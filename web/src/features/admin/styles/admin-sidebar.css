@@ -1,50 +1,104 @@
-/* Admin Sidebar Styles */
+/* =============================================================================
+   ADMIN SIDEBAR — Premium minimalist design
+   ============================================================================= */
 
+/* ── Sidebar container ─────────────────────────────────────────────────── */
 .admin-sidebar {
-  width: 280px;
+  width: 256px;
   height: 100vh;
-  background-color: #fff;
-  border-right: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-right: 1px solid #eaeef3;
   display: flex;
   flex-direction: column;
-  padding: 20px 0;
-  position: sticky;
+  position: fixed;
+  left: 0;
   top: 0;
+  z-index: 1000;
   overflow-y: auto;
-  overflow: visible;
 }
 
-/* Header */
+/* ── Brand header ──────────────────────────────────────────────────────── */
 .admin-sidebar-header {
-  padding: 0 20px 30px;
-  border-bottom: 1px solid #f3f4f6;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.25rem 1.125rem;
+  border-bottom: 1px solid #eaeef3;
+}
+
+.admin-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .admin-sidebar-logo {
-  width: 60px;
-  height: 60px;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
-  margin-bottom: 12px;
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
+  flex-shrink: 0;
+}
+
+.admin-sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
 }
 
 .admin-sidebar-title {
-  font-size: 18px;
+  font-size: 14.5px;
   font-weight: 700;
-  color: #1f2937;
-  margin: 0;
+  color: #0c375f;
+  letter-spacing: -0.01em;
 }
 
-/* Navigation */
+.admin-sidebar-subtitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.admin-sidebar-close {
+  display: none;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.375rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.admin-sidebar-close:hover {
+  background: #f1f5f9;
+  color: #0c375f;
+}
+
+/* ── Navigation ────────────────────────────────────────────────────────── */
 .admin-sidebar-nav {
   flex: 1;
-  padding: 20px 0;
+  padding: 0.625rem 0;
   overflow-y: auto;
 }
 
+/* Section groups */
+.admin-sidebar-section {
+  margin-bottom: 0.125rem;
+}
+
+.admin-sidebar-section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #b0b8c4;
+  padding: 0.875rem 1.375rem 0.375rem;
+  user-select: none;
+}
+
+/* Menu list */
 .admin-sidebar-menu {
   list-style: none;
   margin: 0;
@@ -53,100 +107,105 @@
 
 .admin-sidebar-menu-item {
   margin: 0;
-  padding: 0;
+  padding: 1px 0.625rem;
 }
 
-.admin-sidebar-menu-link {
+/* ── Nav link ──────────────────────────────────────────────────────────── */
+.admin-sidebar-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  margin: 0 16px;
-  color: #374151;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  color: #5a6577;
   text-decoration: none;
-  transition: all 0.2s ease;
-  font-size: 14px;
-  font-weight: 500;
   border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  position: relative;
+  transition: all 0.15s ease;
 }
 
-.admin-sidebar-menu-link:hover {
-  background-color: #f9fafb;
-  color: #1f2937;
+.admin-sidebar-link:hover {
+  background: #f5f7fa;
+  color: #0c375f;
 }
 
-.admin-sidebar-menu-link-active {
-  background-color: #ebf4ff;
-  color: #2563eb;
+/* Active indicator bar (left accent) */
+.admin-sidebar-link-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: #0c375f;
+  border-radius: 0 3px 3px 0;
+  transition: height 0.2s ease;
 }
 
-.admin-sidebar-menu-link-active .admin-sidebar-menu-icon {
-  color: #2563eb;
+.admin-sidebar-link.active .admin-sidebar-link-indicator {
+  height: 60%;
 }
 
-.admin-sidebar-menu-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
+/* Active state */
+.admin-sidebar-link.active {
+  background: #edf4fa;
+  color: #0c375f;
+  font-weight: 600;
+}
+
+/* Icon */
+.admin-sidebar-link-icon {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
-  color: #6b7280;
-  transition: color 0.2s ease;
+  stroke-width: 1.75;
+  transition: color 0.15s;
 }
 
-.admin-sidebar-menu-link:hover .admin-sidebar-menu-icon {
-  color: #374151;
+.admin-sidebar-link:hover .admin-sidebar-link-icon {
+  color: #0c375f;
 }
 
-.admin-sidebar-menu-text {
+.admin-sidebar-link.active .admin-sidebar-link-icon {
+  color: #0c375f;
+}
+
+/* Text */
+.admin-sidebar-link-text {
   white-space: nowrap;
 }
 
-/* Footer - Logout */
+/* ── Footer / Sign Out ─────────────────────────────────────────────────── */
 .admin-sidebar-footer {
-  padding: 20px;
-  border-top: 1px solid #f3f4f6;
+  padding: 0.625rem 0.625rem 0.75rem;
+  border-top: 1px solid #eaeef3;
 }
 
 .admin-sidebar-logout {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
   background: none;
   border: none;
-  color: #ef4444;
-  text-decoration: none;
+  color: #94a3b8;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 500;
+  transition: all 0.15s ease;
 }
 
 .admin-sidebar-logout:hover {
-  background-color: #fef2f2;
+  background: #fef2f2;
   color: #dc2626;
 }
 
-.admin-sidebar-logout-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.admin-sidebar-logout-text {
-  white-space: nowrap;
-}
-
-/* Scrollbar Styling */
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
 .admin-sidebar::-webkit-scrollbar {
-  width: 6px;
+  width: 3px;
 }
 
 .admin-sidebar::-webkit-scrollbar-track {
@@ -154,123 +213,149 @@
 }
 
 .admin-sidebar::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #e2e8f0;
   border-radius: 3px;
 }
 
 .admin-sidebar::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #cbd5e1;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-  .admin-sidebar {
-    width: 240px;
-  }
+/* ── Mobile overlay ────────────────────────────────────────────────────── */
+.admin-sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 999;
+  animation: sidebarFadeIn 0.2s ease;
+}
 
-  .admin-sidebar-menu-link {
-    padding: 10px 16px;
-    font-size: 13px;
+@keyframes sidebarFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
+/* ── Responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .admin-sidebar {
-    position: fixed;
-    left: 0;
-    z-index: 999;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
+    box-shadow: none;
   }
 
   .admin-sidebar.open {
     transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .admin-sidebar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-sidebar-overlay {
+    display: block;
   }
 }
 
-/* Logout Confirmation Modal */
-.admin-logout-modal-overlay {
+/* =============================================================================
+   LOGOUT CONFIRMATION MODAL
+   ============================================================================= */
+
+.admin-logout-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 999999;
-  pointer-events: auto;
+  animation: sidebarFadeIn 0.15s ease;
 }
 
 .admin-logout-modal {
   background: white;
-  border-radius: 8px;
+  border-radius: 14px;
   box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  max-width: 400px;
+    0 24px 48px -12px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  max-width: 380px;
   width: 90%;
-  margin: 20px;
-  position: relative;
-  z-index: 999999;
+  padding: 2rem 1.75rem 1.5rem;
+  text-align: center;
 }
 
-.admin-logout-modal-header {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid #e5e7eb;
+.admin-logout-modal-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
 }
 
 .admin-logout-modal-title {
-  margin: 0;
-  font-size: 18px;
+  margin: 0 0 0.5rem;
+  font-size: 17px;
   font-weight: 600;
   color: #1f2937;
 }
 
-.admin-logout-modal-body {
-  padding: 20px 24px;
-}
-
 .admin-logout-modal-message {
-  margin: 0;
-  font-size: 14px;
+  margin: 0 0 1.5rem;
+  font-size: 13.5px;
   color: #6b7280;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
-.admin-logout-modal-footer {
-  padding: 16px 24px 20px;
-  border-top: 1px solid #e5e7eb;
+.admin-logout-modal-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
+  gap: 0.625rem;
 }
 
 .admin-logout-modal-cancel,
 .admin-logout-modal-confirm {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
+  flex: 1;
+  padding: 0.5625rem 1rem;
+  border-radius: 8px;
+  font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   border: 1px solid transparent;
 }
 
 .admin-logout-modal-cancel {
-  background-color: #f3f4f6;
+  background: #f3f4f6;
   color: #374151;
-  border-color: #d1d5db;
+  border-color: #e5e7eb;
 }
 
 .admin-logout-modal-cancel:hover {
-  background-color: #e5e7eb;
+  background: #e5e7eb;
 }
 
 .admin-logout-modal-confirm {
-  background-color: #dc2626;
+  background: #dc2626;
   color: white;
   border-color: #dc2626;
 }
 
 .admin-logout-modal-confirm:hover {
-  background-color: #b91c1c;
+  background: #b91c1c;
+}
+
+.admin-logout-modal-confirm:disabled,
+.admin-logout-modal-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

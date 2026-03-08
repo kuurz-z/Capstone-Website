@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
 import TenantDetailModal from "../components/TenantDetailModal";
 import { reservationApi, userApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
@@ -171,12 +170,11 @@ export default function TenantsPage() {
 
   return (
     <div className="admin-tenants-page">
-      <Sidebar />
       <main className="admin-tenants-main">
-        <header className="admin-tenants-header">
+        <header className="admin-page-header">
           <div>
-            <h1 className="admin-tenants-title">Tenant Management Dashboard</h1>
-            <p className="admin-tenants-subtitle">
+            <h1 className="admin-page-title">Tenants</h1>
+            <p className="admin-page-subtitle">
               Manage all tenant information, contracts, and documents
             </p>
           </div>
@@ -474,14 +472,14 @@ export default function TenantsPage() {
                       >
                         <path
                           d="M1.16669 7C1.16669 7 3.50002 2.33334 7.00002 2.33334C10.5 2.33334 12.8334 7 12.8334 7C12.8334 7 10.5 11.6667 7.00002 11.6667C3.50002 11.6667 1.16669 7 1.16669 7Z"
-                          stroke="#2563EB"
+                          stroke="#0C375F"
                           strokeWidth="1.2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
                         <path
                           d="M7 8.75C7.9665 8.75 8.75 7.9665 8.75 7C8.75 6.0335 7.9665 5.25 7 5.25C6.0335 5.25 5.25 6.0335 5.25 7C5.25 7.9665 6.0335 8.75 7 8.75Z"
-                          stroke="#2563EB"
+                          stroke="#0C375F"
                           strokeWidth="1.2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -553,11 +551,11 @@ export default function TenantsPage() {
                           padding: "6px 10px",
                           border:
                             page === currentPage
-                              ? "1px solid #2563eb"
+                              ? "1px solid #0C375F"
                               : "1px solid #d1d5db",
                           borderRadius: "6px",
                           backgroundColor:
-                            page === currentPage ? "#2563eb" : "white",
+                            page === currentPage ? "#0C375F" : "white",
                           color: page === currentPage ? "white" : "#374151",
                           cursor: "pointer",
                           fontSize: "13px",

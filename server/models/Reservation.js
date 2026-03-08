@@ -81,6 +81,8 @@ const reservationSchema = new mongoose.Schema(
       type: String,
       default: "inperson",
     },
+    visitDate: Date,
+    visitTime: String,
     isOutOfTown: Boolean,
     currentLocation: String,
     scheduleApproved: {
@@ -218,34 +220,9 @@ const reservationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "pending",
-        "confirmed",
-        "checked-in",
-        "checked-out",
-        "cancelled",
-        "at-risk",
-      ],
+      enum: ["pending", "confirmed", "checked-in", "checked-out", "cancelled"],
       default: "pending",
       index: true,
-    },
-
-    // System assist fields
-    atRisk: {
-      type: Boolean,
-      default: false,
-    },
-    moveInReminderSent: {
-      type: Boolean,
-      default: false,
-    },
-    moveInReminderDate: {
-      type: Date,
-      default: null,
-    },
-    moveInRiskDate: {
-      type: Date,
-      default: null,
     },
 
     // --- Payment ---
@@ -287,18 +264,37 @@ const reservationSchema = new mongoose.Schema(
 // ============================================================================
 
 /**
- * Generate reservation code before saving only when status is confirmed
+ * Generate reservation code before saving only when status is confirmed.
+ * Uses retry loop to prevent collision on unique constraint.
  */
 reservationSchema.pre("save", async function (next) {
-  // Only generate reservation code when status becomes confirmed and code doesn't exist
   if (this.status === "confirmed" && !this.reservationCode) {
-    // Generate a short unique code: RES-ABC123 (6 characters)
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "RES-";
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    const Reservation = mongoose.model("Reservation");
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      let code = "RES-";
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      // Check if code already exists
+      const exists = await Reservation.findOne({
+        reservationCode: code,
+      }).lean();
+      if (!exists) {
+        this.reservationCode = code;
+        break;
+      }
     }
-    this.reservationCode = code;
+
+    if (!this.reservationCode) {
+      return next(
+        new Error(
+          "Failed to generate unique reservation code after 5 attempts",
+        ),
+      );
+    }
   }
   next();
 });

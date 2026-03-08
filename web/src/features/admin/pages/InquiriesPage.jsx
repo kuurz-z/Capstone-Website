@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import Sidebar from "../components/Sidebar";
 import InquiryDetailsModal from "../components/InquiryDetailsModal";
 import { inquiryApi } from "../../../shared/api/apiClient";
+import ConfirmModal from "../../../shared/components/ConfirmModal";
 import "../styles/admin-inquiries.css";
 
 export default function InquiriesPage({ isEmbedded = false }) {
@@ -15,6 +15,13 @@ export default function InquiriesPage({ isEmbedded = false }) {
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({
+    open: false,
+    title: "",
+    message: "",
+    variant: "info",
+    onConfirm: null,
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [pagination, setPagination] = useState({
@@ -85,18 +92,26 @@ export default function InquiriesPage({ isEmbedded = false }) {
   };
 
   // Handle archive
-  const handleArchive = async (inquiryId) => {
-    if (!window.confirm("Are you sure you want to archive this inquiry?"))
-      return;
-
-    try {
-      await inquiryApi.archive(inquiryId);
-      fetchInquiries();
-      fetchStats();
-    } catch (err) {
-      console.error("Error archiving inquiry:", err);
-      alert("Failed to archive inquiry. Please try again.");
-    }
+  const handleArchive = (inquiryId) => {
+    setConfirmModal({
+      open: true,
+      title: "Archive Inquiry",
+      message:
+        "Are you sure you want to archive this inquiry? It will be moved to the archived section.",
+      variant: "warning",
+      confirmText: "Archive",
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, open: false }));
+        try {
+          await inquiryApi.archive(inquiryId);
+          fetchInquiries();
+          fetchStats();
+        } catch (err) {
+          console.error("Error archiving inquiry:", err);
+          showNotification?.("Failed to archive inquiry", "error", 3000);
+        }
+      },
+    });
   };
 
   // Handle inquiry update (after responding)
@@ -540,11 +555,11 @@ export default function InquiriesPage({ isEmbedded = false }) {
                         padding: "6px 10px",
                         border:
                           page === pagination.page
-                            ? "1px solid #2563eb"
+                            ? "1px solid #0C375F"
                             : "1px solid #d1d5db",
                         borderRadius: "6px",
                         backgroundColor:
-                          page === pagination.page ? "#2563eb" : "white",
+                          page === pagination.page ? "#0C375F" : "white",
                         color: page === pagination.page ? "white" : "#374151",
                         cursor: "pointer",
                         fontSize: "13px",
@@ -601,25 +616,33 @@ export default function InquiriesPage({ isEmbedded = false }) {
             onUpdate={handleInquiryUpdate}
           />
         )}
+
+        {/* Confirm Modal */}
+        <ConfirmModal
+          isOpen={confirmModal.open}
+          onClose={() => setConfirmModal((prev) => ({ ...prev, open: false }))}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          variant={confirmModal.variant}
+          confirmText={confirmModal.confirmText || "Confirm"}
+        />
       </main>
     );
   }
 
   return (
     <div className="admin-inquiries-page">
-      <Sidebar />
-      <main className="admin-inquiries-main">
-        <header className="admin-inquiries-header">
-          <div>
-            <h1 className="admin-inquiries-title">Inquiries Management</h1>
-            <p className="admin-inquiries-subtitle">
-              View and respond to customer inquiries
-            </p>
-          </div>
-        </header>
+      <header className="admin-inquiries-header">
+        <div>
+          <h1 className="admin-inquiries-title">Inquiries Management</h1>
+          <p className="admin-inquiries-subtitle">
+            View and respond to customer inquiries
+          </p>
+        </div>
+      </header>
 
-        {/* Copy the rest of the content from the embedded version - use grep to find it */}
-      </main>
+      {/* Copy the rest of the content from the embedded version - use grep to find it */}
     </div>
   );
 }

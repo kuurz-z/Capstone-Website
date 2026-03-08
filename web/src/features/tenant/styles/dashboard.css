@@ -127,8 +127,8 @@
 }
 
 .stat-card:hover {
-  border-color: #6366f1;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+  border-color: #0c375f;
+  box-shadow: 0 4px 12px rgba(12, 55, 95, 0.1);
 }
 
 .stat-icon {
@@ -139,8 +139,8 @@
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  background: #eef2ff;
-  color: #6366f1;
+  background: #edf4fa;
+  color: #0c375f;
 }
 
 .stat-content {
@@ -176,24 +176,24 @@
 }
 
 .dashboard-card:hover {
-  border-color: #6366f1;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+  border-color: #0c375f;
+  box-shadow: 0 4px 12px rgba(12, 55, 95, 0.1);
 }
 
 .dashboard-card.card-accent {
-  border-top: 3px solid #6366f1;
+  border-top: 3px solid #0c375f;
 }
 
 .dashboard-card .card-icon {
   width: 48px;
   height: 48px;
   border-radius: 0.5rem;
-  background: #eef2ff;
+  background: #edf4fa;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.25rem;
-  color: #6366f1;
+  color: #0c375f;
   margin-bottom: 1rem;
 }
 
@@ -236,7 +236,7 @@
 .btn-link {
   background: none;
   border: none;
-  color: #6366f1;
+  color: #0c375f;
   font-weight: 600;
   cursor: pointer;
   font-size: 0.938rem;
@@ -244,7 +244,7 @@
 }
 
 .btn-link:hover {
-  color: #4f46e5;
+  color: #092d4f;
 }
 
 /* Announcements Preview */
@@ -336,12 +336,12 @@
 
 .btn-primary-outline {
   background: white;
-  color: #6366f1;
-  border: 2px solid #6366f1;
+  color: #0c375f;
+  border: 2px solid #0c375f;
 }
 
 .btn-primary-outline:hover {
-  background: #6366f1;
+  background: #0c375f;
   color: white;
 }
 

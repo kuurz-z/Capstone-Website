@@ -4,10 +4,7 @@
 
 import { Reservation, User, Room } from "../models/index.js";
 import auditLogger from "../utils/auditLogger.js";
-import {
-  updateOccupancyOnReservationChange,
-  getRoomOccupancyStatus,
-} from "../utils/occupancyManager.js";
+import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
 
 export const getReservations = async (req, res) => {
   try {
@@ -25,12 +22,18 @@ export const getReservations = async (req, res) => {
 
     let reservations;
 
+    // Exclude heavy base64 image fields from listing — they're only needed
+    // when viewing a single reservation's detail (getById).
+    // Keep proofOfPaymentUrl since it's used for stage detection.
+    const HEAVY_FIELDS =
+      "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
+
     // Super admin sees all reservations (excluding archived)
     if (dbUser.role === "superAdmin") {
       reservations = await Reservation.find({ isArchived: { $ne: true } })
         .populate("userId", "firstName lastName email")
         .populate("roomId", "name branch type price")
-        .select("-__v")
+        .select(HEAVY_FIELDS)
         .sort({ createdAt: -1 });
     }
     // Admin sees reservations for rooms in their branch
@@ -47,7 +50,7 @@ export const getReservations = async (req, res) => {
       })
         .populate("userId", "firstName lastName email")
         .populate("roomId", "name branch type price")
-        .select("-__v")
+        .select(HEAVY_FIELDS)
         .sort({ createdAt: -1 });
     }
     // Regular users/tenants see only their own reservations
@@ -58,7 +61,7 @@ export const getReservations = async (req, res) => {
       })
         .populate("userId", "firstName lastName email")
         .populate("roomId", "name branch type price")
-        .select("-__v")
+        .select(HEAVY_FIELDS)
         .sort({ createdAt: -1 });
     }
 
@@ -142,6 +145,22 @@ export const createReservation = async (req, res) => {
       });
     }
 
+    // ── Single reservation enforcement ──
+    // A user can only have ONE active reservation at a time
+    const existingActive = await Reservation.findOne({
+      userId: dbUser._id,
+      status: { $nin: ["cancelled", "archived"] },
+      isArchived: { $ne: true },
+    });
+    if (existingActive) {
+      return res.status(400).json({
+        error:
+          "You already have an active reservation. Please complete or cancel it before creating a new one.",
+        code: "RESERVATION_ALREADY_EXISTS",
+        existingReservationId: existingActive._id,
+      });
+    }
+
     // Validate required fields
     const { roomId, roomName, checkInDate, totalPrice } = req.body;
     if ((!roomId && !roomName) || !checkInDate || !totalPrice) {
@@ -188,12 +207,6 @@ export const createReservation = async (req, res) => {
     }
 
     // Create new reservation with ALL fields from the form
-    // Calculate reminder and at-risk dates
-    const reminderDate = new Date(moveInDate);
-    reminderDate.setDate(reminderDate.getDate() + 1);
-    const riskDate = new Date(moveInDate);
-    riskDate.setDate(riskDate.getDate() + 2);
-
     const reservation = new Reservation({
       userId: dbUser._id,
       roomId: room._id,
@@ -293,10 +306,6 @@ export const createReservation = async (req, res) => {
       notes: req.body.notes || "",
       status: "pending",
       paymentStatus: "pending",
-      moveInReminderSent: false,
-      moveInReminderDate: reminderDate,
-      moveInRiskDate: riskDate,
-      atRisk: false,
     });
 
     // Save reservation to database
@@ -401,7 +410,7 @@ export const updateReservation = async (req, res) => {
       });
     }
 
-    // If checkInDate is being updated, enforce 3-month window and update reminders
+    // If checkInDate is being updated, enforce 3-month window
     if (req.body.checkInDate) {
       const moveInDate = new Date(req.body.checkInDate);
       const now = new Date();
@@ -413,30 +422,62 @@ export const updateReservation = async (req, res) => {
           code: "MOVEIN_DATE_OUT_OF_RANGE",
         });
       }
-      req.body.moveInReminderSent = false;
-      const reminderDate = new Date(moveInDate);
-      reminderDate.setDate(reminderDate.getDate() + 1);
-      req.body.moveInReminderDate = reminderDate;
-      const riskDate = new Date(moveInDate);
-      riskDate.setDate(riskDate.getDate() + 2);
-      req.body.moveInRiskDate = riskDate;
-      req.body.atRisk = false;
     }
 
-    // When status is changed to "confirmed", automatically set payment to "paid"
-    if (req.body.status === "confirmed") {
+    // ── Status transition: CONFIRMED ──
+    // Set payment to paid, assign user branch from room
+    if (
+      req.body.status === "confirmed" &&
+      existingReservation.status !== "confirmed"
+    ) {
       req.body.paymentStatus = "paid";
       req.body.approvedDate = new Date();
+
+      // Auto-assign branch and set tenantStatus to reserved
+      const reservationUser = await User.findById(existingReservation.userId);
+      const room = await Room.findById(existingReservation.roomId);
+      if (reservationUser && room) {
+        reservationUser.tenantStatus = "reserved";
+        reservationUser.branch =
+          room.branch || existingReservation.roomId?.branch;
+        await reservationUser.save();
+        console.log(
+          `✅ User ${reservationUser.email} → tenantStatus: reserved, branch: ${reservationUser.branch}`,
+        );
+      }
     }
 
-    // When status is changed to "checked-in", update user role and tenantStatus to active
-    if (req.body.status === "checked-in") {
-      const reservation = await Reservation.findById(reservationId);
-      if (reservation && reservation.userId) {
-        await User.findByIdAndUpdate(reservation.userId, {
-          role: "tenant",
-          tenantStatus: "active",
-        });
+    // ── Status transition: CHECKED-IN ──
+    // Promote user to tenant
+    if (
+      req.body.status === "checked-in" &&
+      existingReservation.status !== "checked-in"
+    ) {
+      const reservationUser = await User.findById(existingReservation.userId);
+      if (reservationUser) {
+        reservationUser.role = "tenant";
+        reservationUser.tenantStatus = "active";
+        await reservationUser.save();
+        console.log(
+          `✅ User ${reservationUser.email} → role: tenant, tenantStatus: active`,
+        );
+      }
+    }
+
+    // ── Status transition: CANCELLED ──
+    // Reset user to applicant state
+    if (
+      req.body.status === "cancelled" &&
+      existingReservation.status !== "cancelled"
+    ) {
+      const reservationUser = await User.findById(existingReservation.userId);
+      if (reservationUser && reservationUser.role === "applicant") {
+        reservationUser.tenantStatus = null;
+        reservationUser.branch = null;
+        await reservationUser.save();
+        console.log(
+          `✅ User ${reservationUser.email} → tenantStatus: null, branch: null (cancelled)`,
+        );
       }
     }
 
@@ -565,10 +606,13 @@ export const updateReservationByUser = async (req, res) => {
     };
 
     setField("selectedBed", req.body.selectedBed);
+    setField("roomId", req.body.roomId);
     setField("targetMoveInDate", req.body.targetMoveInDate);
     setField("leaseDuration", req.body.leaseDuration);
     setField("billingEmail", req.body.billingEmail);
     setField("viewingType", req.body.viewingType);
+    setField("visitDate", req.body.visitDate);
+    setField("visitTime", req.body.visitTime);
     setField("isOutOfTown", req.body.isOutOfTown);
     setField("currentLocation", req.body.currentLocation);
     setField("visitApproved", req.body.visitApproved);
@@ -810,7 +854,7 @@ export const deleteReservation = async (req, res) => {
 };
 
 /**
- * Extend a reservation's move-in date (admin action for at-risk reservations)
+ * Extend a reservation's move-in date (admin action for overdue reservations)
  */
 export const extendReservation = async (req, res) => {
   try {
@@ -852,19 +896,9 @@ export const extendReservation = async (req, res) => {
     const newMoveInDate = new Date(currentMoveIn);
     newMoveInDate.setDate(newMoveInDate.getDate() + extensionDays);
 
-    // Update reminder and risk dates
-    const newReminderDate = new Date(newMoveInDate);
-    newReminderDate.setDate(newReminderDate.getDate() + 1);
-    const newRiskDate = new Date(newMoveInDate);
-    newRiskDate.setDate(newRiskDate.getDate() + 2);
-
-    // Update reservation
+    // Update reservation dates
     reservation.checkInDate = newMoveInDate;
     reservation.finalMoveInDate = newMoveInDate;
-    reservation.moveInReminderDate = newReminderDate;
-    reservation.moveInRiskDate = newRiskDate;
-    reservation.moveInReminderSent = false;
-    reservation.atRisk = false;
     reservation.status =
       reservation.paymentStatus === "paid" ? "confirmed" : "pending";
 
@@ -938,8 +972,16 @@ export const releaseSlot = async (req, res) => {
     // Cancel the reservation
     reservation.status = "cancelled";
     reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Released: ${reason}`;
-    reservation.atRisk = false;
     await reservation.save();
+
+    // Reset user to applicant state
+    const reservationUser = await User.findById(reservation.userId);
+    if (reservationUser && reservationUser.role === "applicant") {
+      reservationUser.tenantStatus = null;
+      reservationUser.branch = null;
+      await reservationUser.save();
+      console.log(`✅ User ${reservationUser.email} → reset (slot released)`);
+    }
 
     // Free up the room slot (increment available beds or set available)
     if (reservation.roomId) {
@@ -1087,66 +1129,6 @@ export const archiveReservation = async (req, res) => {
       error: "Failed to archive reservation",
       details: error.message,
       code: "ARCHIVE_RESERVATION_ERROR",
-    });
-  }
-};
-// ============================================================================
-// OCCUPANCY MANAGEMENT CONTROLLERS
-// ============================================================================
-
-/**
- * Get occupancy status of a specific room
- * GET /api/reservations/:roomId/occupancy
- */
-export const getRoomOccupancy = async (req, res) => {
-  try {
-    const { roomId } = req.params;
-
-    if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid room ID format",
-        code: "INVALID_ROOM_ID",
-      });
-    }
-
-    const occupancyStatus = await getRoomOccupancyStatus(roomId);
-
-    res.json({
-      message: "Room occupancy status retrieved",
-      occupancy: occupancyStatus,
-    });
-  } catch (error) {
-    console.error("❌ Get room occupancy error:", error);
-    res.status(500).json({
-      error: "Failed to get room occupancy",
-      details: error.message,
-      code: "GET_OCCUPANCY_ERROR",
-    });
-  }
-};
-
-/**
- * Get branch occupancy statistics
- * GET /api/reservations/stats/occupancy?branch=gil-puyat
- */
-export const getBranchOccupancyStatistics = async (req, res) => {
-  try {
-    const { branch } = req.query;
-    const { getBranchOccupancyStats } =
-      await import("../utils/occupancyManager.js");
-
-    const stats = await getBranchOccupancyStats(branch || null);
-
-    res.json({
-      message: "Branch occupancy statistics retrieved",
-      statistics: stats,
-    });
-  } catch (error) {
-    console.error("❌ Get branch occupancy stats error:", error);
-    res.status(500).json({
-      error: "Failed to get branch occupancy statistics",
-      details: error.message,
-      code: "GET_BRANCH_STATS_ERROR",
     });
   }
 };

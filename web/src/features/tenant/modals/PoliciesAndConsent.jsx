@@ -1,157 +1,180 @@
-import React, { useState } from "react";
+import React from "react";
 import { X } from "lucide-react";
 
-export function PoliciesTermsModal({ isOpen, onClose }) {
+/* ─── Shared modal wrapper ─── */
+const ModalOverlay = ({ isOpen, onClose, children }) => {
   if (!isOpen) return null;
 
   return (
     <div
+      onClick={onClose}
       style={{
         position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0, 0, 0, 0.5)",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.45)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         zIndex: 1000,
-        padding: "20px",
+        padding: "24px",
       }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
-          background: "white",
+          background: "#fff",
           borderRadius: "12px",
-          maxWidth: "600px",
+          maxWidth: "640px",
           width: "100%",
-          maxHeight: "80vh",
-          overflow: "auto",
-          padding: "32px",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+          maxHeight: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 24px 48px rgba(0,0,0,0.15)",
         }}
       >
-        <div
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const SectionTitle = ({ children }) => (
+  <h3
+    style={{
+      fontSize: "14px",
+      fontWeight: "700",
+      color: "#111827",
+      margin: "20px 0 10px",
+      paddingBottom: "6px",
+      borderBottom: "1px solid #F3F4F6",
+    }}
+  >
+    {children}
+  </h3>
+);
+
+const PolicyList = ({ items }) => (
+  <ul
+    style={{
+      margin: "0 0 16px 0",
+      paddingLeft: "20px",
+      listStyleType: "disc",
+    }}
+  >
+    {items.map((item, i) => (
+      <li key={i} style={{ marginBottom: "6px", color: "#374151" }}>
+        {item}
+      </li>
+    ))}
+  </ul>
+);
+
+/* ─── Policies & Terms Modal ─── */
+export function PoliciesTermsModal({ isOpen, onClose }) {
+  return (
+    <ModalOverlay isOpen={isOpen} onClose={onClose}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "20px 24px",
+          borderBottom: "1px solid #E5E7EB",
+          flexShrink: 0,
+        }}
+      >
+        <h2
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "24px",
+            fontSize: "18px",
+            fontWeight: "700",
+            margin: 0,
+            color: "#111827",
           }}
         >
-          <h2 style={{ fontSize: "20px", fontWeight: "700", margin: 0 }}>
-            Policies & Terms
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <X size={24} />
-          </button>
-        </div>
+          Policies & Terms of Service
+        </h2>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "4px",
+            display: "flex",
+            alignItems: "center",
+            color: "#6B7280",
+          }}
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-        <div style={{ fontSize: "13px", lineHeight: "1.8", color: "#333" }}>
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: "700",
-              marginTop: "20px",
-              marginBottom: "10px",
-            }}
-          >
-            Dormitory Policies
-          </h3>
-          <ul style={{ marginLeft: "20px", marginBottom: "16px" }}>
-            <li style={{ marginBottom: "8px" }}>
-              Curfew time is strictly observed
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              No smoking or illegal substances allowed
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Guests must be approved by management
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              All facilities must be used responsibly
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Quiet hours enforced from 10 PM to 8 AM
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Monthly dues must be paid on time
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Room inspections conducted monthly
-            </li>
-          </ul>
+      {/* Scrollable content */}
+      <div
+        style={{
+          padding: "20px 24px",
+          overflowY: "auto",
+          fontSize: "13px",
+          lineHeight: "1.7",
+          color: "#374151",
+          flex: 1,
+        }}
+      >
+        <SectionTitle>Dormitory Policies</SectionTitle>
+        <PolicyList
+          items={[
+            "Curfew time is strictly observed.",
+            "No smoking or illegal substances allowed within the premises.",
+            "Guests must be approved by management in advance.",
+            "All facilities must be used responsibly.",
+            "Quiet hours are enforced from 10:00 PM to 8:00 AM.",
+            "Monthly dues must be paid on or before the due date.",
+            "Room inspections may be conducted on a monthly basis.",
+          ]}
+        />
 
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: "700",
-              marginTop: "20px",
-              marginBottom: "10px",
-            }}
-          >
-            House Rules
-          </h3>
-          <ul style={{ marginLeft: "20px", marginBottom: "16px" }}>
-            <li style={{ marginBottom: "8px" }}>
-              Keep common areas clean and organized
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Respect privacy of other residents
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              No loud music or activities after 10 PM
-            </li>
-            <li style={{ marginBottom: "8px" }}>Lock your room when leaving</li>
-            <li style={{ marginBottom: "8px" }}>
-              Report maintenance issues immediately
-            </li>
-          </ul>
+        <SectionTitle>House Rules</SectionTitle>
+        <PolicyList
+          items={[
+            "Keep common areas clean and organized at all times.",
+            "Respect the privacy and personal space of other residents.",
+            "No loud music or disruptive activities after quiet hours.",
+            "Lock your room when leaving the premises.",
+            "Report maintenance issues to the management immediately.",
+          ]}
+        />
 
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: "700",
-              marginTop: "20px",
-              marginBottom: "10px",
-            }}
-          >
-            Lease Agreement
-          </h3>
-          <p style={{ marginBottom: "12px" }}>
-            By applying to our dormitory, you agree to abide by all policies and
-            rules set forth by Lilycrest / First JRAC Partnership Co. The lease
-            agreement is binding and must be honored for the duration as
-            specified. Any violations may result in termination of lease without
-            notice.
-          </p>
+        <SectionTitle>Lease Agreement</SectionTitle>
+        <p style={{ marginBottom: "12px" }}>
+          By applying, you agree to abide by all policies and rules set forth by
+          Lilycrest / First JRAC Partnership Co. The lease agreement is binding
+          for the specified duration. Violations may result in lease termination
+          without prior notice.
+        </p>
+        <p style={{ marginBottom: "0" }}>
+          The security deposit is non-refundable in the event of early
+          termination. Any property damage charges will be deducted from the
+          deposit accordingly.
+        </p>
+      </div>
 
-          <p style={{ marginBottom: "12px" }}>
-            Security deposit is non-refundable in case of early termination.
-            Damage charges will be deducted from your deposit if applicable.
-          </p>
-        </div>
-
+      {/* Footer */}
+      <div
+        style={{
+          padding: "16px 24px",
+          borderTop: "1px solid #E5E7EB",
+          flexShrink: 0,
+        }}
+      >
         <button
           onClick={onClose}
           style={{
-            marginTop: "24px",
             width: "100%",
-            padding: "12px",
-            background: "#333333",
-            color: "white",
+            padding: "11px",
+            background: "#1F2937",
+            color: "#fff",
             border: "none",
             borderRadius: "8px",
             fontSize: "14px",
@@ -162,164 +185,135 @@ export function PoliciesTermsModal({ isOpen, onClose }) {
           I Understand
         </button>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
+/* ─── Privacy Consent & Certification Modal ─── */
 export function PrivacyConsentModal({ isOpen, onClose }) {
-  if (!isOpen) return null;
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-        padding: "20px",
-      }}
-    >
+    <ModalOverlay isOpen={isOpen} onClose={onClose}>
+      {/* Header */}
       <div
         style={{
-          background: "white",
-          borderRadius: "12px",
-          maxWidth: "600px",
-          width: "100%",
-          maxHeight: "80vh",
-          overflow: "auto",
-          padding: "32px",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "20px 24px",
+          borderBottom: "1px solid #E5E7EB",
+          flexShrink: 0,
         }}
       >
-        <div
+        <h2
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "24px",
+            fontSize: "18px",
+            fontWeight: "700",
+            margin: 0,
+            color: "#111827",
           }}
         >
-          <h2 style={{ fontSize: "20px", fontWeight: "700", margin: 0 }}>
-            Privacy Consent & Certification
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <X size={24} />
-          </button>
-        </div>
+          Privacy Consent & Certification
+        </h2>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "4px",
+            display: "flex",
+            alignItems: "center",
+            color: "#6B7280",
+          }}
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-        <div style={{ fontSize: "13px", lineHeight: "1.8", color: "#333" }}>
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: "700",
-              marginTop: "0",
-              marginBottom: "12px",
-            }}
-          >
-            Privacy Policy
-          </h3>
-          <p style={{ marginBottom: "12px" }}>
-            By submitting this application, you grant Lilycrest / First JRAC
-            Partnership Co. permission to collect and use your personal
-            information for dormitory operations and services. This includes:
-          </p>
-          <ul style={{ marginLeft: "20px", marginBottom: "16px" }}>
-            <li style={{ marginBottom: "8px" }}>
-              Contact and residence information
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Identification documents for verification
-            </li>
-            <li style={{ marginBottom: "8px" }}>Emergency contact details</li>
-            <li style={{ marginBottom: "8px" }}>
-              Employment and education records
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Payment and billing information
-            </li>
-          </ul>
+      {/* Scrollable content */}
+      <div
+        style={{
+          padding: "20px 24px",
+          overflowY: "auto",
+          fontSize: "13px",
+          lineHeight: "1.7",
+          color: "#374151",
+          flex: 1,
+        }}
+      >
+        <SectionTitle>Privacy Policy</SectionTitle>
+        <p style={{ marginBottom: "12px" }}>
+          By submitting this application, you grant Lilycrest / First JRAC
+          Partnership Co. permission to collect and process your personal
+          information for dormitory operations and services, including:
+        </p>
+        <PolicyList
+          items={[
+            "Contact and residence information",
+            "Identification documents for verification",
+            "Emergency contact details",
+            "Employment and education records",
+            "Payment and billing information",
+          ]}
+        />
+        <p style={{ marginBottom: "0" }}>
+          All information is kept confidential and will not be shared with third
+          parties without explicit consent, except as required by law or for
+          dormitory operations.
+        </p>
 
-          <p style={{ marginBottom: "12px" }}>
-            We understand the importance of your privacy. All information will
-            be kept confidential and will not be shared with third parties
-            without your explicit consent, except as required by law or for
-            dormitory operations.
-          </p>
+        <SectionTitle>Data Protection</SectionTitle>
+        <p style={{ marginBottom: "0" }}>
+          Your data is securely stored with access restricted to authorized
+          personnel only. You have the right to request access to your
+          information or request its deletion, subject to applicable legal
+          obligations.
+        </p>
 
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: "700",
-              marginTop: "20px",
-              marginBottom: "12px",
-            }}
-          >
-            Data Protection
-          </h3>
-          <p style={{ marginBottom: "12px" }}>
-            Your data is protected and securely stored. Access is restricted to
-            authorized personnel only. You have the right to request access to
-            your information or request deletion, subject to legal obligations.
-          </p>
+        <SectionTitle>Certification Statement</SectionTitle>
+        <p style={{ marginBottom: "12px" }}>
+          I hereby certify that the information provided in this application is
+          true, accurate, and complete to the best of my knowledge and belief. I
+          understand that any false information, misrepresentation, or omission
+          of facts may be grounds for:
+        </p>
+        <PolicyList
+          items={[
+            "Rejection of this application",
+            "Termination of lease agreement",
+            "Legal action as deemed appropriate",
+          ]}
+        />
+        <p
+          style={{
+            marginBottom: "0",
+            fontStyle: "italic",
+            color: "#6B7280",
+            fontSize: "12px",
+          }}
+        >
+          I have read and understand the contents of this agreement and consent
+          to the collection and use of my personal information as outlined
+          above.
+        </p>
+      </div>
 
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: "700",
-              marginTop: "20px",
-              marginBottom: "12px",
-            }}
-          >
-            Certification Statement
-          </h3>
-          <p style={{ marginBottom: "12px" }}>
-            I hereby certify that the information provided in this application
-            is true, accurate, and complete to the best of my knowledge and
-            belief. I understand that any false information, misrepresentation,
-            or omission of facts may be grounds for:
-          </p>
-          <ul style={{ marginLeft: "20px", marginBottom: "16px" }}>
-            <li style={{ marginBottom: "8px" }}>Rejection of application</li>
-            <li style={{ marginBottom: "8px" }}>
-              Termination of lease agreement
-            </li>
-            <li style={{ marginBottom: "8px" }}>
-              Legal action as deemed appropriate
-            </li>
-          </ul>
-
-          <p style={{ marginBottom: "12px", fontStyle: "italic" }}>
-            I have read and understand the contents of this agreement and
-            consent to the collection and use of my personal information as
-            outlined above.
-          </p>
-        </div>
-
+      {/* Footer */}
+      <div
+        style={{
+          padding: "16px 24px",
+          borderTop: "1px solid #E5E7EB",
+          flexShrink: 0,
+        }}
+      >
         <button
           onClick={onClose}
           style={{
-            marginTop: "24px",
             width: "100%",
-            padding: "12px",
-            background: "#333333",
-            color: "white",
+            padding: "11px",
+            background: "#1F2937",
+            color: "#fff",
             border: "none",
             borderRadius: "8px",
             fontSize: "14px",
@@ -330,6 +324,6 @@ export function PrivacyConsentModal({ isOpen, onClose }) {
           I Acknowledge
         </button>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

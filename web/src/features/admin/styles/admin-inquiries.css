@@ -129,13 +129,13 @@
 
 .admin-inquiries-search-input:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0c375f;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .admin-inquiries-filter:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0c375f;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -225,8 +225,8 @@
 }
 
 .admin-inquiries-status.in-progress {
-  background: #dbeafe;
-  color: #1e40af;
+  background: #e0ebf5;
+  color: #0c375f;
 }
 
 .admin-inquiries-status.responded {
@@ -256,8 +256,8 @@
 }
 
 .admin-inquiries-inquiry-type-badge.reservation {
-  background: #dbeafe;
-  color: #1e40af;
+  background: #e0ebf5;
+  color: #0c375f;
 }
 
 .admin-inquiries-inquiry-type-badge.information {
@@ -282,7 +282,7 @@
   border-radius: 6px;
   border: 0px;
   background: transparent;
-  color: #2563eb;
+  color: #0c375f;
   display: inline-flex;
   align-items: center;
   justify-content: center;

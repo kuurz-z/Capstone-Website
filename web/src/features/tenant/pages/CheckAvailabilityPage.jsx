@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { showNotification } from "../../../shared/utils/notification";
 import {
   Bed,
   ChevronLeft,
@@ -10,10 +11,14 @@ import {
   X,
   Plus,
   Minus,
+  LogOut,
+  User,
+  ChevronDown,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { roomApi } from "../../../shared/api/apiClient";
+import ConfirmModal from "../../../shared/components/ConfirmModal";
 import ElasticSlider from "../components/ElasticSlider";
 import "../../../shared/styles/notification.css";
 import "../styles/tenant-dashboard.css";
@@ -111,10 +116,13 @@ const checkRoomOverbooking = (room) => {
 
 function CheckAvailabilityPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [searchParams] = useSearchParams();
+  const isChangeRoomMode = searchParams.get("changeRoom") === "1";
+  const changeRoomReservationId = searchParams.get("reservationId");
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState("All");
   const [selectedRoomType, setSelectedRoomType] = useState("All");
   const [minPrice, setMinPrice] = useState(0);
@@ -130,6 +138,30 @@ function CheckAvailabilityPage() {
   const [rooms, setRooms] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef(null);
+
+  // User initials and display name
+  const userInitials = user
+    ? `${(user.firstName || "")[0] || ""}${(user.lastName || "")[0] || ""}`.toUpperCase() ||
+      (user.email || "?")[0].toUpperCase()
+    : "?";
+  const userDisplayName = user
+    ? `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+      user.email ||
+      "User"
+    : "Guest";
+
+  // Close user menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const mapRoomType = (type) => {
     const value = typeof type === "string" ? type.toLowerCase() : "";
@@ -358,28 +390,103 @@ function CheckAvailabilityPage() {
   };
 
   const proceedWithReservation = async () => {
-    const reservationData = {
-      room: selectedRoom,
-      selectedAppliances: Object.keys(selectedAppliances)
-        .filter((key) => selectedAppliances[key] > 0)
-        .reduce((acc, key) => {
-          acc[key] = selectedAppliances[key];
-          return acc;
-        }, {}),
-      applianceFees: calculateApplianceFees(),
-      selectedBed,
-    };
+    // ── Change Room Mode: update existing reservation and go back to dashboard ──
+    if (isChangeRoomMode && changeRoomReservationId && selectedRoom) {
+      try {
+        const { reservationApi } =
+          await import("../../../shared/api/reservationApi");
+        await reservationApi.updateByUser(changeRoomReservationId, {
+          roomId: selectedRoom.roomId,
+          selectedBed: selectedBed
+            ? { id: selectedBed.id, position: selectedBed.position }
+            : null,
+          totalPrice: selectedRoom.price || 5000,
+          applianceFees: calculateApplianceFees(),
+        });
+        closeRoomDetails();
+        navigate("/applicant/profile", {
+          state: { notification: `Room changed to ${selectedRoom.title}` },
+        });
+      } catch (err) {
+        console.error("Failed to change room:", err);
+        showNotification(
+          "Failed to change room. " +
+            (err?.response?.data?.error || err.message),
+          "error",
+          4000,
+        );
+      }
+      return;
+    }
 
-    sessionStorage.setItem(
-      "pendingReservation",
-      JSON.stringify(reservationData),
-    );
+    // ── Normal Mode: create reservation draft and go to dashboard ──
+    try {
+      const { reservationApi } =
+        await import("../../../shared/api/reservationApi");
 
-    closeRoomDetails();
+      // Build a reasonable check-in date (30 days from now)
+      const checkInDate = new Date();
+      checkInDate.setDate(checkInDate.getDate() + 30);
 
-    navigate("/tenant/reservation-flow", {
-      state: { roomData: reservationData, step: 1 },
-    });
+      const payload = {
+        roomId: selectedRoom.roomId,
+        selectedBed: selectedBed
+          ? { id: selectedBed.id, position: selectedBed.position }
+          : null,
+        targetMoveInDate: checkInDate.toISOString(),
+        checkInDate: checkInDate.toISOString(),
+        totalPrice: selectedRoom.price || 5000,
+        applianceFees: calculateApplianceFees(),
+        viewingType: null,
+        agreedToPrivacy: false,
+        visitApproved: false,
+      };
+
+      let reservationId = null;
+      try {
+        const resp = await reservationApi.create(payload);
+        reservationId = resp?.reservationId || resp?.reservation?._id;
+      } catch (createErr) {
+        // If user already has a reservation, notify and redirect to profile
+        if (createErr?.response?.data?.code === "RESERVATION_ALREADY_EXISTS") {
+          closeRoomDetails();
+          showNotification(
+            "You already have an ongoing reservation.",
+            "warning",
+            4000,
+          );
+          navigate("/applicant/profile");
+          return;
+        } else {
+          throw createErr;
+        }
+      }
+
+      closeRoomDetails();
+      navigate("/applicant/profile", {
+        state: {
+          notification: `Room ${selectedRoom.title} reserved! Continue from your dashboard.`,
+        },
+      });
+    } catch (err) {
+      console.error("Failed to reserve room:", err);
+      // Check if user already has an ongoing reservation
+      const errorCode = err?.response?.data?.code;
+      if (errorCode === "RESERVATION_ALREADY_EXISTS") {
+        showNotification(
+          "You already have an ongoing reservation. Go to your profile to continue.",
+          "warning",
+          4000,
+        );
+      } else {
+        showNotification(
+          "Failed to reserve room. " +
+            (err?.response?.data?.error || err.message),
+          "error",
+          4000,
+        );
+      }
+    }
   };
 
   const handleLoginConfirmBeforeReserve = () => {
@@ -472,7 +579,10 @@ function CheckAvailabilityPage() {
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
-            <div className="flex items-center gap-2">
+            <Link
+              to="/"
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
               <div
                 className="w-10 h-10 rounded-lg flex items-center justify-center"
                 style={{ backgroundColor: "#0C375F" }}
@@ -485,7 +595,7 @@ function CheckAvailabilityPage() {
               >
                 Lilycrest
               </span>
-            </div>
+            </Link>
 
             <div className="hidden md:flex items-center gap-4 flex-1 max-w-2xl mx-8">
               <div className="relative flex-1">
@@ -508,16 +618,205 @@ function CheckAvailabilityPage() {
             </div>
 
             <div className="flex items-center gap-4">
-              {/* User Menu */}
-              <Link
-                to="/tenant/profile"
-                className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
-              >
-                <span className="text-sm font-semibold text-gray-700">JD</span>
-              </Link>
-            </div>
+              {/* User Profile Menu */}
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full transition-all duration-200"
+                  style={{
+                    width: "260px",
+                    border: showUserMenu
+                      ? "1.5px solid #E7710F"
+                      : "1.5px solid transparent",
+                    backgroundColor: showUserMenu ? "#FFF7ED" : "transparent",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!showUserMenu) {
+                      e.currentTarget.style.backgroundColor = "#F9FAFB";
+                      e.currentTarget.style.borderColor = "#E5E7EB";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!showUserMenu) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.borderColor = "transparent";
+                    }
+                  }}
+                  aria-label="User menu"
+                  aria-expanded={showUserMenu}
+                >
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #E7710F 0%, #D35400 100%)",
+                      boxShadow: "0 1px 3px rgba(231, 113, 15, 0.3)",
+                    }}
+                  >
+                    {userInitials}
+                  </div>
+                  <span className="flex-1 text-sm font-medium text-gray-700 truncate leading-tight text-left">
+                    {userDisplayName}
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${
+                      showUserMenu ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
 
-            <div className="flex items-center gap-4"></div>
+                {/* Dropdown Menu */}
+                {showUserMenu && (
+                  <div
+                    className="absolute right-0 mt-1.5 w-full bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden"
+                    style={{
+                      animation: "fadeIn 0.18s ease-out",
+                      boxShadow:
+                        "0 10px 40px -8px rgba(0,0,0,0.12), 0 4px 12px -2px rgba(0,0,0,0.06)",
+                    }}
+                  >
+                    {/* ─── User Identity Header ─── */}
+                    <div
+                      className="px-3 pt-3 pb-2.5"
+                      style={{
+                        background:
+                          "linear-gradient(180deg, #FAFBFC 0%, #FFFFFF 100%)",
+                        borderBottom: "1px solid #F3F4F6",
+                      }}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-10 h-10 rounded-[10px] flex items-center justify-center text-white text-sm font-bold shrink-0"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #E7710F 0%, #D35400 100%)",
+                            boxShadow: "0 2px 6px rgba(231, 113, 15, 0.25)",
+                          }}
+                        >
+                          {userInitials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p
+                              className="text-[13px] font-semibold truncate leading-none"
+                              style={{ color: "#1A1A2E" }}
+                            >
+                              {userDisplayName}
+                            </p>
+                            <span
+                              className="shrink-0 px-1.5 py-px text-[9px] font-semibold rounded uppercase tracking-wide"
+                              style={{
+                                backgroundColor:
+                                  user?.role === "superAdmin"
+                                    ? "#FEF3C7"
+                                    : user?.role === "admin"
+                                      ? "#DBEAFE"
+                                      : user?.role === "tenant"
+                                        ? "#E0E7FF"
+                                        : "#ECFDF5",
+                                color:
+                                  user?.role === "superAdmin"
+                                    ? "#92400E"
+                                    : user?.role === "admin"
+                                      ? "#1E40AF"
+                                      : user?.role === "tenant"
+                                        ? "#3730A3"
+                                        : "#065F46",
+                              }}
+                            >
+                              {user?.role === "superAdmin"
+                                ? "Super Admin"
+                                : user?.role === "admin"
+                                  ? "Admin"
+                                  : user?.role === "tenant"
+                                    ? "Tenant"
+                                    : "Applicant"}
+                            </span>
+                          </div>
+                          <p
+                            className="text-[11px] truncate mt-1 leading-none"
+                            style={{ color: "#9CA3AF" }}
+                          >
+                            {user?.email || ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ─── Navigation Links ─── */}
+                    <div className="py-1.5 px-2">
+                      <Link
+                        to="/applicant/profile"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150"
+                        style={{ color: "#374151" }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = "#F9FAFB";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = "transparent";
+                        }}
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: "#F3F4F6" }}
+                        >
+                          <User
+                            className="w-4 h-4"
+                            style={{ color: "#6B7280" }}
+                          />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm leading-tight">
+                            My Profile
+                          </p>
+                          <p
+                            className="text-[11px] leading-tight mt-0.5"
+                            style={{ color: "#9CA3AF" }}
+                          >
+                            View your dashboard
+                          </p>
+                        </div>
+                      </Link>
+                    </div>
+
+                    {/* ─── Sign Out ─── */}
+                    <div
+                      className="px-2 pb-2 pt-1"
+                      style={{ borderTop: "1px solid #F3F4F6" }}
+                    >
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setShowLogoutConfirm(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150"
+                        style={{ color: "#EF4444" }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = "#FEF2F2";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = "transparent";
+                        }}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: "#FEF2F2" }}
+                        >
+                          <LogOut
+                            className="w-4 h-4"
+                            style={{ color: "#EF4444" }}
+                          />
+                        </div>
+                        <p className="font-medium text-sm leading-tight">
+                          Sign Out
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="md:hidden pb-4">
@@ -773,6 +1072,9 @@ function CheckAvailabilityPage() {
         room={selectedRoom}
         onClose={closeRoomDetails}
         onProceed={handleProceedToReservation}
+        proceedButtonText={
+          isChangeRoomMode ? "Confirm Room Change" : "Proceed to Reservation"
+        }
         isOverbooked={selectedRoom ? checkRoomOverbooking(selectedRoom) : false}
         selectedBed={selectedBed}
         onSelectBed={setSelectedBed}
@@ -785,6 +1087,26 @@ function CheckAvailabilityPage() {
       <InquiryModal
         isOpen={isInquiryModalOpen}
         onClose={() => setIsInquiryModalOpen(false)}
+      />
+
+      {/* Sign Out Confirmation */}
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={async () => {
+          setShowLogoutConfirm(false);
+          try {
+            await logout();
+            navigate("/signin");
+          } catch (err) {
+            console.error("Logout error:", err);
+          }
+        }}
+        title="Sign Out"
+        message="Are you sure you want to sign out of your account?"
+        variant="warning"
+        confirmText="Sign Out"
+        cancelText="Cancel"
       />
     </div>
   );

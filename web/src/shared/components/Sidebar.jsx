@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import ConfirmModal from "./ConfirmModal";
 import "./Sidebar.css";
 
 const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Determine if user is a tenant (has active or past stay)
   const isTenant =
@@ -48,10 +50,11 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
+    setShowLogoutConfirm(true);
+  };
 
-    const confirmed = window.confirm("Are you sure you want to log out?");
-    if (!confirmed) return;
-
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
     setIsLoggingOut(true);
     try {
       await logout();
@@ -150,6 +153,18 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
           </button>
         </div>
       </aside>
+
+      {/* Logout Confirm Modal */}
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+        title="Log Out"
+        message="Are you sure you want to log out of your account?"
+        variant="warning"
+        confirmText="Log Out"
+        loading={isLoggingOut}
+      />
     </>
   );
 };

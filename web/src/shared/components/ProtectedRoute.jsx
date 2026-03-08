@@ -23,7 +23,7 @@ import GlobalLoading from "./GlobalLoading";
  *
  * @param {Object} props
  * @param {React.ReactNode} props.children - Child components to render
- * @param {string} props.requiredRole - Required role: 'admin', 'superAdmin', or 'user'
+ * @param {string} props.requiredRole - Required role: 'admin', 'superAdmin', or 'applicant'
  * @param {boolean} props.requireAuth - Whether authentication is required (default: true)
  *
  * @returns {React.ReactNode} Protected content or redirect
@@ -51,7 +51,7 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
 
     // User routes redirect to landing page "/"
     // Admin routes redirect to sign-in page "/signin"
-    const redirectPath = requiredRole === "user" ? "/" : "/signin";
+    const redirectPath = requiredRole === "applicant" ? "/" : "/signin";
     return <Navigate to={redirectPath} replace />;
   }
 
@@ -72,8 +72,8 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
         return <Navigate to="/admin/dashboard" replace />;
       }
     }
-    // For user routes, BLOCK admin/super admin users (session lock)
-    else if (requiredRole === "user") {
+    // For applicant routes, BLOCK admin/super admin users (session lock)
+    else if (requiredRole === "applicant") {
       const isAdmin = user?.role === "admin" || user?.role === "superAdmin";
       if (isAdmin) {
         return <Navigate to="/admin/dashboard" replace />;

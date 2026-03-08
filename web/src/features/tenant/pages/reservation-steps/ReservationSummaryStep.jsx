@@ -1,44 +1,60 @@
 import React from "react";
 
-const ReservationSummaryStep = ({ reservationData, onNext }) => {
-  return (
-    <div className="reservation-card bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
-      <h2 className="stage-title text-2xl font-semibold text-slate-800">
-        Room Summary
-      </h2>
-      <p className="stage-subtitle text-sm text-gray-500 mt-1">
-        Review the room you're reserving.
-      </p>
+/**
+ * Step 1 — Room Selection Summary
+ * Shows the selected room details before the user confirms and proceeds.
+ */
+const ReservationSummaryStep = ({ reservationData, onNext, readOnly }) => {
+  const room = reservationData?.room || {};
 
-      <div className="section-group">
-        <h3 className="section-header">Room Information</h3>
+  const formatBranch = (branch) => {
+    if (!branch) return "N/A";
+    if (branch.includes(" ") && !branch.includes("-")) return branch;
+    return branch
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  };
+
+  const formatType = (type) => {
+    if (!type) return "N/A";
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
+  return (
+    <div className="reservation-card">
+      {/* Step Header */}
+      <div className="main-header">
+        <div className="main-header-badge">
+          <span>Step 1 · Getting Started</span>
+        </div>
+        <h2 className="main-header-title">Room Summary</h2>
+        <p className="main-header-subtitle">
+          Review the details of your selected room below. Once confirmed, you'll
+          proceed to schedule your visit.
+        </p>
+      </div>
+
+      {/* Room Details Card */}
+      <div className="content-card">
+        <div className="card-section-title">
+          <div className="icon"></div>
+          Room Information
+        </div>
+
         <div className="summary-section">
           <div className="summary-row">
-            <span className="summary-label">Selected Branch</span>
-            <span className="summary-value">
-              {reservationData?.room?.branch || "N/A"}
-            </span>
+            <span className="summary-label">Branch</span>
+            <span className="summary-value">{formatBranch(room.branch)}</span>
           </div>
           <div className="summary-row">
             <span className="summary-label">Room Type</span>
-            <span className="summary-value">
-              {reservationData?.room?.type || "N/A"}
-            </span>
+            <span className="summary-value">{formatType(room.type)}</span>
           </div>
           <div className="summary-row">
             <span className="summary-label">Room Number</span>
             <span className="summary-value">
-              {reservationData?.room?.roomNumber ||
-                reservationData?.room?.name ||
-                reservationData?.room?.title ||
-                reservationData?.room?.id ||
-                "N/A"}
-            </span>
-          </div>
-          <div className="summary-row">
-            <span className="summary-label">Monthly Rent</span>
-            <span className="summary-value">
-              ₱{(reservationData?.room?.price || 0).toLocaleString()}
+              {room.roomNumber || room.name || room.title || room.id || "N/A"}
             </span>
           </div>
           {reservationData?.selectedBed && (
@@ -61,14 +77,47 @@ const ReservationSummaryStep = ({ reservationData, onNext }) => {
               </span>
             </div>
           )}
+          <div className="total-section">
+            <span>Monthly Rent</span>
+            <span className="total-amount">
+              ₱{(room.price || 0).toLocaleString()}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="stage-buttons flex flex-col sm:flex-row gap-3 mt-6">
-        <button onClick={onNext} className="btn btn-primary w-full">
-          Continue to Next Step
-        </button>
+      {/* Info Notice */}
+      <div className="info-box">
+        <div className="info-box-title">What happens next?</div>
+        <div className="info-text">
+          After confirming, you'll be asked to schedule a dormitory visit so you
+          can see the room in person before finalizing your application.
+        </div>
       </div>
+
+      {/* Read-Only Notice */}
+      {readOnly && (
+        <div
+          className="info-box"
+          style={{ background: "#FEF3C7", borderColor: "#F59E0B" }}
+        >
+          <div className="info-box-title" style={{ color: "#92400E" }}>
+            This step is locked
+          </div>
+          <div className="info-text" style={{ color: "#78350F" }}>
+            Room selection has been confirmed and cannot be changed.
+          </div>
+        </div>
+      )}
+
+      {/* Action */}
+      {!readOnly && (
+        <div className="stage-buttons" style={{ justifyContent: "flex-end" }}>
+          <button onClick={onNext} className="btn btn-primary">
+            Confirm Room & Continue
+          </button>
+        </div>
+      )}
     </div>
   );
 };

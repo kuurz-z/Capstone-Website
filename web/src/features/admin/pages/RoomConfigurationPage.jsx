@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
+
 import { roomApi } from "../../../shared/api/apiClient";
 import "../styles/admin-room-configuration.css";
 
@@ -100,12 +100,7 @@ function RoomConfigurationPage({ isEmbedded = false }) {
       </div>
     );
     if (isEmbedded) return loadingHtml;
-    return (
-      <div className="admin-layout">
-        <Sidebar />
-        <main className="admin-main">{loadingHtml}</main>
-      </div>
-    );
+    return loadingHtml;
   }
 
   const pageContent = (
@@ -344,11 +339,6 @@ function RoomConfigurationPage({ isEmbedded = false }) {
     return pageContent;
   }
 
-  return (
-    <div className="admin-layout">
-      <Sidebar />
-      <main className="admin-main">{pageContent}</main>
-    </div>
-  );
+  return pageContent;
 }
 export default RoomConfigurationPage;

@@ -20,9 +20,14 @@
  */
 
 import express from "express";
-import { verifyToken, verifyAdmin, verifySuperAdmin } from "../middleware/auth.js";
+import {
+  verifyToken,
+  verifyAdmin,
+  verifySuperAdmin,
+} from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
+  createUser,
   getUserStats,
   getUsersByBranch,
   getEmailByUsername,
@@ -71,6 +76,20 @@ router.get("/branch/:branch", verifyToken, verifySuperAdmin, getUsersByBranch);
  * This endpoint is public to allow username-based login.
  */
 router.get("/email-by-username", getEmailByUsername);
+
+// ============================================================================
+// CREATE USER (Super Admin only)
+// ============================================================================
+
+/**
+ * POST /api/users
+ *
+ * Create a new user account from the admin panel.
+ * Creates both a Firebase Auth account and a MongoDB user record.
+ *
+ * Access: Super Admin only
+ */
+router.post("/", verifyToken, verifySuperAdmin, createUser);
 
 // ============================================================================
 // GET ALL USERS

@@ -142,7 +142,7 @@
 }
 
 .tenant-detail-modal-section-title svg {
-  color: #2563eb;
+  color: #0C375F;
   flex-shrink: 0;
 }
 
@@ -178,7 +178,7 @@
 
 .tenant-detail-modal-form-input:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0C375F;
   background: white;
 }
 
@@ -249,10 +249,10 @@
   justify-content: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #eef2ff;
+  background: #EDF4FA;
   border: none;
   border-radius: 6px;
-  color: #2563eb;
+  color: #0C375F;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -260,7 +260,7 @@
 }
 
 .tenant-detail-modal-contract-download:hover {
-  background: #e0e7ff;
+  background: #E0EBF5;
 }
 
 /* Documents */
@@ -288,7 +288,7 @@
   justify-content: center;
   background: white;
   border-radius: 6px;
-  color: #2563eb;
+  color: #0C375F;
   flex-shrink: 0;
 }
 
@@ -314,7 +314,7 @@
   padding: 6px;
   background: transparent;
   border: none;
-  color: #2563eb;
+  color: #0C375F;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -324,7 +324,7 @@
 }
 
 .tenant-detail-modal-document-download:hover {
-  background: #eef2ff;
+  background: #EDF4FA;
 }
 
 .tenant-detail-modal-edit-docs {
@@ -332,7 +332,7 @@
   background: transparent;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  color: #2563eb;
+  color: #0C375F;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -344,8 +344,8 @@
 }
 
 .tenant-detail-modal-edit-docs:hover {
-  border-color: #2563eb;
-  background: #eef2ff;
+  border-color: #0C375F;
+  background: #EDF4FA;
 }
 
 /* Room Assignment Card */
@@ -353,7 +353,7 @@
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 16px;
-  background: #eff6ff;
+  background: #EDF4FA;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -362,7 +362,7 @@
 .tenant-detail-modal-room-number {
   font-size: 20px;
   font-weight: 700;
-  color: #2563eb;
+  color: #0C375F;
 }
 
 .tenant-detail-modal-room-type {
@@ -375,7 +375,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   padding-top: 12px;
-  border-top: 1px solid #dbeafe;
+  border-top: 1px solid #E0EBF5;
 }
 
 .tenant-detail-modal-room-detail {
@@ -402,7 +402,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   padding-top: 12px;
-  border-top: 1px solid #dbeafe;
+  border-top: 1px solid #E0EBF5;
 }
 
 .tenant-detail-modal-room-date {

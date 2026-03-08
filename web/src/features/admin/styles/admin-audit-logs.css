@@ -4,10 +4,8 @@
  * ============================================================================
  */
 
-/* Page Layout - matches other admin pages */
+/* Page Layout - rendered inside AdminLayout */
 .admin-audit-page {
-  display: flex;
-  min-height: 100vh;
   background: #f8fafc;
 }
 
@@ -30,7 +28,7 @@
   justify-content: center;
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #0f4a7f 0%, #092c4c 100%);
   border-radius: 12px;
   color: white;
 }
@@ -90,7 +88,7 @@
 }
 
 .stat-card-info h3.text-blue {
-  color: #3b82f6;
+  color: #0f4a7f;
 }
 .stat-card-info h3.text-red {
   color: #ef4444;
@@ -111,7 +109,7 @@
 }
 
 .stat-card-icon.blue {
-  color: #3b82f6;
+  color: #0f4a7f;
 }
 .stat-card-icon.red {
   color: #ef4444;
@@ -173,7 +171,7 @@
 
 .audit-search input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: #0f4a7f;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -201,7 +199,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #0f4a7f 0%, #092c4c 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -225,7 +223,7 @@
   gap: 16px;
 }
 
-.filter-group label {
+.audit-filters-panel .filter-group label {
   display: block;
   font-size: 0.875rem;
   font-weight: 500;
@@ -233,7 +231,7 @@
   margin-bottom: 6px;
 }
 
-.filter-group select {
+.audit-filters-panel .filter-group select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #d1d5db;
@@ -244,9 +242,9 @@
   transition: border-color 0.2s;
 }
 
-.filter-group select:focus {
+.audit-filters-panel .filter-group select:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: #0f4a7f;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -360,8 +358,8 @@
 }
 
 .severity-badge.info {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #e0ebf5;
+  color: #092c4c;
   border-color: #bfdbfe;
 }
 
@@ -400,8 +398,8 @@
 }
 
 .role-badge.tenant {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #e0ebf5;
+  color: #092c4c;
 }
 
 .role-badge.admin {
@@ -411,7 +409,7 @@
 
 .role-badge.superAdmin {
   background: #f3e8ff;
-  color: #7c3aed;
+  color: #0c375f;
 }
 
 .role-badge.unknown {
@@ -437,7 +435,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #3b82f6;
+  border-top-color: #0f4a7f;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 16px;

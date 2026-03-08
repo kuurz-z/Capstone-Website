@@ -1,0 +1,125 @@
+/* =============================================================================
+   ADMIN LAYOUT - Shared layout for all admin pages
+   ============================================================================= */
+
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.admin-layout-main {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Top Bar */
+.admin-topbar {
+  background: white;
+  height: 60px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.admin-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.admin-menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.admin-menu-toggle:hover {
+  color: #0c375f;
+  background: #f1f5f9;
+}
+
+.admin-topbar-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.admin-topbar-date {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+/* Content Area */
+.admin-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .admin-layout-main {
+    margin-left: 0;
+  }
+
+  .admin-menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-topbar {
+    padding: 0 1rem;
+    height: 56px;
+    min-height: 56px;
+  }
+
+  .admin-content {
+    padding: 1rem;
+  }
+}
+
+/* Tablet */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .admin-topbar {
+    padding: 0 1.5rem;
+  }
+
+  .admin-content {
+    padding: 1.5rem;
+  }
+}
+
+/* Print */
+@media print {
+  .admin-topbar,
+  .admin-sidebar {
+    display: none;
+  }
+
+  .admin-layout-main {
+    margin-left: 0;
+  }
+
+  .admin-content {
+    padding: 0;
+  }
+}

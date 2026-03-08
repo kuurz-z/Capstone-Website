@@ -9,7 +9,7 @@ import auditLogger from "../utils/auditLogger.js";
 import {} from "../middleware/validation.js";
 
 const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
-const VALID_ROLES = ["user", "tenant", "admin", "superAdmin"];
+const VALID_ROLES = ["applicant", "tenant", "admin", "superAdmin"];
 
 export const register = async (req, res) => {
   try {
@@ -125,7 +125,7 @@ export const register = async (req, res) => {
       lastName,
       phone,
       branch,
-      role: "user",
+      role: "applicant",
       isEmailVerified: req.user.email_verified || false, // Synced from Firebase
       tenantStatus: "registered",
     });
@@ -137,7 +137,7 @@ export const register = async (req, res) => {
       req,
       user,
       true,
-      `New user ${user.email} registered with username ${username}${branch ? ` for branch ${branch}` : ""}`,
+      `New applicant ${user.email} registered with username ${username}${branch ? ` for branch ${branch}` : ""}`,
     );
 
     console.log(
@@ -164,6 +164,26 @@ export const register = async (req, res) => {
 
     // Log registration error
     await auditLogger.logError(req, error, "Registration error");
+
+    // CRITICAL: Clean up Firebase user if MongoDB registration fails
+    // This prevents orphaned Firebase accounts when backend registration errors
+    if (req.user?.uid) {
+      try {
+        const auth = getAuth();
+        await auth.deleteUser(req.user.uid);
+        console.log(
+          `🗑️ Rolled back Firebase user ${req.user.uid} after registration error`,
+        );
+      } catch (deleteError) {
+        // Only warn if the user actually existed (not already deleted)
+        if (deleteError.code !== "auth/user-not-found") {
+          console.error(
+            "⚠️ Failed to rollback Firebase user:",
+            deleteError.message,
+          );
+        }
+      }
+    }
 
     // Handle duplicate key errors (email or username already exists)
     if (error.code === 11000) {

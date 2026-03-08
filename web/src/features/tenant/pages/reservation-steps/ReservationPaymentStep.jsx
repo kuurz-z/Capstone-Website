@@ -1,55 +1,32 @@
 import React from "react";
 
-// Helper function to format branch name
+/**
+ * Step 4 — Reservation Fee Payment
+ * User reviews a breakdown of costs and uploads proof of payment.
+ */
+
 const formatBranch = (branch) => {
   if (!branch) return "N/A";
-  // If already formatted (e.g., "Gil Puyat"), return as-is
   if (branch.includes(" ") && !branch.includes("-")) return branch;
-  // Otherwise format from slug (e.g., "gil-puyat" -> "Gil Puyat")
   return branch
     .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 };
 
-// Helper function to format room type
 const formatRoomType = (type) => {
   if (!type) return "N/A";
-  // If already formatted (e.g., "Private", "Shared", "Quadruple"), return as-is
-  if (!type.includes("-")) return type;
-  // Otherwise format from slug
-  return type
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  return type.charAt(0).toUpperCase() + type.slice(1);
 };
 
-// Helper function to format date
 const formatDate = (dateString) => {
   if (!dateString) return "Not set";
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
+  return new Date(dateString).toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
   });
-};
-
-// Helper function to get room name from various possible fields
-const getRoomName = (room) => {
-  if (!room) return "N/A";
-  // Direct name fields
-  if (room.name) return room.name;
-  if (room.roomNumber) return room.roomNumber;
-  // Extract from title (e.g., "Room 101" -> "101")
-  if (room.title) {
-    const match = room.title.match(/Room\s+(.+)/i);
-    return match ? match[1] : room.title;
-  }
-  // Use id as fallback
-  if (room.id) return room.id;
-  return "N/A";
 };
 
 const ReservationPaymentStep = ({
@@ -65,163 +42,230 @@ const ReservationPaymentStep = ({
   isLoading,
   onPrev,
   onNext,
+  readOnly,
 }) => {
   const room = reservationData?.room || {};
+  const roomName =
+    room.name || room.roomNumber || room.title || room.id || "N/A";
 
   return (
-    <div className="reservation-card bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
-      <h2 className="stage-title text-2xl font-semibold text-slate-800">
-        Reservation Fee Payment
-      </h2>
-      <p className="stage-subtitle text-sm text-gray-500 mt-1">
-        Review your final details and secure your reservation with a ₱2,000 fee.
-      </p>
+    <div className="reservation-card">
+      {/* Step Header */}
+      <div className="main-header">
+        <div className="main-header-badge">
+          <span>Step 4 · Finalization</span>
+        </div>
+        <h2 className="main-header-title">Reservation Fee Payment</h2>
+        <p className="main-header-subtitle">
+          Review your reservation breakdown and upload proof of payment to
+          secure your room. A one-time reservation fee of ₱2,000 is required.
+        </p>
+      </div>
 
-      <div className="section-group">
-        <h3 className="section-header">Reservation Details</h3>
-        <div className="summary-section">
-          <div className="summary-row">
-            <span className="summary-label">Room</span>
-            <span className="summary-value" style={{ fontWeight: "600" }}>
-              {getRoomName(room)}
-            </span>
+      {/* Read-Only Banner */}
+      {readOnly && (
+        <div
+          className="info-box"
+          style={{
+            background: "#FEF3C7",
+            borderColor: "#F59E0B",
+            marginBottom: "20px",
+          }}
+        >
+          <div className="info-box-title" style={{ color: "#92400E" }}>
+            This section is locked
           </div>
-          <div className="summary-row">
-            <span className="summary-label">Branch</span>
-            <span className="summary-value">{formatBranch(room.branch)}</span>
+          <div className="info-text" style={{ color: "#78350F" }}>
+            Payment has been submitted and is being processed by admin.
           </div>
-          <div className="summary-row">
-            <span className="summary-label">Room Type</span>
-            <span className="summary-value">{formatRoomType(room.type)}</span>
+        </div>
+      )}
+
+      {/* Form content wrapper — disable interaction when readOnly */}
+      <div
+        style={{
+          pointerEvents: readOnly ? "none" : "auto",
+          opacity: readOnly ? 0.7 : 1,
+        }}
+      >
+        {/* Reservation Breakdown */}
+        <div className="content-card">
+          <div className="card-section-title">
+            <div className="icon"></div>
+            Reservation Breakdown
           </div>
-          <div className="summary-row">
-            <span className="summary-label">Monthly Rent</span>
-            <span
-              className="summary-value"
-              style={{ color: "#E7710F", fontWeight: "600" }}
-            >
-              ₱{(room.price || 0).toLocaleString()}
-            </span>
-          </div>
-          <div className="summary-row">
-            <span className="summary-label">Lease Duration</span>
-            <span className="summary-value">{leaseDuration || 12} months</span>
-          </div>
-          <div className="summary-row">
-            <span className="summary-label">Target Move-In Date</span>
-            <span className="summary-value">{formatDate(finalMoveInDate)}</span>
-          </div>
-          {reservationData?.selectedBed && (
+
+          <div className="summary-section">
             <div className="summary-row">
-              <span className="summary-label">Selected Bed</span>
-              <span className="summary-value">
-                {reservationData.selectedBed.position} (
-                {reservationData.selectedBed.id})
+              <span className="summary-label">Room</span>
+              <span className="summary-value" style={{ fontWeight: "600" }}>
+                {roomName}
               </span>
             </div>
-          )}
-          <div className="total-section">
-            <span>Reservation Fee</span>
-            <span className="total-amount">₱2,000</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="section-group">
-        <h3 className="section-header">Final Move-In Date</h3>
-        <p className="section-helper">
-          Need to adjust your move-in date? Click "Re-Check" to verify room
-          availability for the new date.
-        </p>
-        <div className="form-group">
-          <label className="form-label">Update Move-In Date (Optional)</label>
-          <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
-            <input
-              type="date"
-              className="form-input"
-              value={finalMoveInDate}
-              onChange={(e) => setFinalMoveInDate(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onMoveInDateUpdate}
-              style={{ whiteSpace: "nowrap" }}
-              title="Verify if the room is still available on the selected date"
-            >
-              Re-Check Availability
-            </button>
-          </div>
-          <div
-            className="form-helper"
-            style={{ marginTop: "8px", fontSize: "12px", color: "#6B7280" }}
-          >
-            The Re-Check button verifies if your selected room is still
-            available on the new move-in date
-          </div>
-        </div>
-      </div>
-
-      <div className="section-group">
-        <h3 className="section-header">Payment Method</h3>
-        <div className="form-group">
-          <select
-            className="form-select"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-          >
-            <option value="bank">Bank Transfer</option>
-            <option value="gcash">GCash</option>
-            <option value="card">Credit/Debit Card</option>
-            <option value="check">Check</option>
-          </select>
-        </div>
-
-        <div className="info-box">
-          <div className="info-box-title">💳 Payment Details</div>
-          <div className="info-text">
-            <strong>Bank Account:</strong> BDO - 1234-5678-9012
-            <br />
-            <strong>Account Name:</strong> Dormitory Services Inc.
-            <br />
-            <strong>Amount:</strong> ₱2,000
-          </div>
-        </div>
-      </div>
-
-      <div className="section-group">
-        <h3 className="section-header">Proof of Payment</h3>
-        <div className="form-group">
-          <label className="file-upload" htmlFor="payment-file">
-            <input
-              id="payment-file"
-              type="file"
-              accept="image/*,.pdf"
-              onChange={(e) => setProofOfPayment(e.target.files?.[0] || null)}
-            />
-            <div className="file-icon">💳</div>
-            <div className="file-text">
-              {proofOfPayment
-                ? proofOfPayment.name
-                : "Upload receipt or screenshot"}
+            <div className="summary-row">
+              <span className="summary-label">Branch</span>
+              <span className="summary-value">{formatBranch(room.branch)}</span>
             </div>
-          </label>
+            <div className="summary-row">
+              <span className="summary-label">Room Type</span>
+              <span className="summary-value">{formatRoomType(room.type)}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Monthly Rent</span>
+              <span
+                className="summary-value"
+                style={{ color: "var(--rf-accent)" }}
+              >
+                ₱{(room.price || 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Lease Duration</span>
+              <span className="summary-value">
+                {leaseDuration || 12} months
+              </span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Target Move-In Date</span>
+              <span className="summary-value">
+                {formatDate(finalMoveInDate)}
+              </span>
+            </div>
+            {reservationData?.selectedBed && (
+              <div className="summary-row">
+                <span className="summary-label">Selected Bed</span>
+                <span className="summary-value">
+                  {reservationData.selectedBed.position} (
+                  {reservationData.selectedBed.id})
+                </span>
+              </div>
+            )}
+            <div className="total-section">
+              <span>Reservation Fee (One-time)</span>
+              <span className="total-amount">₱2,000</span>
+            </div>
+          </div>
         </div>
+
+        {/* Move-In Date Adjustment */}
+        <div className="content-card">
+          <div className="card-section-title">
+            <div className="icon"></div>
+            Adjust Move-In Date
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 400,
+                color: "var(--rf-text-muted)",
+                marginLeft: "auto",
+              }}
+            >
+              Optional
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Move-In Date</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input
+                type="date"
+                className="form-input"
+                value={finalMoveInDate}
+                onChange={(e) => setFinalMoveInDate(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={onMoveInDateUpdate}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                Re-Check Availability
+              </button>
+            </div>
+            <div className="form-helper">
+              If you need to change your move-in date, select a new date and
+              click "Re-Check" to verify room availability.
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Method & Upload */}
+        <div className="content-card">
+          <div className="card-section-title">
+            <div className="icon"></div>
+            Payment Information
+          </div>
+
+          {/* Bank Details */}
+          <div className="info-box" style={{ marginBottom: "20px" }}>
+            <div className="info-box-title">Payment Details</div>
+            <div className="info-text">
+              <strong>Bank Account:</strong> BDO — 1234-5678-9012
+              <br />
+              <strong>Account Name:</strong> Dormitory Services Inc.
+              <br />
+              <strong>Amount Due:</strong> ₱2,000 (Reservation Fee)
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          <div className="form-group">
+            <label className="form-label">Payment Method</label>
+            <select
+              className="form-select"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+            >
+              <option value="bank">Bank Transfer</option>
+              <option value="gcash">GCash</option>
+              <option value="card">Credit/Debit Card</option>
+              <option value="check">Check</option>
+            </select>
+          </div>
+
+          {/* Proof of Payment */}
+          <div className="form-group">
+            <label className="form-label">Upload Proof of Payment</label>
+            <label className="file-upload" htmlFor="payment-file">
+              <input
+                id="payment-file"
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setProofOfPayment(e.target.files?.[0] || null)}
+              />
+              <div className="file-icon"></div>
+              <div className="file-text">
+                {proofOfPayment
+                  ? `${proofOfPayment.name}`
+                  : "Click to upload receipt or screenshot"}
+              </div>
+            </label>
+            <div className="form-helper">
+              Accepted formats: JPG, PNG, PDF. Max file size: 10MB.
+            </div>
+          </div>
+        </div>
+
+        {/* Close pointer-events wrapper */}
       </div>
 
-      <div className="stage-buttons">
-        <button onClick={onPrev} className="btn btn-secondary">
-          Back
-        </button>
-        <button
-          onClick={onNext}
-          className="btn btn-primary"
-          disabled={isLoading}
-        >
-          {isLoading ? "Processing..." : "Confirm Payment & Reserve"}
-        </button>
-      </div>
+      {/* Actions */}
+      {!readOnly && (
+        <div className="stage-buttons">
+          <button onClick={onPrev} className="btn btn-secondary">
+            ← Back
+          </button>
+          <button
+            onClick={onNext}
+            className="btn btn-primary"
+            disabled={isLoading}
+            style={{ marginLeft: "auto" }}
+          >
+            {isLoading ? "Processing…" : "Confirm Payment & Reserve"}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

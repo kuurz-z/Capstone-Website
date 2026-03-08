@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
+import { BedDouble, Unlock, X } from "lucide-react";
+
 import { roomApi } from "../../../shared/api/apiClient";
 import "../styles/admin-occupancy-tracking.css";
 
@@ -128,7 +129,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     if (capacity === 0) return "#10b981";
     const rate = (occupied / capacity) * 100;
     if (rate === 0) return "#10b981"; // green - empty
-    if (rate < 50) return "#3b82f6"; // blue - low
+    if (rate < 50) return "#0F4A7F"; // blue - low
     if (rate < 100) return "#f59e0b"; // amber - high
     return "#ef4444"; // red - full
   };
@@ -146,12 +147,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
       </div>
     );
     if (isEmbedded) return loadingHtml;
-    return (
-      <div className="admin-layout">
-        <Sidebar />
-        <main className="admin-main">{loadingHtml}</main>
-      </div>
-    );
+    return loadingHtml;
   }
 
   const pageContent = (
@@ -242,7 +238,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
                     rate === 0
                       ? "#10b981"
                       : rate < 50
-                        ? "#3b82f6"
+                        ? "#0F4A7F"
                         : rate < 100
                           ? "#f59e0b"
                           : "#ef4444",
@@ -402,7 +398,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
                 className="close-btn"
                 onClick={() => setShowRoomDetails(false)}
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
             <div className="modal-body">
@@ -456,7 +452,9 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
                       <div className="beds-list">
                         {selectedRoom.occupiedBeds.map((bed, idx) => (
                           <div key={idx} className="bed-item occupied">
-                            <div className="bed-icon">🛏️</div>
+                            <div className="bed-icon">
+                              <BedDouble size={22} />
+                            </div>
                             <div className="bed-info">
                               <h4>
                                 {bed.position.charAt(0).toUpperCase() +
@@ -495,7 +493,9 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
                       <div className="beds-list">
                         {selectedRoom.availableBeds.map((bed, idx) => (
                           <div key={idx} className="bed-item available">
-                            <div className="bed-icon">🔓</div>
+                            <div className="bed-icon">
+                              <Unlock size={22} />
+                            </div>
                             <div className="bed-info">
                               <h4>
                                 {bed.position.charAt(0).toUpperCase() +
@@ -538,12 +538,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     return pageContent;
   }
 
-  return (
-    <div className="admin-layout">
-      <Sidebar />
-      <main className="admin-main">{pageContent}</main>
-    </div>
-  );
+  return pageContent;
 }
 
 export default OccupancyTrackingPage;

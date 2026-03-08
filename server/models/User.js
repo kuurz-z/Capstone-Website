@@ -14,10 +14,10 @@
  * - Empty branch means user hasn't selected one yet (Gmail signup)
  *
  * ROLES:
- * - user: Default role, not yet a tenant
- * - tenant: Active tenant (moved in)
- * - admin: Branch administrator
- * - superAdmin: System-wide administrator
+ * - applicant: Default role, pre-tenant browsing & reserving (Web only)
+ * - tenant: Active resident with signed contract (Web + Mobile)
+ * - admin: Branch operations staff (Web only)
+ * - superAdmin: System owner, multi-branch (Web only)
  *
  * SOFT DELETE:
  * - Use isArchived=true to soft delete
@@ -92,22 +92,24 @@ const userSchema = new mongoose.Schema(
     // --- Role & Reservation Status ---
     role: {
       type: String,
-      enum: ["user", "tenant", "admin", "superAdmin"],
-      default: "user",
-      // Reservation flow:
-      // - "user" (registered, reserved)
-      // - "tenant" (active/inactive after official move-in/move-out)
+      enum: ["applicant", "tenant", "admin", "superAdmin"],
+      default: "applicant",
+      // Role lifecycle:
+      // - "applicant" (registered, browsing, reserving — web only)
+      // - "tenant" (signed contract, active resident — web + mobile)
+      // - "admin" (branch operations staff — web only)
+      // - "superAdmin" (system owner, multi-branch — web only)
     },
 
     tenantStatus: {
       type: String,
-      enum: ["registered", "reserved", "active", "inactive"],
-      default: "registered",
+      enum: ["reserved", "active", "inactive"],
+      default: null,
       // Usage:
-      // - "registered": after registration
-      // - "reserved": after reservation approval
-      // - "active": after official move-in (admin action)
-      // - "inactive": after move-out
+      // - null: applicant (not yet reserved)
+      // - "reserved": payment confirmed, bed held
+      // - "active": checked in, physically moved in
+      // - "inactive": moved out / contract ended
     },
 
     // --- Status ---

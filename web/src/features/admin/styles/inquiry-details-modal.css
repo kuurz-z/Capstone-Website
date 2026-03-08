@@ -148,7 +148,7 @@
 
 .inquiry-details-modal-message-box {
   background: #f9fafb;
-  border-left: 4px solid #2563eb;
+  border-left: 4px solid #0C375F;
   border-radius: 6px;
   padding: 16px;
 }
@@ -210,7 +210,7 @@
 
 .inquiry-details-modal-response-textarea:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0C375F;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -221,7 +221,7 @@
 .inquiry-details-modal-response-button {
   padding: 12px;
   width: 100%;
-  background: #2563eb;
+  background: #0C375F;
   border: none;
   border-radius: 6px;
   color: #ffffff;
@@ -232,7 +232,7 @@
 }
 
 .inquiry-details-modal-response-button:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: #092C4C;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 

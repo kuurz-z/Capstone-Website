@@ -289,7 +289,58 @@ roomSchema.methods.isBedAvailable = function (bedId) {
 };
 
 /**
- * Increase room occupancy
+ * Increase room occupancy (ATOMIC — prevents race conditions)
+ * Uses MongoDB $inc to guarantee no two concurrent operations can overbook.
+ *
+ * @param {string} roomId - The room ObjectId
+ * @returns {Promise<Room|null>} Updated room or null if already at capacity
+ */
+roomSchema.statics.atomicIncreaseOccupancy = async function (roomId) {
+  return this.findOneAndUpdate(
+    {
+      _id: roomId,
+      $expr: { $lt: ["$currentOccupancy", "$capacity"] },
+    },
+    [
+      {
+        $set: {
+          currentOccupancy: { $add: ["$currentOccupancy", 1] },
+          available: {
+            $lt: [{ $add: ["$currentOccupancy", 1] }, "$capacity"],
+          },
+        },
+      },
+    ],
+    { new: true },
+  );
+};
+
+/**
+ * Decrease room occupancy (ATOMIC — prevents negative values)
+ *
+ * @param {string} roomId - The room ObjectId
+ * @returns {Promise<Room|null>} Updated room or null if already at 0
+ */
+roomSchema.statics.atomicDecreaseOccupancy = async function (roomId) {
+  return this.findOneAndUpdate(
+    {
+      _id: roomId,
+      currentOccupancy: { $gt: 0 },
+    },
+    [
+      {
+        $set: {
+          currentOccupancy: { $subtract: ["$currentOccupancy", 1] },
+          available: true,
+        },
+      },
+    ],
+    { new: true },
+  );
+};
+
+/**
+ * Increase room occupancy (instance method — backward compat)
  */
 roomSchema.methods.increaseOccupancy = function () {
   this.currentOccupancy = Math.min(this.currentOccupancy + 1, this.capacity);
@@ -298,7 +349,7 @@ roomSchema.methods.increaseOccupancy = function () {
 };
 
 /**
- * Decrease room occupancy
+ * Decrease room occupancy (instance method — backward compat)
  */
 roomSchema.methods.decreaseOccupancy = function () {
   this.currentOccupancy = Math.max(this.currentOccupancy - 1, 0);

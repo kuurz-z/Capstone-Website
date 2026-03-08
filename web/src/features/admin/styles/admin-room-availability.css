@@ -52,8 +52,8 @@
 }
 
 .room-tab.active {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: #0C375F;
+  border-bottom-color: #0C375F;
 }
 
 /* Top Stats - Room Stats */
@@ -112,7 +112,7 @@
 
 .room-stat-rate .room-stat-label,
 .room-stat-rate .room-stat-value {
-  color: #2563eb;
+  color: #0C375F;
 }
 
 .room-stat-occupied {
@@ -131,7 +131,7 @@
 }
 
 .room-stat-rate {
-  background: #eff6ff;
+  background: #EDF4FA;
   border-color: #bfdbfe;
 }
 
@@ -247,7 +247,7 @@
 
 .room-search-input:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0C375F;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -282,7 +282,7 @@
 
 .room-availability-filter-select:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0C375F;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -401,11 +401,11 @@
   transition:
     background 0.2s ease,
     color 0.2s ease;
-  color: #2563eb;
+  color: #0C375F;
 }
 
 .room-card-info-btn:hover {
-  background: #eef2ff;
+  background: #EDF4FA;
 }
 
 .room-card-type {

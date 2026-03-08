@@ -137,14 +137,14 @@ export default function VisitDetailsModal({
                 backgroundColor: schedule.visitApproved
                   ? "#D1FAE5"
                   : schedule.scheduleApproved
-                    ? "#DBEAFE"
+                    ? "#E0EBF5"
                     : schedule.scheduleRejected
                       ? "#FEE2E2"
                       : "#FEF3C7",
                 color: schedule.visitApproved
                   ? "#047857"
                   : schedule.scheduleApproved
-                    ? "#1E40AF"
+                    ? "#0C375F"
                     : schedule.scheduleRejected
                       ? "#DC2626"
                       : "#92400E",
@@ -418,12 +418,12 @@ export default function VisitDetailsModal({
                       fontWeight: "500",
                       backgroundColor:
                         schedule.viewingType === "inperson"
-                          ? "#DBEAFE"
+                          ? "#E0EBF5"
                           : "#F3E8FF",
                       color:
                         schedule.viewingType === "inperson"
-                          ? "#1E40AF"
-                          : "#7C3AED",
+                          ? "#0C375F"
+                          : "#0C375F",
                     }}
                   >
                     {schedule.viewingType === "inperson"

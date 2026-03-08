@@ -204,9 +204,9 @@ function SignIn() {
       const firebaseUser = userCredential.user;
       console.log("✅ Firebase authentication successful");
 
-      // STEP 2: Check if email is verified
+      // STEP 2: Check if email is verified (skip in development)
       console.log("📧 Email verified:", firebaseUser.emailVerified);
-      if (!firebaseUser.emailVerified) {
+      if (!firebaseUser.emailVerified && import.meta.env.PROD) {
         console.log("⚠️ Email not verified, signing out...");
         await auth.signOut();
         showNotification(
@@ -233,7 +233,7 @@ function SignIn() {
 
           // Redirect to branch selection page (useAuth handles session)
           setTimeout(() => {
-            navigate("/tenant/check-availability", {
+            navigate("/applicant/check-availability", {
               state: { notice: "Please select your branch to continue" },
             });
           }, 500);
@@ -255,13 +255,11 @@ function SignIn() {
             loginResponse.user.role === "admin" ||
             loginResponse.user.role === "superAdmin"
           ) {
-            // Admin reached tenant login - redirect to admin dashboard
-            // (RequireNonAdmin should prevent this, but this is a safety net)
             console.log("👨‍💼 Admin detected - redirecting to admin dashboard");
             navigate("/admin/dashboard");
           } else {
-            console.log("🏠 Redirecting to check availability...");
-            navigate("/check-availability");
+            console.log("🏠 Redirecting to applicant dashboard...");
+            navigate("/applicant/profile");
           }
         }, 800);
       } catch (backendError) {
@@ -496,12 +494,11 @@ function SignIn() {
         loginResponse.user.role === "admin" ||
         loginResponse.user.role === "superAdmin"
       ) {
-        // Admin detected - redirect to admin dashboard
         console.log("👨‍💼 Admin user - redirecting to admin dashboard");
         navigate("/admin/dashboard");
       } else {
-        console.log("🏠 Regular user - redirecting to check availability");
-        navigate("/check-availability");
+        console.log("🏠 Applicant/Tenant - redirecting to applicant dashboard");
+        navigate("/applicant/profile");
       }
     }, 800);
   };
@@ -674,7 +671,7 @@ function SignIn() {
               </label>
               <button
                 type="button"
-                onClick={() => navigate("/tenant/forgot-password")}
+                onClick={() => navigate("/applicant/forgot-password")}
                 className="text-sm font-light hover:underline"
                 style={{ color: "#E7710F" }}
               >

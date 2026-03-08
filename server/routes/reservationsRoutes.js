@@ -17,7 +17,11 @@
  */
 
 import express from "express";
-import { verifyToken, verifyAdmin, verifyUser } from "../middleware/auth.js";
+import {
+  verifyToken,
+  verifyAdmin,
+  verifyApplicant,
+} from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
   getReservations,
@@ -29,9 +33,11 @@ import {
   extendReservation,
   releaseSlot,
   archiveReservation,
+} from "../controllers/reservationsController.js";
+import {
   getRoomOccupancy,
   getBranchOccupancyStatistics,
-} from "../controllers/reservationsController.js";
+} from "../controllers/occupancyController.js";
 
 const router = express.Router();
 
@@ -70,7 +76,7 @@ router.get("/:reservationId", verifyToken, getReservationById);
  * @body {Object} Reservation data (roomId, checkInDate, checkOutDate, etc.)
  * @returns {Object} Created reservation with success message
  */
-router.post("/", verifyToken, verifyUser, createReservation);
+router.post("/", verifyToken, verifyApplicant, createReservation);
 
 /**
  * PUT /api/reservations/:reservationId
@@ -105,7 +111,7 @@ router.put(
 router.put(
   "/:reservationId/user",
   verifyToken,
-  verifyUser,
+  verifyApplicant,
   updateReservationByUser,
 );
 
