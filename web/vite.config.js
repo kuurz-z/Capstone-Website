@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
@@ -8,18 +8,29 @@ export default defineConfig({
     open: true,
   },
   build: {
-    outDir: 'build',
+    outDir: "build",
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split heavy vendor libs into separately cacheable chunks
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+          "vendor-firebase": ["firebase/app", "firebase/auth"],
+          "vendor-motion": ["framer-motion"],
+          "vendor-icons": ["lucide-react"],
+        },
+      },
+    },
   },
   esbuild: {
-    loader: 'jsx',
+    loader: "jsx",
     include: /src\/.*\.jsx?$/,
     exclude: [],
   },
   optimizeDeps: {
     esbuildOptions: {
       loader: {
-        '.js': 'jsx',
+        ".js": "jsx",
       },
     },
   },

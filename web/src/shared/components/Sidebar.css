@@ -37,7 +37,7 @@
   gap: 0.75rem;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #6366f1;
+  color: #0c375f;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -95,9 +95,9 @@
 }
 
 .sidebar-collapse-toggle:hover {
-  background: #6366f1;
+  background: #0c375f;
   color: white;
-  border-color: #6366f1;
+  border-color: #0c375f;
   transform: scale(1.1);
 }
 
@@ -132,7 +132,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #6366f1;
+  background: #0c375f;
   color: white;
   font-weight: 600;
   font-size: 0.875rem;
@@ -206,12 +206,12 @@
 
 .sidebar-nav-item:hover {
   background: #f1f5f9;
-  color: #6366f1;
+  color: #0c375f;
 }
 
 .sidebar-nav-item.active {
-  background: #eef2ff;
-  color: #6366f1;
+  background: #edf4fa;
+  color: #0c375f;
 }
 
 .sidebar-nav-item.active::before {
@@ -222,7 +222,7 @@
   transform: translateY(-50%);
   height: 20px;
   width: 3px;
-  background: #6366f1;
+  background: #0c375f;
   border-radius: 0 2px 2px 0;
 }
 

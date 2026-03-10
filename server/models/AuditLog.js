@@ -26,6 +26,7 @@
  */
 
 import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -45,7 +46,6 @@ const auditLogSchema = new mongoose.Schema(
     timestamp: {
       type: Date,
       default: Date.now,
-      index: true,
     },
 
     // --- Activity Type ---
@@ -141,6 +141,16 @@ auditLogSchema.index({ timestamp: -1, severity: 1 });
 auditLogSchema.index({ user: 1, timestamp: -1 });
 auditLogSchema.index({ branch: 1, timestamp: -1 });
 
+// TTL index — auto-delete non-critical logs after 365 days
+// Critical logs are retained indefinitely (excluded via partialFilterExpression)
+auditLogSchema.index(
+  { timestamp: 1 },
+  {
+    expireAfterSeconds: 365 * 24 * 60 * 60,
+    partialFilterExpression: { severity: { $ne: "critical" } },
+  },
+);
+
 // ============================================================================
 // STATIC METHODS
 // ============================================================================
@@ -151,7 +161,7 @@ auditLogSchema.index({ branch: 1, timestamp: -1 });
  * @returns {Promise<AuditLog>} The created log entry
  */
 auditLogSchema.statics.log = async function (logData) {
-  const logId = `LOG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const logId = `LOG-${uuidv4()}`;
   const entry = new this({
     logId,
     timestamp: new Date(),

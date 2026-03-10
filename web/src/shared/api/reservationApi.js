@@ -1,0 +1,88 @@
+/**
+ * Reservation API - Domain-specific reservation operations
+ */
+
+import { authFetch } from "./httpClient.js";
+
+export const reservationApi = {
+  /**
+   * Get all reservations
+   */
+  getAll: () => authFetch("/reservations"),
+
+  /**
+   * Get reservation by ID
+   */
+  getById: (reservationId) => authFetch(`/reservations/${reservationId}`),
+
+  /**
+   * Create new reservation
+   */
+  create: (reservationData) =>
+    authFetch("/reservations", {
+      method: "POST",
+      body: JSON.stringify(reservationData),
+    }),
+
+  /**
+   * Update reservation (admin only)
+   */
+  update: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Update reservation (tenant only)
+   */
+  updateByUser: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}/user`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Cancel reservation
+   */
+  cancel: (reservationId) =>
+    authFetch(`/reservations/${reservationId}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "cancelled" }),
+    }),
+
+  /**
+   * Delete reservation
+   */
+  delete: (reservationId) =>
+    authFetch(`/reservations/${reservationId}`, {
+      method: "DELETE",
+    }),
+
+  /**
+   * Extend reservation move-in date (admin only)
+   */
+  extend: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}/extend`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Release reservation slot (admin only)
+   */
+  release: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}/release`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Archive (soft delete) reservation (admin only)
+   */
+  archive: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}/archive`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+};

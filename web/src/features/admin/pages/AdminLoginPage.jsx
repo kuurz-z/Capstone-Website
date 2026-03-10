@@ -73,8 +73,8 @@ function AdminLoginPage() {
       const firebaseUser = userCredential.user;
       console.log("✅ Firebase authentication successful");
 
-      // Step 3: Check email verification
-      if (!firebaseUser.emailVerified) {
+      // Step 3: Check email verification (skip in development)
+      if (!firebaseUser.emailVerified && import.meta.env.PROD) {
         console.log("⚠️ Email not verified, signing out...");
         await signOut();
         setError(

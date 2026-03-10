@@ -1,0 +1,65 @@
+import React, { useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import { Menu } from "lucide-react";
+import Sidebar from "./Sidebar";
+import "../styles/admin-layout.css";
+import "../styles/admin-common.css";
+
+const PAGE_TITLES = {
+  "/admin/dashboard": "Dashboard",
+  "/admin/reservations": "Reservations",
+  "/admin/tenants": "Tenants",
+  "/admin/users": "Accounts",
+  "/admin/room-availability": "Rooms",
+  "/admin/audit-logs": "Activity Log",
+};
+
+export default function AdminLayout() {
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const pageTitle = PAGE_TITLES[location.pathname] || "Admin";
+
+  return (
+    <div className="admin-layout">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      <div className="admin-layout-main">
+        {/* Top Bar */}
+        <header className="admin-topbar">
+          <div className="admin-topbar-left">
+            <button
+              className="admin-menu-toggle"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h1 className="admin-topbar-title">{pageTitle}</h1>
+          </div>
+          <span className="admin-topbar-date">
+            {new Date().toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+        </header>
+
+        {/* Page Content */}
+        <main className="admin-content">
+          <Outlet />
+        </main>
+      </div>
+
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="admin-sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+    </div>
+  );
+}

@@ -100,7 +100,7 @@ const DashboardPage = () => {
               unacknowledged notice{unacknowledgedCount > 1 ? "s" : ""}.
               <button
                 className="alert-link"
-                onClick={() => navigate("/tenant/announcements")}
+                onClick={() => navigate("/applicant/announcements")}
               >
                 View Announcements
               </button>
@@ -122,7 +122,7 @@ const DashboardPage = () => {
                   <p>View and manage your room reservation</p>
                   <button
                     className="btn btn-primary-outline btn-sm"
-                    onClick={() => navigate("/tenant/reservation")}
+                    onClick={() => navigate("/applicant/reservation")}
                   >
                     View Details
                   </button>
@@ -138,7 +138,7 @@ const DashboardPage = () => {
                   <p>Update your personal information</p>
                   <button
                     className="btn btn-secondary-outline btn-sm"
-                    onClick={() => navigate("/tenant/profile")}
+                    onClick={() => navigate("/applicant/profile")}
                   >
                     Edit Profile
                   </button>
@@ -171,7 +171,7 @@ const DashboardPage = () => {
                   </h2>
                   <button
                     className="btn-link"
-                    onClick={() => navigate("/tenant/announcements")}
+                    onClick={() => navigate("/applicant/announcements")}
                   >
                     View All
                   </button>
@@ -272,7 +272,7 @@ const DashboardPage = () => {
                   <p>View your balance and payment history</p>
                   <button
                     className="btn btn-primary-outline btn-sm"
-                    onClick={() => navigate("/tenant/billing")}
+                    onClick={() => navigate("/applicant/billing")}
                   >
                     View Billing
                   </button>
@@ -288,7 +288,7 @@ const DashboardPage = () => {
                   <p>Submit and track maintenance requests</p>
                   <button
                     className="btn btn-secondary-outline btn-sm"
-                    onClick={() => navigate("/tenant/maintenance")}
+                    onClick={() => navigate("/applicant/maintenance")}
                   >
                     Maintenance
                   </button>
@@ -304,7 +304,7 @@ const DashboardPage = () => {
                   <p>View your stay details and documents</p>
                   <button
                     className="btn btn-secondary-outline btn-sm"
-                    onClick={() => navigate("/tenant/profile")}
+                    onClick={() => navigate("/applicant/profile")}
                   >
                     View Profile
                   </button>
@@ -321,7 +321,7 @@ const DashboardPage = () => {
                   </h2>
                   <button
                     className="btn-link"
-                    onClick={() => navigate("/tenant/announcements")}
+                    onClick={() => navigate("/applicant/announcements")}
                   >
                     View All
                   </button>

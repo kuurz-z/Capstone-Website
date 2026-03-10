@@ -1,76 +1,86 @@
-import React from "react";
+import React, { Suspense } from "react";
 import "./App.css";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import ScrollToTop from "./shared/components/ScrollToTop";
 import { FirebaseAuthProvider } from "./shared/hooks/FirebaseAuthContext";
 import { AuthProvider, useAuth } from "./shared/hooks/useAuth";
 import GlobalLoading from "./shared/components/GlobalLoading";
+import RouteErrorBoundary from "./shared/components/RouteErrorBoundary";
 import { useEffect } from "react";
 
-// Public Pages
-import LandingPage from "./features/public/pages/LandingPage";
-
-// Admin Pages
-import AdminLoginPage from "./features/admin/pages/AdminLoginPage";
-import AdminDashboardPage from "./features/admin/pages/Dashboard";
-import InquiriesPage from "./features/admin/pages/InquiriesPage";
-import ReservationsPage from "./features/admin/pages/ReservationsPage";
-import RoomAvailabilityPage from "./features/admin/pages/RoomAvailabilityPage";
-import RoomConfigurationPage from "./features/admin/pages/RoomConfigurationPage";
-import OccupancyTrackingPage from "./features/admin/pages/OccupancyTrackingPage";
-import TenantsPage from "./features/admin/pages/TenantsPage";
-import AuditLogsPage from "./features/admin/pages/AuditLogsPage";
-import UserManagementPage from "./features/admin/pages/UserManagementPage";
-
-// Guards
+// Guards (kept as static imports — small files, needed immediately)
 import RequireAdmin from "./shared/guards/RequireAdmin";
 import RequireNonAdmin from "./shared/guards/RequireNonAdmin";
 import ProtectedRoute from "./shared/components/ProtectedRoute";
 
-// Tenant Pages
-import SignIn from "./features/tenant/pages/SignIn.jsx";
-import SignUp from "./features/public/pages/SignUp.jsx";
-import ForgotPassword from "./features/tenant/pages/ForgotPassword.jsx";
-import DashboardPage from "./features/tenant/pages/DashboardPage";
-import CheckAvailabilityPage from "./features/tenant/pages/CheckAvailabilityPage";
-import ReservationFlowPage from "./features/tenant/pages/ReservationFlowPage";
-import ProfilePage from "./features/tenant/pages/ProfilePage";
-import BillingPage from "./features/tenant/pages/BillingPage";
-import MaintenancePage from "./features/tenant/pages/MaintenancePage";
-import AnnouncementsPage from "./features/tenant/pages/AnnouncementsPage";
-import SettingsPage from "./features/tenant/pages/SettingsPage";
-import ContractsPage from "./features/tenant/pages/ContractsPage";
+// ============================================================================
+// LAZY-LOADED PAGES (code-split for better performance)
+// ============================================================================
 
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+// Public Pages
+const LandingPage = React.lazy(
+  () => import("./features/public/pages/LandingPage"),
+);
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
+// Admin Pages
+const AdminLayout = React.lazy(
+  () => import("./features/admin/components/AdminLayout"),
+);
+const AdminDashboardPage = React.lazy(
+  () => import("./features/admin/pages/Dashboard"),
+);
 
-  componentDidCatch(error, info) {
-    console.error("App crashed:", error, info);
-  }
+const ReservationsPage = React.lazy(
+  () => import("./features/admin/pages/ReservationsPage"),
+);
+const RoomAvailabilityPage = React.lazy(
+  () => import("./features/admin/pages/RoomAvailabilityPage"),
+);
 
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: "24px", fontFamily: "Arial" }}>
-          <h2>Something went wrong.</h2>
-          <pre style={{ whiteSpace: "pre-wrap" }}>
-            {this.state.error?.message}
-          </pre>
-        </div>
-      );
-    }
+const TenantsPage = React.lazy(
+  () => import("./features/admin/pages/TenantsPage"),
+);
+const AuditLogsPage = React.lazy(
+  () => import("./features/admin/pages/AuditLogsPage"),
+);
+const UserManagementPage = React.lazy(
+  () => import("./features/admin/pages/UserManagementPage"),
+);
+const AdminBillingPage = React.lazy(
+  () => import("./features/admin/pages/AdminBillingPage"),
+);
 
-    return this.props.children;
-  }
-}
+// Applicant / Tenant Pages
+const SignIn = React.lazy(() => import("./features/tenant/pages/SignIn.jsx"));
+const SignUp = React.lazy(() => import("./features/public/pages/SignUp.jsx"));
+const ForgotPassword = React.lazy(
+  () => import("./features/tenant/pages/ForgotPassword.jsx"),
+);
+// DashboardPage removed — applicant profile serves as the main page
+const CheckAvailabilityPage = React.lazy(
+  () => import("./features/tenant/pages/CheckAvailabilityPage"),
+);
+const ReservationFlowPage = React.lazy(
+  () => import("./features/tenant/pages/ReservationFlowPage"),
+);
+const ProfilePage = React.lazy(
+  () => import("./features/tenant/pages/ProfilePage"),
+);
+const BillingPage = React.lazy(
+  () => import("./features/tenant/pages/BillingPage"),
+);
+const MaintenancePage = React.lazy(
+  () => import("./features/tenant/pages/MaintenancePage"),
+);
+const AnnouncementsPage = React.lazy(
+  () => import("./features/tenant/pages/AnnouncementsPage"),
+);
+
+const ContractsPage = React.lazy(
+  () => import("./features/tenant/pages/ContractsPage"),
+);
+
 /**
  * Inner App component that uses auth context
  * Must be rendered inside AuthProvider to access useAuth hook
@@ -89,103 +99,37 @@ function AppContent() {
 
     return () => clearTimeout(timer);
   }, [location.pathname, globalLoading, setGlobalLoading]);
+
   return (
     <>
       <ScrollToTop />
-      {/* Global loading overlay for auth operations */}
       {globalLoading && <GlobalLoading />}
-      <ErrorBoundary>
+
+      <Suspense fallback={<GlobalLoading />}>
         <Routes>
-          {/* Public Page */}
+          {/* ============================================================ */}
+          {/* PUBLIC — accessible to everyone                              */}
+          {/* ============================================================ */}
           <Route
             path="/"
             element={
-              <RequireNonAdmin>
+              <RouteErrorBoundary name="LandingPage">
                 <LandingPage />
-              </RequireNonAdmin>
+              </RouteErrorBoundary>
             }
           />
 
-          {/* Admin routes - all require admin auth */}
-          <Route
-            path="/admin/dashboard"
-            element={
-              <RequireAdmin>
-                <AdminDashboardPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/inquiries"
-            element={
-              <RequireAdmin>
-                <InquiriesPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/reservations"
-            element={
-              <RequireAdmin>
-                <ReservationsPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/room-availability"
-            element={
-              <RequireAdmin>
-                <RoomAvailabilityPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/room-configuration"
-            element={
-              <RequireAdmin>
-                <RoomConfigurationPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/occupancy-tracking"
-            element={
-              <RequireAdmin>
-                <OccupancyTrackingPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/tenants"
-            element={
-              <RequireAdmin>
-                <TenantsPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/audit-logs"
-            element={
-              <RequireAdmin>
-                <AuditLogsPage />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="/admin/users"
-            element={
-              <RequireAdmin>
-                <UserManagementPage />
-              </RequireAdmin>
-            }
-          />
-
-          {/* Tenant Page */}
+          {/* ============================================================ */}
+          {/* AUTH — unified sign in / sign up / forgot password            */}
+          {/* All roles (applicant, tenant, admin, superAdmin) login here   */}
+          {/* ============================================================ */}
           <Route
             path="/signin"
             element={
               <RequireNonAdmin>
-                <SignIn />
+                <RouteErrorBoundary name="SignIn">
+                  <SignIn />
+                </RouteErrorBoundary>
               </RequireNonAdmin>
             }
           />
@@ -193,108 +137,245 @@ function AppContent() {
             path="/signup"
             element={
               <RequireNonAdmin>
-                <SignUp />
+                <RouteErrorBoundary name="SignUp">
+                  <SignUp />
+                </RouteErrorBoundary>
               </RequireNonAdmin>
             }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <RequireNonAdmin>
+                <RouteErrorBoundary name="ForgotPassword">
+                  <ForgotPassword />
+                </RouteErrorBoundary>
+              </RequireNonAdmin>
+            }
+          />
+
+          {/* Backward compat: old paths redirect to new */}
+          <Route
+            path="/admin/login"
+            element={<Navigate to="/signin" replace />}
           />
           <Route
             path="/tenant/forgot-password"
+            element={<Navigate to="/forgot-password" replace />}
+          />
+
+          {/* ============================================================ */}
+          {/* ADMIN — require admin auth, shared layout, nested routes    */}
+          {/* ============================================================ */}
+          <Route
+            path="/admin"
             element={
-              <RequireNonAdmin>
-                <ForgotPassword />
-              </RequireNonAdmin>
+              <RequireAdmin>
+                <RouteErrorBoundary name="AdminLayout">
+                  <AdminLayout />
+                </RouteErrorBoundary>
+              </RequireAdmin>
+            }
+          >
+            <Route
+              path="dashboard"
+              element={
+                <RouteErrorBoundary name="AdminDashboard">
+                  <AdminDashboardPage />
+                </RouteErrorBoundary>
+              }
+            />
+
+            <Route
+              path="reservations"
+              element={
+                <RouteErrorBoundary name="Reservations">
+                  <ReservationsPage />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="room-availability"
+              element={
+                <RouteErrorBoundary name="RoomAvailability">
+                  <RoomAvailabilityPage />
+                </RouteErrorBoundary>
+              }
+            />
+
+            <Route
+              path="tenants"
+              element={
+                <RouteErrorBoundary name="Tenants">
+                  <TenantsPage />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="audit-logs"
+              element={
+                <RouteErrorBoundary name="AuditLogs">
+                  <AuditLogsPage />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <RouteErrorBoundary name="UserManagement">
+                  <UserManagementPage />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="billing"
+              element={
+                <RouteErrorBoundary name="AdminBilling">
+                  <AdminBillingPage />
+                </RouteErrorBoundary>
+              }
+            />
+            <Route
+              path="maintenance"
+              element={
+                <RouteErrorBoundary name="AdminMaintenance">
+                  <MaintenancePage />
+                </RouteErrorBoundary>
+              }
+            />
+          </Route>
+
+          {/* ============================================================ */}
+          {/* APPLICANT / TENANT — require applicant or tenant auth        */}
+          {/* Applicants: browse, reserve, upload payment, check status    */}
+          {/* Tenants: also billing, maintenance, announcements, contracts */}
+          {/* ============================================================ */}
+          {/* /applicant/dashboard removed — redirect to profile */}
+          <Route
+            path="/applicant/dashboard"
+            element={<Navigate to="/applicant/profile" replace />}
+          />
+          {/* /applicant/rooms — alias for check-availability */}
+          <Route
+            path="/applicant/rooms"
+            element={<Navigate to="/applicant/check-availability" replace />}
+          />
+          <Route
+            path="/applicant/check-availability"
+            element={
+              <RouteErrorBoundary name="CheckAvailability">
+                <CheckAvailabilityPage />
+              </RouteErrorBoundary>
             }
           />
+          <Route
+            path="/applicant/reservation"
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <RouteErrorBoundary name="ReservationFlow">
+                  <ReservationFlowPage />
+                </RouteErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/applicant/profile"
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <RouteErrorBoundary name="Profile">
+                  <ProfilePage />
+                </RouteErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/applicant/announcements"
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <RouteErrorBoundary name="Announcements">
+                  <AnnouncementsPage />
+                </RouteErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/applicant/contracts"
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <RouteErrorBoundary name="Contracts">
+                  <ContractsPage />
+                </RouteErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/applicant/billing"
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <RouteErrorBoundary name="Billing">
+                  <BillingPage />
+                </RouteErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/applicant/maintenance"
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <RouteErrorBoundary name="Maintenance">
+                  <MaintenancePage />
+                </RouteErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ============================================================ */}
+          {/* BACKWARD COMPAT — old /tenant/* and /check-availability       */}
+          {/* ============================================================ */}
           <Route
             path="/check-availability"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <CheckAvailabilityPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant/check-availability"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <CheckAvailabilityPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant/reservation-flow"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <ReservationFlowPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            element={
-              <ProtectedRoute requiredRole="user">
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-            path="/tenant/profile"
+            element={<Navigate to="/applicant/check-availability" replace />}
           />
           <Route
             path="/tenant/dashboard"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <DashboardPage />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/applicant/profile" replace />}
           />
           <Route
-            path="/tenant/billing"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <BillingPage />
-              </ProtectedRoute>
-            }
+            path="/tenant/check-availability"
+            element={<Navigate to="/applicant/check-availability" replace />}
           />
           <Route
-            path="/tenant/maintenance"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <MaintenancePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant/announcements"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <AnnouncementsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant/settings"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <SettingsPage />
-              </ProtectedRoute>
-            }
+            path="/tenant/reservation-flow"
+            element={<Navigate to="/applicant/reservation" replace />}
           />
           <Route
             path="/tenant/reservation"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <ReservationFlowPage />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/applicant/reservation" replace />}
           />
           <Route
+            path="/tenant/profile"
+            element={<Navigate to="/applicant/profile" replace />}
+          />
+          <Route
+            path="/tenant/billing"
+            element={<Navigate to="/applicant/billing" replace />}
+          />
+          <Route
+            path="/tenant/maintenance"
+            element={<Navigate to="/applicant/maintenance" replace />}
+          />
+          <Route
+            path="/tenant/announcements"
+            element={<Navigate to="/applicant/announcements" replace />}
+          />
+
+          <Route
             path="/tenant/contracts"
-            element={
-              <ProtectedRoute requiredRole="user">
-                <ContractsPage />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/applicant/contracts" replace />}
           />
         </Routes>
-      </ErrorBoundary>
+      </Suspense>
     </>
   );
 }

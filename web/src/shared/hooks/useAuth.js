@@ -24,7 +24,13 @@
  * =============================================================================
  */
 
-import { useState, useEffect, createContext, useContext, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+  useRef,
+} from "react";
 import { authApi } from "../api/authApi";
 import { useFirebaseAuth } from "./FirebaseAuthContext";
 
@@ -91,6 +97,22 @@ export const AuthProvider = ({ children }) => {
       const userData = await authApi.getCurrentUser();
       setUser(userData);
       setIsAuthenticated(true);
+
+      // Log current user info to console
+      const displayName =
+        `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
+        userData.username ||
+        "Unknown";
+      console.log(
+        "%c👤 Current User Session",
+        "background: #0C375F; color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: bold;",
+      );
+      console.table({
+        Name: displayName,
+        Email: userData.email || "N/A",
+        Role: userData.role || "N/A",
+        Username: userData.username || "N/A",
+      });
     } catch (error) {
       // User not authenticated in backend - clear state
       setUser(null);
@@ -109,8 +131,26 @@ export const AuthProvider = ({ children }) => {
     setGlobalLoading(true);
     try {
       const userData = await authApi.login();
-      setUser(userData.user || userData);
+      const resolvedUser = userData.user || userData;
+      setUser(resolvedUser);
       setIsAuthenticated(true);
+
+      // Log login info to console
+      const displayName =
+        `${resolvedUser.firstName || ""} ${resolvedUser.lastName || ""}`.trim() ||
+        resolvedUser.username ||
+        "Unknown";
+      console.log(
+        "%c🔑 User Logged In",
+        "background: #10B981; color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: bold;",
+      );
+      console.table({
+        Name: displayName,
+        Email: resolvedUser.email || "N/A",
+        Role: resolvedUser.role || "N/A",
+        Username: resolvedUser.username || "N/A",
+      });
+
       return userData;
     } finally {
       setGlobalLoading(false);

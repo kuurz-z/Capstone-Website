@@ -141,7 +141,8 @@ export const sanitizeName = (name) => {
     .replace(/<[^>]+>/g, "");
 
   // Allow letters, spaces, hyphens, apostrophes only
-  if (!/^[a-zA-Z\s\-']{2,50}$/.test(sanitized)) {
+  // Minimum 1 character to support short names from social providers (Google)
+  if (!/^[a-zA-Z\s\-']{1,50}$/.test(sanitized)) {
     return null;
   }
 
@@ -260,7 +261,7 @@ export const validateRegisterInput = (body) => {
     const firstName = sanitizeName(body.firstName);
     if (!firstName) {
       errors.push(
-        "First name must be 2-50 characters, letters/spaces/hyphens/apostrophes only",
+        "First name must be 1-50 characters, letters/spaces/hyphens/apostrophes only",
       );
     } else {
       data.firstName = firstName;
@@ -274,7 +275,7 @@ export const validateRegisterInput = (body) => {
     const lastName = sanitizeName(body.lastName);
     if (!lastName) {
       errors.push(
-        "Last name must be 2-50 characters, letters/spaces/hyphens/apostrophes only",
+        "Last name must be 1-50 characters, letters/spaces/hyphens/apostrophes only",
       );
     } else {
       data.lastName = lastName;

@@ -1,66 +1,59 @@
 /**
- * Reservation Controllers
+ * ============================================================================
+ * RESERVATION CONTROLLERS
+ * ============================================================================
+ *
+ * Refactored to use shared helpers from reservationHelpers.js.
+ * Eliminates ~200 lines of duplicated validation, error handling, and field mapping.
  */
 
 import { Reservation, User, Room } from "../models/index.js";
 import auditLogger from "../utils/auditLogger.js";
+import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
 import {
-  updateOccupancyOnReservationChange,
-  getRoomOccupancyStatus,
-} from "../utils/occupancyManager.js";
+  isValidObjectId,
+  invalidIdResponse,
+  handleReservationError,
+  checkBranchAccess,
+  validateMoveInDate,
+  handleStatusTransition,
+  buildUserUpdatePayload,
+} from "../utils/reservationHelpers.js";
 
+/* ─── helpers ────────────────────────────────────── */
+const HEAVY_FIELDS =
+  "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
+const POPULATE_USER = ["userId", "firstName lastName email"];
+const POPULATE_ROOM = ["roomId", "name branch type price"];
+
+const findDbUser = async (uid) => User.findOne({ firebaseUid: uid });
+
+/* ─── GET all reservations ───────────────────────── */
 export const getReservations = async (req, res) => {
   try {
-    const user = req.user;
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser)
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
 
-    // Find user in database to get role and branch
-    const dbUser = await User.findOne({ firebaseUid: user.uid });
-
-    if (!dbUser) {
-      return res.status(404).json({
-        error: "User not found in database",
-        code: "USER_NOT_FOUND",
-      });
-    }
-
-    let reservations;
-
-    // Super admin sees all reservations (excluding archived)
+    let query;
     if (dbUser.role === "superAdmin") {
-      reservations = await Reservation.find({ isArchived: { $ne: true } })
-        .populate("userId", "firstName lastName email")
-        .populate("roomId", "name branch type price")
-        .select("-__v")
-        .sort({ createdAt: -1 });
+      query = { isArchived: { $ne: true } };
+    } else if (dbUser.role === "admin") {
+      const roomIds = (
+        await Room.find({ branch: dbUser.branch }).select("_id")
+      ).map((r) => r._id);
+      query = { roomId: { $in: roomIds }, isArchived: { $ne: true } };
+    } else {
+      query = { userId: dbUser._id, isArchived: { $ne: true } };
     }
-    // Admin sees reservations for rooms in their branch
-    else if (dbUser.role === "admin") {
-      // First get all rooms for the admin's branch
-      const branchRooms = await Room.find({ branch: dbUser.branch }).select(
-        "_id",
-      );
-      const roomIds = branchRooms.map((room) => room._id);
 
-      reservations = await Reservation.find({
-        roomId: { $in: roomIds },
-        isArchived: { $ne: true },
-      })
-        .populate("userId", "firstName lastName email")
-        .populate("roomId", "name branch type price")
-        .select("-__v")
-        .sort({ createdAt: -1 });
-    }
-    // Regular users/tenants see only their own reservations
-    else {
-      reservations = await Reservation.find({
-        userId: dbUser._id,
-        isArchived: { $ne: true },
-      })
-        .populate("userId", "firstName lastName email")
-        .populate("roomId", "name branch type price")
-        .select("-__v")
-        .sort({ createdAt: -1 });
-    }
+    const reservations = await Reservation.find(query)
+      .populate(...POPULATE_USER)
+      .populate(...POPULATE_ROOM)
+      .select(HEAVY_FIELDS)
+      .sort({ createdAt: -1 });
 
     console.log(
       `✅ Retrieved ${reservations.length} reservations for ${dbUser.email} (${dbUser.role})`,
@@ -68,245 +61,202 @@ export const getReservations = async (req, res) => {
     res.json(reservations);
   } catch (error) {
     console.error("❌ Fetch reservations error:", error);
-    res.status(500).json({
-      error: "Failed to fetch reservations",
-      details: error.message,
-      code: "FETCH_RESERVATIONS_ERROR",
-    });
+    handleReservationError(res, error, "fetch");
   }
 };
 
+/* ─── GET single reservation ─────────────────────── */
 export const getReservationById = async (req, res) => {
   try {
     const { reservationId } = req.params;
-    const user = req.user;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
-    if (!reservationId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
-
-    const dbUser = await User.findOne({ firebaseUid: user.uid });
-    if (!dbUser) {
-      return res.status(404).json({
-        error: "User not found in database",
-        code: "USER_NOT_FOUND",
-      });
-    }
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser)
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
 
     const reservation = await Reservation.findById(reservationId)
-      .populate("userId", "firstName lastName email")
+      .populate(...POPULATE_USER)
       .populate("roomId", "name branch type price floor");
-
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
+    if (!reservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
 
     if (
       dbUser.role !== "admin" &&
       dbUser.role !== "superAdmin" &&
       String(reservation.userId?._id) !== String(dbUser._id)
     ) {
-      return res.status(403).json({
-        error: "Access denied. You can only view your own reservations.",
-        code: "RESERVATION_ACCESS_DENIED",
-      });
+      return res
+        .status(403)
+        .json({
+          error: "Access denied. You can only view your own reservations.",
+          code: "RESERVATION_ACCESS_DENIED",
+        });
     }
 
     res.json(reservation);
   } catch (error) {
     console.error("❌ Fetch reservation error:", error);
-    res.status(500).json({
-      error: "Failed to fetch reservation",
-      details: error.message,
-      code: "FETCH_RESERVATION_ERROR",
-    });
+    handleReservationError(res, error, "fetch");
   }
 };
 
+/* ─── CREATE reservation ─────────────────────────── */
 export const createReservation = async (req, res) => {
   try {
-    // Find user in database
-    const dbUser = await User.findOne({ firebaseUid: req.user.uid });
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser)
+      return res
+        .status(404)
+        .json({
+          error:
+            "User not found in database. Please complete registration first.",
+          code: "USER_NOT_FOUND",
+        });
 
-    if (!dbUser) {
-      return res.status(404).json({
-        error:
-          "User not found in database. Please complete registration first.",
-        code: "USER_NOT_FOUND",
-      });
-    }
+    // Single reservation enforcement
+    const existingActive = await Reservation.findOne({
+      userId: dbUser._id,
+      status: { $nin: ["cancelled", "archived"] },
+      isArchived: { $ne: true },
+    });
+    if (existingActive)
+      return res
+        .status(400)
+        .json({
+          error:
+            "You already have an active reservation. Please complete or cancel it before creating a new one.",
+          code: "RESERVATION_ALREADY_EXISTS",
+          existingReservationId: existingActive._id,
+        });
 
-    // Validate required fields
     const { roomId, roomName, checkInDate, totalPrice } = req.body;
-    if ((!roomId && !roomName) || !checkInDate || !totalPrice) {
-      return res.status(400).json({
-        error:
-          "Missing required fields: roomId or roomName, checkInDate, and totalPrice are required",
-        code: "MISSING_REQUIRED_FIELDS",
-      });
-    }
+    if ((!roomId && !roomName) || !checkInDate || !totalPrice)
+      return res
+        .status(400)
+        .json({
+          error:
+            "Missing required fields: roomId or roomName, checkInDate, and totalPrice are required",
+          code: "MISSING_REQUIRED_FIELDS",
+        });
 
-    // Enforce 3-month reservation window
-    const moveInDate = new Date(checkInDate);
-    const now = new Date();
-    const threeMonthsLater = new Date(now);
-    threeMonthsLater.setMonth(now.getMonth() + 3);
-    if (moveInDate < now || moveInDate > threeMonthsLater) {
-      return res.status(400).json({
-        error: "Move-in date must be within 3 months from today.",
-        code: "MOVEIN_DATE_OUT_OF_RANGE",
-      });
-    }
+    // Enforce 3-month window
+    if (!validateMoveInDate(checkInDate))
+      return res
+        .status(400)
+        .json({
+          error: "Move-in date must be within 3 months from today.",
+          code: "MOVEIN_DATE_OUT_OF_RANGE",
+        });
 
-    // Verify room exists - look up by ID or name
-    let room;
-    if (roomId) {
-      room = await Room.findById(roomId);
-    } else if (roomName) {
-      room = await Room.findOne({ name: roomName });
-    }
+    // Verify room
+    const room = roomId
+      ? await Room.findById(roomId)
+      : await Room.findOne({ name: roomName });
+    if (!room)
+      return res
+        .status(404)
+        .json({ error: "Room not found", code: "ROOM_NOT_FOUND" });
+    if (room.isArchived)
+      return res
+        .status(400)
+        .json({
+          error: "Room is not available for reservation",
+          code: "ROOM_NOT_AVAILABLE",
+        });
+    if (!room.available)
+      console.warn(
+        `⚠️ Room ${room.name} is at capacity but allowing draft reservation for ${dbUser.email}`,
+      );
 
-    if (!room) {
-      return res.status(404).json({
-        error: "Room not found",
-        code: "ROOM_NOT_FOUND",
-      });
-    }
-
-    // Check if room is available
-    if (!room.available) {
-      return res.status(400).json({
-        error: "Room is not available for reservation",
-        code: "ROOM_NOT_AVAILABLE",
-      });
-    }
-
-    // Create new reservation with ALL fields from the form
-    // Calculate reminder and at-risk dates
-    const reminderDate = new Date(moveInDate);
-    reminderDate.setDate(reminderDate.getDate() + 1);
-    const riskDate = new Date(moveInDate);
-    riskDate.setDate(riskDate.getDate() + 2);
-
+    // Create reservation with all form fields
+    const b = req.body;
     const reservation = new Reservation({
       userId: dbUser._id,
       roomId: room._id,
-
-      // Bed Assignment
-      selectedBed: req.body.selectedBed
+      selectedBed: b.selectedBed
         ? {
-            id: req.body.selectedBed.id || null,
-            position: req.body.selectedBed.position || null,
+            id: b.selectedBed.id || null,
+            position: b.selectedBed.position || null,
           }
         : null,
-
-      // Stage 1: Summary
-      targetMoveInDate: req.body.targetMoveInDate
-        ? new Date(req.body.targetMoveInDate)
+      targetMoveInDate: b.targetMoveInDate
+        ? new Date(b.targetMoveInDate)
         : null,
-      leaseDuration: req.body.leaseDuration || 12,
-      billingEmail: req.body.billingEmail || dbUser.email,
-
-      // Stage 2: Visit
-      viewingType: req.body.viewingType || null,
-      isOutOfTown: req.body.isOutOfTown || false,
-      currentLocation: req.body.currentLocation || null,
-      visitApproved: req.body.visitApproved === true ? true : false,
-
-      // Stage 3: Details - Photos
-      selfiePhotoUrl: req.body.selfiePhotoUrl || null,
-
-      // Stage 3: Personal Information
-      firstName: req.body.firstName || null,
-      lastName: req.body.lastName || null,
-      middleName: req.body.middleName || null,
-      nickname: req.body.nickname || null,
-      mobileNumber: req.body.mobileNumber || null,
-      birthday: req.body.birthday ? new Date(req.body.birthday) : null,
-      maritalStatus: req.body.maritalStatus || null,
-      nationality: req.body.nationality || null,
-      educationLevel: req.body.educationLevel || null,
-
-      // Stage 3: Address
+      leaseDuration: b.leaseDuration || 12,
+      billingEmail: b.billingEmail || dbUser.email,
+      viewingType: b.viewingType || null,
+      isOutOfTown: b.isOutOfTown || false,
+      currentLocation: b.currentLocation || null,
+      visitApproved: b.visitApproved === true,
+      selfiePhotoUrl: b.selfiePhotoUrl || null,
+      firstName: b.firstName || null,
+      lastName: b.lastName || null,
+      middleName: b.middleName || null,
+      nickname: b.nickname || null,
+      mobileNumber: b.mobileNumber || null,
+      birthday: b.birthday ? new Date(b.birthday) : null,
+      maritalStatus: b.maritalStatus || null,
+      nationality: b.nationality || null,
+      educationLevel: b.educationLevel || null,
       address: {
-        unitHouseNo: req.body.addressUnitHouseNo || null,
-        street: req.body.addressStreet || null,
-        barangay: req.body.addressBarangay || null,
-        city: req.body.addressCity || null,
-        province: req.body.addressProvince || null,
+        unitHouseNo: b.addressUnitHouseNo || null,
+        street: b.addressStreet || null,
+        barangay: b.addressBarangay || null,
+        city: b.addressCity || null,
+        province: b.addressProvince || null,
       },
-
-      // Stage 3: Identity Documents
-      validIDFrontUrl: req.body.validIDFrontUrl || null,
-      validIDBackUrl: req.body.validIDBackUrl || null,
-      validIDType: req.body.validIDType || null,
-      nbiClearanceUrl: req.body.nbiClearanceUrl || null,
-      nbiReason: req.body.nbiReason || null,
-      companyIDUrl: req.body.companyIDUrl || null,
-      companyIDReason: req.body.companyIDReason || null,
-
-      // Stage 3: Emergency Contact
+      validIDFrontUrl: b.validIDFrontUrl || null,
+      validIDBackUrl: b.validIDBackUrl || null,
+      validIDType: b.validIDType || null,
+      nbiClearanceUrl: b.nbiClearanceUrl || null,
+      nbiReason: b.nbiReason || null,
+      companyIDUrl: b.companyIDUrl || null,
+      companyIDReason: b.companyIDReason || null,
       emergencyContact: {
-        name: req.body.emergencyContactName || null,
-        relationship: req.body.emergencyRelationship || null,
-        contactNumber: req.body.emergencyContactNumber || null,
+        name: b.emergencyContactName || null,
+        relationship: b.emergencyRelationship || null,
+        contactNumber: b.emergencyContactNumber || null,
       },
-      healthConcerns: req.body.healthConcerns || null,
-
-      // Stage 3: Employment
+      healthConcerns: b.healthConcerns || null,
       employment: {
-        employerSchool: req.body.employerSchool || null,
-        employerAddress: req.body.employerAddress || null,
-        employerContact: req.body.employerContact || null,
-        startDate: req.body.startDate ? new Date(req.body.startDate) : null,
-        occupation: req.body.occupation || null,
-        previousEmployment: req.body.previousEmployment || null,
+        employerSchool: b.employerSchool || null,
+        employerAddress: b.employerAddress || null,
+        employerContact: b.employerContact || null,
+        startDate: b.startDate ? new Date(b.startDate) : null,
+        occupation: b.occupation || null,
+        previousEmployment: b.previousEmployment || null,
       },
-
-      // Stage 3: Dorm-Related
-      preferredRoomType: req.body.roomType || null,
-      preferredRoomNumber: req.body.preferredRoomNumber || null,
-      referralSource: req.body.referralSource || null,
-      referrerName: req.body.referrerName || null,
-      estimatedMoveInTime: req.body.estimatedMoveInTime || null,
-      workSchedule: req.body.workSchedule || null,
-      workScheduleOther: req.body.workScheduleOther || null,
-
-      // Stage 3: Agreements
-      agreedToPrivacy: req.body.agreedToPrivacy || false,
-      agreedToCertification: req.body.agreedToCertification || false,
-
-      // Stage 4: Payment
-      proofOfPaymentUrl: req.body.proofOfPaymentUrl || null,
-      applianceFees: req.body.applianceFees || 0,
-
-      // Reservation Dates & Status
-      checkInDate: req.body.checkInDate,
-      checkOutDate: req.body.checkOutDate || null,
-      totalPrice: req.body.totalPrice,
-      notes: req.body.notes || "",
+      preferredRoomType: b.roomType || null,
+      preferredRoomNumber: b.preferredRoomNumber || null,
+      referralSource: b.referralSource || null,
+      referrerName: b.referrerName || null,
+      estimatedMoveInTime: b.estimatedMoveInTime || null,
+      workSchedule: b.workSchedule || null,
+      workScheduleOther: b.workScheduleOther || null,
+      agreedToPrivacy: b.agreedToPrivacy || false,
+      agreedToCertification: b.agreedToCertification || false,
+      proofOfPaymentUrl: b.proofOfPaymentUrl || null,
+      applianceFees: b.applianceFees || 0,
+      checkInDate: b.checkInDate,
+      checkOutDate: b.checkOutDate || null,
+      totalPrice: b.totalPrice,
+      notes: b.notes || "",
       status: "pending",
       paymentStatus: "pending",
-      moveInReminderSent: false,
-      moveInReminderDate: reminderDate,
-      moveInRiskDate: riskDate,
-      atRisk: false,
     });
 
-    // Save reservation to database
     await reservation.save();
+    await reservation.populate(...POPULATE_USER);
+    await reservation.populate(...POPULATE_ROOM);
 
-    // Populate user and room details for response
-    await reservation.populate("userId", "firstName lastName email");
-    await reservation.populate("roomId", "name branch type price");
-
-    // Log reservation creation
     await auditLogger.logModification(
       req,
       "reservation",
@@ -315,177 +265,103 @@ export const createReservation = async (req, res) => {
       reservation.toObject(),
       `Created reservation for room: ${room.name}`,
     );
-
     console.log(
       `✅ Reservation created: ${reservation._id} (${reservation.reservationCode}) for ${dbUser.email}`,
     );
-    res.status(201).json({
-      message: "Reservation created successfully",
-      reservationId: reservation._id,
-      reservationCode: reservation.reservationCode,
-      reservation,
-    });
+    res
+      .status(201)
+      .json({
+        message: "Reservation created successfully",
+        reservationId: reservation._id,
+        reservationCode: reservation.reservationCode,
+        reservation,
+      });
   } catch (error) {
     console.error("❌ Create reservation error:", error);
-    console.error("Error stack:", error.stack);
     await auditLogger.logError(req, error, "Failed to create reservation");
-
-    // Handle validation errors
-    if (error.name === "ValidationError") {
-      const validationErrors = {};
-      Object.keys(error.errors).forEach((field) => {
-        validationErrors[field] = error.errors[field].message;
-      });
-      console.error("Validation errors details:", validationErrors);
-
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        validationErrors,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    // Handle cast errors (invalid IDs)
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid ID format",
-        details: error.message,
-        code: "INVALID_ID_FORMAT",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to create reservation",
-      details: error.message,
-      code: "CREATE_RESERVATION_ERROR",
-    });
+    handleReservationError(res, error, "create");
   }
 };
 
+/* ─── UPDATE reservation (admin) ─────────────────── */
 export const updateReservation = async (req, res) => {
   try {
     const { reservationId } = req.params;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
-    // Validate reservationId format
-    if (!reservationId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
-
-    // Find reservation first to check branch access
     const existingReservation = await Reservation.findById(
       reservationId,
     ).populate("roomId", "branch");
+    if (!existingReservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
 
-    if (!existingReservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
+    const oldData = existingReservation.toObject();
+    const denied = checkBranchAccess(
+      res,
+      req.branchFilter,
+      existingReservation.roomId?.branch,
+    );
+    if (denied) return;
 
-    // Store old data for audit log
-    const oldReservationData = existingReservation.toObject();
-
-    // Check branch access (admin can only update reservations for rooms in their branch)
-    if (
-      req.branchFilter &&
-      existingReservation.roomId?.branch !== req.branchFilter
-    ) {
-      return res.status(403).json({
-        error: `Access denied. You can only manage reservations for ${req.branchFilter} branch.`,
-        code: "BRANCH_ACCESS_DENIED",
-      });
-    }
-
-    // If checkInDate is being updated, enforce 3-month window and update reminders
-    if (req.body.checkInDate) {
-      const moveInDate = new Date(req.body.checkInDate);
-      const now = new Date();
-      const threeMonthsLater = new Date(now);
-      threeMonthsLater.setMonth(now.getMonth() + 3);
-      if (moveInDate < now || moveInDate > threeMonthsLater) {
-        return res.status(400).json({
+    // Enforce 3-month window on checkInDate update
+    if (req.body.checkInDate && !validateMoveInDate(req.body.checkInDate)) {
+      return res
+        .status(400)
+        .json({
           error: "Move-in date must be within 3 months from today.",
           code: "MOVEIN_DATE_OUT_OF_RANGE",
         });
-      }
-      req.body.moveInReminderSent = false;
-      const reminderDate = new Date(moveInDate);
-      reminderDate.setDate(reminderDate.getDate() + 1);
-      req.body.moveInReminderDate = reminderDate;
-      const riskDate = new Date(moveInDate);
-      riskDate.setDate(riskDate.getDate() + 2);
-      req.body.moveInRiskDate = riskDate;
-      req.body.atRisk = false;
     }
 
-    // When status is changed to "confirmed", automatically set payment to "paid"
-    if (req.body.status === "confirmed") {
+    // Status transition side-effects
+    if (
+      req.body.status === "confirmed" &&
+      existingReservation.status !== "confirmed"
+    ) {
       req.body.paymentStatus = "paid";
       req.body.approvedDate = new Date();
     }
+    await handleStatusTransition(
+      req.body.status,
+      existingReservation.status,
+      existingReservation.userId,
+      existingReservation.roomId,
+    );
 
-    // When status is changed to "checked-in", update user role and tenantStatus to active
-    if (req.body.status === "checked-in") {
-      const reservation = await Reservation.findById(reservationId);
-      if (reservation && reservation.userId) {
-        await User.findByIdAndUpdate(reservation.userId, {
-          role: "tenant",
-          tenantStatus: "active",
-        });
-      }
-    }
-
-    // Update reservation and return the updated document
-    // Use save() instead of findByIdAndUpdate() to trigger pre-save hooks (reservation code generation)
     const reservation = await Reservation.findById(reservationId);
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
-
-    // Apply updates to the reservation object
+    if (!reservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
     Object.assign(reservation, req.body);
-
-    // Save the reservation (this triggers pre-save hooks for code generation)
     const updatedReservation = await reservation.save();
 
-    // === OCCUPANCY TRACKING ===
-    // Update room occupancy if status changed
-    if (oldReservationData.status !== updatedReservation.status) {
+    // Occupancy tracking
+    if (oldData.status !== updatedReservation.status) {
       try {
-        await updateOccupancyOnReservationChange(
-          updatedReservation,
-          oldReservationData,
-        );
-      } catch (occupancyError) {
-        console.error(
-          "⚠️ Occupancy update failed (non-fatal):",
-          occupancyError,
-        );
-        // Don't fail the request if occupancy update fails
+        await updateOccupancyOnReservationChange(updatedReservation, oldData);
+      } catch (e) {
+        console.error("⚠️ Occupancy update failed (non-fatal):", e);
       }
     }
 
-    // Populate fields
-    await updatedReservation.populate("userId", "firstName lastName email");
-    await updatedReservation.populate("roomId", "name branch type price");
-
-    // Log reservation modification
+    await updatedReservation.populate(...POPULATE_USER);
+    await updatedReservation.populate(...POPULATE_ROOM);
     await auditLogger.logModification(
       req,
       "reservation",
       reservationId,
-      oldReservationData,
+      oldData,
       updatedReservation.toObject(),
     );
-
     console.log(
       `✅ Reservation updated: ${updatedReservation._id} - Status: ${updatedReservation.status}${updatedReservation.reservationCode ? ` - Code: ${updatedReservation.reservationCode}` : ""}`,
     );
@@ -496,192 +372,62 @@ export const updateReservation = async (req, res) => {
   } catch (error) {
     console.error("❌ Update reservation error:", error);
     await auditLogger.logError(req, error, "Failed to update reservation");
-
-    // Handle validation errors
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    // Handle cast errors (invalid ID)
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to update reservation",
-      details: error.message,
-      code: "UPDATE_RESERVATION_ERROR",
-    });
+    handleReservationError(res, error, "update");
   }
 };
 
+/* ─── UPDATE reservation (user self-update) ──────── */
 export const updateReservationByUser = async (req, res) => {
   try {
     const { reservationId } = req.params;
-    const user = req.user;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
-    if (!reservationId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
-
-    const dbUser = await User.findOne({ firebaseUid: user.uid });
-    if (!dbUser) {
-      return res.status(404).json({
-        error: "User not found in database",
-        code: "USER_NOT_FOUND",
-      });
-    }
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser)
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
 
     const reservation = await Reservation.findById(reservationId);
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
+    if (!reservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
+    if (String(reservation.userId) !== String(dbUser._id))
+      return res
+        .status(403)
+        .json({
+          error: "Access denied. You can only update your own reservation.",
+          code: "RESERVATION_ACCESS_DENIED",
+        });
 
-    if (String(reservation.userId) !== String(dbUser._id)) {
-      return res.status(403).json({
-        error: "Access denied. You can only update your own reservation.",
-        code: "RESERVATION_ACCESS_DENIED",
-      });
-    }
+    // Build update payload from config-driven field mapping
+    const updates = buildUserUpdatePayload(req.body);
 
-    const updates = {};
-    const setField = (key, value) => {
-      if (value !== undefined) {
-        updates[key] = value;
-      }
-    };
-
-    setField("selectedBed", req.body.selectedBed);
-    setField("targetMoveInDate", req.body.targetMoveInDate);
-    setField("leaseDuration", req.body.leaseDuration);
-    setField("billingEmail", req.body.billingEmail);
-    setField("viewingType", req.body.viewingType);
-    setField("isOutOfTown", req.body.isOutOfTown);
-    setField("currentLocation", req.body.currentLocation);
-    setField("visitApproved", req.body.visitApproved);
-    setField("selfiePhotoUrl", req.body.selfiePhotoUrl);
-    setField("firstName", req.body.firstName);
-    setField("lastName", req.body.lastName);
-    setField("middleName", req.body.middleName);
-    setField("nickname", req.body.nickname);
-    setField("mobileNumber", req.body.mobileNumber);
-    setField("birthday", req.body.birthday);
-    setField("maritalStatus", req.body.maritalStatus);
-    setField("nationality", req.body.nationality);
-    setField("educationLevel", req.body.educationLevel);
-    setField("validIDFrontUrl", req.body.validIDFrontUrl);
-    setField("validIDBackUrl", req.body.validIDBackUrl);
-    setField("validIDType", req.body.validIDType);
-    setField("nbiClearanceUrl", req.body.nbiClearanceUrl);
-    setField("nbiReason", req.body.nbiReason);
-    setField("companyIDUrl", req.body.companyIDUrl);
-    setField("companyIDReason", req.body.companyIDReason);
-    setField("healthConcerns", req.body.healthConcerns);
-    setField("preferredRoomType", req.body.roomType);
-    setField("preferredRoomNumber", req.body.preferredRoomNumber);
-    setField("referralSource", req.body.referralSource);
-    setField("referrerName", req.body.referrerName);
-    setField("estimatedMoveInTime", req.body.estimatedMoveInTime);
-    setField("workSchedule", req.body.workSchedule);
-    setField("workScheduleOther", req.body.workScheduleOther);
-    setField("agreedToPrivacy", req.body.agreedToPrivacy);
-    setField("agreedToCertification", req.body.agreedToCertification);
-    setField("finalMoveInDate", req.body.finalMoveInDate);
-    setField("paymentMethod", req.body.paymentMethod);
-    setField("proofOfPaymentUrl", req.body.proofOfPaymentUrl);
-    setField("checkInDate", req.body.checkInDate);
-    setField("checkOutDate", req.body.checkOutDate);
-    setField("totalPrice", req.body.totalPrice);
-    setField("applianceFees", req.body.applianceFees);
-    setField("notes", req.body.notes);
-
-    if (req.body.addressUnitHouseNo !== undefined) {
-      updates["address.unitHouseNo"] = req.body.addressUnitHouseNo;
-    }
-    if (req.body.addressStreet !== undefined) {
-      updates["address.street"] = req.body.addressStreet;
-    }
-    if (req.body.addressBarangay !== undefined) {
-      updates["address.barangay"] = req.body.addressBarangay;
-    }
-    if (req.body.addressCity !== undefined) {
-      updates["address.city"] = req.body.addressCity;
-    }
-    if (req.body.addressProvince !== undefined) {
-      updates["address.province"] = req.body.addressProvince;
-    }
-
-    if (req.body.emergencyContactName !== undefined) {
-      updates["emergencyContact.name"] = req.body.emergencyContactName;
-    }
-    if (req.body.emergencyRelationship !== undefined) {
-      updates["emergencyContact.relationship"] = req.body.emergencyRelationship;
-    }
-    if (req.body.emergencyContactNumber !== undefined) {
-      updates["emergencyContact.contactNumber"] =
-        req.body.emergencyContactNumber;
-    }
-
-    if (req.body.employerSchool !== undefined) {
-      updates["employment.employerSchool"] = req.body.employerSchool;
-    }
-    if (req.body.employerAddress !== undefined) {
-      updates["employment.employerAddress"] = req.body.employerAddress;
-    }
-    if (req.body.employerContact !== undefined) {
-      updates["employment.employerContact"] = req.body.employerContact;
-    }
-    if (req.body.startDate !== undefined) {
-      updates["employment.startDate"] = req.body.startDate;
-    }
-    if (req.body.occupation !== undefined) {
-      updates["employment.occupation"] = req.body.occupation;
-    }
-    if (req.body.previousEmployment !== undefined) {
-      updates["employment.previousEmployment"] = req.body.previousEmployment;
-    }
-
-    // When payment proof is uploaded, set status to pending payment verification and generate payment reference
+    // Payment proof handling
     if (req.body.proofOfPaymentUrl) {
       updates.paymentStatus = "pending";
       updates.paymentDate = new Date();
-
-      // Generate payment reference if not already generated
-      const existingReservation = await Reservation.findById(reservationId);
-      if (!existingReservation.paymentReference) {
-        // Generate unique payment reference: PAY-XXXXXX (6 characters)
+      const existing = await Reservation.findById(reservationId);
+      if (!existing.paymentReference) {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        let paymentRef = "PAY-";
-        for (let i = 0; i < 6; i++) {
-          paymentRef += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        updates.paymentReference = paymentRef;
+        let ref = "PAY-";
+        for (let i = 0; i < 6; i++)
+          ref += chars.charAt(Math.floor(Math.random() * chars.length));
+        updates.paymentReference = ref;
       }
     }
 
     const updatedReservation = await Reservation.findByIdAndUpdate(
       reservationId,
       { $set: updates },
-      {
-        new: true,
-        runValidators: true,
-      },
+      { new: true, runValidators: true },
     )
-      .populate("userId", "firstName lastName email")
-      .populate("roomId", "name branch type price");
+      .populate(...POPULATE_USER)
+      .populate(...POPULATE_ROOM);
 
     res.json({
       message: "Reservation updated successfully",
@@ -689,189 +435,119 @@ export const updateReservationByUser = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ User reservation update error:", error);
-    res.status(500).json({
-      error: "Failed to update reservation",
-      details: error.message,
-      code: "UPDATE_RESERVATION_ERROR",
-    });
+    handleReservationError(res, error, "update");
   }
 };
 
-/**
- * Delete a reservation
- */
+/* ─── DELETE reservation ─────────────────────────── */
 export const deleteReservation = async (req, res) => {
   try {
     const { reservationId } = req.params;
-    const user = req.user;
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser)
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
 
-    // Find user in database to get role and branch
-    const dbUser = await User.findOne({ firebaseUid: user.uid });
-
-    if (!dbUser) {
-      return res.status(404).json({
-        error: "User not found in database",
-        code: "USER_NOT_FOUND",
-      });
-    }
-
-    // Find the reservation with populated room data for branch checking
     const reservation =
       await Reservation.findById(reservationId).populate("roomId");
+    if (!reservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
 
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
-
-    // Check authorization
     const isOwner = String(reservation.userId) === String(dbUser._id);
     const isAdmin = dbUser.role === "admin" || dbUser.role === "superAdmin";
+    if (!isOwner && !isAdmin)
+      return res
+        .status(403)
+        .json({
+          error: "Access denied. You can only delete your own reservation.",
+          code: "RESERVATION_ACCESS_DENIED",
+        });
+    if (dbUser.role === "admin" && reservation.roomId?.branch !== dbUser.branch)
+      return res
+        .status(403)
+        .json({
+          error: `Access denied. You can only manage reservations for ${dbUser.branch} branch.`,
+          code: "BRANCH_ACCESS_DENIED",
+        });
 
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({
-        error: "Access denied. You can only delete your own reservation.",
-        code: "RESERVATION_ACCESS_DENIED",
-      });
-    }
-
-    // Check branch access (admin can only delete reservations for rooms in their branch)
-    if (
-      dbUser.role === "admin" &&
-      reservation.roomId?.branch !== dbUser.branch
-    ) {
-      return res.status(403).json({
-        error: `Access denied. You can only manage reservations for ${dbUser.branch} branch.`,
-        code: "BRANCH_ACCESS_DENIED",
-      });
-    }
-
-    // Store data for audit log before deletion
     const reservationData = reservation.toObject();
 
-    // === OCCUPANCY TRACKING ===
-    // Release occupancy if reservation was confirmed or checked-in
+    // Release occupancy
     if (
       reservation.status === "confirmed" ||
       reservation.status === "checked-in"
     ) {
       try {
-        // Create a cancelled version to trigger occupancy release
-        const cancelledReservation = reservation.toObject();
-        cancelledReservation.status = "cancelled";
         await updateOccupancyOnReservationChange(
           { ...reservation, status: "cancelled" },
           reservationData,
         );
-      } catch (occupancyError) {
-        console.error(
-          "⚠️ Occupancy release during deletion failed:",
-          occupancyError,
-        );
+      } catch (e) {
+        console.error("⚠️ Occupancy release during deletion failed:", e);
       }
     }
 
-    // Delete the reservation
     await Reservation.findByIdAndDelete(reservationId);
-
-    // Log reservation deletion
     await auditLogger.logDeletion(
       req,
       "reservation",
       reservationId,
       reservationData,
     );
-
     console.log(`✅ Reservation deleted: ${reservationId}`);
-    res.json({
-      message: "Reservation deleted successfully",
-      reservationId,
-    });
+    res.json({ message: "Reservation deleted successfully", reservationId });
   } catch (error) {
     console.error("❌ Delete reservation error:", error);
     await auditLogger.logError(req, error, "Failed to delete reservation");
-
-    // Handle cast errors (invalid ID)
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to delete reservation",
-      details: error.message,
-      code: "DELETE_RESERVATION_ERROR",
-    });
+    handleReservationError(res, error, "delete");
   }
 };
 
-/**
- * Extend a reservation's move-in date (admin action for at-risk reservations)
- */
+/* ─── EXTEND reservation ─────────────────────────── */
 export const extendReservation = async (req, res) => {
   try {
     const { reservationId } = req.params;
-    const { extensionDays = 3 } = req.body; // Default 3-day extension
-
-    if (!reservationId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
+    const { extensionDays = 3 } = req.body;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId).populate(
       "roomId",
       "branch",
     );
-
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
-
-    // Check branch access
-    if (req.branchFilter && reservation.roomId?.branch !== req.branchFilter) {
-      return res.status(403).json({
-        error: `Access denied. You can only manage reservations for ${req.branchFilter} branch.`,
-        code: "BRANCH_ACCESS_DENIED",
-      });
-    }
+    if (!reservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
+    const denied = checkBranchAccess(
+      res,
+      req.branchFilter,
+      reservation.roomId?.branch,
+    );
+    if (denied) return;
 
     const oldData = reservation.toObject();
+    const newMoveIn = new Date(
+      reservation.checkInDate || reservation.finalMoveInDate,
+    );
+    newMoveIn.setDate(newMoveIn.getDate() + extensionDays);
 
-    // Calculate new move-in date
-    const currentMoveIn =
-      reservation.checkInDate || reservation.finalMoveInDate;
-    const newMoveInDate = new Date(currentMoveIn);
-    newMoveInDate.setDate(newMoveInDate.getDate() + extensionDays);
-
-    // Update reminder and risk dates
-    const newReminderDate = new Date(newMoveInDate);
-    newReminderDate.setDate(newReminderDate.getDate() + 1);
-    const newRiskDate = new Date(newMoveInDate);
-    newRiskDate.setDate(newRiskDate.getDate() + 2);
-
-    // Update reservation
-    reservation.checkInDate = newMoveInDate;
-    reservation.finalMoveInDate = newMoveInDate;
-    reservation.moveInReminderDate = newReminderDate;
-    reservation.moveInRiskDate = newRiskDate;
-    reservation.moveInReminderSent = false;
-    reservation.atRisk = false;
+    reservation.checkInDate = newMoveIn;
+    reservation.finalMoveInDate = newMoveIn;
     reservation.status =
       reservation.paymentStatus === "paid" ? "confirmed" : "pending";
 
     await reservation.save();
-    await reservation.populate("userId", "firstName lastName email");
-    await reservation.populate("roomId", "name branch type price");
-
+    await reservation.populate(...POPULATE_USER);
+    await reservation.populate(...POPULATE_ROOM);
     await auditLogger.logModification(
       req,
       "reservation",
@@ -880,86 +556,73 @@ export const extendReservation = async (req, res) => {
       reservation.toObject(),
       `Extended move-in date by ${extensionDays} days`,
     );
-
     console.log(
-      `✅ Reservation extended: ${reservationId} - New move-in: ${newMoveInDate}`,
+      `✅ Reservation extended: ${reservationId} - New move-in: ${newMoveIn}`,
     );
     res.json({
       message: `Reservation extended by ${extensionDays} days`,
-      newMoveInDate,
+      newMoveInDate: newMoveIn,
       reservation,
     });
   } catch (error) {
     console.error("❌ Extend reservation error:", error);
     await auditLogger.logError(req, error, "Failed to extend reservation");
-    res.status(500).json({
-      error: "Failed to extend reservation",
-      details: error.message,
-      code: "EXTEND_RESERVATION_ERROR",
-    });
+    handleReservationError(res, error, "extend");
   }
 };
 
-/**
- * Release a reservation slot (admin action to cancel and free up room)
- */
+/* ─── RELEASE SLOT ───────────────────────────────── */
 export const releaseSlot = async (req, res) => {
   try {
     const { reservationId } = req.params;
     const { reason = "No-show after move-in date" } = req.body;
-
-    if (!reservationId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation =
       await Reservation.findById(reservationId).populate("roomId");
-
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
-
-    // Check branch access
-    if (req.branchFilter && reservation.roomId?.branch !== req.branchFilter) {
-      return res.status(403).json({
-        error: `Access denied. You can only manage reservations for ${req.branchFilter} branch.`,
-        code: "BRANCH_ACCESS_DENIED",
-      });
-    }
+    if (!reservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
+    const denied = checkBranchAccess(
+      res,
+      req.branchFilter,
+      reservation.roomId?.branch,
+    );
+    if (denied) return;
 
     const oldData = reservation.toObject();
-
-    // Cancel the reservation
     reservation.status = "cancelled";
     reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Released: ${reason}`;
-    reservation.atRisk = false;
     await reservation.save();
 
-    // Free up the room slot (increment available beds or set available)
+    // Reset user
+    await handleStatusTransition(
+      "cancelled",
+      oldData.status,
+      reservation.userId,
+      reservation.roomId,
+    );
+
+    // Free room slot
     if (reservation.roomId) {
       const room = await Room.findById(reservation.roomId._id);
       if (room) {
-        // If shared room, increment available beds
-        if (room.beds && room.beds.length > 0 && reservation.selectedBed?.id) {
+        if (room.beds?.length > 0 && reservation.selectedBed?.id) {
           const bed = room.beds.find(
             (b) => b.id === reservation.selectedBed.id,
           );
           if (bed) bed.occupied = false;
         }
-        // Ensure room is marked available
         room.available = true;
         await room.save();
       }
     }
 
-    await reservation.populate("userId", "firstName lastName email");
-
+    await reservation.populate(...POPULATE_USER);
     await auditLogger.logModification(
       req,
       "reservation",
@@ -968,7 +631,6 @@ export const releaseSlot = async (req, res) => {
       reservation.toObject(),
       `Slot released: ${reason}`,
     );
-
     console.log(`✅ Reservation slot released: ${reservationId}`);
     res.json({
       message: "Reservation slot released successfully",
@@ -982,89 +644,64 @@ export const releaseSlot = async (req, res) => {
       error,
       "Failed to release reservation slot",
     );
-    res.status(500).json({
-      error: "Failed to release slot",
-      details: error.message,
-      code: "RELEASE_SLOT_ERROR",
-    });
+    handleReservationError(res, error, "release slot");
   }
 };
 
-/**
- * Soft delete (archive) a reservation
- */
+/* ─── ARCHIVE reservation ────────────────────────── */
 export const archiveReservation = async (req, res) => {
   try {
     const { reservationId } = req.params;
     const { reason = "Archived by admin" } = req.body;
-
-    if (!reservationId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid reservation ID format",
-        code: "INVALID_RESERVATION_ID",
-      });
-    }
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId).populate(
       "roomId",
       "branch",
     );
-
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
-
-    // Check branch access
-    if (req.branchFilter && reservation.roomId?.branch !== req.branchFilter) {
-      return res.status(403).json({
-        error: `Access denied. You can only manage reservations for ${req.branchFilter} branch.`,
-        code: "BRANCH_ACCESS_DENIED",
-      });
-    }
+    if (!reservation)
+      return res
+        .status(404)
+        .json({
+          error: "Reservation not found",
+          code: "RESERVATION_NOT_FOUND",
+        });
+    const denied = checkBranchAccess(
+      res,
+      req.branchFilter,
+      reservation.roomId?.branch,
+    );
+    if (denied) return;
 
     const oldData = reservation.toObject();
+    const dbUser = await findDbUser(req.user.uid);
 
-    // Find the admin user
-    const dbUser = await User.findOne({ firebaseUid: req.user.uid });
-
-    // If reservation was confirmed or checked-in, mark as cancelled first to trigger occupancy release
+    // Release occupancy if was active
     if (
       reservation.status === "confirmed" ||
       reservation.status === "checked-in"
     ) {
-      const previousStatus = reservation.status;
+      const prevStatus = reservation.status;
       reservation.status = "cancelled";
-
-      // Save with cancelled status to trigger occupancy update
       await reservation.save();
-
-      // Update occupancy
       try {
         await updateOccupancyOnReservationChange(reservation, {
           ...oldData,
-          status: previousStatus,
+          status: prevStatus,
         });
-      } catch (occupancyError) {
-        console.error(
-          "⚠️ Occupancy update during archive failed:",
-          occupancyError,
-        );
+      } catch (e) {
+        console.error("⚠️ Occupancy update during archive failed:", e);
       }
     }
 
-    // Now soft delete the reservation
     reservation.isArchived = true;
     reservation.archivedAt = new Date();
     reservation.archivedBy = dbUser?._id || null;
     reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Archived: ${reason}`;
     await reservation.save();
 
-    await reservation.populate("userId", "firstName lastName email");
-    await reservation.populate("roomId", "name branch type price");
-
+    await reservation.populate(...POPULATE_USER);
+    await reservation.populate(...POPULATE_ROOM);
     await auditLogger.logModification(
       req,
       "reservation",
@@ -1073,7 +710,6 @@ export const archiveReservation = async (req, res) => {
       reservation.toObject(),
       `Reservation archived: ${reason}`,
     );
-
     console.log(`✅ Reservation archived: ${reservationId}`);
     res.json({
       message: "Reservation archived successfully",
@@ -1083,70 +719,6 @@ export const archiveReservation = async (req, res) => {
   } catch (error) {
     console.error("❌ Archive reservation error:", error);
     await auditLogger.logError(req, error, "Failed to archive reservation");
-    res.status(500).json({
-      error: "Failed to archive reservation",
-      details: error.message,
-      code: "ARCHIVE_RESERVATION_ERROR",
-    });
-  }
-};
-// ============================================================================
-// OCCUPANCY MANAGEMENT CONTROLLERS
-// ============================================================================
-
-/**
- * Get occupancy status of a specific room
- * GET /api/reservations/:roomId/occupancy
- */
-export const getRoomOccupancy = async (req, res) => {
-  try {
-    const { roomId } = req.params;
-
-    if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        error: "Invalid room ID format",
-        code: "INVALID_ROOM_ID",
-      });
-    }
-
-    const occupancyStatus = await getRoomOccupancyStatus(roomId);
-
-    res.json({
-      message: "Room occupancy status retrieved",
-      occupancy: occupancyStatus,
-    });
-  } catch (error) {
-    console.error("❌ Get room occupancy error:", error);
-    res.status(500).json({
-      error: "Failed to get room occupancy",
-      details: error.message,
-      code: "GET_OCCUPANCY_ERROR",
-    });
-  }
-};
-
-/**
- * Get branch occupancy statistics
- * GET /api/reservations/stats/occupancy?branch=gil-puyat
- */
-export const getBranchOccupancyStatistics = async (req, res) => {
-  try {
-    const { branch } = req.query;
-    const { getBranchOccupancyStats } =
-      await import("../utils/occupancyManager.js");
-
-    const stats = await getBranchOccupancyStats(branch || null);
-
-    res.json({
-      message: "Branch occupancy statistics retrieved",
-      statistics: stats,
-    });
-  } catch (error) {
-    console.error("❌ Get branch occupancy stats error:", error);
-    res.status(500).json({
-      error: "Failed to get branch occupancy statistics",
-      details: error.message,
-      code: "GET_BRANCH_STATS_ERROR",
-    });
+    handleReservationError(res, error, "archive");
   }
 };

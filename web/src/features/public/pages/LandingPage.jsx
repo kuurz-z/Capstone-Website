@@ -11,23 +11,63 @@ import { StorytellingSection } from "../components/StorytellingSection";
 import { GuaranteeSection } from "../components/GuaranteeSection";
 import { InquiryForm } from "../components/InquiryForm";
 import { CTASection } from "../components/CTASection";
+import ScrollReveal from "../../../shared/components/ScrollReveal";
+import ScrollToTopButton from "../../../shared/components/ScrollToTopButton";
 
 function LandingPage() {
   return (
-    <div className="landing-page">
+    <div className="landing-page" style={{ overflowX: "hidden" }}>
       <Navbar type="landing" currentPage="home" />
+
+      {/* Hero — has its own entrance animations, no ScrollReveal needed */}
       <HeroSection />
-      <BenefitsSection />
-      <RoomInventory />
-      <PricingSection />
-      <FacilitiesSection />
-      <LocationSection />
-      <RulesSection />
-      <StorytellingSection />
-      <GuaranteeSection />
-      <InquiryForm />
-      <CTASection />
-      <ContactFooter />
+
+      {/* Each section reveals as you scroll down */}
+      <ScrollReveal variant="fade-up">
+        <BenefitsSection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade-up" delay={0.1}>
+        <RoomInventory />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade-up">
+        <PricingSection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade-up">
+        <FacilitiesSection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade-up">
+        <LocationSection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade-up">
+        <RulesSection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade-left">
+        <StorytellingSection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="zoom">
+        <GuaranteeSection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade-up">
+        <InquiryForm />
+      </ScrollReveal>
+
+      <ScrollReveal variant="zoom">
+        <CTASection />
+      </ScrollReveal>
+
+      <ScrollReveal variant="fade">
+        <ContactFooter />
+      </ScrollReveal>
+
+      <ScrollToTopButton />
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
 import { roomApi } from "../../../shared/api/apiClient";
+import { formatRoomType, formatBranch } from "../utils/formatters";
+
+import RoomConfigGrid from "../components/rooms/RoomConfigGrid";
+import RoomConfigModal from "../components/rooms/RoomConfigModal";
 import "../styles/admin-room-configuration.css";
 
 function RoomConfigurationPage({ isEmbedded = false }) {
@@ -12,39 +15,28 @@ function RoomConfigurationPage({ isEmbedded = false }) {
   const [error, setError] = useState(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [editingBed, setEditingBed] = useState(null);
 
-  // Fetch rooms on mount
   useEffect(() => {
     let isMounted = true;
-
     const fetchRooms = async () => {
       setLoading(true);
       setError(null);
       try {
         const data = await roomApi.getAll();
-        if (isMounted) {
-          setRooms(data);
-        }
+        if (isMounted) setRooms(data);
       } catch (err) {
         console.error("Failed to fetch rooms:", err);
-        if (isMounted) {
-          setError("Failed to load room configurations");
-        }
+        if (isMounted) setError("Failed to load room configurations");
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
-
     fetchRooms();
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // Filter rooms
   const filteredRooms = rooms.filter((room) => {
     const matchesSearch =
       room.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -56,19 +48,6 @@ function RoomConfigurationPage({ isEmbedded = false }) {
     return matchesSearch && matchesBranch && matchesType;
   });
 
-  const getRoomTypeLabel = (type) => {
-    if (type === "private") return "Private";
-    if (type === "double-sharing") return "Double Sharing";
-    if (type === "quadruple-sharing") return "Quadruple Sharing";
-    return type;
-  };
-
-  const getBranchLabel = (branch) => {
-    if (branch === "gil-puyat") return "Gil Puyat";
-    if (branch === "guadalupe") return "Guadalupe";
-    return branch;
-  };
-
   const openRoomDetails = (room) => {
     setSelectedRoom(room);
     setShowDetailsModal(true);
@@ -76,34 +55,21 @@ function RoomConfigurationPage({ isEmbedded = false }) {
 
   const closeModal = () => {
     setShowDetailsModal(false);
-    setEditingBed(null);
     setSelectedRoom(null);
   };
 
   const toggleBedAvailability = (bedId) => {
     if (!selectedRoom) return;
-
     const updatedBeds = selectedRoom.beds.map((bed) =>
       bed.id === bedId ? { ...bed, available: !bed.available } : bed,
     );
-
-    setSelectedRoom({
-      ...selectedRoom,
-      beds: updatedBeds,
-    });
+    setSelectedRoom({ ...selectedRoom, beds: updatedBeds });
   };
 
   if (loading) {
-    const loadingHtml = (
+    return (
       <div className="admin-section">
         <div className="admin-loading">Loading room configurations...</div>
-      </div>
-    );
-    if (isEmbedded) return loadingHtml;
-    return (
-      <div className="admin-layout">
-        <Sidebar />
-        <main className="admin-main">{loadingHtml}</main>
       </div>
     );
   }
@@ -133,7 +99,6 @@ function RoomConfigurationPage({ isEmbedded = false }) {
             className="admin-filter-input"
           />
         </div>
-
         <div className="admin-filter-group">
           <label>Branch</label>
           <select
@@ -146,7 +111,6 @@ function RoomConfigurationPage({ isEmbedded = false }) {
             <option value="guadalupe">Guadalupe</option>
           </select>
         </div>
-
         <div className="admin-filter-group">
           <label>Room Type</label>
           <select
@@ -188,167 +152,19 @@ function RoomConfigurationPage({ isEmbedded = false }) {
         </div>
       </div>
 
-      {/* Room Grid */}
-      <div className="room-config-grid">
-        {filteredRooms.length > 0 ? (
-          filteredRooms.map((room) => (
-            <div key={room._id} className="room-config-card">
-              <div className="room-config-header">
-                <h3>{room.name}</h3>
-                <span
-                  className={`room-status-badge ${room.available ? "available" : "unavailable"}`}
-                >
-                  {room.available ? "Active" : "Inactive"}
-                </span>
-              </div>
+      <RoomConfigGrid rooms={filteredRooms} onConfigureRoom={openRoomDetails} />
 
-              <div className="room-config-details">
-                <p>
-                  <strong>Type:</strong> {getRoomTypeLabel(room.type)}
-                </p>
-                <p>
-                  <strong>Branch:</strong> {getBranchLabel(room.branch)}
-                </p>
-                <p>
-                  <strong>Capacity:</strong> {room.capacity} pax
-                </p>
-                <p>
-                  <strong>Floor:</strong> {room.floor}
-                </p>
-                <p>
-                  <strong>Beds:</strong> {room.beds?.length || 0}
-                </p>
-                <p>
-                  <strong>Occupied:</strong> {room.currentOccupancy || 0} /{" "}
-                  {room.capacity}
-                </p>
-              </div>
-
-              <button
-                className="btn-config"
-                onClick={() => openRoomDetails(room)}
-              >
-                Configure Beds
-              </button>
-            </div>
-          ))
-        ) : (
-          <div className="admin-empty-state">
-            <p>No rooms found matching your filters</p>
-          </div>
-        )}
-      </div>
-
-      {/* Room Configuration Modal */}
       {showDetailsModal && selectedRoom && (
-        <div className="admin-modal-overlay" onClick={closeModal}>
-          <div
-            className="admin-modal-content"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="admin-modal-header">
-              <h2>Configure Room: {selectedRoom.name}</h2>
-              <button
-                className="modal-close-btn"
-                onClick={closeModal}
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="admin-modal-body">
-              <div className="room-info-section">
-                <h3>Room Information</h3>
-                <div className="info-grid">
-                  <div>
-                    <strong>Type:</strong> {getRoomTypeLabel(selectedRoom.type)}
-                  </div>
-                  <div>
-                    <strong>Capacity:</strong> {selectedRoom.capacity} pax
-                  </div>
-                  <div>
-                    <strong>Floor:</strong> {selectedRoom.floor}
-                  </div>
-                  <div>
-                    <strong>Branch:</strong>{" "}
-                    {getBranchLabel(selectedRoom.branch)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="bed-config-section">
-                <h3>Bed Configuration</h3>
-                <div className="bed-list">
-                  {selectedRoom.beds && selectedRoom.beds.length > 0 ? (
-                    selectedRoom.beds.map((bed, index) => (
-                      <div key={bed.id || index} className="bed-item">
-                        <div className="bed-info">
-                          <strong>{bed.id}</strong>
-                          <span className="bed-position">
-                            Position: {bed.position}
-                          </span>
-                        </div>
-                        <div className="bed-status">
-                          <label className="checkbox-label">
-                            <input
-                              type="checkbox"
-                              checked={bed.available}
-                              onChange={() => toggleBedAvailability(bed.id)}
-                            />
-                            <span>
-                              {bed.available ? "Available" : "Occupied"}
-                            </span>
-                          </label>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="no-beds">No beds configured</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="occupancy-info">
-                <h3>Current Occupancy</h3>
-                <div className="occupancy-bar">
-                  <div
-                    className="occupancy-fill"
-                    style={{
-                      width: `${(selectedRoom.currentOccupancy / selectedRoom.capacity) * 100}%`,
-                    }}
-                  />
-                </div>
-                <p>
-                  {selectedRoom.currentOccupancy} of {selectedRoom.capacity}{" "}
-                  beds occupied
-                </p>
-              </div>
-            </div>
-
-            <div className="admin-modal-footer">
-              <button className="btn-secondary" onClick={closeModal}>
-                Close
-              </button>
-              <button className="btn-primary" onClick={closeModal}>
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
+        <RoomConfigModal
+          room={selectedRoom}
+          onToggleBed={toggleBedAvailability}
+          onClose={closeModal}
+        />
       )}
     </section>
   );
 
-  if (isEmbedded) {
-    return pageContent;
-  }
-
-  return (
-    <div className="admin-layout">
-      <Sidebar />
-      <main className="admin-main">{pageContent}</main>
-    </div>
-  );
+  return pageContent;
 }
+
 export default RoomConfigurationPage;

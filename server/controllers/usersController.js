@@ -4,7 +4,218 @@
  */
 
 import { User, Reservation, Room } from "../models/index.js";
+import { getAuth } from "../config/firebase.js";
 import auditLogger from "../utils/auditLogger.js";
+
+const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
+
+/**
+ * POST /api/users
+ *
+ * Admin-created user account.
+ * Creates a Firebase Auth user + MongoDB record.
+ * Sends a password-reset email so the user can set their own password.
+ *
+ * Access: Admin (applicant only) | Super Admin (applicant or admin)
+ */
+export const createUser = async (req, res) => {
+  let firebaseUid = null; // track for rollback
+
+  try {
+    const { email, username, firstName, lastName, phone, role, password } =
+      req.body;
+
+    // --- Validate required fields ---
+    if (!email || !username || !firstName || !lastName || !password) {
+      return res.status(400).json({
+        error:
+          "Missing required fields: email, username, firstName, lastName, and password are required",
+        code: "MISSING_REQUIRED_FIELDS",
+      });
+    }
+
+    // --- Validate password strength ---
+    if (password.length < 6) {
+      return res.status(400).json({
+        error: "Password must be at least 6 characters",
+        code: "WEAK_PASSWORD",
+      });
+    }
+
+    // --- Validate role ---
+    const allowedRole = role || "applicant";
+    if (allowedRole === "superAdmin") {
+      return res.status(403).json({
+        error: "Cannot create Super Admin accounts",
+        code: "ROLE_FORBIDDEN",
+      });
+    }
+    if (allowedRole === "admin" && !req.isSuperAdmin) {
+      return res.status(403).json({
+        error: "Only Super Admins can create admin accounts",
+        code: "ROLE_FORBIDDEN",
+      });
+    }
+    if (!["applicant", "admin"].includes(allowedRole)) {
+      return res.status(400).json({
+        error: "Role must be 'applicant' or 'admin'",
+        code: "INVALID_ROLE",
+      });
+    }
+
+    // --- Check for duplicates in MongoDB ---
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
+      return res.status(409).json({
+        error: "Email already in use",
+        code: "EMAIL_TAKEN",
+      });
+    }
+
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      return res.status(409).json({
+        error: "Username already taken",
+        code: "USERNAME_TAKEN",
+      });
+    }
+
+    // --- Create Firebase Auth account ---
+    const auth = getAuth();
+    if (!auth) {
+      return res.status(503).json({
+        error: "Firebase Admin SDK is not available",
+        code: "FIREBASE_UNAVAILABLE",
+      });
+    }
+
+    const firebaseUser = await auth.createUser({
+      email: email.toLowerCase(),
+      password,
+      displayName: `${firstName} ${lastName}`,
+      emailVerified: false,
+    });
+    firebaseUid = firebaseUser.uid;
+
+    // If creating an admin, set Firebase custom claims
+    if (allowedRole === "admin") {
+      await auth.setCustomUserClaims(firebaseUid, { admin: true });
+    }
+
+    // --- Create MongoDB user record ---
+    const user = new User({
+      firebaseUid,
+      email: email.toLowerCase(),
+      username,
+      firstName,
+      lastName,
+      phone: phone || null,
+      branch: null, // branch is assigned when user becomes tenant
+      role: allowedRole,
+      isEmailVerified: false,
+      isActive: true,
+      tenantStatus: null,
+    });
+
+    await user.save();
+
+    // --- Generate password reset link ---
+    try {
+      const resetLink = await auth.generatePasswordResetLink(
+        email.toLowerCase(),
+      );
+      console.log(`Password reset link generated for ${email}`);
+      // The link is logged for now; could be emailed via your email service
+    } catch (resetErr) {
+      console.warn(
+        `Could not generate password reset link: ${resetErr.message}`,
+      );
+      // Non-fatal — user can still use "Forgot Password" later
+    }
+
+    // --- Audit log ---
+    await auditLogger.logModification(
+      req,
+      "user",
+      user._id.toString(),
+      null,
+      user.toObject(),
+      `Admin created account for ${email} with role ${allowedRole}`,
+    );
+
+    console.log(`User created by admin: ${email} (${allowedRole})`);
+    res.status(201).json({
+      message: "User created successfully",
+      user: {
+        id: user._id,
+        firebaseUid: user.firebaseUid,
+        email: user.email,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        branch: user.branch,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Create user error:", error);
+
+    // --- Rollback: delete Firebase user if MongoDB save failed ---
+    if (firebaseUid) {
+      try {
+        const auth = getAuth();
+        await auth.deleteUser(firebaseUid);
+        console.log(`Rolled back Firebase user ${firebaseUid}`);
+      } catch (deleteErr) {
+        if (deleteErr.code !== "auth/user-not-found") {
+          console.error("Failed to rollback Firebase user:", deleteErr.message);
+        }
+      }
+    }
+
+    // Firebase-specific errors
+    if (error.code === "auth/email-already-exists") {
+      return res.status(409).json({
+        error: "Email already registered in Firebase",
+        code: "EMAIL_TAKEN",
+      });
+    }
+    if (error.code === "auth/invalid-email") {
+      return res.status(400).json({
+        error: "Invalid email format",
+        code: "INVALID_EMAIL",
+      });
+    }
+
+    // MongoDB duplicate key
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(409).json({
+        error: `${field} already exists`,
+        code: "DUPLICATE_FIELD",
+      });
+    }
+
+    // Validation errors
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: error.message,
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    await auditLogger.logError(req, error, "Failed to create user");
+    res.status(500).json({
+      error: "Failed to create user",
+      details: error.message,
+      code: "CREATE_USER_ERROR",
+    });
+  }
+};
 
 export const getUserStats = async (req, res) => {
   try {

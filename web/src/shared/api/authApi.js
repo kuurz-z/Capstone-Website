@@ -59,8 +59,17 @@ const authRequest = async (url, options = {}) => {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || error.message || "Request failed");
+    const errorData = await response.json().catch(() => ({}));
+    // Create error with .response property so callers can check status codes
+    // (e.g., Google sign-up flow checks error.response?.status === 404)
+    const error = new Error(
+      errorData.error || errorData.message || "Request failed",
+    );
+    error.response = {
+      status: response.status,
+      data: errorData,
+    };
+    throw error;
   }
 
   return response.json();

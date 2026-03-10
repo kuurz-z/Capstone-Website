@@ -21,7 +21,7 @@
  *   router.get('/protected', verifyToken, handler)
  *   router.post('/admin-only', verifyToken, verifyAdmin, handler)
  *   router.delete('/super-admin', verifyToken, verifySuperAdmin, handler)
- *   router.post('/user-only', verifyToken, verifyUser, handler)
+ *   router.post('/user-only', verifyToken, verifyApplicant, handler)
  */
 
 import { getAuth } from "../config/firebase.js";
@@ -118,11 +118,9 @@ export const verifyToken = async (req, res, next) => {
  * Middleware to check if the authenticated user has admin privileges.
  * Must be used AFTER verifyToken middleware.
  *
- * Checks for custom claims in the Firebase ID token:
- * - admin: true (admin user)
- * - superAdmin: true (super admin user)
- *
- * SECURITY: This prevents unauthorized access to admin-only endpoints.
+ * Checks in order:
+ * 1. Firebase custom claims (admin: true or superAdmin: true) — fast path
+ * 2. Fallback: MongoDB user role (handles missing custom claims)
  *
  * @middleware
  * @param {Object} req - Express request object (must have req.user from verifyToken)
@@ -141,17 +139,27 @@ export const verifyAdmin = async (req, res, next) => {
       });
     }
 
-    // Check custom claims from Firebase ID token
-    // Admin users have either 'admin' or 'superAdmin' custom claims
-    if (!req.user.admin && !req.user.superAdmin) {
-      return res.status(403).json({
-        error: "Access denied. Admin privileges required.",
-        code: "ADMIN_ACCESS_DENIED",
-      });
+    // Check custom claims from Firebase ID token (fast path)
+    if (req.user.admin || req.user.superAdmin) {
+      return next();
     }
 
-    // User has admin privileges, proceed to route handler
-    next();
+    // Fallback: Check MongoDB role (handles missing Firebase custom claims)
+    const { User } = await import("../models/index.js");
+    const dbUser = await User.findOne({ firebaseUid: req.user.uid });
+
+    if (dbUser && (dbUser.role === "admin" || dbUser.role === "superAdmin")) {
+      // Attach role info to req.user for downstream middleware
+      req.user.admin = dbUser.role === "admin" || dbUser.role === "superAdmin";
+      req.user.superAdmin = dbUser.role === "superAdmin";
+      req.user.dbRole = dbUser.role;
+      return next();
+    }
+
+    return res.status(403).json({
+      error: "Access denied. Admin privileges required.",
+      code: "ADMIN_ACCESS_DENIED",
+    });
   } catch (error) {
     console.error("❌ Admin verification error:", error.message);
 
@@ -189,17 +197,28 @@ export const verifySuperAdmin = async (req, res, next) => {
       });
     }
 
-    // Check custom claims from Firebase ID token
-    // Only super admin users have the 'superAdmin' custom claim
-    if (!req.user.superAdmin) {
-      return res.status(403).json({
-        error: "Access denied. Super admin privileges required.",
-        code: "SUPER_ADMIN_ACCESS_DENIED",
-      });
+    // Check custom claims from Firebase ID token (fast path)
+    if (req.user.superAdmin) {
+      req.isSuperAdmin = true;
+      return next();
     }
 
-    // User has super admin privileges, proceed to route handler
-    next();
+    // Fallback: Check MongoDB role (handles missing Firebase custom claims)
+    const { User } = await import("../models/index.js");
+    const dbUser = await User.findOne({ firebaseUid: req.user.uid });
+
+    if (dbUser && dbUser.role === "superAdmin") {
+      req.user.superAdmin = true;
+      req.user.admin = true;
+      req.user.dbRole = dbUser.role;
+      req.isSuperAdmin = true;
+      return next();
+    }
+
+    return res.status(403).json({
+      error: "Access denied. Super admin privileges required.",
+      code: "SUPER_ADMIN_ACCESS_DENIED",
+    });
   } catch (error) {
     console.error("❌ Super admin verification error:", error.message);
 
@@ -211,26 +230,26 @@ export const verifySuperAdmin = async (req, res, next) => {
 };
 
 /**
- * Verify User/Tenant Role
+ * Verify Applicant/Tenant Role
  *
- * Middleware to check if the authenticated user has user/tenant privileges.
+ * Middleware to check if the authenticated user has applicant/tenant privileges.
  * Must be used AFTER verifyToken middleware.
  *
- * Ensures that admin users cannot access user-only endpoints.
- * Users with "user", "tenant" roles will pass this check.
+ * Ensures that admin users cannot access applicant-only endpoints.
+ * Users with "applicant", "tenant" roles will pass this check.
  * Admin and superAdmin users will be denied access.
  *
  * SECURITY: This prevents privilege escalation where admins
- * could access user endpoints with their elevated permissions.
+ * could access applicant endpoints with their elevated permissions.
  *
  * @middleware
  * @param {Object} req - Express request object (must have req.user from verifyToken)
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  *
- * @returns {void} Calls next() if user/tenant, sends 403 error otherwise
+ * @returns {void} Calls next() if applicant/tenant, sends 403 error otherwise
  */
-export const verifyUser = async (req, res, next) => {
+export const verifyApplicant = async (req, res, next) => {
   try {
     // Ensure verifyToken was called first
     if (!req.user || !req.user.uid) {
@@ -241,18 +260,18 @@ export const verifyUser = async (req, res, next) => {
     }
 
     // Check that user does NOT have admin privileges
-    // This prevents admins from accessing user-only endpoints
+    // This prevents admins from accessing applicant-only endpoints
     if (req.user.admin || req.user.superAdmin) {
       return res.status(403).json({
-        error: "Access denied. User endpoint - admin access not allowed.",
-        code: "USER_ENDPOINT_ADMIN_DENIED",
+        error: "Access denied. Applicant endpoint - admin access not allowed.",
+        code: "APPLICANT_ENDPOINT_ADMIN_DENIED",
       });
     }
 
-    // User is not an admin (regular user/tenant), proceed to route handler
+    // User is not an admin (applicant/tenant), proceed to route handler
     next();
   } catch (error) {
-    console.error("❌ User verification error:", error.message);
+    console.error("❌ Applicant verification error:", error.message);
 
     res.status(403).json({
       error: "Access denied",

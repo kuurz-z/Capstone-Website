@@ -228,7 +228,7 @@
 }
 
 .admin-dashboard-chart-bar.blue {
-  background: #3b82f6;
+  background: #0F4A7F;
 }
 
 .admin-dashboard-chart-bar.orange {
@@ -280,7 +280,7 @@
 }
 
 .admin-dashboard-chart-legend-color.blue {
-  background: #3b82f6;
+  background: #0F4A7F;
 }
 
 .admin-dashboard-chart-legend-color.orange {
@@ -340,7 +340,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #dbeafe;
+  background: #E0EBF5;
   border-radius: 8px;
   flex-shrink: 0;
 }
@@ -579,8 +579,8 @@
 }
 
 .admin-reservation-status.checked-in {
-  background: #dbeafe;
-  color: #2563eb;
+  background: #E0EBF5;
+  color: #0C375F;
 }
 
 .admin-reservation-status.cancelled,
@@ -656,14 +656,14 @@
 
 .admin-dashboard-view-all {
   font-size: 13px;
-  color: #3b82f6;
+  color: #0F4A7F;
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s ease;
 }
 
 .admin-dashboard-view-all:hover {
-  color: #2563eb;
+  color: #0C375F;
 }
 
 /* Activities List */
@@ -698,8 +698,8 @@
 }
 
 .admin-dashboard-activity-icon.inquiry {
-  background: #dbeafe;
-  color: #3b82f6;
+  background: #E0EBF5;
+  color: #0F4A7F;
 }
 
 .admin-dashboard-activity-icon.reservation {
@@ -714,7 +714,7 @@
 
 .admin-dashboard-activity-icon.tenant {
   background: #ede9fe;
-  color: #8b5cf6;
+  color: #0F4A7F;
 }
 
 .admin-dashboard-activity-icon svg {

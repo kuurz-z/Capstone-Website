@@ -31,7 +31,7 @@ const billSchema = new mongoose.Schema(
     reservationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Reservation",
-      required: true,
+      default: null,
       index: true,
     },
     userId: {
@@ -45,6 +45,23 @@ const billSchema = new mongoose.Schema(
       enum: ["gil-puyat", "guadalupe"],
       required: true,
       index: true,
+    },
+
+    // --- Room Bill Link (for room-based billing) ---
+    roomBillId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RoomBill",
+      default: null,
+      index: true,
+    },
+    roomId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      default: null,
+    },
+    proRataDays: {
+      type: Number,
+      default: null,
     },
 
     // --- Bill Period ---

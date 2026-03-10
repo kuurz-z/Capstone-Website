@@ -9,6 +9,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import SpotlightCard from "../components/SpotlightCard";
 
 function getAvailabilityLabel(room) {
   const beds = room.beds || [];
@@ -128,59 +129,69 @@ export default function RoomDetailsModal({
         <div className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-4">
-              <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100">
-                {images.length > 0 && (
-                  <img
-                    src={images[currentImageIndex]}
-                    alt={`${room.title} - Photo ${currentImageIndex + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                )}
+              <SpotlightCard
+                spotlightColor="rgba(231, 113, 15, 0.3)"
+                className="p-0"
+              >
+                <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100">
+                  {images.length > 0 && (
+                    <img
+                      src={images[currentImageIndex]}
+                      alt={`${room.title} - Photo ${currentImageIndex + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
 
-                {images.length > 1 && (
-                  <>
-                    <button
-                      onClick={handlePrevImage}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white shadow-lg transition-all"
-                    >
-                      <ChevronLeft className="w-6 h-6 text-gray-800" />
-                    </button>
-                    <button
-                      onClick={handleNextImage}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white shadow-lg transition-all"
-                    >
-                      <ChevronRight className="w-6 h-6 text-gray-800" />
-                    </button>
-                  </>
-                )}
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        onClick={handlePrevImage}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white shadow-lg transition-all"
+                      >
+                        <ChevronLeft className="w-6 h-6 text-gray-800" />
+                      </button>
+                      <button
+                        onClick={handleNextImage}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white shadow-lg transition-all"
+                      >
+                        <ChevronRight className="w-6 h-6 text-gray-800" />
+                      </button>
+                    </>
+                  )}
 
-                {images.length > 0 && (
-                  <div className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-sm">
-                    {currentImageIndex + 1} / {images.length}
-                  </div>
-                )}
-              </div>
+                  {images.length > 0 && (
+                    <div className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-sm">
+                      {currentImageIndex + 1} / {images.length}
+                    </div>
+                  )}
+                </div>
+              </SpotlightCard>
 
               {images.length > 1 && (
-                <div className="grid grid-cols-4 gap-2">
-                  {images.map((image, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentImageIndex(index)}
-                      className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                        currentImageIndex === index
-                          ? "border-orange-500 scale-95"
-                          : "border-transparent hover:border-gray-300"
-                      }`}
-                    >
-                      <img
-                        src={image}
-                        alt={`Thumbnail ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
+                <SpotlightCard
+                  spotlightColor="rgba(231, 113, 15, 0.2)"
+                  className="p-0"
+                >
+                  <div className="grid grid-cols-4 gap-2 p-2">
+                    {images.map((image, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                          currentImageIndex === index
+                            ? "border-orange-500 scale-95"
+                            : "border-transparent hover:border-gray-300"
+                        }`}
+                      >
+                        <img
+                          src={image}
+                          alt={`Thumbnail ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </SpotlightCard>
               )}
             </div>
 

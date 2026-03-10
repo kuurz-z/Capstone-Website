@@ -20,9 +20,14 @@
  */
 
 import express from "express";
-import { verifyToken, verifyAdmin, verifySuperAdmin } from "../middleware/auth.js";
+import {
+  verifyToken,
+  verifyAdmin,
+  verifySuperAdmin,
+} from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
+  createUser,
   getUserStats,
   getUsersByBranch,
   getEmailByUsername,
@@ -73,6 +78,20 @@ router.get("/branch/:branch", verifyToken, verifySuperAdmin, getUsersByBranch);
 router.get("/email-by-username", getEmailByUsername);
 
 // ============================================================================
+// CREATE USER (Super Admin only)
+// ============================================================================
+
+/**
+ * POST /api/users
+ *
+ * Create a new user account from the admin panel.
+ * Creates both a Firebase Auth account and a MongoDB user record.
+ *
+ * Access: Super Admin only
+ */
+router.post("/", verifyToken, verifySuperAdmin, createUser);
+
+// ============================================================================
 // GET ALL USERS
 // ============================================================================
 
@@ -109,7 +128,7 @@ router.get("/", verifyToken, verifyAdmin, filterByBranch, getUsers);
 router.get("/:userId", verifyToken, verifyAdmin, filterByBranch, getUserById);
 
 // ============================================================================
-// UPDATE USER
+// UPDATE USER (Super Admin only)
 // ============================================================================
 
 /**
@@ -117,9 +136,9 @@ router.get("/:userId", verifyToken, verifyAdmin, filterByBranch, getUserById);
  *
  * Update a user's information.
  *
- * Access: Admin (must be from their branch) | Super Admin (any user)
+ * Access: Super Admin only
  */
-router.put("/:userId", verifyToken, verifyAdmin, filterByBranch, updateUser);
+router.put("/:userId", verifyToken, verifySuperAdmin, updateUser);
 
 // ============================================================================
 // DELETE USER (Super Admin only)

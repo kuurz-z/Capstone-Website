@@ -1,41 +1,52 @@
 /**
- * =============================================================================
- * LILYCREST DORMITORY MANAGEMENT SYSTEM - MAIN SERVER
- * =============================================================================
+ * ============================================================================
+ * LILYCREST DORMITORY MANAGEMENT SYSTEM — SERVER
+ * ============================================================================
  *
- * This is the main Express.js server for the Lilycrest Dormitory Management System.
- * It handles all backend API requests for two branches: Gil Puyat and Guadalupe.
+ * Production-grade Express.js server with:
+ * - Security headers (Helmet)
+ * - Rate limiting (tiered)
+ * - Request ID tracing
+ * - Structured JSON logging (Pino)
+ * - Response compression (gzip/brotli)
+ * - Standardized error handling
+ * - Deep health checks
+ * - Graceful shutdown
  *
- * Key Features:
- * - Firebase Authentication integration for secure user management
- * - MongoDB database for storing user, room, reservation, and inquiry data
- * - RESTful API endpoints for all CRUD operations
- * - Role-based access control (tenant, admin, superAdmin)
- * - Email verification system via Firebase
- *
- * Technology Stack:
- * - Express.js: Web framework
- * - MongoDB/Mongoose: Database
- * - Firebase Admin SDK: Authentication & authorization
- * - CORS: Cross-origin resource sharing
- *
- * Author: Lilycrest Development Team
- * Last Updated: February 2026
+ * ============================================================================
  */
 
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import compression from "compression";
+import mongoose from "mongoose";
+
+// --- Config ---
 import connectDB from "./config/database.js";
+
+// --- Middleware ---
+import requestId from "./middleware/requestId.js";
+import { requestLogger } from "./middleware/logger.js";
+import logger from "./middleware/logger.js";
+import {
+  globalLimiter,
+  authLimiter,
+  publicLimiter,
+} from "./middleware/rateLimiter.js";
+import { globalErrorHandler } from "./middleware/errorHandler.js";
+
+// --- Routes ---
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/usersRoutes.js";
 import roomRoutes from "./routes/roomsRoutes.js";
 import reservationRoutes from "./routes/reservationsRoutes.js";
 import inquiryRoutes from "./routes/inquiriesRoutes.js";
 import auditRoutes from "./routes/auditRoutes.js";
-import billingRoutes from "./api/billing.js";
-import announcementRoutes from "./api/announcements.js";
-import maintenanceRoutes from "./api/maintenance.js";
+import billingRoutes from "./routes/billingRoutes.js";
+import announcementRoutes from "./routes/announcementRoutes.js";
+import maintenanceRoutes from "./routes/maintenanceRoutes.js";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -44,8 +55,6 @@ dotenv.config();
 // DATABASE CONNECTION
 // ============================================================================
 
-// Connect to MongoDB database
-// This will auto-retry on failure (see database.js for retry logic)
 connectDB();
 
 // ============================================================================
@@ -56,32 +65,103 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ============================================================================
-// MIDDLEWARE CONFIGURATION
+// SECURITY MIDDLEWARE (applied first)
 // ============================================================================
 
 /**
- * CORS Middleware
- * Enables cross-origin requests from the React frontend
- * - origin: Specifies which frontend URLs can access the API
- * - credentials: Allows cookies and authorization headers
+ * Request ID — trace every request through the system
+ */
+app.use(requestId);
+
+/**
+ * Allowed origins for CORS
+ */
+const allowedOrigins = (
+  process.env.CORS_ORIGINS ||
+  process.env.FRONTEND_URL ||
+  "http://localhost:3000,http://localhost:3001"
+)
+  .split(",")
+  .map((o) => o.trim());
+
+/**
+ * Handle OPTIONS preflight explicitly (before any other middleware can block it)
+ */
+app.options("*", (req, res) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type,Authorization,X-Request-Id",
+    );
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  res.sendStatus(204);
+});
+
+/**
+ * CORS — allow requests from the React frontend(s)
  */
 app.use(
   cors({
-    origin: [
-      process.env.FRONTEND_URL || "http://localhost:3000",
-      "http://localhost:3001",
-    ],
+    origin: allowedOrigins,
     credentials: true,
+    exposedHeaders: ["X-Request-Id"],
   }),
 );
 
 /**
- * Body Parser Middleware
- * Parses incoming request bodies in JSON and URL-encoded formats
- * Increased limit to 10MB to support base64 encoded proof of payment images
+ * Helmet — sets secure HTTP headers:
+ * - Content-Security-Policy, X-Content-Type-Options, X-Frame-Options
+ * - Strict-Transport-Security, X-XSS-Protection, etc.
+ */
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: [
+          "'self'",
+          "https://identitytoolkit.googleapis.com",
+          "https://securetoken.googleapis.com",
+        ],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        objectSrc: ["'none'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
+/**
+ * Global rate limit — 100 requests per 15 min per IP
+ */
+app.use(globalLimiter);
+
+/**
+ * Response compression — gzip/brotli for all responses
+ */
+app.use(compression());
+
+/**
+ * Body Parser — JSON and URL-encoded with per-route appropriate limits
  */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+/**
+ * Structured request logging — every request/response logged with context
+ */
+app.use(requestLogger);
 
 // ============================================================================
 // API ROUTES
@@ -89,124 +169,102 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 /**
  * Authentication Routes (/api/auth/*)
- * Handles user registration, login, profile management, and role assignment
+ * Extra-strict rate limiting on login/register to prevent brute-force.
  */
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 
 /**
- * User Routes (/api/users/*)
- * Handles user management operations (admin only)
+ * User, Room, Reservation, Audit, Billing, Announcement, Maintenance Routes
+ * Protected by global rate limit + per-route auth middleware.
  */
 app.use("/api/users", userRoutes);
-
-/**
- * Room Routes (/api/rooms/*)
- * Handles room CRUD operations and availability checks
- */
 app.use("/api/rooms", roomRoutes);
-
-/**
- * Reservation Routes (/api/reservations/*)
- * Handles booking and reservation management
- */
 app.use("/api/reservations", reservationRoutes);
-
-/**
- * Inquiry Routes (/api/inquiries/*)
- * Handles customer inquiries and contact form submissions
- */
-app.use("/api/inquiries", inquiryRoutes);
-
-/**
- * Audit Log Routes (/api/audit-logs/*)
- * Handles audit logging and security monitoring (admin only)
- */
+app.use("/api/inquiries", publicLimiter, inquiryRoutes);
 app.use("/api/audit-logs", auditRoutes);
-
-/**
- * Billing Routes (/api/billing/*)
- * Handles tenant billing, invoices, and payment tracking (branch-aware)
- */
 app.use("/api/billing", billingRoutes);
-
-/**
- * Announcements Routes (/api/announcements/*)
- * Handles system announcements with branch targeting and engagement tracking
- */
 app.use("/api/announcements", announcementRoutes);
-
-/**
- * Maintenance Routes (/api/maintenance/*)
- * Handles maintenance requests and tracking (branch-aware)
- */
 app.use("/api/maintenance", maintenanceRoutes);
 
 // ============================================================================
-// HEALTH CHECK ENDPOINT
+// DEEP HEALTH CHECK
 // ============================================================================
 
 /**
  * GET /api/health
- * Simple health check endpoint to verify server is running
- * Used by monitoring services and load balancers
+ * Deep health check — verifies:
+ * 1. Server is responsive
+ * 2. MongoDB is connected and responsive
+ * 3. Memory usage is within bounds
  */
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
+  const checks = {};
+  let healthy = true;
+
+  // 1. MongoDB health
   try {
-    res.json({
-      status: "OK",
-      message: "Server is running",
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("Health check error:", error);
-    res.status(500).json({
-      status: "ERROR",
-      message: "Server error",
-    });
+    const state = mongoose.connection.readyState;
+    if (state === 1) {
+      const start = Date.now();
+      await mongoose.connection.db.admin().ping();
+      checks.mongodb = { status: "ok", latency: `${Date.now() - start}ms` };
+    } else {
+      checks.mongodb = { status: "degraded", state };
+      healthy = false;
+    }
+  } catch (err) {
+    checks.mongodb = { status: "error", error: err.message };
+    healthy = false;
   }
+
+  // 2. Memory health
+  const mem = process.memoryUsage();
+  const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
+  checks.memory = {
+    status: heapUsedMB < 512 ? "ok" : "warning",
+    heapUsed: `${heapUsedMB}MB`,
+    heapTotal: `${heapTotalMB}MB`,
+  };
+
+  // 3. Uptime
+  checks.uptime = `${Math.round(process.uptime())}s`;
+
+  res.status(healthy ? 200 : 503).json({
+    success: true,
+    data: {
+      status: healthy ? "healthy" : "degraded",
+      checks,
+      environment: process.env.NODE_ENV || "development",
+    },
+    meta: {
+      requestId: req.id,
+      timestamp: new Date().toISOString(),
+    },
+  });
 });
 
 // ============================================================================
-// GLOBAL ERROR HANDLING MIDDLEWARE
+// GLOBAL ERROR HANDLER (must be AFTER all routes)
 // ============================================================================
 
-/**
- * Error Handler
- * Catches all errors that weren't handled by route-specific try-catch blocks
- * - In development: Returns detailed error messages
- * - In production: Returns generic error messages (security best practice)
- */
-app.use((err, req, res, next) => {
-  try {
-    console.error("❌ Unhandled error:", err.stack);
-
-    res.status(err.status || 500).json({
-      error: "Something went wrong!",
-      message: process.env.NODE_ENV === "development" ? err.message : undefined,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (handlerError) {
-    // Fallback if error handler itself fails
-    console.error("❌ Error handler failed:", handlerError);
-    res.status(500).json({ error: "Critical server error" });
-  }
-});
+app.use(globalErrorHandler);
 
 // ============================================================================
 // SERVER STARTUP
 // ============================================================================
 
-/**
- * Start the Express server
- * Listens on the specified PORT and logs startup information
- */
 const server = app.listen(PORT, () => {
-  console.log("🚀 LILYCREST DORMITORY MANAGEMENT SYSTEM");
-
-  console.log(`📡 Server running on port ${PORT}`);
-  console.log(`🌐 API available at http://localhost:${PORT}/api`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
+  logger.info(
+    {
+      port: PORT,
+      env: process.env.NODE_ENV || "development",
+      node: process.version,
+    },
+    "🚀 LILYCREST DORMITORY MANAGEMENT SYSTEM started",
+  );
+  logger.info(`📡 API available at http://localhost:${PORT}/api`);
+  logger.info(`🏥 Health check: http://localhost:${PORT}/api/health`);
 });
 
 /**
@@ -214,51 +272,46 @@ const server = app.listen(PORT, () => {
  */
 server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
-    console.error("❌ ERROR: Port", PORT, "is already in use!");
-    console.error("⚠️ Another server instance is running.");
-    console.error("💡 Solutions:");
-    console.error("   1. Stop the other server instance");
-    console.error("   2. Run: npx kill-port", PORT);
-    console.error(
-      "   3. Change PORT in .env file to a different port (e.g., 5001)",
-    );
+    logger.fatal({ port: PORT }, "Port already in use");
     process.exit(1);
   } else {
-    console.error("❌ Server error:", error);
+    logger.fatal({ err: error }, "Server error");
     process.exit(1);
   }
 });
 
 /**
  * Graceful shutdown handling
- * Properly close server and database connections on shutdown
  */
-const gracefulShutdown = () => {
-  console.log("\n⏳ Shutting down gracefully...");
+const gracefulShutdown = (signal) => {
+  logger.info({ signal }, "Shutting down gracefully...");
+
   server.close(() => {
-    console.log("✅ Server closed");
-    process.exit(0);
+    logger.info("HTTP server closed");
+
+    // Close MongoDB connection
+    mongoose.connection.close(false).then(() => {
+      logger.info("MongoDB connection closed");
+      process.exit(0);
+    });
   });
 
   // Force shutdown after 10 seconds
   setTimeout(() => {
-    console.error("⚠️ Forced shutdown after timeout");
+    logger.error("Forced shutdown after timeout");
     process.exit(1);
   }, 10000);
 };
 
-// Handle shutdown signals
-process.on("SIGTERM", gracefulShutdown);
-process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-// Handle uncaught exceptions
 process.on("uncaughtException", (error) => {
-  console.error("❌ Uncaught Exception:", error);
-  gracefulShutdown();
+  logger.fatal({ err: error }, "Uncaught Exception");
+  gracefulShutdown("uncaughtException");
 });
 
-// Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
-  gracefulShutdown();
+  logger.fatal({ reason }, "Unhandled Rejection");
+  gracefulShutdown("unhandledRejection");
 });

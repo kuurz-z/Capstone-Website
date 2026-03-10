@@ -41,15 +41,14 @@ const RequireNonAdmin = ({ children }) => {
     return null;
   }
 
-  // Block admin and super admin users from public/tenant routes
-  const isAdmin = user?.role === "admin" || user?.role === "superAdmin";
-  if (isAdmin) {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
-
-  // Block authenticated regular users from auth pages
-  if (isAuthenticated && user && !isAdmin) {
-    return <Navigate to="/check-availability" replace />;
+  // If already authenticated, redirect based on role (they don't need auth pages)
+  if (isAuthenticated && user) {
+    const isAdmin = user.role === "admin" || user.role === "superAdmin";
+    if (isAdmin) {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+    // Applicant or tenant — redirect to browse rooms
+    return <Navigate to="/applicant/check-availability" replace />;
   }
 
   // Allow unauthenticated users
