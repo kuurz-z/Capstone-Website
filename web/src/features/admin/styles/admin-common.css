@@ -10,7 +10,7 @@
 .admin-page-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0 0 0.25rem;
 }
 
@@ -43,7 +43,7 @@
 .admin-stat-label {
   font-size: 0.75rem;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 0.375rem;
@@ -87,8 +87,8 @@
 }
 
 .admin-search-box:focus-within {
-  border-color: #0c375f;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.08);
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
 }
 
 .admin-search-box input {
@@ -132,19 +132,19 @@
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  background: #0c375f;
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-white);
   border: none;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   white-space: nowrap;
 }
 
 .admin-btn-primary:hover {
-  background: #092c4c;
+  background: var(--color-primary-hover);
 }
 
 .admin-btn-secondary {
@@ -236,8 +236,8 @@
 }
 
 .admin-tab.active {
-  color: #0c375f;
-  border-bottom-color: #0c375f;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -253,28 +253,28 @@
 }
 
 .admin-badge-success {
-  background: #ecfdf5;
-  color: #065f46;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .admin-badge-warning {
-  background: #fffbeb;
-  color: #92400e;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .admin-badge-danger {
-  background: #fef2f2;
-  color: #991b1b;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .admin-badge-info {
-  background: #edf4fa;
-  color: #0c375f;
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
 }
 
 .admin-badge-neutral {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
 }
 
 /* Empty State */
@@ -356,9 +356,9 @@
 }
 
 .admin-pagination-btn.active {
-  background: #0c375f;
-  color: white;
-  border-color: #0c375f;
+  background: var(--color-primary);
+  color: var(--text-white);
+  border-color: var(--color-primary);
 }
 
 /* Modal Overlay */

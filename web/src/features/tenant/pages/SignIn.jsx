@@ -49,6 +49,9 @@ function SignIn() {
   const [fieldValid, setFieldValid] = useState({});
   const [debounceTimer, setDebounceTimer] = useState(null);
   const [rememberMe, setRememberMe] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState(null);
+  const [lockoutCountdown, setLockoutCountdown] = useState(0);
 
   // Load remembered email on mount
   useEffect(() => {
@@ -60,6 +63,38 @@ function SignIn() {
       setTouched((prev) => ({ ...prev, email: true }));
     }
   }, []);
+
+  // ── Lockout countdown timer ────────────────────────────────
+  useEffect(() => {
+    if (!lockoutUntil) return;
+    const tick = () => {
+      const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setLockoutUntil(null);
+        setLockoutCountdown(0);
+        setFailedAttempts(0);
+      } else {
+        setLockoutCountdown(remaining);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
+
+  const isLockedOut = lockoutUntil && Date.now() < lockoutUntil;
+
+  const recordFailedAttempt = () => {
+    const next = failedAttempts + 1;
+    setFailedAttempts(next);
+    if (next >= 5) {
+      setLockoutUntil(Date.now() + 60_000);
+      showNotification(
+        "Too many failed attempts. Please wait 60 seconds.",
+        "error",
+      );
+    }
+  };
 
   // ── Form handling ──────────────────────────────────────────
   const handleChange = (e) => {
@@ -96,6 +131,13 @@ function SignIn() {
 
   const handleEmailPasswordLogin = async (e) => {
     e.preventDefault();
+    if (isLockedOut) {
+      showNotification(
+        `Too many attempts. Try again in ${lockoutCountdown}s.`,
+        "error",
+      );
+      return;
+    }
     setSubmitting(true);
     setGlobalLoading(true);
     try {
@@ -179,6 +221,7 @@ function SignIn() {
           );
       }
     } catch (error) {
+      recordFailedAttempt();
       showNotification(getFirebaseErrorMessage(error, "login"), "error");
     } finally {
       setSubmitting(false);
@@ -407,9 +450,11 @@ function SignIn() {
                 backgroundColor: "#E7710F",
                 opacity: submitting ? 0.7 : 1,
               }}
-              disabled={!isFormValid() || submitting}
+              disabled={!isFormValid() || submitting || isLockedOut}
             >
-              {submitting ? (
+              {isLockedOut ? (
+                `Locked out (${lockoutCountdown}s)`
+              ) : submitting ? (
                 <>
                   <Loader2
                     className="w-4 h-4"
