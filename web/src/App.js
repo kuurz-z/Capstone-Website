@@ -57,6 +57,9 @@ const SignUp = React.lazy(() => import("./features/public/pages/SignUp.jsx"));
 const ForgotPassword = React.lazy(
   () => import("./features/tenant/pages/ForgotPassword.jsx"),
 );
+const VerifyEmail = React.lazy(
+  () => import("./features/public/pages/VerifyEmail.jsx"),
+);
 // DashboardPage removed — applicant profile serves as the main page
 const CheckAvailabilityPage = React.lazy(
   () => import("./features/tenant/pages/CheckAvailabilityPage"),
@@ -244,6 +247,14 @@ function AppContent() {
               }
             />
           </Route>
+          <Route
+            path="/verify-email"
+            element={
+              <RouteErrorBoundary name="VerifyEmail">
+                <VerifyEmail />
+              </RouteErrorBoundary>
+            }
+          />
 
           {/* ============================================================ */}
           {/* APPLICANT / TENANT — require applicant or tenant auth        */}
@@ -253,19 +264,29 @@ function AppContent() {
           {/* /applicant/dashboard removed — redirect to profile */}
           <Route
             path="/applicant/dashboard"
-            element={<Navigate to="/applicant/profile" replace />}
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <Navigate to="/applicant/profile" replace />
+              </ProtectedRoute>
+            }
           />
           {/* /applicant/rooms — alias for check-availability */}
           <Route
             path="/applicant/rooms"
-            element={<Navigate to="/applicant/check-availability" replace />}
+            element={
+              <ProtectedRoute requiredRole="applicant">
+                <Navigate to="/applicant/check-availability" replace />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/applicant/check-availability"
             element={
-              <RouteErrorBoundary name="CheckAvailability">
-                <CheckAvailabilityPage />
-              </RouteErrorBoundary>
+              <ProtectedRoute requiredRole="applicant" requireAuth={false}>
+                <RouteErrorBoundary name="CheckAvailability">
+                  <CheckAvailabilityPage />
+                </RouteErrorBoundary>
+              </ProtectedRoute>
             }
           />
           <Route

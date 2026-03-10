@@ -103,10 +103,11 @@ const userSchema = new mongoose.Schema(
 
     tenantStatus: {
       type: String,
-      enum: ["reserved", "active", "inactive"],
+      enum: ["registered", "reserved", "active", "inactive"],
       default: null,
       // Usage:
-      // - null: applicant (not yet reserved)
+      // - null: applicant (not yet registered / email unverified)
+      // - "registered": email verified, ready to reserve
       // - "reserved": payment confirmed, bed held
       // - "active": checked in, physically moved in
       // - "inactive": moved out / contract ended

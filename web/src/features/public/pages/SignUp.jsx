@@ -259,7 +259,10 @@ function SignUp() {
           formData.lastName,
         );
         try {
-          await sendEmailVerification(firebaseUser);
+          const actionCodeSettings = {
+            url: `${window.location.origin}/signin`,
+          };
+          await sendEmailVerification(firebaseUser, actionCodeSettings);
         } catch (emailError) {
           console.error("⚠️ Failed to send verification email:", emailError);
         }
@@ -575,6 +578,142 @@ function SignUp() {
                   <span className="validation-msg error">
                     {validationErrors.password}
                   </span>
+                )}
+
+                {/* Real-time password strength checklist */}
+                {formData.password.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: "8px",
+                      padding: "12px 14px",
+                      borderRadius: "10px",
+                      backgroundColor: "#F9FAFB",
+                      border: "1px solid #E5E7EB",
+                    }}
+                  >
+                    {/* Strength bar */}
+                    <div style={{ marginBottom: "10px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: "500",
+                            color: "#6B7280",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          Strength
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            color:
+                              passwordStrength.score >= 100
+                                ? "#10B981"
+                                : passwordStrength.score >= 60
+                                  ? "#F59E0B"
+                                  : "#EF4444",
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {passwordStrength.level}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          height: "4px",
+                          borderRadius: "4px",
+                          backgroundColor: "#E5E7EB",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            borderRadius: "4px",
+                            width: `${passwordStrength.score}%`,
+                            backgroundColor:
+                              passwordStrength.score >= 100
+                                ? "#10B981"
+                                : passwordStrength.score >= 60
+                                  ? "#F59E0B"
+                                  : "#EF4444",
+                            transition:
+                              "width 0.3s ease, background-color 0.3s ease",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Requirements list */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "4px 12px",
+                      }}
+                    >
+                      {[
+                        { key: "length", label: "6+ characters" },
+                        { key: "uppercase", label: "Uppercase" },
+                        { key: "lowercase", label: "Lowercase" },
+                        { key: "number", label: "Number" },
+                        { key: "special", label: "Special char" },
+                      ].map(({ key, label }) => (
+                        <div
+                          key={key}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            fontSize: "12px",
+                            color: passwordStrength.requirements[key]
+                              ? "#10B981"
+                              : "#9CA3AF",
+                            transition: "color 0.2s ease",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: "14px",
+                              height: "14px",
+                              borderRadius: "50%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "9px",
+                              fontWeight: "700",
+                              flexShrink: 0,
+                              backgroundColor: passwordStrength.requirements[
+                                key
+                              ]
+                                ? "#10B981"
+                                : "transparent",
+                              color: passwordStrength.requirements[key]
+                                ? "white"
+                                : "#D1D5DB",
+                              border: passwordStrength.requirements[key]
+                                ? "none"
+                                : "1.5px solid #D1D5DB",
+                              transition: "all 0.2s ease",
+                            }}
+                          >
+                            {passwordStrength.requirements[key] ? "✓" : ""}
+                          </span>
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 

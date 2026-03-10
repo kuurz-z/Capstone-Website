@@ -7,7 +7,10 @@ import { ArrowLeft, Home } from "lucide-react";
  * Accepts a hero image URL, headline, and subtitle.
  */
 const AuthBrandingPanel = ({ imageUrl, headline, subtitle }) => (
-  <div className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden">
+  <div
+    className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden"
+    style={{ position: "sticky", top: 0, height: "100vh" }}
+  >
     <div className="absolute inset-0 bg-gradient-to-br from-black/40 to-black/60 z-10"></div>
     <img
       src={imageUrl}

@@ -12,7 +12,7 @@
  * - Comprehensive error handling
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import {
@@ -47,6 +47,18 @@ function SignIn() {
   const [touched, setTouched] = useState({});
   const [fieldValid, setFieldValid] = useState({});
   const [debounceTimer, setDebounceTimer] = useState(null);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load remembered email on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("lilycrest_remember_email");
+    if (savedEmail) {
+      setFormData((prev) => ({ ...prev, email: savedEmail }));
+      setRememberMe(true);
+      setFieldValid((prev) => ({ ...prev, email: true }));
+      setTouched((prev) => ({ ...prev, email: true }));
+    }
+  }, []);
 
   // ── Form handling ──────────────────────────────────────────
   const handleChange = (e) => {
@@ -92,7 +104,11 @@ function SignIn() {
       );
       const firebaseUser = userCredential.user;
 
-      if (!firebaseUser.emailVerified && import.meta.env.PROD) {
+      // Check custom claims to see if user is admin (admins bypass email verification)
+      const tokenResult = await firebaseUser.getIdTokenResult();
+      const isAdmin = tokenResult.claims.admin || tokenResult.claims.superAdmin;
+
+      if (!firebaseUser.emailVerified && !isAdmin) {
         await auth.signOut();
         showNotification(
           "Please verify your email before logging in. Check your inbox for the verification link.",
@@ -100,6 +116,13 @@ function SignIn() {
         );
         setGlobalLoading(false);
         return;
+      }
+
+      // Save or clear remembered email
+      if (rememberMe) {
+        localStorage.setItem("lilycrest_remember_email", formData.email);
+      } else {
+        localStorage.removeItem("lilycrest_remember_email");
       }
 
       try {
@@ -339,6 +362,8 @@ function SignIn() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300"
                   style={{ accentColor: "#E7710F" }}
                 />
@@ -348,7 +373,7 @@ function SignIn() {
               </label>
               <button
                 type="button"
-                onClick={() => navigate("/applicant/forgot-password")}
+                onClick={() => navigate("/forgot-password")}
                 className="text-sm font-light hover:underline"
                 style={{ color: "#E7710F" }}
               >

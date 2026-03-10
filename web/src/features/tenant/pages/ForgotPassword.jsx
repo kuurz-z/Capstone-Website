@@ -3,159 +3,266 @@
  * FORGOT PASSWORD PAGE
  * =============================================================================
  *
- * Password reset page with the following features:
- * - Send password reset email
- * - Email validation
- * - User-friendly error messages
- * - Success confirmation
- * - Link back to sign in
+ * Professional minimalist password reset page matching the SignIn/SignUp design.
+ * Features AuthBrandingPanel on the left, clean form on the right.
+ * Two states: email form → success confirmation.
  */
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { sendPasswordResetEmail } from "firebase/auth";
+import { Mail, ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
 import { auth } from "../../../firebase/config";
 import { showNotification } from "../../../shared/utils/notification";
+import { validateEmail } from "../../../shared/utils/authValidation";
+import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import "../../../shared/styles/notification.css";
-import "./ForgotPassword.css";
-import logoImage from "../../../assets/images/branding/logo.png";
+
+const RESET_IMAGE =
+  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBhcGFydG1lbnQlMjBpbnRlcmlvcnxlbnwwfHx8fDE3NzAyNjI4Nzh8MA&ixlib=rb-4.1.0&q=80&w=1080";
 
 function ForgotPassword() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const [validationError, setValidationError] = useState(null);
+  const [fieldValid, setFieldValid] = useState(false);
 
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setEmail(value);
+    setTouched(true);
+    const error = validateEmail(value);
+    setValidationError(error);
+    setFieldValid(!error);
   };
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
 
-    // Validation
     if (!email.trim()) {
       showNotification("Please enter your email address", "error");
       return;
     }
-
-    if (!validateEmail(email)) {
+    if (validationError) {
       showNotification("Please enter a valid email address", "error");
       return;
     }
 
     setLoading(true);
-
     try {
-      console.log("📧 Sending password reset email to:", email);
-
       await sendPasswordResetEmail(auth, email);
-
-      console.log("✅ Password reset email sent successfully");
       setEmailSent(true);
-      showNotification(
-        "Password reset email sent! Please check your inbox.",
-        "success",
-      );
+      showNotification("Password reset email sent!", "success");
     } catch (error) {
-      console.error("❌ Password reset error:", error);
-
-      let errorMessage = "Failed to send reset email. ";
-
-      if (error.code === "auth/user-not-found") {
-        errorMessage = "No account found with this email address.";
-      } else if (error.code === "auth/invalid-email") {
-        errorMessage = "Invalid email address format.";
-      } else if (error.code === "auth/too-many-requests") {
-        errorMessage = "Too many requests. Please try again later.";
-      } else if (error.code === "auth/network-request-failed") {
-        errorMessage = "Network error. Please check your connection.";
-      } else {
-        errorMessage += error.message || "Please try again.";
-      }
-
-      showNotification(errorMessage, "error");
+      let msg = "Failed to send reset email. ";
+      if (error.code === "auth/user-not-found")
+        msg = "No account found with this email address.";
+      else if (error.code === "auth/invalid-email")
+        msg = "Invalid email address format.";
+      else if (error.code === "auth/too-many-requests")
+        msg = "Too many requests. Please try again later.";
+      else if (error.code === "auth/network-request-failed")
+        msg = "Network error. Please check your connection.";
+      else msg += error.message || "Please try again.";
+      showNotification(msg, "error");
     } finally {
       setLoading(false);
     }
   };
 
+  const inputClass = `w-full px-4 py-4 rounded-xl bg-gray-50 border focus:outline-none text-gray-900 font-light placeholder:text-gray-400 transition-colors ${touched ? (fieldValid ? "border-green-500" : "border-red-500") : "border-gray-200 focus:border-gray-300"}`;
+
   return (
-    <div className="forgot-password-page">
-      <div className="forgot-password-container">
-        <div className="forgot-password-header">
-          <img src={logoImage} alt="Lilycrest Logo" className="forgot-logo" />
-          <h1>Reset Password</h1>
-          <p>
-            {emailSent
-              ? "Check your email for reset instructions"
-              : "Enter your email to receive a password reset link"}
-          </p>
-        </div>
+    <div
+      className="min-h-screen grid lg:grid-cols-2"
+      style={{ backgroundColor: "#0C375F" }}
+    >
+      <AuthBrandingPanel
+        imageUrl={RESET_IMAGE}
+        headline="Forgot Your<br/>Password?"
+        subtitle="No worries — we'll help you get back in"
+      />
 
-        {!emailSent ? (
-          <form onSubmit={handleResetPassword} className="forgot-password-form">
-            <div className="form-group">
-              <label htmlFor="email">Email Address</label>
-              <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your.email@example.com"
-                disabled={loading}
-                className="email-input"
-                autoComplete="email"
-              />
+      <div className="flex items-center justify-center p-8 lg:p-12 bg-white">
+        <div className="w-full max-w-md">
+          <Link
+            to="/"
+            className="lg:hidden inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-8 transition-colors"
+          >
+            <span className="text-sm font-light">← Back to website</span>
+          </Link>
+
+          {!emailSent ? (
+            <>
+              {/* Header */}
+              <div className="mb-10">
+                <h1
+                  className="text-4xl font-light mb-3 tracking-tight"
+                  style={{ color: "#0C375F" }}
+                >
+                  Reset password
+                </h1>
+                <p className="text-gray-600 font-light">
+                  Enter the email associated with your account and we'll send a
+                  link to reset your password.
+                </p>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleResetPassword} className="space-y-6">
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-light text-gray-700 mb-2"
+                  >
+                    Email address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      id="email"
+                      value={email}
+                      onChange={handleChange}
+                      placeholder="your.email@example.com"
+                      disabled={loading}
+                      autoComplete="email"
+                      autoFocus
+                      className={inputClass}
+                    />
+                    <Mail
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                      style={{ width: "18px", height: "18px" }}
+                    />
+                  </div>
+                  {touched && validationError && (
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: "6px",
+                        fontSize: "12px",
+                        color: "#EF4444",
+                        fontWeight: "400",
+                      }}
+                    >
+                      {validationError}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-4 rounded-xl text-white font-light hover:opacity-90 transition-opacity text-base flex items-center justify-center gap-2"
+                  style={{ backgroundColor: "#E7710F" }}
+                  disabled={!fieldValid || loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2
+                        className="w-4 h-4 animate-spin"
+                        style={{ animation: "spin 1s linear infinite" }}
+                      />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send reset link"
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/signin")}
+                  className="w-full flex items-center justify-center gap-2 py-3 text-sm font-light text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <ArrowLeft style={{ width: "16px", height: "16px" }} />
+                  Back to sign in
+                </button>
+              </form>
+            </>
+          ) : (
+            /* Success State */
+            <div className="text-center">
+              <div
+                style={{
+                  width: "64px",
+                  height: "64px",
+                  borderRadius: "50%",
+                  backgroundColor: "#ECFDF5",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 24px",
+                }}
+              >
+                <CheckCircle
+                  style={{ width: "28px", height: "28px", color: "#10B981" }}
+                />
+              </div>
+
+              <h1
+                className="text-3xl font-light mb-3 tracking-tight"
+                style={{ color: "#0C375F" }}
+              >
+                Check your email
+              </h1>
+              <p
+                className="text-gray-600 font-light mb-2"
+                style={{ lineHeight: "1.6" }}
+              >
+                We've sent a password reset link to
+              </p>
+              <p
+                className="mb-8"
+                style={{
+                  fontWeight: "500",
+                  color: "#0C375F",
+                  fontSize: "15px",
+                }}
+              >
+                {email}
+              </p>
+
+              <p
+                className="text-gray-500 font-light mb-8"
+                style={{ fontSize: "13px", lineHeight: "1.6" }}
+              >
+                Click the link in the email to create a new password.
+                <br />
+                Don't forget to check your spam folder.
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => navigate("/signin")}
+                  className="w-full py-4 rounded-xl text-white font-light hover:opacity-90 transition-opacity text-base"
+                  style={{ backgroundColor: "#E7710F" }}
+                >
+                  Back to sign in
+                </button>
+
+                <button
+                  onClick={() => {
+                    setEmailSent(false);
+                    setEmail("");
+                    setTouched(false);
+                    setFieldValid(false);
+                  }}
+                  className="w-full py-3 rounded-xl text-sm font-light text-gray-600 hover:text-gray-900 transition-colors"
+                  style={{ backgroundColor: "#F3F4F6" }}
+                >
+                  Didn't receive it? Resend email
+                </button>
+              </div>
             </div>
-
-            <button type="submit" className="reset-button" disabled={loading}>
-              {loading ? (
-                <span className="loading-spinner"></span>
-              ) : (
-                "Send Reset Link"
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate("/signin")}
-              className="back-to-signin-button"
-              disabled={loading}
-            >
-              Back to Sign In
-            </button>
-          </form>
-        ) : (
-          <div className="success-message">
-            <div className="success-icon">✓</div>
-            <p className="success-text">
-              We've sent a password reset link to <strong>{email}</strong>
-            </p>
-            <p className="success-subtext">
-              Click the link in the email to create a new password.
-              <br />
-              Don't forget to check your spam folder!
-            </p>
-            <button
-              onClick={() => navigate("/signin")}
-              className="back-to-signin-button"
-            >
-              Back to Sign In
-            </button>
-            <button
-              onClick={() => {
-                setEmailSent(false);
-                setEmail("");
-              }}
-              className="resend-button"
-            >
-              Resend Email
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      <style>
+        {`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}
+      </style>
     </div>
   );
 }
