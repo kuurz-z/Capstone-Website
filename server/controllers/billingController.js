@@ -11,7 +11,11 @@
  */
 
 import { Bill, RoomBill, Reservation, Room, User } from "../models/index.js";
-import { sendBillGeneratedEmail } from "../config/email.js";
+import {
+  sendBillGeneratedEmail,
+  sendPaymentApprovedEmail,
+  sendPaymentRejectedEmail,
+} from "../config/email.js";
 
 /* ─── shared helpers ─────────────────────────────── */
 
@@ -299,7 +303,12 @@ export const generateRoomBill = async (req, res) => {
       seenUserIds.add(String(reservation.userId._id));
 
       const rent =
-        reservation.totalPrice || room.monthlyPrice || room.price || 0;
+        reservation.monthlyRent ||
+        reservation.totalPrice ||
+        room.monthlyPrice ||
+        room.price ||
+        0;
+      const customCharges = reservation.customCharges || [];
       const moveInDate =
         bed.occupiedBy.occupiedSince || reservation.checkInDate || monthStart;
       const tenantStart = new Date(
@@ -321,6 +330,7 @@ export const generateRoomBill = async (req, res) => {
           "Tenant",
         email: reservation.userId.email || "",
         rent,
+        customCharges,
         daysInRoom,
         moveInDate,
       });
@@ -340,7 +350,12 @@ export const generateRoomBill = async (req, res) => {
         seenUserIds.add(String(reservation.userId._id));
 
         const rent =
-          reservation.totalPrice || room.monthlyPrice || room.price || 0;
+          reservation.monthlyRent ||
+          reservation.totalPrice ||
+          room.monthlyPrice ||
+          room.price ||
+          0;
+        const customCharges = reservation.customCharges || [];
         const moveInDate = reservation.checkInDate || monthStart;
         const tenantStart = new Date(
           Math.max(new Date(moveInDate).getTime(), monthStart.getTime()),
@@ -361,6 +376,7 @@ export const generateRoomBill = async (req, res) => {
             "Tenant",
           email: reservation.userId.email || "",
           rent,
+          customCharges,
           daysInRoom,
           moveInDate,
         });
@@ -378,14 +394,8 @@ export const generateRoomBill = async (req, res) => {
     const roomCharges = {
       electricity: Number(charges.electricity) || 0,
       water: Number(charges.water) || 0,
-      applianceFees: Number(charges.applianceFees) || 0,
-      corkageFees: Number(charges.corkageFees) || 0,
     };
-    const totalUtilities =
-      roomCharges.electricity +
-      roomCharges.water +
-      roomCharges.applianceFees +
-      roomCharges.corkageFees;
+    const totalUtilities = roomCharges.electricity + roomCharges.water;
     const billDueDate = dueDate
       ? new Date(dueDate)
       : new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 15);
@@ -404,12 +414,18 @@ export const generateRoomBill = async (req, res) => {
       if (tenant.reservationId) dupeFilter.reservationId = tenant.reservationId;
       if (await Bill.findOne(dupeFilter)) continue;
 
-      const te = r2(roomCharges.electricity * share),
-        tw = r2(roomCharges.water * share);
-      const ta = r2(roomCharges.applianceFees * share),
-        tc = r2(roomCharges.corkageFees * share);
-      const utilityShare = te + tw + ta + tc;
-      const totalAmount = tenant.rent + utilityShare;
+      const te = r2(roomCharges.electricity * share);
+      const tw = r2(roomCharges.water * share);
+      const utilityShare = te + tw;
+
+      // Custom charges from reservation (appliance fees, etc.)
+      const tenantCustomCharges = tenant.customCharges || [];
+      const customChargesTotal = tenantCustomCharges.reduce(
+        (sum, c) => sum + (Number(c.amount) || 0),
+        0,
+      );
+
+      const totalAmount = tenant.rent + utilityShare + customChargesTotal;
 
       const bill = new Bill({
         reservationId: tenant.reservationId,
@@ -423,11 +439,15 @@ export const generateRoomBill = async (req, res) => {
           rent: tenant.rent,
           electricity: te,
           water: tw,
-          applianceFees: ta,
-          corkageFees: tc,
+          applianceFees: customChargesTotal,
+          corkageFees: 0,
           penalty: 0,
           discount: 0,
         },
+        additionalCharges: tenantCustomCharges.map((c) => ({
+          name: c.name,
+          amount: c.amount,
+        })),
         totalAmount,
         status: "pending",
       });
@@ -439,6 +459,7 @@ export const generateRoomBill = async (req, res) => {
         daysInRoom: tenant.daysInRoom,
         proRataShare: Math.round(share * 10000) / 10000,
         rent: tenant.rent,
+        customCharges: tenantCustomCharges,
         utilityShare,
         totalAmount,
         billId: bill._id,
@@ -539,19 +560,48 @@ export const getRoomsWithTenants = async (req, res) => {
 
     const rooms = await Room.find(filter)
       .select(
-        "name roomNumber branch type capacity currentOccupancy beds price",
+        "name roomNumber branch type capacity currentOccupancy beds price monthlyPrice",
       )
       .sort({ name: 1 });
 
     res.json({
       rooms: await Promise.all(
         rooms.map(async (room) => {
-          // Only count reservations with status exactly "checked-in"
-          const tenantCount = await Reservation.countDocuments({
+          // Get checked-in reservations with tenant details
+          const reservations = await Reservation.find({
             roomId: room._id,
             status: "checked-in",
             isArchived: { $ne: true },
-          });
+          })
+            .populate("userId", "firstName lastName email")
+            .lean();
+
+          const tenants = reservations
+            .filter((r) => r.userId)
+            .map((r) => {
+              // Find which bed this tenant is on
+              const bed = room.beds.find(
+                (b) =>
+                  b.occupiedBy?.reservationId?.toString() === r._id.toString(),
+              );
+              return {
+                userId: r.userId._id,
+                reservationId: r._id,
+                name:
+                  `${r.userId.firstName || ""} ${r.userId.lastName || ""}`.trim() ||
+                  "Tenant",
+                email: r.userId.email || "",
+                checkInDate: r.checkInDate,
+                monthlyRent:
+                  r.monthlyRent ||
+                  r.totalPrice ||
+                  room.monthlyPrice ||
+                  room.price ||
+                  0,
+                customCharges: r.customCharges || [],
+                bedPosition: bed?.position || null,
+              };
+            });
 
           return {
             id: room._id,
@@ -560,8 +610,10 @@ export const getRoomsWithTenants = async (req, res) => {
             branch: room.branch,
             type: room.type,
             capacity: room.capacity,
-            currentOccupancy: tenantCount,
-            tenantCount,
+            currentOccupancy: tenants.length,
+            tenantCount: tenants.length,
+            roomPrice: room.monthlyPrice || room.price || 0,
+            tenants,
           };
         }),
       ),
@@ -569,6 +621,346 @@ export const getRoomsWithTenants = async (req, res) => {
   } catch (error) {
     console.error("❌ Get rooms with tenants error:", error);
     res.status(500).json({ error: "Failed to fetch rooms" });
+  }
+};
+
+// ============================================================================
+// TENANT: Get my bills
+// ============================================================================
+
+export const getMyBills = async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
+    if (!dbUser) return res.status(404).json({ error: "User not found" });
+
+    const bills = await Bill.find({
+      userId: dbUser._id,
+      isArchived: false,
+    })
+      .populate("roomId", "name branch type")
+      .sort({ billingMonth: -1 })
+      .lean();
+
+    res.json({
+      bills: bills.map((b) => ({
+        id: b._id,
+        billingMonth: b.billingMonth,
+        dueDate: b.dueDate,
+        charges: b.charges,
+        totalAmount: b.totalAmount,
+        paidAmount: b.paidAmount,
+        status: b.status,
+        proRataDays: b.proRataDays,
+        room: b.roomId?.name || "N/A",
+        branch: b.branch,
+        paymentProof: b.paymentProof || { verificationStatus: "none" },
+        penaltyDetails: b.penaltyDetails || { daysLate: 0 },
+        createdAt: b.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("❌ Get my bills error:", error);
+    res.status(500).json({ error: "Failed to fetch bills" });
+  }
+};
+
+// ============================================================================
+// TENANT: Submit payment proof
+// ============================================================================
+
+export const submitPaymentProof = async (req, res) => {
+  try {
+    const { billId } = req.params;
+    const { imageUrl, amount } = req.body;
+
+    if (!imageUrl)
+      return res.status(400).json({ error: "Proof image is required" });
+    if (!amount || amount <= 0)
+      return res
+        .status(400)
+        .json({ error: "Valid payment amount is required" });
+
+    const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
+    if (!dbUser) return res.status(404).json({ error: "User not found" });
+
+    const bill = await Bill.findById(billId);
+    if (!bill) return res.status(404).json({ error: "Bill not found" });
+    if (String(bill.userId) !== String(dbUser._id))
+      return res
+        .status(403)
+        .json({ error: "You can only submit proof for your own bills" });
+    if (bill.status === "paid")
+      return res.status(400).json({ error: "Bill is already paid" });
+    if (bill.paymentProof?.verificationStatus === "pending-verification")
+      return res.status(400).json({
+        error: "Payment proof already submitted and pending verification",
+      });
+
+    bill.paymentProof = {
+      imageUrl,
+      submittedAmount: amount,
+      submittedAt: new Date(),
+      verificationStatus: "pending-verification",
+      rejectionReason: null,
+      verifiedBy: null,
+      verifiedAt: null,
+    };
+    await bill.save();
+
+    console.log(
+      `✅ Payment proof submitted for bill ${billId} by ${dbUser.email}`,
+    );
+    res.json({
+      message: "Payment proof submitted successfully",
+      bill: { id: bill._id, paymentProof: bill.paymentProof },
+    });
+  } catch (error) {
+    console.error("❌ Submit payment proof error:", error);
+    res.status(500).json({ error: "Failed to submit payment proof" });
+  }
+};
+
+// ============================================================================
+// ADMIN: Verify payment proof
+// ============================================================================
+
+export const verifyPayment = async (req, res) => {
+  try {
+    const { billId } = req.params;
+    const { action, rejectionReason } = req.body; // action: "approve" | "reject"
+
+    if (!["approve", "reject"].includes(action))
+      return res
+        .status(400)
+        .json({ error: "Action must be 'approve' or 'reject'" });
+
+    const admin = await getAdminInfo(req);
+    const bill = await Bill.findById(billId);
+    if (!bill) return res.status(404).json({ error: "Bill not found" });
+    if (!admin.isSuperAdmin && bill.branch !== admin.branch)
+      return res.status(403).json({ error: "Access denied" });
+    if (bill.paymentProof?.verificationStatus !== "pending-verification")
+      return res
+        .status(400)
+        .json({ error: "No pending payment proof to verify" });
+
+    if (action === "approve") {
+      bill.paymentProof.verificationStatus = "approved";
+      bill.paymentProof.verifiedBy = admin._id;
+      bill.paymentProof.verifiedAt = new Date();
+      bill.paidAmount = bill.paymentProof.submittedAmount || bill.totalAmount;
+      bill.status =
+        bill.paidAmount >= bill.totalAmount ? "paid" : "partially-paid";
+      bill.paymentDate = new Date();
+    } else {
+      bill.paymentProof.verificationStatus = "rejected";
+      bill.paymentProof.rejectionReason =
+        rejectionReason || "Payment proof not acceptable";
+      bill.paymentProof.verifiedBy = admin._id;
+      bill.paymentProof.verifiedAt = new Date();
+    }
+    await bill.save();
+
+    // Send email notification to tenant (non-blocking)
+    try {
+      const tenant = await User.findById(bill.userId).lean();
+      if (tenant?.email) {
+        const monthStr = new Date(bill.billingMonth).toLocaleDateString(
+          "en-PH",
+          { year: "numeric", month: "long" },
+        );
+        if (action === "approve") {
+          sendPaymentApprovedEmail({
+            to: tenant.email,
+            tenantName:
+              `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
+            billingMonth: monthStr,
+            paidAmount: bill.paidAmount,
+            branchName: bill.branch,
+          }).catch((e) => console.error("Email error:", e.message));
+        } else {
+          sendPaymentRejectedEmail({
+            to: tenant.email,
+            tenantName:
+              `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
+            billingMonth: monthStr,
+            rejectionReason: bill.paymentProof.rejectionReason,
+            branchName: bill.branch,
+          }).catch((e) => console.error("Email error:", e.message));
+        }
+      }
+    } catch (emailErr) {
+      console.error("Email notification failed:", emailErr.message);
+    }
+
+    console.log(`✅ Payment ${action}d for bill ${billId} by admin`);
+    res.json({
+      message: `Payment ${action}d successfully`,
+      bill: {
+        id: bill._id,
+        status: bill.status,
+        paymentProof: bill.paymentProof,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Verify payment error:", error);
+    res.status(500).json({ error: "Failed to verify payment" });
+  }
+};
+
+// ============================================================================
+// ADMIN: Get pending verifications
+// ============================================================================
+
+export const getPendingVerifications = async (req, res) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const filter = {
+      "paymentProof.verificationStatus": "pending-verification",
+      isArchived: false,
+    };
+    if (!admin.isSuperAdmin && admin.branch) filter.branch = admin.branch;
+
+    const bills = await Bill.find(filter)
+      .populate("userId", "firstName lastName email")
+      .populate("roomId", "name branch")
+      .sort({ "paymentProof.submittedAt": -1 })
+      .lean();
+
+    res.json({
+      count: bills.length,
+      bills: bills.map((b) => ({
+        id: b._id,
+        tenant: b.userId
+          ? {
+              name: `${b.userId.firstName || ""} ${b.userId.lastName || ""}`.trim(),
+              email: b.userId.email,
+            }
+          : null,
+        room: b.roomId?.name || "N/A",
+        branch: b.branch,
+        billingMonth: b.billingMonth,
+        totalAmount: b.totalAmount,
+        paymentProof: b.paymentProof,
+      })),
+    });
+  } catch (error) {
+    console.error("❌ Get pending verifications error:", error);
+    res.status(500).json({ error: "Failed to fetch pending verifications" });
+  }
+};
+
+// ============================================================================
+// PENALTY: Auto-apply penalties for overdue bills
+// ============================================================================
+
+const PENALTY_RATE_PER_DAY = 50; // ₱50/day per PRD
+
+export const applyPenalties = async (req, res) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const now = new Date();
+    const filter = {
+      status: { $in: ["pending", "overdue"] },
+      dueDate: { $lt: now },
+      isArchived: false,
+    };
+    if (!admin.isSuperAdmin && admin.branch) filter.branch = admin.branch;
+
+    const overdueBills = await Bill.find(filter);
+    let updated = 0;
+
+    for (const bill of overdueBills) {
+      const daysLate = Math.max(
+        1,
+        Math.floor((now - new Date(bill.dueDate)) / 86400000),
+      );
+      const penalty = daysLate * PENALTY_RATE_PER_DAY;
+
+      // Recalculate total: base charges + penalty - discount
+      const baseCharges =
+        (bill.charges.rent || 0) +
+        (bill.charges.electricity || 0) +
+        (bill.charges.water || 0) +
+        (bill.charges.applianceFees || 0) +
+        (bill.charges.corkageFees || 0);
+
+      bill.charges.penalty = penalty;
+      bill.totalAmount = baseCharges + penalty - (bill.charges.discount || 0);
+      bill.penaltyDetails = {
+        daysLate,
+        ratePerDay: PENALTY_RATE_PER_DAY,
+        appliedAt: now,
+      };
+      bill.status = "overdue";
+      await bill.save();
+      updated++;
+    }
+
+    console.log(`✅ Applied penalties to ${updated} overdue bills`);
+    res.json({ message: `Penalties applied to ${updated} bills`, updated });
+  } catch (error) {
+    console.error("❌ Apply penalties error:", error);
+    res.status(500).json({ error: "Failed to apply penalties" });
+  }
+};
+
+// ============================================================================
+// ADMIN: Billing report
+// ============================================================================
+
+export const getBillingReport = async (req, res) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const filter = { isArchived: false };
+    if (!admin.isSuperAdmin && admin.branch) filter.branch = admin.branch;
+
+    const [totalBills, paidBills, overdueBills, pendingVerifications] =
+      await Promise.all([
+        Bill.countDocuments(filter),
+        Bill.aggregate([
+          { $match: { ...filter, status: "paid" } },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: "$paidAmount" },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+        Bill.aggregate([
+          { $match: { ...filter, status: "overdue" } },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: "$totalAmount" },
+              count: { $sum: 1 },
+              penalties: { $sum: "$charges.penalty" },
+            },
+          },
+        ]),
+        Bill.countDocuments({
+          ...filter,
+          "paymentProof.verificationStatus": "pending-verification",
+        }),
+      ]);
+
+    res.json({
+      totalBills,
+      collected: {
+        amount: paidBills[0]?.total || 0,
+        count: paidBills[0]?.count || 0,
+      },
+      overdue: {
+        amount: overdueBills[0]?.total || 0,
+        count: overdueBills[0]?.count || 0,
+        penalties: overdueBills[0]?.penalties || 0,
+      },
+      pendingVerifications,
+    });
+  } catch (error) {
+    console.error("❌ Get billing report error:", error);
+    res.status(500).json({ error: "Failed to fetch billing report" });
   }
 };
 
@@ -580,4 +972,10 @@ export default {
   getBillsByBranch,
   generateRoomBill,
   getRoomsWithTenants,
+  getMyBills,
+  submitPaymentProof,
+  verifyPayment,
+  getPendingVerifications,
+  applyPenalties,
+  getBillingReport,
 };

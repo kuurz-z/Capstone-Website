@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { billingApi } from "../../../shared/api/apiClient";
 import { useAuth } from "../../../shared/hooks/useAuth";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, ShieldAlert, Clock, AlertTriangle } from "lucide-react";
 
 import BillingStatsBar from "../components/billing/BillingStatsBar";
 import BillingRoomGrid from "../components/billing/BillingRoomGrid";
@@ -39,8 +39,6 @@ const AdminBillingPage = () => {
   const [genCharges, setGenCharges] = useState({
     electricity: "",
     water: "",
-    applianceFees: "",
-    corkageFees: "",
   });
   const [generating, setGenerating] = useState(false);
 
@@ -49,6 +47,10 @@ const AdminBillingPage = () => {
   const [payAmount, setPayAmount] = useState("");
   const [payNote, setPayNote] = useState("");
   const [paying, setPaying] = useState(false);
+
+  // Pending verifications
+  const [pendingVerifications, setPendingVerifications] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
 
   // ── Filtered rooms (client-side) ──
   const filteredRooms = useMemo(() => {
@@ -101,36 +103,50 @@ const AdminBillingPage = () => {
     }
   };
 
+  const fetchPendingVerifications = async () => {
+    setPendingLoading(true);
+    try {
+      const res = await billingApi.getPendingVerifications();
+      setPendingVerifications(res.bills || []);
+    } catch (err) {
+      console.error("Pending verifications error:", err);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchBills();
     fetchStats();
     fetchRooms();
+    fetchPendingVerifications();
   }, [fetchBills]);
 
   // ── Room card click → open generate modal ──
   const handleRoomClick = (room) => {
     if (room.tenantCount === 0) return;
     setSelectedRoom(room);
-    setGenMonth(new Date().toISOString().slice(0, 7));
-    setGenDueDate("");
+    const now = new Date();
+    const currentMonth = now.toISOString().slice(0, 7);
+    setGenMonth(currentMonth);
+    // Default due date = 30 days from billing month start
+    const monthDate = new Date(currentMonth + "-01");
+    const defaultDue = new Date(monthDate);
+    defaultDue.setDate(defaultDue.getDate() + 30);
+    setGenDueDate(defaultDue.toISOString().slice(0, 10));
     setGenCharges({
       electricity: "",
       water: "",
-      applianceFees: "",
-      corkageFees: "",
     });
     setShowGenerate(true);
   };
 
   const genTotal =
-    Number(genCharges.electricity || 0) +
-    Number(genCharges.water || 0) +
-    Number(genCharges.applianceFees || 0) +
-    Number(genCharges.corkageFees || 0);
+    Number(genCharges.electricity || 0) + Number(genCharges.water || 0);
 
   const handleGenerate = async () => {
     if (!selectedRoom) return;
-    if (genTotal <= 0) return alert("Please enter at least one charge");
+    if (genTotal <= 0) return alert("Please enter at least one utility charge");
     setGenerating(true);
     try {
       const monthDate = genMonth ? new Date(genMonth + "-01") : new Date();
@@ -141,8 +157,6 @@ const AdminBillingPage = () => {
         charges: {
           electricity: Number(genCharges.electricity) || 0,
           water: Number(genCharges.water) || 0,
-          applianceFees: Number(genCharges.applianceFees) || 0,
-          corkageFees: Number(genCharges.corkageFees) || 0,
         },
       });
       setShowGenerate(false);
@@ -178,6 +192,32 @@ const AdminBillingPage = () => {
     }
   };
 
+  // ── Verify payment proof ──
+  const handleVerifyPayment = async (billId, { action, rejectionReason }) => {
+    try {
+      await billingApi.verifyPayment(billId, { action, rejectionReason });
+      setDetailBill(null);
+      fetchBills();
+      fetchStats();
+      fetchPendingVerifications();
+    } catch (err) {
+      alert(err.error || err.message || "Failed to verify payment");
+    }
+  };
+
+  // ── Apply penalties ──
+  const handleApplyPenalties = async () => {
+    if (!confirm("Apply ₱50/day penalties to all overdue bills?")) return;
+    try {
+      const res = await billingApi.applyPenalties();
+      alert(res.message || "Penalties applied");
+      fetchBills();
+      fetchStats();
+    } catch (err) {
+      alert(err.error || err.message || "Failed to apply penalties");
+    }
+  };
+
   return (
     <div className="admin-billing-page">
       <div className="admin-billing-container">
@@ -190,10 +230,88 @@ const AdminBillingPage = () => {
               tenants
             </p>
           </div>
+          <button
+            className="btn btn-outline"
+            onClick={handleApplyPenalties}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              background: "#fef2f2",
+              color: "#dc2626",
+              border: "1px solid #fecaca",
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+            }}
+          >
+            <AlertTriangle size={14} /> Apply Penalties
+          </button>
         </div>
 
         {/* Stats */}
         <BillingStatsBar stats={stats} />
+
+        {/* Pending Verifications Banner */}
+        {pendingVerifications.length > 0 && (
+          <div
+            style={{
+              background: "#fef3c7",
+              border: "1px solid #fcd34d",
+              borderRadius: "10px",
+              padding: "1rem 1.25rem",
+              marginBottom: "1.5rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+            }}
+          >
+            <ShieldAlert
+              size={20}
+              style={{ color: "#d97706", flexShrink: 0 }}
+            />
+            <div>
+              <strong style={{ color: "#92400e" }}>
+                {pendingVerifications.length} payment
+                {pendingVerifications.length !== 1 ? "s" : ""} awaiting
+                verification
+              </strong>
+              <p
+                style={{
+                  fontSize: "0.8rem",
+                  color: "#78350f",
+                  margin: "0.15rem 0 0",
+                }}
+              >
+                {pendingVerifications
+                  .map((v) => v.tenant?.name || "Tenant")
+                  .join(", ")}
+              </p>
+            </div>
+            <button
+              style={{
+                marginLeft: "auto",
+                background: "#d97706",
+                color: "#fff",
+                border: "none",
+                padding: "0.4rem 1rem",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                whiteSpace: "nowrap",
+              }}
+              onClick={() => {
+                // Show the first pending bill
+                if (pendingVerifications[0]) {
+                  setDetailBill(pendingVerifications[0]);
+                }
+              }}
+            >
+              Review
+            </button>
+          </div>
+        )}
 
         {/* Room Cards */}
         <BillingRoomGrid
@@ -256,7 +374,6 @@ const AdminBillingPage = () => {
           genMonth={genMonth}
           genDueDate={genDueDate}
           genCharges={genCharges}
-          genTotal={genTotal}
           generating={generating}
           onMonthChange={setGenMonth}
           onDueDateChange={setGenDueDate}
@@ -279,6 +396,7 @@ const AdminBillingPage = () => {
           onPayAmountChange={setPayAmount}
           onPayNoteChange={setPayNote}
           onMarkPaid={handleMarkPaid}
+          onVerifyPayment={handleVerifyPayment}
           onClose={() => {
             setDetailBill(null);
             setPayAmount("");

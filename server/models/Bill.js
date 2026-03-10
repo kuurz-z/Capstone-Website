@@ -63,6 +63,16 @@ const billSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    // Dynamic custom charges (appliance fees, etc.)
+    additionalCharges: {
+      type: [
+        {
+          name: { type: String, required: true },
+          amount: { type: Number, required: true },
+        },
+      ],
+      default: [],
+    },
 
     // --- Bill Period ---
     billingMonth: {
@@ -139,6 +149,33 @@ const billSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
       index: true,
+    },
+
+    // --- Payment Proof (tenant submission) ---
+    paymentProof: {
+      imageUrl: { type: String, default: null },
+      submittedAmount: { type: Number, default: null },
+      submittedAt: { type: Date, default: null },
+      verificationStatus: {
+        type: String,
+        enum: ["none", "pending-verification", "approved", "rejected"],
+        default: "none",
+        index: true,
+      },
+      rejectionReason: { type: String, default: null },
+      verifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      verifiedAt: { type: Date, default: null },
+    },
+
+    // --- Penalty Details ---
+    penaltyDetails: {
+      daysLate: { type: Number, default: 0 },
+      ratePerDay: { type: Number, default: 50 },
+      appliedAt: { type: Date, default: null },
     },
   },
   { timestamps: true },

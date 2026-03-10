@@ -438,4 +438,233 @@ export const sendBillGeneratedEmail = async ({
   }
 };
 
+// =============================================================================
+// PAYMENT REMINDER EMAIL (sent 3 days before due date)
+// =============================================================================
+
+export const sendPaymentReminderEmail = async ({
+  to,
+  tenantName,
+  billingMonth,
+  totalAmount,
+  dueDate,
+  branchName = "Lilycrest",
+}) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD)
+    return { success: false, message: "Email service not configured" };
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td style="padding:40px 20px;">
+    <table role="presentation" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+      <tr><td style="background:linear-gradient(135deg,#0C375F 0%,#1a4a7a 100%);padding:30px 40px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:28px;">Lilycrest Dormitory</h1>
+        <p style="color:rgba(255,255,255,0.9);margin:10px 0 0;font-size:14px;">${branchName} Branch</p>
+      </td></tr>
+      <tr><td style="padding:40px;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <div style="width:60px;height:60px;background:#FEF3C7;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;">
+            <span style="font-size:28px;">⏰</span>
+          </div>
+        </div>
+        <h2 style="color:#111827;margin:0 0 20px;font-size:22px;text-align:center;">Payment Reminder</h2>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Hello <strong>${tenantName}</strong>,</p>
+        <p style="color:#555;font-size:16px;line-height:1.6;">This is a friendly reminder that your dormitory payment is due soon.</p>
+        <div style="background:#f8f9fa;border-radius:8px;padding:20px;margin:20px 0;text-align:center;">
+          <p style="color:#6B7280;font-size:12px;text-transform:uppercase;margin:0 0 6px;">Amount Due</p>
+          <p style="color:#E7710F;font-size:28px;font-weight:700;margin:0 0 12px;">₱${Number(totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+          <p style="color:#6B7280;font-size:12px;text-transform:uppercase;margin:0 0 6px;">Due Date</p>
+          <p style="color:#111827;font-size:16px;font-weight:600;margin:0;">${dueDate}</p>
+        </div>
+        <p style="color:#555;font-size:14px;line-height:1.6;">Please make your payment and upload proof through the dormitory portal to avoid late penalties.</p>
+      </td></tr>
+      <tr><td style="background:#f8f9fa;padding:25px 40px;text-align:center;border-top:1px solid #eee;">
+        <p style="color:#888;font-size:14px;margin:0;">Best regards,<br><strong style="color:#0C375F;">Lilycrest Dormitory Team</strong></p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+  try {
+    const info = await transporter.sendMail({
+      from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+      to,
+      subject: `Payment Reminder — Due ${dueDate} | Lilycrest Dormitory`,
+      html,
+      text: `Hello ${tenantName}, reminder: your payment of ₱${totalAmount} is due on ${dueDate}. — Lilycrest Dormitory`,
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`❌ Payment reminder email failed:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+// =============================================================================
+// OVERDUE NOTICE EMAIL
+// =============================================================================
+
+export const sendOverdueNoticeEmail = async ({
+  to,
+  tenantName,
+  billingMonth,
+  totalAmount,
+  daysLate,
+  penalty,
+  branchName = "Lilycrest",
+}) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD)
+    return { success: false, message: "Email service not configured" };
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td style="padding:40px 20px;">
+    <table role="presentation" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+      <tr><td style="background:linear-gradient(135deg,#991B1B 0%,#DC2626 100%);padding:30px 40px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:28px;">Lilycrest Dormitory</h1>
+        <p style="color:rgba(255,255,255,0.9);margin:10px 0 0;font-size:14px;">${branchName} Branch</p>
+      </td></tr>
+      <tr><td style="padding:40px;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <div style="width:60px;height:60px;background:#FEF2F2;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;">
+            <span style="font-size:28px;">⚠️</span>
+          </div>
+        </div>
+        <h2 style="color:#991B1B;margin:0 0 20px;font-size:22px;text-align:center;">Payment Overdue</h2>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Hello <strong>${tenantName}</strong>,</p>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Your payment is <strong>${daysLate} day${daysLate !== 1 ? "s" : ""} overdue</strong>. Penalties are being applied.</p>
+        <div style="background:#FEF2F2;border-radius:8px;padding:20px;margin:20px 0;text-align:center;">
+          <p style="color:#6B7280;font-size:12px;text-transform:uppercase;margin:0 0 6px;">Total Amount (incl. penalty)</p>
+          <p style="color:#DC2626;font-size:28px;font-weight:700;margin:0 0 12px;">₱${Number(totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+          <p style="color:#991B1B;font-size:14px;margin:0;">Includes ₱${Number(penalty).toLocaleString("en-PH", { minimumFractionDigits: 2 })} in late penalties</p>
+        </div>
+        <p style="color:#555;font-size:14px;line-height:1.6;">Please settle your payment immediately to avoid further charges.</p>
+      </td></tr>
+      <tr><td style="background:#f8f9fa;padding:25px 40px;text-align:center;border-top:1px solid #eee;">
+        <p style="color:#888;font-size:14px;margin:0;">Best regards,<br><strong style="color:#0C375F;">Lilycrest Dormitory Team</strong></p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+  try {
+    const info = await transporter.sendMail({
+      from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+      to,
+      subject: `⚠️ Payment Overdue — Penalties Applying | Lilycrest Dormitory`,
+      html,
+      text: `Hello ${tenantName}, your payment is ${daysLate} days overdue. Total due: ₱${totalAmount} (includes ₱${penalty} penalty). — Lilycrest Dormitory`,
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`❌ Overdue notice email failed:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+// =============================================================================
+// PAYMENT APPROVED EMAIL
+// =============================================================================
+
+export const sendPaymentApprovedEmail = async ({
+  to,
+  tenantName,
+  billingMonth,
+  paidAmount,
+  branchName = "Lilycrest",
+}) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD)
+    return { success: false, message: "Email service not configured" };
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td style="padding:40px 20px;">
+    <table role="presentation" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+      <tr><td style="background:linear-gradient(135deg,#065F46 0%,#059669 100%);padding:30px 40px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:28px;">Lilycrest Dormitory</h1>
+        <p style="color:rgba(255,255,255,0.9);margin:10px 0 0;font-size:14px;">${branchName} Branch</p>
+      </td></tr>
+      <tr><td style="padding:40px;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <div style="width:60px;height:60px;background:#ECFDF5;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;">
+            <span style="font-size:28px;">✅</span>
+          </div>
+        </div>
+        <h2 style="color:#065F46;margin:0 0 20px;font-size:22px;text-align:center;">Payment Approved!</h2>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Hello <strong>${tenantName}</strong>,</p>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Your payment of <strong>₱${Number(paidAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong> for <strong>${billingMonth}</strong> has been verified and approved.</p>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Thank you for your prompt payment!</p>
+      </td></tr>
+      <tr><td style="background:#f8f9fa;padding:25px 40px;text-align:center;border-top:1px solid #eee;">
+        <p style="color:#888;font-size:14px;margin:0;">Best regards,<br><strong style="color:#0C375F;">Lilycrest Dormitory Team</strong></p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+  try {
+    const info = await transporter.sendMail({
+      from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+      to,
+      subject: `Payment Approved — ${billingMonth} | Lilycrest Dormitory`,
+      html,
+      text: `Hello ${tenantName}, your payment of ₱${paidAmount} for ${billingMonth} has been approved. — Lilycrest Dormitory`,
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`❌ Payment approved email failed:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+// =============================================================================
+// PAYMENT REJECTED EMAIL
+// =============================================================================
+
+export const sendPaymentRejectedEmail = async ({
+  to,
+  tenantName,
+  billingMonth,
+  rejectionReason,
+  branchName = "Lilycrest",
+}) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD)
+    return { success: false, message: "Email service not configured" };
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td style="padding:40px 20px;">
+    <table role="presentation" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+      <tr><td style="background:linear-gradient(135deg,#0C375F 0%,#1a4a7a 100%);padding:30px 40px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:28px;">Lilycrest Dormitory</h1>
+        <p style="color:rgba(255,255,255,0.9);margin:10px 0 0;font-size:14px;">${branchName} Branch</p>
+      </td></tr>
+      <tr><td style="padding:40px;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <div style="width:60px;height:60px;background:#FEF2F2;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;">
+            <span style="font-size:28px;">❌</span>
+          </div>
+        </div>
+        <h2 style="color:#991B1B;margin:0 0 20px;font-size:22px;text-align:center;">Payment Proof Rejected</h2>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Hello <strong>${tenantName}</strong>,</p>
+        <p style="color:#555;font-size:16px;line-height:1.6;">Your payment proof for <strong>${billingMonth}</strong> was reviewed and could not be accepted.</p>
+        <div style="background:#FEF2F2;border-left:4px solid #EF4444;padding:15px 20px;margin:20px 0;border-radius:0 8px 8px 0;">
+          <p style="color:#991B1B;font-size:14px;margin:0;font-weight:500;">Reason: ${rejectionReason}</p>
+        </div>
+        <p style="color:#555;font-size:14px;line-height:1.6;">Please re-upload a valid payment proof through the dormitory portal.</p>
+      </td></tr>
+      <tr><td style="background:#f8f9fa;padding:25px 40px;text-align:center;border-top:1px solid #eee;">
+        <p style="color:#888;font-size:14px;margin:0;">Best regards,<br><strong style="color:#0C375F;">Lilycrest Dormitory Team</strong></p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+  try {
+    const info = await transporter.sendMail({
+      from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+      to,
+      subject: `Payment Proof Rejected — ${billingMonth} | Lilycrest Dormitory`,
+      html,
+      text: `Hello ${tenantName}, your payment proof for ${billingMonth} was rejected. Reason: ${rejectionReason}. Please resubmit. — Lilycrest Dormitory`,
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`❌ Payment rejected email failed:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 export default transporter;

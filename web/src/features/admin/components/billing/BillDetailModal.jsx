@@ -1,4 +1,5 @@
-import { X } from "lucide-react";
+import { useState } from "react";
+import { X, Check, XCircle, Eye, Clock, AlertTriangle } from "lucide-react";
 import { fmtCurrency, fmtDate, fmtMonth } from "../../utils/formatters";
 
 export default function BillDetailModal({
@@ -9,8 +10,16 @@ export default function BillDetailModal({
   onPayAmountChange,
   onPayNoteChange,
   onMarkPaid,
+  onVerifyPayment,
   onClose,
 }) {
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [proofZoom, setProofZoom] = useState(false);
+
+  const hasProof =
+    bill.paymentProof?.verificationStatus === "pending-verification";
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -74,21 +83,21 @@ export default function BillDetailModal({
                 <span>{fmtCurrency(bill.charges.water)}</span>
               </div>
             )}
-            {(bill.charges?.applianceFees || 0) > 0 && (
-              <div className="charge-row">
-                <span>Appliance Fees</span>
-                <span>{fmtCurrency(bill.charges.applianceFees)}</span>
+            {/* Dynamic custom charges */}
+            {(bill.additionalCharges || []).map((charge, idx) => (
+              <div className="charge-row" key={idx}>
+                <span>{charge.name}</span>
+                <span>{fmtCurrency(charge.amount)}</span>
               </div>
-            )}
-            {(bill.charges?.corkageFees || 0) > 0 && (
-              <div className="charge-row">
-                <span>Corkage Fees</span>
-                <span>{fmtCurrency(bill.charges.corkageFees)}</span>
-              </div>
-            )}
+            ))}
             {(bill.charges?.penalty || 0) > 0 && (
               <div className="charge-row penalty">
-                <span>Penalty</span>
+                <span>
+                  Penalty
+                  {bill.penaltyDetails?.daysLate
+                    ? ` (${bill.penaltyDetails.daysLate}d × ₱${bill.penaltyDetails.ratePerDay || 50})`
+                    : ""}
+                </span>
                 <span>+{fmtCurrency(bill.charges.penalty)}</span>
               </div>
             )}
@@ -110,40 +119,248 @@ export default function BillDetailModal({
             )}
           </div>
 
-          {/* Mark as paid */}
-          {bill.status !== "paid" && (
-            <div className="mark-paid-section">
-              <h3>Mark as Paid</h3>
-              <div className="form-group">
-                <label>Amount</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder={bill.totalAmount}
-                  value={payAmount}
-                  onChange={(e) => onPayAmountChange(e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label>Note (optional)</label>
-                <input
-                  type="text"
-                  placeholder="Cash, GCash, bank transfer..."
-                  value={payNote}
-                  onChange={(e) => onPayNoteChange(e.target.value)}
-                />
-              </div>
-              <button
-                className="btn btn-primary"
-                onClick={onMarkPaid}
-                disabled={paying}
-                style={{ marginTop: "0.5rem" }}
+          {/* ─── Payment Proof Section ─── */}
+          {bill.paymentProof &&
+            bill.paymentProof.verificationStatus !== "none" && (
+              <div
+                className="payment-proof-section"
+                style={{ marginTop: "1.5rem" }}
               >
-                {paying ? "Processing..." : "Confirm Payment"}
-              </button>
-            </div>
-          )}
+                <h3
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.95rem",
+                    color: "#0C375F",
+                  }}
+                >
+                  <Eye size={16} /> Payment Proof
+                </h3>
+
+                {/* Proof image */}
+                {bill.paymentProof.imageUrl && (
+                  <div
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      padding: "0.5rem",
+                      marginBottom: "0.75rem",
+                      cursor: "pointer",
+                      textAlign: "center",
+                    }}
+                    onClick={() => setProofZoom(!proofZoom)}
+                  >
+                    <img
+                      src={bill.paymentProof.imageUrl}
+                      alt="Payment proof"
+                      style={{
+                        maxWidth: proofZoom ? "100%" : "200px",
+                        maxHeight: proofZoom ? "500px" : "150px",
+                        objectFit: "contain",
+                        borderRadius: "6px",
+                        transition: "all 0.3s",
+                      }}
+                    />
+                    <p
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#94a3b8",
+                        marginTop: "0.25rem",
+                      }}
+                    >
+                      Click to {proofZoom ? "minimize" : "enlarge"}
+                    </p>
+                  </div>
+                )}
+
+                <div className="detail-row">
+                  <span className="detail-label">Amount Submitted</span>
+                  <span className="detail-value">
+                    {fmtCurrency(bill.paymentProof.submittedAmount)}
+                  </span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Submitted</span>
+                  <span className="detail-value">
+                    {bill.paymentProof.submittedAt
+                      ? fmtDate(bill.paymentProof.submittedAt)
+                      : "N/A"}
+                  </span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Verification</span>
+                  <span
+                    className="detail-value"
+                    style={{
+                      color:
+                        bill.paymentProof.verificationStatus === "approved"
+                          ? "#16a34a"
+                          : bill.paymentProof.verificationStatus === "rejected"
+                            ? "#dc2626"
+                            : "#eab308",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {bill.paymentProof.verificationStatus ===
+                    "pending-verification"
+                      ? "⏳ Pending"
+                      : bill.paymentProof.verificationStatus === "approved"
+                        ? "✅ Approved"
+                        : "❌ Rejected"}
+                  </span>
+                </div>
+
+                {bill.paymentProof.rejectionReason && (
+                  <div
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: "8px",
+                      padding: "0.75rem",
+                      fontSize: "0.85rem",
+                      color: "#991b1b",
+                      marginTop: "0.5rem",
+                    }}
+                  >
+                    <strong>Rejection Reason:</strong>{" "}
+                    {bill.paymentProof.rejectionReason}
+                  </div>
+                )}
+
+                {/* Admin verification actions */}
+                {hasProof && onVerifyPayment && (
+                  <div style={{ marginTop: "1rem" }}>
+                    {!showRejectForm ? (
+                      <div style={{ display: "flex", gap: "0.75rem" }}>
+                        <button
+                          className="btn btn-primary"
+                          style={{
+                            background: "#16a34a",
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "0.5rem",
+                          }}
+                          onClick={() =>
+                            onVerifyPayment(bill._id, { action: "approve" })
+                          }
+                        >
+                          <Check size={16} /> Approve Payment
+                        </button>
+                        <button
+                          className="btn"
+                          style={{
+                            background: "#dc2626",
+                            color: "#fff",
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "0.5rem",
+                          }}
+                          onClick={() => setShowRejectForm(true)}
+                        >
+                          <XCircle size={16} /> Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div
+                          className="form-group"
+                          style={{ marginBottom: "0.75rem" }}
+                        >
+                          <label
+                            style={{
+                              fontSize: "0.85rem",
+                              fontWeight: 500,
+                              marginBottom: "0.25rem",
+                              display: "block",
+                            }}
+                          >
+                            Rejection Reason
+                          </label>
+                          <input
+                            type="text"
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            placeholder="e.g., Blurry image, amount mismatch..."
+                            style={{
+                              width: "100%",
+                              padding: "0.5rem",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "6px",
+                              boxSizing: "border-box",
+                            }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button
+                            className="btn"
+                            style={{ background: "#dc2626", color: "#fff" }}
+                            onClick={() => {
+                              onVerifyPayment(bill._id, {
+                                action: "reject",
+                                rejectionReason:
+                                  rejectionReason ||
+                                  "Payment proof not acceptable",
+                              });
+                            }}
+                          >
+                            Confirm Rejection
+                          </button>
+                          <button
+                            className="btn"
+                            style={{ background: "#f1f5f9", color: "#64748b" }}
+                            onClick={() => setShowRejectForm(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+          {/* Mark as paid (manual — when no proof submitted) */}
+          {bill.status !== "paid" &&
+            (!bill.paymentProof ||
+              bill.paymentProof.verificationStatus === "none") && (
+              <div className="mark-paid-section">
+                <h3>Mark as Paid (Manual)</h3>
+                <div className="form-group">
+                  <label>Amount</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={bill.totalAmount}
+                    value={payAmount}
+                    onChange={(e) => onPayAmountChange(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Note (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Cash, GCash, bank transfer..."
+                    value={payNote}
+                    onChange={(e) => onPayNoteChange(e.target.value)}
+                  />
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={onMarkPaid}
+                  disabled={paying}
+                  style={{ marginTop: "0.5rem" }}
+                >
+                  {paying ? "Processing..." : "Confirm Payment"}
+                </button>
+              </div>
+            )}
         </div>
       </div>
     </div>

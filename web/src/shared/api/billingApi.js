@@ -5,6 +5,8 @@
 import { authFetch } from "./httpClient.js";
 
 export const billingApi = {
+  // ── Tenant Endpoints ──
+
   /**
    * Get current month's billing for logged-in tenant
    */
@@ -14,6 +16,22 @@ export const billingApi = {
    * Get billing history
    */
   getHistory: (limit = 50) => authFetch(`/billing/history?limit=${limit}`),
+
+  /**
+   * Get all bills for logged-in tenant with full breakdown
+   */
+  getMyBills: () => authFetch("/billing/my-bills"),
+
+  /**
+   * Submit payment proof for a bill
+   */
+  submitPaymentProof: (billId, { imageUrl, amount }) =>
+    authFetch(`/billing/${billId}/submit-proof`, {
+      method: "POST",
+      body: JSON.stringify({ imageUrl, amount }),
+    }),
+
+  // ── Admin Endpoints ──
 
   /**
    * Get billing statistics by branch (admin only)
@@ -28,8 +46,6 @@ export const billingApi = {
       method: "POST",
       body: JSON.stringify({ amount, note }),
     }),
-
-  // ── Admin Billing ──
 
   /**
    * Get all bills for a branch (admin only)
@@ -53,4 +69,29 @@ export const billingApi = {
       method: "POST",
       body: JSON.stringify(billData),
     }),
+
+  /**
+   * Get bills with pending payment proof verification (admin only)
+   */
+  getPendingVerifications: () => authFetch("/billing/pending-verifications"),
+
+  /**
+   * Approve or reject payment proof (admin only)
+   */
+  verifyPayment: (billId, { action, rejectionReason }) =>
+    authFetch(`/billing/${billId}/verify`, {
+      method: "POST",
+      body: JSON.stringify({ action, rejectionReason }),
+    }),
+
+  /**
+   * Apply penalties to overdue bills (admin only)
+   */
+  applyPenalties: () =>
+    authFetch("/billing/apply-penalties", { method: "POST" }),
+
+  /**
+   * Get billing report (admin only)
+   */
+  getBillingReport: () => authFetch("/billing/report"),
 };

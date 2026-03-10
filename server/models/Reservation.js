@@ -215,6 +215,24 @@ const reservationSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    // Monthly rent locked at booking time (snapshot of room price)
+    // Admin can adjust per-tenant for discounts/promotions
+    monthlyRent: {
+      type: Number,
+      default: null, // null = fallback to totalPrice or room.price
+    },
+    // Recurring custom charges (appliance fees etc.)
+    // Auto-populated into each monthly bill; admin can add/remove anytime
+    customCharges: {
+      type: [
+        {
+          name: { type: String, required: true },
+          amount: { type: Number, required: true, min: 0 },
+          addedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     applianceFees: {
       type: Number,
       default: 0,
