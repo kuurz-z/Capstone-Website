@@ -1,4 +1,3 @@
-import { Button } from './ui/button';
 import { ArrowRight, Phone, Mail } from 'lucide-react';
 
 export function CTASection() {
@@ -31,19 +30,18 @@ export function CTASection() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button
+            <button
               className="text-white px-10 py-7 rounded-full font-light hover:opacity-90 transition-opacity text-base"
               style={{ backgroundColor: '#E7710F' }}
             >
               Book a Viewing
               <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-            <Button
-              variant="outline"
+            </button>
+            <button
               className="px-10 py-7 bg-transparent border border-white/30 text-white hover:bg-white/5 rounded-full font-light text-base"
             >
               Download Brochure
-            </Button>
+            </button>
           </div>
 
           {/* Contact Info */}

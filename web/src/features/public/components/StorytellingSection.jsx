@@ -1,4 +1,3 @@
-import { Button } from './ui/button';
 import { Heart, Users, Award } from 'lucide-react';
 
 export function StorytellingSection() {
@@ -25,12 +24,12 @@ export function StorytellingSection() {
               </p>
             </div>
 
-            <Button
+            <button
               className="text-white px-8 py-6 rounded-full font-light hover:opacity-90 transition-opacity"
               style={{ backgroundColor: '#E7710F' }}
             >
               Learn More About Us
-            </Button>
+            </button>
           </div>
 
           {/* Right - Values */}

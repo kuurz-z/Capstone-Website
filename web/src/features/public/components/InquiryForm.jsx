@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Button } from './ui/button';
 import { Send, User, Mail, Phone, Home, Calendar, MessageSquare } from 'lucide-react';
 
 export function InquiryForm() {
@@ -199,14 +198,14 @@ export function InquiryForm() {
             </div>
           </div>
 
-          <Button
+          <button
             type="submit"
             className="w-full text-white py-4 px-6 rounded-full font-light hover:opacity-90 transition-opacity text-base flex items-center justify-center gap-3"
             style={{ backgroundColor: "#E7710F" }}
           >
             <span>Submit Inquiry</span>
             <Send className="w-5 h-5" />
-          </Button>
+          </button>
 
           {/* Privacy Note */}
           <p className="text-xs text-gray-400 text-center mt-6 font-light">

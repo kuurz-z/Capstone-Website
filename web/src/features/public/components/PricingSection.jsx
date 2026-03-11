@@ -1,5 +1,4 @@
 import { Check, X } from "lucide-react";
-import { Button } from "./ui/button";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
@@ -180,7 +179,7 @@ export function PricingSection() {
                 </div>
 
                 {/* CTA */}
-                <Button
+                <button
                   onClick={handleReserve}
                   className={`w-full py-6 rounded-full font-light transition-all ${
                     plan.popular
@@ -194,7 +193,7 @@ export function PricingSection() {
                   }
                 >
                   Reserve This Room
-                </Button>
+                </button>
               </div>
             </div>
           ))}

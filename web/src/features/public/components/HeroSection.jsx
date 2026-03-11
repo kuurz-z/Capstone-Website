@@ -1,5 +1,4 @@
 import { Sparkles, CheckCircle } from "lucide-react";
-import { Button } from "./ui/button";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -69,8 +68,7 @@ export function HeroSection() {
           {/* Primary CTA */}
           <motion.div {...fadeUp(0.8)}>
             <Link to="/applicant/check-availability">
-              <Button
-                size="lg"
+              <button
                 className="text-white px-10 py-6 gap-4 rounded-full font-normal text-base transition-all duration-300"
                 style={{
                   backgroundColor: "#E7710F",
@@ -89,7 +87,7 @@ export function HeroSection() {
                 }}
               >
                 Browse Available Rooms
-              </Button>
+              </button>
             </Link>
           </motion.div>
 
