@@ -6,11 +6,11 @@ Express.js backend with MongoDB and Firebase Admin SDK for the Lilycrest Dormito
 
 ## Technology Stack
 
-- **Express.js** - Web framework
-- **MongoDB + Mongoose** - Database & ODM
-- **Firebase Admin SDK** - Token verification
-- **Nodemailer** - Email service
-- **JWT** - Token-based authentication
+- **Express.js** — Web framework
+- **MongoDB + Mongoose** — Database & ODM
+- **Firebase Admin SDK** — Token verification
+- **Nodemailer** — Email service
+- **JWT** — Token-based authentication
 
 ---
 
@@ -19,49 +19,63 @@ Express.js backend with MongoDB and Firebase Admin SDK for the Lilycrest Dormito
 ```
 server/
 ├── config/
-│   ├── database.js       # MongoDB connection
-│   ├── firebase.js       # Firebase Admin SDK
-│   └── email.js          # Nodemailer configuration
+│   ├── database.js              # MongoDB connection
+│   ├── firebase.js              # Firebase Admin SDK
+│   └── email.js                 # Nodemailer configuration
 │
-├── controllers/          # Business logic
-│   ├── authController.js
-│   ├── usersController.js
-│   ├── roomsController.js
-│   ├── reservationsController.js
-│   ├── inquiriesController.js
-│   └── auditController.js
+├── controllers/                  # Business logic (10 controllers)
+│   ├── authController.js        # Auth (register, login, profile)
+│   ├── usersController.js       # User CRUD & role management
+│   ├── roomsController.js       # Room CRUD & configuration
+│   ├── reservationsController.js # Reservation lifecycle
+│   ├── inquiriesController.js   # Inquiry management
+│   ├── billingController.js     # Bill generation & payment
+│   ├── announcementsController.js # Announcement management
+│   ├── maintenanceController.js # Maintenance requests
+│   ├── occupancyController.js   # Occupancy endpoints
+│   └── auditController.js      # Audit log retrieval
 │
-├── middleware/           # Express middleware
-│   ├── auth.js          # JWT/Firebase verification
-│   ├── branchAccess.js  # Branch-based access control
-│   ├── csrf.js          # CSRF protection
-│   └── validation.js    # Input sanitization & validation
+├── middleware/                   # Express middleware (8 modules)
+│   ├── auth.js                  # JWT/Firebase verification
+│   ├── branchAccess.js          # Branch-based access control
+│   ├── csrf.js                  # CSRF protection
+│   ├── errorHandler.js          # Centralized error handling
+│   ├── logger.js                # Request logging
+│   ├── rateLimiter.js           # Rate limiting
+│   ├── requestId.js             # Request ID generation
+│   └── validation.js            # Input sanitization & validation
 │
-├── models/              # Mongoose schemas
-│   ├── User.js
-│   ├── Room.js
-│   ├── Reservation.js
-│   ├── Inquiry.js
-│   ├── AuditLog.js
-│   └── archive/         # Archive schemas
+├── models/                       # Mongoose schemas (10 models)
+│   ├── User.js                  # User accounts & roles
+│   ├── Room.js                  # Room definitions & beds
+│   ├── Reservation.js           # Multi-step reservations
+│   ├── Inquiry.js               # Public inquiries
+│   ├── Bill.js                  # Tenant billing records
+│   ├── RoomBill.js              # Room-based utility bills
+│   ├── Announcement.js          # Branch-targeted announcements
+│   ├── MaintenanceRequest.js    # Maintenance requests
+│   ├── AcknowledgmentAccount.js # Announcement engagement
+│   ├── AuditLog.js              # Admin action audit trail
+│   ├── archive/                 # Archive utility schemas
+│   └── index.js                 # Central model exports
 │
-├── routes/              # Express routes
-│   ├── authRoutes.js
-│   ├── usersRoutes.js
-│   ├── roomsRoutes.js
-│   ├── reservationsRoutes.js
-│   ├── inquiriesRoutes.js
-│   └── auditRoutes.js
-│
-├── scripts/             # Utility scripts
-│   ├── seed-rooms.js
-│   ├── cleanup-incomplete-rooms.js
-│   └── check-users.js
+├── routes/                       # Express routes (9 route files)
+│   ├── authRoutes.js            # /api/auth/*
+│   ├── usersRoutes.js           # /api/users/*
+│   ├── roomsRoutes.js           # /api/rooms/*
+│   ├── reservationsRoutes.js    # /api/reservations/*
+│   ├── inquiriesRoutes.js       # /api/inquiries/*
+│   ├── billingRoutes.js         # /api/billing/*
+│   ├── announcementRoutes.js    # /api/announcements/*
+│   ├── maintenanceRoutes.js     # /api/maintenance/*
+│   └── auditRoutes.js           # /api/audit-logs/*
 │
 ├── utils/
-│   └── auditLogger.js   # Audit logging utility
+│   ├── auditLogger.js           # Audit logging utility
+│   ├── occupancyManager.js      # Room occupancy logic
+│   └── reservationHelpers.js    # Reservation helper functions
 │
-└── server.js            # Entry point
+└── server.js                    # Express app entry point
 ```
 
 ---
@@ -97,11 +111,6 @@ EMAIL_PASSWORD=your-app-specific-password
 
 # CORS
 FRONTEND_URL=http://localhost:3000
-
-# Default Admin Account
-ADMIN_EMAIL=admin@lilycrest.com
-ADMIN_PASSWORD=Admin123!
-ADMIN_ROLE=superAdmin
 ```
 
 ### 3. Run Server
@@ -122,237 +131,125 @@ Server runs on: **http://localhost:5000**
 
 ### Authentication (`/api/auth`)
 
-| Method | Endpoint         | Auth Required | Description        |
-| ------ | ---------------- | ------------- | ------------------ |
-| POST   | `/register`      | Firebase      | Register new user  |
-| POST   | `/login`         | Firebase      | User login         |
-| GET    | `/profile`       | JWT           | Get user profile   |
-| PUT    | `/profile`       | JWT           | Update profile     |
-| PATCH  | `/update-branch` | JWT           | Update user branch |
-| POST   | `/set-role`      | Admin         | Set user role      |
+| Method | Endpoint         | Auth     | Description        |
+| ------ | ---------------- | -------- | ------------------ |
+| POST   | `/register`      | Firebase | Register new user  |
+| POST   | `/login`         | Firebase | User login         |
+| GET    | `/profile`       | JWT      | Get user profile   |
+| PUT    | `/profile`       | JWT      | Update profile     |
+| PATCH  | `/update-branch` | JWT      | Update user branch |
+| POST   | `/set-role`      | Admin    | Set user role      |
 
 ### Rooms (`/api/rooms`)
 
-| Method | Endpoint   | Auth Required | Description             |
-| ------ | ---------- | ------------- | ----------------------- |
-| GET    | `/`        | Public        | Get all rooms (filters) |
-| GET    | `/:roomId` | Public        | Get room by ID          |
-| POST   | `/`        | Admin         | Create room             |
-| PUT    | `/:roomId` | Admin         | Update room             |
-| DELETE | `/:roomId` | Admin         | Delete room             |
+| Method | Endpoint   | Auth   | Description                  |
+| ------ | ---------- | ------ | ---------------------------- |
+| GET    | `/`        | Public | Get all rooms (with filters) |
+| GET    | `/:roomId` | Public | Get room by ID               |
+| POST   | `/`        | Admin  | Create room                  |
+| PUT    | `/:roomId` | Admin  | Update room                  |
+| DELETE | `/:roomId` | Admin  | Delete room                  |
 
 ### Reservations (`/api/reservations`)
 
-| Method | Endpoint          | Auth Required | Description           |
-| ------ | ----------------- | ------------- | --------------------- |
-| GET    | `/`               | JWT           | Get reservations      |
-| GET    | `/:reservationId` | JWT           | Get reservation by ID |
-| POST   | `/`               | JWT           | Create reservation    |
-| PUT    | `/:reservationId` | Admin         | Update reservation    |
-| DELETE | `/:reservationId` | Admin         | Cancel reservation    |
+| Method | Endpoint          | Auth  | Description        |
+| ------ | ----------------- | ----- | ------------------ |
+| GET    | `/`               | JWT   | Get reservations   |
+| GET    | `/:reservationId` | JWT   | Get by ID          |
+| POST   | `/`               | JWT   | Create reservation |
+| PUT    | `/:reservationId` | Admin | Update reservation |
+| DELETE | `/:reservationId` | Admin | Cancel reservation |
 
 ### Inquiries (`/api/inquiries`)
 
-| Method | Endpoint      | Auth Required | Description       |
-| ------ | ------------- | ------------- | ----------------- |
-| GET    | `/`           | Admin         | Get all inquiries |
-| GET    | `/:inquiryId` | Public        | Get inquiry by ID |
-| POST   | `/`           | Public        | Submit inquiry    |
-| PUT    | `/:inquiryId` | Admin         | Update inquiry    |
-| DELETE | `/:inquiryId` | Admin         | Delete inquiry    |
+| Method | Endpoint              | Auth   | Description           |
+| ------ | --------------------- | ------ | --------------------- |
+| GET    | `/`                   | Admin  | Get all inquiries     |
+| POST   | `/`                   | Public | Submit inquiry        |
+| PATCH  | `/:inquiryId/respond` | Admin  | Respond (sends email) |
+
+### Billing (`/api/billing`)
+
+| Method | Endpoint                  | Auth  | Description          |
+| ------ | ------------------------- | ----- | -------------------- |
+| GET    | `/current`                | JWT   | Current month's bill |
+| GET    | `/history`                | JWT   | Payment history      |
+| GET    | `/stats`                  | Admin | Branch billing stats |
+| POST   | `/:billId/mark-paid`      | Admin | Mark as paid         |
+| GET    | `/rooms`                  | Admin | Rooms for billing    |
+| POST   | `/rooms/:roomId/generate` | Admin | Generate room bill   |
+
+### Announcements (`/api/announcements`)
+
+| Method | Endpoint           | Auth  | Description         |
+| ------ | ------------------ | ----- | ------------------- |
+| GET    | `/`                | JWT   | Get announcements   |
+| POST   | `/`                | Admin | Create announcement |
+| POST   | `/:id/acknowledge` | JWT   | Acknowledge         |
+
+### Maintenance (`/api/maintenance`)
+
+| Method | Endpoint        | Auth  | Description       |
+| ------ | --------------- | ----- | ----------------- |
+| GET    | `/my-requests`  | JWT   | Tenant's requests |
+| POST   | `/requests`     | JWT   | Create request    |
+| PATCH  | `/requests/:id` | Admin | Update status     |
 
 ### Users (`/api/users`)
 
-| Method | Endpoint           | Auth Required | Description           |
-| ------ | ------------------ | ------------- | --------------------- |
-| GET    | `/`                | Admin         | Get all users         |
-| GET    | `/:userId`         | Admin         | Get user by ID        |
-| GET    | `/email/:username` | Admin         | Get email by username |
-| GET    | `/stats`           | Admin         | Get user statistics   |
-| PUT    | `/:userId`         | Admin         | Update user           |
-| DELETE | `/:userId`         | Admin         | Delete user           |
+| Method | Endpoint   | Auth  | Description    |
+| ------ | ---------- | ----- | -------------- |
+| GET    | `/`        | Admin | Get all users  |
+| GET    | `/:userId` | Admin | Get user by ID |
+| PUT    | `/:userId` | Admin | Update user    |
+| DELETE | `/:userId` | Admin | Delete user    |
 
 ### Audit Logs (`/api/audit-logs`)
 
-| Method | Endpoint | Auth Required | Description    |
-| ------ | -------- | ------------- | -------------- |
-| GET    | `/`      | Admin         | Get audit logs |
+| Method | Endpoint | Auth  | Description    |
+| ------ | -------- | ----- | -------------- |
+| GET    | `/`      | Admin | Get audit logs |
+
+See [docs/API.md](../docs/API.md) for complete endpoint documentation with request/response examples.
 
 ---
 
 ## Authentication Flow
 
-### 1. Firebase Authentication (Frontend)
-
 ```
 User signs in → Firebase Auth → Returns ID token
-```
-
-### 2. Backend Verification
-
-```
+    ↓
 Request with token → Firebase Admin verifies → Returns user data
-```
-
-### 3. Protected Routes
-
-```javascript
-// Middleware chain
-router.post(
-  "/protected-route",
-  verifyToken, // Verify Firebase token
-  verifyAdmin, // Check admin role
-  filterByBranch, // Apply branch filter
-  handler, // Execute controller
-);
+    ↓
+Middleware chain: verifyToken → verifyAdmin → filterByBranch → handler
 ```
 
 ---
 
 ## Security Features
 
-### Input Validation & Sanitization
-
-- XSS protection (HTML entity escaping)
-- SQL injection prevention (Mongoose ODM)
-- Validation rules for all inputs
-- **Location**: `middleware/validation.js`
-
-### CSRF Protection
-
-- Cryptographic token validation
-- State-changing requests protected
-- **Location**: `middleware/csrf.js`
-
-### Branch Isolation
-
-- Automatic branch filtering
-- Users only access their branch data
-- Admins restricted to their branch
-
-### Role-Based Access Control
-
-- `user` - Basic account
-- `tenant` - Active resident
-- `admin` - Branch administrator
-- `superAdmin` - System administrator
+- **Input Validation & Sanitization** — XSS protection, format validation (`middleware/validation.js`)
+- **CSRF Protection** — Cryptographic token validation (`middleware/csrf.js`)
+- **Branch Isolation** — Automatic branch filtering, users only access their branch data
+- **Rate Limiting** — Protection against brute force on auth endpoints (`middleware/rateLimiter.js`)
+- **Role-Based Access Control** — `user` → `tenant` → `admin` → `superAdmin`
 
 ---
 
 ## Database Models
 
-### User Model
-
-```javascript
-{
-  (firebaseUid,
-    email,
-    username,
-    firstName,
-    lastName,
-    phone,
-    role,
-    branch,
-    emailVerified,
-    createdAt,
-    updatedAt);
-}
-```
-
-### Room Model
-
-```javascript
-{
-  name, roomNumber, branch, type,
-  capacity, price, available,
-  beds: [{ id, position, available }],
-  amenities, description, images
-}
-```
-
-### Reservation Model
-
-```javascript
-{
-  (userId,
-    roomId,
-    branch,
-    startDate,
-    endDate,
-    status,
-    totalAmount,
-    createdAt,
-    updatedAt);
-}
-```
-
-### Inquiry Model
-
-```javascript
-{
-  (name,
-    email,
-    phone,
-    branch,
-    message,
-    status,
-    priority,
-    response,
-    respondedBy,
-    respondedAt,
-    createdAt);
-}
-```
-
-### AuditLog Model
-
-```javascript
-{
-  userId, action, resourceType, resourceId,
-  changes: { before, after },
-  branch, timestamp
-}
-```
-
----
-
-## Utility Scripts
-
-### Seed Rooms Database
-
-```bash
-node scripts/seed-rooms.js
-```
-
-Creates 12 rooms (3 private, 3 double, 6 quadruple) across both branches.
-
-### Cleanup Incomplete Rooms
-
-```bash
-node scripts/cleanup-incomplete-rooms.js
-```
-
-Removes rooms with missing required fields.
-
-### Check Users
-
-```bash
-node scripts/check-users.js
-```
-
-Lists all users with their roles and branches.
-
----
-
-## Admin Account Setup
-
-Default admin account is auto-created on first run:
-
-**Email**: `admin@lilycrest.com`  
-**Password**: `Admin123!`  
-**Role**: `superAdmin`
-
-⚠️ **Security**: Change password immediately after first login!
+| Model                   | Description                                            |
+| ----------------------- | ------------------------------------------------------ |
+| `User`                  | Accounts with Firebase UID, roles, branches            |
+| `Room`                  | Room definitions with beds, capacity, pricing          |
+| `Reservation`           | Multi-step reservation lifecycle                       |
+| `Inquiry`               | Public inquiry submissions                             |
+| `Bill`                  | Tenant billing records                                 |
+| `RoomBill`              | Room-based utility bill generation                     |
+| `Announcement`          | Branch-targeted announcements with engagement tracking |
+| `MaintenanceRequest`    | Maintenance request tracking with categories           |
+| `AcknowledgmentAccount` | Announcement read/acknowledge tracking                 |
+| `AuditLog`              | Comprehensive admin action audit trail                 |
 
 ---
 
@@ -368,30 +265,15 @@ Standard error responses:
 }
 ```
 
-Common error codes:
-
-- `VALIDATION_ERROR` - Input validation failed
-- `AUTH_FAILED` - Authentication failed
-- `UNAUTHORIZED` - Insufficient permissions
-- `NOT_FOUND` - Resource not found
-- `BRANCH_ACCESS_DENIED` - Branch access violation
+Common error codes: `VALIDATION_ERROR`, `AUTH_FAILED`, `UNAUTHORIZED`, `NOT_FOUND`, `BRANCH_ACCESS_DENIED`
 
 ---
 
 ## Development
 
-### Enable Debug Logging
-
-```javascript
-// In controllers
-console.log("✅ Success message");
-console.error("❌ Error message");
-console.warn("⚠️ Warning message");
-```
-
 ### Test API Endpoints
 
-Use Postman/Insomnia or curl:
+Use Postman, Insomnia, or curl:
 
 ```bash
 # Get all rooms
@@ -410,12 +292,9 @@ curl -X POST http://localhost:5000/api/auth/register \
 
 ### Environment Variables
 
-Ensure all production environment variables are set:
-
 - Update `MONGODB_URI` to production database
 - Update `FRONTEND_URL` to production domain
 - Use production Firebase credentials
-- Change admin password
 
 ### Production Mode
 
@@ -425,23 +304,18 @@ NODE_ENV=production npm start
 
 ### Hosting Options
 
-- **Heroku**: `git push heroku main`
-- **Railway**: Deploy via GitHub integration
-- **Google Cloud Run**: Use Docker container
-- **AWS EC2**: Deploy with PM2
+- **Railway** — Deploy via GitHub integration
+- **Render** — Automatic deployment from repo
+- **Google Cloud Run** — Use Docker container
+- **AWS EC2** — Deploy with PM2
 
 ---
 
 ## Documentation
 
-- [Main README](../README.md) - Project overview
-- [API Documentation](../docs/API.md) - Complete API reference
-- [Authentication Guide](../docs/AUTHENTICATION.md) - Auth implementation
-- [Security Guide](../docs/SECURITY.md) - Security features
-- [Project Structure](../docs/STRUCTURE.md) - Full structure
-
----
-
-## Support
-
-For frontend issues, see [web/README.md](../web/README.md)
+- [Main README](../README.md) — Project overview
+- [API Documentation](../docs/API.md) — Complete API reference
+- [Authentication Guide](../docs/AUTHENTICATION.md) — Auth implementation
+- [Security Guide](../docs/SECURITY.md) — Security features
+- [Project Structure](../docs/STRUCTURE.md) — Full structure
+- [Developer Guide](../docs/DEVELOPER_GUIDE.md) — Coding patterns & conventions

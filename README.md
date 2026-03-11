@@ -1,26 +1,71 @@
-# Lilycrest Dormitory Management System
+# 🏢 Lilycrest Dormitory Management System
 
-Full-stack web application for managing dormitory operations across multiple branches with role-based access control.
+> A full-stack web-based dormitory management platform designed to handle multi-branch operations, tenant lifecycle management, room-based billing, and real-time occupancy tracking — all through a unified, role-based interface.
 
-**Last Updated**: February 7, 2026
+[![Node.js](https://img.shields.io/badge/Node.js-16%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-Auth-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![Express.js](https://img.shields.io/badge/Express.js-4.x-000000?logo=express&logoColor=white)](https://expressjs.com/)
 
 ---
 
-## 🚀 Quick Start
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [Features](#features)
+- [API Reference](#api-reference)
+- [Security](#security)
+- [Deployment](#deployment)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Overview
+
+Lilycrest DMS is built for **Lilycrest Dormitory**, a multi-branch residential facility operating in Makati, Philippines. The system digitizes and streamlines dormitory operations including:
+
+- **Reservation lifecycle** — from inquiry to check-in via a guided multi-step workflow
+- **Room & occupancy management** — real-time bed-level tracking with automatic availability updates
+- **Billing** — room-based utility bill generation with pro-rata distribution
+- **Maintenance** — tenant-submitted requests with priority tracking and resolution stats
+- **Audit trail** — comprehensive logging of all administrative actions
+
+The platform serves four distinct user roles — public visitors, tenants, branch admins, and system administrators — each with a dedicated, access-controlled interface.
+
+---
+
+## Tech Stack
+
+| Layer        | Technologies                                                               |
+| ------------ | -------------------------------------------------------------------------- |
+| **Frontend** | React 19, Vite, React Router, Firebase Auth (Client SDK)                   |
+| **Backend**  | Express.js, MongoDB (Mongoose ODM), Firebase Admin SDK                     |
+| **Email**    | Nodemailer (Gmail SMTP)                                                    |
+| **Auth**     | Firebase Authentication (Email/Password, Google OAuth)                     |
+| **Security** | Input sanitization, CSRF protection, rate limiting, RBAC, branch isolation |
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 16+
-- MongoDB Atlas account
-- Firebase project with Authentication enabled
-- npm or yarn
+- [Node.js](https://nodejs.org/) v16 or higher
+- [MongoDB Atlas](https://www.mongodb.com/atlas) account
+- [Firebase](https://firebase.google.com/) project with Authentication enabled
 
-### 1. Clone & Install
+### Installation
 
 ```bash
-# Clone repository
-git clone <repository-url>
-cd Lilycrest-Web
+# Clone the repository
+git clone https://github.com/PlaytsDEV/Capstone-Website.git
+cd Capstone-Website
 
 # Install backend dependencies
 cd server && npm install
@@ -29,474 +74,209 @@ cd server && npm install
 cd ../web && npm install
 ```
 
-### 2. Configure Environment
+### Environment Configuration
 
-**Backend** (`server/.env`):
+**Backend** — create `server/.env`:
 
 ```env
 PORT=5000
-MONGODB_URI=mongodb+srv://...
-FIREBASE_PROJECT_ID=...
-FIREBASE_CLIENT_EMAIL=...
-FIREBASE_PRIVATE_KEY="..."
-EMAIL_USER=your-gmail@gmail.com
-EMAIL_PASSWORD=your-app-password
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/lilycrest
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-specific-password
 FRONTEND_URL=http://localhost:3000
 ```
 
-**Frontend** (`web/.env`):
+**Frontend** — create `web/.env`:
 
 ```env
 VITE_API_URL=http://localhost:5000/api
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_API_KEY=your-api-key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+VITE_FIREBASE_APP_ID=your-app-id
 ```
 
-### 3. Run Development Servers
+### Running the Application
 
 ```bash
-# Terminal 1: Backend
+# Terminal 1 — Start backend
 cd server && npm run dev
 
-# Terminal 2: Frontend
+# Terminal 2 — Start frontend
 cd web && npm run dev
 ```
 
-- **Frontend**: http://localhost:3000
-- **Backend**: http://localhost:5000
+| Service     | URL                   |
+| ----------- | --------------------- |
+| Frontend    | http://localhost:3000 |
+| Backend API | http://localhost:5000 |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-Lilycrest-Web/
-├── docs/                    # 📚 Documentation
-│   ├── API.md              # API endpoints reference
-│   ├── API_MIGRATION.md    # API migration history
-│   ├── AUTHENTICATION.md   # Authentication flows
-│   ├── REFACTORING.md      # Refactoring history
-│   ├── SECURITY.md         # Security implementation
-│   └── STRUCTURE.md        # Detailed project structure
+Capstone-Website/
 │
-├── server/                  # 🖥️ Express Backend
-│   ├── config/             # DB, Firebase, Email setup
-│   ├── controllers/        # Business logic
-│   ├── middleware/         # Auth, validation, CSRF
-│   ├── models/             # MongoDB schemas
-│   ├── routes/             # API routes
-│   ├── scripts/            # Utility scripts
-│   ├── utils/              # Helper functions
-│   └── server.js           # Entry point
+├── server/                      # Express.js Backend
+│   ├── config/                 # Database, Firebase, Email configuration
+│   ├── controllers/            # Request handlers (10 controllers)
+│   ├── middleware/             # Auth, validation, CSRF, rate limiting
+│   ├── models/                # Mongoose schemas (10 models)
+│   ├── routes/                # API route definitions (9 route files)
+│   ├── utils/                 # Audit logger, occupancy manager
+│   └── server.js              # Application entry point
 │
-└── web/                     # 🌐 React Frontend
-    ├── public/             # Static files
-    ├── src/
-    │   ├── assets/         # Images
-    │   ├── features/       # Role-based modules
-    │   │   ├── public/     # Public pages
-    │   │   ├── tenant/     # Tenant portal
-    │   │   ├── admin/      # Branch admin
-    │   │   └── super-admin/# System admin
-    │   ├── firebase/       # Firebase config
-    │   ├── shared/         # Shared components/utils
-    │   ├── App.js          # Main routing
-    │   └── index.js        # Entry point
-    └── build/              # Production build
+├── web/                         # React + Vite Frontend
+│   └── src/
+│       ├── features/           # Role-based UI modules
+│       │   ├── public/        # Landing page, room listings
+│       │   ├── tenant/        # Tenant dashboard & portal
+│       │   ├── admin/         # Branch admin dashboard
+│       │   └── super-admin/   # System administration
+│       ├── shared/            # Shared components, API layer, hooks
+│       └── firebase/          # Firebase configuration
+│
+└── docs/                        # Technical documentation
 ```
+
+> For a complete file-by-file breakdown, see [docs/STRUCTURE.md](docs/STRUCTURE.md).
 
 ---
 
-## 📖 Documentation
+## Features
 
-| Document                                        | Description                                      |
-| ----------------------------------------------- | ------------------------------------------------ |
-| **[API.md](docs/API.md)**                       | Complete API endpoint reference                  |
-| **[API_MIGRATION.md](docs/API_MIGRATION.md)**   | Migration from static to API-driven architecture |
-| **[AUTHENTICATION.md](docs/AUTHENTICATION.md)** | Firebase authentication flows & implementation   |
-| **[REFACTORING.md](docs/REFACTORING.md)**       | Complete refactoring history & improvements      |
-| **[SECURITY.md](docs/SECURITY.md)**             | Security features (XSS, CSRF, input validation)  |
-| **[STRUCTURE.md](docs/STRUCTURE.md)**           | Detailed project structure breakdown             |
-| **[server/README.md](server/README.md)**        | Backend-specific documentation                   |
-| **[web/README.md](web/README.md)**              | Frontend-specific documentation                  |
+### Public Interface
 
----
+- Responsive landing page with branch information
+- Room browsing with filters (type, price, capacity, availability)
+- Online inquiry submission with email notifications
 
-## ✨ Key Features
+### Tenant Portal
 
-### 🏠 Public Features
+- Guided multi-step reservation workflow
+- Real-time billing dashboard with payment history
+- Maintenance request submission and tracking
+- Announcements with read/acknowledgment tracking
+- Profile and contract management
 
-- Landing page with branch information
-- Room listings with advanced filters (price, type, capacity)
-- Room details with image galleries
-- Online inquiry submission
-- FAQs page
+### Admin Dashboard
 
-### 🔐 Authentication
+- Unified reservation and inquiry management
+- Room management with 3-tab interface (Availability, Setup, Occupancy)
+- Room-based billing with pro-rata utility distribution
+- Tenant lifecycle management (pending → confirmed → checked-in → checked-out)
+- Comprehensive audit trail for all actions
 
-- Email/password registration & login
-- Google OAuth integration
-- Email verification
-- Password reset
-- Branch selection on first login
-- Role-based access control
+### System Administration
 
-### 👤 Tenant Portal
-
-- Personal dashboard with overview
-- Billing & payment history
-- Maintenance request submission
-- Announcements & notifications
-- Contract management
-- Profile settings
-
-### 🛠️ Admin Dashboard (Branch-Level)
-
-- **Dashboard**: Quick stats & metrics
-- **Reservations**: Unified inquiries + reservations management
-- **Tenants**: Tenant profiles & contracts
-- **Rooms**: 3-tab interface (Availability, Setup, Occupancy)
-- **User Management**: Staff management
-- **Audit Logs**: Activity tracking
-
-### ⚙️ Super Admin Panel (System-Level)
-
-- System-wide user management
-- Branch management & configuration
-- Role & permission management
-- Activity logs & audit trail
-- System settings & configuration
+- Cross-branch user management
+- Branch configuration
+- Role and permission management
+- System-wide activity logs
 
 ---
 
-## 🏗️ Architecture
+## API Reference
 
-### Technology Stack
+The backend exposes RESTful API endpoints organized by domain:
 
-**Frontend**:
+| Domain         | Base Path            | Auth           |
+| -------------- | -------------------- | -------------- |
+| Authentication | `/api/auth`          | Firebase / JWT |
+| Rooms          | `/api/rooms`         | Public / Admin |
+| Reservations   | `/api/reservations`  | JWT / Admin    |
+| Inquiries      | `/api/inquiries`     | Public / Admin |
+| Billing        | `/api/billing`       | JWT / Admin    |
+| Announcements  | `/api/announcements` | JWT / Admin    |
+| Maintenance    | `/api/maintenance`   | JWT / Admin    |
+| Users          | `/api/users`         | Admin          |
+| Audit Logs     | `/api/audit-logs`    | Admin          |
 
-- React 19 + Vite
-- React Router for routing
-- Firebase Auth (Client SDK)
-- Fetch API for HTTP requests
-
-**Backend**:
-
-- Express.js
-- MongoDB + Mongoose
-- Firebase Admin SDK
-- Nodemailer for emails
-
-**Security**:
-
-- Input sanitization & validation
-- CSRF protection
-- JWT token verification
-- Role-based access control
-- Branch isolation
-
-### Communication Flow
-
-```
-User Sign In (Firebase Auth)
-    ↓
-Firebase ID Token
-    ↓
-Token sent with API requests
-    ↓
-Backend verifies with Firebase Admin
-    ↓
-Role & branch-based access control
-    ↓
-Protected operations executed
-```
+> For complete endpoint documentation with request/response examples, see [docs/API.md](docs/API.md).
 
 ---
 
-## 🔒 Security Features
+## Security
 
-### Input Validation & Sanitization
+The application implements multiple layers of security:
 
-- ✅ XSS protection (HTML entity escaping)
-- ✅ SQL injection prevention (Mongoose ODM)
-- ✅ Input validation rules for all fields
-- ✅ Email/phone/username format validation
+| Measure              | Implementation                                                       |
+| -------------------- | -------------------------------------------------------------------- |
+| **Authentication**   | Firebase Auth with JWT token verification on every request           |
+| **Authorization**    | Role-based access control (user, tenant, admin, superAdmin)          |
+| **Branch Isolation** | Automatic data filtering ensures users only access their branch      |
+| **Input Validation** | Server-side sanitization against XSS, injection, and malformed input |
+| **CSRF Protection**  | Cryptographic token validation on state-changing requests            |
+| **Rate Limiting**    | Throttling on authentication endpoints to prevent brute force        |
+| **Audit Logging**    | All administrative actions recorded with before/after snapshots      |
 
-### CSRF Protection
-
-- ✅ Cryptographic token generation
-- ✅ Token validation on state-changing requests
-- ✅ Firebase Auth implicit protection
-
-### Access Control
-
-- ✅ JWT token verification
-- ✅ Role-based permissions (user, tenant, admin, superAdmin)
-- ✅ Branch isolation (users only access their branch data)
-- ✅ Audit logging for all admin actions
-
-See [docs/SECURITY.md](docs/SECURITY.md) for complete details.
+> For implementation details, see [docs/SECURITY.md](docs/SECURITY.md).
 
 ---
 
-## 🗄️ Database Schema
-
-### User Model
-
-```javascript
-{
-  (firebaseUid,
-    email,
-    username,
-    firstName,
-    lastName,
-    phone,
-    role,
-    branch,
-    emailVerified,
-    createdAt,
-    updatedAt);
-}
-```
-
-### Room Model
-
-```javascript
-{
-  name, roomNumber, branch, type, capacity, price,
-  available, beds: [{ id, position, available }],
-  amenities, description, images
-}
-```
-
-### Reservation Model
-
-```javascript
-{
-  (userId,
-    roomId,
-    branch,
-    startDate,
-    endDate,
-    status,
-    totalAmount,
-    createdAt,
-    updatedAt);
-}
-```
-
-### Inquiry Model
-
-```javascript
-{
-  (name,
-    email,
-    phone,
-    branch,
-    message,
-    status,
-    priority,
-    response,
-    respondedBy,
-    createdAt,
-    respondedAt);
-}
-```
-
-### AuditLog Model
-
-```javascript
-{
-  userId, action, resourceType, resourceId,
-  changes: { before, after }, branch, timestamp
-}
-```
-
----
-
-## 🌐 API Endpoints
-
-### Authentication
-
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - User login
-- `GET /api/auth/profile` - Get profile
-- `PUT /api/auth/profile` - Update profile
-
-### Rooms (Public)
-
-- `GET /api/rooms` - Get all rooms (with filters)
-- `GET /api/rooms/:id` - Get room details
-
-### Reservations (Protected)
-
-- `GET /api/reservations` - Get user reservations
-- `POST /api/reservations` - Create reservation
-- `PUT /api/reservations/:id` - Update reservation (admin)
-
-### Inquiries
-
-- `POST /api/inquiries` - Submit inquiry (public)
-- `GET /api/inquiries` - Get all inquiries (admin)
-- `PUT /api/inquiries/:id` - Update inquiry (admin)
-
-### Users (Admin)
-
-- `GET /api/users` - Get all users
-- `GET /api/users/:id` - Get user details
-- `PUT /api/users/:id` - Update user
-- `DELETE /api/users/:id` - Delete user
-
-### Audit Logs (Admin)
-
-- `GET /api/audit-logs` - Get audit trail
-
-See [docs/API.md](docs/API.md) for complete endpoint documentation.
-
----
-
-## 🛠️ Utility Scripts
-
-### Seed Rooms Database
-
-```bash
-cd server
-node scripts/seed-rooms.js
-```
-
-Creates 12 rooms (3 private @ ₱13,500, 3 double @ ₱7,200, 6 quadruple @ ₱5,400).
-
-### Cleanup Incomplete Rooms
-
-```bash
-node scripts/cleanup-incomplete-rooms.js
-```
-
-Removes rooms with missing required fields.
-
-### Check Users
-
-```bash
-node scripts/check-users.js
-```
-
-Lists all users with roles and branches.
-
----
-
-## 🚢 Deployment
-
-### Frontend (Vercel/Netlify)
-
-```bash
-cd web
-npm run build
-# Deploy build/ directory
-```
-
-### Backend (Heroku/Railway)
-
-```bash
-cd server
-# Set environment variables in hosting platform
-# Deploy via Git or CLI
-```
-
-### Environment Variables
-
-- Update `FRONTEND_URL` and `VITE_API_URL` to production domains
-- Use production MongoDB URI
-- Use production Firebase credentials
-- Change default admin password
-
----
-
-## 🧪 Testing
-
-### Backend
-
-```bash
-cd server
-npm test
-```
+## Deployment
 
 ### Frontend
 
 ```bash
-cd web
-npm test
+cd web && npm run build
 ```
 
----
+Deploy the `build/` directory to **Vercel**, **Netlify**, or **Firebase Hosting**.
 
-## 📋 Admin Accounts
+### Backend
 
-**Default Admin** (auto-created on first run):
+Deploy to **Railway**, **Render**, or any Node.js-compatible platform. Ensure all environment variables are configured in your hosting provider's settings.
 
-- Email: `admin@lilycrest.com`
-- Password: `Admin123!`
-- Role: `superAdmin`
+### Production Checklist
 
-⚠️ **SECURITY**: Change password immediately after first login!
-
----
-
-## 🐛 Troubleshooting
-
-### Frontend not connecting to backend
-
-- Check `VITE_API_URL` in `web/.env`
-- Ensure backend is running on correct port
-- Check CORS settings in `server/server.js`
-
-### Firebase authentication errors
-
-- Verify Firebase config in both `.env` files
-- Check Firebase Console for enabled auth methods
-- Ensure service account key is valid
-
-### MongoDB connection errors
-
-- Verify `MONGODB_URI` format
-- Check MongoDB Atlas network access (whitelist IP)
-- Ensure database user has correct permissions
-
-### Room data issues
-
-- Run `node scripts/cleanup-incomplete-rooms.js`
-- Re-seed with `node scripts/seed-rooms.js`
+- [ ] Set `NODE_ENV=production`
+- [ ] Update `FRONTEND_URL` and `VITE_API_URL` to production domains
+- [ ] Use production MongoDB Atlas URI with IP whitelist
+- [ ] Use production Firebase credentials
 
 ---
 
-## 🤝 Contributing
+## Documentation
+
+| Document                                             | Description                                  |
+| ---------------------------------------------------- | -------------------------------------------- |
+| [API Reference](docs/API.md)                         | Complete endpoint documentation              |
+| [Authentication](docs/AUTHENTICATION.md)             | Firebase auth flows and setup                |
+| [Developer Guide](docs/DEVELOPER_GUIDE.md)           | Coding patterns, conventions, and onboarding |
+| [Occupancy Management](docs/OCCUPANCY_MANAGEMENT.md) | Room and bed tracking system                 |
+| [Security](docs/SECURITY.md)                         | Security implementation details              |
+| [Project Structure](docs/STRUCTURE.md)               | Full file structure reference                |
+| [Backend Guide](server/README.md)                    | Backend-specific documentation               |
+| [Frontend Guide](web/README.md)                      | Frontend-specific documentation              |
+
+---
+
+## Contributing
 
 1. Fork the repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -m 'Add your feature'`)
+4. Push to the branch (`git push origin feature/your-feature`)
+5. Open a Pull Request
+
+Please refer to the [Developer Guide](docs/DEVELOPER_GUIDE.md) for coding conventions and patterns used in this project.
 
 ---
 
-## 📝 License
+## License
 
-[Add your license information here]
-
----
-
-## 📞 Support
-
-For detailed documentation:
-
-- Backend issues: [server/README.md](server/README.md)
-- Frontend issues: [web/README.md](web/README.md)
-- API reference: [docs/API.md](docs/API.md)
-- Security: [docs/SECURITY.md](docs/SECURITY.md)
+This project was developed as a capstone project for academic purposes.
 
 ---
 
-**Built with ❤️ for Lilycrest Dormitory**
+<p align="center">
+  <strong>Lilycrest Dormitory Management System</strong><br>
+  Built with React · Express · MongoDB · Firebase
+</p>

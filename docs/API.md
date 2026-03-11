@@ -1,35 +1,29 @@
 # API Documentation
 
-## Base URL
+Complete reference for all backend API endpoints.
 
-## Authentication Endpoints
+**Base URL**: `http://localhost:5000/api`
 
-### Health Check
+---
 
-```http
-GET /api/health
-```
+## Authentication (`/api/auth`)
 
-**Response:**
-
-```json
-{ "status": "ok", "timestamp": "2024-01-01T00:00:00.000Z" }
-```
+| Method | Endpoint         | Auth     | Description        |
+| ------ | ---------------- | -------- | ------------------ |
+| POST   | `/register`      | Firebase | Register new user  |
+| POST   | `/login`         | Firebase | User login         |
+| GET    | `/profile`       | JWT      | Get user profile   |
+| PUT    | `/profile`       | JWT      | Update profile     |
+| PATCH  | `/update-branch` | JWT      | Update user branch |
+| POST   | `/set-role`      | Admin    | Set user role      |
 
 ### Register User
 
 ```http
 POST /api/auth/register
-```
-
-**Headers:**
-
-```
 Authorization: Bearer <firebase_id_token>
 Content-Type: application/json
 ```
-
-**Body:**
 
 ```json
 {
@@ -41,316 +35,161 @@ Content-Type: application/json
 }
 ```
 
-**Response (201):**
-
-```json
-{
-  "message": "User registered successfully",
-
-  "user": {
-    "_id": "...",
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-
-    "branch": "gil-puyat",
-    "role": "tenant"
-  }
-}
-```
-
----
-
 ### Login
 
 ```http
 POST /api/auth/login
-```
-
-**Headers:**
-
-```
 Authorization: Bearer <firebase_id_token>
 ```
-
-**Response (200):**
-
-```json
-{
-  "message": "Login successful",
-
-  "token": "jwt_token"
-}
-```
-
----
 
 ### Get Profile
 
 ```http
 GET /api/auth/profile
-```
-
-**Headers:**
-
-```
 Authorization: Bearer <jwt_token>
 ```
-
-**Response (200):**
-
-```json
-{
-
-
-    "_id": "...",
-
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-
-    "branch": "gil-puyat",
-    "role": "tenant"
-  }
-}
-```
-
----
 
 ### Update Branch
 
 ```http
-
 PATCH /api/auth/update-branch
-```
-
-**Headers:**
-
-```
 Authorization: Bearer <jwt_token>
 Content-Type: application/json
 ```
 
-````json
-
-**Response (200):**
-
 ```json
 {
-  "message": "Branch updated successfully",
-  "user": { ... }
-}
-````
-
----
-
-## Room Endpoints
-
-### Get All Rooms
-
-```http
-GET /api/rooms
-```
-
-**Query Parameters:**
-
-- `branch`: Filter by branch (`gil-puyat` | `guadalupe`)
-- `type`: Filter by room type
-- `available`: Filter by availability (`true` | `false`)
-
-**Response (200):**
-
-```json
-{
-  "rooms": [
-    {
-      "_id": "...",
-      "name": "Room 101",
-      "type": "private",
-      "branch": "gil-puyat",
-      "price": 8000,
-      "capacity": 1,
-      "available": true
-    }
-  ]
-}
-```
-
----
-
-### Get Room by ID
-
-```http
-GET /api/rooms/:id
-```
-
-**Response (200):**
-
-```json
-{
-  "room": { ... }
-}
-```
-
----
-
-## Reservation Endpoints
-
-### Get All Reservations (Admin)
-
-```http
-GET /api/reservations
-```
-
-**Headers:**
-
-```
-Authorization: Bearer <admin_jwt_token>
-```
-
-**Query Parameters:**
-
-- `branch`: Filter by branch
-- `status`: Filter by status (`pending` | `confirmed` | `cancelled`)
-
----
-
-### Create Reservation
-
-```http
-POST /api/reservations
-```
-
-**Headers:**
-
-```
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**Body:**
-
-```json
-{
-  "roomId": "room_id",
-  "checkIn": "2024-02-01",
-  "checkOut": "2024-02-28",
-  "notes": "Optional notes"
-}
-```
-
----
-
-### Update Reservation Status (Admin)
-
-```http
-PATCH /api/reservations/:id/status
-```
-
-**Body:**
-
-```json
-{
-  "status": "confirmed"
-}
-```
-
----
-
-## Inquiry Endpoints
-
-### Create Inquiry (Public)
-
-```http
-POST /api/inquiries
-```
-
-**Body:**
-
-```json
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "phone": "09123456789",
-  "subject": "Room Availability",
-  "message": "I would like to inquire about...",
   "branch": "gil-puyat"
 }
 ```
 
 ---
 
-### Get All Inquiries (Admin)
+## Rooms (`/api/rooms`)
 
-```http
-GET /api/inquiries
-```
+| Method | Endpoint   | Auth   | Description                  |
+| ------ | ---------- | ------ | ---------------------------- |
+| GET    | `/`        | Public | Get all rooms (with filters) |
+| GET    | `/:roomId` | Public | Get room by ID               |
+| POST   | `/`        | Admin  | Create room                  |
+| PUT    | `/:roomId` | Admin  | Update room                  |
+| DELETE | `/:roomId` | Admin  | Delete room                  |
 
-**Headers:**
+**Query Parameters** (GET `/`):
 
-```
-Authorization: Bearer <admin_jwt_token>
-```
-
----
-
-### Respond to Inquiry (Admin)
-
-```http
-PATCH /api/inquiries/:id/respond
-```
-
-**Body:**
-
-```json
-{
-  "response": "Thank you for your inquiry..."
-}
-```
-
-_Note: This also sends an email to the customer_
+- `branch` — Filter by branch (`gil-puyat` | `guadalupe`)
+- `type` — Filter by room type
+- `available` — Filter by availability (`true` | `false`)
 
 ---
 
-## User Management (Super Admin)
+## Reservations (`/api/reservations`)
 
-### Get All Users
-
-```http
-GET /api/users
-```
-
-**Headers:**
-
-```
-Authorization: Bearer <super_admin_jwt_token>
-```
+| Method | Endpoint             | Auth  | Description                     |
+| ------ | -------------------- | ----- | ------------------------------- |
+| GET    | `/`                  | JWT   | Get reservations                |
+| GET    | `/:reservationId`    | JWT   | Get reservation by ID           |
+| POST   | `/`                  | JWT   | Create reservation              |
+| PUT    | `/:reservationId`    | Admin | Update reservation              |
+| DELETE | `/:reservationId`    | Admin | Cancel reservation              |
+| GET    | `/occupancy/:roomId` | Admin | Get room occupancy status       |
+| GET    | `/stats/occupancy`   | Admin | Get branch occupancy statistics |
 
 ---
 
-### Update User Role
+## Inquiries (`/api/inquiries`)
 
-```http
-PATCH /api/users/:id/role
-```
+| Method | Endpoint              | Auth   | Description                      |
+| ------ | --------------------- | ------ | -------------------------------- |
+| GET    | `/`                   | Admin  | Get all inquiries                |
+| GET    | `/:inquiryId`         | Public | Get inquiry by ID                |
+| POST   | `/`                   | Public | Submit inquiry                   |
+| PUT    | `/:inquiryId`         | Admin  | Update inquiry                   |
+| PATCH  | `/:inquiryId/respond` | Admin  | Respond to inquiry (sends email) |
+| DELETE | `/:inquiryId`         | Admin  | Delete inquiry                   |
 
-**Body:**
+---
 
-```json
-{
-  "role": "admin"
-}
-```
+## Billing (`/api/billing`)
+
+| Method | Endpoint                  | Auth  | Description                   |
+| ------ | ------------------------- | ----- | ----------------------------- |
+| GET    | `/current`                | JWT   | Get current month's bill      |
+| GET    | `/history`                | JWT   | Get payment history           |
+| GET    | `/stats`                  | Admin | Get branch billing statistics |
+| POST   | `/:billId/mark-paid`      | Admin | Mark bill as paid             |
+| GET    | `/rooms`                  | Admin | Get rooms for billing         |
+| POST   | `/rooms/:roomId/generate` | Admin | Generate bill for a room      |
+
+**Query Parameters** (GET `/history`):
+
+- `limit` — Max results (default: 50)
+
+---
+
+## Announcements (`/api/announcements`)
+
+| Method | Endpoint                       | Auth  | Description                      |
+| ------ | ------------------------------ | ----- | -------------------------------- |
+| GET    | `/`                            | JWT   | Get announcements                |
+| GET    | `/unacknowledged`              | JWT   | Get unacknowledged announcements |
+| POST   | `/`                            | Admin | Create announcement              |
+| POST   | `/:announcementId/read`        | JWT   | Mark as read                     |
+| POST   | `/:announcementId/acknowledge` | JWT   | Acknowledge announcement         |
+| GET    | `/user/engagement-stats`       | JWT   | Get user engagement stats        |
+
+**Query Parameters** (GET `/`):
+
+- `limit` — Max results (default: 50)
+- `category` — Filter by category
+
+---
+
+## Maintenance (`/api/maintenance`)
+
+| Method | Endpoint                 | Auth  | Description                |
+| ------ | ------------------------ | ----- | -------------------------- |
+| GET    | `/my-requests`           | JWT   | Get tenant's requests      |
+| GET    | `/branch`                | Admin | Get all branch requests    |
+| POST   | `/requests`              | JWT   | Create maintenance request |
+| GET    | `/requests/:requestId`   | JWT   | Get request details        |
+| PATCH  | `/requests/:requestId`   | Admin | Update request status      |
+| GET    | `/stats/completion`      | Admin | Get completion statistics  |
+| GET    | `/stats/issue-frequency` | Admin | Get issue frequency stats  |
+
+---
+
+## Users (`/api/users`)
+
+| Method | Endpoint           | Auth  | Description           |
+| ------ | ------------------ | ----- | --------------------- |
+| GET    | `/`                | Admin | Get all users         |
+| GET    | `/:userId`         | Admin | Get user by ID        |
+| GET    | `/email/:username` | Admin | Get email by username |
+| GET    | `/stats`           | Admin | Get user statistics   |
+| PUT    | `/:userId`         | Admin | Update user           |
+| DELETE | `/:userId`         | Admin | Delete user           |
+
+---
+
+## Audit Logs (`/api/audit-logs`)
+
+| Method | Endpoint | Auth  | Description    |
+| ------ | -------- | ----- | -------------- |
+| GET    | `/`      | Admin | Get audit logs |
 
 ---
 
 ## Error Responses
 
+All error responses follow a consistent format:
+
 ### 400 Bad Request
 
 ```json
 {
-  "error": "Validation error message"
+  "error": "Validation failed",
+  "details": ["Username must be 3-30 characters", "Invalid email format"]
 }
 ```
 
@@ -358,7 +197,7 @@ PATCH /api/users/:id/role
 
 ```json
 {
-  "error": "No token provided" | "Invalid token"
+  "error": "No token provided"
 }
 ```
 
@@ -385,3 +224,24 @@ PATCH /api/users/:id/role
   "error": "Internal server error"
 }
 ```
+
+### Common Error Codes
+
+| Code                   | Description              |
+| ---------------------- | ------------------------ |
+| `VALIDATION_ERROR`     | Input validation failed  |
+| `AUTH_FAILED`          | Authentication failed    |
+| `UNAUTHORIZED`         | Insufficient permissions |
+| `NOT_FOUND`            | Resource not found       |
+| `BRANCH_ACCESS_DENIED` | Branch access violation  |
+
+---
+
+## Authentication Types
+
+| Type         | Usage                                                                  |
+| ------------ | ---------------------------------------------------------------------- |
+| **Firebase** | `Authorization: Bearer <firebase_id_token>` — Used for register/login  |
+| **JWT**      | `Authorization: Bearer <jwt_token>` — Used for all protected endpoints |
+| **Admin**    | JWT + admin/superAdmin role required                                   |
+| **Public**   | No authentication needed                                               |

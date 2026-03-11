@@ -311,8 +311,8 @@ All occupancy changes are logged with:
 
 Potential features for future implementation:
 
-1. **Occupancy Forecasting**: Predict future occupancy based on pending reservations
-2. **Peak Hours Analysis**: Identify peak occupancy periods
-3. **Bed Preference Analytics**: Track popular bed positions
-4. **Occupancy Notifications**: Alert admins when rooms approach full capacity
-5. **Waitlist Management**: Auto-waitlist when room becomes full
+1. **Occupancy Forecasting** — Predict future occupancy based on pending reservations
+2. **Peak Hours Analysis** — Identify peak occupancy periods
+3. **Bed Preference Analytics** — Track popular bed positions
+4. **Occupancy Notifications** — Alert admins when rooms approach full capacity
+5. **Waitlist Management** — Auto-waitlist when room becomes full
