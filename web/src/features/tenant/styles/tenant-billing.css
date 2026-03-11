@@ -558,3 +558,110 @@
     justify-content: space-between;
   }
 }
+
+/* ============ PAYMENT RECEIPT CARD ============ */
+.receipt-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.receipt-header {
+  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.receipt-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.btn-download-receipt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-download-receipt:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.receipt-body {
+  padding: 1.25rem;
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.receipt-row:last-child {
+  border-bottom: none;
+}
+
+.receipt-row.total {
+  border-top: 2px solid #e2e8f0;
+  border-bottom: none;
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+}
+
+.receipt-label {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.receipt-value {
+  color: #0f172a;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.receipt-row.total .receipt-label {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.receipt-row.total .receipt-value {
+  font-weight: 700;
+  color: #059669;
+  font-size: 1.1rem;
+}
+
+.receipt-footer {
+  background: #f8fafc;
+  text-align: center;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Paid status in hero */
+.proof-status-inline.paid-status {
+  background: rgba(5, 150, 105, 0.1);
+  color: #059669;
+}

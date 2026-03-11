@@ -20,17 +20,6 @@ export function useCurrentBilling() {
   });
 }
 
-/** Submit payment proof */
-export function useSubmitPaymentProof() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ billId, imageUrl, amount }) =>
-      billingApi.submitPaymentProof(billId, { imageUrl, amount }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["billing"] });
-    },
-  });
-}
 
 // ── Admin Hooks ──
 
@@ -58,14 +47,6 @@ export function useRoomsWithTenants(branch) {
   });
 }
 
-/** Get pending payment verifications */
-export function usePendingVerifications() {
-  return useQuery({
-    queryKey: queryKeys.billing.pendingVerifications,
-    queryFn: () => billingApi.getPendingVerifications(),
-  });
-}
-
 /** Get billing report */
 export function useBillingReport() {
   return useQuery({
@@ -89,16 +70,6 @@ export function useMarkAsPaid() {
   return useMutation({
     mutationFn: ({ billId, amount, note }) =>
       billingApi.markAsPaid(billId, amount, note),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["billing"] }),
-  });
-}
-
-/** Verify payment proof */
-export function useVerifyPayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ billId, action, rejectionReason }) =>
-      billingApi.verifyPayment(billId, { action, rejectionReason }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["billing"] }),
   });
 }

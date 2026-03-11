@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   formatBranch,
   formatRoomType,
@@ -7,9 +7,7 @@ import {
 
 /**
  * Step 4 — Reservation Fee Payment
- * Two payment paths:
- *   1. Pay Online — PayMongo (GCash, Maya, Card)
- *   2. Upload Proof — manual bank transfer / screenshot
+ * PayMongo online checkout only (GCash, Maya, Card).
  */
 
 const ReservationPaymentStep = ({
@@ -18,18 +16,11 @@ const ReservationPaymentStep = ({
   finalMoveInDate,
   setFinalMoveInDate,
   onMoveInDateUpdate,
-  paymentMethod,
-  setPaymentMethod,
-  proofOfPayment,
-  setProofOfPayment,
   isLoading,
-  onPrev,
-  onNext,
   onPayOnline,
   payingOnline,
   readOnly,
 }) => {
-  const [paymentPath, setPaymentPath] = useState("online"); // "online" | "manual"
   const room = reservationData?.room || {};
   const roomName =
     room.name || room.roomNumber || room.title || room.id || "N/A";
@@ -53,21 +44,21 @@ const ReservationPaymentStep = ({
         <div
           className="info-box"
           style={{
-            background: "#FEF3C7",
-            borderColor: "#F59E0B",
+            background: "#ECFDF5",
+            borderColor: "#10B981",
             marginBottom: "20px",
           }}
         >
-          <div className="info-box-title" style={{ color: "#92400E" }}>
-            This section is locked
+          <div className="info-box-title" style={{ color: "#065F46" }}>
+            Payment Complete
           </div>
-          <div className="info-text" style={{ color: "#78350F" }}>
-            Payment has been submitted and is being processed by admin.
+          <div className="info-text" style={{ color: "#047857" }}>
+            Your reservation fee has been paid. Awaiting admin confirmation.
           </div>
         </div>
       )}
 
-      {/* Form content wrapper — disable interaction when readOnly */}
+      {/* Form content wrapper */}
       <div
         style={{
           pointerEvents: readOnly ? "none" : "auto",
@@ -176,152 +167,45 @@ const ReservationPaymentStep = ({
           </div>
         </div>
 
-        {/* Payment Method Selection */}
+        {/* Payment Info */}
         <div className="content-card">
           <div className="card-section-title">
             <div className="icon"></div>
-            Choose Payment Method
+            Secure Online Payment
           </div>
 
-          {/* Payment Path Selector */}
-          <div className="payment-path-selector">
-            <button
-              type="button"
-              className={`payment-path-option ${paymentPath === "online" ? "active" : ""}`}
-              onClick={() => setPaymentPath("online")}
-            >
-              <div className="payment-path-icon">💳</div>
-              <div className="payment-path-info">
-                <strong>Pay Online</strong>
-                <span>GCash, Maya, Card — instant verification</span>
-              </div>
-              {paymentPath === "online" && (
-                <div className="payment-path-check">✓</div>
-              )}
-            </button>
-
-            <button
-              type="button"
-              className={`payment-path-option ${paymentPath === "manual" ? "active" : ""}`}
-              onClick={() => setPaymentPath("manual")}
-            >
-              <div className="payment-path-icon">📄</div>
-              <div className="payment-path-info">
-                <strong>Upload Proof of Payment</strong>
-                <span>Bank transfer, check — requires admin verification</span>
-              </div>
-              {paymentPath === "manual" && (
-                <div className="payment-path-check">✓</div>
-              )}
-            </button>
+          <div
+            className="info-box"
+            style={{
+              background: "#ECFDF5",
+              borderColor: "#10B981",
+              marginBottom: "0",
+            }}
+          >
+            <div className="info-box-title" style={{ color: "#065F46" }}>
+              💳 Pay via GCash, Maya, or Card
+            </div>
+            <div className="info-text" style={{ color: "#047857" }}>
+              You'll be redirected to PayMongo's secure checkout to pay ₱2,000.
+              Your reservation will be automatically confirmed once payment is
+              received. A receipt will be available after payment.
+            </div>
           </div>
-
-          {/* Online Payment Path */}
-          {paymentPath === "online" && (
-            <div className="payment-online-section">
-              <div
-                className="info-box"
-                style={{
-                  background: "#ECFDF5",
-                  borderColor: "#10B981",
-                  marginBottom: "16px",
-                }}
-              >
-                <div className="info-box-title" style={{ color: "#065F46" }}>
-                  Secure Online Payment
-                </div>
-                <div className="info-text" style={{ color: "#047857" }}>
-                  You'll be redirected to PayMongo's secure checkout to pay
-                  ₱2,000 via GCash, Maya, GrabPay, or Credit/Debit Card. Your
-                  reservation will be automatically confirmed once payment is
-                  received.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Manual Payment Path */}
-          {paymentPath === "manual" && (
-            <div className="payment-manual-section">
-              {/* Bank Details */}
-              <div className="info-box" style={{ marginBottom: "20px" }}>
-                <div className="info-box-title">Payment Details</div>
-                <div className="info-text">
-                  <strong>Bank Account:</strong> BDO — 1234-5678-9012
-                  <br />
-                  <strong>Account Name:</strong> Dormitory Services Inc.
-                  <br />
-                  <strong>Amount Due:</strong> ₱2,000 (Reservation Fee)
-                </div>
-              </div>
-
-              {/* Payment Method */}
-              <div className="form-group">
-                <label className="form-label">Payment Method</label>
-                <select
-                  className="form-select"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                >
-                  <option value="bank">Bank Transfer</option>
-                  <option value="gcash">GCash</option>
-                  <option value="card">Credit/Debit Card</option>
-                  <option value="check">Check</option>
-                </select>
-              </div>
-
-              {/* Proof of Payment */}
-              <div className="form-group">
-                <label className="form-label">Upload Proof of Payment</label>
-                <label className="file-upload" htmlFor="payment-file">
-                  <input
-                    id="payment-file"
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) =>
-                      setProofOfPayment(e.target.files?.[0] || null)
-                    }
-                  />
-                  <div className="file-icon"></div>
-                  <div className="file-text">
-                    {proofOfPayment
-                      ? `${proofOfPayment.name}`
-                      : "Click to upload receipt or screenshot"}
-                  </div>
-                </label>
-                <div className="form-helper">
-                  Accepted formats: JPG, PNG, PDF. Max file size: 10MB.
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-
-        {/* Close pointer-events wrapper */}
       </div>
 
-      {/* Actions */}
+      {/* Pay Online Button */}
       {!readOnly && (
         <div className="stage-buttons" style={{ justifyContent: "flex-end" }}>
-          {paymentPath === "online" ? (
-            <button
-              onClick={onPayOnline}
-              className="btn btn-primary btn-pay-online-reservation"
-              disabled={isLoading || payingOnline}
-            >
-              {payingOnline
-                ? "Redirecting to PayMongo…"
-                : "💳 Pay ₱2,000 Online"}
-            </button>
-          ) : (
-            <button
-              onClick={onNext}
-              className="btn btn-primary"
-              disabled={isLoading}
-            >
-              {isLoading ? "Processing…" : "Confirm Payment & Reserve"}
-            </button>
-          )}
+          <button
+            onClick={onPayOnline}
+            className="btn btn-primary btn-pay-online-reservation"
+            disabled={isLoading || payingOnline}
+          >
+            {payingOnline
+              ? "Redirecting to PayMongo…"
+              : "💳 Pay ₱2,000 Online"}
+          </button>
         </div>
       )}
     </div>

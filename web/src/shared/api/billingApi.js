@@ -22,15 +22,6 @@ export const billingApi = {
    */
   getMyBills: () => authFetch("/billing/my-bills"),
 
-  /**
-   * Submit payment proof for a bill
-   */
-  submitPaymentProof: (billId, { imageUrl, amount }) =>
-    authFetch(`/billing/${billId}/submit-proof`, {
-      method: "POST",
-      body: JSON.stringify({ imageUrl, amount }),
-    }),
-
   // ── Admin Endpoints ──
 
   /**
@@ -68,20 +59,6 @@ export const billingApi = {
     authFetch("/billing/generate-room", {
       method: "POST",
       body: JSON.stringify(billData),
-    }),
-
-  /**
-   * Get bills with pending payment proof verification (admin only)
-   */
-  getPendingVerifications: () => authFetch("/billing/pending-verifications"),
-
-  /**
-   * Approve or reject payment proof (admin only)
-   */
-  verifyPayment: (billId, { action, rejectionReason }) =>
-    authFetch(`/billing/${billId}/verify`, {
-      method: "POST",
-      body: JSON.stringify({ action, rejectionReason }),
     }),
 
   /**

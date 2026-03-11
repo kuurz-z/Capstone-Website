@@ -1,21 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { billingApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
 import {
   FileText,
-  Upload,
   Clock,
   CheckCircle,
   AlertCircle,
-  XCircle,
   Info,
   History,
   Zap,
   Droplets,
   Home,
   CreditCard,
+  Download,
 } from "lucide-react";
 import "../styles/tenant-billing.css";
 
@@ -23,8 +22,6 @@ const BillingPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [bills, setBills] = useState([]);
-  const [selectedBill, setSelectedBill] = useState(null);
-  const [showProofModal, setShowProofModal] = useState(false);
   const [payingOnline, setPayingOnline] = useState(false);
 
   // Handle PayMongo return (success or cancelled)
@@ -33,21 +30,38 @@ const BillingPage = () => {
     const sessionId = searchParams.get("session_id");
 
     if (paymentStatus === "success" && sessionId) {
-      // Verify payment with backend and auto-mark bill
-      billingApi.checkPaymentStatus(sessionId).then((result) => {
-        if (result.status === "paid") {
-          showNotification("Payment successful! Your bill has been paid.", "success", 5000);
-          loadBills();
-        } else {
-          showNotification("Payment is being processed. It may take a moment.", "info", 5000);
-        }
-      }).catch(() => {
-        showNotification("Could not verify payment. Please refresh.", "warning", 5000);
-      });
-      // Clean URL params
+      billingApi
+        .checkPaymentStatus(sessionId)
+        .then((result) => {
+          if (result.status === "paid") {
+            showNotification(
+              "Payment successful! Your bill has been paid.",
+              "success",
+              5000,
+            );
+            loadBills();
+          } else {
+            showNotification(
+              "Payment is being processed. It may take a moment.",
+              "info",
+              5000,
+            );
+          }
+        })
+        .catch(() => {
+          showNotification(
+            "Could not verify payment. Please refresh.",
+            "warning",
+            5000,
+          );
+        });
       setSearchParams({}, { replace: true });
     } else if (paymentStatus === "cancelled") {
-      showNotification("Payment was cancelled. You can try again.", "info", 3000);
+      showNotification(
+        "Payment was cancelled. You can try again.",
+        "info",
+        3000,
+      );
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -103,19 +117,12 @@ const BillingPage = () => {
       day: "numeric",
     });
 
-  const getDisplayStatus = (bill) => {
-    if (bill.paymentProof?.verificationStatus === "pending-verification")
-      return "pending-verification";
-    return bill.status;
-  };
-
   const getStatusLabel = (status) => {
     const labels = {
       pending: "Pending",
       paid: "Paid",
       overdue: "Overdue",
       "partially-paid": "Partially Paid",
-      "pending-verification": "Awaiting Verification",
     };
     return labels[status] || status;
   };
@@ -156,7 +163,7 @@ const BillingPage = () => {
         <div className="tenant-billing">
           <div className="billing-page-header">
             <h1>Billing & Payments</h1>
-            <p>View your bills and submit payment proofs</p>
+            <p>View your bills and make payments online</p>
           </div>
           <div className="no-bills-state">
             <FileText size={48} />
@@ -176,7 +183,7 @@ const BillingPage = () => {
       <div className="tenant-billing">
         <div className="billing-page-header">
           <h1>Billing & Payments</h1>
-          <p>View your bills, charge breakdowns, and submit payment proofs</p>
+          <p>View your bills, charge breakdowns, and pay online</p>
         </div>
 
         {/* ─── Current Bill Hero Card ─── */}
@@ -186,12 +193,7 @@ const BillingPage = () => {
             fmtCurrency={fmtCurrency}
             fmtMonth={fmtMonth}
             fmtDate={fmtDate}
-            getDisplayStatus={getDisplayStatus}
             getStatusLabel={getStatusLabel}
-            onUploadProof={() => {
-              setSelectedBill(currentBill);
-              setShowProofModal(true);
-            }}
             onPayOnline={() => handlePayOnline(currentBill.id)}
             payingOnline={payingOnline}
           />
@@ -202,6 +204,16 @@ const BillingPage = () => {
           <ChargeBreakdown bill={currentBill} fmtCurrency={fmtCurrency} />
         )}
 
+        {/* ─── Payment Receipt (for paid bills) ─── */}
+        {currentBill && currentBill.status === "paid" && (
+          <PaymentReceipt
+            bill={currentBill}
+            fmtCurrency={fmtCurrency}
+            fmtMonth={fmtMonth}
+            fmtDate={fmtDate}
+          />
+        )}
+
         {/* ─── Bill History ─── */}
         {pastBills.length > 0 && (
           <div className="bill-history-section">
@@ -210,13 +222,7 @@ const BillingPage = () => {
             </h3>
             <div className="bill-history-list">
               {pastBills.map((bill) => (
-                <div
-                  key={bill.id}
-                  className="bill-history-item"
-                  onClick={() => {
-                    setSelectedBill(bill);
-                  }}
-                >
+                <div key={bill.id} className="bill-history-item">
                   <div className="bill-history-left">
                     <span className="bill-month">
                       {fmtMonth(bill.billingMonth)}
@@ -229,33 +235,14 @@ const BillingPage = () => {
                     <span className="bill-amount">
                       {fmtCurrency(bill.totalAmount)}
                     </span>
-                    <span
-                      className={`bill-status-badge ${getDisplayStatus(bill)}`}
-                    >
-                      {getStatusLabel(getDisplayStatus(bill))}
+                    <span className={`bill-status-badge ${bill.status}`}>
+                      {getStatusLabel(bill.status)}
                     </span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        )}
-
-        {/* ─── Payment Proof Modal ─── */}
-        {showProofModal && selectedBill && (
-          <PaymentProofModal
-            bill={selectedBill}
-            fmtCurrency={fmtCurrency}
-            onClose={() => {
-              setShowProofModal(false);
-              setSelectedBill(null);
-            }}
-            onSubmitted={() => {
-              setShowProofModal(false);
-              setSelectedBill(null);
-              loadBills();
-            }}
-          />
         )}
       </div>
     </TenantLayout>
@@ -269,17 +256,11 @@ function CurrentBillHero({
   fmtCurrency,
   fmtMonth,
   fmtDate,
-  getDisplayStatus,
   getStatusLabel,
-  onUploadProof,
   onPayOnline,
   payingOnline,
 }) {
-  const status = getDisplayStatus(bill);
-  const canUpload =
-    bill.status !== "paid" &&
-    bill.paymentProof?.verificationStatus !== "pending-verification" &&
-    bill.paymentProof?.verificationStatus !== "approved";
+  const canPay = bill.status !== "paid";
 
   return (
     <div className="current-bill-hero">
@@ -288,8 +269,8 @@ function CurrentBillHero({
           Current Bill
           <strong>{fmtMonth(bill.billingMonth)}</strong>
         </div>
-        <span className={`bill-status-badge ${status}`}>
-          {getStatusLabel(status)}
+        <span className={`bill-status-badge ${bill.status}`}>
+          {getStatusLabel(bill.status)}
         </span>
       </div>
 
@@ -300,42 +281,22 @@ function CurrentBillHero({
       </div>
 
       <div className="bill-hero-actions">
-        {canUpload && (
-          <>
-            <button
-              className="btn-pay-online"
-              onClick={onPayOnline}
-              disabled={payingOnline}
-            >
-              <CreditCard size={16} />
-              {payingOnline ? "Redirecting..." : "Pay Online (GCash/Maya/Card)"}
-            </button>
-            <button className="btn-upload-proof" onClick={onUploadProof}>
-              <Upload size={16} /> Upload Proof of Payment
-            </button>
-          </>
-        )}
-
-        {bill.paymentProof?.verificationStatus === "pending-verification" && (
-          <div className="proof-status-inline">
-            <Clock size={14} /> Payment proof submitted — awaiting admin
-            verification
-          </div>
-        )}
-
-        {bill.paymentProof?.verificationStatus === "approved" && (
-          <div className="proof-status-inline">
-            <CheckCircle size={14} /> Payment verified ✓
-          </div>
-        )}
-
-        {bill.paymentProof?.verificationStatus === "rejected" && (
-          <div
-            className="proof-status-inline"
-            style={{ background: "rgba(239,68,68,0.2)" }}
+        {canPay && (
+          <button
+            className="btn-pay-online"
+            onClick={onPayOnline}
+            disabled={payingOnline}
           >
-            <XCircle size={14} /> Payment rejected:{" "}
-            {bill.paymentProof.rejectionReason || "Please resubmit"}
+            <CreditCard size={16} />
+            {payingOnline
+              ? "Redirecting to payment..."
+              : "Pay Online (GCash / Maya / Card)"}
+          </button>
+        )}
+
+        {bill.status === "paid" && (
+          <div className="proof-status-inline paid-status">
+            <CheckCircle size={14} /> Payment confirmed ✓
           </div>
         )}
       </div>
@@ -376,7 +337,6 @@ function ChargeBreakdown({ bill, fmtCurrency }) {
         </div>
       )}
 
-      {/* Dynamic additional charges (appliance fees, etc.) */}
       {(bill.additionalCharges || []).map((charge, idx) => (
         <div className="charge-line" key={idx}>
           <span className="charge-label">{charge.name}</span>
@@ -420,8 +380,8 @@ function ChargeBreakdown({ bill, fmtCurrency }) {
           <span>
             Your utility charges are pro-rated based on{" "}
             <strong>{bill.proRataDays} days</strong> of occupancy during this
-            billing period. Utilities are split fairly among all tenants based
-            on length of stay.
+            billing period. Utilities are split fairly among all tenants based on
+            length of stay.
           </span>
         </div>
       )}
@@ -429,128 +389,97 @@ function ChargeBreakdown({ bill, fmtCurrency }) {
   );
 }
 
-function PaymentProofModal({ bill, fmtCurrency, onClose, onSubmitted }) {
-  const [imagePreview, setImagePreview] = useState(null);
-  const [imageUrl, setImageUrl] = useState("");
-  const [amount, setAmount] = useState(bill.totalAmount || "");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const fileInputRef = useRef(null);
+/**
+ * PaymentReceipt — Embedded receipt card for paid bills with download support
+ */
+function PaymentReceipt({ bill, fmtCurrency, fmtMonth, fmtDate }) {
+  const handleDownload = () => {
+    const receiptContent = `
+LILYCREST DORMITORY
+═══════════════════════════════════
+        PAYMENT RECEIPT
+═══════════════════════════════════
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+Receipt No:    ${bill.paymongoPaymentId || bill.id || "N/A"}
+Date:          ${fmtDate(bill.paymentDate || bill.updatedAt)}
+Billing Month: ${fmtMonth(bill.billingMonth)}
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file (JPG, PNG, etc.)");
-      return;
-    }
+Room:          ${bill.room || "N/A"}
+Branch:        ${bill.branch || "N/A"}
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setImagePreview(ev.target.result);
-      // For now, use base64 as the URL. In production, this would upload to cloud storage.
-      setImageUrl(ev.target.result);
-    };
-    reader.readAsDataURL(file);
-    setError("");
-  };
+───────────────────────────────────
+CHARGES
+───────────────────────────────────
+Rent:          ${fmtCurrency(bill.charges?.rent)}${(bill.charges?.electricity || 0) > 0 ? `\nElectricity:   ${fmtCurrency(bill.charges.electricity)}` : ""}${(bill.charges?.water || 0) > 0 ? `\nWater:         ${fmtCurrency(bill.charges.water)}` : ""}${(bill.charges?.penalty || 0) > 0 ? `\nPenalty:       ${fmtCurrency(bill.charges.penalty)}` : ""}${(bill.charges?.discount || 0) > 0 ? `\nDiscount:     -${fmtCurrency(bill.charges.discount)}` : ""}
 
-  const handleSubmit = async () => {
-    if (!imageUrl) {
-      setError("Please upload proof of payment");
-      return;
-    }
-    if (!amount || Number(amount) <= 0) {
-      setError("Please enter a valid payment amount");
-      return;
-    }
+───────────────────────────────────
+TOTAL PAID:    ${fmtCurrency(bill.paidAmount || bill.totalAmount)}
+Method:        ${(bill.paymentMethod || "online").toUpperCase()}
+Status:        PAID ✓
+═══════════════════════════════════
 
-    setSubmitting(true);
-    setError("");
-    try {
-      await billingApi.submitPaymentProof(bill.id, {
-        imageUrl,
-        amount: Number(amount),
-      });
-      onSubmitted();
-    } catch (err) {
-      setError(err.error || err.message || "Failed to submit payment proof");
-    } finally {
-      setSubmitting(false);
-    }
+Thank you for your payment!
+Lilycrest Dormitory Management
+    `.trim();
+
+    const blob = new Blob([receiptContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `receipt-${fmtMonth(bill.billingMonth).replace(/\s/g, "-")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="proof-modal-overlay" onClick={onClose}>
-      <div className="proof-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Upload Payment Proof</h2>
-        <p className="modal-subtitle">
-          Submit your proof of payment for {fmtCurrency(bill.totalAmount)}
-        </p>
-
-        {/* Upload Zone */}
-        <div
-          className={`proof-upload-zone ${imagePreview ? "has-image" : ""}`}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {imagePreview ? (
-            <img src={imagePreview} alt="Payment proof preview" />
-          ) : (
-            <div className="upload-placeholder">
-              <Upload size={32} />
-              <span>Click to upload payment receipt</span>
-              <span style={{ fontSize: "0.75rem" }}>
-                JPG, PNG, or screenshot
-              </span>
-            </div>
-          )}
+    <div className="receipt-card">
+      <div className="receipt-header">
+        <div className="receipt-badge">
+          <CheckCircle size={16} /> Payment Receipt
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileSelect}
-          style={{ display: "none" }}
-        />
+        <button className="btn-download-receipt" onClick={handleDownload}>
+          <Download size={14} /> Download
+        </button>
+      </div>
 
-        {/* Amount */}
-        <div className="form-group">
-          <label>Payment Amount (₱)</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Enter amount paid"
-          />
+      <div className="receipt-body">
+        <div className="receipt-row">
+          <span className="receipt-label">Receipt No.</span>
+          <span className="receipt-value">
+            {bill.paymongoPaymentId
+              ? bill.paymongoPaymentId.slice(-12).toUpperCase()
+              : bill.id?.slice(-8).toUpperCase() || "N/A"}
+          </span>
         </div>
-
-        {error && (
-          <p
-            style={{
-              color: "#dc2626",
-              fontSize: "0.85rem",
-              margin: "0 0 0.5rem",
-            }}
-          >
-            {error}
-          </p>
-        )}
-
-        <div className="proof-modal-actions">
-          <button className="btn-cancel-proof" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn-submit-proof"
-            onClick={handleSubmit}
-            disabled={submitting || !imageUrl}
-          >
-            {submitting ? "Submitting..." : "Submit Proof"}
-          </button>
+        <div className="receipt-row">
+          <span className="receipt-label">Date Paid</span>
+          <span className="receipt-value">
+            {fmtDate(bill.paymentDate || bill.updatedAt)}
+          </span>
         </div>
+        <div className="receipt-row">
+          <span className="receipt-label">Billing Period</span>
+          <span className="receipt-value">{fmtMonth(bill.billingMonth)}</span>
+        </div>
+        <div className="receipt-row">
+          <span className="receipt-label">Payment Method</span>
+          <span className="receipt-value">
+            {(bill.paymentMethod || "online").charAt(0).toUpperCase() +
+              (bill.paymentMethod || "online").slice(1)}
+          </span>
+        </div>
+        <div className="receipt-row total">
+          <span className="receipt-label">Amount Paid</span>
+          <span className="receipt-value">
+            {fmtCurrency(bill.paidAmount || bill.totalAmount)}
+          </span>
+        </div>
+      </div>
+
+      <div className="receipt-footer">
+        Thank you for your payment — Lilycrest Dormitory
       </div>
     </div>
   );

@@ -7,7 +7,6 @@ import {
   useBillingStats,
   useBillsByBranch,
   useRoomsWithTenants,
-  usePendingVerifications,
 } from "../../../shared/hooks/queries/useBilling";
 
 import BillingStatsBar from "../components/billing/BillingStatsBar";
@@ -63,12 +62,10 @@ const AdminBillingPage = () => {
   const { data: billsResponse, isLoading: loading } = useBillsByBranch(billParams);
   const { data: stats } = useBillingStats();
   const { data: roomsResponse, isLoading: roomsLoading } = useRoomsWithTenants();
-  const { data: pendingResponse } = usePendingVerifications();
 
   const bills = billsResponse?.bills || [];
   const meta = billsResponse?.pagination || { total: 0, page: 1, totalPages: 1 };
   const rooms = roomsResponse?.rooms || [];
-  const pendingVerifications = pendingResponse?.bills || [];
 
   // ── Filtered rooms (client-side) ──
   const filteredRooms = useMemo(() => {
@@ -209,65 +206,6 @@ const AdminBillingPage = () => {
         {/* Stats */}
         <BillingStatsBar stats={stats} />
 
-        {/* Pending Verifications Banner */}
-        {pendingVerifications.length > 0 && (
-          <div
-            style={{
-              background: "#fef3c7",
-              border: "1px solid #fcd34d",
-              borderRadius: "10px",
-              padding: "1rem 1.25rem",
-              marginBottom: "1.5rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-            }}
-          >
-            <ShieldAlert
-              size={20}
-              style={{ color: "#d97706", flexShrink: 0 }}
-            />
-            <div>
-              <strong style={{ color: "#92400e" }}>
-                {pendingVerifications.length} payment
-                {pendingVerifications.length !== 1 ? "s" : ""} awaiting
-                verification
-              </strong>
-              <p
-                style={{
-                  fontSize: "0.8rem",
-                  color: "#78350f",
-                  margin: "0.15rem 0 0",
-                }}
-              >
-                {pendingVerifications
-                  .map((v) => v.tenant?.name || "Tenant")
-                  .join(", ")}
-              </p>
-            </div>
-            <button
-              style={{
-                marginLeft: "auto",
-                background: "#d97706",
-                color: "#fff",
-                border: "none",
-                padding: "0.4rem 1rem",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.8rem",
-                whiteSpace: "nowrap",
-              }}
-              onClick={() => {
-                // Show the first pending bill
-                if (pendingVerifications[0]) {
-                  setDetailBill(pendingVerifications[0]);
-                }
-              }}
-            >
-              Review
-            </button>
-          </div>
-        )}
 
         {/* Room Cards */}
         <BillingRoomGrid

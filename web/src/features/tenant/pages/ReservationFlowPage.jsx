@@ -143,8 +143,6 @@ function ReservationFlowPage() {
 
   // Stage 4
   const [finalMoveInDate, setFinalMoveInDate] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("bank");
-  const [proofOfPayment, setProofOfPayment] = useState(null);
   const [paymentSubmitted, setPaymentSubmitted] = useState(false);
 
   // Stage 5
@@ -900,18 +898,19 @@ function ReservationFlowPage() {
         setEditingApplication(false);
         advanceStage(4, "Application submitted! Payment step is now unlocked.");
       } else if (currentStage === 4) {
-        if (!proofOfPayment) {
-          showNotification("Please upload proof of payment", "error", 3000);
-          return;
+        // Stage 4 only uses PayMongo online checkout.
+        // If user got here via the "Confirm" button, show overlay and go to profile.
+        if (finalMoveInDate) {
+          await updateReservationDraft({ finalMoveInDate });
         }
-        const proofOfPaymentUrl = await fileToBase64(proofOfPayment);
-        await updateReservationDraft({
-          finalMoveInDate,
-          paymentMethod,
-          proofOfPaymentUrl,
-        });
         setPaymentSubmitted(true);
-        advanceStage(5, "Payment uploaded! Awaiting admin confirmation.");
+        await queryClient.invalidateQueries({ queryKey: ["reservations"] });
+        setSuccessOverlay({
+          show: true,
+          title: "Payment Step Ready!",
+          subtitle: "Use the Pay Online button to complete your reservation.",
+        });
+        setTimeout(() => navigate("/applicant/profile"), 2200);
       } else if (currentStage === 5) {
         navigate("/applicant/profile");
       }
@@ -1246,10 +1245,6 @@ function ReservationFlowPage() {
                 leaseDuration,
                 finalMoveInDate,
                 setFinalMoveInDate,
-                paymentMethod,
-                setPaymentMethod,
-                proofOfPayment,
-                setProofOfPayment,
                 isLoading,
                 payingOnline,
               }}
