@@ -64,7 +64,7 @@ The platform serves four distinct user roles — public visitors, tenants, branc
 
 ```bash
 # Clone the repository
-git clone https://github.com/PlaytsDEV/Capstone-Website.git
+git clone https://github.com/kuurz-z/Capstone-Website.git
 cd Capstone-Website
 
 # Install backend dependencies
