@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { showNotification } from "../../../shared/utils/notification";
-import { reservationApi, roomApi } from "../../../shared/api/apiClient";
+import { reservationApi, roomApi, billingApi } from "../../../shared/api/apiClient";
 import GlobalLoading from "../../../shared/components/GlobalLoading";
 import "../../../shared/styles/notification.css";
 import "../styles/reservation-flow.css";
@@ -58,6 +58,8 @@ function ReservationFlowPage() {
   const [paymentApproved, setPaymentApproved] = useState(false);
   const [reservationId, setReservationId] = useState(null);
   const [devBypassValidation, setDevBypassValidation] = useState(false);
+  const [payingOnline, setPayingOnline] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Stage 1
   const [targetMoveInDate, setTargetMoveInDate] = useState("");
@@ -336,6 +338,32 @@ function ReservationFlowPage() {
       billingEmail: user?.email || "",
     });
     if (!continueReservation && stepOverride) setCurrentStage(stepOverride);
+
+    // Handle PayMongo return for deposit payments
+    const paymentStatus = new URLSearchParams(location.search).get("payment");
+    const sessionId = new URLSearchParams(location.search).get("session_id");
+    if (paymentStatus === "success" && sessionId) {
+      billingApi.checkPaymentStatus(sessionId).then((result) => {
+        if (result.status === "paid") {
+          setPaymentSubmitted(true);
+          setPaymentApproved(true);
+          showNotification("Payment successful! Your reservation is confirmed.", "success", 5000);
+          setCurrentStage(5);
+          setHighestStageReached(5);
+        } else {
+          showNotification("Payment is being processed. Check your profile for updates.", "info", 5000);
+        }
+      }).catch(() => {
+        showNotification("Could not verify payment. Please check your profile.", "warning", 5000);
+      });
+      // Clean URL params without reloading
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+    } else if (paymentStatus === "cancelled") {
+      showNotification("Payment was cancelled. You can try again.", "info", 3000);
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+    }
   }, [user, navigate, location]);
 
   const loadActiveReservation = async () => {
@@ -1195,6 +1223,7 @@ function ReservationFlowPage() {
                 proofOfPayment,
                 setProofOfPayment,
                 isLoading,
+                payingOnline,
               }}
               onMoveInDateUpdate={() =>
                 showNotification(
@@ -1205,6 +1234,29 @@ function ReservationFlowPage() {
               }
               onPrev={handlePrevStage}
               onNext={handleNextStage}
+              onPayOnline={async () => {
+                if (!reservationId) {
+                  showNotification("Reservation not found. Please try again.", "error", 3000);
+                  return;
+                }
+                try {
+                  setPayingOnline(true);
+                  // Save move-in date before redirecting
+                  if (finalMoveInDate) {
+                    await updateReservationDraft({ finalMoveInDate });
+                  }
+                  const { checkoutUrl } = await billingApi.createDepositCheckout(reservationId);
+                  window.location.href = checkoutUrl;
+                } catch (error) {
+                  console.error("Failed to create deposit checkout:", error);
+                  showNotification(
+                    error?.message || "Failed to start online payment. Try again.",
+                    "error",
+                    3000,
+                  );
+                  setPayingOnline(false);
+                }
+              }}
               readOnly={isStageLocked(4)}
             />
           )}

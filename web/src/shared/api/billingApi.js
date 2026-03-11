@@ -108,4 +108,10 @@ export const billingApi = {
    */
   checkPaymentStatus: (sessionId) =>
     authFetch(`/payments/session/${sessionId}/status`),
+
+  /**
+   * Create a PayMongo checkout session for a reservation deposit
+   */
+  createDepositCheckout: (reservationId) =>
+    authFetch(`/payments/deposit/${reservationId}/checkout`, { method: "POST" }),
 };
