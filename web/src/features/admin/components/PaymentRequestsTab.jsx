@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import PaymentTable from "./PaymentTable";
+import { useReservations } from "../../../shared/hooks/queries/useReservations";
+import { useQueryClient } from "@tanstack/react-query";
 
 function PaymentRequestsTab() {
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [actionLoading, setActionLoading] = useState(null);
   const [confirmModal, setConfirmModal] = useState({
     open: false,
@@ -16,15 +17,11 @@ function PaymentRequestsTab() {
     onConfirm: null,
   });
 
-  useEffect(() => {
-    fetchPayments();
-  }, []);
+  const { data: rawReservations = [], isLoading: loading } = useReservations();
 
-  const fetchPayments = async () => {
-    try {
-      setLoading(true);
-      const data = await reservationApi.getAll();
-      const transformed = data
+  const payments = useMemo(
+    () =>
+      rawReservations
         .filter((r) => Boolean(r.proofOfPaymentUrl))
         .map((res) => ({
           id: res._id,
@@ -43,14 +40,12 @@ function PaymentRequestsTab() {
           status: res.status,
           submittedDate: res.updatedAt,
           checkInDate: res.checkInDate,
-        }));
-      setPayments(transformed);
-    } catch (error) {
-      console.error("Error fetching payment requests:", error);
-      showNotification("Failed to load payment requests", "error", 3000);
-    } finally {
-      setLoading(false);
-    }
+        })),
+    [rawReservations],
+  );
+
+  const refetchAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["reservations"] });
   };
 
   const handleVerifyPayment = (paymentId) => {
@@ -74,7 +69,7 @@ function PaymentRequestsTab() {
             "success",
             3000,
           );
-          fetchPayments();
+          refetchAll();
         } catch (error) {
           console.error("Error verifying payment:", error);
           showNotification("Failed to verify payment", "error", 3000);

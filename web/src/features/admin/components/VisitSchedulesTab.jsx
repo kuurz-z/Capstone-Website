@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
+import { useReservations } from "../../../shared/hooks/queries/useReservations";
+import { useQueryClient } from "@tanstack/react-query";
 import "../styles/admin-common.css";
 import "../styles/admin-reservations.css";
 
 function VisitSchedulesTab() {
-  const [schedules, setSchedules] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [actionLoading, setActionLoading] = useState(null);
   const [confirmModal, setConfirmModal] = useState({
     open: false,
@@ -17,17 +18,13 @@ function VisitSchedulesTab() {
     onConfirm: null,
   });
 
-  useEffect(() => {
-    fetchSchedules();
-  }, []);
+  const { data: rawReservations = [], isLoading: loading } = useReservations();
 
-  const fetchSchedules = async () => {
-    try {
-      setLoading(true);
-      const data = await reservationApi.getAll();
-      const withVisit = data.filter((r) => r.visitDate);
-      setSchedules(
-        withVisit.map((r) => ({
+  const schedules = useMemo(
+    () =>
+      rawReservations
+        .filter((r) => r.visitDate)
+        .map((r) => ({
           id: r._id,
           reservationCode: r.reservationCode || "—",
           customer:
@@ -42,12 +39,11 @@ function VisitSchedulesTab() {
           visitApproved: r.visitApproved,
           status: r.status,
         })),
-      );
-    } catch {
-      showNotification("Failed to load visit schedules", "error");
-    } finally {
-      setLoading(false);
-    }
+    [rawReservations],
+  );
+
+  const refetchAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["reservations"] });
   };
 
   const confirmAction = (title, message, variant, confirmText, action) => {
@@ -61,7 +57,7 @@ function VisitSchedulesTab() {
         setConfirmModal((p) => ({ ...p, open: false }));
         try {
           await action();
-          fetchSchedules();
+          refetchAll();
         } catch {
           showNotification(`Failed: ${title}`, "error");
         }
