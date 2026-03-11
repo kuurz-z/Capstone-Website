@@ -209,7 +209,7 @@ The application implements multiple layers of security:
 | Measure              | Implementation                                                       |
 | -------------------- | -------------------------------------------------------------------- |
 | **Authentication**   | Firebase Auth with JWT token verification on every request           |
-| **Authorization**    | Role-based access control (user, tenant, admin, superAdmin)          |
+| **Authorization**    | Role-based access control (applicant, tenant, admin, superAdmin)     |
 | **Branch Isolation** | Automatic data filtering ensures users only access their branch      |
 | **Input Validation** | Server-side sanitization against XSS, injection, and malformed input |
 | **CSRF Protection**  | Cryptographic token validation on state-changing requests            |

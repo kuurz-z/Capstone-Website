@@ -232,7 +232,7 @@ Middleware chain: verifyToken → verifyAdmin → filterByBranch → handler
 - **CSRF Protection** — Cryptographic token validation (`middleware/csrf.js`)
 - **Branch Isolation** — Automatic branch filtering, users only access their branch data
 - **Rate Limiting** — Protection against brute force on auth endpoints (`middleware/rateLimiter.js`)
-- **Role-Based Access Control** — `user` → `tenant` → `admin` → `superAdmin`
+- **Role-Based Access Control** — `applicant` → `tenant` → `admin` → `superAdmin`
 
 ---
 

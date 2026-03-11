@@ -74,7 +74,7 @@ Four roles are enforced through middleware guards:
 
 | Role         | Scope    | Capabilities                                                                |
 | ------------ | -------- | --------------------------------------------------------------------------- |
-| `user`       | Public   | Browse rooms, submit inquiries                                              |
+| `applicant`  | Public   | Browse rooms, submit inquiries, create reservations                         |
 | `tenant`     | Personal | View own bills, submit maintenance requests, manage profile                 |
 | `admin`      | Branch   | Manage reservations, tenants, rooms, and billing within assigned branch     |
 | `superAdmin` | System   | Full access across all branches, user/role management, system configuration |
@@ -105,17 +105,17 @@ All user-supplied input is sanitized and validated before processing. The middle
 
 ### Sanitization Functions
 
-| Function             | Purpose               | Rules                                        |
-| -------------------- | --------------------- | -------------------------------------------- |
-| `sanitizeString()`   | General text cleaning | Escapes `<`, `>`, `&`, `"`, `'`, `/`         |
-| `sanitizeEmail()`    | Email normalization   | RFC 5322 format, trimmed, lowercased         |
-| `sanitizeUsername()` | Username enforcement  | 3–30 chars, alphanumeric plus `-` and `_`    |
-| `sanitizeName()`     | Name formatting       | 2–50 chars, letters, spaces, `-`, `'`        |
-| `sanitizePhone()`    | Phone normalization   | 7+ digits, allows `+` and `-`                |
-| `validateBranch()`   | Branch enum check     | Only `gil-puyat` or `guadalupe`              |
-| `validateRole()`     | Role enum check       | Only `user`, `tenant`, `admin`, `superAdmin` |
-| `isValidObjectId()`  | MongoDB ID check      | 24-character hex string                      |
-| `isValidDate()`      | Date format check     | ISO 8601 format (`YYYY-MM-DD`)               |
+| Function             | Purpose               | Rules                                             |
+| -------------------- | --------------------- | ------------------------------------------------- |
+| `sanitizeString()`   | General text cleaning | Escapes `<`, `>`, `&`, `"`, `'`, `/`              |
+| `sanitizeEmail()`    | Email normalization   | RFC 5322 format, trimmed, lowercased              |
+| `sanitizeUsername()` | Username enforcement  | 3–30 chars, alphanumeric plus `-` and `_`         |
+| `sanitizeName()`     | Name formatting       | 2–50 chars, letters, spaces, `-`, `'`             |
+| `sanitizePhone()`    | Phone normalization   | 7+ digits, allows `+` and `-`                     |
+| `validateBranch()`   | Branch enum check     | Only `gil-puyat` or `guadalupe`                   |
+| `validateRole()`     | Role enum check       | Only `applicant`, `tenant`, `admin`, `superAdmin` |
+| `isValidObjectId()`  | MongoDB ID check      | 24-character hex string                           |
+| `isValidDate()`      | Date format check     | ISO 8601 format (`YYYY-MM-DD`)                    |
 
 ### Example: XSS Prevention
 

@@ -216,16 +216,16 @@ await AuditLogger.log({
 
 ## Roles & Access Levels
 
-| Role         | Access            | Can Do                                                              |
-| ------------ | ----------------- | ------------------------------------------------------------------- |
-| `user`       | Public pages only | Browse rooms, submit inquiries                                      |
-| `tenant`     | Tenant portal     | View bills, submit maintenance requests, manage profile             |
-| `admin`      | Admin dashboard   | Manage reservations, tenants, rooms, billing for their branch       |
-| `superAdmin` | Everything        | System-wide user management, branch configuration, all admin powers |
+| Role         | Access                     | Can Do                                                              |
+| ------------ | -------------------------- | ------------------------------------------------------------------- |
+| `applicant`  | Public pages + reservation | Browse rooms, submit inquiries, create reservations                 |
+| `tenant`     | Tenant portal              | View bills, submit maintenance requests, manage profile             |
+| `admin`      | Admin dashboard            | Manage reservations, tenants, rooms, billing for their branch       |
+| `superAdmin` | Everything                 | System-wide user management, branch configuration, all admin powers |
 
 Role transitions:
 
-- New signup → `user`
+- New signup → `applicant`
 - Reservation checked-in → automatically promoted to `tenant`
 - Manual promotion → `admin` or `superAdmin` (by superAdmin only)
 
