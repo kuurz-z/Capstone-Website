@@ -2,11 +2,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reservationApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
-/** Fetch all reservations */
+/** Fetch all reservations — always refetch on mount so profile shows fresh data */
 export function useReservations() {
   return useQuery({
     queryKey: queryKeys.reservations.all,
     queryFn: () => reservationApi.getAll(),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }
 

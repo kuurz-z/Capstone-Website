@@ -958,7 +958,8 @@ function ReservationFlowPage() {
           "success",
           3000,
         );
-        queryClient.invalidateQueries({ queryKey: ["reservations"] });
+        await queryClient.invalidateQueries({ queryKey: ["reservations"] });
+        await queryClient.invalidateQueries({ queryKey: ["rooms"] });
         navigate("/applicant/profile");
       } else if (pendingStageAction === "stage4") {
         showNotification(
@@ -966,7 +967,7 @@ function ReservationFlowPage() {
           "success",
           3000,
         );
-        queryClient.invalidateQueries({ queryKey: ["reservations"] });
+        await queryClient.invalidateQueries({ queryKey: ["reservations"] });
         navigate("/applicant/profile");
       }
     } catch (error) {
