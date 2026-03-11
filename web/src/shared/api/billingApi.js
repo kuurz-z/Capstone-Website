@@ -94,4 +94,18 @@ export const billingApi = {
    * Get billing report (admin only)
    */
   getBillingReport: () => authFetch("/billing/report"),
+
+  // ── PayMongo Online Payment ──
+
+  /**
+   * Create a PayMongo checkout session for a bill
+   */
+  createCheckout: (billId) =>
+    authFetch(`/payments/bill/${billId}/checkout`, { method: "POST" }),
+
+  /**
+   * Check PayMongo session payment status
+   */
+  checkPaymentStatus: (sessionId) =>
+    authFetch(`/payments/session/${sessionId}/status`),
 };

@@ -47,6 +47,7 @@ import auditRoutes from "./routes/auditRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import maintenanceRoutes from "./routes/maintenanceRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -185,6 +186,7 @@ app.use("/api/audit-logs", auditRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // ============================================================================
 // DEEP HEALTH CHECK

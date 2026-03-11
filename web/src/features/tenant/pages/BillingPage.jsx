@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { billingApi } from "../../../shared/api/apiClient";
+import { showNotification } from "../../../shared/utils/notification";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
 import {
   FileText,
@@ -18,10 +20,53 @@ import {
 import "../styles/tenant-billing.css";
 
 const BillingPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [bills, setBills] = useState([]);
   const [selectedBill, setSelectedBill] = useState(null);
   const [showProofModal, setShowProofModal] = useState(false);
+  const [payingOnline, setPayingOnline] = useState(false);
+
+  // Handle PayMongo return (success or cancelled)
+  useEffect(() => {
+    const paymentStatus = searchParams.get("payment");
+    const sessionId = searchParams.get("session_id");
+
+    if (paymentStatus === "success" && sessionId) {
+      // Verify payment with backend and auto-mark bill
+      billingApi.checkPaymentStatus(sessionId).then((result) => {
+        if (result.status === "paid") {
+          showNotification("Payment successful! Your bill has been paid.", "success", 5000);
+          loadBills();
+        } else {
+          showNotification("Payment is being processed. It may take a moment.", "info", 5000);
+        }
+      }).catch(() => {
+        showNotification("Could not verify payment. Please refresh.", "warning", 5000);
+      });
+      // Clean URL params
+      setSearchParams({}, { replace: true });
+    } else if (paymentStatus === "cancelled") {
+      showNotification("Payment was cancelled. You can try again.", "info", 3000);
+      setSearchParams({}, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePayOnline = async (billId) => {
+    try {
+      setPayingOnline(true);
+      const { checkoutUrl } = await billingApi.createCheckout(billId);
+      window.location.href = checkoutUrl;
+    } catch (error) {
+      console.error("Failed to create checkout:", error);
+      showNotification(
+        error.message || "Failed to start online payment. Try again.",
+        "error",
+        3000,
+      );
+      setPayingOnline(false);
+    }
+  };
 
   const loadBills = useCallback(async () => {
     try {
@@ -147,6 +192,8 @@ const BillingPage = () => {
               setSelectedBill(currentBill);
               setShowProofModal(true);
             }}
+            onPayOnline={() => handlePayOnline(currentBill.id)}
+            payingOnline={payingOnline}
           />
         )}
 
@@ -225,6 +272,8 @@ function CurrentBillHero({
   getDisplayStatus,
   getStatusLabel,
   onUploadProof,
+  onPayOnline,
+  payingOnline,
 }) {
   const status = getDisplayStatus(bill);
   const canUpload =
@@ -252,9 +301,19 @@ function CurrentBillHero({
 
       <div className="bill-hero-actions">
         {canUpload && (
-          <button className="btn-upload-proof" onClick={onUploadProof}>
-            <Upload size={16} /> Upload Proof of Payment
-          </button>
+          <>
+            <button
+              className="btn-pay-online"
+              onClick={onPayOnline}
+              disabled={payingOnline}
+            >
+              <CreditCard size={16} />
+              {payingOnline ? "Redirecting..." : "Pay Online (GCash/Maya/Card)"}
+            </button>
+            <button className="btn-upload-proof" onClick={onUploadProof}>
+              <Upload size={16} /> Upload Proof of Payment
+            </button>
+          </>
         )}
 
         {bill.paymentProof?.verificationStatus === "pending-verification" && (

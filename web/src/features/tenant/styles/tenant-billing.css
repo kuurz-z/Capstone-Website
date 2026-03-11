@@ -119,8 +119,8 @@
   margin-top: 1.5rem;
 }
 
-.btn-upload-proof {
-  background: #e7710f;
+.btn-pay-online {
+  background: linear-gradient(135deg, #059669, #10b981);
   color: #fff;
   border: none;
   padding: 0.65rem 1.5rem;
@@ -134,8 +134,35 @@
   gap: 0.5rem;
 }
 
-.btn-upload-proof:hover {
+.btn-pay-online:hover {
   opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+.btn-pay-online:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-upload-proof {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.65rem 1.5rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-upload-proof:hover {
+  background: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
 }
 .btn-upload-proof:disabled {
