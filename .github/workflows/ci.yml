@@ -1,0 +1,71 @@
+name: Lilycrest CI
+
+# WHEN does this run?
+on:
+  push:
+    branches: [main]        # runs when you push to main
+  pull_request:
+    branches: [main]        # runs when you open a PR to main
+
+jobs:
+  # ============================
+  # JOB 1: Check the Backend
+  # ============================
+  server:
+    name: 🖥️ Server CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+
+    steps:
+      # Step 1: Download the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Check for syntax errors (won't fail the build)
+      - name: Lint check
+        run: npx eslint . --ext .js || true
+
+  # ============================
+  # JOB 2: Check the Frontend
+  # ============================
+  web:
+    name: 🌐 Frontend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./web
+
+    steps:
+      # Step 1: Download the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Build the frontend (catches broken imports, typos, etc.)
+      - name: Build
+        run: npm run build
