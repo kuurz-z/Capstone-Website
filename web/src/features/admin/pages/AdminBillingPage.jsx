@@ -148,17 +148,6 @@ const AdminBillingPage = () => {
     }
   };
 
-  // ── Verify payment proof ──
-  const handleVerifyPayment = async (billId, { action, rejectionReason }) => {
-    try {
-      await billingApi.verifyPayment(billId, { action, rejectionReason });
-      setDetailBill(null);
-      refetchAll();
-    } catch (err) {
-      alert(err.error || err.message || "Failed to verify payment");
-    }
-  };
-
   // ── Apply penalties ──
   const handleApplyPenalties = async () => {
     if (!confirm("Apply ₱50/day penalties to all overdue bills?")) return;
@@ -290,7 +279,6 @@ const AdminBillingPage = () => {
           onPayAmountChange={setPayAmount}
           onPayNoteChange={setPayNote}
           onMarkPaid={handleMarkPaid}
-          onVerifyPayment={handleVerifyPayment}
           onClose={() => {
             setDetailBill(null);
             setPayAmount("");
