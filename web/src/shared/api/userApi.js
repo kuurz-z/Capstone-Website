@@ -50,4 +50,30 @@ export const userApi = {
     publicFetch(
       `/users/email-by-username?username=${encodeURIComponent(username)}`,
     ),
+
+  /**
+   * Suspend user account (admin only)
+   */
+  suspend: (userId, reason) =>
+    authFetch(`/users/${userId}/suspend`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason }),
+    }),
+
+  /**
+   * Ban user account (admin only)
+   */
+  ban: (userId, reason) =>
+    authFetch(`/users/${userId}/ban`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason }),
+    }),
+
+  /**
+   * Reactivate user account (admin only)
+   */
+  reactivate: (userId) =>
+    authFetch(`/users/${userId}/reactivate`, {
+      method: "PATCH",
+    }),
 };

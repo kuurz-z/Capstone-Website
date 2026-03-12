@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import Sidebar from "../components/Sidebar";
+import NotificationBell from "../components/NotificationBell";
+import AccountBlockedBanner from "../components/AccountBlockedBanner";
 import "./TenantLayout.css";
 
 /**
@@ -46,6 +48,7 @@ const TenantLayout = ({ children }) => {
           </div>
 
           <div className="tenant-topbar-user">
+            <NotificationBell />
             <div className="tenant-topbar-avatar">
               {user?.profileImage ? (
                 <img src={user.profileImage} alt="Profile" />
@@ -61,6 +64,11 @@ const TenantLayout = ({ children }) => {
             </span>
           </div>
         </header>
+
+        {/* Account Status Banner */}
+        {(user?.accountStatus === "suspended" || user?.accountStatus === "banned") && (
+          <AccountBlockedBanner accountStatus={user.accountStatus} />
+        )}
 
         {/* Main Content */}
         <main className="tenant-content">{children}</main>

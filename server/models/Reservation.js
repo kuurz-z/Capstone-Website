@@ -49,7 +49,6 @@ const reservationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
     roomId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -68,10 +67,7 @@ const reservationSchema = new mongoose.Schema(
     // STAGE 1: SUMMARY
     // =========================================================================
     targetMoveInDate: Date,
-    leaseDuration: {
-      type: Number,
-      default: 12, // months
-    },
+    leaseDuration: Number,
     billingEmail: String,
     roomConfirmed: {
       type: Boolean,
@@ -487,6 +483,14 @@ reservationSchema.statics.findArchived = function (filter = {}) {
 reservationSchema.statics.findPending = function (filter = {}) {
   return this.find({ ...filter, isArchived: false, status: "pending" });
 };
+
+// ============================================================================
+// INDEXES (compound indexes for common query patterns)
+// ============================================================================
+
+reservationSchema.index({ userId: 1, status: 1 }); // User's reservations by status
+reservationSchema.index({ roomId: 1, status: 1 }); // Room availability queries
+reservationSchema.index({ status: 1, isArchived: 1 }); // Admin listing filters
 
 // ============================================================================
 // EXPORT

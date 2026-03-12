@@ -16,6 +16,7 @@ import {
   CreditCard,
   Download,
 } from "lucide-react";
+import BillingPageSkeleton from "../components/billing/BillingPageSkeleton";
 import "../styles/tenant-billing.css";
 
 const BillingPage = () => {
@@ -134,27 +135,7 @@ const BillingPage = () => {
   const pastBills = bills.filter((b) => b !== currentBill);
 
   if (loading) {
-    return (
-      <TenantLayout>
-        <div className="tenant-billing">
-          <div style={{ textAlign: "center", padding: "3rem" }}>
-            <div
-              className="spinner"
-              style={{
-                width: 32,
-                height: 32,
-                border: "3px solid #e2e8f0",
-                borderTopColor: "#E7710F",
-                borderRadius: "50%",
-                animation: "spin 0.8s linear infinite",
-                margin: "0 auto 1rem",
-              }}
-            />
-            <p style={{ color: "#64748b" }}>Loading your billing...</p>
-          </div>
-        </div>
-      </TenantLayout>
-    );
+    return <BillingPageSkeleton />;
   }
 
   if (bills.length === 0) {
@@ -238,6 +219,30 @@ const BillingPage = () => {
                     <span className={`bill-status-badge ${bill.status}`}>
                       {getStatusLabel(bill.status)}
                     </span>
+                    <button
+                      className="btn-download-receipt"
+                      title="Download billing statement PDF"
+                      onClick={async () => {
+                        const { generateBillingPDF } = await import(
+                          "../../../shared/utils/pdfUtils"
+                        );
+                        generateBillingPDF(bill);
+                      }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "4px 10px",
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        color: "#64748B",
+                        fontSize: "12px",
+                      }}
+                    >
+                      <Download size={12} /> PDF
+                    </button>
                   </div>
                 </div>
               ))}
@@ -293,6 +298,31 @@ function CurrentBillHero({
               : "Pay Online (GCash / Maya / Card)"}
           </button>
         )}
+
+        <button
+          className="btn-download-receipt"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "8px 16px",
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            cursor: "pointer",
+            color: "#475569",
+            fontSize: "13px",
+            fontWeight: 500,
+          }}
+          onClick={async () => {
+            const { generateBillingPDF } = await import(
+              "../../../shared/utils/pdfUtils"
+            );
+            generateBillingPDF(bill);
+          }}
+        >
+          <Download size={14} /> Download Statement
+        </button>
 
         {bill.status === "paid" && (
           <div className="proof-status-inline paid-status">
@@ -393,44 +423,11 @@ function ChargeBreakdown({ bill, fmtCurrency }) {
  * PaymentReceipt — Embedded receipt card for paid bills with download support
  */
 function PaymentReceipt({ bill, fmtCurrency, fmtMonth, fmtDate }) {
-  const handleDownload = () => {
-    const receiptContent = `
-LILYCREST DORMITORY
-═══════════════════════════════════
-        PAYMENT RECEIPT
-═══════════════════════════════════
-
-Receipt No:    ${bill.paymongoPaymentId || bill.id || "N/A"}
-Date:          ${fmtDate(bill.paymentDate || bill.updatedAt)}
-Billing Month: ${fmtMonth(bill.billingMonth)}
-
-Room:          ${bill.room || "N/A"}
-Branch:        ${bill.branch || "N/A"}
-
-───────────────────────────────────
-CHARGES
-───────────────────────────────────
-Rent:          ${fmtCurrency(bill.charges?.rent)}${(bill.charges?.electricity || 0) > 0 ? `\nElectricity:   ${fmtCurrency(bill.charges.electricity)}` : ""}${(bill.charges?.water || 0) > 0 ? `\nWater:         ${fmtCurrency(bill.charges.water)}` : ""}${(bill.charges?.penalty || 0) > 0 ? `\nPenalty:       ${fmtCurrency(bill.charges.penalty)}` : ""}${(bill.charges?.discount || 0) > 0 ? `\nDiscount:     -${fmtCurrency(bill.charges.discount)}` : ""}
-
-───────────────────────────────────
-TOTAL PAID:    ${fmtCurrency(bill.paidAmount || bill.totalAmount)}
-Method:        ${(bill.paymentMethod || "online").toUpperCase()}
-Status:        PAID ✓
-═══════════════════════════════════
-
-Thank you for your payment!
-Lilycrest Dormitory Management
-    `.trim();
-
-    const blob = new Blob([receiptContent], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `receipt-${fmtMonth(bill.billingMonth).replace(/\s/g, "-")}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleDownload = async () => {
+    const { generateBillingReceipt } = await import(
+      "../../../shared/utils/pdfReceipt.js"
+    );
+    generateBillingReceipt(bill);
   };
 
   return (

@@ -16,6 +16,7 @@
  * ============================================================================
  */
 
+import dayjs from "dayjs";
 import { Reservation, Room } from "../models/index.js";
 import notify from "./notificationService.js";
 
@@ -25,7 +26,7 @@ const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
  * Process grace period transitions
  */
 async function processGracePeriods() {
-  const now = new Date();
+  const now = dayjs();
   let transitioned = 0;
   let cancelled = 0;
 
@@ -33,7 +34,7 @@ async function processGracePeriods() {
     // ── Step 1: Confirmed → grace_period ──────────────────────────
     const confirmedPastMoveIn = await Reservation.find({
       status: "confirmed",
-      checkInDate: { $lt: now },
+      checkInDate: { $lt: now.toDate() },
       isArchived: false,
     });
 
@@ -42,9 +43,9 @@ async function processGracePeriods() {
 
       // Compute graceDeadline if not set
       if (!reservation.graceDeadline) {
-        const moveIn = new Date(reservation.checkInDate);
+        const moveIn = dayjs(reservation.checkInDate);
         const days = reservation.gracePeriodDays || 3;
-        reservation.graceDeadline = new Date(moveIn.getTime() + days * 24 * 60 * 60 * 1000);
+        reservation.graceDeadline = moveIn.add(days, "day").toDate();
       }
 
       await reservation.save();
@@ -52,16 +53,14 @@ async function processGracePeriods() {
 
       // Notify tenant
       const code = reservation.reservationCode || reservation._id.toString().slice(-6);
-      const deadline = reservation.graceDeadline.toLocaleDateString("en-PH", {
-        year: "numeric", month: "long", day: "numeric",
-      });
+      const deadline = dayjs(reservation.graceDeadline).format("MMMM D, YYYY");
       notify.gracePeriodWarning(reservation.userId, code, deadline);
     }
 
     // ── Step 2: grace_period past deadline → cancelled ────────────
     const expiredGrace = await Reservation.find({
       status: "grace_period",
-      graceDeadline: { $lt: now },
+      graceDeadline: { $lt: now.toDate() },
       isArchived: false,
     });
 
@@ -93,7 +92,6 @@ async function processGracePeriods() {
     }
 
     if (transitioned > 0 || cancelled > 0) {
-      console.log(`🕐 Grace period job: ${transitioned} → grace_period, ${cancelled} → cancelled`);
     }
   } catch (error) {
     console.error("❌ Grace period job error:", error);
@@ -104,7 +102,6 @@ async function processGracePeriods() {
  * Start the grace period background job
  */
 export function startGracePeriodJob() {
-  console.log("🕐 Grace period job started (every 15 min)");
 
   // Run once immediately on startup
   processGracePeriods();

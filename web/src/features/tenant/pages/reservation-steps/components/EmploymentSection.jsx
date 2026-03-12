@@ -30,7 +30,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group">
-      <label className="form-label">Current Employer</label>
+      <label className="form-label">Current Employer <span style={{ color: "#dc2626" }}>*</span></label>
       <input
         type="text"
         className="form-input"
@@ -43,7 +43,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group">
-      <label className="form-label">Employer's Address</label>
+      <label className="form-label">Employer's Address <span style={{ color: "#dc2626" }}>*</span></label>
       <textarea
         className="form-textarea"
         placeholder="Full address"
@@ -56,7 +56,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group">
-      <label className="form-label">Employer's Contact Number</label>
+      <label className="form-label">Employer's Contact Number <span style={{ color: "#dc2626" }}>*</span></label>
       <input
         type="tel"
         className="form-input"
@@ -79,7 +79,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group">
-      <label className="form-label">Occupation / Job Description</label>
+      <label className="form-label">Occupation / Job Description <span style={{ color: "#dc2626" }}>*</span></label>
       <textarea
         className="form-textarea"
         placeholder="e.g., Software Engineer, Nurse, Currently Job Hunting"

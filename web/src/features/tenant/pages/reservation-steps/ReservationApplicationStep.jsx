@@ -371,9 +371,9 @@ const ReservationApplicationStep = ({
       setWorkSchedule,
       setWorkScheduleOther,
     ].forEach((s) => s(""));
-    setMaritalStatus("single");
-    setNationality("Filipino");
-    setEducationLevel("college");
+    setMaritalStatus("");
+    setNationality("");
+    setEducationLevel("");
     [
       setSelfiePhoto,
       setValidIDFront,

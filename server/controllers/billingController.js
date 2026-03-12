@@ -10,7 +10,13 @@
  * ============================================================================
  */
 
+import dayjs from "dayjs";
 import { Bill, RoomBill, Reservation, Room, User } from "../models/index.js";
+import {
+  sendSuccess,
+  sendError,
+  AppError,
+} from "../middleware/errorHandler.js";
 import {
   sendBillGeneratedEmail,
   sendPaymentApprovedEmail,
@@ -32,7 +38,7 @@ async function getAdminInfo(req) {
 
 /** Auto-mark overdue bills (shared by getBillsByBranch + getAllBills) */
 async function markOverdueBills(bills) {
-  const now = new Date();
+  const now = dayjs().toDate();
   for (const bill of bills) {
     if (bill.status === "pending" && bill.dueDate < now) {
       bill.status = "overdue";
@@ -69,10 +75,10 @@ async function fetchBills(filter, query) {
   const skip = (parseInt(page) - 1) * parseInt(limit);
   if (status && status !== "all") filter.status = status;
   if (month) {
-    const d = new Date(month);
+    const d = dayjs(month);
     filter.billingMonth = {
-      $gte: new Date(d.getFullYear(), d.getMonth(), 1),
-      $lt: new Date(d.getFullYear(), d.getMonth() + 1, 1),
+      $gte: d.startOf("month").toDate(),
+      $lt: d.add(1, "month").startOf("month").toDate(),
     };
   }
 
@@ -116,7 +122,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
 
 /* ─── controllers ────────────────────────────────── */
 
-export const getCurrentBilling = async (req, res) => {
+export const getCurrentBilling = async (req, res, next) => {
   try {
     const { uid, branch } = req.user;
     const dbUser = await User.findOne({ firebaseUid: uid }).lean();
@@ -129,13 +135,13 @@ export const getCurrentBilling = async (req, res) => {
     if (!activeStay)
       return res.status(404).json({ error: "No active stay found" });
 
-    const now = new Date();
+    const now = dayjs();
     const currentBill = await Bill.findOne({
       reservationId: activeStay._id,
       branch,
       billingMonth: {
-        $gte: new Date(now.getFullYear(), now.getMonth(), 1),
-        $lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+        $gte: now.startOf("month").toDate(),
+        $lt: now.add(1, "month").startOf("month").toDate(),
       },
     });
     if (!currentBill)
@@ -150,12 +156,11 @@ export const getCurrentBilling = async (req, res) => {
       charges: currentBill.charges,
     });
   } catch (error) {
-    console.error("❌ Get current billing error:", error);
-    res.status(500).json({ error: "Failed to fetch billing information" });
+    next(error);
   }
 };
 
-export const getBillingHistory = async (req, res) => {
+export const getBillingHistory = async (req, res, next) => {
   try {
     const { uid, branch } = req.user;
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
@@ -184,12 +189,11 @@ export const getBillingHistory = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("❌ Get billing history error:", error);
-    res.status(500).json({ error: "Failed to fetch billing history" });
+    next(error);
   }
 };
 
-export const getBillingStats = async (req, res) => {
+export const getBillingStats = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     if (
@@ -204,12 +208,11 @@ export const getBillingStats = async (req, res) => {
     const paymentStats = await Bill.getPaymentStats(admin.branch);
     res.json({ branch: admin.branch, monthlyRevenue, paymentStats });
   } catch (error) {
-    console.error("❌ Get billing stats error:", error);
-    res.status(500).json({ error: "Failed to fetch billing statistics" });
+    next(error);
   }
 };
 
-export const markBillAsPaid = async (req, res) => {
+export const markBillAsPaid = async (req, res, next) => {
   try {
     const { billId } = req.params;
     const { amount, note } = req.body;
@@ -225,12 +228,11 @@ export const markBillAsPaid = async (req, res) => {
     }
     res.json({ success: true, bill: bill.toObject() });
   } catch (error) {
-    console.error("❌ Mark bill as paid error:", error);
-    res.status(500).json({ error: "Failed to update bill" });
+    next(error);
   }
 };
 
-export const getBillsByBranch = async (req, res) => {
+export const getBillsByBranch = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const branch =
@@ -248,12 +250,11 @@ export const getBillsByBranch = async (req, res) => {
     const result = await fetchBills({ branch, isArchived: false }, req.query);
     res.json(result);
   } catch (error) {
-    console.error("❌ Get bills by branch error:", error);
-    res.status(500).json({ error: "Failed to fetch bills" });
+    next(error);
   }
 };
 
-export const generateRoomBill = async (req, res) => {
+export const generateRoomBill = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const { roomId, billingMonth, dueDate, charges = {} } = req.body;
@@ -266,17 +267,9 @@ export const generateRoomBill = async (req, res) => {
         .status(403)
         .json({ error: "Cannot create bills for another branch" });
 
-    const monthDate = new Date(billingMonth || new Date());
-    const monthStart = new Date(
-      monthDate.getFullYear(),
-      monthDate.getMonth(),
-      1,
-    );
-    const monthEnd = new Date(
-      monthDate.getFullYear(),
-      monthDate.getMonth() + 1,
-      0,
-    );
+    const monthDate = dayjs(billingMonth || undefined);
+    const monthStart = monthDate.startOf("month").toDate();
+    const monthEnd = monthDate.endOf("month").toDate();
 
     // Check duplicate room bill
     if (
@@ -318,16 +311,9 @@ export const generateRoomBill = async (req, res) => {
       const customCharges = reservation.customCharges || [];
       const moveInDate =
         bed.occupiedBy.occupiedSince || reservation.checkInDate || monthStart;
-      const tenantStart = new Date(
-        Math.max(new Date(moveInDate).getTime(), monthStart.getTime()),
-      );
-      const tenantEnd = new Date(
-        Math.min(Date.now(), monthEnd.getTime() + 86400000),
-      );
-      const daysInRoom = Math.max(
-        1,
-        Math.ceil((tenantEnd - tenantStart) / 86400000),
-      );
+      const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
+      const tenantEnd = dayjs(Math.min(Date.now(), dayjs(monthEnd).add(1, "day").valueOf()));
+      const daysInRoom = Math.max(1, tenantEnd.diff(tenantStart, "day", true) | 0 || 1);
 
       tenantInfos.push({
         userId: reservation.userId._id,
@@ -364,16 +350,9 @@ export const generateRoomBill = async (req, res) => {
           0;
         const customCharges = reservation.customCharges || [];
         const moveInDate = reservation.checkInDate || monthStart;
-        const tenantStart = new Date(
-          Math.max(new Date(moveInDate).getTime(), monthStart.getTime()),
-        );
-        const tenantEnd = new Date(
-          Math.min(Date.now(), monthEnd.getTime() + 86400000),
-        );
-        const daysInRoom = Math.max(
-          1,
-          Math.ceil((tenantEnd - tenantStart) / 86400000),
-        );
+        const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
+        const tenantEnd = dayjs(Math.min(Date.now(), dayjs(monthEnd).add(1, "day").valueOf()));
+        const daysInRoom = Math.max(1, tenantEnd.diff(tenantStart, "day", true) | 0 || 1);
 
         tenantInfos.push({
           userId: reservation.userId._id,
@@ -404,8 +383,8 @@ export const generateRoomBill = async (req, res) => {
     };
     const totalUtilities = roomCharges.electricity + roomCharges.water;
     const billDueDate = dueDate
-      ? new Date(dueDate)
-      : new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 15);
+      ? dayjs(dueDate).toDate()
+      : monthDate.add(1, "month").date(15).toDate();
     const adminUser = await User.findOne({ firebaseUid: req.user.uid });
 
     const generatedBills = [];
@@ -516,15 +495,8 @@ export const generateRoomBill = async (req, res) => {
     });
 
     // Send bill notification emails to all billed tenants
-    const monthLabel = monthStart.toLocaleDateString("en-PH", {
-      year: "numeric",
-      month: "long",
-    });
-    const dueDateLabel = billDueDate.toLocaleDateString("en-PH", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    const monthLabel = dayjs(monthStart).format("MMMM YYYY");
+    const dueDateLabel = dayjs(billDueDate).format("MMMM D, YYYY");
     for (const tenant of tenantInfos) {
       if (!tenant.email) continue;
       try {
@@ -548,12 +520,11 @@ export const generateRoomBill = async (req, res) => {
       }
     }
   } catch (error) {
-    console.error("❌ Generate room bill error:", error);
-    res.status(500).json({ error: "Failed to generate room bill" });
+    next(error);
   }
 };
 
-export const getRoomsWithTenants = async (req, res) => {
+export const getRoomsWithTenants = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const branch =
@@ -622,8 +593,7 @@ export const getRoomsWithTenants = async (req, res) => {
       ),
     });
   } catch (error) {
-    console.error("❌ Get rooms with tenants error:", error);
-    res.status(500).json({ error: "Failed to fetch rooms" });
+    next(error);
   }
 };
 
@@ -631,7 +601,7 @@ export const getRoomsWithTenants = async (req, res) => {
 // TENANT: Get my bills
 // ============================================================================
 
-export const getMyBills = async (req, res) => {
+export const getMyBills = async (req, res, next) => {
   try {
     const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
     if (!dbUser) return res.status(404).json({ error: "User not found" });
@@ -662,8 +632,7 @@ export const getMyBills = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("❌ Get my bills error:", error);
-    res.status(500).json({ error: "Failed to fetch bills" });
+    next(error);
   }
 };
 
@@ -671,7 +640,7 @@ export const getMyBills = async (req, res) => {
 // TENANT: Submit payment proof
 // ============================================================================
 
-export const submitPaymentProof = async (req, res) => {
+export const submitPaymentProof = async (req, res, next) => {
   try {
     const { billId } = req.params;
     const { imageUrl, amount } = req.body;
@@ -710,16 +679,12 @@ export const submitPaymentProof = async (req, res) => {
     };
     await bill.save();
 
-    console.log(
-      `✅ Payment proof submitted for bill ${billId} by ${dbUser.email}`,
-    );
     res.json({
       message: "Payment proof submitted successfully",
       bill: { id: bill._id, paymentProof: bill.paymentProof },
     });
   } catch (error) {
-    console.error("❌ Submit payment proof error:", error);
-    res.status(500).json({ error: "Failed to submit payment proof" });
+    next(error);
   }
 };
 
@@ -727,7 +692,7 @@ export const submitPaymentProof = async (req, res) => {
 // ADMIN: Verify payment proof
 // ============================================================================
 
-export const verifyPayment = async (req, res) => {
+export const verifyPayment = async (req, res, next) => {
   try {
     const { billId } = req.params;
     const { action, rejectionReason } = req.body; // action: "approve" | "reject"
@@ -768,10 +733,7 @@ export const verifyPayment = async (req, res) => {
     try {
       const tenant = await User.findById(bill.userId).lean();
       if (tenant?.email) {
-        const monthStr = new Date(bill.billingMonth).toLocaleDateString(
-          "en-PH",
-          { year: "numeric", month: "long" },
-        );
+        const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
         if (action === "approve") {
           sendPaymentApprovedEmail({
             to: tenant.email,
@@ -796,7 +758,6 @@ export const verifyPayment = async (req, res) => {
       console.error("Email notification failed:", emailErr.message);
     }
 
-    console.log(`✅ Payment ${action}d for bill ${billId} by admin`);
     res.json({
       message: `Payment ${action}d successfully`,
       bill: {
@@ -806,8 +767,7 @@ export const verifyPayment = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Verify payment error:", error);
-    res.status(500).json({ error: "Failed to verify payment" });
+    next(error);
   }
 };
 
@@ -815,7 +775,7 @@ export const verifyPayment = async (req, res) => {
 // ADMIN: Get pending verifications
 // ============================================================================
 
-export const getPendingVerifications = async (req, res) => {
+export const getPendingVerifications = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const filter = {
@@ -848,8 +808,7 @@ export const getPendingVerifications = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("❌ Get pending verifications error:", error);
-    res.status(500).json({ error: "Failed to fetch pending verifications" });
+    next(error);
   }
 };
 
@@ -859,13 +818,13 @@ export const getPendingVerifications = async (req, res) => {
 
 const PENALTY_RATE_PER_DAY = 50; // ₱50/day per PRD
 
-export const applyPenalties = async (req, res) => {
+export const applyPenalties = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
-    const now = new Date();
+    const now = dayjs();
     const filter = {
       status: { $in: ["pending", "overdue"] },
-      dueDate: { $lt: now },
+      dueDate: { $lt: now.toDate() },
       isArchived: false,
     };
     if (!admin.isSuperAdmin && admin.branch) filter.branch = admin.branch;
@@ -874,10 +833,7 @@ export const applyPenalties = async (req, res) => {
     let updated = 0;
 
     for (const bill of overdueBills) {
-      const daysLate = Math.max(
-        1,
-        Math.floor((now - new Date(bill.dueDate)) / 86400000),
-      );
+      const daysLate = Math.max(1, now.diff(dayjs(bill.dueDate), "day"));
       const penalty = daysLate * PENALTY_RATE_PER_DAY;
 
       // Recalculate total: base charges + penalty - discount
@@ -900,11 +856,9 @@ export const applyPenalties = async (req, res) => {
       updated++;
     }
 
-    console.log(`✅ Applied penalties to ${updated} overdue bills`);
     res.json({ message: `Penalties applied to ${updated} bills`, updated });
   } catch (error) {
-    console.error("❌ Apply penalties error:", error);
-    res.status(500).json({ error: "Failed to apply penalties" });
+    next(error);
   }
 };
 
@@ -912,7 +866,7 @@ export const applyPenalties = async (req, res) => {
 // ADMIN: Billing report
 // ============================================================================
 
-export const getBillingReport = async (req, res) => {
+export const getBillingReport = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const filter = { isArchived: false };
@@ -962,8 +916,7 @@ export const getBillingReport = async (req, res) => {
       pendingVerifications,
     });
   } catch (error) {
-    console.error("❌ Get billing report error:", error);
-    res.status(500).json({ error: "Failed to fetch billing report" });
+    next(error);
   }
 };
 

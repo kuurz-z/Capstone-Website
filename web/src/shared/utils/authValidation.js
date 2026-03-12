@@ -64,6 +64,27 @@ export const calculatePasswordStrength = (password) => {
   return { score, level, requirements };
 };
 
+/**
+ * Enforce password strength — returns error message or null if valid.
+ * Requires minimum "medium" strength (3+ of 5 requirements met).
+ */
+export const validatePassword = (password) => {
+  if (!password) return "Password is required";
+  if (password.length < 8) return "Password must be at least 8 characters";
+
+  const { requirements } = calculatePasswordStrength(password);
+  const missing = [];
+  if (!requirements.uppercase) missing.push("uppercase letter");
+  if (!requirements.lowercase) missing.push("lowercase letter");
+  if (!requirements.number) missing.push("number");
+  if (!requirements.special) missing.push("special character");
+
+  if (missing.length > 2) {
+    return `Password needs at least: ${missing.join(", ")}`;
+  }
+  return null; // Valid
+};
+
 /** Sanitize name fields — allow only letters, spaces, hyphens, apostrophes */
 export const sanitizeName = (value) => value.replace(/[^a-zA-Z\s'-]/g, "");
 

@@ -7,6 +7,7 @@
  * ~200 lines of duplicated validation, error handling, and field mapping.
  */
 
+import dayjs from "dayjs";
 import { User, Room } from "../models/index.js";
 
 /** Validate MongoDB ObjectId format */
@@ -68,11 +69,10 @@ export const checkBranchAccess = (res, branchFilter, roomBranch) => {
 
 /** Enforce 3-month move-in date window */
 export const validateMoveInDate = (dateStr) => {
-  const moveIn = new Date(dateStr);
-  const now = new Date();
-  const limit = new Date(now);
-  limit.setMonth(now.getMonth() + 3);
-  return moveIn >= now && moveIn <= limit;
+  const moveIn = dayjs(dateStr);
+  const now = dayjs();
+  const limit = now.add(3, "month");
+  return moveIn.isAfter(now) || moveIn.isSame(now, "day") ? moveIn.isBefore(limit) || moveIn.isSame(limit, "day") : false;
 };
 
 /**
@@ -99,7 +99,6 @@ export const handleStatusTransition = async (
       const auth = getAuth();
       if (auth && user.firebaseUid) {
         await auth.setCustomUserClaims(user.firebaseUid, claims);
-        console.log(`🔑 Firebase claims synced for ${user.email}:`, claims);
       }
     } catch (e) {
       console.error("⚠️ Firebase claims sync failed (non-fatal):", e.message);
@@ -112,9 +111,6 @@ export const handleStatusTransition = async (
     if (room) user.branch = room.branch;
     await user.save();
     await syncFirebaseClaims({ role: "applicant", tenantStatus: "reserved" });
-    console.log(
-      `✅ User ${user.email} → tenantStatus: reserved, branch: ${user.branch}`,
-    );
   }
 
   if (newStatus === "checked-in" && oldStatus !== "checked-in") {
@@ -122,7 +118,6 @@ export const handleStatusTransition = async (
     user.tenantStatus = "active";
     await user.save();
     await syncFirebaseClaims({ role: "tenant", tenantStatus: "active" });
-    console.log(`✅ User ${user.email} → role: tenant, tenantStatus: active`);
   }
 
   if (
@@ -134,9 +129,6 @@ export const handleStatusTransition = async (
     user.branch = null;
     await user.save();
     await syncFirebaseClaims({ role: "applicant", tenantStatus: null });
-    console.log(
-      `✅ User ${user.email} → tenantStatus: null, branch: null (cancelled)`,
-    );
   }
 };
 

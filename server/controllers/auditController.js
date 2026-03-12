@@ -15,6 +15,10 @@
  */
 
 import AuditLog from "../models/AuditLog.js";
+import {
+  sendSuccess,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -44,31 +48,16 @@ const getClientIP = (req) => {
  * Get all audit logs with optional filters
  * @access Admin, SuperAdmin
  */
-export const getAuditLogs = async (req, res) => {
+export const getAuditLogs = async (req, res, next) => {
   try {
     const {
-      type,
-      severity,
-      user,
-      role,
-      branch,
-      startDate,
-      endDate,
-      search,
-      limit,
-      offset,
+      type, severity, user, role, branch,
+      startDate, endDate, search, limit, offset,
     } = req.query;
 
-    // Build filters
     const filters = {
-      type,
-      severity,
-      user,
-      role,
-      branch,
-      startDate,
-      endDate,
-      search,
+      type, severity, user, role, branch,
+      startDate, endDate, search,
     };
 
     // Remove undefined filters
@@ -76,26 +65,16 @@ export const getAuditLogs = async (req, res) => {
       (key) => filters[key] === undefined && delete filters[key],
     );
 
-    // Build options
     const options = {
       limit: parseInt(limit) || 100,
       offset: parseInt(offset) || 0,
     };
 
-    // Get logs
     const result = await AuditLog.getLogs(filters, options);
 
-    res.json({
-      success: true,
-      data: result.logs,
-      pagination: result.pagination,
-    });
+    sendSuccess(res, result.logs, 200, { pagination: result.pagination });
   } catch (error) {
-    console.error("Error fetching audit logs:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch audit logs",
-    });
+    next(error);
   }
 };
 
@@ -104,21 +83,13 @@ export const getAuditLogs = async (req, res) => {
  * Get audit log statistics
  * @access Admin, SuperAdmin
  */
-export const getAuditStats = async (req, res) => {
+export const getAuditStats = async (req, res, next) => {
   try {
     const { branch } = req.query;
     const stats = await AuditLog.getStats(branch);
-
-    res.json({
-      success: true,
-      data: stats,
-    });
+    sendSuccess(res, stats);
   } catch (error) {
-    console.error("Error fetching audit stats:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch statistics",
-    });
+    next(error);
   }
 };
 
@@ -127,27 +98,13 @@ export const getAuditStats = async (req, res) => {
  * Get specific audit log entry
  * @access Admin, SuperAdmin
  */
-export const getAuditLogById = async (req, res) => {
+export const getAuditLogById = async (req, res, next) => {
   try {
     const log = await AuditLog.findOne({ logId: req.params.id }).lean();
-
-    if (!log) {
-      return res.status(404).json({
-        success: false,
-        error: "Audit log not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      data: log,
-    });
+    if (!log) throw new AppError("Audit log not found", 404, "AUDIT_LOG_NOT_FOUND");
+    sendSuccess(res, log);
   } catch (error) {
-    console.error("Error fetching audit log:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch audit log",
-    });
+    next(error);
   }
 };
 
@@ -156,76 +113,44 @@ export const getAuditLogById = async (req, res) => {
  * Create new audit log entry (internal use)
  * @access System
  */
-export const createAuditLog = async (req, res) => {
+export const createAuditLog = async (req, res, next) => {
   try {
     const {
-      type,
-      action,
-      severity,
-      user,
-      details,
-      metadata,
-      entityType,
-      entityId,
-      branch,
+      type, action, severity, user, details,
+      metadata, entityType, entityId, branch,
     } = req.body;
 
-    // Validation
     if (!type || !action || !severity) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields: type, action, severity",
-      });
+      throw new AppError(
+        "Missing required fields: type, action, severity",
+        400,
+        "MISSING_REQUIRED_FIELDS",
+      );
     }
 
     const validTypes = ["login", "data_modification", "data_deletion", "error"];
     const validSeverities = ["info", "warning", "high", "critical"];
 
     if (!validTypes.includes(type)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid type",
-      });
+      throw new AppError("Invalid type", 400, "INVALID_TYPE");
     }
-
     if (!validSeverities.includes(severity)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid severity",
-      });
+      throw new AppError("Invalid severity", 400, "INVALID_SEVERITY");
     }
 
     const logEntry = await AuditLog.log({
-      type,
-      action,
-      severity,
+      type, action, severity,
       user: user || req.user?.email || "system",
       userId: req.user?.mongoId,
       userRole: req.user?.role,
       ip: getClientIP(req),
       userAgent: req.headers["user-agent"],
-      details,
-      metadata,
-      entityType,
-      entityId,
-      branch,
+      details, metadata, entityType, entityId, branch,
     });
 
-    // Log critical events to console
-    if (severity === "critical") {
-      console.log("🚨 CRITICAL AUDIT LOG:", logEntry);
-    }
-
-    res.status(201).json({
-      success: true,
-      data: logEntry,
-    });
+    sendSuccess(res, logEntry, 201);
   } catch (error) {
-    console.error("Error creating audit log:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to create audit log",
-    });
+    next(error);
   }
 };
 
@@ -234,7 +159,7 @@ export const createAuditLog = async (req, res) => {
  * Export audit logs (filtered)
  * @access Admin, SuperAdmin
  */
-export const exportAuditLogs = async (req, res) => {
+export const exportAuditLogs = async (req, res, next) => {
   try {
     const filters = req.body.filters || {};
     const result = await AuditLog.getLogs(filters, { limit: 10000, offset: 0 });
@@ -251,11 +176,7 @@ export const exportAuditLogs = async (req, res) => {
       logs: result.logs,
     });
   } catch (error) {
-    console.error("Error exporting audit logs:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to export audit logs",
-    });
+    next(error);
   }
 };
 
@@ -264,21 +185,13 @@ export const exportAuditLogs = async (req, res) => {
  * Get recent failed login attempts (security monitoring)
  * @access Admin, SuperAdmin
  */
-export const getFailedLogins = async (req, res) => {
+export const getFailedLogins = async (req, res, next) => {
   try {
     const hours = parseInt(req.query.hours) || 24;
     const data = await AuditLog.getFailedLogins(hours);
-
-    res.json({
-      success: true,
-      data,
-    });
+    sendSuccess(res, data);
   } catch (error) {
-    console.error("Error fetching failed logins:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch security data",
-    });
+    next(error);
   }
 };
 
@@ -287,20 +200,16 @@ export const getFailedLogins = async (req, res) => {
  * Archive/delete old audit logs
  * @access SuperAdmin only
  */
-export const cleanupAuditLogs = async (req, res) => {
+export const cleanupAuditLogs = async (req, res, next) => {
   try {
     const daysToKeep = parseInt(req.query.daysToKeep) || 90;
 
     if (daysToKeep < 30) {
-      return res.status(400).json({
-        success: false,
-        error: "Cannot delete logs newer than 30 days",
-      });
+      throw new AppError("Cannot delete logs newer than 30 days", 400, "INVALID_RETENTION");
     }
 
     const result = await AuditLog.cleanupOldLogs(daysToKeep);
 
-    // Log the cleanup operation itself
     await AuditLog.log({
       type: "data_deletion",
       action: "Audit log cleanup performed",
@@ -313,16 +222,8 @@ export const cleanupAuditLogs = async (req, res) => {
       entityType: "system",
     });
 
-    res.json({
-      success: true,
-      message: "Cleanup completed",
-      data: result,
-    });
+    sendSuccess(res, { message: "Cleanup completed", ...result });
   } catch (error) {
-    console.error("Error during cleanup:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to cleanup audit logs",
-    });
+    next(error);
   }
 };

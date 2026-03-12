@@ -114,10 +114,6 @@ export const AuthProvider = ({ children }) => {
         `${userData.firstName || ""} ${userData.lastName || ""}`.trim() ||
         userData.username ||
         "Unknown";
-      console.log(
-        "%c👤 Current User Session",
-        "background: #0C375F; color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: bold;",
-      );
       console.table({
         Name: displayName,
         Email: userData.email || "N/A",
@@ -151,10 +147,6 @@ export const AuthProvider = ({ children }) => {
         `${resolvedUser.firstName || ""} ${resolvedUser.lastName || ""}`.trim() ||
         resolvedUser.username ||
         "Unknown";
-      console.log(
-        "%c🔑 User Logged In",
-        "background: #10B981; color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: bold;",
-      );
       console.table({
         Name: displayName,
         Email: resolvedUser.email || "N/A",
@@ -192,7 +184,6 @@ export const AuthProvider = ({ children }) => {
   const logout = async (branchOverride) => {
     // GUARD: Prevent duplicate logout execution
     if (logoutExecutedRef.current) {
-      console.log("⚠️ Logout already in progress, skipping duplicate call");
       return { success: false, branch: null };
     }
     logoutExecutedRef.current = true;

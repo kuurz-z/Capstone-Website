@@ -18,13 +18,13 @@ import ReservationConfirmationStep from "./reservation-steps/ReservationConfirma
 // Extracted sub-components
 import {
   RESERVATION_STAGES,
-  fileToBase64,
   ReservationStepper,
   RoomInfoBanner,
   LoginConfirmModal,
   CancelConfirmModal,
   StageConfirmModal,
 } from "./reservation-flow";
+import { uploadIfFile } from "../../../shared/utils/imageUpload";
 
 // ─────────────────────────────────────────────────────────────
 // ReservationFlowPage — orchestrator
@@ -97,9 +97,9 @@ function ReservationFlowPage() {
   const [nickname, setNickname] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [birthday, setBirthday] = useState("");
-  const [maritalStatus, setMaritalStatus] = useState("single");
-  const [nationality, setNationality] = useState("Filipino");
-  const [educationLevel, setEducationLevel] = useState("college");
+  const [maritalStatus, setMaritalStatus] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [educationLevel, setEducationLevel] = useState("");
   const [addressUnitHouseNo, setAddressUnitHouseNo] = useState("");
   const [addressStreet, setAddressStreet] = useState("");
   const [addressBarangay, setAddressBarangay] = useState("");
@@ -114,7 +114,7 @@ function ReservationFlowPage() {
 
   // Stage 3: Emergency
   const [emergencyContactName, setEmergencyContactName] = useState("");
-  const [emergencyRelationship, setEmergencyRelationship] = useState("parent");
+  const [emergencyRelationship, setEmergencyRelationship] = useState("");
   const [emergencyContactNumber, setEmergencyContactNumber] = useState("");
   const [healthConcerns, setHealthConcerns] = useState("");
 
@@ -270,9 +270,8 @@ function ReservationFlowPage() {
     if (r.companyIDUrl) setCompanyID(r.companyIDUrl);
     if (r.companyIDReason) setCompanyIDReason(r.companyIDReason);
     if (r.validIDType) setValidIDType(r.validIDType);
-    if (r.agreedToPrivacy) setAgreedToPrivacy(r.agreedToPrivacy);
-    if (r.agreedToCertification)
-      setAgreedToCertification(r.agreedToCertification);
+    // NOTE: agreedToPrivacy / agreedToCertification are NOT restored
+    // from saved data — consent must be re-affirmed each session.
   };
 
   const computeLockingFlags = (r) => {
@@ -611,7 +610,7 @@ function ReservationFlowPage() {
             }
           : null,
         targetMoveInDate: getFieldValue(targetMoveInDate, checkInDate),
-        leaseDuration: getFieldValue(leaseDuration, "12"),
+        leaseDuration: leaseDuration || "",
         billingEmail: getFieldValue(
           billingEmail,
           user?.email || "test@example.com",
@@ -844,24 +843,11 @@ function ReservationFlowPage() {
             return;
           }
         }
-        const selfiePhotoUrl =
-          selfiePhoto instanceof File
-            ? await fileToBase64(selfiePhoto)
-            : selfiePhoto;
-        const validIDFrontUrl =
-          validIDFront instanceof File
-            ? await fileToBase64(validIDFront)
-            : validIDFront;
-        const validIDBackUrl =
-          validIDBack instanceof File
-            ? await fileToBase64(validIDBack)
-            : validIDBack;
-        const nbiClearanceUrl =
-          nbiClearance instanceof File
-            ? await fileToBase64(nbiClearance)
-            : nbiClearance;
-        const companyIDUrl =
-          companyID instanceof File ? await fileToBase64(companyID) : companyID;
+        const selfiePhotoUrl = await uploadIfFile(selfiePhoto);
+        const validIDFrontUrl = await uploadIfFile(validIDFront);
+        const validIDBackUrl = await uploadIfFile(validIDBack);
+        const nbiClearanceUrl = await uploadIfFile(nbiClearance);
+        const companyIDUrl = await uploadIfFile(companyID);
         await updateReservationDraft({
           firstName,
           lastName,

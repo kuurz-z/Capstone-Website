@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
 import { useMyMaintenanceRequests, useCreateMaintenanceRequest } from "../../../shared/hooks/queries/useMaintenance";
+import MaintenancePageSkeleton from "../components/maintenance/MaintenancePageSkeleton";
 import "../styles/tenant-common.css";
 
 const MaintenancePage = () => {
@@ -14,6 +15,14 @@ const MaintenancePage = () => {
   const { data: requestsData, isLoading: loading } = useMyMaintenanceRequests(50);
   const requests = requestsData?.requests || [];
   const createMutation = useCreateMaintenanceRequest();
+
+  if (loading) {
+    return (
+      <TenantLayout>
+        <MaintenancePageSkeleton />
+      </TenantLayout>
+    );
+  }
 
   const handleSubmitRequest = async (e) => {
     e.preventDefault();

@@ -4,7 +4,26 @@ description: Build production bundles for tenant and admin frontends
 
 # Production Build
 
-This workflow builds both the tenant-facing and admin-facing frontends for deployment.
+Builds both the tenant-facing and admin-facing frontends for deployment.
+
+## How to Run
+
+**Option 1 — Ask the AI:** Type `/build` in chat
+
+**Option 2 — Run manually:**
+```bash
+cd D:\Portfolio\3rdYear\CapstoneSystem\Capstone-Website\web
+
+# Build tenant frontend
+npm run build
+
+# Build admin frontend
+npm run build:admin
+```
+
+## Expected Output
+- Build output in `web/build/` directory
+- Terminal shows `✓ built in X.XXs` with no errors
 
 // turbo-all
 
@@ -18,6 +37,4 @@ cd D:\Portfolio\3rdYear\CapstoneSystem\Capstone-Website\web && npm run build
 cd D:\Portfolio\3rdYear\CapstoneSystem\Capstone-Website\web && npm run build:admin
 ```
 
-3. Verify the builds completed successfully:
-   - Check for build output in `web/build/` directory
-   - Ensure there are no build errors in the terminal output
+3. Verify the builds completed successfully.

@@ -1,5 +1,16 @@
 import '../styles/tenant-detail-modal.css';
 
+const formatDate = (d) => {
+  if (!d || d === '-') return 'N/A';
+  const date = new Date(d);
+  return isNaN(date) ? 'N/A' : date.toISOString().split('T')[0];
+};
+
+const formatMoney = (amount) => {
+  if (!amount && amount !== 0) return 'N/A';
+  return `₱${Number(amount).toLocaleString()}`;
+};
+
 export default function TenantDetailModal({ tenant, onClose }) {
   if (!tenant) return null;
 
@@ -54,20 +65,20 @@ export default function TenantDetailModal({ tenant, onClose }) {
                 </div>
                 <div className="tenant-detail-modal-form-group">
                   <label className="tenant-detail-modal-form-label">Date of Birth</label>
-                  <input type="text" className="tenant-detail-modal-form-input" value="1995-05-15" readOnly />
+                  <input type="text" className="tenant-detail-modal-form-input" value={formatDate(tenant.dateOfBirth)} readOnly />
                 </div>
               </div>
 
               <div className="tenant-detail-modal-form-row">
                 <div className="tenant-detail-modal-form-group">
                   <label className="tenant-detail-modal-form-label">Gender</label>
-                  <input type="text" className="tenant-detail-modal-form-input" value="Male" readOnly />
+                  <input type="text" className="tenant-detail-modal-form-input" value={tenant.gender ? tenant.gender.charAt(0).toUpperCase() + tenant.gender.slice(1) : 'Not provided'} readOnly />
                 </div>
               </div>
 
               <div className="tenant-detail-modal-form-group">
                 <label className="tenant-detail-modal-form-label">Address</label>
-                <input type="text" className="tenant-detail-modal-form-input" value="123 Main St, Quezon City, Metro Manila" readOnly />
+                <input type="text" className="tenant-detail-modal-form-input" value={[tenant.address, tenant.city].filter(Boolean).join(', ') || 'Not provided'} readOnly />
               </div>
             </div>
 
@@ -94,19 +105,35 @@ export default function TenantDetailModal({ tenant, onClose }) {
               <div className="tenant-detail-modal-contract">
                 <div className="tenant-detail-modal-contract-header">
                   <span className="tenant-detail-modal-contract-name">Lease Agreement</span>
-                  <span className="tenant-detail-modal-contract-status active">Active</span>
+                  <span className="tenant-detail-modal-contract-status active">{tenant.status || 'N/A'}</span>
                 </div>
                 <div className="tenant-detail-modal-contract-dates">
                   <div className="tenant-detail-modal-contract-date">
                     <span className="tenant-detail-modal-contract-label">Start Date</span>
-                    <span className="tenant-detail-modal-contract-value">2026-01-01</span>
+                    <span className="tenant-detail-modal-contract-value">{tenant.moveIn || 'N/A'}</span>
                   </div>
                   <div className="tenant-detail-modal-contract-date">
                     <span className="tenant-detail-modal-contract-label">End Date</span>
-                    <span className="tenant-detail-modal-contract-value">2026-12-31</span>
+                    <span className="tenant-detail-modal-contract-value">{tenant.moveOut || 'N/A'}</span>
                   </div>
                 </div>
-                <button className="tenant-detail-modal-contract-download">
+                <button
+                  className="tenant-detail-modal-contract-download"
+                  onClick={async () => {
+                    try {
+                      const { generateContractPDF } = await import('../../../shared/utils/pdfUtils');
+                      generateContractPDF({
+                        userId: { firstName: tenant.name?.split(' ')[0] || '', lastName: tenant.name?.split(' ').slice(1).join(' ') || '', email: tenant.email },
+                        reservationCode: tenant.reservationId || 'N/A',
+                        roomId: { name: tenant.room, branch: tenant.branch, type: tenant.roomType },
+                        selectedBed: { position: 'N/A' },
+                        checkInDate: tenant.moveIn !== '-' ? tenant.moveIn : null,
+                        leaseDuration: 12,
+                        totalPrice: tenant.monthlyRent,
+                      });
+                    } catch (err) { console.error('PDF generation failed:', err); alert('Failed to generate contract PDF'); }
+                  }}
+                >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M8 1V10M8 10L4.5 6.5M8 10L11.5 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M2 14H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -214,22 +241,22 @@ export default function TenantDetailModal({ tenant, onClose }) {
 
               <div className="tenant-detail-modal-form-group">
                 <label className="tenant-detail-modal-form-label">Name</label>
-                <input type="text" className="tenant-detail-modal-form-input" value="Mary Doe" readOnly />
+                <input type="text" className="tenant-detail-modal-form-input" value={tenant.emergencyContact || 'Not provided'} readOnly />
               </div>
 
               <div className="tenant-detail-modal-form-group">
                 <label className="tenant-detail-modal-form-label">Email</label>
-                <input type="email" className="tenant-detail-modal-form-input" value="mary.doe@example.com" readOnly />
+                <input type="email" className="tenant-detail-modal-form-input" value={tenant.emergencyEmail || 'Not provided'} readOnly />
               </div>
 
               <div className="tenant-detail-modal-form-group">
                 <label className="tenant-detail-modal-form-label">Phone</label>
-                <input type="tel" className="tenant-detail-modal-form-input" value="+63 917 111 2222" readOnly />
+                <input type="tel" className="tenant-detail-modal-form-input" value={tenant.emergencyPhone || 'Not provided'} readOnly />
               </div>
 
               <div className="tenant-detail-modal-form-group">
                 <label className="tenant-detail-modal-form-label">Relationship</label>
-                <input type="text" className="tenant-detail-modal-form-input" value="Mother" readOnly />
+                <input type="text" className="tenant-detail-modal-form-input" value={tenant.emergencyRelation || 'Not provided'} readOnly />
               </div>
             </div>
 
@@ -261,7 +288,7 @@ export default function TenantDetailModal({ tenant, onClose }) {
 
               <div className="tenant-detail-modal-room-card">
                 <div className="tenant-detail-modal-room-number">{tenant.room}</div>
-                <div className="tenant-detail-modal-room-type">Standard Room (Quadruple)</div>
+                <div className="tenant-detail-modal-room-type">{tenant.roomType || 'Standard Room'}</div>
 
                 <div className="tenant-detail-modal-room-details">
                   <div className="tenant-detail-modal-room-detail">
@@ -270,7 +297,7 @@ export default function TenantDetailModal({ tenant, onClose }) {
                   </div>
                   <div className="tenant-detail-modal-room-detail">
                     <span className="tenant-detail-modal-room-detail-label">Monthly Rent</span>
-                    <span className="tenant-detail-modal-room-detail-value">₱5,500</span>
+                    <span className="tenant-detail-modal-room-detail-value">{formatMoney(tenant.monthlyRent)}</span>
                   </div>
                 </div>
 
@@ -286,6 +313,81 @@ export default function TenantDetailModal({ tenant, onClose }) {
                 </div>
               </div>
             </div>
+
+            {/* ─── Admin Actions ─── */}
+            {tenant.reservationId && (
+              <div className="tenant-detail-modal-section">
+                <h3 className="tenant-detail-modal-section-title">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 1.66675L2.5 5.00008V9.16675C2.5 13.7501 5.7 18.0834 10 18.3334C14.3 18.0834 17.5 13.7501 17.5 9.16675V5.00008L10 1.66675Z" stroke="#155DFC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Tenant Actions
+                </h3>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* Renew Contract */}
+                  <button
+                    className="tenant-detail-modal-contract-download"
+                    onClick={async () => {
+                      const months = prompt('Extend lease by how many months? (1–24)', '12');
+                      if (!months) return;
+                      const m = parseInt(months, 10);
+                      if (isNaN(m) || m < 1 || m > 24) return alert('Enter 1–24');
+                      try {
+                        const { reservationApi } = await import('../../../shared/api/apiClient');
+                        const res = await reservationApi.renew(tenant.reservationId, { additionalMonths: m });
+                        alert(res.message || 'Contract renewed!');
+                        onClose();
+                      } catch (err) { alert(err.error || err.message || 'Renewal failed'); }
+                    }}
+                    style={{ background: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 7.33A6 6 0 0 0 3.26 3.34M2 1.34v2.67h2.67M2 8.67a6 6 0 0 0 10.74 3.99M14 14.67V12h-2.67" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Renew Contract
+                  </button>
+
+                  {/* Check Out */}
+                  <button
+                    className="tenant-detail-modal-contract-download"
+                    onClick={async () => {
+                      if (!confirm(`Check out ${tenant.name}? This will vacate their bed and mark them as inactive.`)) return;
+                      try {
+                        const { reservationApi } = await import('../../../shared/api/apiClient');
+                        const res = await reservationApi.checkout(tenant.reservationId, { reason: 'Admin checkout' });
+                        alert(res.message || 'Tenant checked out');
+                        onClose();
+                      } catch (err) { alert(err.error || err.message || 'Checkout failed'); }
+                    }}
+                    style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 14H3.33A1.33 1.33 0 0 1 2 12.67V3.33A1.33 1.33 0 0 1 3.33 2H6M10.67 11.33 14 8l-3.33-3.33M14 8H6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Check Out Tenant
+                  </button>
+
+                  {/* Transfer Room */}
+                  <button
+                    className="tenant-detail-modal-contract-download"
+                    onClick={async () => {
+                      const newRoomId = prompt('Enter new Room ID (ObjectId):');
+                      if (!newRoomId) return;
+                      const newBedId = prompt('Enter new Bed ID (ObjectId):');
+                      if (!newBedId) return;
+                      const reason = prompt('Reason for transfer:', 'Room maintenance / accommodation change');
+                      try {
+                          const { reservationApi } = await import('../../../shared/api/apiClient');
+                          const res = await reservationApi.transfer(tenant.reservationId, { newRoomId, newBedId, reason });
+                          alert(res.message || 'Transfer complete');
+                          onClose();
+                      } catch (err) { alert(err.error || err.message || 'Transfer failed'); }
+                    }}
+                    style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.33 1.33 12 4 9.33 6.67M12 4H4M6.67 9.33 4 12l2.67 2.67M4 12h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Transfer Room
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

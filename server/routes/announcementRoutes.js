@@ -11,6 +11,8 @@
 
 import express from "express";
 import { verifyToken } from "../middleware/auth.js";
+import { validate } from "../validation/validate.js";
+import { createAnnouncementSchema } from "../validation/schemas.js";
 import * as announcementsController from "../controllers/announcementsController.js";
 
 const router = express.Router();
@@ -66,7 +68,7 @@ router.get(
  * POST /api/announcements
  * Create new announcement (Admin only)
  */
-router.post("/", announcementsController.createAnnouncement);
+router.post("/", validate(createAnnouncementSchema), announcementsController.createAnnouncement);
 
 // ============================================================================
 // EXPORT

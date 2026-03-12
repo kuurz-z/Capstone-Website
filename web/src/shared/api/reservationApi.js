@@ -85,4 +85,31 @@ export const reservationApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  /**
+   * Renew a tenant's contract / extend lease (admin only)
+   */
+  renew: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}/renew`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Check out a tenant (admin only)
+   */
+  checkout: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}/checkout`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Transfer tenant to a different room/bed (admin only)
+   */
+  transfer: (reservationId, data) =>
+    authFetch(`/reservations/${reservationId}/transfer`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 };

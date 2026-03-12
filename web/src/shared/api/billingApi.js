@@ -91,4 +91,34 @@ export const billingApi = {
    */
   createDepositCheckout: (reservationId) =>
     authFetch(`/payments/deposit/${reservationId}/checkout`, { method: "POST" }),
+
+  // ── Payment History ──
+
+  /**
+   * Get payment history for the logged-in tenant
+   */
+  getPaymentHistory: (limit = 50) =>
+    authFetch(`/payments/history?limit=${limit}`),
+
+  /**
+   * Get all payments for a specific bill
+   */
+  getPaymentsForBill: (billId) =>
+    authFetch(`/payments/bill/${billId}/payments`),
+
+  // ── Admin Export & Utilities ──
+
+  /**
+   * Get flattened billing data for CSV export (admin only)
+   */
+  getExportData: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return authFetch(`/billing/export?${query}`);
+  },
+
+  /**
+   * Get expected vacancy dates for all beds (admin only)
+   */
+  getVacancyDates: () =>
+    authFetch("/payments/vacancy-dates"),
 };

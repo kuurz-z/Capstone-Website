@@ -14,9 +14,14 @@
  * ============================================================================
  */
 
+import dayjs from "dayjs";
 import { createCheckoutSession, getCheckoutSession } from "../config/paymongo.js";
 import { Bill, Reservation, User } from "../models/index.js";
 import { sendPaymentApprovedEmail } from "../config/email.js";
+import {
+  sendSuccess,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 /* ─── helpers ───────────────────────────────────── */
 
@@ -33,30 +38,25 @@ async function getDbUser(firebaseUid) {
  * POST /api/payments/bill/:billId/checkout
  * Create a PayMongo checkout session for a monthly bill.
  */
-export const createBillCheckout = async (req, res) => {
+export const createBillCheckout = async (req, res, next) => {
   try {
     const { billId } = req.params;
     const dbUser = await getDbUser(req.user.uid);
-    if (!dbUser) return res.status(404).json({ error: "User not found" });
+    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
     const bill = await Bill.findById(billId);
-    if (!bill) return res.status(404).json({ error: "Bill not found" });
+    if (!bill) throw new AppError("Bill not found", 404, "BILL_NOT_FOUND");
 
-    // Ownership check
     if (String(bill.userId) !== String(dbUser._id)) {
-      return res.status(403).json({ error: "You can only pay your own bills" });
+      throw new AppError("You can only pay your own bills", 403, "FORBIDDEN");
     }
 
-    // Status check
     if (bill.status === "paid") {
-      return res.status(400).json({ error: "Bill is already paid" });
+      throw new AppError("Bill is already paid", 400, "ALREADY_PAID");
     }
 
     const amountDue = bill.totalAmount - (bill.paidAmount || 0);
-    const monthLabel = new Date(bill.billingMonth).toLocaleDateString("en-PH", {
-      year: "numeric",
-      month: "long",
-    });
+    const monthLabel = dayjs(bill.billingMonth).format("MMMM YYYY");
 
     const { checkoutUrl, sessionId } = await createCheckoutSession({
       amount: amountDue,
@@ -70,15 +70,12 @@ export const createBillCheckout = async (req, res) => {
       cancelUrl: `${FRONTEND_URL}/billing?payment=cancelled`,
     });
 
-    // Store session ID on the bill for later verification
     bill.paymongoSessionId = sessionId;
     await bill.save();
 
-    console.log(`✅ Checkout created for bill ${billId} → ${sessionId}`);
-    res.json({ checkoutUrl, sessionId });
+    sendSuccess(res, { checkoutUrl, sessionId });
   } catch (error) {
-    console.error("❌ Create bill checkout error:", error);
-    res.status(500).json({ error: error.message || "Failed to create checkout" });
+    next(error);
   }
 };
 
@@ -86,28 +83,24 @@ export const createBillCheckout = async (req, res) => {
  * POST /api/payments/deposit/:resId/checkout
  * Create a PayMongo checkout session for a reservation deposit.
  */
-export const createDepositCheckout = async (req, res) => {
+export const createDepositCheckout = async (req, res, next) => {
   try {
     const { resId } = req.params;
     const dbUser = await getDbUser(req.user.uid);
-    if (!dbUser) return res.status(404).json({ error: "User not found" });
+    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
     const reservation = await Reservation.findById(resId).populate("roomId", "name branch");
-    if (!reservation) return res.status(404).json({ error: "Reservation not found" });
+    if (!reservation) throw new AppError("Reservation not found", 404, "RESERVATION_NOT_FOUND");
 
-    // Ownership check
     if (String(reservation.userId) !== String(dbUser._id)) {
-      return res.status(403).json({ error: "You can only pay for your own reservation" });
+      throw new AppError("You can only pay for your own reservation", 403, "FORBIDDEN");
     }
 
-    // Status check
     if (reservation.paymentStatus === "paid") {
-      return res.status(400).json({ error: "Deposit is already paid" });
+      throw new AppError("Deposit is already paid", 400, "ALREADY_PAID");
     }
 
-    // Reservation deposit is always ₱2,000 (not room rent)
     const amount = 2000;
-
     const roomName = reservation.roomId?.name || "Room";
 
     const { checkoutUrl, sessionId } = await createCheckoutSession({
@@ -122,24 +115,20 @@ export const createDepositCheckout = async (req, res) => {
       cancelUrl: `${FRONTEND_URL}/applicant/profile?payment=cancelled`,
     });
 
-    // Store session ID on the reservation for later verification
     reservation.paymongoSessionId = sessionId;
     await reservation.save();
 
-    console.log(`✅ Deposit checkout created for reservation ${resId} → ${sessionId}`);
-    res.json({ checkoutUrl, sessionId });
+    sendSuccess(res, { checkoutUrl, sessionId });
   } catch (error) {
-    console.error("❌ Create deposit checkout error:", error);
-    res.status(500).json({ error: error.message || "Failed to create checkout" });
+    next(error);
   }
 };
 
 /**
  * GET /api/payments/session/:sessionId/status
  * Check whether a PayMongo checkout session has been paid.
- * Called by the frontend after redirect back from PayMongo.
  */
-export const checkSessionStatus = async (req, res) => {
+export const checkSessionStatus = async (req, res, next) => {
   try {
     const { sessionId } = req.params;
     const session = await getCheckoutSession(sessionId);
@@ -149,7 +138,7 @@ export const checkSessionStatus = async (req, res) => {
     if (isPaid) {
       const metadata = session.attributes.metadata || {};
 
-      // Auto-mark the bill or reservation as paid
+      // Auto-mark the bill as paid
       if (metadata.type === "bill" && metadata.billId) {
         const bill = await Bill.findById(metadata.billId);
         if (bill && bill.status !== "paid") {
@@ -164,16 +153,12 @@ export const checkSessionStatus = async (req, res) => {
             submittedAmount: bill.totalAmount,
           };
           await bill.save();
-          console.log(`✅ Bill ${metadata.billId} auto-marked as paid via PayMongo`);
 
           // Send confirmation email
           try {
             const tenant = await User.findById(bill.userId).lean();
             if (tenant?.email) {
-              const monthStr = new Date(bill.billingMonth).toLocaleDateString("en-PH", {
-                year: "numeric",
-                month: "long",
-              });
+              const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
               await sendPaymentApprovedEmail({
                 to: tenant.email,
                 tenantName: `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
@@ -188,6 +173,7 @@ export const checkSessionStatus = async (req, res) => {
         }
       }
 
+      // Auto-mark the reservation deposit as paid
       if (metadata.type === "deposit" && metadata.reservationId) {
         const reservation = await Reservation.findById(metadata.reservationId);
         if (reservation && reservation.paymentStatus !== "paid") {
@@ -196,18 +182,16 @@ export const checkSessionStatus = async (req, res) => {
           reservation.paymentMethod = "paymongo";
           reservation.paymongoPaymentId = payments[0]?.id || sessionId;
           await reservation.save();
-          console.log(`✅ Reservation ${metadata.reservationId} deposit auto-marked as paid`);
         }
       }
     }
 
-    res.json({
+    sendSuccess(res, {
       sessionId,
       status: isPaid ? "paid" : "pending",
       paymentCount: payments.length,
     });
   } catch (error) {
-    console.error("❌ Check session status error:", error);
-    res.status(500).json({ error: "Failed to check payment status" });
+    next(error);
   }
 };

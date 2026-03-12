@@ -395,6 +395,84 @@
   background: #fef2f2;
 }
 
+/* Account status badges */
+.admin-users-page .badge-suspended {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.admin-users-page .badge-banned {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.admin-users-page .badge-pending {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Account action buttons */
+.admin-users-page .action-btn.suspend:hover {
+  border-color: #f59e0b;
+  color: #d97706;
+  background: #fffbeb;
+}
+
+.admin-users-page .action-btn.ban:hover {
+  border-color: #ef4444;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.admin-users-page .action-btn.reactivate:hover {
+  border-color: #22c55e;
+  color: #16a34a;
+  background: #f0fdf4;
+}
+
+/* Account action modal confirm buttons */
+.admin-users-page .btn-suspend-confirm {
+  background: #f59e0b;
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.admin-users-page .btn-suspend-confirm:hover { background: #d97706; }
+.admin-users-page .btn-suspend-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.admin-users-page .btn-ban-confirm {
+  background: #ef4444;
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.admin-users-page .btn-ban-confirm:hover { background: #dc2626; }
+.admin-users-page .btn-ban-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.admin-users-page .btn-reactivate-confirm {
+  background: #22c55e;
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.admin-users-page .btn-reactivate-confirm:hover { background: #16a34a; }
+.admin-users-page .btn-reactivate-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* ── Pagination ─────────────────────────────────────────────────────────── */
 .admin-users-page .pagination {
   display: flex;

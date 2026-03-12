@@ -12,16 +12,13 @@ export const systemService = {
 
   updateSystemSettings: async (settings) => {
     // Update system settings
-    console.log("Updating system settings", settings);
   },
 
   backupDatabase: async () => {
     // Backup database
-    console.log("Backing up database");
   },
 
   restoreDatabase: async (backupFile) => {
     // Restore database
-    console.log("Restoring database from", backupFile);
   },
 };

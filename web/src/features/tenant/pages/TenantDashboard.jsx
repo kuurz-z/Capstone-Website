@@ -114,7 +114,6 @@ function TenantDashboard() {
   };
 
   const handleScheduleVisit = (roomId) => {
-    console.log(`Scheduled visit for room: ${roomId}`);
     // TODO: Implement the schedule visit functionality
   };
 

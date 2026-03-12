@@ -4,7 +4,20 @@ description: Check database state using utility scripts
 
 # Check Database State
 
-This workflow runs utility scripts to inspect the current state of the MongoDB database.
+Runs utility scripts to inspect the current MongoDB database state.
+
+## How to Run
+
+**Option 1 — Ask the AI:** Type `/check-db` in chat
+
+**Option 2 — Run manually:**
+```bash
+cd D:\Portfolio\3rdYear\CapstoneSystem\Capstone-Website\server
+node check-users.js
+```
+
+## What it Shows
+- Lists all users in the database with their email, role, and branch
 
 // turbo-all
 
@@ -17,15 +30,4 @@ cd D:\Portfolio\3rdYear\CapstoneSystem\Capstone-Website\server && node check-use
 
 ## Optional Actions
 
-If the user needs additional data inspection, write a temporary script in `/tmp/` that connects to the database using the existing Mongoose config and queries the required collection. For example:
-
-```javascript
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-dotenv.config({ path: 'D:/Portfolio/3rdYear/CapstoneSystem/Capstone-Website/server/.env' });
-
-await mongoose.connect(process.env.MONGODB_URI);
-const data = await mongoose.connection.db.collection('<collection_name>').find({}).limit(10).toArray();
-console.log(JSON.stringify(data, null, 2));
-await mongoose.disconnect();
-```
+If the user needs additional data inspection, write a temporary script in `/tmp/` that connects to the database using the existing Mongoose config and queries the required collection.

@@ -2,11 +2,17 @@
  * Inquiry Controllers
  */
 
+import dayjs from "dayjs";
 import { Inquiry, User } from "../models/index.js";
 import { sendInquiryResponseEmail } from "../config/email.js";
 import auditLogger from "../utils/auditLogger.js";
+import {
+  sendSuccess,
+  sendError,
+  AppError,
+} from "../middleware/errorHandler.js";
 
-export const getInquiryStats = async (req, res) => {
+export const getInquiryStats = async (req, res, next) => {
   try {
     const matchQuery = req.branchFilter
       ? { branch: req.branchFilter, isArchived: { $ne: true } }
@@ -29,8 +35,7 @@ export const getInquiryStats = async (req, res) => {
 
     // Get total and recent counts
     const total = await Inquiry.countDocuments(matchQuery);
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgo = dayjs().subtract(7, "day").toDate();
     const recentCount = await Inquiry.countDocuments({
       ...matchQuery,
       createdAt: { $gte: sevenDaysAgo },
@@ -51,21 +56,13 @@ export const getInquiryStats = async (req, res) => {
       if (item._id) stats.byBranch[item._id] = item.count;
     });
 
-    console.log(
-      `✅ Retrieved inquiry stats for ${req.userBranch || "all"} branch(es)`,
-    );
     res.json(stats);
   } catch (error) {
-    console.error("❌ Fetch inquiry stats error:", error);
-    res.status(500).json({
-      error: "Failed to fetch inquiry statistics",
-      details: error.message,
-      code: "FETCH_STATS_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getInquiriesByBranch = async (req, res) => {
+export const getInquiriesByBranch = async (req, res, next) => {
   try {
     const { branch } = req.params;
 
@@ -82,21 +79,13 @@ export const getInquiriesByBranch = async (req, res) => {
       .populate("respondedBy", "firstName lastName email")
       .select("-__v");
 
-    console.log(
-      `✅ Super Admin retrieved ${inquiries.length} inquiries for ${branch}`,
-    );
     res.json(inquiries);
   } catch (error) {
-    console.error("❌ Fetch branch inquiries error:", error);
-    res.status(500).json({
-      error: "Failed to fetch branch inquiries",
-      details: error.message,
-      code: "FETCH_BRANCH_INQUIRIES_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getInquiries = async (req, res) => {
+export const getInquiries = async (req, res, next) => {
   try {
     const {
       status,
@@ -140,9 +129,6 @@ export const getInquiries = async (req, res) => {
       Inquiry.countDocuments(query),
     ]);
 
-    console.log(
-      `✅ Retrieved ${inquiries.length} inquiries for ${req.userBranch || "all"} branch(es)`,
-    );
 
     res.json({
       inquiries,
@@ -156,16 +142,11 @@ export const getInquiries = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Fetch inquiries error:", error);
-    res.status(500).json({
-      error: "Failed to fetch inquiries",
-      details: error.message,
-      code: "FETCH_INQUIRIES_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getInquiryById = async (req, res) => {
+export const getInquiryById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -192,19 +173,13 @@ export const getInquiryById = async (req, res) => {
       });
     }
 
-    console.log(`✅ Retrieved inquiry: ${inquiry._id}`);
     res.json(inquiry);
   } catch (error) {
-    console.error("❌ Fetch inquiry error:", error);
-    res.status(500).json({
-      error: "Failed to fetch inquiry",
-      details: error.message,
-      code: "FETCH_INQUIRY_ERROR",
-    });
+    next(error);
   }
 };
 
-export const createInquiry = async (req, res) => {
+export const createInquiry = async (req, res, next) => {
   try {
     const { name, email, phone, subject, message, branch } = req.body;
 
@@ -244,32 +219,17 @@ export const createInquiry = async (req, res) => {
 
     await inquiry.save();
 
-    console.log(`✅ Inquiry created: ${inquiry._id} for ${branch} branch`);
     res.status(201).json({
       message: "Inquiry submitted successfully. We will get back to you soon!",
       inquiryId: inquiry._id,
       inquiry,
     });
   } catch (error) {
-    console.error("❌ Create inquiry error:", error);
-
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to submit inquiry",
-      details: error.message,
-      code: "CREATE_INQUIRY_ERROR",
-    });
+    next(error);
   }
 };
 
-export const updateInquiry = async (req, res) => {
+export const updateInquiry = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -326,16 +286,9 @@ export const updateInquiry = async (req, res) => {
       });
 
       if (emailResult.success) {
-        console.log(`📧 Email sent to ${existingInquiry.email}`);
       } else {
-        console.log(
-          `⚠️ Email not sent: ${emailResult.message || emailResult.error}`,
-        );
       }
 
-      console.log(
-        `✅ Inquiry responded: ${existingInquiry._id} by ${adminUser.firstName} ${adminUser.lastName}`,
-      );
     }
 
     // Apply any remaining updates (excluding response which is handled above)
@@ -362,40 +315,16 @@ export const updateInquiry = async (req, res) => {
       "firstName lastName email",
     );
 
-    console.log(
-      `✅ Inquiry updated: ${inquiry._id} - Status: ${inquiry.status}`,
-    );
     res.json({
       message: "Inquiry updated successfully",
       inquiry,
     });
   } catch (error) {
-    console.error("❌ Update inquiry error:", error);
-
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid inquiry ID format",
-        code: "INVALID_INQUIRY_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to update inquiry",
-      details: error.message,
-      code: "UPDATE_INQUIRY_ERROR",
-    });
+    next(error);
   }
 };
 
-export const deleteInquiry = async (req, res) => {
+export const deleteInquiry = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -440,27 +369,13 @@ export const deleteInquiry = async (req, res) => {
       "Inquiry archived",
     );
 
-    console.log(`✅ Inquiry archived: ${id}`);
     res.json({
       message: "Inquiry archived successfully",
       archivedId: id,
       branch: inquiry.branch,
     });
   } catch (error) {
-    console.error("❌ Archive inquiry error:", error);
     await auditLogger.logError(req, error, "Failed to archive inquiry");
-
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid inquiry ID format",
-        code: "INVALID_INQUIRY_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to archive inquiry",
-      details: error.message,
-      code: "ARCHIVE_INQUIRY_ERROR",
-    });
+    next(error);
   }
 };

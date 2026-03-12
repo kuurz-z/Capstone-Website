@@ -135,11 +135,6 @@ class AuditLogger {
       const userRole = typeof user === "object" ? user?.role : userInfo.role;
       const branch = typeof user === "object" ? user?.branch : userInfo.branch;
 
-      console.log("📝 [AuditLogger] Creating logout log entry:", {
-        email,
-        userRole,
-        branch,
-      });
 
       const result = await AuditLog.log({
         type: "login",
@@ -153,7 +148,6 @@ class AuditLogger {
         branch,
         details: `${userRole || "user"} logged out`,
       });
-      console.log("✅ [AuditLogger] Logout log created:", result?.logId);
     } catch (error) {
       console.error("❌ [AuditLogger] Failed to log logout event:", error);
     }

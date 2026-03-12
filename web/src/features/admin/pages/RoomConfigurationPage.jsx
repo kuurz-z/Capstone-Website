@@ -2,6 +2,8 @@ import { useState } from "react";
 import { roomApi } from "../../../shared/api/apiClient";
 import { formatRoomType, formatBranch } from "../utils/formatters";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
+import { useQueryClient } from "@tanstack/react-query";
+import { showNotification } from "../../../shared/utils/notification";
 
 import RoomConfigGrid from "../components/rooms/RoomConfigGrid";
 import RoomConfigModal from "../components/rooms/RoomConfigModal";
@@ -13,6 +15,7 @@ function RoomConfigurationPage({ isEmbedded = false }) {
   const [roomTypeFilter, setRoomTypeFilter] = useState("all");
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: rooms = [], isLoading: loading, error: queryError } = useRooms();
   const error = queryError ? "Failed to load room configurations" : null;
@@ -49,6 +52,17 @@ function RoomConfigurationPage({ isEmbedded = false }) {
       return { ...bed, status: newStatus };
     });
     setSelectedRoom({ ...selectedRoom, beds: updatedBeds });
+  };
+
+  const handleSaveBedConfig = async (updatedRoom) => {
+    try {
+      await roomApi.update(updatedRoom._id, { beds: updatedRoom.beds });
+      showNotification("Bed configuration saved", "success");
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    } catch (err) {
+      showNotification(err.message || "Failed to save", "error");
+      throw err;
+    }
   };
 
   if (loading) {
@@ -144,6 +158,7 @@ function RoomConfigurationPage({ isEmbedded = false }) {
           room={selectedRoom}
           onToggleBed={toggleBedAvailability}
           onClose={closeModal}
+          onSave={handleSaveBedConfig}
         />
       )}
     </section>

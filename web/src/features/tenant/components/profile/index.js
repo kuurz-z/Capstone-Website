@@ -5,4 +5,6 @@ export { default as DashboardTab } from "./DashboardTab";
 export { default as PersonalDetailsTab } from "./PersonalDetailsTab";
 export { default as RoomPaymentTab } from "./RoomPaymentTab";
 export { default as ActivityHistoryTab } from "./ActivityHistoryTab";
-export { NotificationsTab, SettingsTab } from "./PlaceholderTabs";
+export { default as NotificationsTab } from "./NotificationsTab";
+export { default as SettingsTab } from "./SettingsTab";
+export { default as ProfileCompletionCard } from "./ProfileCompletionCard";

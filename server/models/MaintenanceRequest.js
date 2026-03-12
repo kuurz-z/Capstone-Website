@@ -115,6 +115,44 @@ const maintenanceRequestSchema = new mongoose.Schema(
       default: null,
     },
 
+    // --- Room/Bed Reference (for room-specific maintenance) ---
+    roomId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      default: null,
+      index: true,
+    },
+    bedId: {
+      type: String,
+      default: null,
+    },
+
+    // --- Scheduling ---
+    scheduledDate: {
+      type: Date,
+      default: null,
+    },
+    estimatedDuration: {
+      type: String, // e.g. "2 hours", "1 day"
+      default: null,
+    },
+
+    // --- Cost Tracking ---
+    estimatedCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    actualCost: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    costNotes: {
+      type: String,
+      default: "",
+    },
+
     // --- Metadata ---
     isArchived: {
       type: Boolean,

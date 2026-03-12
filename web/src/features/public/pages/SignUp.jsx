@@ -28,6 +28,7 @@ import { authApi } from "../../../shared/api/apiClient";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
   validateEmail,
+  validatePassword,
   calculatePasswordStrength,
   sanitizeName,
   generateUsername,
@@ -129,9 +130,7 @@ function SignUp() {
           error = "Phone must be exactly 11 digits";
         break;
       case "password":
-        if (!value) error = "Password is required";
-        else if (value.length < 6)
-          error = "Password must be at least 6 characters";
+        error = validatePassword(value);
         if (formData.confirmPassword)
           validateField("confirmPassword", formData.confirmPassword);
         break;
@@ -195,12 +194,9 @@ function SignUp() {
       showNotification("Phone number must be 1-11 digits only", "error");
       return false;
     }
-    if (!formData.password) {
-      showNotification("Password is required", "error");
-      return false;
-    }
-    if (formData.password.length < 6) {
-      showNotification("Password must be at least 6 characters", "error");
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) {
+      showNotification(passwordError, "error");
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -685,7 +681,7 @@ function SignUp() {
                       }}
                     >
                       {[
-                        { key: "length", label: "6+ characters" },
+                        { key: "length", label: "8+ characters" },
                         { key: "uppercase", label: "Uppercase" },
                         { key: "lowercase", label: "Lowercase" },
                         { key: "number", label: "Number" },

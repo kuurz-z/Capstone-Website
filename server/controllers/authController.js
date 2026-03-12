@@ -6,12 +6,17 @@
 import { getAuth } from "../config/firebase.js";
 import { User } from "../models/index.js";
 import auditLogger from "../utils/auditLogger.js";
+import {
+  sendSuccess,
+  sendError,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 
 const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
 const VALID_ROLES = ["applicant", "tenant", "admin", "superAdmin"];
 
-export const register = async (req, res) => {
+export const register = async (req, res, next) => {
   try {
 
     // Sanitize and validate input
@@ -58,7 +63,6 @@ export const register = async (req, res) => {
     const existingUser = await User.findOne({ firebaseUid: req.user.uid });
 
     if (existingUser) {
-      console.log(`⚠️ User already registered: ${existingUser.email}`);
       // Log duplicate registration attempt
       await auditLogger.logRegistration(
         req,
@@ -123,9 +127,6 @@ export const register = async (req, res) => {
       `New applicant ${user.email} registered with username ${username}${branch ? ` for branch ${branch}` : ""}`,
     );
 
-    console.log(
-      `✅ User registered successfully: ${user.email} (${user.branch})`,
-    );
     res.status(201).json({
       message: "User registered successfully. Please verify your email.",
       userId: req.user.uid,
@@ -143,62 +144,12 @@ export const register = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Registration error:", error);
-
-    // Log registration error
     await auditLogger.logError(req, error, "Registration error");
-
-    // CRITICAL: Clean up Firebase user if MongoDB registration fails
-    // This prevents orphaned Firebase accounts when backend registration errors
-    if (req.user?.uid) {
-      try {
-        const auth = getAuth();
-        await auth.deleteUser(req.user.uid);
-        console.log(
-          `🗑️ Rolled back Firebase user ${req.user.uid} after registration error`,
-        );
-      } catch (deleteError) {
-        // Only warn if the user actually existed (not already deleted)
-        if (deleteError.code !== "auth/user-not-found") {
-          console.error(
-            "⚠️ Failed to rollback Firebase user:",
-            deleteError.message,
-          );
-        }
-      }
-    }
-
-    // Handle duplicate key errors (email or username already exists)
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      return res.status(400).json({
-        error: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`,
-        code: "DUPLICATE_FIELD",
-      });
-    }
-
-    // Handle validation errors
-    if (error.name === "ValidationError") {
-      console.error("❌ Mongoose validation keys:", Object.keys(error.errors));
-      console.error("❌ Mongoose validation details:", error.errors);
-
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        fields: Object.keys(error.errors),
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    res.status(500).json({
-      error: "Registration failed. Please try again.",
-      details: error.message,
-      code: "REGISTRATION_ERROR",
-    });
+    next(error);
   }
 };
 
-export const login = async (req, res) => {
+export const login = async (req, res, next) => {
   try {
     // Check if this is just a check (for Google sign-in flow)
     const isCheckOnly = req.query.checkOnly === "true";
@@ -207,7 +158,6 @@ export const login = async (req, res) => {
     const user = await User.findOne({ firebaseUid: req.user.uid });
 
     if (!user) {
-      console.log(`❌ User not found in database: ${req.user.uid}`);
       // Only log if this is a real login attempt, not a check
       if (!isCheckOnly) {
         await auditLogger.logLogin(
@@ -225,7 +175,6 @@ export const login = async (req, res) => {
 
     // Check if account is active
     if (!user.isActive) {
-      console.log(`⚠️ Inactive account login attempt: ${user.email}`);
       // Log failed login attempt
       await auditLogger.logLogin(
         req,
@@ -249,15 +198,11 @@ export const login = async (req, res) => {
         user.tenantStatus = "registered";
       }
       await user.save();
-      console.log(
-        `✅ Synced verification for ${user.email}: ${firebaseEmailVerified}`,
-      );
     }
 
     // Block unverified non-admin users from logging in
     const isAdminRole = user.role === "admin" || user.role === "superAdmin";
     if (!user.isEmailVerified && !isAdminRole) {
-      console.log(`⚠️ Unverified email login attempt: ${user.email}`);
       await auditLogger.logLogin(req, user, false, "Email not verified");
       return res.status(403).json({
         error: "Please verify your email before logging in.",
@@ -270,7 +215,6 @@ export const login = async (req, res) => {
       await auditLogger.logLogin(req, user, true);
     }
 
-    console.log(`✅ Login successful: ${user.email} (${user.role})`);
     res.json({
       message: "Login successful",
       user: {
@@ -288,35 +232,19 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Login error:", error);
-    // Log error
     await auditLogger.logError(req, error, "Login error");
-    res.status(500).json({
-      error: "Login failed. Please try again.",
-      details: error.message,
-      code: "LOGIN_ERROR",
-    });
+    next(error);
   }
 };
 
-export const logout = async (req, res) => {
-  console.log("🔐 [Server] Logout endpoint called");
-  console.log("🔐 [Server] User from token:", req.user?.email || "unknown");
+export const logout = async (req, res, next) => {
   try {
     // Get user info for audit logging
     const user = await User.findOne({ firebaseUid: req.user.uid });
-    console.log(
-      "🔐 [Server] User from DB:",
-      user?.email || "not found",
-      "Role:",
-      user?.role || "N/A",
-    );
 
     if (!user) {
       // User not in database but authenticated with Firebase - still log logout
-      console.log("🔐 [Server] Logging logout for Firebase-only user...");
       await auditLogger.logLogout(req, req.user.email);
-      console.log(`✅ Logout successful (Firebase user): ${req.user.email}`);
       return res.json({
         message: "Logged out successfully",
         code: "LOGOUT_SUCCESS",
@@ -324,39 +252,29 @@ export const logout = async (req, res) => {
     }
 
     // Log logout event for authenticated user with full details
-    console.log("🔐 [Server] Logging logout for DB user...");
     await auditLogger.logLogout(req, user);
 
-    console.log(`✅ Logout successful: ${user.email} (${user.role})`);
     res.json({
       message: "Logged out successfully",
       code: "LOGOUT_SUCCESS",
     });
   } catch (error) {
-    console.error("❌ Logout error:", error);
-    // Log logout error
     await auditLogger.logError(req, error, "Logout error");
-    res.status(500).json({
-      error: "Logout failed",
-      details: error.message,
-      code: "LOGOUT_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getProfile = async (req, res) => {
+export const getProfile = async (req, res, next) => {
   try {
     const user = await User.findOne({ firebaseUid: req.user.uid });
 
     if (!user) {
-      console.log(`❌ Profile not found for Firebase UID: ${req.user.uid}`);
       return res.status(404).json({
         error: "User not found",
         code: "USER_NOT_FOUND",
       });
     }
 
-    console.log(`✅ Profile fetched: ${user.email}`);
     res.json({
       id: user._id,
       firebaseUid: user.firebaseUid,
@@ -371,16 +289,21 @@ export const getProfile = async (req, res) => {
       tenantStatus: user.tenantStatus,
       isActive: user.isActive,
       isEmailVerified: user.isEmailVerified,
+      // Extended profile fields
+      gender: user.gender || "",
+      address: user.address || "",
+      city: user.city || "",
+      dateOfBirth: user.dateOfBirth || null,
+      emergencyContact: user.emergencyContact || "",
+      emergencyPhone: user.emergencyPhone || "",
+      studentId: user.studentId || "",
+      school: user.school || "",
+      yearLevel: user.yearLevel || "",
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });
   } catch (error) {
-    console.error("❌ Profile fetch error:", error);
-    res.status(500).json({
-      error: "Failed to fetch profile",
-      details: error.message,
-      code: "PROFILE_FETCH_ERROR",
-    });
+    next(error);
   }
 };
 
@@ -390,9 +313,12 @@ const sanitizeName = (s) => s?.trim().replace(/[<>"'&]/g, "") || "";
 /** Sanitize a phone field — strip non-phone characters */
 const sanitizePhone = (s) => s?.replace(/[^\d+\-() ]/g, "") || "";
 
-export const updateProfile = async (req, res) => {
+/** Sanitize general text — strip dangerous characters */
+const sanitizeText = (s) => s?.trim().replace(/[<>"'&]/g, "") || "";
+
+export const updateProfile = async (req, res, next) => {
   try {
-    // Sanitize input
+    // Sanitize input — core fields
     const firstName = req.body.firstName
       ? sanitizeName(req.body.firstName)
       : null;
@@ -401,19 +327,16 @@ export const updateProfile = async (req, res) => {
     const profileImage =
       req.body.profileImage !== undefined ? req.body.profileImage : undefined;
 
-    // Validate at least one field is provided
-    if (
-      !firstName &&
-      !lastName &&
-      phone === null &&
-      profileImage === undefined
-    ) {
-      return res.status(400).json({
-        error:
-          "At least one field (firstName, lastName, phone, or profileImage) must be provided",
-        code: "NO_UPDATE_DATA",
-      });
-    }
+    // Sanitize input — extended profile fields
+    const gender = req.body.gender !== undefined ? req.body.gender : undefined;
+    const address = req.body.address !== undefined ? sanitizeText(req.body.address) : undefined;
+    const city = req.body.city !== undefined ? sanitizeText(req.body.city) : undefined;
+    const dateOfBirth = req.body.dateOfBirth !== undefined ? req.body.dateOfBirth : undefined;
+    const emergencyContact = req.body.emergencyContact !== undefined ? sanitizeText(req.body.emergencyContact) : undefined;
+    const emergencyPhone = req.body.emergencyPhone !== undefined ? sanitizePhone(req.body.emergencyPhone) : undefined;
+    const studentId = req.body.studentId !== undefined ? sanitizeText(req.body.studentId) : undefined;
+    const school = req.body.school !== undefined ? sanitizeText(req.body.school) : undefined;
+    const yearLevel = req.body.yearLevel !== undefined ? sanitizeText(req.body.yearLevel) : undefined;
 
     // Build update object with only provided fields
     const updateData = {};
@@ -421,6 +344,24 @@ export const updateProfile = async (req, res) => {
     if (lastName) updateData.lastName = lastName;
     if (phone !== undefined && phone !== null) updateData.phone = phone;
     if (profileImage !== undefined) updateData.profileImage = profileImage;
+    // Extended fields
+    if (gender !== undefined) updateData.gender = gender;
+    if (address !== undefined) updateData.address = address;
+    if (city !== undefined) updateData.city = city;
+    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth || null;
+    if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
+    if (emergencyPhone !== undefined) updateData.emergencyPhone = emergencyPhone;
+    if (studentId !== undefined) updateData.studentId = studentId;
+    if (school !== undefined) updateData.school = school;
+    if (yearLevel !== undefined) updateData.yearLevel = yearLevel;
+
+    // Check at least one field is being updated
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        error: "At least one field must be provided",
+        code: "NO_UPDATE_DATA",
+      });
+    }
 
     const user = await User.findOneAndUpdate(
       { firebaseUid: req.user.uid },
@@ -429,14 +370,12 @@ export const updateProfile = async (req, res) => {
     );
 
     if (!user) {
-      console.log(`❌ User not found for update: ${req.user.uid}`);
       return res.status(404).json({
         error: "User not found",
         code: "USER_NOT_FOUND",
       });
     }
 
-    console.log(`✅ Profile updated: ${user.email}`);
     res.json({
       message: "Profile updated successfully",
       user: {
@@ -449,29 +388,24 @@ export const updateProfile = async (req, res) => {
         profileImage: user.profileImage,
         branch: user.branch,
         role: user.role,
+        // Extended fields
+        gender: user.gender || "",
+        address: user.address || "",
+        city: user.city || "",
+        dateOfBirth: user.dateOfBirth || null,
+        emergencyContact: user.emergencyContact || "",
+        emergencyPhone: user.emergencyPhone || "",
+        studentId: user.studentId || "",
+        school: user.school || "",
+        yearLevel: user.yearLevel || "",
       },
     });
   } catch (error) {
-    console.error("❌ Profile update error:", error);
-
-    // Handle validation errors
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to update profile",
-      details: error.message,
-      code: "PROFILE_UPDATE_ERROR",
-    });
+    next(error);
   }
 };
 
-export const updateBranch = async (req, res) => {
+export const updateBranch = async (req, res, next) => {
   try {
     const { branch } = req.body;
 
@@ -498,14 +432,12 @@ export const updateBranch = async (req, res) => {
     );
 
     if (!user) {
-      console.log(`❌ User not found for branch update: ${req.user.uid}`);
       return res.status(404).json({
         error: "User not found",
         code: "USER_NOT_FOUND",
       });
     }
 
-    console.log(`✅ Branch updated for ${user.email}: ${branch}`);
     res.json({
       message: "Branch updated successfully",
       user: {
@@ -523,16 +455,11 @@ export const updateBranch = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Branch update error:", error);
-    res.status(500).json({
-      error: "Failed to update branch",
-      details: error.message,
-      code: "BRANCH_UPDATE_ERROR",
-    });
+    next(error);
   }
 };
 
-export const setRole = async (req, res) => {
+export const setRole = async (req, res, next) => {
   try {
     const { userId, role } = req.body;
 
@@ -572,7 +499,6 @@ export const setRole = async (req, res) => {
     // Find user by MongoDB _id
     const user = await User.findById(userId);
     if (!user) {
-      console.log(`❌ User not found for role update: ${userId}`);
       return res.status(404).json({
         error: "User not found",
         code: "USER_NOT_FOUND",
@@ -597,7 +523,6 @@ export const setRole = async (req, res) => {
     user.role = role;
     await user.save();
 
-    console.log(`✅ User role updated: ${user.email} → ${role}`);
     res.json({
       message: "User role updated successfully",
       user: {
@@ -607,38 +532,7 @@ export const setRole = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Role update error:", error);
-
-    // Handle Firebase errors
-    if (error.code && error.code.startsWith("auth/")) {
-      return res.status(400).json({
-        error: "Firebase error: " + error.message,
-        code: "FIREBASE_ERROR",
-      });
-    }
-
-    // Handle validation errors
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    // Handle cast errors (invalid ID)
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid user ID format",
-        code: "INVALID_USER_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to update user role",
-      details: error.message,
-      code: "ROLE_UPDATE_ERROR",
-    });
+    next(error);
   }
 };
 
@@ -653,7 +547,7 @@ export const setRole = async (req, res) => {
  * Called by the ForgotPassword frontend component.
  * No auth required since the user is not logged in at this point.
  */
-export const logPasswordReset = async (req, res) => {
+export const logPasswordReset = async (req, res, next) => {
   try {
     const { email, success } = req.body;
 

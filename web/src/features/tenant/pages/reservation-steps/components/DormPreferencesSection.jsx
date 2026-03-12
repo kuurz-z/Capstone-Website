@@ -73,7 +73,7 @@ const DormPreferencesSection = ({
     {/* Move-in Date */}
     <div className="form-group">
       <label className="form-label">
-        Target Move In Date (within 3 months) *
+        Target Move In Date (within 3 months) <span style={{ color: "#dc2626" }}>*</span>
       </label>
       <input
         type="date"
@@ -102,7 +102,7 @@ const DormPreferencesSection = ({
     {/* Move-in Time */}
     <div className="form-group">
       <label className="form-label">
-        Estimated Time of Move In (8:00 AM to 6:00 PM) *
+        Estimated Time of Move In (8:00 AM to 6:00 PM) <span style={{ color: "#dc2626" }}>*</span>
       </label>
       <select
         className="form-select"
@@ -134,13 +134,13 @@ const DormPreferencesSection = ({
 
     {/* Lease Duration */}
     <div className="form-group">
-      <label className="form-label">Duration of Lease</label>
+      <label className="form-label">Duration of Lease <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: 400 }}>(optional)</span></label>
       <select
         className="form-select"
         value={leaseDuration}
         onChange={(e) => setLeaseDuration(e.target.value)}
       >
-        <option value="" disabled>Select duration...</option>
+        <option value="">Select duration...</option>
         {LEASE_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}

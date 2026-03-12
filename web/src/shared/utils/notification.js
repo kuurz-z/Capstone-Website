@@ -46,7 +46,6 @@ export const showNotification = (message, type = "info", duration = 3000) => {
       message === lastNotification.message &&
       now - lastNotification.timestamp < DEBOUNCE_MS
     ) {
-      console.log("🔕 Notification debounced (duplicate):", message);
       return;
     }
     lastNotification = { message, timestamp: now };
@@ -105,7 +104,6 @@ export const showNotification = (message, type = "info", duration = 3000) => {
   } catch (error) {
     // Fallback to console if notification fails
     console.error("❌ Failed to show notification:", error);
-    console.log(`${type.toUpperCase()}: ${message}`);
   }
 };
 

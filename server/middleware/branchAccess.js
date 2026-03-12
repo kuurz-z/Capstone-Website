@@ -67,7 +67,6 @@ export const filterByBranch = async (req, res, next) => {
       req.branchFilter = null; // No filter - access all
       req.userBranch = "all";
       req.isSuperAdmin = true;
-      console.log("🔓 Super Admin access - no branch filter");
       return next();
     }
 
@@ -83,7 +82,6 @@ export const filterByBranch = async (req, res, next) => {
     req.branchFilter = branch;
     req.userBranch = branch;
     req.isSuperAdmin = false;
-    console.log(`🔒 Admin access filtered to branch: ${branch}`);
 
     next();
   } catch (error) {

@@ -32,7 +32,6 @@ async function cleanupExpiredBedLocks() {
     }
 
     if (totalUnlocked > 0) {
-      console.log(`🔓 Bed lock cleanup: released ${totalUnlocked} expired lock(s)`);
     }
   } catch (error) {
     console.error("❌ Bed lock cleanup error:", error);
@@ -43,7 +42,6 @@ async function cleanupExpiredBedLocks() {
  * Start the bed lock cleanup job
  */
 export function startBedLockCleanupJob() {
-  console.log("🔓 Bed lock cleanup job started (every 2 min)");
 
   // Run once immediately
   cleanupExpiredBedLocks();

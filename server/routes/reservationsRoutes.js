@@ -33,6 +33,9 @@ import {
   extendReservation,
   releaseSlot,
   archiveReservation,
+  renewContract,
+  checkoutReservation,
+  transferTenant,
 } from "../controllers/reservationsController.js";
 import {
   getRoomOccupancy,
@@ -182,6 +185,67 @@ router.put(
   verifyAdmin,
   filterByBranch,
   archiveReservation,
+);
+
+/**
+ * PUT /api/reservations/:reservationId/renew
+ *
+ * Renew a tenant's contract (extend lease duration).
+ *
+ * Access: Admin | Super Admin
+ *
+ * @param {string} reservationId - MongoDB ObjectId
+ * @body {number} additionalMonths - Months to add (1-24, default 12)
+ * @body {string} notes - Optional renewal notes
+ * @returns {Object} Updated reservation
+ */
+router.put(
+  "/:reservationId/renew",
+  verifyToken,
+  verifyAdmin,
+  filterByBranch,
+  renewContract,
+);
+
+/**
+ * PUT /api/reservations/:reservationId/checkout
+ *
+ * Check out a tenant (end stay, vacate bed, update user status).
+ *
+ * Access: Admin | Super Admin
+ *
+ * @param {string} reservationId - MongoDB ObjectId
+ * @body {string} notes - Checkout notes
+ * @body {boolean} inspectionPassed - Room inspection result
+ * @returns {Object} Updated reservation
+ */
+router.put(
+  "/:reservationId/checkout",
+  verifyToken,
+  verifyAdmin,
+  filterByBranch,
+  checkoutReservation,
+);
+
+/**
+ * PUT /api/reservations/:reservationId/transfer
+ *
+ * Transfer a tenant to a different room/bed.
+ *
+ * Access: Admin | Super Admin
+ *
+ * @param {string} reservationId - MongoDB ObjectId
+ * @body {string} newRoomId - Target room ObjectId
+ * @body {string} newBedId - Target bed ObjectId
+ * @body {string} reason - Transfer reason
+ * @returns {Object} Updated reservation
+ */
+router.put(
+  "/:reservationId/transfer",
+  verifyToken,
+  verifyAdmin,
+  filterByBranch,
+  transferTenant,
 );
 
 // ============================================================================

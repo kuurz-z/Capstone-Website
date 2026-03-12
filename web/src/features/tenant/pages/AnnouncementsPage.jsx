@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { announcementApi } from "../../../shared/api/apiClient";
 import { useAnnouncements } from "../../../shared/hooks/queries/useAnnouncements";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
+import AnnouncementsPageSkeleton from "../components/announcements/AnnouncementsPageSkeleton";
 import "../styles/tenant-common.css";
 
 const AnnouncementsPage = () => {
@@ -14,6 +15,14 @@ const AnnouncementsPage = () => {
   const filteredAnnouncements = announcements.filter(
     (a) => filter === "all" || a.category.toLowerCase() === filter,
   );
+
+  if (loading) {
+    return (
+      <TenantLayout>
+        <AnnouncementsPageSkeleton />
+      </TenantLayout>
+    );
+  }
 
   const handleAcknowledge = async (id) => {
     try {

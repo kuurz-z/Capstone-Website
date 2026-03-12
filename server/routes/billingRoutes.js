@@ -104,6 +104,54 @@ router.post("/:billId/mark-paid", billingController.markBillAsPaid);
  */
 router.post("/apply-penalties", billingController.applyPenalties);
 
+/**
+ * GET /api/billing/export
+ * Get flattened billing data for CSV export (Admin only).
+ * Query: ?branch=gil-puyat&status=overdue&month=2026-01
+ */
+router.get("/export", async (req, res) => {
+  try {
+    const { Bill } = await import("../models/index.js");
+    const { branch, status, month } = req.query;
+
+    const filter = { isArchived: { $ne: true } };
+    if (branch) filter.branch = branch;
+    if (status) filter.status = status;
+    if (month) {
+      const start = new Date(`${month}-01`);
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + 1);
+      filter.billingMonth = { $gte: start, $lt: end };
+    }
+
+    const bills = await Bill.find(filter)
+      .populate("userId", "firstName lastName email")
+      .populate("roomId", "name")
+      .sort({ billingMonth: -1 })
+      .lean();
+
+    const data = bills.map((b) => ({
+      tenantName: `${b.userId?.firstName || ""} ${b.userId?.lastName || ""}`.trim(),
+      email: b.userId?.email || "",
+      roomName: b.roomId?.name || "",
+      billingMonth: b.billingMonth ? new Date(b.billingMonth).toISOString().slice(0, 7) : "",
+      rent: b.charges?.rent || 0,
+      electricity: b.charges?.electricity || 0,
+      water: b.charges?.water || 0,
+      penalty: b.charges?.penalty || 0,
+      totalAmount: b.totalAmount || 0,
+      paidAmount: b.paidAmount || 0,
+      status: b.status,
+      dueDate: b.dueDate,
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error("❌ Billing export error:", error);
+    res.status(500).json({ error: "Failed to export billing data" });
+  }
+});
+
 // ============================================================================
 // EXPORT
 // ============================================================================

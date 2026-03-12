@@ -79,7 +79,6 @@ export const authFetch = async (url, options = {}, _isRetry = false) => {
       // ── Silent token refresh on 401 (prevents mid-demo crashes) ──
       // If the token expired mid-session, force-refresh and retry once.
       if (response.status === 401 && !_isRetry) {
-        console.warn("🔐 Token expired — silently refreshing and retrying...");
         const freshToken = await getFreshToken(true); // force refresh
         if (freshToken) {
           return authFetch(url, options, true); // retry exactly once

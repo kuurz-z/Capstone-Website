@@ -4,6 +4,19 @@ import { useAuth } from "../../../shared/hooks/useAuth";
 import { useAnnouncements } from "../../../shared/hooks/queries/useAnnouncements";
 import { useMyStays } from "../../../shared/hooks/queries/useUsers";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
+import DashboardPageSkeleton from "../components/dashboard/DashboardPageSkeleton";
+import {
+  AlertTriangle,
+  CalendarCheck,
+  User,
+  Search,
+  FileText,
+  Wrench,
+  Home,
+  Bed,
+  CheckCircle,
+  Megaphone
+} from "lucide-react";
 import "../styles/dashboard.css";
 
 const DashboardPage = () => {
@@ -41,14 +54,7 @@ const DashboardPage = () => {
   ).length;
 
   if (loading) {
-    return (
-      <TenantLayout>
-        <div className="dashboard-loading">
-          <div className="loading-spinner"></div>
-          <p>Loading dashboard...</p>
-        </div>
-      </TenantLayout>
-    );
+    return <DashboardPageSkeleton />;
   }
 
   return (
@@ -78,7 +84,7 @@ const DashboardPage = () => {
         {/* Alerts */}
         {unacknowledgedCount > 0 && (
           <div className="dashboard-alert alert-warning">
-            <i className="fas fa-exclamation-triangle"></i>
+            <AlertTriangle size={16} />
             <div>
               <strong>Action Required:</strong> You have {unacknowledgedCount}{" "}
               unacknowledged notice{unacknowledgedCount > 1 ? "s" : ""}.
@@ -99,7 +105,7 @@ const DashboardPage = () => {
               {/* Quick Actions */}
               <div className="dashboard-card card-accent">
                 <div className="card-icon">
-                  <i className="fas fa-calendar-check"></i>
+                  <CalendarCheck size={20} />
                 </div>
                 <div className="card-content">
                   <h3>My Reservation</h3>
@@ -115,7 +121,7 @@ const DashboardPage = () => {
 
               <div className="dashboard-card">
                 <div className="card-icon">
-                  <i className="fas fa-user"></i>
+                  <User size={20} />
                 </div>
                 <div className="card-content">
                   <h3>Profile</h3>
@@ -131,7 +137,7 @@ const DashboardPage = () => {
 
               <div className="dashboard-card">
                 <div className="card-icon">
-                  <i className="fas fa-search"></i>
+                  <Search size={20} />
                 </div>
                 <div className="card-content">
                   <h3>Find Rooms</h3>
@@ -151,7 +157,7 @@ const DashboardPage = () => {
               <div className="dashboard-section">
                 <div className="section-header">
                   <h2>
-                    <i className="fas fa-bullhorn"></i> Latest Announcements
+                    <Megaphone size={18} /> Latest Announcements
                   </h2>
                   <button
                     className="btn-link"
@@ -200,7 +206,7 @@ const DashboardPage = () => {
             <div className="dashboard-stats">
               <div className="stat-card">
                 <div className="stat-icon">
-                  <i className="fas fa-home"></i>
+                  <Home size={20} />
                 </div>
                 <div className="stat-content">
                   <div className="stat-value">
@@ -214,7 +220,7 @@ const DashboardPage = () => {
 
               <div className="stat-card">
                 <div className="stat-icon">
-                  <i className="fas fa-calendar-check"></i>
+                  <CalendarCheck size={20} />
                 </div>
                 <div className="stat-content">
                   <div className="stat-value">{stayData.stats.totalStays}</div>
@@ -224,7 +230,7 @@ const DashboardPage = () => {
 
               <div className="stat-card">
                 <div className="stat-icon">
-                  <i className="fas fa-bed"></i>
+                  <Bed size={20} />
                 </div>
                 <div className="stat-content">
                   <div className="stat-value">{stayData.stats.totalNights}</div>
@@ -234,7 +240,7 @@ const DashboardPage = () => {
 
               <div className="stat-card">
                 <div className="stat-icon">
-                  <i className="fas fa-check-circle"></i>
+                  <CheckCircle size={20} />
                 </div>
                 <div className="stat-content">
                   <div className="stat-value">
@@ -249,7 +255,7 @@ const DashboardPage = () => {
             <div className="dashboard-cards">
               <div className="dashboard-card card-accent">
                 <div className="card-icon">
-                  <i className="fas fa-file-invoice-dollar"></i>
+                  <FileText size={20} />
                 </div>
                 <div className="card-content">
                   <h3>Billing</h3>
@@ -265,7 +271,7 @@ const DashboardPage = () => {
 
               <div className="dashboard-card">
                 <div className="card-icon">
-                  <i className="fas fa-tools"></i>
+                  <Wrench size={20} />
                 </div>
                 <div className="card-content">
                   <h3>Maintenance</h3>
@@ -281,7 +287,7 @@ const DashboardPage = () => {
 
               <div className="dashboard-card">
                 <div className="card-icon">
-                  <i className="fas fa-user"></i>
+                  <User size={20} />
                 </div>
                 <div className="card-content">
                   <h3>Profile</h3>
@@ -301,7 +307,7 @@ const DashboardPage = () => {
               <div className="dashboard-section">
                 <div className="section-header">
                   <h2>
-                    <i className="fas fa-bullhorn"></i> Latest Announcements
+                    <Megaphone size={18} /> Latest Announcements
                   </h2>
                   <button
                     className="btn-link"

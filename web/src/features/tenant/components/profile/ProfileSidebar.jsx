@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   User,
@@ -11,6 +11,8 @@ import {
   CreditCard,
   ArrowRight,
   ChevronRight,
+  Settings,
+  Camera,
 } from "lucide-react";
 
 const NAV_SECTIONS = [
@@ -28,7 +30,10 @@ const NAV_SECTIONS = [
   },
   {
     label: "Preferences",
-    items: [{ id: "notifications", label: "Notifications", icon: Bell }],
+    items: [
+      { id: "notifications", label: "Notifications", icon: Bell },
+      { id: "settings", label: "Settings", icon: Settings },
+    ],
   },
 ];
 
@@ -67,7 +72,34 @@ const ProfileSidebar = ({
   fullName,
   hasActiveReservation,
   onLogout,
-}) => (
+  onUpdateImage,
+}) => {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleAvatarClick = () => {
+    if (!uploading) fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !onUpdateImage) return;
+    setUploading(true);
+    try {
+      const { uploadToImageKit } = await import("../../../../shared/utils/imageUpload");
+      const result = await uploadToImageKit(file, `profile/${profileData.email}`);
+      if (result?.url) {
+        await onUpdateImage(result.url);
+      }
+    } catch (err) {
+      console.error("Profile image upload failed:", err);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  return (
   <aside
     className="w-64 bg-white border-r flex flex-col"
     style={{
@@ -102,16 +134,72 @@ const ProfileSidebar = ({
     {/* User Card */}
     <div className="px-5 py-4 border-b" style={{ borderColor: "#E8EBF0" }}>
       <div className="flex items-center gap-3">
+        {/* Avatar with upload overlay */}
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+          onClick={handleAvatarClick}
           style={{
-            background: "linear-gradient(135deg, #E7710F 0%, #D35400 100%)",
-            boxShadow: "0 2px 6px rgba(231,113,15,0.25)",
+            position: "relative",
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            cursor: onUpdateImage ? "pointer" : "default",
+            flexShrink: 0,
+            overflow: "hidden",
           }}
+          title={onUpdateImage ? "Click to change photo" : undefined}
         >
-          {(profileData.firstName?.[0] || "").toUpperCase()}
-          {(profileData.lastName?.[0] || "").toUpperCase()}
+          {profileData.profileImage ? (
+            <img
+              src={profileData.profileImage}
+              alt="Profile"
+              style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+            />
+          ) : (
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
+              style={{
+                background: "linear-gradient(135deg, #E7710F 0%, #D35400 100%)",
+                boxShadow: "0 2px 6px rgba(231,113,15,0.25)",
+                width: "100%",
+                height: "100%",
+              }}
+            >
+              {(profileData.firstName?.[0] || "").toUpperCase()}
+              {(profileData.lastName?.[0] || "").toUpperCase()}
+            </div>
+          )}
+          {/* Camera overlay (shown on hover) */}
+          {onUpdateImage && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: uploading ? 1 : 0,
+                transition: "opacity 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+              onMouseLeave={(e) => { if (!uploading) e.currentTarget.style.opacity = "0"; }}
+            >
+              {uploading ? (
+                <span style={{ color: "#fff", fontSize: 10 }}>...</span>
+              ) : (
+                <Camera className="w-4 h-4" style={{ color: "#fff" }} />
+              )}
+            </div>
+          )}
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+        />
         <div className="flex-1 min-w-0">
           <p
             className="text-sm font-semibold truncate"
@@ -203,6 +291,7 @@ const ProfileSidebar = ({
       </button>
     </div>
   </aside>
-);
+  );
+};
 
 export default ProfileSidebar;

@@ -17,48 +17,6 @@ export const MOVE_IN_TIME_SLOTS = [
   { value: "18:00", label: "6:00 PM" },
 ];
 
-export const REGIONS = [
-  "Regionl Autonomous Region in Muslim Mindanao (ARMM)",
-  "Bicol Region",
-  "Calabarzon",
-  "Cavite",
-  "Laguna",
-  "Quezon",
-  "Rizal",
-  "NCR - National Capital Region",
-  "CAR - Cordillera Administrative Region",
-  "Region I - Ilocos",
-  "Region II - Cagayan Valley",
-  "Region III - Central Luzon",
-  "Region IV - Mimaropa",
-  "Region V - Bicol",
-  "Region VI - Western Visayas",
-  "Region VII - Central Visayas",
-  "Region VIII - Eastern Visayas",
-  "Region IX - Zamboanga Peninsula",
-  "Region X - Northern Mindanao",
-  "Region XI - Davao",
-  "Region XII - Soccsksargen",
-];
-
-export const CITIES = [
-  "Manila",
-  "Quezon City",
-  "Caloocan",
-  "Las Piñas",
-  "Makati",
-  "Parañaque",
-  "Pasay",
-  "Pasig",
-  "Taguig",
-  "Valenzuela",
-  "Cebu",
-  "Davao",
-  "Cagayan de Oro",
-  "Bacolod",
-  "Iloilo City",
-];
-
 export const REFERRAL_OPTIONS = [
   { id: "facebook", value: "facebook", label: "Facebook Ad" },
   { id: "instagram", value: "instagram", label: "Instagram" },

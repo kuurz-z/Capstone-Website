@@ -3,9 +3,15 @@
  * Extracted from routes for cleaner separation.
  */
 
+import dayjs from "dayjs";
 import { User, Reservation, Room } from "../models/index.js";
 import { getAuth } from "../config/firebase.js";
 import auditLogger from "../utils/auditLogger.js";
+import {
+  sendSuccess,
+  sendError,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
 
@@ -18,7 +24,7 @@ const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
  *
  * Access: Admin (applicant only) | Super Admin (applicant or admin)
  */
-export const createUser = async (req, res) => {
+export const createUser = async (req, res, next) => {
   let firebaseUid = null; // track for rollback
 
   try {
@@ -124,12 +130,8 @@ export const createUser = async (req, res) => {
       const resetLink = await auth.generatePasswordResetLink(
         email.toLowerCase(),
       );
-      console.log(`Password reset link generated for ${email}`);
       // The link is logged for now; could be emailed via your email service
     } catch (resetErr) {
-      console.warn(
-        `Could not generate password reset link: ${resetErr.message}`,
-      );
       // Non-fatal — user can still use "Forgot Password" later
     }
 
@@ -143,7 +145,6 @@ export const createUser = async (req, res) => {
       `Admin created account for ${email} with role ${allowedRole}`,
     );
 
-    console.log(`User created by admin: ${email} (${allowedRole})`);
     res.status(201).json({
       message: "User created successfully",
       user: {
@@ -161,63 +162,12 @@ export const createUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Create user error:", error);
-
-    // --- Rollback: delete Firebase user if MongoDB save failed ---
-    if (firebaseUid) {
-      try {
-        const auth = getAuth();
-        await auth.deleteUser(firebaseUid);
-        console.log(`Rolled back Firebase user ${firebaseUid}`);
-      } catch (deleteErr) {
-        if (deleteErr.code !== "auth/user-not-found") {
-          console.error("Failed to rollback Firebase user:", deleteErr.message);
-        }
-      }
-    }
-
-    // Firebase-specific errors
-    if (error.code === "auth/email-already-exists") {
-      return res.status(409).json({
-        error: "Email already registered in Firebase",
-        code: "EMAIL_TAKEN",
-      });
-    }
-    if (error.code === "auth/invalid-email") {
-      return res.status(400).json({
-        error: "Invalid email format",
-        code: "INVALID_EMAIL",
-      });
-    }
-
-    // MongoDB duplicate key
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      return res.status(409).json({
-        error: `${field} already exists`,
-        code: "DUPLICATE_FIELD",
-      });
-    }
-
-    // Validation errors
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
     await auditLogger.logError(req, error, "Failed to create user");
-    res.status(500).json({
-      error: "Failed to create user",
-      details: error.message,
-      code: "CREATE_USER_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getUserStats = async (req, res) => {
+export const getUserStats = async (req, res, next) => {
   try {
     const matchQuery = req.branchFilter ? { branch: req.branchFilter } : {};
 
@@ -262,21 +212,13 @@ export const getUserStats = async (req, res) => {
       if (item._id) stats.byBranch[item._id] = item.count;
     });
 
-    console.log(
-      `✅ Retrieved user stats for ${req.userBranch || "all"} branch(es)`,
-    );
     res.json(stats);
   } catch (error) {
-    console.error("❌ Fetch user stats error:", error);
-    res.status(500).json({
-      error: "Failed to fetch user statistics",
-      details: error.message,
-      code: "FETCH_STATS_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getUsersByBranch = async (req, res) => {
+export const getUsersByBranch = async (req, res, next) => {
   try {
     const { branch } = req.params;
 
@@ -292,21 +234,13 @@ export const getUsersByBranch = async (req, res) => {
       .sort({ createdAt: -1 })
       .select("-__v");
 
-    console.log(
-      `✅ Super Admin retrieved ${users.length} users for ${branch || "no"} branch`,
-    );
     res.json(users);
   } catch (error) {
-    console.error("❌ Fetch branch users error:", error);
-    res.status(500).json({
-      error: "Failed to fetch branch users",
-      details: error.message,
-      code: "FETCH_BRANCH_USERS_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getEmailByUsername = async (req, res) => {
+export const getEmailByUsername = async (req, res, next) => {
   try {
     const { username } = req.query;
 
@@ -318,35 +252,25 @@ export const getEmailByUsername = async (req, res) => {
     }
 
     const trimmedUsername = username.trim();
-    console.log(`🔍 Looking up username: "${trimmedUsername}"`);
 
     const user = await User.findOne({
       username: { $regex: new RegExp(`^${trimmedUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
     }).select("email username");
 
     if (!user) {
-      console.log(`❌ Username not found: "${trimmedUsername}"`);
       return res.status(404).json({
         error: "Username not found",
         code: "USERNAME_NOT_FOUND",
       });
     }
 
-    console.log(
-      `✅ Email lookup for username: ${trimmedUsername} -> ${user.email}`,
-    );
     res.json({ email: user.email });
   } catch (error) {
-    console.error("❌ Username lookup error:", error);
-    res.status(500).json({
-      error: "Failed to lookup username",
-      details: error.message,
-      code: "USERNAME_LOOKUP_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getUsers = async (req, res) => {
+export const getUsers = async (req, res, next) => {
   try {
     const {
       role,
@@ -393,9 +317,6 @@ export const getUsers = async (req, res) => {
       User.countDocuments(query),
     ]);
 
-    console.log(
-      `✅ Retrieved ${users.length} users for ${req.userBranch || "all"} branch(es)`,
-    );
 
     res.json({
       users,
@@ -409,16 +330,11 @@ export const getUsers = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Fetch users error:", error);
-    res.status(500).json({
-      error: "Failed to fetch users",
-      details: error.message,
-      code: "FETCH_USERS_ERROR",
-    });
+    next(error);
   }
 };
 
-export const getUserById = async (req, res) => {
+export const getUserById = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -443,27 +359,13 @@ export const getUserById = async (req, res) => {
       });
     }
 
-    console.log(`✅ Retrieved user: ${user.email}`);
     res.json(user);
   } catch (error) {
-    console.error("❌ Fetch user error:", error);
-
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid user ID format",
-        code: "INVALID_USER_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to fetch user",
-      details: error.message,
-      code: "FETCH_USER_ERROR",
-    });
+    next(error);
   }
 };
 
-export const updateUser = async (req, res) => {
+export const updateUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -490,7 +392,22 @@ export const updateUser = async (req, res) => {
     // Store old data for audit log
     const oldUserData = existingUser.toObject();
 
-    const updateData = { ...req.body };
+    const ALLOWED_ADMIN_UPDATE_FIELDS = [
+      "username", "firstName", "lastName", "email", "phone", "profileImage",
+      "role", "branch", "isActive",
+      // Extended profile fields
+      "address", "city", "gender", "dateOfBirth",
+      "emergencyContact", "emergencyPhone",
+      "studentId", "school", "yearLevel",
+    ];
+
+    // Build update object from whitelist only
+    const updateData = {};
+    for (const field of ALLOWED_ADMIN_UPDATE_FIELDS) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
 
     // Prevent changing sensitive fields
     delete updateData._id;
@@ -521,39 +438,17 @@ export const updateUser = async (req, res) => {
       user.toObject(),
     );
 
-    console.log(`✅ User updated: ${user.email}`);
     res.json({
       message: "User updated successfully",
       user,
     });
   } catch (error) {
-    console.error("❌ Update user error:", error);
     await auditLogger.logError(req, error, "Failed to update user");
-
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: error.message,
-        code: "VALIDATION_ERROR",
-      });
-    }
-
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid user ID format",
-        code: "INVALID_USER_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to update user",
-      details: error.message,
-      code: "UPDATE_USER_ERROR",
-    });
+    next(error);
   }
 };
 
-export const deleteUser = async (req, res) => {
+export const deleteUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -593,27 +488,13 @@ export const deleteUser = async (req, res) => {
       "User account permanently deleted",
     );
 
-    console.log(`✅ User permanently deleted: ${user.email}`);
     res.json({
       message: "User deleted successfully",
       deletedId: userId,
     });
   } catch (error) {
-    console.error("❌ Delete user error:", error);
     await auditLogger.logError(req, error, "Failed to delete user");
-
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        error: "Invalid user ID format",
-        code: "INVALID_USER_ID",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to delete user",
-      details: error.message,
-      code: "DELETE_USER_ERROR",
-    });
+    next(error);
   }
 };
 
@@ -626,7 +507,7 @@ export const deleteUser = async (req, res) => {
  * Suspend a user account.
  * Access: Admin | Super Admin
  */
-export const suspendUser = async (req, res) => {
+export const suspendUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { reason } = req.body;
@@ -650,12 +531,10 @@ export const suspendUser = async (req, res) => {
     await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
       `Account suspended: ${reason || "No reason provided"}`);
 
-    console.log(`✅ User suspended: ${targetUser.email}`);
     res.json({ message: "User suspended successfully", user: targetUser });
   } catch (error) {
-    console.error("❌ Suspend user error:", error);
     await auditLogger.logError(req, error, "Failed to suspend user");
-    res.status(500).json({ error: "Failed to suspend user", code: "SUSPEND_USER_ERROR" });
+    next(error);
   }
 };
 
@@ -664,7 +543,7 @@ export const suspendUser = async (req, res) => {
  * Reactivate a suspended or banned user account.
  * Access: Admin | Super Admin
  */
-export const reactivateUser = async (req, res) => {
+export const reactivateUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -690,12 +569,10 @@ export const reactivateUser = async (req, res) => {
     await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
       `Account reactivated from ${oldData.accountStatus}`);
 
-    console.log(`✅ User reactivated: ${targetUser.email}`);
     res.json({ message: "User reactivated successfully", user: targetUser });
   } catch (error) {
-    console.error("❌ Reactivate user error:", error);
     await auditLogger.logError(req, error, "Failed to reactivate user");
-    res.status(500).json({ error: "Failed to reactivate user", code: "REACTIVATE_USER_ERROR" });
+    next(error);
   }
 };
 
@@ -704,7 +581,7 @@ export const reactivateUser = async (req, res) => {
  * Ban a user account permanently.
  * Access: Super Admin only
  */
-export const banUser = async (req, res) => {
+export const banUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { reason } = req.body;
@@ -728,12 +605,10 @@ export const banUser = async (req, res) => {
     await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
       `Account banned: ${reason || "No reason provided"}`);
 
-    console.log(`✅ User banned: ${targetUser.email}`);
     res.json({ message: "User banned successfully", user: targetUser });
   } catch (error) {
-    console.error("❌ Ban user error:", error);
     await auditLogger.logError(req, error, "Failed to ban user");
-    res.status(500).json({ error: "Failed to ban user", code: "BAN_USER_ERROR" });
+    next(error);
   }
 };
 
@@ -741,7 +616,7 @@ export const banUser = async (req, res) => {
  * Get user's stay information and history
  * Returns current stay and past reservations
  */
-export const getMyStays = async (req, res) => {
+export const getMyStays = async (req, res, next) => {
   try {
     // Find user in database
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
@@ -780,17 +655,15 @@ export const getMyStays = async (req, res) => {
     ).length;
     const totalNights = pastStays.reduce((sum, reservation) => {
       if (reservation.checkInDate && reservation.checkOutDate) {
-        const nights = Math.ceil(
-          (new Date(reservation.checkOutDate) -
-            new Date(reservation.checkInDate)) /
-            (1000 * 60 * 60 * 24),
+        const nights = dayjs(reservation.checkOutDate).diff(
+          dayjs(reservation.checkInDate),
+          "day"
         );
-        return sum + nights;
+        return sum + Math.max(0, nights);
       }
       return sum;
     }, 0);
 
-    console.log(`✅ Retrieved stay information for ${dbUser.email}`);
     res.json({
       currentStays,
       pastStays,
@@ -802,11 +675,6 @@ export const getMyStays = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Fetch stays error:", error);
-    res.status(500).json({
-      error: "Failed to fetch stay information",
-      details: error.message,
-      code: "FETCH_STAYS_ERROR",
-    });
+    next(error);
   }
 };

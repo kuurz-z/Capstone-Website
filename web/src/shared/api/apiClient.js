@@ -31,6 +31,7 @@ export { auditApi } from "./auditApi.js";
 export { billingApi } from "./billingApi.js";
 export { announcementApi } from "./announcementApi.js";
 export { maintenanceApi } from "./maintenanceApi.js";
+export { notificationApi } from "./notificationApi.js";
 
 // =============================================================================
 // DEFAULT EXPORT (backward compatibility)
@@ -45,6 +46,7 @@ import { auditApi } from "./auditApi.js";
 import { billingApi } from "./billingApi.js";
 import { announcementApi } from "./announcementApi.js";
 import { maintenanceApi } from "./maintenanceApi.js";
+import { notificationApi } from "./notificationApi.js";
 import { useApiClient } from "./httpClient.js";
 
 const apiClient = {
@@ -57,6 +59,7 @@ const apiClient = {
   billingApi,
   announcementApi,
   maintenanceApi,
+  notificationApi,
   useApiClient,
 };
 

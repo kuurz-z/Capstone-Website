@@ -10,15 +10,19 @@
 
 import Notification from "../models/Notification.js";
 import { User } from "../models/index.js";
+import {
+  sendSuccess,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 /**
  * GET /api/notifications
  * Get notifications for the authenticated user (paginated).
  */
-export const getMyNotifications = async (req, res) => {
+export const getMyNotifications = async (req, res, next) => {
   try {
     const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-    if (!dbUser) return res.status(404).json({ error: "User not found" });
+    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
     const { page = 1, limit = 20, unreadOnly } = req.query;
     const result = await Notification.getForUser(dbUser._id, {
@@ -27,10 +31,9 @@ export const getMyNotifications = async (req, res) => {
       unreadOnly: unreadOnly === "true",
     });
 
-    res.json(result);
+    sendSuccess(res, result);
   } catch (error) {
-    console.error("❌ Get notifications error:", error);
-    res.status(500).json({ error: "Failed to fetch notifications" });
+    next(error);
   }
 };
 
@@ -38,22 +41,21 @@ export const getMyNotifications = async (req, res) => {
  * PATCH /api/notifications/:notificationId/read
  * Mark a single notification as read.
  */
-export const markAsRead = async (req, res) => {
+export const markAsRead = async (req, res, next) => {
   try {
     const { notificationId } = req.params;
     const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-    if (!dbUser) return res.status(404).json({ error: "User not found" });
+    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
     const notification = await Notification.findById(notificationId);
-    if (!notification) return res.status(404).json({ error: "Notification not found" });
+    if (!notification) throw new AppError("Notification not found", 404, "NOTIFICATION_NOT_FOUND");
     if (String(notification.userId) !== String(dbUser._id))
-      return res.status(403).json({ error: "Not your notification" });
+      throw new AppError("Not your notification", 403, "FORBIDDEN");
 
     await notification.markAsRead();
-    res.json({ message: "Notification marked as read" });
+    sendSuccess(res, { message: "Notification marked as read" });
   } catch (error) {
-    console.error("❌ Mark notification read error:", error);
-    res.status(500).json({ error: "Failed to update notification" });
+    next(error);
   }
 };
 
@@ -61,16 +63,15 @@ export const markAsRead = async (req, res) => {
  * PATCH /api/notifications/read-all
  * Mark all notifications as read for the authenticated user.
  */
-export const markAllAsRead = async (req, res) => {
+export const markAllAsRead = async (req, res, next) => {
   try {
     const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-    if (!dbUser) return res.status(404).json({ error: "User not found" });
+    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
     const result = await Notification.markAllAsRead(dbUser._id);
-    res.json({ message: "All notifications marked as read", modifiedCount: result.modifiedCount });
+    sendSuccess(res, { message: "All notifications marked as read", modifiedCount: result.modifiedCount });
   } catch (error) {
-    console.error("❌ Mark all notifications read error:", error);
-    res.status(500).json({ error: "Failed to update notifications" });
+    next(error);
   }
 };
 
@@ -78,15 +79,14 @@ export const markAllAsRead = async (req, res) => {
  * GET /api/notifications/unread-count
  * Get unread notification count for the authenticated user.
  */
-export const getUnreadCount = async (req, res) => {
+export const getUnreadCount = async (req, res, next) => {
   try {
     const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-    if (!dbUser) return res.status(404).json({ error: "User not found" });
+    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
 
     const count = await Notification.countDocuments({ userId: dbUser._id, isRead: false });
-    res.json({ unreadCount: count });
+    sendSuccess(res, { unreadCount: count });
   } catch (error) {
-    console.error("❌ Get unread count error:", error);
-    res.status(500).json({ error: "Failed to fetch unread count" });
+    next(error);
   }
 };

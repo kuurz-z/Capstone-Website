@@ -19,6 +19,8 @@ import {
   validateProfileUpdateInput,
   createValidationMiddleware,
 } from "../middleware/validation.js";
+import { validate } from "../validation/validate.js";
+import { setRoleSchema, updateBranchSchema } from "../validation/schemas.js";
 import {
   register,
   login,
@@ -129,7 +131,7 @@ router.put(
  * @body { branch: 'gil-puyat' | 'guadalupe' }
  * @returns { updated user data }
  */
-router.patch("/update-branch", verifyToken, updateBranch);
+router.patch("/update-branch", verifyToken, validate(updateBranchSchema), updateBranch);
 
 // ============================================================================
 // ADMIN OPERATIONS
@@ -145,7 +147,7 @@ router.patch("/update-branch", verifyToken, updateBranch);
  * @body { userId, role }
  * @returns { message }
  */
-router.post("/set-role", verifyToken, verifyAdmin, setRole);
+router.post("/set-role", verifyToken, verifyAdmin, validate(setRoleSchema), setRole);
 
 /**
  * POST /api/auth/log-password-reset
@@ -157,5 +159,39 @@ router.post("/set-role", verifyToken, verifyAdmin, setRole);
  * @returns { message }
  */
 router.post("/log-password-reset", logPasswordReset);
+
+/**
+ * POST /api/auth/revoke-sessions
+ *
+ * Revoke all refresh tokens for the authenticated user.
+ * This effectively signs out the user from all devices.
+ *
+ * @requires Firebase token in Authorization header
+ * @returns { message }
+ */
+router.post("/revoke-sessions", verifyToken, async (req, res) => {
+  try {
+    const auth = getAuth();
+    if (!auth) {
+      return res.status(503).json({ error: "Firebase Admin not available" });
+    }
+    await auth.revokeRefreshTokens(req.user.uid);
+    await auditLogger.log({
+      type: "security",
+      action: "All sessions revoked",
+      severity: "warning",
+      userId: req.user.uid,
+      userName: req.user.email,
+      userRole: "user",
+      userEmail: req.user.email,
+      ipAddress: req.headers["x-forwarded-for"] || req.connection?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+    res.json({ message: "All sessions revoked successfully" });
+  } catch (error) {
+    console.error("❌ Session revocation error:", error);
+    res.status(500).json({ error: "Failed to revoke sessions" });
+  }
+});
 
 export default router;

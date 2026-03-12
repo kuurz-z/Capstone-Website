@@ -111,10 +111,8 @@ export const authApi = {
    */
   logout: async () => {
     try {
-      console.log("🔐 [Logout] Starting backend logout call...");
       // Call backend logout endpoint first to log the logout
       const response = await authRequest("/auth/logout", { method: "POST" });
-      console.log("✅ [Logout] Backend logout successful:", response);
     } catch (error) {
       console.error(
         "❌ [Logout] Backend logout error:",
@@ -122,9 +120,7 @@ export const authApi = {
       );
     }
     // Always sign out from Firebase even if backend fails
-    console.log("🔐 [Logout] Signing out from Firebase...");
     await auth.signOut();
-    console.log("✅ [Logout] Firebase signout complete");
     return { message: "Logged out successfully" };
   },
 

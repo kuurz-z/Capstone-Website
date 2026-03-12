@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { User, Bed, ArrowRight } from "lucide-react";
 import ReservationDashboard from "../ReservationDashboard";
+import ProfileCompletionCard from "./ProfileCompletionCard";
 
 /**
  * Dashboard tab content for ProfilePage.
@@ -13,11 +14,18 @@ const DashboardTab = ({
   selectedReservation,
   visits,
   nextAction,
+  onGoToPersonal,
 }) => {
   const navigate = useNavigate();
 
   return (
     <div className="max-w-4xl">
+      {/* Profile Completion Card — auto-hides at 100% */}
+      <ProfileCompletionCard
+        profileData={profileData}
+        onGoToPersonal={onGoToPersonal}
+      />
+
       {/* Welcome Banner */}
       <div
         style={{

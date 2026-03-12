@@ -75,6 +75,8 @@ export default function TenantsPage() {
           userReservation?.roomId?.name ||
           userReservation?.roomId?.roomNumber ||
           "Not Assigned",
+        roomType: userReservation?.roomId?.type || "Standard Room",
+        monthlyRent: userReservation?.roomId?.price || null,
         branch:
           userReservation?.roomId?.branch === "gil-puyat"
             ? "Gil Puyat"
@@ -94,6 +96,16 @@ export default function TenantsPage() {
         email: user.email || "N/A",
         phone: userReservation?.mobileNumber || user.phone || "N/A",
         reservationId: userReservation?._id,
+        // Extended profile fields
+        dateOfBirth: user.dateOfBirth || null,
+        gender: user.gender || "",
+        address: user.address || "",
+        city: user.city || "",
+        emergencyContact: user.emergencyContact || "",
+        emergencyPhone: user.emergencyPhone || "",
+        studentId: user.studentId || "",
+        school: user.school || "",
+        yearLevel: user.yearLevel || "",
       };
     });
   }, [usersResponse, reservationsData]);

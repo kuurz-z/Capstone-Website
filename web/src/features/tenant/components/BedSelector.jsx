@@ -19,10 +19,15 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
 
   const getStatus = (bed) => {
     if (!bed) return "empty";
-    return bed.status || (bed.available === false ? "occupied" : "available");
+    if (bed.status) return bed.status; // available, occupied, reserved, locked, maintenance
+    return bed.available === false ? "occupied" : "available";
   };
 
-  const isSelectable = (bed) => !readOnly && bed && getStatus(bed) === "available";
+  const isSelectable = (bed) => {
+    if (readOnly || !bed) return false;
+    const status = getStatus(bed);
+    return status === "available";
+  };
   const isSelected = (bed) => bed && selectedBed?.id === bed.id;
 
   const handleClick = (bed) => {
@@ -58,7 +63,17 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
             </div>
           </div>
           <div className="bs-badge">
-            {selected ? "✓ Selected" : status === "occupied" ? "Occupied" : status === "maintenance" ? "Locked" : "Available"}
+            {selected
+              ? "✓ Selected"
+              : status === "occupied"
+                ? "Occupied"
+                : status === "reserved"
+                  ? "🔒 Reserved"
+                  : status === "locked"
+                    ? "🔧 Locked"
+                    : status === "maintenance"
+                      ? "Locked"
+                      : "Available"}
           </div>
         </div>
       </div>
@@ -72,7 +87,8 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
         <div className="bs-legend">
           <span className="bs-legend-item"><span className="bs-legend-dot bs-legend-avail" />Available</span>
           <span className="bs-legend-item"><span className="bs-legend-dot bs-legend-occ" />Occupied</span>
-          <span className="bs-legend-item"><span className="bs-legend-dot bs-legend-maint" />Maintenance</span>
+          <span className="bs-legend-item"><span className="bs-legend-dot bs-legend-resv" />Reserved</span>
+          <span className="bs-legend-item"><span className="bs-legend-dot bs-legend-lock" />Locked</span>
         </div>
       </div>
 

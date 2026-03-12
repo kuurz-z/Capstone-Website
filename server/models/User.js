@@ -81,6 +81,52 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    // --- Extended Profile ---
+    gender: {
+      type: String,
+      enum: ["male", "female", "other", "prefer-not-to-say", ""],
+      default: "",
+    },
+    address: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+    emergencyContact: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    emergencyPhone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    studentId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    school: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    yearLevel: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     // --- Branch & Role ---
     branch: {
       type: String,

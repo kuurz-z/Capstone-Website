@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
+import NotificationBell from "../../../shared/components/NotificationBell";
 import "../styles/admin-layout.css";
 import "../styles/admin-common.css";
 
@@ -37,14 +38,17 @@ export default function AdminLayout() {
             </button>
             <h1 className="admin-topbar-title">{pageTitle}</h1>
           </div>
-          <span className="admin-topbar-date">
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </span>
+          <div className="admin-topbar-right">
+            <NotificationBell />
+            <span className="admin-topbar-date">
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+          </div>
         </header>
 
         {/* Page Content */}

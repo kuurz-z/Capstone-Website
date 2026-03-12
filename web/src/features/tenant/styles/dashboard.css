@@ -7,15 +7,6 @@
   margin: 0 auto;
 }
 
-.dashboard-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  gap: 1rem;
-}
-
 .dashboard-header {
   display: flex;
   justify-content: space-between;

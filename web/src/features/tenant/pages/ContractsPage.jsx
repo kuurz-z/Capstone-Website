@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
+import ContractsPageSkeleton from "../components/contracts/ContractsPageSkeleton";
 import "../styles/tenant-common.css";
 import "../styles/contracts.css";
 
@@ -294,6 +295,34 @@ const ContractsPage = () => {
               </div>
             )}
           </div>
+
+          {/* Download Contract PDF */}
+          <button
+            className="btn btn-primary-outline btn-sm"
+            style={{
+              marginTop: "16px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              width: "100%",
+              justifyContent: "center",
+              padding: "10px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 600
+            }}
+            onClick={async () => {
+              try {
+                const { generateContractPDF } = await import("../../../shared/utils/pdfUtils");
+                generateContractPDF(reservation);
+              } catch (err) {
+                console.error("PDF generation failed:", err);
+              }
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1V10M8 10L4.5 6.5M8 10L11.5 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 14H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Download Contract PDF
+          </button>
         </div>
       </div>
     );
@@ -308,7 +337,7 @@ const ContractsPage = () => {
         </div>
 
         {loading ? (
-          <div className="contracts-loading">Loading contracts...</div>
+          <ContractsPageSkeleton />
         ) : error ? (
           <div className="contracts-error">{error}</div>
         ) : !activeContract &&

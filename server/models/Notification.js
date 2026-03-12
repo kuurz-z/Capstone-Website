@@ -46,6 +46,8 @@ const notificationSchema = new mongoose.Schema(
         "payment_rejected",
         "bill_generated",
         "bill_due_reminder",
+        "penalty_applied",
+        "contract_expiring",
         "grace_period_warning",
         "move_in_reminder",
         "account_suspended",

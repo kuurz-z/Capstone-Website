@@ -10,13 +10,18 @@
  */
 
 import { Announcement, AcknowledgmentAccount, User } from "../models/index.js";
+import {
+  sendSuccess,
+  sendError,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 /**
  * Get announcements for logged-in user's branch
  * @route GET /api/announcements?limit=50&category=reminder
  * @access Private
  */
-export const getAnnouncements = async (req, res) => {
+export const getAnnouncements = async (req, res, next) => {
   try {
     const { branch } = req.user;
     const { limit = 50, category } = req.query;
@@ -34,7 +39,7 @@ export const getAnnouncements = async (req, res) => {
       .sort({ isPinned: -1, publishedAt: -1 })
       .limit(Math.min(parseInt(limit), 100));
 
-    res.json({
+    sendSuccess(res, {
       count: announcements.length,
       announcements: announcements.map((a) => ({
         id: a._id,
@@ -47,8 +52,7 @@ export const getAnnouncements = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("❌ Get announcements error:", error);
-    res.status(500).json({ error: "Failed to fetch announcements" });
+    next(error);
   }
 };
 
@@ -57,7 +61,7 @@ export const getAnnouncements = async (req, res) => {
  * @route GET /api/announcements/unacknowledged
  * @access Private
  */
-export const getUnacknowledged = async (req, res) => {
+export const getUnacknowledged = async (req, res, next) => {
   try {
     const userId = req.user.uid;
     const { branch } = req.user;
@@ -67,7 +71,7 @@ export const getUnacknowledged = async (req, res) => {
       branch,
     );
 
-    res.json({
+    sendSuccess(res, {
       count: unacknowledged.length,
       announcements: unacknowledged.map((a) => ({
         id: a._id,
@@ -78,10 +82,7 @@ export const getUnacknowledged = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("❌ Get unacknowledged error:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to fetch unacknowledged announcements" });
+    next(error);
   }
 };
 
@@ -90,7 +91,7 @@ export const getUnacknowledged = async (req, res) => {
  * @route POST /api/announcements/:announcementId/read
  * @access Private
  */
-export const markAsRead = async (req, res) => {
+export const markAsRead = async (req, res, next) => {
   try {
     const userId = req.user.uid;
     const { announcementId } = req.params;
@@ -116,13 +117,9 @@ export const markAsRead = async (req, res) => {
       await announcement.incrementViewCount();
     }
 
-    res.json({
-      success: true,
-      readAt: ackAccount.readAt,
-    });
+    sendSuccess(res, { readAt: ackAccount.readAt });
   } catch (error) {
-    console.error("❌ Mark as read error:", error);
-    res.status(500).json({ error: "Failed to mark announcement as read" });
+    next(error);
   }
 };
 
@@ -131,7 +128,7 @@ export const markAsRead = async (req, res) => {
  * @route POST /api/announcements/:announcementId/acknowledge
  * @access Private
  */
-export const acknowledgeAnnouncement = async (req, res) => {
+export const acknowledgeAnnouncement = async (req, res, next) => {
   try {
     const userId = req.user.uid;
     const { announcementId } = req.params;
@@ -157,13 +154,9 @@ export const acknowledgeAnnouncement = async (req, res) => {
       await announcement.incrementAcknowledgmentCount();
     }
 
-    res.json({
-      success: true,
-      acknowledgedAt: ackAccount.acknowledgedAt,
-    });
+    sendSuccess(res, { acknowledgedAt: ackAccount.acknowledgedAt });
   } catch (error) {
-    console.error("❌ Acknowledge announcement error:", error);
-    res.status(500).json({ error: "Failed to acknowledge announcement" });
+    next(error);
   }
 };
 
@@ -172,7 +165,7 @@ export const acknowledgeAnnouncement = async (req, res) => {
  * @route GET /api/announcements/user/engagement-stats
  * @access Private
  */
-export const getUserEngagementStats = async (req, res) => {
+export const getUserEngagementStats = async (req, res, next) => {
   try {
     const userId = req.user.uid;
     const { days = 30 } = req.query;
@@ -182,10 +175,9 @@ export const getUserEngagementStats = async (req, res) => {
       parseInt(days),
     );
 
-    res.json(stats[0] || {});
+    sendSuccess(res, stats[0] || {});
   } catch (error) {
-    console.error("❌ Get engagement stats error:", error);
-    res.status(500).json({ error: "Failed to fetch engagement statistics" });
+    next(error);
   }
 };
 
@@ -194,7 +186,7 @@ export const getUserEngagementStats = async (req, res) => {
  * @route POST /api/announcements
  * @access Private (Admin only)
  */
-export const createAnnouncement = async (req, res) => {
+export const createAnnouncement = async (req, res, next) => {
   try {
     const publishedBy = req.user.uid;
     const {
@@ -208,9 +200,11 @@ export const createAnnouncement = async (req, res) => {
 
     // Validate inputs
     if (!title || !content || !category) {
-      return res.status(400).json({
-        error: "Missing required fields: title, content, category",
-      });
+      throw new AppError(
+        "Missing required fields: title, content, category",
+        400,
+        "MISSING_REQUIRED_FIELDS",
+      );
     }
 
     const announcement = new Announcement({
@@ -246,13 +240,9 @@ export const createAnnouncement = async (req, res) => {
       }
     }
 
-    res.status(201).json({
-      success: true,
-      announcement: announcement.toObject(),
-    });
+    sendSuccess(res, { announcement: announcement.toObject() }, 201);
   } catch (error) {
-    console.error("❌ Create announcement error:", error);
-    res.status(500).json({ error: "Failed to create announcement" });
+    next(error);
   }
 };
 

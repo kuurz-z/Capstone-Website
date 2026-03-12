@@ -10,6 +10,7 @@ import "../../../shared/styles/notification.css";
 import "../styles/tenant-dashboard.css";
 import InquiryModal from "../../public/modals/InquiryModal";
 import RoomDetailsModal from "../modals/RoomDetailsModal";
+import CheckAvailabilitySkeleton from "../components/check-availability/CheckAvailabilitySkeleton";
 
 // Extracted sub-components
 import {
@@ -131,7 +132,6 @@ function CheckAvailabilityPage() {
     if (!validation.isValid)
       console.error("Room capacity validation errors:", validation.errors);
     if (validation.warnings.length > 0)
-      console.warn("Room capacity warnings:", validation.warnings);
   }, [rooms]);
 
   // ── Filtering ──────────────────────────────────────────────
@@ -463,7 +463,7 @@ function CheckAvailabilityPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {roomsLoading ? (
-            <div className="text-gray-600">Loading rooms...</div>
+            <CheckAvailabilitySkeleton />
           ) : roomsError ? (
             <div className="text-red-600">{roomsError}</div>
           ) : filteredRooms.length === 0 ? (

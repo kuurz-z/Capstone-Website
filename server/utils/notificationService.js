@@ -129,6 +129,30 @@ const notify = {
       { entityType: "user" }),
 
   /**
+   * Bill due reminder
+   */
+  billDueReminder: (userId, billingMonth, totalAmount, daysUntilDue) =>
+    createNotification(userId, "bill_due_reminder", "Payment Reminder",
+      `Your bill of ₱${totalAmount.toLocaleString()} for ${billingMonth} is due in ${daysUntilDue} day${daysUntilDue === 1 ? "" : "s"}.`,
+      { entityType: "bill" }),
+
+  /**
+   * Penalty applied to overdue bill
+   */
+  penaltyApplied: (userId, billingMonth, penaltyAmount, daysLate) =>
+    createNotification(userId, "penalty_applied", "Late Payment Penalty",
+      `A penalty of ₱${penaltyAmount.toLocaleString()} (${daysLate} day${daysLate === 1 ? "" : "s"} late) has been applied to your ${billingMonth} bill.`,
+      { entityType: "bill" }),
+
+  /**
+   * Contract expiring soon
+   */
+  contractExpiring: (userId, roomName, daysRemaining) =>
+    createNotification(userId, "contract_expiring", "Lease Expiring Soon",
+      `Your lease for ${roomName} expires in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}. Please contact the admin to renew or arrange move-out.`,
+      { entityType: "reservation" }),
+
+  /**
    * General notification
    */
   general: (userId, title, message, options = {}) =>

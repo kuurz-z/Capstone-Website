@@ -47,7 +47,8 @@
 
 .bs-legend-avail { background: #10B981; }
 .bs-legend-occ   { background: #EF4444; }
-.bs-legend-maint { background: #D1D5DB; }
+.bs-legend-resv  { background: #F59E0B; }
+.bs-legend-lock  { background: #9CA3AF; }
 
 /* ── Bunk container ── */
 .bs-bunks {
@@ -120,6 +121,8 @@
 
 .bs-dot-available   { background: #10B981; box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
 .bs-dot-occupied    { background: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
+.bs-dot-reserved    { background: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
+.bs-dot-locked      { background: #9CA3AF; box-shadow: 0 0 0 3px rgba(156,163,175,0.15); }
 .bs-dot-maintenance { background: #D1D5DB; }
 
 /* ── Labels ── */
@@ -164,6 +167,32 @@
   color: #DC2626;
 }
 .bs-occupied .bs-label {
+  color: #9CA3AF;
+}
+
+.bs-reserved {
+  background: #FFFDF7;
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.bs-reserved .bs-badge {
+  background: #FEF3C7;
+  color: #92400E;
+}
+.bs-reserved .bs-label {
+  color: #B45309;
+}
+
+.bs-locked {
+  background: #FAFAFA;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.bs-locked .bs-badge {
+  background: #F3F4F6;
+  color: #6B7280;
+}
+.bs-locked .bs-label {
   color: #9CA3AF;
 }
 

@@ -20,6 +20,11 @@ import {
   buildUserUpdatePayload,
 } from "../utils/reservationHelpers.js";
 import { sendReservationConfirmedEmail, sendVisitApprovedEmail } from "../config/email.js";
+import {
+  sendSuccess,
+  sendError,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
@@ -48,7 +53,7 @@ const findDbUser = async (uid) => {
 export const invalidateUserCache = (uid) => userCache.delete(uid);
 
 /* ─── GET all reservations ───────────────────────── */
-export const getReservations = async (req, res) => {
+export const getReservations = async (req, res, next) => {
   try {
     const dbUser = await findDbUser(req.user.uid);
     if (!dbUser)
@@ -74,9 +79,6 @@ export const getReservations = async (req, res) => {
       .select(HEAVY_FIELDS)
       .sort({ createdAt: -1 });
 
-    console.log(
-      `✅ Retrieved ${reservations.length} reservations for ${dbUser.email} (${dbUser.role})`,
-    );
     res.json(reservations);
   } catch (error) {
     console.error("❌ Fetch reservations error:", error);
@@ -85,7 +87,7 @@ export const getReservations = async (req, res) => {
 };
 
 /* ─── GET single reservation ─────────────────────── */
-export const getReservationById = async (req, res) => {
+export const getReservationById = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
@@ -124,7 +126,7 @@ export const getReservationById = async (req, res) => {
 };
 
 /* ─── CREATE reservation ─────────────────────────── */
-export const createReservation = async (req, res) => {
+export const createReservation = async (req, res, next) => {
   try {
     const dbUser = await findDbUser(req.user.uid);
     if (!dbUser)
@@ -177,9 +179,10 @@ export const createReservation = async (req, res) => {
         code: "ROOM_NOT_AVAILABLE",
       });
     if (!room.available)
-      console.warn(
-        `⚠️ Room ${room.name} is at capacity but allowing draft reservation for ${dbUser.email}`,
-      );
+      return res.status(400).json({
+        error: "Room is not available for reservation",
+        code: "ROOM_UNAVAILABLE",
+      });
 
     // Create reservation with all form fields
     const b = req.body;
@@ -270,9 +273,6 @@ export const createReservation = async (req, res) => {
       reservation.toObject(),
       `Created reservation for room: ${room.name}`,
     );
-    console.log(
-      `✅ Reservation created: ${reservation._id} (${reservation.reservationCode}) for ${dbUser.email}`,
-    );
     res.status(201).json({
       message: "Reservation created successfully",
       reservationId: reservation._id,
@@ -287,7 +287,7 @@ export const createReservation = async (req, res) => {
 };
 
 /* ─── UPDATE reservation (admin) ─────────────────── */
-export const updateReservation = async (req, res) => {
+export const updateReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
@@ -369,9 +369,6 @@ export const updateReservation = async (req, res) => {
       oldData,
       updatedReservation.toObject(),
     );
-    console.log(
-      `✅ Reservation updated: ${updatedReservation._id} - Status: ${updatedReservation.status}${updatedReservation.reservationCode ? ` - Code: ${updatedReservation.reservationCode}` : ""}`,
-    );
     res.json({
       message: "Reservation updated successfully",
       reservation: updatedReservation,
@@ -436,7 +433,7 @@ export const updateReservation = async (req, res) => {
 };
 
 /* ─── UPDATE reservation (user self-update) ──────── */
-export const updateReservationByUser = async (req, res) => {
+export const updateReservationByUser = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
@@ -495,7 +492,7 @@ export const updateReservationByUser = async (req, res) => {
 };
 
 /* ─── DELETE reservation ─────────────────────────── */
-export const deleteReservation = async (req, res) => {
+export const deleteReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
     const dbUser = await findDbUser(req.user.uid);
@@ -549,7 +546,6 @@ export const deleteReservation = async (req, res) => {
       reservationId,
       reservationData,
     );
-    console.log(`✅ Reservation deleted: ${reservationId}`);
     res.json({ message: "Reservation deleted successfully", reservationId });
   } catch (error) {
     console.error("❌ Delete reservation error:", error);
@@ -559,7 +555,7 @@ export const deleteReservation = async (req, res) => {
 };
 
 /* ─── EXTEND reservation ─────────────────────────── */
-export const extendReservation = async (req, res) => {
+export const extendReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
     const { extensionDays = 3 } = req.body;
@@ -603,9 +599,6 @@ export const extendReservation = async (req, res) => {
       reservation.toObject(),
       `Extended move-in date by ${extensionDays} days`,
     );
-    console.log(
-      `✅ Reservation extended: ${reservationId} - New move-in: ${newMoveIn}`,
-    );
     res.json({
       message: `Reservation extended by ${extensionDays} days`,
       newMoveInDate: newMoveIn,
@@ -619,7 +612,7 @@ export const extendReservation = async (req, res) => {
 };
 
 /* ─── RELEASE SLOT ───────────────────────────────── */
-export const releaseSlot = async (req, res) => {
+export const releaseSlot = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
     const { reason = "No-show after move-in date" } = req.body;
@@ -674,7 +667,6 @@ export const releaseSlot = async (req, res) => {
       reservation.toObject(),
       `Slot released: ${reason}`,
     );
-    console.log(`✅ Reservation slot released: ${reservationId}`);
     res.json({
       message: "Reservation slot released successfully",
       reason,
@@ -692,7 +684,7 @@ export const releaseSlot = async (req, res) => {
 };
 
 /* ─── ARCHIVE reservation ────────────────────────── */
-export const archiveReservation = async (req, res) => {
+export const archiveReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
     const { reason = "Archived by admin" } = req.body;
@@ -751,7 +743,6 @@ export const archiveReservation = async (req, res) => {
       reservation.toObject(),
       `Reservation archived: ${reason}`,
     );
-    console.log(`✅ Reservation archived: ${reservationId}`);
     res.json({
       message: "Reservation archived successfully",
       reason,
@@ -761,5 +752,278 @@ export const archiveReservation = async (req, res) => {
     console.error("❌ Archive reservation error:", error);
     await auditLogger.logError(req, error, "Failed to archive reservation");
     handleReservationError(res, error, "archive");
+  }
+};
+
+/* ─── RENEW CONTRACT ─────────────────────────────── */
+export const renewContract = async (req, res, next) => {
+  try {
+    const { reservationId } = req.params;
+    const { additionalMonths = 12, notes: renewNotes = "" } = req.body;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
+
+    if (additionalMonths < 1 || additionalMonths > 24) {
+      return res.status(400).json({
+        error: "Renewal must be between 1 and 24 months.",
+        code: "INVALID_RENEWAL_DURATION",
+      });
+    }
+
+    const reservation = await Reservation.findById(reservationId)
+      .populate("roomId", "name branch")
+      .populate("userId", "firstName lastName email");
+    if (!reservation)
+      return res.status(404).json({
+        error: "Reservation not found",
+        code: "RESERVATION_NOT_FOUND",
+      });
+
+    if (reservation.status !== "checked-in") {
+      return res.status(400).json({
+        error: "Only checked-in reservations can be renewed.",
+        code: "INVALID_STATUS_FOR_RENEWAL",
+      });
+    }
+
+    const denied = checkBranchAccess(
+      res,
+      req.branchFilter,
+      reservation.roomId?.branch,
+    );
+    if (denied) return;
+
+    const oldData = reservation.toObject();
+    const oldDuration = reservation.leaseDuration || 12;
+
+    reservation.leaseDuration = oldDuration + additionalMonths;
+    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Contract renewed: +${additionalMonths} months (${oldDuration} → ${reservation.leaseDuration}). ${renewNotes}`;
+    await reservation.save();
+
+    // Notify tenant
+    const { notify } = await import("../utils/notificationService.js");
+    const roomName = reservation.roomId?.name || "your room";
+    notify.general(
+      reservation.userId?._id || reservation.userId,
+      "Contract Renewed",
+      `Your lease for ${roomName} has been renewed for an additional ${additionalMonths} month${additionalMonths === 1 ? "" : "s"} (total: ${reservation.leaseDuration} months).`,
+      { entityType: "reservation" },
+    );
+
+    await auditLogger.logModification(
+      req,
+      "reservation",
+      reservationId,
+      oldData,
+      reservation.toObject(),
+      `Contract renewed: +${additionalMonths} months`,
+    );
+
+    res.json({
+      message: `Contract renewed for ${additionalMonths} additional months`,
+      oldDuration,
+      newDuration: reservation.leaseDuration,
+      reservation,
+    });
+  } catch (error) {
+    console.error("❌ Renew contract error:", error);
+    await auditLogger.logError(req, error, "Failed to renew contract");
+    handleReservationError(res, error, "renew");
+  }
+};
+
+/* ─── CHECKOUT ───────────────────────────────────── */
+export const checkoutReservation = async (req, res, next) => {
+  try {
+    const { reservationId } = req.params;
+    const { notes: checkoutNotes = "", inspectionPassed = true } = req.body;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
+
+    const reservation = await Reservation.findById(reservationId)
+      .populate("roomId")
+      .populate("userId", "firstName lastName email");
+    if (!reservation)
+      return res.status(404).json({
+        error: "Reservation not found",
+        code: "RESERVATION_NOT_FOUND",
+      });
+
+    if (reservation.status !== "checked-in") {
+      return res.status(400).json({
+        error: "Only checked-in reservations can be checked out.",
+        code: "INVALID_STATUS_FOR_CHECKOUT",
+      });
+    }
+
+    const denied = checkBranchAccess(
+      res,
+      req.branchFilter,
+      reservation.roomId?.branch,
+    );
+    if (denied) return;
+
+    const oldData = reservation.toObject();
+
+    // 1. Update reservation status
+    reservation.status = "checked-out";
+    reservation.checkOutDate = new Date();
+    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Checked out${inspectionPassed ? " (inspection passed)" : " (inspection issues noted)"}. ${checkoutNotes}`;
+    await reservation.save();
+
+    // 2. Release bed and decrease occupancy
+    if (reservation.roomId && reservation.selectedBed?.id) {
+      const room = await Room.findById(reservation.roomId._id);
+      if (room) {
+        room.vacateBed(reservation.selectedBed.id);
+        room.decreaseOccupancy();
+        room.updateAvailability();
+        await room.save();
+      }
+    }
+
+    // 3. Update user status
+    const userId = reservation.userId?._id || reservation.userId;
+    if (userId) {
+      await User.findByIdAndUpdate(userId, {
+        tenantStatus: "inactive",
+        role: "applicant", // Revert to applicant so they can re-reserve
+      });
+    }
+
+    // 4. Notify tenant
+    const { notify } = await import("../utils/notificationService.js");
+    const roomName = reservation.roomId?.name || "your room";
+    notify.general(
+      userId,
+      "Check-Out Complete",
+      `You have been checked out from ${roomName}. Thank you for staying at Lilycrest!`,
+      { entityType: "reservation" },
+    );
+
+    await reservation.populate(...POPULATE_USER);
+    await reservation.populate(...POPULATE_ROOM);
+    await auditLogger.logModification(
+      req,
+      "reservation",
+      reservationId,
+      oldData,
+      reservation.toObject(),
+      `Tenant checked out from ${roomName}`,
+    );
+
+    res.json({
+      message: "Tenant checked out successfully",
+      reservation,
+    });
+  } catch (error) {
+    console.error("❌ Checkout error:", error);
+    await auditLogger.logError(req, error, "Failed to checkout reservation");
+    handleReservationError(res, error, "checkout");
+  }
+};
+
+/* ─── TRANSFER TENANT ────────────────────────────── */
+export const transferTenant = async (req, res, next) => {
+  try {
+    const { reservationId } = req.params;
+    const { newRoomId, newBedId, reason = "Room transfer" } = req.body;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
+
+    if (!newRoomId || !newBedId) {
+      return res.status(400).json({
+        error: "New room ID and bed ID are required.",
+        code: "MISSING_TRANSFER_FIELDS",
+      });
+    }
+
+    const reservation = await Reservation.findById(reservationId)
+      .populate("roomId")
+      .populate("userId", "firstName lastName email");
+    if (!reservation)
+      return res.status(404).json({
+        error: "Reservation not found",
+        code: "RESERVATION_NOT_FOUND",
+      });
+
+    if (reservation.status !== "checked-in") {
+      return res.status(400).json({
+        error: "Only checked-in tenants can be transferred.",
+        code: "INVALID_STATUS_FOR_TRANSFER",
+      });
+    }
+
+    const denied = checkBranchAccess(
+      res,
+      req.branchFilter,
+      reservation.roomId?.branch,
+    );
+    if (denied) return;
+
+    // Validate new room
+    const newRoom = await Room.findById(newRoomId);
+    if (!newRoom)
+      return res.status(404).json({ error: "New room not found", code: "NEW_ROOM_NOT_FOUND" });
+
+    // Check bed availability
+    const newBed = newRoom.beds?.find((b) => String(b._id) === String(newBedId));
+    if (!newBed)
+      return res.status(404).json({ error: "Bed not found in new room", code: "BED_NOT_FOUND" });
+    if (newBed.status !== "available")
+      return res.status(400).json({ error: "Selected bed is not available", code: "BED_NOT_AVAILABLE" });
+
+    const oldData = reservation.toObject();
+    const oldRoomName = reservation.roomId?.name || "unknown";
+    const oldBedId = reservation.selectedBed?.id;
+
+    // 1. Vacate old bed & decrease old room occupancy
+    if (reservation.roomId && oldBedId) {
+      const oldRoom = await Room.findById(reservation.roomId._id);
+      if (oldRoom) {
+        oldRoom.vacateBed(oldBedId);
+        oldRoom.decreaseOccupancy();
+        oldRoom.updateAvailability();
+        await oldRoom.save();
+      }
+    }
+
+    // 2. Occupy new bed & increase new room occupancy
+    newRoom.occupyBed(newBedId);
+    newRoom.increaseOccupancy();
+    newRoom.updateAvailability();
+    await newRoom.save();
+
+    // 3. Update reservation
+    reservation.roomId = newRoom._id;
+    reservation.selectedBed = { id: newBedId, position: newBed.position || null };
+    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Transferred from ${oldRoomName} to ${newRoom.name}. ${reason}`;
+    await reservation.save();
+
+    // 4. Notify tenant
+    const { notify } = await import("../utils/notificationService.js");
+    notify.general(
+      reservation.userId?._id || reservation.userId,
+      "Room Transfer",
+      `You have been transferred from ${oldRoomName} to ${newRoom.name}. Reason: ${reason}`,
+      { entityType: "reservation" },
+    );
+
+    await reservation.populate(...POPULATE_USER);
+    await reservation.populate(...POPULATE_ROOM);
+    await auditLogger.logModification(
+      req,
+      "reservation",
+      reservationId,
+      oldData,
+      reservation.toObject(),
+      `Tenant transferred: ${oldRoomName} → ${newRoom.name}`,
+    );
+
+    res.json({
+      message: `Tenant transferred from ${oldRoomName} to ${newRoom.name}`,
+      reservation,
+    });
+  } catch (error) {
+    console.error("❌ Transfer error:", error);
+    await auditLogger.logError(req, error, "Failed to transfer tenant");
+    handleReservationError(res, error, "transfer");
   }
 };

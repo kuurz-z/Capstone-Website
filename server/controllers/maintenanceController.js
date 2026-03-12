@@ -10,34 +10,31 @@
  */
 
 import { MaintenanceRequest, Reservation } from "../models/index.js";
+import {
+  sendSuccess,
+  AppError,
+} from "../middleware/errorHandler.js";
 
 /**
  * Get maintenance requests for logged-in tenant
  * @route GET /api/maintenance/my-requests?limit=50&status=pending
  * @access Private (Tenant only)
  */
-export const getMyRequests = async (req, res) => {
+export const getMyRequests = async (req, res, next) => {
   try {
     const userId = req.user.uid;
     const { branch } = req.user;
     const { limit = 50, status } = req.query;
 
-    const query = {
-      userId,
-      branch,
-      isArchived: false,
-    };
-
-    if (status) {
-      query.status = status;
-    }
+    const query = { userId, branch, isArchived: false };
+    if (status) query.status = status;
 
     const requests = await MaintenanceRequest.find(query)
       .sort({ createdAt: -1 })
       .limit(Math.min(parseInt(limit), 100))
       .lean();
 
-    res.json({
+    sendSuccess(res, {
       count: requests.length,
       requests: requests.map((r) => ({
         id: r._id,
@@ -51,8 +48,7 @@ export const getMyRequests = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("❌ Get my requests error:", error);
-    res.status(500).json({ error: "Failed to fetch maintenance requests" });
+    next(error);
   }
 };
 
@@ -61,36 +57,23 @@ export const getMyRequests = async (req, res) => {
  * @route GET /api/maintenance/branch?limit=50&status=pending
  * @access Private (Admin only)
  */
-export const getByBranch = async (req, res) => {
+export const getByBranch = async (req, res, next) => {
   try {
     const { branch } = req.user;
     const { limit = 50, status, category } = req.query;
 
-    const query = {
-      branch,
-      isArchived: false,
-    };
-
-    if (status) {
-      query.status = status;
-    }
-
-    if (category) {
-      query.category = category;
-    }
+    const query = { branch, isArchived: false };
+    if (status) query.status = status;
+    if (category) query.category = category;
 
     const requests = await MaintenanceRequest.find(query)
       .sort({ urgency: -1, createdAt: 1 })
       .limit(Math.min(parseInt(limit), 100))
       .lean();
 
-    res.json({
-      count: requests.length,
-      requests,
-    });
+    sendSuccess(res, { count: requests.length, requests });
   } catch (error) {
-    console.error("❌ Get branch requests error:", error);
-    res.status(500).json({ error: "Failed to fetch maintenance requests" });
+    next(error);
   }
 };
 
@@ -99,46 +82,37 @@ export const getByBranch = async (req, res) => {
  * @route POST /api/maintenance/requests
  * @access Private (Tenant only)
  */
-export const createRequest = async (req, res) => {
+export const createRequest = async (req, res, next) => {
   try {
     const userId = req.user.uid;
     const { branch } = req.user;
     const { category, title, description, urgency } = req.body;
 
-    // Validate inputs
     if (!category || !title || !description) {
-      return res.status(400).json({
-        error: "Missing required fields: category, title, description",
-      });
+      throw new AppError(
+        "Missing required fields: category, title, description",
+        400,
+        "MISSING_REQUIRED_FIELDS",
+      );
     }
 
-    // Find user's active stay to get reservation ID
     const reservation = await Reservation.findOne({
-      userId,
-      branch,
-      status: "checked-in",
+      userId, branch, status: "checked-in",
     });
 
     if (!reservation) {
-      return res.status(404).json({
-        error: "No active stay found",
-      });
+      throw new AppError("No active stay found", 404, "NO_ACTIVE_STAY");
     }
 
     const request = new MaintenanceRequest({
       reservationId: reservation._id,
-      userId,
-      branch,
-      category,
-      title,
-      description,
+      userId, branch, category, title, description,
       urgency: urgency || "medium",
     });
 
     await request.save();
 
-    res.status(201).json({
-      success: true,
+    sendSuccess(res, {
       request: {
         id: request._id,
         title: request.title,
@@ -146,10 +120,9 @@ export const createRequest = async (req, res) => {
         status: request.status,
         date: request.createdAt,
       },
-    });
+    }, 201);
   } catch (error) {
-    console.error("❌ Create request error:", error);
-    res.status(500).json({ error: "Failed to create maintenance request" });
+    next(error);
   }
 };
 
@@ -158,27 +131,25 @@ export const createRequest = async (req, res) => {
  * @route GET /api/maintenance/requests/:requestId
  * @access Private
  */
-export const getRequest = async (req, res) => {
+export const getRequest = async (req, res, next) => {
   try {
     const { requestId } = req.params;
     const userId = req.user.uid;
 
     const request = await MaintenanceRequest.findById(requestId);
-
     if (!request) {
-      return res.status(404).json({ error: "Request not found" });
+      throw new AppError("Request not found", 404, "REQUEST_NOT_FOUND");
     }
 
-    // Users can only view their own requests if not admin
     if (
       request.userId.toString() !== userId &&
       req.user.role !== "admin" &&
       req.user.role !== "superAdmin"
     ) {
-      return res.status(403).json({ error: "Access denied" });
+      throw new AppError("Access denied", 403, "FORBIDDEN");
     }
 
-    res.json({
+    sendSuccess(res, {
       id: request._id,
       title: request.title,
       category: request.category,
@@ -191,8 +162,7 @@ export const getRequest = async (req, res) => {
       assignedTo: request.assignedTo,
     });
   } catch (error) {
-    console.error("❌ Get request error:", error);
-    res.status(500).json({ error: "Failed to fetch maintenance request" });
+    next(error);
   }
 };
 
@@ -201,7 +171,7 @@ export const getRequest = async (req, res) => {
  * @route PATCH /api/maintenance/requests/:requestId
  * @access Private (Admin only)
  */
-export const updateRequest = async (req, res) => {
+export const updateRequest = async (req, res, next) => {
   try {
     const { requestId } = req.params;
     const { status, completionNote } = req.body;
@@ -209,9 +179,8 @@ export const updateRequest = async (req, res) => {
     const { branch } = req.user;
 
     const request = await MaintenanceRequest.findById(requestId);
-
     if (!request || request.branch !== branch) {
-      return res.status(404).json({ error: "Request not found" });
+      throw new AppError("Request not found", 404, "REQUEST_NOT_FOUND");
     }
 
     if (status === "in-progress" && !request.assignedTo) {
@@ -223,8 +192,7 @@ export const updateRequest = async (req, res) => {
       await request.save();
     }
 
-    res.json({
-      success: true,
+    sendSuccess(res, {
       request: {
         id: request._id,
         status: request.status,
@@ -232,8 +200,7 @@ export const updateRequest = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Update request error:", error);
-    res.status(500).json({ error: "Failed to update maintenance request" });
+    next(error);
   }
 };
 
@@ -242,7 +209,7 @@ export const updateRequest = async (req, res) => {
  * @route GET /api/maintenance/stats/completion
  * @access Private (Admin only)
  */
-export const getCompletionStats = async (req, res) => {
+export const getCompletionStats = async (req, res, next) => {
   try {
     const { branch } = req.user;
     const { days = 30 } = req.query;
@@ -252,14 +219,9 @@ export const getCompletionStats = async (req, res) => {
       parseInt(days),
     );
 
-    res.json({
-      branch,
-      period: `${days} days`,
-      stats,
-    });
+    sendSuccess(res, { branch, period: `${days} days`, stats });
   } catch (error) {
-    console.error("❌ Get completion stats error:", error);
-    res.status(500).json({ error: "Failed to fetch completion statistics" });
+    next(error);
   }
 };
 
@@ -268,7 +230,7 @@ export const getCompletionStats = async (req, res) => {
  * @route GET /api/maintenance/stats/issue-frequency
  * @access Private (Admin only)
  */
-export const getIssueFrequency = async (req, res) => {
+export const getIssueFrequency = async (req, res, next) => {
   try {
     const { branch } = req.user;
     const { limit = 12, months = 6 } = req.query;
@@ -279,14 +241,9 @@ export const getIssueFrequency = async (req, res) => {
       parseInt(months),
     );
 
-    res.json({
-      branch,
-      period: `${months} months`,
-      frequency,
-    });
+    sendSuccess(res, { branch, period: `${months} months`, frequency });
   } catch (error) {
-    console.error("❌ Get issue frequency error:", error);
-    res.status(500).json({ error: "Failed to fetch issue frequency" });
+    next(error);
   }
 };
 

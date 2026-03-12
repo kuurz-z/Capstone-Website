@@ -49,10 +49,10 @@ import announcementRoutes from "./routes/announcementRoutes.js";
 import maintenanceRoutes from "./routes/maintenanceRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
 
 // --- Background Jobs ---
-import { startGracePeriodJob } from "./utils/gracePeriodJob.js";
-import { startBedLockCleanupJob } from "./utils/bedLockCleanup.js";
+import { startScheduler, stopScheduler } from "./utils/scheduler.js";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -193,6 +193,7 @@ app.use("/api/announcements", announcementRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // ============================================================================
 // DEEP HEALTH CHECK
@@ -274,12 +275,8 @@ const server = app.listen(PORT, () => {
   logger.info(`📡 API available at http://localhost:${PORT}/api`);
   logger.info(`🏥 Health check: http://localhost:${PORT}/api/health`);
 
-  // Start background jobs
-  const stopGracePeriod = startGracePeriodJob();
-  const stopBedLockCleanup = startBedLockCleanupJob();
-
-  // Store cleanup functions for graceful shutdown
-  server._backgroundJobs = { stopGracePeriod, stopBedLockCleanup };
+  // Start cron scheduler (grace periods, bed lock cleanup, overdue billing)
+  startScheduler();
 });
 
 /**
@@ -303,6 +300,9 @@ const gracefulShutdown = (signal) => {
 
   server.close(() => {
     logger.info("HTTP server closed");
+
+    // Stop cron scheduler
+    stopScheduler();
 
     // Close MongoDB connection
     mongoose.connection.close(false).then(() => {

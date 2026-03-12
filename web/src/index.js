@@ -6,9 +6,6 @@ import { queryClient } from "./shared/lib/queryClient";
 import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
-
-console.log("🚀 App starting...");
-
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(

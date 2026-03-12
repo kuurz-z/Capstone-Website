@@ -9,6 +9,7 @@ import {
 } from "../utils/formatters";
 
 import { useDashboardData } from "../../../shared/hooks/queries/useDashboard";
+import { useBillingStats } from "../../../shared/hooks/queries/useBilling";
 import DashboardStatsBar from "../components/dashboard/DashboardStatsBar";
 import ReservationStatusChart from "../components/dashboard/ReservationStatusChart";
 import "../styles/admin-dashboard.css";
@@ -23,6 +24,8 @@ export default function Dashboard() {
     isLoading,
     isError,
   } = useDashboardData();
+
+  const { data: billingStats } = useBillingStats();
 
   // ── Derive all dashboard data from query results ──
   const occupancyStats = occupancy.data?.statistics || occupancy.data;
@@ -96,8 +99,20 @@ export default function Dashboard() {
         color: "#A855F7",
         percentage: approvedCount ? `${approvedCount} confirmed` : "-",
       },
+      {
+        id: 5,
+        label: "Total Revenue",
+        value: billingStats?.totalCollected
+          ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
+          : "₱0",
+        icon: "billing",
+        color: "#3B82F6",
+        percentage: billingStats?.overdueCount
+          ? `${billingStats.overdueCount} overdue`
+          : "0 overdue",
+      },
     ];
-  }, [occupancyStats, inquiryStatsData, userStatsData, reservations]);
+  }, [occupancyStats, inquiryStatsData, userStatsData, reservations, billingStats]);
 
   const recentInquiries = useMemo(
     () =>

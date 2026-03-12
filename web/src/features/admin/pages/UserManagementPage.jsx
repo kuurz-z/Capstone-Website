@@ -11,6 +11,7 @@ import UserTable from "../components/users/UserTable";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
 import DeleteUserModal from "../components/users/DeleteUserModal";
+import AccountActionModal from "../components/users/AccountActionModal";
 import "../styles/admin-users.css";
 
 function UserManagementPage() {
@@ -21,6 +22,7 @@ function UserManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [accountAction, setAccountAction] = useState({ type: null, user: null });
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,6 +40,16 @@ function UserManagementPage() {
     role: "applicant",
     branch: "",
     isActive: true,
+    // Extended profile fields
+    gender: "",
+    dateOfBirth: "",
+    address: "",
+    city: "",
+    emergencyContact: "",
+    emergencyPhone: "",
+    studentId: "",
+    school: "",
+    yearLevel: "",
   });
 
   // Add form state
@@ -95,7 +107,14 @@ function UserManagementPage() {
     const params = { page: currentPage, limit: ITEMS_PER_PAGE };
     if (roleFilter !== "all") params.role = roleFilter;
     if (branchFilter !== "all") params.branch = branchFilter;
-    if (statusFilter !== "all") params.isActive = statusFilter === "active";
+    if (statusFilter !== "all") {
+      // Use accountStatus for granular filtering
+      if (statusFilter === "active" || statusFilter === "suspended" || statusFilter === "banned") {
+        params.accountStatus = statusFilter;
+      } else {
+        params.isActive = statusFilter === "active";
+      }
+    }
     return params;
   }, [currentPage, roleFilter, branchFilter, statusFilter]);
 
@@ -121,6 +140,18 @@ function UserManagementPage() {
       role: userData.role || "applicant",
       branch: userData.branch || "",
       isActive: userData.isActive !== false,
+      // Extended profile fields
+      gender: userData.gender || "",
+      dateOfBirth: userData.dateOfBirth
+        ? new Date(userData.dateOfBirth).toISOString().split("T")[0]
+        : "",
+      address: userData.address || "",
+      city: userData.city || "",
+      emergencyContact: userData.emergencyContact || "",
+      emergencyPhone: userData.emergencyPhone || "",
+      studentId: userData.studentId || "",
+      school: userData.school || "",
+      yearLevel: userData.yearLevel || "",
     });
     setIsEditModalOpen(true);
   };
@@ -239,6 +270,36 @@ function UserManagementPage() {
     }
   };
 
+  // ── Account action handler ──
+  const handleAccountAction = async (action, userId, reason) => {
+    try {
+      if (action === "suspend") {
+        await authFetch(`/users/${userId}/suspend`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        });
+        showNotification("User suspended successfully", "success", 3000);
+      } else if (action === "ban") {
+        await authFetch(`/users/${userId}/ban`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        });
+        showNotification("User banned successfully", "success", 3000);
+      } else if (action === "reactivate") {
+        await authFetch(`/users/${userId}/reactivate`, {
+          method: "PATCH",
+        });
+        showNotification("User reactivated successfully", "success", 3000);
+      }
+      refetchAll();
+    } catch (error) {
+      console.error(`Account action '${action}' error:`, error);
+      showNotification(error.message || `Failed to ${action} user`, "error", 3000);
+    }
+  };
+
   // ── Derived data ──
   const filteredUsers = users.filter((u) => {
     const q = searchQuery.toLowerCase();
@@ -304,8 +365,12 @@ function UserManagementPage() {
           users={filteredUsers}
           loading={loading}
           isSuperAdmin={isSuperAdmin}
+          currentUserId={user?._id || user?.uid}
           onEditClick={handleEditClick}
           onDeleteClick={handleDeleteClick}
+          onAccountAction={(type, targetUser) =>
+            setAccountAction({ type, user: targetUser })
+          }
         />
 
         {/* Pagination */}
@@ -360,6 +425,15 @@ function UserManagementPage() {
           user={selectedUser}
           onDelete={handleDeleteUser}
           onClose={() => setIsDeleteModalOpen(false)}
+        />
+      )}
+
+      {accountAction.type && (
+        <AccountActionModal
+          action={accountAction.type}
+          user={accountAction.user}
+          onConfirm={handleAccountAction}
+          onClose={() => setAccountAction({ type: null, user: null })}
         />
       )}
     </div>

@@ -45,9 +45,6 @@ function InquiryModal({ isOpen, onClose, defaultBranch = "general" }) {
 
       // Submit to API
       const response = await inquiryApi.create(inquiryData);
-
-      console.log("✅ Inquiry submitted successfully:", response);
-
       // Show success state
       setSuccess(true);
 

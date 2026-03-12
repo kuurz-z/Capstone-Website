@@ -38,13 +38,9 @@ function AdminLoginPage() {
     if (!authLoading && isAuthenticated && user) {
       if (user.role === "admin" || user.role === "superAdmin") {
         // Admin already logged in, redirect to dashboard
-        console.log("🔒 Admin already logged in, redirecting to dashboard...");
         navigate("/admin/dashboard", { replace: true });
       } else {
         // Regular user trying to access admin login, redirect to home
-        console.log(
-          "🔒 Regular user already logged in, redirecting to home...",
-        );
         navigate("/", { replace: true });
       }
     }
@@ -64,18 +60,14 @@ function AdminLoginPage() {
       }
 
       // Step 2: Authenticate with Firebase
-      console.log("🔐 Authenticating with Firebase...");
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email,
         password,
       );
       const firebaseUser = userCredential.user;
-      console.log("✅ Firebase authentication successful");
-
       // Step 3: Check email verification (skip in development)
       if (!firebaseUser.emailVerified && import.meta.env.PROD) {
-        console.log("⚠️ Email not verified, signing out...");
         await signOut();
         setError(
           "Please verify your email before logging in. Check your inbox for the verification link.",
@@ -85,16 +77,12 @@ function AdminLoginPage() {
       }
 
       // Step 4: Login to backend API
-      console.log("🔍 Logging in to backend...");
       const userData = await login();
-      console.log("✅ Backend login successful");
-
       // Step 5: Check if user has admin or superAdmin role
       if (
         userData.user.role === "admin" ||
         userData.user.role === "superAdmin"
       ) {
-        console.log("👨‍💼 Admin login successful, redirecting to dashboard");
         // Show welcome notification
         showNotification(
           `Welcome, ${userData.user.firstName || "Admin"}!`,
@@ -105,7 +93,6 @@ function AdminLoginPage() {
           navigate("/admin/dashboard");
         }, 500);
       } else {
-        console.log("❌ Access denied - not an admin");
         setError("Access denied. Admin privileges required.");
         // Sign out since they don't have admin access
         await signOut();

@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { billingApi } from "../../../shared/api/apiClient";
 import { useAuth } from "../../../shared/hooks/useAuth";
-import { TrendingUp, ShieldAlert, Clock, AlertTriangle } from "lucide-react";
+import { TrendingUp, ShieldAlert, Clock, AlertTriangle, Download } from "lucide-react";
+import { exportToCSV, BILLING_COLUMNS } from "../../../shared/utils/exportUtils";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useBillingStats,
@@ -15,6 +16,7 @@ import BillsToolbar from "../components/billing/BillsToolbar";
 import BillsTable from "../components/billing/BillsTable";
 import GenerateBillModal from "../components/billing/GenerateBillModal";
 import BillDetailModal from "../components/billing/BillDetailModal";
+import PaymentRequestsTab from "../components/PaymentRequestsTab";
 import "../styles/admin-billing.css";
 
 const AdminBillingPage = () => {
@@ -26,6 +28,7 @@ const AdminBillingPage = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
+  const [activeTab, setActiveTab] = useState("billing");
 
   // Rooms
   const [roomBranchFilter, setRoomBranchFilter] = useState("");
@@ -172,6 +175,7 @@ const AdminBillingPage = () => {
               tenants
             </p>
           </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <button
             className="btn btn-outline"
             onClick={handleApplyPenalties}
@@ -190,8 +194,47 @@ const AdminBillingPage = () => {
           >
             <AlertTriangle size={14} /> Apply Penalties
           </button>
+          <button
+            className="btn btn-outline"
+            onClick={async () => {
+              try {
+                const params = {};
+                if (statusFilter) params.status = statusFilter;
+                if (monthFilter) params.month = monthFilter;
+                const res = await billingApi.getExportData(params);
+                exportToCSV(res.data || [], BILLING_COLUMNS, `billing_export_${new Date().toISOString().slice(0, 10)}`);
+              } catch (err) {
+                alert(err.message || "Export failed");
+              }
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              background: "#f0fdf4",
+              color: "#16a34a",
+              border: "1px solid #bbf7d0",
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+            }}
+          >
+            <Download size={14} /> Export CSV
+          </button>
+          </div>
         </div>
 
+        {/* Tabs */}
+        <div className="admin-tabs" style={{ marginBottom: "20px" }}>
+          <button className={`admin-tab ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>Billing</button>
+          <button className={`admin-tab ${activeTab === "payments" ? "active" : ""}`} onClick={() => setActiveTab("payments")}>Payment Requests</button>
+        </div>
+
+        {activeTab === "payments" && <PaymentRequestsTab />}
+
+        {activeTab === "billing" && (
+        <>
         {/* Stats */}
         <BillingStatsBar stats={stats} />
 
@@ -248,6 +291,9 @@ const AdminBillingPage = () => {
             </button>
           </div>
         )}
+
+      </>
+      )}
       </div>
 
       {/* Generate Bill Modal */}

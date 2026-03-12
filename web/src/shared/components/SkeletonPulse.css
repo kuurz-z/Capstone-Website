@@ -1,0 +1,14 @@
+/* ==========================================================================
+   SKELETON PULSE — Shimmer loading placeholder
+   ========================================================================== */
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton-pulse {
+  background: linear-gradient(90deg, #E8EBF0 25%, #F4F6F9 50%, #E8EBF0 75%);
+  background-size: 200px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}

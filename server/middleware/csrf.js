@@ -104,7 +104,6 @@ export const csrfProtection = (req, res, next) => {
       null;
 
     if (!token) {
-      console.warn("⚠️ CSRF token missing from request");
       return res.status(403).json({
         error: "CSRF token is missing",
         code: "CSRF_TOKEN_MISSING",
@@ -113,7 +112,6 @@ export const csrfProtection = (req, res, next) => {
 
     // Validate token format (should be 64 hex characters)
     if (!/^[a-f0-9]{64}$/.test(token)) {
-      console.warn("⚠️ CSRF token has invalid format");
       return res.status(403).json({
         error: "CSRF token is invalid",
         code: "CSRF_TOKEN_INVALID",

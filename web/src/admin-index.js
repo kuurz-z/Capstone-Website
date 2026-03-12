@@ -6,9 +6,6 @@ import { queryClient } from "./shared/lib/queryClient";
 import "./index.css";
 import AdminApp from "./AdminApp";
 import reportWebVitals from "./reportWebVitals";
-
-console.log("🚀 Admin App starting...");
-
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(

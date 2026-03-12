@@ -31,7 +31,6 @@ export const updateOccupancyOnReservationChange = async (
   try {
     const room = await Room.findById(reservation.roomId);
     if (!room) {
-      console.warn(`⚠️ Room ${reservation.roomId} not found for occupancy`);
       return null;
     }
 
@@ -43,9 +42,6 @@ export const updateOccupancyOnReservationChange = async (
       return room;
     }
 
-    console.log(
-      `📊 Occupancy update: Reservation ${reservation._id} (${oldStatus} → ${newStatus})`,
-    );
 
     // === INCREASE OCCUPANCY ===
     // When transitioning to confirmed or checked-in (if not already confirmed)
@@ -54,10 +50,8 @@ export const updateOccupancyOnReservationChange = async (
       oldStatus !== "confirmed" &&
       oldStatus !== "checked-in"
     ) {
-      console.log(`📈 Increasing occupancy for room ${room.name} (atomic)`);
       const updated = await Room.atomicIncreaseOccupancy(room._id);
       if (!updated) {
-        console.warn(`⚠️ Room ${room.name} is at capacity, could not increase occupancy`);
       }
 
       // Assign bed if selected (needs loaded doc)
@@ -71,9 +65,6 @@ export const updateOccupancyOnReservationChange = async (
             reservation._id,
           );
           if (assigned) {
-            console.log(
-              `🛏️ Bed ${reservation.selectedBed.id} assigned in ${room.name}`,
-            );
             await freshRoom.save();
           }
         }
@@ -86,7 +77,6 @@ export const updateOccupancyOnReservationChange = async (
       oldStatus !== "confirmed" &&
       oldStatus !== "checked-in"
     ) {
-      console.log(`📈 Increasing occupancy for room ${room.name} (check-in, atomic)`);
       await Room.atomicIncreaseOccupancy(room._id);
 
       if (reservation.selectedBed?.id) {
@@ -98,7 +88,6 @@ export const updateOccupancyOnReservationChange = async (
             reservation._id,
           );
           if (assigned) {
-            console.log(`🛏️ Bed ${reservation.selectedBed.id} occupied`);
             await freshRoom.save();
           }
         }
@@ -108,7 +97,6 @@ export const updateOccupancyOnReservationChange = async (
     // === DECREASE OCCUPANCY ===
     // When transitioning to cancelled
     if (newStatus === "cancelled" && oldStatus !== "cancelled") {
-      console.log(`📉 Decreasing occupancy for room ${room.name} (atomic)`);
       await Room.atomicDecreaseOccupancy(room._id);
 
       // Vacate bed if it was occupied
@@ -117,9 +105,6 @@ export const updateOccupancyOnReservationChange = async (
         if (freshRoom) {
           const vacated = freshRoom.vacateBed(reservation.selectedBed.id);
           if (vacated) {
-            console.log(
-              `🛏️ Bed ${reservation.selectedBed.id} vacated in ${room.name}`,
-            );
             await freshRoom.save();
           }
         }
@@ -129,9 +114,6 @@ export const updateOccupancyOnReservationChange = async (
     // When transitioning to checked-out
     if (newStatus === "checked-out" && oldStatus !== "checked-out") {
       if (oldStatus === "confirmed" || oldStatus === "checked-in") {
-        console.log(
-          `📉 Decreasing occupancy for room ${room.name} (check-out, atomic)`,
-        );
         await Room.atomicDecreaseOccupancy(room._id);
 
         if (reservation.selectedBed?.id) {
@@ -139,7 +121,6 @@ export const updateOccupancyOnReservationChange = async (
           if (freshRoom) {
             const vacated = freshRoom.vacateBed(reservation.selectedBed.id);
             if (vacated) {
-              console.log(`🛏️ Bed ${reservation.selectedBed.id} vacated`);
               await freshRoom.save();
             }
           }
@@ -150,9 +131,6 @@ export const updateOccupancyOnReservationChange = async (
     // Re-fetch room for return value (atomic ops already updated it)
     const finalRoom = await Room.findById(room._id);
 
-    console.log(
-      `✅ Room occupancy updated: ${finalRoom.name} (${finalRoom.currentOccupancy}/${finalRoom.capacity})`,
-    );
 
     return finalRoom;
   } catch (error) {
@@ -214,9 +192,6 @@ export const recalculateRoomOccupancy = async (roomId) => {
     // Save the room
     await room.save();
 
-    console.log(
-      `✅ Room occupancy recalculated: ${room.name} (${room.currentOccupancy}/${room.capacity})`,
-    );
 
     return room;
   } catch (error) {

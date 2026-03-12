@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
-import GlobalLoading from "../../../shared/components/GlobalLoading";
+import ProfilePageSkeleton from "../components/profile/ProfilePageSkeleton";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { authApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   getReservationProgress,
   getNextAction,
@@ -24,6 +25,7 @@ import {
   ActivityHistoryTab,
   NotificationsTab,
   SettingsTab,
+  ProfileCompletionCard,
 } from "../components/profile";
 
 // ─────────────────────────────────────────────────────────────
@@ -41,6 +43,8 @@ const ProfilePage = () => {
   const [success, setSuccess] = useState(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [pendingTab, setPendingTab] = useState(null);
   const [receiptModal, setReceiptModal] = useState({ open: false, step: null });
   const [selectedReservationId, setSelectedReservationId] = useState(null);
 
@@ -195,6 +199,8 @@ const ProfilePage = () => {
   }, [reservations]);
 
   // ── Profile editing handlers ───────────────────────────────
+  const queryClient = useQueryClient();
+
   const handleSaveProfile = async () => {
     setSaving(true);
     setError(null);
@@ -205,6 +211,8 @@ const ProfilePage = () => {
       setSuccess("Profile updated successfully!");
       setIsEditingProfile(false);
       if (updateUser) updateUser(updatedUser.user);
+      // Invalidate cache so sidebar/header reflect new data immediately
+      queryClient.invalidateQueries({ queryKey: ["users", "currentUser"] });
     } catch (err) {
       console.error("Error updating profile:", err);
       setError(err.message || "Failed to update profile");
@@ -245,6 +253,40 @@ const ProfilePage = () => {
     } catch (err) {
       console.error("Logout failed:", err);
       showNotification("Logout failed. Please try again.", "error", 3000);
+    }
+  };
+
+  // ── Unsaved changes warning ────────────────────────────────
+  const hasUnsavedChanges = isEditingProfile && (
+    editData.firstName !== (profileData.firstName || "") ||
+    editData.lastName !== (profileData.lastName || "") ||
+    editData.phone !== (profileData.phone || "") ||
+    editData.address !== (profileData.address || "") ||
+    editData.city !== (profileData.city || "") ||
+    editData.dateOfBirth !== (profileData.dateOfBirth || "") ||
+    editData.emergencyContact !== (profileData.emergencyContact || "") ||
+    editData.emergencyPhone !== (profileData.emergencyPhone || "") ||
+    editData.studentId !== (profileData.studentId || "") ||
+    editData.school !== (profileData.school || "") ||
+    editData.yearLevel !== (profileData.yearLevel || "")
+  );
+
+  const handleTabChange = (newTab) => {
+    if (hasUnsavedChanges) {
+      setPendingTab(newTab);
+      setShowUnsavedWarning(true);
+    } else {
+      setActiveTab(newTab);
+      setIsEditingProfile(false);
+    }
+  };
+
+  const confirmDiscardChanges = () => {
+    setShowUnsavedWarning(false);
+    handleCancelEdit();
+    if (pendingTab) {
+      setActiveTab(pendingTab);
+      setPendingTab(null);
     }
   };
 
@@ -311,7 +353,7 @@ const ProfilePage = () => {
     settings: "Settings",
   };
 
-  if (loading) return <GlobalLoading />;
+  if (loading) return <ProfilePageSkeleton />;
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -319,7 +361,7 @@ const ProfilePage = () => {
       <div className="min-h-screen flex" style={{ backgroundColor: "#F7F8FA" }}>
         <ProfileSidebar
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={handleTabChange}
           profileData={profileData}
           fullName={fullName}
           hasActiveReservation={Boolean(activeReservation)}
@@ -355,6 +397,7 @@ const ProfilePage = () => {
                   selectedReservation={selectedReservation}
                   visits={visits}
                   nextAction={nextAction}
+                  onGoToPersonal={() => setActiveTab("personal")}
                 />
               )}
 
@@ -407,6 +450,17 @@ const ProfilePage = () => {
         variant="warning"
         confirmText="Sign Out"
         cancelText="Cancel"
+      />
+
+      <ConfirmModal
+        isOpen={showUnsavedWarning}
+        onClose={() => { setShowUnsavedWarning(false); setPendingTab(null); }}
+        onConfirm={confirmDiscardChanges}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Are you sure you want to leave this tab? Your changes will be lost."
+        variant="warning"
+        confirmText="Discard Changes"
+        cancelText="Keep Editing"
       />
     </>
   );

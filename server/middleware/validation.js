@@ -365,6 +365,102 @@ export const validateProfileUpdateInput = (body) => {
     }
   }
 
+  // --- Extended profile field validations ---
+
+  // Validate gender (optional)
+  if (body.gender !== undefined) {
+    const validGenders = ["male", "female", "other", "prefer-not-to-say", ""];
+    if (!validGenders.includes(body.gender)) {
+      errors.push("Gender must be one of: male, female, other, prefer-not-to-say");
+    } else {
+      data.gender = body.gender;
+    }
+  }
+
+  // Validate address (optional, max 200 chars)
+  if (body.address !== undefined) {
+    if (body.address.length > 200) {
+      errors.push("Address must be 200 characters or less");
+    } else {
+      data.address = body.address.trim();
+    }
+  }
+
+  // Validate city (optional, max 100 chars)
+  if (body.city !== undefined) {
+    if (body.city.length > 100) {
+      errors.push("City must be 100 characters or less");
+    } else {
+      data.city = body.city.trim();
+    }
+  }
+
+  // Validate dateOfBirth (optional, must be valid date in the past)
+  if (body.dateOfBirth !== undefined) {
+    if (body.dateOfBirth === null || body.dateOfBirth === "") {
+      data.dateOfBirth = null;
+    } else {
+      const dob = new Date(body.dateOfBirth);
+      if (isNaN(dob.getTime())) {
+        errors.push("Date of birth must be a valid date");
+      } else if (dob > new Date()) {
+        errors.push("Date of birth cannot be in the future");
+      } else {
+        data.dateOfBirth = dob;
+      }
+    }
+  }
+
+  // Validate emergencyContact (optional, max 100 chars)
+  if (body.emergencyContact !== undefined) {
+    if (body.emergencyContact.length > 100) {
+      errors.push("Emergency contact name must be 100 characters or less");
+    } else {
+      data.emergencyContact = body.emergencyContact.trim();
+    }
+  }
+
+  // Validate emergencyPhone (optional)
+  if (body.emergencyPhone !== undefined) {
+    if (body.emergencyPhone === null || body.emergencyPhone === "") {
+      data.emergencyPhone = "";
+    } else {
+      const ePhone = sanitizePhone(body.emergencyPhone);
+      if (!ePhone) {
+        errors.push("Invalid emergency phone number format");
+      } else {
+        data.emergencyPhone = ePhone;
+      }
+    }
+  }
+
+  // Validate studentId (optional, max 50 chars)
+  if (body.studentId !== undefined) {
+    if (body.studentId.length > 50) {
+      errors.push("Student ID must be 50 characters or less");
+    } else {
+      data.studentId = body.studentId.trim();
+    }
+  }
+
+  // Validate school (optional, max 100 chars)
+  if (body.school !== undefined) {
+    if (body.school.length > 100) {
+      errors.push("School name must be 100 characters or less");
+    } else {
+      data.school = body.school.trim();
+    }
+  }
+
+  // Validate yearLevel (optional, max 20 chars)
+  if (body.yearLevel !== undefined) {
+    if (body.yearLevel.length > 20) {
+      errors.push("Year level must be 20 characters or less");
+    } else {
+      data.yearLevel = body.yearLevel.trim();
+    }
+  }
+
   return {
     valid: errors.length === 0,
     data,
