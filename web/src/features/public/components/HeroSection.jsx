@@ -60,7 +60,7 @@ export function HeroSection() {
           {/* Feature highlights */}
           <motion.p
             {...fadeUp(0.7)}
-            className="text-white/50 text-sm mb-6 font-light"
+            className="text-white/65 text-sm mb-6 font-normal"
           >
             24/7 Security · High-Speed WiFi · All-Inclusive
           </motion.p>
@@ -94,7 +94,7 @@ export function HeroSection() {
           {/* Reassurance text */}
           <motion.p
             {...fadeUp(0.95)}
-            className="text-white/40 text-xs mt-4 font-light"
+            className="text-white/55 text-xs mt-4 font-normal"
           >
             ✓ No hidden fees · ✓ Flexible terms · ✓ Visit first, decide later
           </motion.p>

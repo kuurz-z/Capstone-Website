@@ -25,15 +25,15 @@ const locations = [
 
 export function LocationSection() {
   return (
-    <section className="py-24 lg:py-32 bg-white" id="location">
+    <section className="py-16 lg:py-20 bg-white" id="location">
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
         {/* Header */}
-        <div className="text-center mb-20">
-          <p className="text-xs text-gray-400 mb-3 tracking-widest uppercase font-light">Where We Are</p>
-          <h2 className="text-4xl lg:text-5xl font-light mb-5 tracking-tight" style={{ color: '#0C375F' }}>
+        <div className="text-center mb-12">
+          <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Where We Are</p>
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#0C375F' }}>
             Strategic Locations
           </h2>
-          <p className="text-gray-500 max-w-2xl mx-auto font-light leading-relaxed">
+          <p className="text-gray-500 max-w-2xl mx-auto font-normal leading-relaxed">
             Both branches are strategically located near universities, public transport, and essential establishments.
           </p>
         </div>
@@ -61,13 +61,13 @@ export function LocationSection() {
               {/* Details */}
               <div className="order-1 lg:order-2">
                 <div className="mb-6">
-                  <div className="inline-block px-4 py-2 rounded-full text-xs font-light mb-4" style={{ backgroundColor: `${location.color}15`, color: location.color }}>
+                  <div className="inline-block px-4 py-2 rounded-full text-xs font-medium mb-4" style={{ backgroundColor: `${location.color}15`, color: location.color }}>
                     {location.branch} Branch
                   </div>
-                  <h3 className="text-2xl font-normal mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+                  <h3 className="text-2xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
                     {location.address}
                   </h3>
-                  <p className="text-sm text-gray-400 font-light">{location.coordinates}</p>
+                  <p className="text-sm text-gray-500">{location.coordinates}</p>
                 </div>
 
                 {/* Nearby Schools */}
@@ -78,7 +78,7 @@ export function LocationSection() {
                   </div>
                   <ul className="space-y-2">
                     {location.nearbySchools.map((school, idx) => (
-                      <li key={idx} className="text-sm text-gray-600 font-light pl-7">
+                      <li key={idx} className="text-sm text-gray-600 pl-7">
                         • {school}
                       </li>
                     ))}
@@ -93,7 +93,7 @@ export function LocationSection() {
                   </div>
                   <ul className="space-y-2">
                     {location.transportation.map((transport, idx) => (
-                      <li key={idx} className="text-sm text-gray-600 font-light pl-7">
+                      <li key={idx} className="text-sm text-gray-600 pl-7">
                         • {transport}
                       </li>
                     ))}
@@ -108,7 +108,7 @@ export function LocationSection() {
                   </div>
                   <ul className="space-y-2">
                     {location.landmarks.map((landmark, idx) => (
-                      <li key={idx} className="text-sm text-gray-600 font-light pl-7">
+                      <li key={idx} className="text-sm text-gray-600 pl-7">
                         • {landmark}
                       </li>
                     ))}

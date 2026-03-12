@@ -39,6 +39,10 @@ import RoomBill from "./RoomBill.js";
 import Announcement from "./Announcement.js";
 import MaintenanceRequest from "./MaintenanceRequest.js";
 import AcknowledgmentAccount from "./AcknowledgmentAccount.js";
+import UserSession from "./UserSession.js";
+import Notification from "./Notification.js";
+import BedHistory from "./BedHistory.js";
+import Payment from "./Payment.js";
 
 // ============================================================================
 // NAMED EXPORTS
@@ -55,6 +59,10 @@ export {
   Announcement,
   MaintenanceRequest,
   AcknowledgmentAccount,
+  UserSession,
+  Notification,
+  BedHistory,
+  Payment,
 };
 
 // ============================================================================
@@ -91,10 +99,15 @@ export const INQUIRY_STATUSES = [
  */
 export const RESERVATION_STATUSES = [
   "pending",
+  "visit_pending",
+  "visit_approved",
+  "payment_pending",
   "confirmed",
+  "grace_period",
   "checked-in",
   "checked-out",
   "cancelled",
+  "archived",
 ];
 
 /**
@@ -156,6 +169,10 @@ export default {
   Announcement,
   MaintenanceRequest,
   AcknowledgmentAccount,
+  UserSession,
+  Notification,
+  BedHistory,
+  Payment,
   ROOM_BRANCHES,
   INQUIRY_BRANCHES,
   USER_ROLES,

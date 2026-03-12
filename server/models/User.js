@@ -113,7 +113,33 @@ const userSchema = new mongoose.Schema(
       // - "inactive": moved out / contract ended
     },
 
-    // --- Status ---
+    // --- Account Status ---
+    accountStatus: {
+      type: String,
+      enum: ["active", "suspended", "banned", "pending_verification"],
+      default: "active",
+      index: true,
+      // Lifecycle:
+      // - "active": account in good standing
+      // - "suspended": temporarily disabled by admin
+      // - "banned": permanently disabled by admin
+      // - "pending_verification": awaiting email verification
+    },
+    statusChangedAt: {
+      type: Date,
+      default: null,
+    },
+    statusChangedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    statusReason: {
+      type: String,
+      default: null,
+    },
+
+    // --- Status (backward-compatible – kept in sync via pre-save) ---
     isActive: {
       type: Boolean,
       default: true,
@@ -145,6 +171,17 @@ const userSchema = new mongoose.Schema(
 );
 
 // ============================================================================
+// PRE-SAVE HOOK — sync isActive with accountStatus
+// ============================================================================
+
+userSchema.pre("save", function (next) {
+  if (this.isModified("accountStatus")) {
+    this.isActive = this.accountStatus === "active";
+  }
+  next();
+});
+
+// ============================================================================
 // INDEXES
 // ============================================================================
 
@@ -169,7 +206,7 @@ userSchema.virtual("fullName").get(function () {
  */
 userSchema.methods.archive = async function (archivedById = null) {
   this.isArchived = true;
-  this.isActive = false;
+  this.accountStatus = "banned";
   this.archivedAt = new Date();
   this.archivedBy = archivedById;
   return this.save();
@@ -180,9 +217,47 @@ userSchema.methods.archive = async function (archivedById = null) {
  */
 userSchema.methods.restore = async function () {
   this.isArchived = false;
-  this.isActive = true;
+  this.accountStatus = "active";
   this.archivedAt = null;
   this.archivedBy = null;
+  return this.save();
+};
+
+/**
+ * Suspend user account
+ * @param {ObjectId} changedById - Admin performing the action
+ * @param {string} reason - Reason for suspension
+ */
+userSchema.methods.suspend = async function (changedById, reason = null) {
+  this.accountStatus = "suspended";
+  this.statusChangedAt = new Date();
+  this.statusChangedBy = changedById;
+  this.statusReason = reason;
+  return this.save();
+};
+
+/**
+ * Ban user account
+ * @param {ObjectId} changedById - Admin performing the action
+ * @param {string} reason - Reason for ban
+ */
+userSchema.methods.ban = async function (changedById, reason = null) {
+  this.accountStatus = "banned";
+  this.statusChangedAt = new Date();
+  this.statusChangedBy = changedById;
+  this.statusReason = reason;
+  return this.save();
+};
+
+/**
+ * Reactivate user account
+ * @param {ObjectId} changedById - Admin performing the action
+ */
+userSchema.methods.reactivate = async function (changedById) {
+  this.accountStatus = "active";
+  this.statusChangedAt = new Date();
+  this.statusChangedBy = changedById;
+  this.statusReason = null;
   return this.save();
 };
 

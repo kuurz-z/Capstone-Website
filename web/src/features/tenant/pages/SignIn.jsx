@@ -127,7 +127,7 @@ function SignIn() {
 
   // ── Auth handlers ──────────────────────────────────────────
   const handlePostAuthFlow = (loginResponse) => {
-    showNotification(`Welcome, ${loginResponse.user.firstName}!`, "success");
+    showNotification(`Welcome back, ${loginResponse.user.firstName}!`, "success", 4000);
     if (
       loginResponse.user.role === "admin" ||
       loginResponse.user.role === "superAdmin"
@@ -149,6 +149,7 @@ function SignIn() {
     }
     setSubmitting(true);
     setGlobalLoading(true);
+
     try {
       const userCredential = await signInWithEmailAndPassword(
         auth,
@@ -180,14 +181,13 @@ function SignIn() {
 
       try {
         const loginResponse = await login();
+        const welcomeName = loginResponse.user.firstName || firebaseUser.displayName || "back";
+        // Show notification directly — it appends to document.body and survives route transitions
+        showNotification(`Welcome back, ${welcomeName}!`, "success", 4000);
         if (
           loginResponse.user.role === "admin" ||
           loginResponse.user.role === "superAdmin"
         ) {
-          showNotification(
-            `Welcome, ${loginResponse.user.firstName}!`,
-            "success",
-          );
           setTimeout(() => navigate("/admin/dashboard"), 800);
           setGlobalLoading(false);
           return;
@@ -203,10 +203,6 @@ function SignIn() {
           setGlobalLoading(false);
           return;
         }
-        showNotification(
-          `Welcome, ${loginResponse.user.firstName}!`,
-          "success",
-        );
         setTimeout(() => navigate("/applicant/check-availability"), 800);
       } catch (backendError) {
         await auth.signOut();

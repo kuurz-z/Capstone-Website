@@ -10,11 +10,12 @@ import {
   X,
 } from "lucide-react";
 import SpotlightCard from "../components/SpotlightCard";
+import BedSelector from "../components/BedSelector";
 
 function getAvailabilityLabel(room) {
   const beds = room.beds || [];
   const totalBeds = beds.length || 0;
-  const availableBeds = beds.filter((bed) => bed.available).length;
+  const availableBeds = beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available)).length;
 
   if (!totalBeds) return "Available";
   if (availableBeds === 0) return "Full";
@@ -62,7 +63,7 @@ export default function RoomDetailsModal({
     isOverbooked || (requiresBedSelection && !selectedBed);
   const totalBeds = room.beds?.length || 0;
   const availableBeds = room.beds
-    ? room.beds.filter((bed) => bed.available).length
+    ? room.beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available)).length
     : 0;
   const occupancyPercentage = totalBeds
     ? ((totalBeds - availableBeds) / totalBeds) * 100
@@ -299,255 +300,11 @@ export default function RoomDetailsModal({
               </div>
 
               {requiresBedSelection && (
-                <div>
-                  {hasBunkPreference ? (
-                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
-                      <h3
-                        className="font-semibold mb-3 flex items-center gap-2"
-                        style={{ color: "#0C375F" }}
-                      >
-                        <Bed className="w-5 h-5" style={{ color: "#E7710F" }} />
-                        Bunk Bed Availability
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Select your preferred bed position based on current
-                        availability:
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          onClick={() => {
-                            if (!hasAvailableUpper) return;
-                            const firstAvailable = upperBeds.find(
-                              (bed) => bed.available,
-                            );
-                            if (firstAvailable) onSelectBed(firstAvailable);
-                          }}
-                          disabled={!hasAvailableUpper}
-                          className={`p-4 rounded-xl border-2 transition-all ${
-                            selectedBed?.position === "upper" ||
-                            selectedBed?.position === "top"
-                              ? "border-orange-500 bg-orange-100"
-                              : hasAvailableUpper
-                                ? "border-gray-300 bg-white hover:border-orange-300"
-                                : "border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed"
-                          }`}
-                        >
-                          <div className="flex flex-col items-center gap-2">
-                            <div
-                              className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                                selectedBed?.position === "upper" ||
-                                selectedBed?.position === "top"
-                                  ? "bg-orange-500"
-                                  : hasAvailableUpper
-                                    ? "bg-green-500"
-                                    : "bg-gray-400"
-                              }`}
-                            >
-                              <svg
-                                className="w-6 h-6 text-white"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 10l7-7m0 0l7 7m-7-7v18"
-                                />
-                              </svg>
-                            </div>
-                            <div className="text-center">
-                              <p
-                                className={`font-semibold ${
-                                  selectedBed?.position === "upper" ||
-                                  selectedBed?.position === "top"
-                                    ? "text-orange-700"
-                                    : hasAvailableUpper
-                                      ? "text-gray-900"
-                                      : "text-gray-500"
-                                }`}
-                              >
-                                Upper Bunk
-                              </p>
-                              <p className="text-xs text-gray-600 mt-1">
-                                Top bed, more privacy
-                              </p>
-                              <div className="mt-2">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    hasAvailableUpper
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-red-100 text-red-700"
-                                  }`}
-                                >
-                                  {upperBeds.filter((bed) => bed.available)
-                                    .length || 0}{" "}
-                                  / {upperBeds.length} Available
-                                </span>
-                              </div>
-                            </div>
-                            {(selectedBed?.position === "upper" ||
-                              selectedBed?.position === "top") && (
-                              <Check className="w-5 h-5 text-orange-600" />
-                            )}
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            if (!hasAvailableLower) return;
-                            const firstAvailable = lowerBeds.find(
-                              (bed) => bed.available,
-                            );
-                            if (firstAvailable) onSelectBed(firstAvailable);
-                          }}
-                          disabled={!hasAvailableLower}
-                          className={`p-4 rounded-xl border-2 transition-all ${
-                            selectedBed?.position === "lower" ||
-                            selectedBed?.position === "bottom"
-                              ? "border-orange-500 bg-orange-100"
-                              : hasAvailableLower
-                                ? "border-gray-300 bg-white hover:border-orange-300"
-                                : "border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed"
-                          }`}
-                        >
-                          <div className="flex flex-col items-center gap-2">
-                            <div
-                              className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                                selectedBed?.position === "lower" ||
-                                selectedBed?.position === "bottom"
-                                  ? "bg-orange-500"
-                                  : hasAvailableLower
-                                    ? "bg-green-500"
-                                    : "bg-gray-400"
-                              }`}
-                            >
-                              <svg
-                                className="w-6 h-6 text-white"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                                />
-                              </svg>
-                            </div>
-                            <div className="text-center">
-                              <p
-                                className={`font-semibold ${
-                                  selectedBed?.position === "lower" ||
-                                  selectedBed?.position === "bottom"
-                                    ? "text-orange-700"
-                                    : hasAvailableLower
-                                      ? "text-gray-900"
-                                      : "text-gray-500"
-                                }`}
-                              >
-                                Lower Bunk
-                              </p>
-                              <p className="text-xs text-gray-600 mt-1">
-                                Bottom bed, easier access
-                              </p>
-                              <div className="mt-2">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    hasAvailableLower
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-red-100 text-red-700"
-                                  }`}
-                                >
-                                  {lowerBeds.filter((bed) => bed.available)
-                                    .length || 0}{" "}
-                                  / {lowerBeds.length} Available
-                                </span>
-                              </div>
-                            </div>
-                            {(selectedBed?.position === "lower" ||
-                              selectedBed?.position === "bottom") && (
-                              <Check className="w-5 h-5 text-orange-600" />
-                            )}
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-xs text-blue-800">
-                          <span className="font-semibold">Note:</span> Green
-                          indicates available beds. Grayed out positions are
-                          currently occupied.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <h3
-                        className="font-semibold mb-3"
-                        style={{ color: "#0C375F" }}
-                      >
-                        Select Your Bed
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-3">
-                        Choose your preferred bed position. Only available beds
-                        can be selected.
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        {room.beds.map((bed, index) => (
-                          <button
-                            key={bed.id || index}
-                            type="button"
-                            onClick={() => bed.available && onSelectBed(bed)}
-                            disabled={!bed.available}
-                            className={`p-4 rounded-lg border-2 text-left transition-all ${
-                              selectedBed?.id === bed.id
-                                ? "border-blue-600 bg-blue-50"
-                                : bed.available
-                                  ? "border-gray-200 bg-white hover:border-gray-300"
-                                  : "border-gray-100 bg-gray-50"
-                            }`}
-                          >
-                            <div className="text-xl mb-2">
-                              {bed.position === "upper" ||
-                              bed.position === "top"
-                                ? "🛏️⬆️"
-                                : bed.position === "lower" ||
-                                    bed.position === "bottom"
-                                  ? "🛏️⬇️"
-                                  : "🛏️"}
-                            </div>
-                            <div className="text-sm font-semibold capitalize">
-                              {bed.position === "single"
-                                ? "Single Bed"
-                                : `${bed.position} Bed`}
-                            </div>
-                            <div
-                              className={`text-xs font-medium ${
-                                bed.available
-                                  ? "text-green-600"
-                                  : "text-red-500"
-                              }`}
-                            >
-                              {bed.available ? "Available" : "Occupied"}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      {selectedBed && (
-                        <div className="mt-3 p-3 rounded-lg bg-blue-50 text-sm text-blue-700">
-                          Selected:{" "}
-                          <strong className="capitalize">
-                            {selectedBed.position} Bed
-                          </strong>{" "}
-                          ({selectedBed.id})
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <BedSelector
+                  beds={room.beds}
+                  selectedBed={selectedBed}
+                  onSelect={onSelectBed}
+                />
               )}
 
               <div>

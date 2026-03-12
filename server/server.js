@@ -48,6 +48,11 @@ import billingRoutes from "./routes/billingRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import maintenanceRoutes from "./routes/maintenanceRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+
+// --- Background Jobs ---
+import { startGracePeriodJob } from "./utils/gracePeriodJob.js";
+import { startBedLockCleanupJob } from "./utils/bedLockCleanup.js";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -187,6 +192,7 @@ app.use("/api/billing", billingRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ============================================================================
 // DEEP HEALTH CHECK
@@ -267,6 +273,13 @@ const server = app.listen(PORT, () => {
   );
   logger.info(`📡 API available at http://localhost:${PORT}/api`);
   logger.info(`🏥 Health check: http://localhost:${PORT}/api/health`);
+
+  // Start background jobs
+  const stopGracePeriod = startGracePeriodJob();
+  const stopBedLockCleanup = startBedLockCleanupJob();
+
+  // Store cleanup functions for graceful shutdown
+  server._backgroundJobs = { stopGracePeriod, stopBedLockCleanup };
 });
 
 /**

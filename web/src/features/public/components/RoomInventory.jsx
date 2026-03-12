@@ -33,15 +33,15 @@ const roomListings = [
 export function RoomInventory() {
   
   return (
-    <section className="py-24 lg:py-32 bg-white" id="rooms">
+    <section className="py-16 lg:py-20 bg-white" id="rooms">
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
         {/* Header */}
         <div className="text-center mb-6">
-          <p className="text-xs text-gray-400 mb-3 tracking-widest uppercase font-light">Room Options</p>
-          <h2 className="text-4xl lg:text-5xl font-light mb-5 tracking-tight" style={{ color: '#0C375F' }}>
+          <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Room Options</p>
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#0C375F' }}>
             Choose Your Room Type
           </h2>
-          <p className="text-gray-500 max-w-xl mx-auto mb-16 font-light leading-relaxed">
+          <p className="text-gray-500 max-w-xl mx-auto mb-12 font-normal leading-relaxed">
             All rooms come fully furnished with essential amenities. Pick the option that fits your budget and lifestyle.
           </p>
         </div>
@@ -71,20 +71,20 @@ export function RoomInventory() {
 
               {/* Content */}
               <div className="p-8">     
-                <h3 className="font-normal text-2xl mb-2 tracking-tight" style={{ color: '#0C375F' }}>
+                <h3 className="font-medium text-2xl mb-2 tracking-tight" style={{ color: '#0C375F' }}>
                   {room.title}
                 </h3>
-                <p className="text-sm text-gray-400 mb-4 font-light">{room.subtitle}</p>
-                <p className="text-sm text-gray-500 mb-6 leading-relaxed font-light">
+                <p className="text-sm text-gray-500 mb-4">{room.subtitle}</p>
+                <p className="text-sm text-gray-600 mb-6 leading-relaxed">
                   {room.description}
                 </p>
 
                 {/* Inclusions */}
                 <div className="mb-8">
-                  <p className="text-xs text-gray-400 mb-3 font-light">Included:</p>
+                  <p className="text-xs text-gray-500 mb-3 font-medium">Included:</p>
                   <div className="flex flex-wrap gap-2">
                     {room.inclusions.map((item, idx) => (
-                      <span key={idx} className="text-xs px-3 py-1 rounded-full bg-gray-50 text-gray-600 font-light">
+                      <span key={idx} className="text-xs px-3 py-1 rounded-full bg-gray-50 text-gray-600">
                         {item}
                       </span>
                     ))}
@@ -95,10 +95,10 @@ export function RoomInventory() {
                 <div className="flex items-center justify-between pt-6 border-t border-gray-100">
                   {/* Price */}
                   <div className="text-right">
-                    <p className="font-normal text-xl tracking-tight" style={{ color: '#0C375F' }}>
+                    <p className="font-semibold text-xl tracking-tight" style={{ color: '#0C375F' }}>
                       {room.price}
                     </p>
-                    <p className="text-xs text-gray-400 font-light mt-0.5">per month</p>
+                    <p className="text-xs text-gray-500 mt-0.5">per month</p>
                   </div>
                 </div>
               </div>

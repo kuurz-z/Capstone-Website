@@ -49,7 +49,7 @@ export const getFreshToken = async (forceRefresh = false) => {
  * @returns {Promise<Object>} Parsed JSON response
  * @throws {Error} API error with response details
  */
-export const authFetch = async (url, options = {}) => {
+export const authFetch = async (url, options = {}, _isRetry = false) => {
   try {
     // Always get a fresh token before each request
     const token = await getFreshToken();
@@ -76,16 +76,20 @@ export const authFetch = async (url, options = {}) => {
         .json()
         .catch(() => ({ message: response.statusText }));
 
+      // ── Silent token refresh on 401 (prevents mid-demo crashes) ──
+      // If the token expired mid-session, force-refresh and retry once.
+      if (response.status === 401 && !_isRetry) {
+        console.warn("🔐 Token expired — silently refreshing and retrying...");
+        const freshToken = await getFreshToken(true); // force refresh
+        if (freshToken) {
+          return authFetch(url, options, true); // retry exactly once
+        }
+      }
+
       const apiError = new Error(
         error.error || error.message || "API request failed",
       );
       apiError.response = { status: response.status, data: error };
-
-      // Log 401 errors for debugging
-      if (response.status === 401) {
-        console.warn("🔐 Authentication failed - token may be expired");
-      }
-
       throw apiError;
     }
 

@@ -35,6 +35,9 @@ import {
   getUserById,
   updateUser,
   deleteUser,
+  suspendUser,
+  reactivateUser,
+  banUser,
 } from "../controllers/usersController.js";
 
 const router = express.Router();
@@ -90,6 +93,31 @@ router.get("/email-by-username", getEmailByUsername);
  * Access: Super Admin only
  */
 router.post("/", verifyToken, verifySuperAdmin, createUser);
+
+// ============================================================================
+// ACCOUNT STATUS MANAGEMENT
+// ============================================================================
+
+/**
+ * PATCH /api/users/:userId/suspend
+ * Suspend a user account.
+ * Access: Admin | Super Admin
+ */
+router.patch("/:userId/suspend", verifyToken, verifyAdmin, filterByBranch, suspendUser);
+
+/**
+ * PATCH /api/users/:userId/reactivate
+ * Reactivate a suspended/banned user account.
+ * Access: Admin | Super Admin
+ */
+router.patch("/:userId/reactivate", verifyToken, verifyAdmin, filterByBranch, reactivateUser);
+
+/**
+ * PATCH /api/users/:userId/ban
+ * Ban a user account permanently.
+ * Access: Super Admin only
+ */
+router.patch("/:userId/ban", verifyToken, verifySuperAdmin, banUser);
 
 // ============================================================================
 // GET ALL USERS

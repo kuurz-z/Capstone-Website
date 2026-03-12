@@ -1,6 +1,14 @@
 import { formatRoomType, formatBranch } from "../../utils/formatters";
 
+const BED_STATUS_STYLES = {
+  available: { bg: "#D1FAE5", color: "#059669", label: "Available" },
+  occupied: { bg: "#FEE2E2", color: "#DC2626", label: "Occupied" },
+  maintenance: { bg: "#F3F4F6", color: "#6B7280", label: "🔧 Maintenance" },
+};
+
 export default function RoomConfigModal({ room, onToggleBed, onClose }) {
+  const getBedStatus = (bed) => bed.status || (bed.available === false ? "occupied" : "available");
+
   return (
     <div className="admin-modal-overlay" onClick={onClose}>
       <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -38,26 +46,45 @@ export default function RoomConfigModal({ room, onToggleBed, onClose }) {
             <h3>Bed Configuration</h3>
             <div className="bed-list">
               {room.beds && room.beds.length > 0 ? (
-                room.beds.map((bed, index) => (
-                  <div key={bed.id || index} className="bed-item">
-                    <div className="bed-info">
-                      <strong>{bed.id}</strong>
-                      <span className="bed-position">
-                        Position: {bed.position}
-                      </span>
+                room.beds.map((bed, index) => {
+                  const status = getBedStatus(bed);
+                  const style = BED_STATUS_STYLES[status];
+
+                  return (
+                    <div key={bed.id || index} className="bed-item" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: "8px", marginBottom: "8px", border: "1px solid #E5E7EB" }}>
+                      <div className="bed-info" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <strong>{bed.id}</strong>
+                        <span className="bed-position" style={{ color: "#6B7280", fontSize: "13px" }}>
+                          {bed.position}
+                        </span>
+                        <span style={{ padding: "2px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: 600, background: style.bg, color: style.color }}>
+                          {style.label}
+                        </span>
+                      </div>
+                      <div>
+                        {status === "occupied" ? (
+                          <span style={{ fontSize: "12px", color: "#9CA3AF" }}>In use</span>
+                        ) : (
+                          <button
+                            onClick={() => onToggleBed(bed.id)}
+                            style={{
+                              padding: "4px 14px",
+                              borderRadius: "6px",
+                              border: "1px solid #E5E7EB",
+                              background: status === "maintenance" ? "#10B981" : "#6B7280",
+                              color: "white",
+                              fontSize: "12px",
+                              fontWeight: 500,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {status === "maintenance" ? "Unlock" : "Lock 🔧"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="bed-status">
-                      <label className="checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={bed.available}
-                          onChange={() => onToggleBed(bed.id)}
-                        />
-                        <span>{bed.available ? "Available" : "Occupied"}</span>
-                      </label>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="no-beds">No beds configured</p>
               )}
@@ -92,3 +119,4 @@ export default function RoomConfigModal({ room, onToggleBed, onClose }) {
     </div>
   );
 }
+

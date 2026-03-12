@@ -254,9 +254,30 @@ const reservationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "confirmed", "checked-in", "checked-out", "cancelled"],
+      enum: [
+        "pending",
+        "visit_pending",
+        "visit_approved",
+        "payment_pending",
+        "confirmed",
+        "grace_period",
+        "checked-in",
+        "checked-out",
+        "cancelled",
+        "archived",
+      ],
       default: "pending",
       index: true,
+    },
+
+    // --- Grace Period ---
+    gracePeriodDays: {
+      type: Number,
+      default: 3,
+    },
+    graceDeadline: {
+      type: Date,
+      default: null,
     },
 
     // --- Payment ---
@@ -425,7 +446,7 @@ reservationSchema.methods.cancel = async function () {
 reservationSchema.methods.countsTowardOccupancy = function () {
   return (
     !this.isArchived &&
-    (this.status === "confirmed" || this.status === "checked-in")
+    (this.status === "confirmed" || this.status === "checked-in" || this.status === "grace_period")
   );
 };
 

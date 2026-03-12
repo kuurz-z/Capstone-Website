@@ -617,6 +617,126 @@ export const deleteUser = async (req, res) => {
   }
 };
 
+// ============================================================================
+// ACCOUNT STATUS MANAGEMENT
+// ============================================================================
+
+/**
+ * PATCH /api/users/:userId/suspend
+ * Suspend a user account.
+ * Access: Admin | Super Admin
+ */
+export const suspendUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+
+    if (!userId.match(/^[0-9a-fA-F]{24}$/))
+      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser)
+      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+
+    // Prevent suspending admins unless you're a super admin
+    if ((targetUser.role === "admin" || targetUser.role === "superAdmin") && !req.isSuperAdmin)
+      return res.status(403).json({ error: "Only super admins can suspend admin accounts", code: "ROLE_FORBIDDEN" });
+
+    const adminUser = await User.findOne({ firebaseUid: req.user.uid });
+    const oldData = targetUser.toObject();
+
+    await targetUser.suspend(adminUser?._id, reason || "Suspended by admin");
+
+    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
+      `Account suspended: ${reason || "No reason provided"}`);
+
+    console.log(`✅ User suspended: ${targetUser.email}`);
+    res.json({ message: "User suspended successfully", user: targetUser });
+  } catch (error) {
+    console.error("❌ Suspend user error:", error);
+    await auditLogger.logError(req, error, "Failed to suspend user");
+    res.status(500).json({ error: "Failed to suspend user", code: "SUSPEND_USER_ERROR" });
+  }
+};
+
+/**
+ * PATCH /api/users/:userId/reactivate
+ * Reactivate a suspended or banned user account.
+ * Access: Admin | Super Admin
+ */
+export const reactivateUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId.match(/^[0-9a-fA-F]{24}$/))
+      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser)
+      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+
+    if (targetUser.accountStatus === "active")
+      return res.status(400).json({ error: "User is already active", code: "ALREADY_ACTIVE" });
+
+    // Only super admin can reactivate banned users
+    if (targetUser.accountStatus === "banned" && !req.isSuperAdmin)
+      return res.status(403).json({ error: "Only super admins can reactivate banned accounts", code: "ROLE_FORBIDDEN" });
+
+    const adminUser = await User.findOne({ firebaseUid: req.user.uid });
+    const oldData = targetUser.toObject();
+
+    await targetUser.reactivate(adminUser?._id);
+
+    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
+      `Account reactivated from ${oldData.accountStatus}`);
+
+    console.log(`✅ User reactivated: ${targetUser.email}`);
+    res.json({ message: "User reactivated successfully", user: targetUser });
+  } catch (error) {
+    console.error("❌ Reactivate user error:", error);
+    await auditLogger.logError(req, error, "Failed to reactivate user");
+    res.status(500).json({ error: "Failed to reactivate user", code: "REACTIVATE_USER_ERROR" });
+  }
+};
+
+/**
+ * PATCH /api/users/:userId/ban
+ * Ban a user account permanently.
+ * Access: Super Admin only
+ */
+export const banUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+
+    if (!userId.match(/^[0-9a-fA-F]{24}$/))
+      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser)
+      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+
+    // Cannot ban super admins
+    if (targetUser.role === "superAdmin")
+      return res.status(403).json({ error: "Cannot ban super admin accounts", code: "ROLE_FORBIDDEN" });
+
+    const adminUser = await User.findOne({ firebaseUid: req.user.uid });
+    const oldData = targetUser.toObject();
+
+    await targetUser.ban(adminUser?._id, reason || "Banned by admin");
+
+    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
+      `Account banned: ${reason || "No reason provided"}`);
+
+    console.log(`✅ User banned: ${targetUser.email}`);
+    res.json({ message: "User banned successfully", user: targetUser });
+  } catch (error) {
+    console.error("❌ Ban user error:", error);
+    await auditLogger.logError(req, error, "Failed to ban user");
+    res.status(500).json({ error: "Failed to ban user", code: "BAN_USER_ERROR" });
+  }
+};
+
 /**
  * Get user's stay information and history
  * Returns current stay and past reservations

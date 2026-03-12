@@ -57,6 +57,8 @@ function CheckAvailabilityPage() {
   const { data: rawRooms = [], isLoading: roomsLoading, error: roomsQueryError } = useRooms();
   const roomsError = roomsQueryError ? "Failed to load rooms. Please try again." : null;
 
+
+
   const rooms = useMemo(
     () =>
       rawRooms.map((room) => {
@@ -78,7 +80,7 @@ function CheckAvailabilityPage() {
               normalizedType,
               room.currentOccupancy || 0,
             );
-        const availableBeds = beds.filter((bed) => bed.available).length;
+        const availableBeds = beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available !== false)).length;
         const totalBeds = beds.length || room.capacity || 0;
         return {
           id: roomNumber,
@@ -341,7 +343,8 @@ function CheckAvailabilityPage() {
               <button
                 onClick={() => {
                   setShowLoginConfirmBeforeReserve(false);
-                  navigate("/signin");
+                  showNotification("Please sign in to reserve a room", "info", 4000);
+                  setTimeout(() => navigate("/signin"), 300);
                 }}
                 className="flex-1 py-3 px-4 rounded-full text-white text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer"
                 style={{ backgroundColor: "#E7710F" }}
@@ -408,7 +411,7 @@ function CheckAvailabilityPage() {
         </div>
 
         <div className="mb-8">
-          <h1 className="text-3xl font-light mb-2" style={{ color: "#0C375F" }}>
+          <h1 className="text-3xl font-semibold mb-2" style={{ color: "#0C375F" }}>
             Available Rooms
           </h1>
           <p className="text-gray-600">
@@ -417,56 +420,44 @@ function CheckAvailabilityPage() {
               : `${filteredRooms.length} rooms available`}
           </p>
           {!user && (
-            <div
+            <p
               style={{
-                marginTop: "12px",
-                padding: "10px 16px",
-                backgroundColor: "#FFF7ED",
-                border: "1px solid #FDBA74",
-                borderRadius: "8px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
+                marginTop: "8px",
                 fontSize: "14px",
-                color: "#9A3412",
+                color: "#6B7280",
               }}
             >
-              <span>🔑</span>
-              <span>
-                <button
-                  onClick={() => navigate("/signin")}
-                  style={{
-                    fontWeight: "500",
-                    color: "#E7710F",
-                    textDecoration: "underline",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    fontSize: "inherit",
-                  }}
-                >
-                  Sign in
-                </button>{" "}
-                or{" "}
-                <button
-                  onClick={() => navigate("/signup")}
-                  style={{
-                    fontWeight: "500",
-                    color: "#E7710F",
-                    textDecoration: "underline",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    fontSize: "inherit",
-                  }}
-                >
-                  create an account
-                </button>{" "}
-                to reserve a room
-              </span>
-            </div>
+              <button
+                onClick={() => navigate("/signin")}
+                style={{
+                  fontWeight: "600",
+                  color: "#E7710F",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontSize: "inherit",
+                }}
+              >
+                Sign in
+              </button>{" "}
+              or{" "}
+              <button
+                onClick={() => navigate("/signup")}
+                style={{
+                  fontWeight: "600",
+                  color: "#E7710F",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontSize: "inherit",
+                }}
+              >
+                create an account
+              </button>{" "}
+              to reserve a room
+            </p>
           )}
         </div>
 
@@ -511,7 +502,7 @@ function CheckAvailabilityPage() {
 
         {/* Coming Soon */}
         <section className="mt-16">
-          <h2 className="text-2xl font-light mb-2" style={{ color: "#0C375F" }}>
+          <h2 className="text-2xl font-semibold mb-2" style={{ color: "#0C375F" }}>
             Coming Soon
           </h2>
           <p className="text-gray-600 mb-6">
@@ -580,6 +571,7 @@ function CheckAvailabilityPage() {
           setShowLogoutConfirm(false);
           try {
             await logout();
+            showNotification("Signed out successfully", "success", 3000);
             navigate("/signin");
           } catch (err) {
             console.error("Logout error:", err);

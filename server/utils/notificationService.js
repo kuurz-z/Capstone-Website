@@ -1,0 +1,139 @@
+/**
+ * ============================================================================
+ * NOTIFICATION SERVICE
+ * ============================================================================
+ *
+ * Centralized helper for creating notifications.
+ * Import this in any controller that needs to notify users.
+ *
+ * Usage:
+ *   import { notify } from "../utils/notificationService.js";
+ *   await notify.reservationConfirmed(userId, reservationCode, roomName);
+ *
+ * ============================================================================
+ */
+
+import Notification from "../models/Notification.js";
+
+/**
+ * Create a notification (generic)
+ * @param {ObjectId} userId - Target user
+ * @param {string} type - Notification type enum value
+ * @param {string} title - Short title
+ * @param {string} message - Full message body
+ * @param {Object} options - Optional { actionUrl, entityType, entityId }
+ */
+async function createNotification(userId, type, title, message, options = {}) {
+  try {
+    const notification = new Notification({
+      userId,
+      type,
+      title,
+      message,
+      actionUrl: options.actionUrl || null,
+      entityType: options.entityType || "",
+      entityId: options.entityId || null,
+    });
+    await notification.save();
+    return notification;
+  } catch (error) {
+    // Non-fatal — don't break the calling flow
+    console.error("⚠️ Failed to create notification:", error.message);
+    return null;
+  }
+}
+
+// ============================================================================
+// PRE-BUILT NOTIFICATION HELPERS
+// ============================================================================
+
+const notify = {
+  /**
+   * Reservation confirmed
+   */
+  reservationConfirmed: (userId, reservationCode, roomName) =>
+    createNotification(userId, "reservation_confirmed", "Reservation Confirmed",
+      `Your reservation ${reservationCode} for ${roomName} has been confirmed.`,
+      { entityType: "reservation" }),
+
+  /**
+   * Reservation cancelled
+   */
+  reservationCancelled: (userId, reservationCode, reason) =>
+    createNotification(userId, "reservation_cancelled", "Reservation Cancelled",
+      `Your reservation ${reservationCode} has been cancelled. ${reason ? `Reason: ${reason}` : ""}`,
+      { entityType: "reservation" }),
+
+  /**
+   * Visit approved
+   */
+  visitApproved: (userId, branchName) =>
+    createNotification(userId, "visit_approved", "Visit Approved",
+      `Your visit to ${branchName} has been approved. Please proceed to the dormitory.`,
+      { entityType: "reservation" }),
+
+  /**
+   * Visit rejected
+   */
+  visitRejected: (userId, reason) =>
+    createNotification(userId, "visit_rejected", "Visit Schedule Rejected",
+      `Your visit schedule has been rejected. ${reason || "Please reschedule."}`,
+      { entityType: "reservation" }),
+
+  /**
+   * Payment approved
+   */
+  paymentApproved: (userId, billingMonth, amount) =>
+    createNotification(userId, "payment_approved", "Payment Approved",
+      `Your payment of ₱${amount} for ${billingMonth} has been approved.`,
+      { entityType: "bill" }),
+
+  /**
+   * Payment rejected
+   */
+  paymentRejected: (userId, billingMonth, reason) =>
+    createNotification(userId, "payment_rejected", "Payment Rejected",
+      `Your payment for ${billingMonth} was rejected. ${reason || "Please resubmit."} `,
+      { entityType: "bill" }),
+
+  /**
+   * Bill generated
+   */
+  billGenerated: (userId, billingMonth, totalAmount, dueDate) =>
+    createNotification(userId, "bill_generated", "New Bill Generated",
+      `Your bill for ${billingMonth} is ₱${totalAmount}. Due by ${dueDate}.`,
+      { entityType: "bill" }),
+
+  /**
+   * Grace period warning
+   */
+  gracePeriodWarning: (userId, reservationCode, deadline) =>
+    createNotification(userId, "grace_period_warning", "Grace Period Warning",
+      `Your reservation ${reservationCode} is in grace period. Move in by ${deadline} or it will be cancelled.`,
+      { entityType: "reservation" }),
+
+  /**
+   * Account suspended
+   */
+  accountSuspended: (userId, reason) =>
+    createNotification(userId, "account_suspended", "Account Suspended",
+      `Your account has been suspended. ${reason || "Contact support for details."}`,
+      { entityType: "user" }),
+
+  /**
+   * Account reactivated
+   */
+  accountReactivated: (userId) =>
+    createNotification(userId, "account_reactivated", "Account Reactivated",
+      "Your account has been reactivated. You can now log in and use the system.",
+      { entityType: "user" }),
+
+  /**
+   * General notification
+   */
+  general: (userId, title, message, options = {}) =>
+    createNotification(userId, "general", title, message, options),
+};
+
+export { createNotification, notify };
+export default notify;

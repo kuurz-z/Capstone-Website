@@ -312,3 +312,46 @@ export const deleteRoom = async (req, res) => {
     });
   }
 };
+
+/* ─── PATCH bed status (lock/unlock for maintenance) ───────────── */
+export const updateBedStatus = async (req, res) => {
+  try {
+    const { roomId, bedId } = req.params;
+    const { status } = req.body; // "maintenance" or "available"
+
+    if (!["maintenance", "available"].includes(status)) {
+      return res.status(400).json({
+        error: "Invalid bed status. Use 'maintenance' or 'available'.",
+        code: "INVALID_BED_STATUS",
+      });
+    }
+
+    const query = { _id: roomId };
+    if (req.branchFilter) query.branch = req.branchFilter;
+
+    const room = await Room.findOne(query);
+    if (!room) {
+      return res.status(404).json({ error: "Room not found", code: "ROOM_NOT_FOUND" });
+    }
+
+    let success;
+    if (status === "maintenance") {
+      success = room.lockBedForMaintenance(bedId);
+    } else {
+      success = room.unlockBed(bedId);
+    }
+
+    if (!success) {
+      return res.status(404).json({ error: "Bed not found or already in requested state", code: "BED_NOT_FOUND" });
+    }
+
+    await room.save();
+
+    await auditLogger.logModification(req, "room", roomId, null, null, `Bed ${bedId} → ${status}`);
+    console.log(`✅ Bed ${bedId} in ${room.name} → ${status}`);
+    res.json({ message: `Bed ${bedId} set to ${status}`, room });
+  } catch (error) {
+    console.error("❌ Update bed status error:", error);
+    res.status(500).json({ error: "Failed to update bed status", code: "BED_STATUS_ERROR" });
+  }
+};

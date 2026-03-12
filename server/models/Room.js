@@ -123,7 +123,22 @@ const roomSchema = new mongoose.Schema(
             enum: ["upper", "lower", "single"],
             required: true,
           },
-          available: { type: Boolean, default: true },
+          // 5-state: available, locked (temp hold), reserved (confirmed), occupied, maintenance
+          status: {
+            type: String,
+            enum: ["available", "locked", "reserved", "occupied", "maintenance"],
+            default: "available",
+          },
+          // Lock expiry for temporary bed holds
+          lockExpiresAt: {
+            type: Date,
+            default: null,
+          },
+          lockedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+          },
           occupiedBy: {
             userId: {
               type: mongoose.Schema.Types.ObjectId,
@@ -235,7 +250,7 @@ roomSchema.methods.occupyBed = function (bedId, userId, reservationId) {
   const bed = this.beds.find((b) => b.id === bedId);
   if (!bed) return false;
 
-  bed.available = false;
+  bed.status = "occupied";
   bed.occupiedBy = {
     userId,
     reservationId,
@@ -253,7 +268,7 @@ roomSchema.methods.vacateBed = function (bedId) {
   const bed = this.beds.find((b) => b.id === bedId);
   if (!bed) return false;
 
-  bed.available = true;
+  bed.status = "available";
   bed.occupiedBy = {
     userId: null,
     reservationId: null,
@@ -263,11 +278,85 @@ roomSchema.methods.vacateBed = function (bedId) {
 };
 
 /**
+ * Lock a bed for maintenance (admin only)
+ * @param {string} bedId - The bed ID to lock
+ * @returns {boolean} - true if successful
+ */
+roomSchema.methods.lockBedForMaintenance = function (bedId) {
+  const bed = this.beds.find((b) => b.id === bedId);
+  if (!bed) return false;
+  bed.status = "maintenance";
+  bed.occupiedBy = { userId: null, reservationId: null, occupiedSince: null };
+  return true;
+};
+
+/**
+ * Unlock a bed from maintenance
+ * @param {string} bedId - The bed ID to unlock
+ * @returns {boolean} - true if successful
+ */
+roomSchema.methods.unlockBed = function (bedId) {
+  const bed = this.beds.find((b) => b.id === bedId);
+  if (!bed || bed.status !== "maintenance") return false;
+  bed.status = "available";
+  return true;
+};
+
+/**
  * Get all available beds
  * @returns {array} - Array of available beds
  */
 roomSchema.methods.getAvailableBeds = function () {
-  return this.beds.filter((bed) => bed.available);
+  return this.beds.filter((bed) => bed.status === "available");
+};
+
+/**
+ * Lock a bed temporarily for a user (prevents race conditions)
+ * @param {string} bedId - The bed ID to lock
+ * @param {ObjectId} userId - User requesting the lock
+ * @param {number} lockMinutes - Lock duration in minutes (default 10)
+ * @returns {boolean} - true if successful
+ */
+roomSchema.methods.lockBed = function (bedId, userId, lockMinutes = 10) {
+  const bed = this.beds.find((b) => b.id === bedId);
+  if (!bed || bed.status !== "available") return false;
+  bed.status = "locked";
+  bed.lockedBy = userId;
+  bed.lockExpiresAt = new Date(Date.now() + lockMinutes * 60 * 1000);
+  return true;
+};
+
+/**
+ * Confirm a locked bed (lock → reserved)
+ * @param {string} bedId - The bed ID
+ * @param {ObjectId} userId - User who locked it
+ * @returns {boolean} - true if successful
+ */
+roomSchema.methods.confirmBedLock = function (bedId, userId) {
+  const bed = this.beds.find((b) => b.id === bedId);
+  if (!bed || bed.status !== "locked") return false;
+  if (String(bed.lockedBy) !== String(userId)) return false;
+  bed.status = "reserved";
+  bed.lockExpiresAt = null;
+  return true;
+};
+
+/**
+ * Release all expired bed locks back to available
+ * @returns {number} - Number of beds unlocked
+ */
+roomSchema.methods.unlockExpiredBeds = function () {
+  const now = new Date();
+  let unlocked = 0;
+  for (const bed of this.beds) {
+    if (bed.status === "locked" && bed.lockExpiresAt && bed.lockExpiresAt < now) {
+      bed.status = "available";
+      bed.lockedBy = null;
+      bed.lockExpiresAt = null;
+      unlocked++;
+    }
+  }
+  return unlocked;
 };
 
 /**
@@ -275,7 +364,7 @@ roomSchema.methods.getAvailableBeds = function () {
  * @returns {array} - Array of occupied beds
  */
 roomSchema.methods.getOccupiedBeds = function () {
-  return this.beds.filter((bed) => !bed.available);
+  return this.beds.filter((bed) => bed.status === "occupied");
 };
 
 /**
@@ -285,7 +374,7 @@ roomSchema.methods.getOccupiedBeds = function () {
  */
 roomSchema.methods.isBedAvailable = function (bedId) {
   const bed = this.beds.find((b) => b.id === bedId);
-  return bed ? bed.available : false;
+  return bed ? bed.status === "available" : false;
 };
 
 /**

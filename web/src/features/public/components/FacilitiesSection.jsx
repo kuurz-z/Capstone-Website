@@ -89,20 +89,20 @@ const facilities = [
 export function FacilitiesSection() {
   return (
     <section
-      className="py-24 lg:py-32"
+      className="py-16 lg:py-20"
       style={{ backgroundColor: "#0C375F" }}
       id="facilities"
     >
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
         {/* Header */}
-        <div className="text-center mb-20">
-          <p className="text-xs text-white/40 mb-3 tracking-widest uppercase font-light">
+        <div className="text-center mb-12">
+          <p className="text-xs text-white/60 mb-3 tracking-widest uppercase font-medium">
             Shared Spaces
           </p>
-          <h2 className="text-4xl lg:text-5xl font-light mb-5 tracking-tight text-white">
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight text-white">
             Facilities & Amenities
           </h2>
-          <p className="text-white/60 max-w-2xl mx-auto font-light leading-relaxed">
+          <p className="text-white/70 max-w-2xl mx-auto font-normal leading-relaxed">
             Beyond your room, enjoy access to well-maintained common areas
             designed for studying, cooking, and relaxation.
           </p>
@@ -148,7 +148,7 @@ export function FacilitiesSection() {
                   <h3 className="text-lg font-medium mb-2 text-white">
                     {facility.title}
                   </h3>
-                  <p className="text-sm text-white/60 leading-relaxed font-light">
+                  <p className="text-sm text-white/70 leading-relaxed">
                     {facility.description}
                   </p>
                 </div>

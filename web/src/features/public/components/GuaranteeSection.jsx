@@ -29,15 +29,15 @@ const guarantees = [
 
 export function GuaranteeSection() {
   return (
-    <section className="py-24 lg:py-32 bg-white">
+    <section className="py-16 lg:py-20 bg-white">
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
         {/* Header */}
-        <div className="text-center mb-20">
-          <p className="text-xs text-gray-400 mb-3 tracking-widest uppercase font-light">Our Promise</p>
-          <h2 className="text-4xl lg:text-5xl font-light mb-5 tracking-tight" style={{ color: '#0C375F' }}>
+        <div className="text-center mb-12">
+          <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Our Promise</p>
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#0C375F' }}>
             Risk-Free Living Guarantee
           </h2>
-          <p className="text-gray-500 max-w-2xl mx-auto font-light leading-relaxed">
+          <p className="text-gray-500 max-w-2xl mx-auto font-normal leading-relaxed">
             We stand behind the quality of our accommodations. Your satisfaction and peace of mind are guaranteed.
           </p>
         </div>
@@ -59,10 +59,10 @@ export function GuaranteeSection() {
                     <Icon className="w-6 h-6" style={{ color: guarantee.color }} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-normal mb-2 tracking-tight" style={{ color: '#0C375F' }}>
+                    <h3 className="text-lg font-medium mb-2 tracking-tight" style={{ color: '#0C375F' }}>
                       {guarantee.title}
                     </h3>
-                    <p className="text-sm text-gray-500 leading-relaxed font-light">
+                    <p className="text-sm text-gray-600 leading-relaxed">
                       {guarantee.description}
                     </p>
                   </div>
@@ -73,20 +73,20 @@ export function GuaranteeSection() {
         </div>
 
         {/* Trust Badges */}
-        <div className="mt-16 flex flex-wrap justify-center items-center gap-8 pt-12 border-t border-gray-100">
+        <div className="mt-12 flex flex-wrap justify-center items-center gap-8 pt-10 border-t border-gray-100">
           <div className="text-center">
-            <p className="text-xs text-gray-400 font-light mb-1">Accredited by</p>
-            <p className="text-sm font-normal" style={{ color: '#0C375F' }}>DTI Registered</p>
+            <p className="text-xs text-gray-500 font-normal mb-1">Accredited by</p>
+            <p className="text-sm font-semibold" style={{ color: '#0C375F' }}>DTI Registered</p>
           </div>
           <div className="w-px h-8 bg-gray-200"></div>
           <div className="text-center">
-            <p className="text-xs text-gray-400 font-light mb-1">Certified</p>
-            <p className="text-sm font-normal" style={{ color: '#0C375F' }}>Fire Safety Compliant</p>
+            <p className="text-xs text-gray-500 font-normal mb-1">Certified</p>
+            <p className="text-sm font-semibold" style={{ color: '#0C375F' }}>Fire Safety Compliant</p>
           </div>
           <div className="w-px h-8 bg-gray-200"></div>
           <div className="text-center">
-            <p className="text-xs text-gray-400 font-light mb-1">Trusted by</p>
-            <p className="text-sm font-normal" style={{ color: '#0C375F' }}>500+ Students</p>
+            <p className="text-xs text-gray-500 font-normal mb-1">Trusted by</p>
+            <p className="text-sm font-semibold" style={{ color: '#0C375F' }}>500+ Students</p>
           </div>
         </div>
       </div>

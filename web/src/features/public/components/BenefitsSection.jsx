@@ -41,15 +41,15 @@ const benefits = [
 
 export function BenefitsSection() {
   return (
-    <section className="py-24 lg:py-32 bg-gradient-to-b from-gray-50 to-white">
+    <section className="py-16 lg:py-20 bg-gradient-to-b from-gray-50 to-white">
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
         {/* Header */}
-        <div className="text-center mb-20">
-          <p className="text-xs text-gray-400 mb-3 tracking-widest uppercase font-light">Why Choose Us</p>
-          <h2 className="text-4xl lg:text-5xl font-light mb-5 tracking-tight" style={{ color: '#0C375F' }}>
+        <div className="text-center mb-12">
+          <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Why Choose Us</p>
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#0C375F' }}>
             Everything You Need to Succeed
           </h2>
-          <p className="text-gray-500 max-w-2xl mx-auto font-light leading-relaxed">
+          <p className="text-gray-500 max-w-2xl mx-auto font-normal leading-relaxed">
             More than just a place to sleep. Lilycrest provides a complete living experience designed for student success.
           </p>
         </div>
@@ -69,10 +69,10 @@ export function BenefitsSection() {
                 >
                   <Icon className="w-6 h-6" style={{ color: benefit.color }} />
                 </div>
-                <h3 className="text-xl font-normal mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+                <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
                   {benefit.title}
                 </h3>
-                <p className="text-sm text-gray-500 leading-relaxed font-light">
+                <p className="text-sm text-gray-600 leading-relaxed">
                   {benefit.description}
                 </p>
               </div>

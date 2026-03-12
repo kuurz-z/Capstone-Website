@@ -1,0 +1,214 @@
+/* ==========================================================================
+   BED SELECTOR — Minimalist & Professional
+   ========================================================================== */
+
+.bed-selector {
+  padding: 16px 0;
+}
+
+/* ── Header ── */
+.bs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bs-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1F2937;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* ── Legend ── */
+.bs-legend {
+  display: flex;
+  gap: 14px;
+}
+
+.bs-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #9CA3AF;
+  font-weight: 500;
+}
+
+.bs-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.bs-legend-avail { background: #10B981; }
+.bs-legend-occ   { background: #EF4444; }
+.bs-legend-maint { background: #D1D5DB; }
+
+/* ── Bunk container ── */
+.bs-bunks {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Frame (one bunk unit) ── */
+.bs-frame {
+  flex: 1;
+  min-width: 200px;
+  max-width: 280px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #FAFAFA;
+  position: relative;
+}
+
+.bs-frame-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9CA3AF;
+  padding: 8px 14px 0;
+}
+
+.bs-tier {
+  padding: 4px 6px;
+}
+
+.bs-divider {
+  height: 1px;
+  background: #E5E7EB;
+  margin: 0 12px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INDIVIDUAL BED
+   ══════════════════════════════════════════════════════════════ */
+.bs-bed {
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+  user-select: none;
+  border: 1.5px solid transparent;
+}
+
+.bs-bed-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bs-bed-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Status dot ── */
+.bs-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bs-dot-available   { background: #10B981; box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
+.bs-dot-occupied    { background: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
+.bs-dot-maintenance { background: #D1D5DB; }
+
+/* ── Labels ── */
+.bs-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  line-height: 1.2;
+}
+
+.bs-id {
+  font-size: 11px;
+  color: #9CA3AF;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+/* ── Badge ── */
+.bs-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ── Status-specific styles ── */
+.bs-available {
+  background: white;
+}
+.bs-available .bs-badge {
+  background: #ECFDF5;
+  color: #059669;
+}
+
+.bs-occupied {
+  background: #FEFEFE;
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.bs-occupied .bs-badge {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+.bs-occupied .bs-label {
+  color: #9CA3AF;
+}
+
+.bs-maintenance {
+  background: #FEFEFE;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.bs-maintenance .bs-badge {
+  background: #F3F4F6;
+  color: #6B7280;
+}
+.bs-maintenance .bs-label {
+  color: #9CA3AF;
+}
+
+/* ── Clickable ── */
+.bs-clickable {
+  cursor: pointer;
+}
+.bs-clickable:hover {
+  background: #F0FDF4;
+  border-color: #86EFAC;
+}
+
+/* ── Selected ── */
+.bs-selected {
+  background: #FFFBEB !important;
+  border-color: #F59E0B !important;
+  opacity: 1 !important;
+}
+.bs-selected .bs-badge {
+  background: #FEF3C7 !important;
+  color: #92400E !important;
+}
+.bs-selected .bs-dot {
+  background: #F59E0B !important;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.2) !important;
+}
+.bs-selected .bs-label {
+  color: #92400E !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .bs-bunks { flex-direction: column; }
+  .bs-frame { max-width: 100%; }
+}

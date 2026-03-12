@@ -2,30 +2,30 @@ import { Heart, Users, Award } from 'lucide-react';
 
 export function StorytellingSection() {
   return (
-    <section className="py-24 lg:py-32 bg-gradient-to-br from-gray-50 to-white">
+    <section className="py-16 lg:py-20 bg-gradient-to-br from-gray-50 to-white">
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Left - Story */}
           <div>
-            <p className="text-xs text-gray-400 mb-3 tracking-widest uppercase font-light">Our Story</p>
-            <h2 className="text-4xl lg:text-5xl font-light mb-8 tracking-tight leading-tight" style={{ color: '#0C375F' }}>
+            <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Our Story</p>
+            <h2 className="text-4xl lg:text-5xl font-normal mb-8 tracking-tight leading-tight" style={{ color: '#0C375F' }}>
               About Lilycrest
             </h2>
             
-            <div className="space-y-6 mb-10">
-              <p className="text-gray-600 leading-relaxed font-light">
+            <div className="space-y-5 mb-8">
+              <p className="text-gray-600 leading-relaxed">
                 Lilycrest was founded in 2019 by former university students who understood the struggle of finding quality, affordable accommodation near campus. We experienced firsthand the challenges of overpriced, poorly maintained dormitories with unreliable utilities.
               </p>
-              <p className="text-gray-600 leading-relaxed font-light">
+              <p className="text-gray-600 leading-relaxed">
                 Today, we've created the living spaces we wished existed during our college years. Every detail—from the high-speed internet to the 24/7 security—is designed with student needs in mind.
               </p>
-              <p className="text-gray-600 leading-relaxed font-light">
+              <p className="text-gray-600 leading-relaxed">
                 Our mission is simple: provide students with a safe, comfortable, and inspiring home where they can focus on what truly matters—their education and personal growth.
               </p>
             </div>
 
             <button
-              className="text-white px-8 py-6 rounded-full font-light hover:opacity-90 transition-opacity"
+              className="text-white px-8 py-5 rounded-full font-normal hover:opacity-90 transition-all duration-300 hover:shadow-lg"
               style={{ backgroundColor: '#E7710F' }}
             >
               Learn More About Us
@@ -41,10 +41,10 @@ export function StorytellingSection() {
               >
                 <Heart className="w-6 h-6" style={{ color: '#E7710F' }} />
               </div>
-              <h3 className="text-xl font-normal mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
                 Student-First Approach
               </h3>
-              <p className="text-sm text-gray-500 leading-relaxed font-light">
+              <p className="text-sm text-gray-600 leading-relaxed">
                 Every decision we make prioritizes the comfort, safety, and success of our residents. Your wellbeing is our top priority.
               </p>
             </div>
@@ -56,10 +56,10 @@ export function StorytellingSection() {
               >
                 <Users className="w-6 h-6" style={{ color: '#0C375F' }} />
               </div>
-              <h3 className="text-xl font-normal mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
                 Community Matters
               </h3>
-              <p className="text-sm text-gray-500 leading-relaxed font-light">
+              <p className="text-sm text-gray-600 leading-relaxed">
                 We foster a supportive environment where students can build lasting friendships and professional networks.
               </p>
             </div>
@@ -71,10 +71,10 @@ export function StorytellingSection() {
               >
                 <Award className="w-6 h-6" style={{ color: '#EDB938' }} />
               </div>
-              <h3 className="text-xl font-normal mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
                 Quality & Transparency
               </h3>
-              <p className="text-sm text-gray-500 leading-relaxed font-light">
+              <p className="text-sm text-gray-600 leading-relaxed">
                 No hidden fees, no surprises. We maintain high standards and communicate openly with all our residents.
               </p>
             </div>

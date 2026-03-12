@@ -78,6 +78,9 @@ export const validateMoveInDate = (dateStr) => {
 /**
  * Handle status transitions (confirmed / checked-in / cancelled).
  * Centralises ~55 lines duplicated in updateReservation, releaseSlot, archiveReservation.
+ *
+ * Also syncs Firebase Custom Claims so the user's token reflects
+ * the new role immediately (no re-login required).
  */
 export const handleStatusTransition = async (
   newStatus,
@@ -89,11 +92,26 @@ export const handleStatusTransition = async (
   const user = await User.findById(userId);
   if (!user) return;
 
+  // Helper: sync Firebase custom claims (non-fatal if it fails)
+  const syncFirebaseClaims = async (claims) => {
+    try {
+      const { getAuth } = await import("../config/firebase.js");
+      const auth = getAuth();
+      if (auth && user.firebaseUid) {
+        await auth.setCustomUserClaims(user.firebaseUid, claims);
+        console.log(`🔑 Firebase claims synced for ${user.email}:`, claims);
+      }
+    } catch (e) {
+      console.error("⚠️ Firebase claims sync failed (non-fatal):", e.message);
+    }
+  };
+
   if (newStatus === "confirmed" && oldStatus !== "confirmed") {
     const room = await Room.findById(roomId);
     user.tenantStatus = "reserved";
     if (room) user.branch = room.branch;
     await user.save();
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: "reserved" });
     console.log(
       `✅ User ${user.email} → tenantStatus: reserved, branch: ${user.branch}`,
     );
@@ -103,6 +121,7 @@ export const handleStatusTransition = async (
     user.role = "tenant";
     user.tenantStatus = "active";
     await user.save();
+    await syncFirebaseClaims({ role: "tenant", tenantStatus: "active" });
     console.log(`✅ User ${user.email} → role: tenant, tenantStatus: active`);
   }
 
@@ -114,6 +133,7 @@ export const handleStatusTransition = async (
     user.tenantStatus = null;
     user.branch = null;
     await user.save();
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: null });
     console.log(
       `✅ User ${user.email} → tenantStatus: null, branch: null (cancelled)`,
     );

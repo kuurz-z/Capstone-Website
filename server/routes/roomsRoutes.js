@@ -23,6 +23,7 @@ import {
   createRoom,
   updateRoom,
   deleteRoom,
+  updateBedStatus,
 } from "../controllers/roomsController.js";
 
 const router = express.Router();
@@ -82,5 +83,19 @@ router.put("/:roomId", verifyToken, verifyAdmin, filterByBranch, updateRoom);
  * @returns {Object} Success message
  */
 router.delete("/:roomId", verifyToken, verifyAdmin, filterByBranch, deleteRoom);
+
+/**
+ * PATCH /api/rooms/:roomId/beds/:bedId/status
+ *
+ * Lock or unlock a bed for maintenance.
+ *
+ * Access: Admin only
+ *
+ * @param {string} roomId - MongoDB ObjectId of the room
+ * @param {string} bedId - Bed ID within the room
+ * @body {string} status - "maintenance" or "available"
+ * @returns {Object} Updated room
+ */
+router.patch("/:roomId/beds/:bedId/status", verifyToken, verifyAdmin, filterByBranch, updateBedStatus);
 
 export default router;

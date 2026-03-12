@@ -40,9 +40,14 @@ function RoomConfigurationPage({ isEmbedded = false }) {
 
   const toggleBedAvailability = (bedId) => {
     if (!selectedRoom) return;
-    const updatedBeds = selectedRoom.beds.map((bed) =>
-      bed.id === bedId ? { ...bed, available: !bed.available } : bed,
-    );
+    const updatedBeds = selectedRoom.beds.map((bed) => {
+      if (bed.id !== bedId) return bed;
+      const currentStatus = bed.status || (bed.available === false ? "occupied" : "available");
+      // Cycle: available → maintenance, maintenance → available (occupied can't be toggled)
+      if (currentStatus === "occupied") return bed;
+      const newStatus = currentStatus === "available" ? "maintenance" : "available";
+      return { ...bed, status: newStatus };
+    });
     setSelectedRoom({ ...selectedRoom, beds: updatedBeds });
   };
 

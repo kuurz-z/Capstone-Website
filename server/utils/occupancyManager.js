@@ -185,18 +185,21 @@ export const recalculateRoomOccupancy = async (roomId) => {
 
     // Reset bed occupancy status
     room.beds.forEach((bed) => {
+      // Don't touch beds locked for maintenance
+      if (bed.status === "maintenance") return;
+
       const occupier = activeReservations.find(
         (res) => res.selectedBed?.id === bed.id,
       );
       if (occupier) {
-        bed.available = false;
+        bed.status = "occupied";
         bed.occupiedBy = {
           userId: occupier.userId,
           reservationId: occupier._id,
           occupiedSince: occupier.createdAt,
         };
       } else {
-        bed.available = true;
+        bed.status = "available";
         bed.occupiedBy = {
           userId: null,
           reservationId: null,
@@ -238,8 +241,9 @@ export const getRoomOccupancyStatus = async (roomId) => {
       throw new Error(`Room ${roomId} not found`);
     }
 
-    const occupiedBeds = room.beds.filter((bed) => !bed.available);
-    const availableBeds = room.beds.filter((bed) => bed.available);
+    const occupiedBeds = room.beds.filter((bed) => bed.status === "occupied");
+    const maintenanceBeds = room.beds.filter((bed) => bed.status === "maintenance");
+    const availableBeds = room.beds.filter((bed) => bed.status === "available");
 
     return {
       roomName: room.name,
@@ -266,6 +270,10 @@ export const getRoomOccupancyStatus = async (roomId) => {
         },
       })),
       availableBeds: availableBeds.map((bed) => ({
+        bedId: bed.id,
+        position: bed.position,
+      })),
+      maintenanceBeds: maintenanceBeds.map((bed) => ({
         bedId: bed.id,
         position: bed.position,
       })),

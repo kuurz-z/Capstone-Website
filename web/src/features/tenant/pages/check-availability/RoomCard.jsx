@@ -20,7 +20,7 @@ const RoomCard = ({ room, onClick }) => {
 
   return (
     <div
-      className="group cursor-pointer"
+      className="group cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl rounded-2xl"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
@@ -79,8 +79,8 @@ const RoomCard = ({ room, onClick }) => {
             </span>
           </div>
         </div>
-        <p className="text-sm font-medium text-gray-700">
-          {room.type} · {room.title}
+        <p className="text-sm text-gray-500">
+          {room.bedsLeft}
         </p>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <MapPin className="w-4 h-4" />
