@@ -125,14 +125,7 @@ function CheckAvailabilityPage() {
     if (roomType) setSelectedRoomType(roomType);
   }, [searchParams]);
 
-  // ── Capacity validation ────────────────────────────────────
-  useEffect(() => {
-    if (!rooms.length) return;
-    const validation = validateRoomCapacity(rooms);
-    if (!validation.isValid)
-      console.error("Room capacity validation errors:", validation.errors);
-    if (validation.warnings.length > 0)
-  }, [rooms]);
+  // ── Capacity validation (dev-only debug removed) ─────────
 
   // ── Filtering ──────────────────────────────────────────────
   const getAvailableRoomTypes = () => {
