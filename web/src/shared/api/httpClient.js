@@ -92,7 +92,10 @@ export const authFetch = async (url, options = {}, _isRetry = false) => {
       throw apiError;
     }
 
-    return response.json();
+    const json = await response.json();
+    // Auto-unwrap sendSuccess envelope: { success, data, meta } → data
+    if (json && json.success === true && "data" in json) return json.data;
+    return json;
   } catch (error) {
     console.error("❌ API Request Error:", error);
     throw error;
@@ -134,7 +137,10 @@ export const publicFetch = async (url, options = {}) => {
       throw apiError;
     }
 
-    return response.json();
+    const json = await response.json();
+    // Auto-unwrap sendSuccess envelope: { success, data, meta } → data
+    if (json && json.success === true && "data" in json) return json.data;
+    return json;
   } catch (error) {
     console.error("❌ Public API Request Error:", error);
     throw error;
