@@ -1,12 +1,28 @@
 import React, { useRef, useState } from "react";
 import { uploadToImageKit, validateFile } from "../../../../../shared/utils/imageUpload";
 
+/** Format bytes into a human-readable string */
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Truncate filename if too long, keeping the extension */
+function truncateName(name, max = 28) {
+  if (!name || name.length <= max) return name;
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  return name.slice(0, max - ext.length - 3) + "..." + ext;
+}
+
 /**
  * Reusable file upload field with:
  * - Drag & drop support
  * - Client-side validation (size + type)
  * - Upload progress bar
  * - Error feedback
+ * - Displays file name + size after upload
  * - Immediate ImageKit upload on file select
  */
 const FileUploadField = ({
@@ -21,14 +37,10 @@ const FileUploadField = ({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [fileMeta, setFileMeta] = useState(null); // { name, size }
 
   const isUploaded = typeof value === "string" && value.startsWith("http");
   const isFile = value instanceof File;
-  const fileName = isUploaded
-    ? "✓ Uploaded"
-    : isFile
-      ? value.name
-      : null;
 
   const handleClick = () => {
     if (!uploading) inputRef.current?.click();
@@ -44,6 +56,8 @@ const FileUploadField = ({
       return;
     }
 
+    // Save file metadata for display after upload
+    setFileMeta({ name: file.name, size: file.size });
     setError(null);
     setUploading(true);
     setProgress(0);
@@ -52,12 +66,11 @@ const FileUploadField = ({
       const url = await uploadToImageKit(file, (pct) => setProgress(pct));
       setUploading(false);
       setProgress(100);
-      onChange(url); // Pass the ImageKit URL, not the File
+      onChange(url);
     } catch (err) {
       setUploading(false);
       setProgress(0);
       setError(err.message || "Upload failed. Please try again.");
-      // Still pass the File so user can retry
       onChange(file);
     }
   };
@@ -104,9 +117,14 @@ const FileUploadField = ({
       >
         {uploading ? (
           <>
-            <div style={{ fontSize: "14px", color: "#E7710F", fontWeight: 500, marginBottom: "8px" }}>
+            <div style={{ fontSize: "14px", color: "#E7710F", fontWeight: 500, marginBottom: "4px" }}>
               Uploading… {progress}%
             </div>
+            {fileMeta && (
+              <div style={{ fontSize: "12px", color: "#9CA3AF", marginBottom: "8px" }}>
+                {truncateName(fileMeta.name)}
+              </div>
+            )}
             <div style={{ width: "100%", height: "6px", background: "#F3F4F6", borderRadius: "3px", overflow: "hidden" }}>
               <div
                 style={{
@@ -120,11 +138,27 @@ const FileUploadField = ({
             </div>
           </>
         ) : isUploaded ? (
-          <div style={{ color: "#059669", fontWeight: 500 }}>
-            ✓ Uploaded — click to replace
+          <div>
+            <div style={{ color: "#059669", fontWeight: 600, fontSize: "14px", marginBottom: "4px" }}>
+              ✓ Uploaded successfully
+            </div>
+            {fileMeta ? (
+              <div style={{ fontSize: "12px", color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 500, color: "#374151" }}>{truncateName(fileMeta.name)}</span>
+                <span style={{ color: "#D1D5DB" }}>·</span>
+                <span>{formatFileSize(fileMeta.size)}</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: "12px", color: "#6B7280" }}>
+                File uploaded
+              </div>
+            )}
+            <div style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "4px" }}>
+              Click to replace
+            </div>
           </div>
-        ) : fileName ? (
-          <div style={{ color: "#059669", fontWeight: 500 }}>✓ {fileName}</div>
+        ) : isFile ? (
+          <div style={{ color: "#059669", fontWeight: 500 }}>✓ {value.name}</div>
         ) : (
           <>
             <div style={{ fontSize: "20px", marginBottom: "8px", color: "#6B7280" }}>↑</div>
@@ -147,7 +181,7 @@ const FileUploadField = ({
         )}
 
         {/* File size limit hint */}
-        {!fileName && !uploading && !error && (
+        {!isUploaded && !isFile && !uploading && !error && (
           <div style={{ fontSize: "11px", color: "#B0B0B0", marginTop: "4px" }}>
             Max 5MB · JPEG, PNG, or PDF
           </div>
