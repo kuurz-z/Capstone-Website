@@ -294,7 +294,7 @@
   height: 6px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.5);
-  transition: all 0.2s;
+  transition: width 0.2s, background 0.2s, border-radius 0.2s;
 }
 
 .ca-card-dot.active {
