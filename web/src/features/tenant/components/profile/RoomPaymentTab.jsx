@@ -94,7 +94,7 @@ const RoomPaymentTab = ({
               </p>
               <span
                 className={`inline-block px-3 py-1.5 rounded-lg text-sm font-medium ${
-                  activeStatusLabel === "confirmed" ||
+                  activeStatusLabel === "reserved" ||
                   activeStatusLabel === "active"
                     ? "bg-green-100 text-green-700"
                     : activeStatusLabel === "visit-completed"
@@ -192,7 +192,7 @@ const RoomPaymentTab = ({
           <p className="text-sm text-gray-500 mb-6">
             Start browsing rooms to make a reservation
           </p>
-          <Link to="/tenant/check-availability">
+          <Link to="/applicant/check-availability">
             <button
               className="px-6 py-3 rounded-lg font-medium text-white"
               style={{ backgroundColor: "#E7710F" }}

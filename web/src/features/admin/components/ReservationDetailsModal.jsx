@@ -13,8 +13,8 @@ const STATUS_MAP = {
     bg: "#fffbeb",
     dot: "#f59e0b",
   },
-  confirmed: {
-    label: "Confirmed",
+  reserved: {
+    label: "Reserved",
     color: "#047857",
     bg: "#ecfdf5",
     dot: "#10b981",
@@ -140,7 +140,7 @@ export default function ReservationDetailsModal({
   const sc = STATUS_MAP[status] || STATUS_MAP.pending;
   const moveIn = reservation.moveInDate ?? reservation.checkInDate ?? null;
   const isOverdue =
-    status === "confirmed" && moveIn && new Date(moveIn) < new Date();
+    status === "reserved" && moveIn && new Date(moveIn) < new Date();
   const daysOverdue = isOverdue
     ? Math.floor((new Date() - new Date(moveIn)) / 86400000)
     : 0;
@@ -151,7 +151,7 @@ export default function ReservationDetailsModal({
       key === "extend"
         ? {
             title: `Extend Move-in by ${extendDays} Day${extendDays > 1 ? "s" : ""}`,
-            message: `Push the move-in date forward by ${extendDays} day${extendDays > 1 ? "s" : ""}. Reservation stays confirmed.`,
+            message: `Push the move-in date forward by ${extendDays} day${extendDays > 1 ? "s" : ""}. Reservation stays reserved.`,
             confirmText: "Extend",
             variant: "info",
           }
@@ -323,7 +323,7 @@ export default function ReservationDetailsModal({
                         "confirm",
                         () =>
                           reservationApi.update(reservation.id, {
-                            status: "confirmed",
+                            status: "reserved",
                           }),
                         "Reservation confirmed",
                       )
@@ -333,7 +333,7 @@ export default function ReservationDetailsModal({
                     Confirm Payment & Reserve Bed
                   </button>
                 )}
-                {status === "confirmed" && (
+                {status === "reserved" && (
                   <>
                     <button
                       className="rdm-action rdm-action-primary"

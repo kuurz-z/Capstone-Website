@@ -50,7 +50,7 @@ export const BRANCH_DISPLAY_NAMES = {
 // -----------------------------------------------------------------------------
 export const RESERVATION_STATUS = {
   PENDING: "pending",
-  CONFIRMED: "confirmed",
+  RESERVED: "reserved",
   CHECKED_IN: "checked-in",
   CHECKED_OUT: "checked-out",
   CANCELLED: "cancelled",

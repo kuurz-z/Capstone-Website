@@ -30,7 +30,7 @@ const ContractsPage = () => {
 
   // Confirmed (upcoming) = confirmed but not checked-in yet
   const upcomingContract = useMemo(
-    () => reservations.find((r) => r.status === "confirmed"),
+    () => reservations.find((r) => r.status === "reserved"),
     [reservations],
   );
 
@@ -49,7 +49,7 @@ const ContractsPage = () => {
   const getStatusBadge = (status) => {
     const map = {
       "checked-in": { label: "Active", className: "badge-active" },
-      confirmed: { label: "Upcoming", className: "badge-upcoming" },
+      reserved: { label: "Upcoming", className: "badge-upcoming" },
       completed: { label: "Completed", className: "badge-completed" },
       "checked-out": { label: "Completed", className: "badge-completed" },
       cancelled: { label: "Cancelled", className: "badge-cancelled" },

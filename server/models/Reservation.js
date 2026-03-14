@@ -7,8 +7,8 @@
  *
  * WORKFLOW:
  * 1. User creates reservation (status: pending)
- * 2. Admin confirms reservation (status: confirmed)
- * 3. Tenant checks in (status: checked-in)
+ * 2. User completes visit + details + payment (status: reserved)
+ * 3. Admin verifies move-in (status: checked-in)
  * 4. Tenant checks out (status: checked-out)
  *
  * CANCELLATION:
@@ -255,8 +255,7 @@ const reservationSchema = new mongoose.Schema(
         "visit_pending",
         "visit_approved",
         "payment_pending",
-        "confirmed",
-        "grace_period",
+        "reserved",
         "checked-in",
         "checked-out",
         "cancelled",
@@ -266,14 +265,11 @@ const reservationSchema = new mongoose.Schema(
       index: true,
     },
 
-    // --- Grace Period ---
-    gracePeriodDays: {
-      type: Number,
-      default: 3,
-    },
-    graceDeadline: {
+    // --- Overdue Move-In Tracking ---
+    moveInExtendedTo: {
       type: Date,
       default: null,
+      // Admin can extend the move-in deadline if tenant is late
     },
 
     // --- Payment ---
@@ -319,7 +315,7 @@ const reservationSchema = new mongoose.Schema(
  * Uses retry loop to prevent collision on unique constraint.
  */
 reservationSchema.pre("save", async function (next) {
-  if (this.status === "confirmed" && !this.reservationCode) {
+  if (this.status === "reserved" && !this.reservationCode) {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     const Reservation = mongoose.model("Reservation");
 
@@ -379,8 +375,8 @@ reservationSchema.post("save", async function (doc, next) {
     // For occupancy, we need to check if status changed
 
     // Status transitions that affect occupancy:
-    // pending -> confirmed: increase occupancy, occupy bed
-    // confirmed -> checked-in: no occupancy change (already counted)
+    // pending -> reserved: increase occupancy, occupy bed
+    // reserved -> checked-in: no occupancy change (already counted)
     // any -> cancelled: decrease occupancy, vacate bed
     // checked-in -> checked-out: decrease occupancy, vacate bed
 
@@ -442,7 +438,7 @@ reservationSchema.methods.cancel = async function () {
 reservationSchema.methods.countsTowardOccupancy = function () {
   return (
     !this.isArchived &&
-    (this.status === "confirmed" || this.status === "checked-in" || this.status === "grace_period")
+    (this.status === "reserved" || this.status === "checked-in")
   );
 };
 
@@ -482,6 +478,23 @@ reservationSchema.statics.findArchived = function (filter = {}) {
  */
 reservationSchema.statics.findPending = function (filter = {}) {
   return this.find({ ...filter, isArchived: false, status: "pending" });
+};
+
+/**
+ * Find reserved reservations that are overdue for move-in
+ */
+reservationSchema.statics.findOverdueMoveIns = function () {
+  const now = new Date();
+  return this.find({
+    status: "reserved",
+    isArchived: false,
+    $or: [
+      // No extension: targetMoveInDate has passed
+      { moveInExtendedTo: null, targetMoveInDate: { $lt: now } },
+      // Has extension: extension deadline has also passed
+      { moveInExtendedTo: { $ne: null, $lt: now } },
+    ],
+  });
 };
 
 // ============================================================================

@@ -36,15 +36,11 @@ const DashboardPage = () => {
 
   const getStatusBadge = (status) => {
     const badges = {
-      registered: { class: "status-registered", text: "Registered" },
-      "with-reservation": {
-        class: "status-reserved",
-        text: "With Reservation",
-      },
-      visited: { class: "status-visited", text: "Visited" },
-      reserved: { class: "status-reserved", text: "Reserved" },
+      none: { class: "status-registered", text: "Pre-Tenant" },
       active: { class: "status-active", text: "Active" },
       inactive: { class: "status-inactive", text: "Former Tenant" },
+      evicted: { class: "status-evicted", text: "Evicted" },
+      blacklisted: { class: "status-blacklisted", text: "Blacklisted" },
     };
     return badges[status] || { class: "", text: status };
   };
@@ -73,10 +69,10 @@ const DashboardPage = () => {
           <div className="dashboard-status-badge">
             <span
               className={
-                getStatusBadge(user?.tenantStatus || "registered").class
+                getStatusBadge(user?.tenantStatus || "none").class
               }
             >
-              {getStatusBadge(user?.tenantStatus || "registered").text}
+              {getStatusBadge(user?.tenantStatus || "none").text}
             </span>
           </div>
         </div>
@@ -144,7 +140,7 @@ const DashboardPage = () => {
                   <p>Browse available room options</p>
                   <button
                     className="btn btn-secondary-outline btn-sm"
-                    onClick={() => navigate("/check-availability")}
+                    onClick={() => navigate("/applicant/check-availability")}
                   >
                     Check Availability
                   </button>

@@ -7,6 +7,8 @@ export default function UserToolbar({
   onBranchChange,
   statusFilter,
   onStatusChange,
+  tenantStatusFilter,
+  onTenantStatusChange,
   isSuperAdmin,
   onAddUser,
 }) {
@@ -75,6 +77,18 @@ export default function UserToolbar({
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+        </select>
+
+        <select
+          value={tenantStatusFilter}
+          onChange={(e) => onTenantStatusChange(e.target.value)}
+        >
+          <option value="all">All Tenant Status</option>
+          <option value="none">Pre-Tenant</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="evicted">Evicted</option>
+          <option value="blacklisted">Blacklisted</option>
         </select>
       </div>
 

@@ -94,7 +94,7 @@ const DashboardTab = ({
         }}
       >
         <QuickActionCard
-          to="/tenant/check-availability"
+          to="/applicant/check-availability"
           icon={<Bed className="w-5 h-5" style={{ color: "#E7710F" }} />}
           iconBg="#FFF7ED"
           hoverColor="#E7710F"
@@ -106,7 +106,7 @@ const DashboardTab = ({
           <QuickActionButton
             onClick={() => {
               if (nextAction.reservationId && nextAction.step) {
-                navigate("/tenant/reservation-flow", {
+                navigate("/applicant/reservation", {
                   state: {
                     reservationId: nextAction.reservationId,
                     continueFlow: true,
@@ -126,7 +126,7 @@ const DashboardTab = ({
         ) : (
           <QuickActionButton
             onClick={() =>
-              navigate("/tenant/profile", { state: { tab: "personal" } })
+              navigate("/applicant/profile", { state: { tab: "personal" } })
             }
             icon={<User className="w-5 h-5" style={{ color: "#6366F1" }} />}
             iconBg="#EEF2FF"

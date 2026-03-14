@@ -15,88 +15,61 @@
  *   * * * * *
  *
  * Jobs:
- *   1. Grace period check      — every 15 min
+ *   1. Overdue move-in detection — daily at 08:30
  *   2. Bed lock cleanup         — every 2 min
  *   3. Overdue bill marking     — daily at midnight
+ *   4. Auto-compute penalties   — daily at 00:10
+ *   5. Payment due reminders    — daily at 08:00
+ *   6. Contract expiration      — daily at 09:00
+ *   7. Firebase ↔ MongoDB sync  — daily at 03:00
  *
  * ============================================================================
  */
 
 import cron from "node-cron";
 import dayjs from "dayjs";
-import { Reservation, Room, Bill } from "../models/index.js";
+import { Reservation, Room, Bill, User } from "../models/index.js";
+import { getAuth } from "../config/firebase.js";
 import notify from "./notificationService.js";
 
-// ─── Job 1: Grace Period Check (every 15 min) ──────────────────────────
+// ─── Job 1: Overdue Move-In Detection (daily at 08:30) ──────────────────────────
 
-async function processGracePeriods() {
-  const now = dayjs();
-  let transitioned = 0;
-  let cancelled = 0;
-
+async function detectOverdueMoveIns() {
   try {
-    // Step 1: Confirmed → grace_period
-    const confirmedPastMoveIn = await Reservation.find({
-      status: "confirmed",
-      checkInDate: { $lt: now.toDate() },
-      isArchived: false,
-    });
+    const now = dayjs();
+    let notified = 0;
 
-    for (const reservation of confirmedPastMoveIn) {
-      reservation.status = "grace_period";
+    // Find reserved reservations past their move-in deadline
+    const overdueReservations = await Reservation.findOverdueMoveIns()
+      .populate("userId", "firstName lastName")
+      .populate("roomId", "name branch");
 
-      if (!reservation.graceDeadline) {
-        const moveIn = dayjs(reservation.checkInDate);
-        const days = reservation.gracePeriodDays || 3;
-        reservation.graceDeadline = moveIn.add(days, "day").toDate();
-      }
+    for (const reservation of overdueReservations) {
+      const deadline = reservation.moveInExtendedTo || reservation.targetMoveInDate;
+      if (!deadline) continue;
+      const daysOverdue = now.diff(dayjs(deadline), "day");
+      if (daysOverdue <= 0) continue;
 
-      await reservation.save();
-      transitioned++;
-
+      const tenantName = reservation.userId
+        ? `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim()
+        : "Unknown tenant";
+      const roomName = reservation.roomId?.name || "Unknown room";
       const code = reservation.reservationCode || reservation._id.toString().slice(-6);
-      const deadline = dayjs(reservation.graceDeadline).format("MMMM D, YYYY");
-      notify.gracePeriodWarning(reservation.userId, code, deadline);
+
+      notify.overdueMoveIn(reservation.userId?._id, code, roomName, tenantName, daysOverdue);
+      notified++;
     }
 
-    // Step 2: grace_period past deadline → cancelled
-    const expiredGrace = await Reservation.find({
-      status: "grace_period",
-      graceDeadline: { $lt: now.toDate() },
-      isArchived: false,
-    });
-
-    for (const reservation of expiredGrace) {
-      reservation.status = "cancelled";
-      reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-cancelled: grace period expired`;
-      await reservation.save();
-
-      if (reservation.roomId && reservation.selectedBed?.id) {
-        try {
-          const room = await Room.findById(reservation.roomId);
-          if (room) {
-            room.vacateBed(reservation.selectedBed.id);
-            room.decreaseOccupancy();
-            room.updateAvailability();
-            await room.save();
-          }
-        } catch (e) {
-          console.error(`⚠️ Failed to release bed for reservation ${reservation._id}:`, e.message);
-        }
-      }
-
-      cancelled++;
-
-      const code = reservation.reservationCode || reservation._id.toString().slice(-6);
-      notify.reservationCancelled(reservation.userId, code, "Grace period expired — no check-in");
-    }
-
-    if (transitioned > 0 || cancelled > 0) {
+    if (notified > 0) {
+      console.log(`📢 ${notified} overdue move-in alerts sent`);
     }
   } catch (error) {
-    console.error("❌ Grace period job error:", error);
+    console.error("❌ Overdue move-in detection error:", error);
   }
 }
+
+
+
 
 // ─── Job 2: Bed Lock Cleanup (every 2 min) ─────────────────────────────
 
@@ -263,22 +236,88 @@ async function checkContractExpirations() {
   }
 }
 
+// ─── Job 7: Firebase ↔ MongoDB Sync Cleanup (daily at 03:00) ───────────
+
+async function cleanupOrphanedAccounts() {
+  const auth = getAuth();
+  if (!auth) {
+    console.warn("⚠️ [Sync] Firebase Admin not initialized — skipping sync cleanup");
+    return;
+  }
+
+  try {
+    // 1. Fetch all Firebase Auth users
+    const firebaseUsers = [];
+    let nextPageToken;
+    do {
+      const result = await auth.listUsers(1000, nextPageToken);
+      firebaseUsers.push(...result.users);
+      nextPageToken = result.pageToken;
+    } while (nextPageToken);
+
+    // 2. Fetch all MongoDB users
+    const mongoUsers = await User.find({}, "firebaseUid email role").lean();
+
+    const firebaseUids = new Set(firebaseUsers.map((u) => u.uid));
+    const mongoByUid = new Map(mongoUsers.map((u) => [u.firebaseUid, u]));
+
+    let deletedFirebase = 0;
+    let deletedMongo = 0;
+
+    // 3. Delete orphaned Firebase accounts (in Firebase but NOT in MongoDB)
+    for (const fbUser of firebaseUsers) {
+      if (!mongoByUid.has(fbUser.uid)) {
+        try {
+          await auth.deleteUser(fbUser.uid);
+          deletedFirebase++;
+          console.log(`🔥 [Sync] Deleted orphaned Firebase account: ${fbUser.email}`);
+        } catch (err) {
+          console.error(`❌ [Sync] Failed to delete Firebase user ${fbUser.email}:`, err.message);
+        }
+      }
+    }
+
+    // 4. Delete orphaned MongoDB records (in MongoDB but NOT in Firebase)
+    //    Skip admin and superAdmin to prevent accidental deletion
+    for (const [uid, mgUser] of mongoByUid) {
+      if (!firebaseUids.has(uid)) {
+        if (mgUser.role === "admin" || mgUser.role === "superAdmin") {
+          console.warn(`⚠️ [Sync] Skipping orphaned admin MongoDB record: ${mgUser.email}`);
+          continue;
+        }
+        try {
+          await User.deleteOne({ firebaseUid: uid });
+          deletedMongo++;
+          console.log(`🍃 [Sync] Deleted orphaned MongoDB record: ${mgUser.email}`);
+        } catch (err) {
+          console.error(`❌ [Sync] Failed to delete MongoDB user ${mgUser.email}:`, err.message);
+        }
+      }
+    }
+
+    if (deletedFirebase > 0 || deletedMongo > 0) {
+      console.log(`🔄 [Sync] Cleanup complete: ${deletedFirebase} Firebase + ${deletedMongo} MongoDB orphan(s) removed`);
+    }
+  } catch (error) {
+    console.error("❌ [Sync] Firebase ↔ MongoDB sync cleanup error:", error.message);
+  }
+}
+
 // ─── Scheduler Startup ──────────────────────────────────────────────────
 
 const scheduledJobs = [];
 
 export function startScheduler() {
 
-  // Run all jobs once immediately on startup
-  processGracePeriods();
+  // Run cleanup jobs once immediately on startup
   cleanupExpiredBedLocks();
   markOverdueBills();
 
-  // Job 1: Grace period — every 15 minutes
+  // Job 1: Overdue move-in detection — daily at 08:30
   scheduledJobs.push(
-    cron.schedule("*/15 * * * *", processGracePeriods, {
+    cron.schedule("30 8 * * *", detectOverdueMoveIns, {
       scheduled: true,
-      name: "grace-period-check",
+      name: "overdue-movein-detection",
     }),
   );
 
@@ -319,6 +358,14 @@ export function startScheduler() {
     cron.schedule("0 9 * * *", checkContractExpirations, {
       scheduled: true,
       name: "contract-expiration-alerts",
+    }),
+  );
+
+  // Job 7: Firebase ↔ MongoDB sync cleanup — daily at 03:00
+  scheduledJobs.push(
+    cron.schedule("0 3 * * *", cleanupOrphanedAccounts, {
+      scheduled: true,
+      name: "firebase-mongodb-sync",
     }),
   );
 

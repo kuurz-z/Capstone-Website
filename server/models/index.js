@@ -43,6 +43,7 @@ import UserSession from "./UserSession.js";
 import Notification from "./Notification.js";
 import BedHistory from "./BedHistory.js";
 import Payment from "./Payment.js";
+import LoginLog from "./LoginLog.js";
 
 // ============================================================================
 // NAMED EXPORTS
@@ -63,6 +64,7 @@ export {
   Notification,
   BedHistory,
   Payment,
+  LoginLog,
 };
 
 // ============================================================================
@@ -85,6 +87,17 @@ export const INQUIRY_BRANCHES = ["gil-puyat", "guadalupe", "general"];
 export const USER_ROLES = ["user", "tenant", "admin", "superAdmin"];
 
 /**
+ * Valid tenant statuses
+ */
+export const TENANT_STATUSES = [
+  "none",
+  "active",
+  "inactive",
+  "evicted",
+  "blacklisted",
+];
+
+/**
  * Valid inquiry statuses
  */
 export const INQUIRY_STATUSES = [
@@ -102,8 +115,7 @@ export const RESERVATION_STATUSES = [
   "visit_pending",
   "visit_approved",
   "payment_pending",
-  "confirmed",
-  "grace_period",
+  "reserved",
   "checked-in",
   "checked-out",
   "cancelled",
@@ -173,9 +185,11 @@ export default {
   Notification,
   BedHistory,
   Payment,
+  LoginLog,
   ROOM_BRANCHES,
   INQUIRY_BRANCHES,
   USER_ROLES,
+  TENANT_STATUSES,
   INQUIRY_STATUSES,
   RESERVATION_STATUSES,
   INQUIRY_TAGS,

@@ -12,6 +12,7 @@ import {
   sendError,
   AppError,
 } from "../middleware/errorHandler.js";
+import { DEFAULT_PERMISSIONS, ALL_PERMISSIONS } from "../middleware/permissions.js";
 
 const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
 
@@ -120,7 +121,8 @@ export const createUser = async (req, res, next) => {
       role: allowedRole,
       isEmailVerified: false,
       isActive: true,
-      tenantStatus: null,
+      tenantStatus: "none",
+      permissions: DEFAULT_PERMISSIONS[allowedRole] || [],
     });
 
     await user.save();
@@ -276,6 +278,8 @@ export const getUsers = async (req, res, next) => {
       role,
       branch,
       isActive,
+      tenantStatus,
+      accountStatus,
       page = 1,
       limit = 20,
       sort = "createdAt",
@@ -297,6 +301,14 @@ export const getUsers = async (req, res, next) => {
 
     if (isActive !== undefined) {
       query.isActive = isActive === "true";
+    }
+
+    if (tenantStatus) {
+      query.tenantStatus = tenantStatus;
+    }
+
+    if (accountStatus) {
+      query.accountStatus = accountStatus;
     }
 
     // Pagination
@@ -639,7 +651,7 @@ export const getMyStays = async (req, res, next) => {
     // Find active/current stays
     const currentStays = allReservations.filter((reservation) => {
       const status = reservation.status;
-      return status === "confirmed" || status === "checked-in";
+      return status === "reserved" || status === "checked-in";
     });
 
     // Past stays (completed or cancelled)
@@ -675,6 +687,59 @@ export const getMyStays = async (req, res, next) => {
       },
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// PERMISSION MANAGEMENT
+// ============================================================================
+
+/**
+ * PATCH /api/users/:userId/permissions
+ * Update an admin user's permissions array.
+ * Access: Super Admin only
+ */
+export const updatePermissions = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { permissions } = req.body;
+
+    if (!userId.match(/^[0-9a-fA-F]{24}$/))
+      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+
+    if (!Array.isArray(permissions))
+      return res.status(400).json({ error: "Permissions must be an array", code: "INVALID_PERMISSIONS" });
+
+    // Validate each permission key
+    const invalid = permissions.filter((p) => !ALL_PERMISSIONS.includes(p));
+    if (invalid.length > 0)
+      return res.status(400).json({
+        error: `Invalid permissions: ${invalid.join(", ")}`,
+        code: "INVALID_PERMISSION_KEYS",
+      });
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser)
+      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+
+    // Only allow modifying admin permissions (not superAdmin or applicant/tenant)
+    if (targetUser.role !== "admin")
+      return res.status(400).json({
+        error: "Permissions can only be set on admin accounts",
+        code: "ROLE_NOT_ADMIN",
+      });
+
+    const oldData = targetUser.toObject();
+    targetUser.permissions = permissions;
+    await targetUser.save();
+
+    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
+      `Permissions updated: ${permissions.join(", ") || "(none)"}`);
+
+    res.json({ message: "Permissions updated successfully", user: targetUser });
+  } catch (error) {
+    await auditLogger.logError(req, error, "Failed to update user permissions");
     next(error);
   }
 };

@@ -1,10 +1,12 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { formatBranch, fmtDate } from "../../../../shared/utils/formatDate";
 
 /**
- * Step 5 — Reservation Confirmed
- * Comprehensive summary receipt with Print/Download capability.
+ * Step 5 — Reservation Secured
+ * Celebration screen with summary, auto-redirect, and clear navigation.
  */
+const REDIRECT_SECONDS = 15;
+
 const ReservationConfirmationStep = ({
   reservationData,
   reservationCode,
@@ -20,20 +22,43 @@ const ReservationConfirmationStep = ({
   onReturnHome,
 }) => {
   const receiptRef = useRef(null);
+  const [countdown, setCountdown] = useState(REDIRECT_SECONDS);
+  const [paused, setPaused] = useState(false);
+
+  // Auto-redirect countdown
+  useEffect(() => {
+    if (paused || countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onViewDetails?.();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [paused, countdown, onViewDetails]);
+
+  const pauseRedirect = useCallback(() => setPaused(true), []);
 
   const formatPaymentMethod = (method) => {
     const methods = {
       bank: "Bank Transfer",
       gcash: "GCash",
+      maya: "Maya",
       card: "Credit/Debit Card",
+      online: "Online Payment",
       check: "Check",
     };
-    return methods[method] || method || "N/A";
+    return methods[method] || method || "Online Payment";
   };
 
   const handlePrint = () => {
     const content = receiptRef.current;
     if (!content) return;
+    pauseRedirect();
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -107,207 +132,379 @@ const ReservationConfirmationStep = ({
   const room = reservationData?.room || {};
 
   return (
-    <div className="reservation-card confirmation-card" ref={receiptRef}>
-      {/* Success Icon */}
-      <div className="success-icon">✓</div>
-
-      {/* Header */}
-      <div className="main-header" style={{ textAlign: "center" }}>
-        <div className="main-header-badge">
-          <span>Step 5 · Finalization</span>
+    <div ref={receiptRef} style={s.wrapper}>
+      {/* ── Celebration Header ────────────────────────────────── */}
+      <div style={s.celebrationBanner}>
+        <div style={s.checkCircle}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M20 6L9 17l-5-5"
+              stroke="#fff"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
-        <h2 className="main-header-title">Reservation Confirmed!</h2>
-        <p className="main-header-subtitle">
-          Your dormitory reservation has been successfully secured. Below is
-          your complete reservation summary.
+        <h1 style={s.celebrationTitle}>You're All Set! 🎉</h1>
+        <p style={s.celebrationSubtitle}>
+          Your room has been reserved. Here's a summary of your reservation.
         </p>
       </div>
 
-      {/* Reservation Code */}
-      <div className="reservation-code">
-        <div className="code-label">Your Reservation Code</div>
-        <div className="code-value">{reservationCode || "—"}</div>
+      {/* ── Reservation Code ──────────────────────────────────── */}
+      <div style={s.codeCard}>
+        <div style={s.codeLabel}>Your Reservation Code</div>
+        <div style={s.codeValue}>{reservationCode || "—"}</div>
+        <div style={s.codeHint}>
+          Save this code — you'll need it on your move-in day
+        </div>
       </div>
 
-      {/* Applicant Summary */}
-      <div className="content-card" style={{ textAlign: "left" }}>
-        <div className="card-section-title">
-          <div className="icon"></div>
-          Applicant Information
+      {/* ── Quick Summary Grid ────────────────────────────────── */}
+      <div style={s.summaryGrid}>
+        <div style={s.summaryCard}>
+          <div style={s.summaryIcon}>🏠</div>
+          <div style={s.summaryLabel}>Room</div>
+          <div style={s.summaryValue}>
+            {room.roomNumber || room.name || room.title || "—"}
+          </div>
+          <div style={s.summaryMeta}>{formatBranch(room.branch)}</div>
         </div>
-        <div className="detail-list">
-          <div className="detail-item">
-            <span className="detail-label">Name</span>
-            <span className="detail-value">{applicantName || "N/A"}</span>
+        <div style={s.summaryCard}>
+          <div style={s.summaryIcon}>📅</div>
+          <div style={s.summaryLabel}>Move-In Date</div>
+          <div style={s.summaryValue}>{fmtDate(finalMoveInDate)}</div>
+          <div style={s.summaryMeta}>{leaseDuration || 12}-month lease</div>
+        </div>
+        <div style={s.summaryCard}>
+          <div style={s.summaryIcon}>💳</div>
+          <div style={s.summaryLabel}>Payment</div>
+          <div style={{ ...s.summaryValue, color: "#059669" }}>✓ Paid</div>
+          <div style={s.summaryMeta}>
+            {formatPaymentMethod(paymentMethod)}
           </div>
-          <div className="detail-item">
-            <span className="detail-label">Email</span>
-            <span className="detail-value">{applicantEmail || "N/A"}</span>
-          </div>
-          {applicantPhone && (
-            <div className="detail-item">
-              <span className="detail-label">Phone</span>
-              <span className="detail-value">{applicantPhone}</span>
+        </div>
+      </div>
+
+      {/* ── What Happens Next ─────────────────────────────────── */}
+      <div style={s.nextStepsCard}>
+        <h3 style={s.nextStepsTitle}>📋 What happens next?</h3>
+        <div style={s.stepsList}>
+          <div style={s.nextStep}>
+            <div style={s.stepNumber}>1</div>
+            <div>
+              <div style={s.stepText}>
+                <strong>Wait for your move-in day</strong>
+              </div>
+              <div style={s.stepDetail}>
+                Your room is reserved for{" "}
+                <strong>{fmtDate(finalMoveInDate)}</strong>
+              </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Room Summary */}
-      <div className="content-card" style={{ textAlign: "left" }}>
-        <div className="card-section-title">
-          <div className="icon"></div>
-          Room Details
-        </div>
-        <div className="detail-list">
-          <div className="detail-item">
-            <span className="detail-label">Room</span>
-            <span className="detail-value" style={{ fontWeight: "600" }}>
-              {room.roomNumber || room.name || room.title || room.id || "N/A"}
-            </span>
           </div>
-          <div className="detail-item">
-            <span className="detail-label">Branch</span>
-            <span className="detail-value">{formatBranch(room.branch)}</span>
-          </div>
-          <div className="detail-item">
-            <span className="detail-label">Room Type</span>
-            <span className="detail-value">
-              {room.type
-                ? room.type.charAt(0).toUpperCase() + room.type.slice(1)
-                : "N/A"}
-            </span>
-          </div>
-          <div className="detail-item">
-            <span className="detail-label">Monthly Rate</span>
-            <span
-              className="detail-value"
-              style={{ color: "var(--rf-accent)", fontWeight: "600" }}
-            >
-              ₱{(room.price || 0).toLocaleString()}
-            </span>
-          </div>
-          {reservationData?.selectedBed && (
-            <div className="detail-item">
-              <span className="detail-label">Selected Bed</span>
-              <span className="detail-value">
-                {reservationData.selectedBed.position} (
-                {reservationData.selectedBed.id})
-              </span>
+          <div style={s.nextStep}>
+            <div style={s.stepNumber}>2</div>
+            <div>
+              <div style={s.stepText}>
+                <strong>Bring your documents</strong>
+              </div>
+              <div style={s.stepDetail}>
+                Valid ID, reservation code, and first month's rent
+              </div>
             </div>
-          )}
-          <div className="detail-item">
-            <span className="detail-label">Lease Duration</span>
-            <span className="detail-value">{leaseDuration || 12} months</span>
           </div>
-        </div>
-      </div>
-
-      {/* Schedule Summary */}
-      <div className="content-card" style={{ textAlign: "left" }}>
-        <div className="card-section-title">
-          <div className="icon"></div>
-          Schedule
-        </div>
-        <div className="detail-list">
-          <div className="detail-item">
-            <span className="detail-label">Move-In Date</span>
-            <span className="detail-value">{fmtDate(finalMoveInDate)}</span>
-          </div>
-          {visitDate && (
-            <div className="detail-item">
-              <span className="detail-label">Visit Date</span>
-              <span className="detail-value">
-                {fmtDate(visitDate)} {visitTime ? `at ${visitTime}` : ""}
-              </span>
+          <div style={s.nextStep}>
+            <div style={s.stepNumber}>3</div>
+            <div>
+              <div style={s.stepText}>
+                <strong>Admin will check you in</strong>
+              </div>
+              <div style={s.stepDetail}>
+                The admin will verify your arrival and complete your check-in
+              </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Payment Summary */}
-      <div className="content-card" style={{ textAlign: "left" }}>
-        <div className="card-section-title">
-          <div className="icon"></div>
-          Payment Details
-        </div>
-        <div className="detail-list">
-          <div className="detail-item">
-            <span className="detail-label">Payment Method</span>
-            <span className="detail-value">
-              {formatPaymentMethod(paymentMethod)}
-            </span>
-          </div>
-          <div className="detail-item">
-            <span className="detail-label">Reservation Fee</span>
-            <span className="detail-value" style={{ fontWeight: "600" }}>
-              ₱2,000
-            </span>
-          </div>
-          <div className="detail-item">
-            <span className="detail-label">Payment Status</span>
-            <span
-              className="detail-value"
-              style={{ color: "var(--rf-success)", fontWeight: "600" }}
-            >
-              ✓ Paid & Confirmed
-            </span>
           </div>
         </div>
       </div>
 
-      {/* What's Next */}
-      <div className="content-card" style={{ textAlign: "left" }}>
-        <div className="card-section-title">
-          <div className="icon"></div>
-          What's Next
-        </div>
-
-        <div className="info-box">
-          <div className="info-box-title">Prepare for Move-In</div>
-          <div className="info-text">
-            <strong>Move-In Date:</strong> {fmtDate(finalMoveInDate)}
-            <br />
-            <strong>Reservation Valid Until:</strong>{" "}
-            {new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000,
-            ).toLocaleDateString()}
-            <br />
-            <br />
-            <strong>Required Documents for Check-In:</strong>
-            <br />• Valid Government-issued ID
-            <br />• This reservation code
-            <br />• First month's rent payment
-            <br />
-            <br />
-            <strong>Contact:</strong> reservations@lilycrest.com
-          </div>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="action-buttons">
+      {/* ── Action Buttons ────────────────────────────────────── */}
+      <div style={s.buttonsRow}>
         <button
-          onClick={handlePrint}
-          className="btn btn-secondary btn-full"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
+          onClick={() => {
+            pauseRedirect();
+            onViewDetails?.();
           }}
+          style={s.primaryBtn}
         >
-          Print / Download Receipt
+          View My Reservation →
         </button>
-        <button onClick={onViewDetails} className="btn btn-primary btn-full">
-          View Reservation Details
-        </button>
-        <button onClick={onReturnHome} className="btn btn-secondary btn-full">
-          Return to Home
+        <button
+          onClick={() => {
+            pauseRedirect();
+            onReturnHome?.();
+          }}
+          style={s.secondaryBtn}
+        >
+          Go to Dashboard
         </button>
       </div>
+
+      {/* ── Print Receipt Link ────────────────────────────────── */}
+      <div style={s.printRow}>
+        <button onClick={handlePrint} style={s.printLink}>
+          🖨️ Print / Download Receipt
+        </button>
+      </div>
+
+      {/* ── Auto-redirect countdown ──────────────────────────── */}
+      {!paused && countdown > 0 && (
+        <div style={s.redirectRow}>
+          <span style={s.redirectText}>
+            Taking you to your reservation in{" "}
+            <strong>{countdown}s</strong>...
+          </span>
+          <button onClick={pauseRedirect} style={s.redirectCancel}>
+            Stay here
+          </button>
+        </div>
+      )}
     </div>
   );
+};
+
+/* ── styles ──────────────────────────────────────────────────── */
+const s = {
+  wrapper: {
+    maxWidth: 640,
+    margin: "0 auto",
+    padding: "8px 0 32px",
+  },
+
+  /* celebration */
+  celebrationBanner: {
+    textAlign: "center",
+    padding: "32px 20px 24px",
+    background: "linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 50%, #fefce8 100%)",
+    borderRadius: 16,
+    marginBottom: 20,
+    border: "1px solid #d1fae5",
+  },
+  checkCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #059669 0%, #10B981 100%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: "0 auto 16px",
+    boxShadow: "0 4px 20px rgba(16, 185, 129, 0.3)",
+    animation: "scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+  },
+  celebrationTitle: {
+    fontSize: 26,
+    fontWeight: 800,
+    color: "#065f46",
+    margin: "0 0 8px",
+    letterSpacing: "-0.02em",
+  },
+  celebrationSubtitle: {
+    fontSize: 15,
+    color: "#047857",
+    margin: 0,
+    lineHeight: 1.5,
+  },
+
+  /* code card */
+  codeCard: {
+    textAlign: "center",
+    padding: "20px 24px",
+    background: "#fff",
+    borderRadius: 12,
+    border: "2px dashed #d1d5db",
+    marginBottom: 20,
+  },
+  codeLabel: {
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: "1.5px",
+    color: "#6B7280",
+    fontWeight: 600,
+    marginBottom: 6,
+  },
+  codeValue: {
+    fontSize: 32,
+    fontWeight: 800,
+    letterSpacing: "4px",
+    color: "#111827",
+    fontFamily: "'Courier New', monospace",
+    marginBottom: 8,
+  },
+  codeHint: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    fontStyle: "italic",
+  },
+
+  /* summary grid */
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 12,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    textAlign: "center",
+    padding: "16px 12px",
+    background: "#fff",
+    borderRadius: 12,
+    border: "1px solid #E5E7EB",
+  },
+  summaryIcon: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+    color: "#9CA3AF",
+    fontWeight: 600,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#111827",
+    marginBottom: 2,
+  },
+  summaryMeta: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+
+  /* next steps */
+  nextStepsCard: {
+    padding: "20px 24px",
+    background: "#FFF7ED",
+    borderRadius: 12,
+    border: "1px solid #FED7AA",
+    marginBottom: 24,
+  },
+  nextStepsTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "#9A3412",
+    margin: "0 0 16px",
+  },
+  stepsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  },
+  nextStep: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  stepNumber: {
+    width: 28,
+    height: 28,
+    minWidth: 28,
+    borderRadius: "50%",
+    background: "#EA580C",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 13,
+    fontWeight: 700,
+    marginTop: 1,
+  },
+  stepText: {
+    fontSize: 14,
+    color: "#1F2937",
+    lineHeight: 1.3,
+  },
+  stepDetail: {
+    fontSize: 13,
+    color: "#78716C",
+    marginTop: 2,
+    lineHeight: 1.4,
+  },
+
+  /* buttons */
+  buttonsRow: {
+    display: "flex",
+    gap: 12,
+    marginBottom: 12,
+  },
+  primaryBtn: {
+    flex: 2,
+    padding: "14px 24px",
+    background: "linear-gradient(135deg, #E7710F 0%, #FF8C2E 100%)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: "pointer",
+    transition: "transform 0.15s, box-shadow 0.15s",
+    boxShadow: "0 2px 12px rgba(231, 113, 15, 0.3)",
+  },
+  secondaryBtn: {
+    flex: 1,
+    padding: "14px 16px",
+    background: "#fff",
+    color: "#374151",
+    border: "1px solid #D1D5DB",
+    borderRadius: 10,
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+
+  /* print */
+  printRow: {
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  printLink: {
+    background: "none",
+    border: "none",
+    fontSize: 13,
+    color: "#6B7280",
+    cursor: "pointer",
+    textDecoration: "underline",
+    padding: "8px 16px",
+  },
+
+  /* redirect */
+  redirectRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: "10px 16px",
+    background: "#F3F4F6",
+    borderRadius: 8,
+  },
+  redirectText: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  redirectCancel: {
+    background: "none",
+    border: "none",
+    fontSize: 13,
+    color: "#E7710F",
+    cursor: "pointer",
+    fontWeight: 600,
+    textDecoration: "underline",
+    padding: 0,
+  },
 };
 
 export default ReservationConfirmationStep;

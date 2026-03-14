@@ -405,7 +405,7 @@ const STEP_RENDERERS = {
   visit_completed: VisitCompletedReceipt,
   application_submitted: ApplicationReceipt,
   payment_submitted: PaymentReceipt,
-  confirmed: ConfirmedReceipt,
+  reserved: ConfirmedReceipt,
 };
 
 const StepReceiptRenderer = ({ step, reservation }) => {

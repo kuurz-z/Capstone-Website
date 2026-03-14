@@ -57,7 +57,7 @@ const ProfilePage = () => {
     profileImage: "",
     branch: "",
     role: "",
-    tenantStatus: "",
+    tenantStatus: "none",
     createdAt: "",
     address: "",
     city: "",
@@ -249,6 +249,7 @@ const ProfilePage = () => {
     setShowLogoutConfirm(false);
     try {
       await logout();
+      showNotification("You have been signed out successfully.", "success", 3000);
       navigate("/signin");
     } catch (err) {
       console.error("Logout failed:", err);
@@ -306,18 +307,18 @@ const ProfilePage = () => {
 
   const isReservationConfirmed =
     selectedReservation &&
-    (selectedReservation.reservationStatus === "confirmed" ||
-      selectedReservation.status === "confirmed" ||
+    (selectedReservation.reservationStatus === "reserved" ||
+      selectedReservation.status === "reserved" ||
       selectedReservation.paymentStatus === "paid");
 
-  // Prevent browser back button when reservation is confirmed
+  // Prevent browser back button when reservation is reserved
   useEffect(() => {
     if (!isReservationConfirmed) return;
     window.history.pushState(null, "", window.location.href);
     const handlePopState = () => {
       window.history.pushState(null, "", window.location.href);
       showNotification(
-        "Your reservation is confirmed. You cannot go back to edit previous steps.",
+        "Your reservation is secured. You cannot go back to edit previous steps.",
         "info",
         3000,
       );

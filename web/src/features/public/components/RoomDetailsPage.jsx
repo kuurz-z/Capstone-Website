@@ -135,7 +135,7 @@ function RoomDetailsPage({
                   <span className="room-details-card-period">per month</span>
                   <button
                     className="room-details-btn-check-availability"
-                    onClick={() => navigate("/check-availability")}
+                    onClick={() => navigate("/applicant/check-availability")}
                   >
                     Check Availability
                   </button>

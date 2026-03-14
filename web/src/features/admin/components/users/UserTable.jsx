@@ -12,6 +12,14 @@ const STATUS_CONFIG = {
   pending_verification: { label: "Pending", badge: "badge-pending", icon: "⏳" },
 };
 
+const TENANT_STATUS_CONFIG = {
+  none: { label: "Pre-Tenant", badge: "badge-ts-none", icon: "○" },
+  active: { label: "Active", badge: "badge-ts-active", icon: "✓" },
+  inactive: { label: "Inactive", badge: "badge-ts-inactive", icon: "—" },
+  evicted: { label: "Evicted", badge: "badge-ts-evicted", icon: "✕" },
+  blacklisted: { label: "Blacklisted", badge: "badge-ts-blacklisted", icon: "⛔" },
+};
+
 const GRADIENTS = [
   "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
   "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
@@ -100,6 +108,7 @@ export default function UserTable({
             <th>Role</th>
             <th>Branch</th>
             <th>Status</th>
+            <th>Tenant Status</th>
             <th>Joined</th>
             <th>Actions</th>
           </tr>
@@ -148,6 +157,17 @@ export default function UserTable({
                   <span className={`badge ${statusConfig.badge}`}>
                     {statusConfig.icon} {statusConfig.label}
                   </span>
+                </td>
+                <td>
+                  {(() => {
+                    const ts = u.tenantStatus || "none";
+                    const tsConfig = TENANT_STATUS_CONFIG[ts] || TENANT_STATUS_CONFIG.none;
+                    return (
+                      <span className={`badge ${tsConfig.badge}`}>
+                        {tsConfig.icon} {tsConfig.label}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td>{new Date(u.createdAt).toLocaleDateString()}</td>
                 <td>

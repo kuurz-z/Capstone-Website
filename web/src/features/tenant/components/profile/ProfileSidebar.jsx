@@ -222,7 +222,7 @@ const ProfileSidebar = ({
     {/* Browse Rooms CTA */}
     <div className="px-4 pt-4 pb-2">
       <Link
-        to="/tenant/check-availability"
+        to="/applicant/check-availability"
         className="flex items-center gap-2.5 w-full py-2.5 px-3.5 rounded-lg text-sm font-semibold transition-all duration-200"
         style={{
           backgroundColor: "transparent",

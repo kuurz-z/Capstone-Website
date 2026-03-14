@@ -59,7 +59,7 @@ const STEPS = [
     category: "Finalization",
   },
   {
-    key: "confirmed",
+    key: "reserved",
     label: "Confirmation",
     desc: "Reservation secured and ready",
     icon: CheckCircle,
@@ -74,7 +74,7 @@ function resolveCurrentStage(reservation) {
   if (!reservation) return 0;
   const status = reservation.reservationStatus || reservation.status;
 
-  if (status === "confirmed") return 5;
+  if (status === "reserved") return 5;
   if (reservation.paymentStatus === "paid") return 5;
 
   // payment submitted via PayMongo
@@ -97,7 +97,7 @@ function resolveCurrentStage(reservation) {
   // room confirmed — ready for visit scheduling
   if (reservation.roomConfirmed) return 2;
 
-  // room selected (reservation exists but not yet confirmed)
+  // room selected (reservation exists but not yet reserved)
   return 1;
 }
 
@@ -132,10 +132,10 @@ function getNextAction(reservation, currentStage) {
   }
 
   const status = reservation.reservationStatus || reservation.status;
-  if (status === "confirmed") {
+  if (status === "reserved") {
     return {
-      title: "Reservation Confirmed",
-      description: "Your reservation is confirmed. You're all set for move-in!",
+      title: "Reservation Secured",
+      description: "Your reservation is secured. You're all set for move-in!",
       buttonLabel: null,
       route: null,
       isWaiting: false,
@@ -307,7 +307,7 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
   const branch = room.branch || "Lilycrest";
   const code = reservation.reservationCode || "—";
   const isConfirmed =
-    (reservation.reservationStatus || reservation.status) === "confirmed" ||
+    (reservation.reservationStatus || reservation.status) === "reserved" ||
     reservation.paymentStatus === "paid";
 
   return (
@@ -318,7 +318,7 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
           <div style={styles.headerRow}>
             <h3 style={styles.roomTitle}>{roomName}</h3>
             {isConfirmed ? (
-              <span style={styles.confirmedBadge}>✓ Confirmed</span>
+              <span style={styles.confirmedBadge}>✓ Reserved</span>
             ) : (
               <span style={styles.pendingBadge}>In Progress</span>
             )}
@@ -519,9 +519,9 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
         <div style={styles.celebrationCard}>
           <CheckCircle size={24} color="#059669" />
           <div style={{ marginLeft: 12 }}>
-            <h4 style={styles.celebrationTitle}>Reservation Confirmed!</h4>
+            <h4 style={styles.celebrationTitle}>Reservation Secured!</h4>
             <p style={styles.celebrationDesc}>
-              Your reservation is confirmed. Please prepare for your move-in
+              Your reservation is secured. Please prepare for your move-in
               date.
             </p>
           </div>

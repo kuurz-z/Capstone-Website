@@ -30,7 +30,9 @@ import {
 } from "../../../shared/utils/authValidation";
 import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import SocialAuthButtons from "../../../shared/components/SocialAuthButtons";
+import FloatingInput from "../../../shared/components/FloatingInput";
 import { Loader2 } from "lucide-react";
+import "../../../shared/styles/auth-forms.css";
 import "../../public/styles/tenant-signin.css";
 import "../../../shared/styles/notification.css";
 
@@ -283,8 +285,15 @@ function SignIn() {
         const loginResponse = await login();
         handlePostAuthFlow(loginResponse);
       } catch (loginError) {
-        // Always sign out on failure — but NEVER delete the Firebase account
-        await auth.signOut();
+        // Delete the auto-created Firebase account to keep Firebase ↔ MongoDB in sync
+        // signInWithPopup auto-creates a Firebase account; if backend rejects, we must remove it
+        try {
+          const u = auth.currentUser;
+          if (u) await u.delete();
+        } catch (delErr) {
+          // delete() can fail if account existed before (e.g. email/password user)
+          try { await auth.signOut(); } catch (_) { /* ignore */ }
+        }
 
         const status = loginError.response?.status;
         const errMsg = loginError.message || "";
@@ -326,9 +335,9 @@ function SignIn() {
       }
       if (auth.currentUser) {
         try {
-          await auth.signOut();
-        } catch (e) {
-          /* ignore */
+          await auth.currentUser.delete();
+        } catch (delErr) {
+          try { await auth.signOut(); } catch (_) { /* ignore */ }
         }
       }
       showNotification(getFirebaseErrorMessage(error, "login"), "error");
@@ -365,74 +374,41 @@ function SignIn() {
             <span className="text-sm font-light">← Back to website</span>
           </Link>
 
-          <div className="mb-10">
-            <h1
-              className="text-4xl font-light mb-3 tracking-tight"
-              style={{ color: "#0C375F" }}
-            >
-              Welcome back
-            </h1>
-            <p className="text-gray-600 font-light">
+          <div className="auth-header">
+            <h1 className="auth-header__title">Welcome back</h1>
+            <p className="auth-header__subtitle">
               Don&apos;t have an account?{" "}
-              <Link
-                to="/signup"
-                className="hover:underline"
-                style={{ color: "#E7710F" }}
-              >
-                Sign up
-              </Link>
+              <Link to="/signup">Sign up</Link>
             </p>
           </div>
 
-          <form onSubmit={handleEmailPasswordLogin} className="space-y-6">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-light text-gray-700 mb-2"
-              >
-                Email address
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={submitting}
-                autoComplete="email"
-                className={inputClass("email")}
-                placeholder="your.email@example.com"
-              />
-              {touched.email && validationErrors.email && (
-                <span className="validation-msg error">
-                  {validationErrors.email}
-                </span>
-              )}
-            </div>
+          <form onSubmit={handleEmailPasswordLogin} className="auth-form">
+            <FloatingInput
+              label="Email address"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              disabled={submitting}
+              autoComplete="email"
+              error={touched.email ? validationErrors.email : null}
+              valid={touched.email && fieldValid.email}
+            />
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-light text-gray-700 mb-2"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  disabled={submitting}
-                  autoComplete="current-password"
-                  className={inputClass("password")}
-                  placeholder="Enter your password"
-                />
+            <FloatingInput
+              label="Password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              value={formData.password}
+              onChange={handleChange}
+              disabled={submitting}
+              autoComplete="current-password"
+              error={touched.password ? validationErrors.password : null}
+              valid={touched.password && fieldValid.password}
+              endAdornment={
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? (
@@ -441,32 +417,22 @@ function SignIn() {
                     <Eye className="w-5 h-5" />
                   )}
                 </button>
-              </div>
-              {touched.password && validationErrors.password && (
-                <span className="validation-msg error">
-                  {validationErrors.password}
-                </span>
-              )}
-            </div>
+              }
+            />
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="auth-options-row">
+              <label className="auth-remember">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300"
-                  style={{ accentColor: "#E7710F" }}
                 />
-                <span className="text-sm text-gray-600 font-light">
-                  Remember me
-                </span>
+                <span>Remember me</span>
               </label>
               <button
                 type="button"
                 onClick={() => navigate("/forgot-password")}
-                className="text-sm font-light hover:underline"
-                style={{ color: "#E7710F" }}
+                className="auth-forgot-link"
               >
                 Forgot password?
               </button>
@@ -474,21 +440,14 @@ function SignIn() {
 
             <button
               type="submit"
-              className="auth-submit-btn w-full py-6 rounded-xl text-white font-light transition-opacity text-base flex items-center justify-center gap-2"
-              style={{
-                backgroundColor: "#E7710F",
-                opacity: submitting ? 0.7 : 1,
-              }}
+              className="auth-btn-primary"
               disabled={submitting || socialLoading || isLockedOut}
             >
               {isLockedOut ? (
                 `Locked out (${lockoutCountdown}s)`
               ) : submitting ? (
                 <>
-                  <Loader2
-                    className="w-4 h-4"
-                    style={{ animation: "spin 1s linear infinite" }}
-                  />
+                  <Loader2 className="w-4 h-4 auth-spinner" />
                   Signing in...
                 </>
               ) : (
@@ -498,7 +457,6 @@ function SignIn() {
 
             <SocialAuthButtons
               onGoogle={handleGoogleLogin}
-              onFacebook={handleFacebookLogin}
               loading={socialLoading}
               dividerText="Or continue with"
             />

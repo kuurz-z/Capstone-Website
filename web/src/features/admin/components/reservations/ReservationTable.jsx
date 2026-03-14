@@ -39,7 +39,7 @@ export function statusLabel(status) {
 }
 
 export function checkOverdue(r) {
-  if (r.status !== "pending" && r.status !== "confirmed") return false;
+  if (r.status !== "pending" && r.status !== "reserved") return false;
   const moveIn = new Date(r.moveInDate);
   return !isNaN(moveIn.getTime()) && moveIn < new Date();
 }

@@ -84,7 +84,7 @@ function ReservationsPage() {
         setConfirmModal((prev) => ({ ...prev, open: false }));
         try {
           setActionLoading(id);
-          await reservationApi.update(id, { status: "confirmed" });
+          await reservationApi.update(id, { status: "reserved" });
           showNotification("Reservation confirmed", "success");
           refetchReservations();
         } catch {
@@ -217,7 +217,7 @@ function ReservationsPage() {
   const counts = {
     total: reservations.length,
     pending: reservations.filter((r) => r.status === "pending").length,
-    confirmed: reservations.filter((r) => r.status === "confirmed").length,
+    reserved: reservations.filter((r) => r.status === "reserved").length,
     checkedIn: reservations.filter((r) => r.status === "checked-in").length,
     overdue: reservations.filter(checkOverdue).length,
   };
@@ -231,10 +231,10 @@ function ReservationsPage() {
       count: counts.pending,
     },
     {
-      key: "confirmed",
+      key: "reserved",
       cls: "ar-stat-confirmed",
-      label: "Confirmed",
-      count: counts.confirmed,
+      label: "Reserved",
+      count: counts.reserved,
     },
     {
       key: "checked-in",

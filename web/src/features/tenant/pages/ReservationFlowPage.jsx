@@ -282,7 +282,7 @@ function ReservationFlowPage() {
     const hasApplication = Boolean(r.firstName && r.lastName && r.mobileNumber);
     const hasPayment = Boolean(r.proofOfPaymentUrl);
     const isConfirmed =
-      r.status === "confirmed" || r.paymentStatus === "paid";
+      r.status === "reserved" || r.paymentStatus === "paid";
 
     if (hasVisitScheduled) setVisitCompleted(true);
     if (isVisitApprovedFlag) setVisitApproved(true);
@@ -364,7 +364,7 @@ function ReservationFlowPage() {
           setPaymentSubmitted(true);
           setPaymentApproved(true);
           setPaymentMethod(result.paymentMethod || "online");
-          showNotification("Payment successful! Your reservation is confirmed.", "success", 5000);
+          showNotification("Payment successful! Your reservation is secured.", "success", 5000);
           setCurrentStage(5);
           setHighestStageReached(5);
         } else {

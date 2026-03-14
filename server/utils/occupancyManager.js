@@ -7,7 +7,7 @@
  * change status. Automatically updates room availability based on occupancy.
  *
  * OCCUPANCY RULES:
- * - Confirmed (status=confirmed): Room is occupied, bed is assigned
+ * - Reserved (status=reserved): Room is occupied, bed is assigned
  * - Checked-in (status=checked-in): Room is occupied, bed is occupied
  * - Cancelled (status=cancelled): Room occupancy decreases, bed is vacated
  * - Checked-out (status=checked-out): Room occupancy decreases, bed is vacated
@@ -44,10 +44,10 @@ export const updateOccupancyOnReservationChange = async (
 
 
     // === INCREASE OCCUPANCY ===
-    // When transitioning to confirmed or checked-in (if not already confirmed)
+    // When transitioning to reserved or checked-in (if not already reserved)
     if (
-      newStatus === "confirmed" &&
-      oldStatus !== "confirmed" &&
+      newStatus === "reserved" &&
+      oldStatus !== "reserved" &&
       oldStatus !== "checked-in"
     ) {
       const updated = await Room.atomicIncreaseOccupancy(room._id);
@@ -71,10 +71,10 @@ export const updateOccupancyOnReservationChange = async (
       }
     }
 
-    // When checked-in from pending (in case confirmed was skipped)
+    // When checked-in from pending (in case reserved was skipped)
     if (
       newStatus === "checked-in" &&
-      oldStatus !== "confirmed" &&
+      oldStatus !== "reserved" &&
       oldStatus !== "checked-in"
     ) {
       await Room.atomicIncreaseOccupancy(room._id);
@@ -113,7 +113,7 @@ export const updateOccupancyOnReservationChange = async (
 
     // When transitioning to checked-out
     if (newStatus === "checked-out" && oldStatus !== "checked-out") {
-      if (oldStatus === "confirmed" || oldStatus === "checked-in") {
+      if (oldStatus === "reserved" || oldStatus === "checked-in") {
         await Room.atomicDecreaseOccupancy(room._id);
 
         if (reservation.selectedBed?.id) {
@@ -151,11 +151,11 @@ export const recalculateRoomOccupancy = async (roomId) => {
       throw new Error(`Room ${roomId} not found`);
     }
 
-    // Count all confirmed and checked-in reservations
+    // Count all reserved and checked-in reservations
     const activeReservations = await Reservation.find({
       roomId,
       isArchived: false,
-      status: { $in: ["confirmed", "checked-in"] },
+      status: { $in: ["reserved", "checked-in"] },
     });
 
     // Reset occupancy

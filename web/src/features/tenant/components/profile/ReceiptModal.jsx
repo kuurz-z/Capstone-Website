@@ -596,11 +596,11 @@ const PaymentReceiptContent = ({ reservation }) => (
         <span style={{ color: "#6B7280" }}>Verification Status</span>
         <span
           style={{
-            color: reservation?.status === "confirmed" ? "#10B981" : "#F59E0B",
+            color: reservation?.status === "reserved" ? "#10B981" : "#F59E0B",
             fontWeight: "600",
           }}
         >
-          {reservation?.status === "confirmed"
+          {reservation?.status === "reserved"
             ? "✓ Verified"
             : "⏳ Pending Verification"}
         </span>
@@ -736,7 +736,7 @@ const STEP_CONTENT = {
   visit_completed: VisitCompletedReceipt,
   application_submitted: ApplicationReceipt,
   payment_submitted: PaymentReceiptContent,
-  confirmed: ConfirmedReceipt,
+  reserved: ConfirmedReceipt,
 };
 
 // ─── Main Modal Component ────────────────────────────────────

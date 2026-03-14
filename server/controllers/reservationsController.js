@@ -319,8 +319,8 @@ export const updateReservation = async (req, res, next) => {
 
     // Status transition side-effects
     if (
-      req.body.status === "confirmed" &&
-      existingReservation.status !== "confirmed"
+      req.body.status === "reserved" &&
+      existingReservation.status !== "reserved"
     ) {
       req.body.paymentStatus = "paid";
       req.body.approvedDate = new Date();
@@ -374,10 +374,10 @@ export const updateReservation = async (req, res, next) => {
       reservation: updatedReservation,
     });
 
-    // Send confirmation email if status just changed to "confirmed"
+    // Send confirmation email if status just changed to "reserved"
     if (
-      req.body.status === "confirmed" &&
-      oldData.status !== "confirmed" &&
+      req.body.status === "reserved" &&
+      oldData.status !== "reserved" &&
       updatedReservation.userId?.email
     ) {
       try {
@@ -526,7 +526,7 @@ export const deleteReservation = async (req, res, next) => {
 
     // Release occupancy
     if (
-      reservation.status === "confirmed" ||
+      reservation.status === "reserved" ||
       reservation.status === "checked-in"
     ) {
       try {
@@ -585,8 +585,12 @@ export const extendReservation = async (req, res, next) => {
 
     reservation.checkInDate = newMoveIn;
     reservation.finalMoveInDate = newMoveIn;
-    reservation.status =
-      reservation.paymentStatus === "paid" ? "confirmed" : "pending";
+    reservation.moveInExtendedTo = newMoveIn;
+    // Keep status as reserved — admin extended the deadline
+    if (reservation.status !== "reserved") {
+      reservation.status =
+        reservation.paymentStatus === "paid" ? "reserved" : "pending";
+    }
 
     await reservation.save();
     await reservation.populate(...POPULATE_USER);
@@ -711,7 +715,7 @@ export const archiveReservation = async (req, res, next) => {
 
     // Release occupancy if was active
     if (
-      reservation.status === "confirmed" ||
+      reservation.status === "reserved" ||
       reservation.status === "checked-in"
     ) {
       const prevStatus = reservation.status;

@@ -14,7 +14,7 @@ const ProfileSidebar = ({
     style={{ borderColor: "#E8EBF0" }}
   >
     <div className="p-6 border-b" style={{ borderColor: "#E8EBF0" }}>
-      <Link to="/tenant/check-availability" className="flex items-center gap-3">
+      <Link to="/applicant/check-availability" className="flex items-center gap-3">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center"
           style={{ backgroundColor: "#0C375F" }}
@@ -68,7 +68,7 @@ const ProfileSidebar = ({
             <span>Dashboard</span>
           </button>
           <Link
-            to="/tenant/check-availability"
+            to="/applicant/check-availability"
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <Bed className="w-5 h-5" />

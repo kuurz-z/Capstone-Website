@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import ConfirmModal from "./ConfirmModal";
+import { showNotification } from "../utils/notification";
 import "./Sidebar.css";
 
 const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
@@ -18,32 +19,30 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
 
   // Navigation items for Pre-Tenant (Registered User)
   const preTenantNavItems = [
-    { path: "/tenant/dashboard", icon: "fas fa-home", label: "Home" },
-    { path: "/tenant/profile", icon: "fas fa-user", label: "Profile" },
+    { path: "/applicant/profile", icon: "fas fa-home", label: "Home" },
+    { path: "/applicant/profile", icon: "fas fa-user", label: "Profile" },
     {
-      path: "/tenant/reservation",
+      path: "/applicant/reservation",
       icon: "fas fa-calendar-check",
       label: "Reservation",
     },
-    { path: "/tenant/settings", icon: "fas fa-cog", label: "Settings" },
   ];
 
   // Navigation items for Tenant (Active/Former)
   const tenantNavItems = [
-    { path: "/tenant/dashboard", icon: "fas fa-home", label: "Home" },
-    { path: "/tenant/profile", icon: "fas fa-user", label: "Profile" },
+    { path: "/applicant/profile", icon: "fas fa-home", label: "Home" },
+    { path: "/applicant/profile", icon: "fas fa-user", label: "Profile" },
     {
-      path: "/tenant/billing",
+      path: "/applicant/billing",
       icon: "fas fa-file-invoice-dollar",
       label: "Billing",
     },
-    { path: "/tenant/maintenance", icon: "fas fa-tools", label: "Maintenance" },
+    { path: "/applicant/maintenance", icon: "fas fa-tools", label: "Maintenance" },
     {
-      path: "/tenant/announcements",
+      path: "/applicant/announcements",
       icon: "fas fa-bullhorn",
       label: "Announcements",
     },
-    { path: "/tenant/settings", icon: "fas fa-cog", label: "Settings" },
   ];
 
   const navItems = isTenant ? tenantNavItems : preTenantNavItems;
@@ -58,9 +57,11 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
     setIsLoggingOut(true);
     try {
       await logout();
+      showNotification("You have been signed out successfully.", "success", 3000);
       navigate("/");
     } catch (error) {
       console.error("Logout error:", error);
+      showNotification("Logout failed. Please try again.", "error", 3000);
       setIsLoggingOut(false);
     }
   };

@@ -149,14 +149,30 @@ const userSchema = new mongoose.Schema(
 
     tenantStatus: {
       type: String,
-      enum: ["registered", "reserved", "active", "inactive"],
-      default: null,
+      enum: ["none", "active", "inactive", "evicted", "blacklisted"],
+      default: "none",
       // Usage:
-      // - null: applicant (not yet registered / email unverified)
-      // - "registered": email verified, ready to reserve
-      // - "reserved": payment confirmed, bed held
+      // - "none": not a tenant yet (applicant / pre-tenant)
       // - "active": checked in, physically moved in
       // - "inactive": moved out / contract ended
+      // - "evicted": forcefully removed by admin
+      // - "blacklisted": banned from future reservations
+    },
+
+    // --- Granular Permissions ---
+    permissions: {
+      type: [String],
+      default: [],
+      // Populated based on role. SuperAdmin can customise per admin.
+      // Available permissions:
+      // - manageReservations: view/update/cancel reservations
+      // - manageTenants: view/edit tenant profiles, account actions
+      // - manageBilling: generate bills, verify payments, apply penalties
+      // - manageRooms: edit rooms, beds, occupancy
+      // - manageMaintenance: handle maintenance requests
+      // - manageAnnouncements: create/edit/delete announcements
+      // - viewReports: access reports & analytics
+      // - manageUsers: create/edit/delete user accounts
     },
 
     // --- Account Status ---

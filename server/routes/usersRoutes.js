@@ -38,6 +38,7 @@ import {
   suspendUser,
   reactivateUser,
   banUser,
+  updatePermissions,
 } from "../controllers/usersController.js";
 
 const router = express.Router();
@@ -118,6 +119,13 @@ router.patch("/:userId/reactivate", verifyToken, verifyAdmin, filterByBranch, re
  * Access: Super Admin only
  */
 router.patch("/:userId/ban", verifyToken, verifySuperAdmin, banUser);
+
+/**
+ * PATCH /api/users/:userId/permissions
+ * Update an admin user's permissions.
+ * Access: Super Admin only
+ */
+router.patch("/:userId/permissions", verifyToken, verifySuperAdmin, updatePermissions);
 
 // ============================================================================
 // GET ALL USERS

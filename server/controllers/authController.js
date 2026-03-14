@@ -4,7 +4,7 @@
  */
 
 import { getAuth } from "../config/firebase.js";
-import { User } from "../models/index.js";
+import { User, LoginLog } from "../models/index.js";
 import auditLogger from "../utils/auditLogger.js";
 import {
   sendSuccess,
@@ -114,7 +114,7 @@ export const register = async (req, res, next) => {
       branch,
       role: "applicant",
       isEmailVerified: req.user.email_verified || false, // Synced from Firebase
-      tenantStatus: "registered",
+      tenantStatus: "none",
     });
 
     await user.save();
@@ -182,6 +182,7 @@ export const login = async (req, res, next) => {
         false,
         "Inactive account login attempt",
       );
+      LoginLog.logEvent({ userId: user._id, email: user.email, action: "login_failed", success: false, failureReason: "Account inactive", req });
       return res.status(403).json({
         error: "Your account is inactive. Please contact support.",
         code: "ACCOUNT_INACTIVE",
@@ -193,10 +194,8 @@ export const login = async (req, res, next) => {
     const firebaseEmailVerified = req.user.email_verified || false;
     if (user.isEmailVerified !== firebaseEmailVerified) {
       user.isEmailVerified = firebaseEmailVerified;
-      // If email is now verified and tenantStatus is not 'registered', update it
-      if (firebaseEmailVerified && user.tenantStatus !== "registered") {
-        user.tenantStatus = "registered";
-      }
+      // Note: tenantStatus is only set to meaningful values (active/inactive/etc)
+      // when the user becomes a tenant via check-in. No sync needed here.
       await user.save();
     }
 
@@ -204,6 +203,7 @@ export const login = async (req, res, next) => {
     const isAdminRole = user.role === "admin" || user.role === "superAdmin";
     if (!user.isEmailVerified && !isAdminRole) {
       await auditLogger.logLogin(req, user, false, "Email not verified");
+      LoginLog.logEvent({ userId: user._id, email: user.email, action: "login_failed", success: false, failureReason: "Email not verified", req });
       return res.status(403).json({
         error: "Please verify your email before logging in.",
         code: "EMAIL_NOT_VERIFIED",
@@ -213,6 +213,7 @@ export const login = async (req, res, next) => {
     // Log successful login (not for checkOnly)
     if (!isCheckOnly) {
       await auditLogger.logLogin(req, user, true);
+      LoginLog.logEvent({ userId: user._id, email: user.email, action: "login", success: true, req });
     }
 
     res.json({
@@ -253,6 +254,7 @@ export const logout = async (req, res, next) => {
 
     // Log logout event for authenticated user with full details
     await auditLogger.logLogout(req, user);
+    LoginLog.logEvent({ userId: user._id, email: user.email, action: "logout", success: true, req });
 
     res.json({
       message: "Logged out successfully",

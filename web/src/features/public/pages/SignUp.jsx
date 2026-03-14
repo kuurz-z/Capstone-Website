@@ -36,7 +36,9 @@ import {
 } from "../../../shared/utils/authValidation";
 import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import SocialAuthButtons from "../../../shared/components/SocialAuthButtons";
+import FloatingInput from "../../../shared/components/FloatingInput";
 import TermsModal from "../../tenant/modals/TermsModal";
+import "../../../shared/styles/auth-forms.css";
 import "../styles/tenant-signup.css";
 import "../../../shared/styles/notification.css";
 
@@ -300,7 +302,9 @@ function SignUp() {
       const result = await signInWithPopup(auth, provider);
       const firebaseUser = result.user;
       if (!firebaseUser.email) {
-        await auth.signOut();
+        try { await firebaseUser.delete(); } catch (_) {
+          try { await auth.signOut(); } catch (_2) { /* ignore */ }
+        }
         socialAuthRef.current = false;
         showNotification(
           "Unable to get email from your Google account.",
@@ -348,7 +352,7 @@ function SignUp() {
               /* proceed anyway */
             }
             showNotification(`Welcome to Lilycrest, ${firstName}!`, "success");
-            setTimeout(() => navigate("/check-availability"), 2000);
+            setTimeout(() => navigate("/applicant/check-availability"), 2000);
           } catch (regError) {
             const errMsg = regError.response?.data?.error || regError.message || "";
             const errCode = regError.response?.data?.code || "";
@@ -381,10 +385,12 @@ function SignUp() {
             setLoading(false);
           }
         } else {
+          // Non-404 error — delete the auto-created Firebase account to stay in sync
           try {
-            await auth.signOut();
-          } catch (e) {
-            /* ignore */
+            const u = auth.currentUser;
+            if (u) await u.delete();
+          } catch (delErr) {
+            try { await auth.signOut(); } catch (_) { /* ignore */ }
           }
           showNotification(
             "An error occurred while checking your account. Please try again.",
@@ -396,9 +402,9 @@ function SignUp() {
     } catch (error) {
       if (auth.currentUser) {
         try {
-          await auth.signOut();
-        } catch (e) {
-          /* ignore */
+          await auth.currentUser.delete();
+        } catch (delErr) {
+          try { await auth.signOut(); } catch (_) { /* ignore */ }
         }
       }
       if (error.code !== "auth/cancelled-popup-request")
@@ -434,7 +440,7 @@ function SignUp() {
           subtitle="Join hundreds of students living their best life"
         />
 
-        <div className="flex items-center justify-center p-8 lg:p-12 bg-white">
+        <div className="flex items-center justify-center p-8 lg:p-12 bg-white overflow-y-auto">
           <div className="w-full max-w-md">
             <Link
               to="/"
@@ -443,244 +449,120 @@ function SignUp() {
               <span className="text-sm font-light">← Back to website</span>
             </Link>
 
-            <div className="mb-10">
-              <h1
-                className="text-4xl font-light mb-3 tracking-tight"
-                style={{ color: "#0C375F" }}
-              >
-                Create an account
-              </h1>
-              <p className="text-gray-600 font-light">
+            <div className="auth-header">
+              <h1 className="auth-header__title">Create an account</h1>
+              <p className="auth-header__subtitle">
                 Already have an account?{" "}
-                <Link
-                  to="/signin"
-                  className="hover:underline"
-                  style={{ color: "#E7710F" }}
-                >
-                  Log in
-                </Link>
+                <Link to="/signin">Log in</Link>
               </p>
             </div>
 
-            <form onSubmit={handleSignUp} className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="firstName"
-                    className="block text-sm font-light text-gray-700 mb-2"
-                  >
-                    First name
-                  </label>
-                  <input
-                    type="text"
-                    id="firstName"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    disabled={loading}
-                    className={inputClass("firstName")}
-                    placeholder="First name"
-                  />
-                  {touched.firstName && validationErrors.firstName && (
-                    <span className="validation-msg error">
-                      {validationErrors.firstName}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <label
-                    htmlFor="lastName"
-                    className="block text-sm font-light text-gray-700 mb-2"
-                  >
-                    Last name
-                  </label>
-                  <input
-                    type="text"
-                    id="lastName"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    disabled={loading}
-                    className={inputClass("lastName")}
-                    placeholder="Last name"
-                  />
-                  {touched.lastName && validationErrors.lastName && (
-                    <span className="validation-msg error">
-                      {validationErrors.lastName}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-light text-gray-700 mb-2"
-                >
-                  Email address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
+            <form onSubmit={handleSignUp} className="auth-form">
+              <div className="form-row">
+                <FloatingInput
+                  label="First name"
+                  name="firstName"
+                  value={formData.firstName}
                   onChange={handleChange}
                   disabled={loading}
-                  className={inputClass("email")}
-                  placeholder="your.email@example.com"
+                  error={touched.firstName ? validationErrors.firstName : null}
+                  valid={touched.firstName && fieldValid.firstName}
                 />
-                {touched.email && validationErrors.email && (
-                  <span className="validation-msg error">
-                    {validationErrors.email}
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="phone"
-                  className="block text-sm font-light text-gray-700 mb-2"
-                >
-                  Phone number
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
+                <FloatingInput
+                  label="Last name"
+                  name="lastName"
+                  value={formData.lastName}
                   onChange={handleChange}
                   disabled={loading}
-                  inputMode="numeric"
-                  maxLength={11}
-                  className={inputClass("phone")}
-                  placeholder="123-456-7890"
+                  error={touched.lastName ? validationErrors.lastName : null}
+                  valid={touched.lastName && fieldValid.lastName}
                 />
-                {touched.phone && validationErrors.phone && (
-                  <span className="validation-msg error">
-                    {validationErrors.phone}
-                  </span>
-                )}
               </div>
 
+              <FloatingInput
+                label="Email address"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                disabled={loading}
+                autoComplete="email"
+                error={touched.email ? validationErrors.email : null}
+                valid={touched.email && fieldValid.email}
+              />
+
+              <FloatingInput
+                label="Phone number"
+                name="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={handleChange}
+                disabled={loading}
+                inputMode="numeric"
+                maxLength={11}
+                error={touched.phone ? validationErrors.phone : null}
+                valid={touched.phone && fieldValid.phone}
+              />
+
               <div>
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-light text-gray-700 mb-2"
-                >
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    disabled={loading}
-                    className={inputClass("password")}
-                    placeholder="Create a strong password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
-                {touched.password && validationErrors.password && (
-                  <span className="validation-msg error">
-                    {validationErrors.password}
-                  </span>
-                )}
-
-                {/* Real-time password strength checklist */}
-                {formData.password.length > 0 && (
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      padding: "12px 14px",
-                      borderRadius: "10px",
-                      backgroundColor: "#F9FAFB",
-                      border: "1px solid #E5E7EB",
-                    }}
-                  >
-                    {/* Strength bar */}
-                    <div style={{ marginBottom: "10px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: "5px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: "500",
-                            color: "#6B7280",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          Strength
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            color:
-                              passwordStrength.score >= 100
-                                ? "#10B981"
-                                : passwordStrength.score >= 60
-                                  ? "#F59E0B"
-                                  : "#EF4444",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {passwordStrength.level}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          height: "4px",
-                          borderRadius: "4px",
-                          backgroundColor: "#E5E7EB",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: "100%",
-                            borderRadius: "4px",
-                            width: `${passwordStrength.score}%`,
-                            backgroundColor:
-                              passwordStrength.score >= 100
-                                ? "#10B981"
-                                : passwordStrength.score >= 60
-                                  ? "#F59E0B"
-                                  : "#EF4444",
-                            transition:
-                              "width 0.3s ease, background-color 0.3s ease",
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Requirements list */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "4px 12px",
-                      }}
+                <FloatingInput
+                  label="Password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={handleChange}
+                  disabled={loading}
+                  error={touched.password ? validationErrors.password : null}
+                  valid={touched.password && fieldValid.password}
+                  endAdornment={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex={-1}
                     >
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
+                    </button>
+                  }
+                />
+
+                {/* Password strength indicator */}
+                {formData.password.length > 0 && (
+                  <div className="password-strength">
+                    <div className="password-strength__bar-wrap">
+                      <span className="password-strength__label">Strength</span>
+                      <span
+                        className="password-strength__level"
+                        style={{
+                          color:
+                            passwordStrength.score >= 100
+                              ? "#10B981"
+                              : passwordStrength.score >= 60
+                                ? "#F59E0B"
+                                : "#EF4444",
+                        }}
+                      >
+                        {passwordStrength.level}
+                      </span>
+                    </div>
+                    <div className="password-strength__track">
+                      <div
+                        className="password-strength__fill"
+                        style={{
+                          width: `${passwordStrength.score}%`,
+                          backgroundColor:
+                            passwordStrength.score >= 100
+                              ? "#10B981"
+                              : passwordStrength.score >= 60
+                                ? "#F59E0B"
+                                : "#EF4444",
+                        }}
+                      />
+                    </div>
+                    <div className="password-strength__checks">
                       {[
                         { key: "length", label: "8+ characters" },
                         { key: "uppercase", label: "Uppercase" },
@@ -690,31 +572,17 @@ function SignUp() {
                       ].map(({ key, label }) => (
                         <div
                           key={key}
+                          className="password-strength__check"
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontSize: "12px",
                             color: passwordStrength.requirements[key]
                               ? "#10B981"
                               : "#9CA3AF",
-                            transition: "color 0.2s ease",
                           }}
                         >
                           <span
+                            className="password-strength__dot"
                             style={{
-                              width: "14px",
-                              height: "14px",
-                              borderRadius: "50%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "9px",
-                              fontWeight: "700",
-                              flexShrink: 0,
-                              backgroundColor: passwordStrength.requirements[
-                                key
-                              ]
+                              backgroundColor: passwordStrength.requirements[key]
                                 ? "#10B981"
                                 : "transparent",
                               color: passwordStrength.requirements[key]
@@ -723,7 +591,6 @@ function SignUp() {
                               border: passwordStrength.requirements[key]
                                 ? "none"
                                 : "1.5px solid #D1D5DB",
-                              transition: "all 0.2s ease",
                             }}
                           >
                             {passwordStrength.requirements[key] ? "✓" : ""}
@@ -736,28 +603,19 @@ function SignUp() {
                 )}
               </div>
 
-              <div>
-                <label
-                  htmlFor="confirmPassword"
-                  className="block text-sm font-light text-gray-700 mb-2"
-                >
-                  Confirm password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    disabled={loading}
-                    className={inputClass("confirmPassword")}
-                    placeholder="Confirm your password"
-                  />
+              <FloatingInput
+                label="Confirm password"
+                name="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                disabled={loading}
+                error={touched.confirmPassword ? validationErrors.confirmPassword : null}
+                valid={touched.confirmPassword && fieldValid.confirmPassword}
+                endAdornment={
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                     tabIndex={-1}
                   >
                     {showConfirmPassword ? (
@@ -766,58 +624,43 @@ function SignUp() {
                       <Eye className="w-5 h-5" />
                     )}
                   </button>
-                </div>
-                {touched.confirmPassword &&
-                  validationErrors.confirmPassword && (
-                    <span className="validation-msg error">
-                      {validationErrors.confirmPassword}
-                    </span>
-                  )}
-              </div>
+                }
+              />
 
-              <div>
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={agreedToTerms}
-                    onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    disabled={loading}
-                    className="w-5 h-5 mt-0.5 rounded border-gray-300 flex-shrink-0"
-                    style={{ accentColor: "#E7710F" }}
-                  />
-                  <span className="text-sm text-gray-600 font-light">
-                    I agree to the{" "}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setShowTermsModal(true);
-                      }}
-                      className="hover:underline"
-                      style={{ color: "#E7710F" }}
-                    >
-                      Terms & Conditions
-                    </button>{" "}
-                    and{" "}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setShowTermsModal(true);
-                      }}
-                      className="hover:underline"
-                      style={{ color: "#E7710F" }}
-                    >
-                      Privacy Policy
-                    </button>
-                  </span>
-                </label>
-              </div>
+              <label className="auth-terms">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  disabled={loading}
+                />
+                <span>
+                  I agree to the{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowTermsModal(true);
+                    }}
+                  >
+                    Terms & Conditions
+                  </button>{" "}
+                  and{" "}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowTermsModal(true);
+                    }}
+                  >
+                    Privacy Policy
+                  </button>
+                </span>
+              </label>
 
               <button
                 type="submit"
-                className="auth-submit-btn w-full py-6 rounded-xl text-white font-light transition-opacity text-base"
-                style={{ backgroundColor: "#E7710F" }}
+                className="auth-btn-primary"
                 disabled={loading}
               >
                 {loading ? "Creating Account..." : "Create account"}
@@ -825,7 +668,6 @@ function SignUp() {
 
               <SocialAuthButtons
                 onGoogle={handleGoogleSignup}
-                onFacebook={handleFacebookSignup}
                 loading={loading}
                 dividerText="Or register with"
               />

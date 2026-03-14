@@ -411,6 +411,32 @@
   color: #1d4ed8;
 }
 
+/* Tenant status badges */
+.admin-users-page .badge-ts-none {
+  background: #f0f4f8;
+  color: #64748b;
+}
+
+.admin-users-page .badge-ts-active {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.admin-users-page .badge-ts-inactive {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.admin-users-page .badge-ts-evicted {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.admin-users-page .badge-ts-blacklisted {
+  background: #450a0a;
+  color: #fca5a5;
+}
+
 /* Account action buttons */
 .admin-users-page .action-btn.suspend:hover {
   border-color: #f59e0b;

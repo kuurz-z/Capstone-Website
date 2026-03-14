@@ -105,11 +105,11 @@ const notify = {
       { entityType: "bill" }),
 
   /**
-   * Grace period warning
+   * Overdue move-in alert (admin + tenant notification)
    */
-  gracePeriodWarning: (userId, reservationCode, deadline) =>
-    createNotification(userId, "grace_period_warning", "Grace Period Warning",
-      `Your reservation ${reservationCode} is in grace period. Move in by ${deadline} or it will be cancelled.`,
+  overdueMoveIn: (userId, reservationCode, roomName, tenantName, daysOverdue) =>
+    createNotification(userId, "grace_period_warning", "Overdue Move-In",
+      `${tenantName} (${reservationCode}) is ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue for move-in to ${roomName}. Please extend or cancel.`,
       { entityType: "reservation" }),
 
   /**

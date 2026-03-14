@@ -105,12 +105,13 @@ export const handleStatusTransition = async (
     }
   };
 
-  if (newStatus === "confirmed" && oldStatus !== "confirmed") {
+  if (newStatus === "reserved" && oldStatus !== "reserved") {
+    // Reservation state is tracked in Reservation model, not on User.
+    // Only set branch from room so user is associated with correct branch.
     const room = await Room.findById(roomId);
-    user.tenantStatus = "reserved";
     if (room) user.branch = room.branch;
     await user.save();
-    await syncFirebaseClaims({ role: "applicant", tenantStatus: "reserved" });
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: "none" });
   }
 
   if (newStatus === "checked-in" && oldStatus !== "checked-in") {
@@ -125,10 +126,10 @@ export const handleStatusTransition = async (
     oldStatus !== "cancelled" &&
     user.role === "applicant"
   ) {
-    user.tenantStatus = null;
+    user.tenantStatus = "none";
     user.branch = null;
     await user.save();
-    await syncFirebaseClaims({ role: "applicant", tenantStatus: null });
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: "none" });
   }
 };
 

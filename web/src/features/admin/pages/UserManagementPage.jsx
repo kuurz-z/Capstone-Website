@@ -29,6 +29,7 @@ function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [tenantStatusFilter, setTenantStatusFilter] = useState("all");
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -115,8 +116,9 @@ function UserManagementPage() {
         params.isActive = statusFilter === "active";
       }
     }
+    if (tenantStatusFilter !== "all") params.tenantStatus = tenantStatusFilter;
     return params;
-  }, [currentPage, roleFilter, branchFilter, statusFilter]);
+  }, [currentPage, roleFilter, branchFilter, statusFilter, tenantStatusFilter]);
 
   const { data: usersData, isLoading: loading } = useUsers(userFilters);
   const { data: stats } = useUserStats();
@@ -357,6 +359,8 @@ function UserManagementPage() {
           onBranchChange={setBranchFilter}
           statusFilter={statusFilter}
           onStatusChange={setStatusFilter}
+          tenantStatusFilter={tenantStatusFilter}
+          onTenantStatusChange={setTenantStatusFilter}
           isSuperAdmin={isSuperAdmin}
           onAddUser={handleAddUser}
         />

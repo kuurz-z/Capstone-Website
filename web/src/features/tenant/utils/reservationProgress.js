@@ -12,7 +12,7 @@ const STEP_ORDER = [
   "visit_completed",
   "application_submitted",
   "payment_submitted",
-  "confirmed",
+  "reserved",
 ];
 
 export const DEFAULT_STEPS = [
@@ -47,8 +47,8 @@ export const DEFAULT_STEPS = [
     status: "locked",
   },
   {
-    step: "confirmed",
-    title: "6. Reservation Confirmed",
+    step: "reserved",
+    title: "6. Reservation Secured",
     description: "Reservation finalized and ready for move-in",
     status: "locked",
   },
@@ -72,7 +72,7 @@ export function getReservationProgress(reservation) {
   const hasApplication = Boolean(reservation.firstName && reservation.lastName);
   const hasPayment = Boolean(reservation.paymentStatus === "paid" || reservation.paymongoSessionId);
   const isConfirmed =
-    status === "confirmed" || reservation.paymentStatus === "paid";
+    status === "reserved" || reservation.paymentStatus === "paid";
 
   const isScheduleRejected = Boolean(reservation.scheduleRejected === true);
   const scheduleRejectionReason = reservation.scheduleRejectionReason || null;
@@ -142,7 +142,7 @@ export function getReservationProgress(reservation) {
       description: isApplicationEditable
         ? "Application submitted - can still edit"
         : isConfirmed
-          ? "Application locked - reservation confirmed"
+          ? "Application locked - reservation secured"
           : hasPayment
             ? "Application locked - payment submitted"
             : "Personal details and documents submitted",
@@ -161,7 +161,7 @@ export function getReservationProgress(reservation) {
       title: "5. Payment Submitted",
       description: isPaymentPendingApproval
         ? "Awaiting payment confirmation"
-        : "Reservation fee paid and confirmed",
+        : "Reservation fee paid and verified",
       status: isPaymentPendingApproval
         ? "pending_approval"
         : currentStepIndex >= 4
@@ -173,11 +173,11 @@ export function getReservationProgress(reservation) {
         currentStepIndex >= 4 ? reservation.paymentDate : undefined,
     },
     {
-      step: "confirmed",
-      title: "6. Reservation Confirmed",
+      step: "reserved",
+      title: "6. Reservation Secured",
       description: isPaymentPendingApproval
         ? "Pending admin payment verification"
-        : "Reservation fully confirmed and finalized",
+        : "Reservation fully secured and finalized",
       status: currentStepIndex >= 5 ? "completed" : "locked",
       completedDate:
         currentStepIndex >= 5 ? reservation.approvedDate : undefined,
@@ -200,7 +200,7 @@ export function getNextAction(activeReservation, reservationProgress) {
       title: "Start Your Reservation",
       description: "Browse available rooms and start the reservation process",
       buttonText: "Browse Rooms",
-      buttonLink: "/tenant/check-availability",
+      buttonLink: "/applicant/check-availability",
     };
   }
 
@@ -212,7 +212,7 @@ export function getNextAction(activeReservation, reservationProgress) {
         title: "Confirm Room & Continue",
         description: "Review your selected room and confirm your choice.",
         buttonText: "Continue",
-        buttonLink: "/tenant/reservation-flow",
+        buttonLink: "/applicant/reservation",
         reservationId: activeReservation._id,
         step: 1,
       };
@@ -224,7 +224,7 @@ export function getNextAction(activeReservation, reservationProgress) {
           description:
             "Pick a date and time to visit the dormitory and review policies.",
           buttonText: "Schedule Visit",
-          buttonLink: "/tenant/reservation-flow",
+          buttonLink: "/applicant/reservation",
           reservationId: activeReservation._id,
           step: 2,
         };
@@ -234,7 +234,7 @@ export function getNextAction(activeReservation, reservationProgress) {
         description:
           "Your visit has been scheduled. Please complete your visit and wait for admin verification.",
         buttonText: "View Status",
-        buttonLink: "/tenant/profile",
+        buttonLink: "/applicant/profile",
         buttonVariant: "outline",
       };
     }
@@ -244,7 +244,7 @@ export function getNextAction(activeReservation, reservationProgress) {
         description:
           "Provide your personal details and upload required documents for admin review.",
         buttonText: "Fill Application Form",
-        buttonLink: "/tenant/reservation-flow",
+        buttonLink: "/applicant/reservation",
         reservationId: activeReservation._id,
         step: 4,
       };
@@ -254,25 +254,25 @@ export function getNextAction(activeReservation, reservationProgress) {
         description:
           "Your application has been submitted. Pay ₱2,000 online to confirm your reservation.",
         buttonText: "Pay Now",
-        buttonLink: "/tenant/reservation-flow",
+        buttonLink: "/applicant/reservation",
         reservationId: activeReservation._id,
         step: 5,
       };
     case "payment_submitted":
-    case "confirmed":
+    case "reserved":
       return {
-        title: "Reservation Confirmed!",
+        title: "Reservation Secured!",
         description:
-          "Your reservation is confirmed! Prepare for move-in and check your email for contract details.",
+          "Your reservation is secured! Prepare for move-in and check your email for contract details.",
         buttonText: "View Details",
-        buttonLink: "/tenant/profile",
+        buttonLink: "/applicant/profile",
       };
     default:
       return {
         title: "Get Started",
         description: "Browse available rooms to begin your reservation",
         buttonText: "Browse Rooms",
-        buttonLink: "/tenant/check-availability",
+        buttonLink: "/applicant/check-availability",
       };
   }
 }

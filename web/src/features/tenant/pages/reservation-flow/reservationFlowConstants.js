@@ -30,7 +30,7 @@ export const RESERVATION_STAGES = [
   {
     id: 5,
     label: "Confirmation",
-    desc: "Reservation confirmed and ready for move-in",
+    desc: "Reservation secured and ready for move-in",
     category: "Finalization",
   },
 ];
