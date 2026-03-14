@@ -800,6 +800,13 @@ export const renewContract = async (req, res, next) => {
     const oldDuration = reservation.leaseDuration || 12;
 
     reservation.leaseDuration = oldDuration + additionalMonths;
+    reservation.leaseExtensions.push({
+      addedMonths: additionalMonths,
+      previousDuration: oldDuration,
+      newDuration: reservation.leaseDuration,
+      extendedBy: (await findDbUser(req.user.uid))?._id || null,
+      notes: renewNotes,
+    });
     reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Contract renewed: +${additionalMonths} months (${oldDuration} → ${reservation.leaseDuration}). ${renewNotes}`;
     await reservation.save();
 

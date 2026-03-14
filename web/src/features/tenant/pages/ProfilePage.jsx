@@ -14,6 +14,7 @@ import {
 import { useCurrentUser } from "../../../shared/hooks/queries/useUsers";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import { useMyStays } from "../../../shared/hooks/queries/useUsers";
+import { billingApi } from "../../../shared/api/billingApi";
 
 // Sub-components
 import {
@@ -112,6 +113,40 @@ const ProfilePage = () => {
       yearLevel: profile.yearLevel || "",
     });
   }, [profile]);
+
+  // ── Payment success redirect handler ──────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const paymentStatus = params.get("payment");
+    const sessionId = params.get("session_id");
+
+    if (!paymentStatus) return;
+
+    // Clean URL immediately
+    navigate(location.pathname, { replace: true });
+
+    if (paymentStatus === "success" && sessionId) {
+      // Verify payment with backend
+      const verifyPayment = async () => {
+        try {
+          const result = await billingApi.checkPaymentStatus(sessionId);
+          if (result?.isPaid) {
+            showNotification("Payment successful! Your reservation is confirmed.", "success", 5000);
+          } else {
+            showNotification("Payment is being processed. Please wait a moment.", "info", 5000);
+          }
+        } catch (err) {
+          console.error("Payment verification failed:", err);
+          showNotification("Payment received. Verifying with PayMongo...", "info", 5000);
+        }
+        // Refresh reservations regardless
+        queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      };
+      verifyPayment();
+    } else if (paymentStatus === "cancelled") {
+      showNotification("Payment was cancelled. You can try again from your profile.", "warning", 5000);
+    }
+  }, [location.search]);
 
   // ── Derive reservations, visits, activity from cached data ─
   const reservations = useMemo(() => reservationsData || [], [reservationsData]);

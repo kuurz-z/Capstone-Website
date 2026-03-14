@@ -285,6 +285,26 @@ const reservationSchema = new mongoose.Schema(
       default: "",
     },
 
+    // --- Contract ---
+    contractFileUrl: {
+      type: String,
+      default: null,
+      // Admin-uploaded signed PDF contract
+    },
+    leaseExtensions: {
+      type: [
+        {
+          addedMonths: { type: Number, required: true },
+          previousDuration: { type: Number, required: true },
+          newDuration: { type: Number, required: true },
+          extendedAt: { type: Date, default: Date.now },
+          extendedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          notes: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
+
     // --- Soft Delete ---
     isArchived: {
       type: Boolean,
