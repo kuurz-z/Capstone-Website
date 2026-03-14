@@ -51,7 +51,7 @@ const TYPE_CONFIG = {
   account_suspended: { icon: AlertCircle, color: "#EF4444", label: "Account" },
   account_reactivated: { icon: Check, color: "#10B981", label: "Account" },
   maintenance_update: { icon: Wrench, color: "#8B5CF6", label: "Maintenance" },
-  announcement: { icon: Megaphone, color: "#E7710F", label: "Announcement" },
+  announcement: { icon: Megaphone, color: "#D4982B", label: "Announcement" },
   general: { icon: Bell, color: "#6B7280", label: "General" },
 };
 
@@ -362,7 +362,7 @@ const NotificationsTab = () => {
                             width: "8px",
                             height: "8px",
                             borderRadius: "50%",
-                            backgroundColor: "#E7710F",
+                            backgroundColor: "#D4982B",
                             flexShrink: 0,
                             marginTop: "6px",
                           }}

@@ -185,7 +185,7 @@
 }
 
 .filter-tabs .tab.active {
-  background: linear-gradient(135deg, #0c375f 0%, #1e5a8e 100%);
+  background: linear-gradient(135deg, #183153 0%, #1e5a8e 100%);
   color: white;
   border-color: transparent;
 }
@@ -350,7 +350,7 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background: #0c375f;
+  background: #183153;
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -379,8 +379,8 @@
 
 .form-control:focus {
   outline: none;
-  border-color: #0c375f;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.1);
+  border-color: #183153;
+  box-shadow: 0 0 0 3px rgba(24, 49, 83, 0.1);
 }
 
 .form-actions {
@@ -409,13 +409,13 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #0c375f 0%, #1e5a8e 100%);
+  background: linear-gradient(135deg, #183153 0%, #1e5a8e 100%);
   color: white;
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(12, 55, 95, 0.3);
+  box-shadow: 0 4px 12px rgba(24, 49, 83, 0.3);
 }
 
 .btn-secondary {

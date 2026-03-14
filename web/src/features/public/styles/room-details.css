@@ -41,7 +41,7 @@
 }
 
 .room-details-nav-link:hover {
-  color: #FF6900;
+  color: #D4982B;
 }
 
 /* Breadcrumb */
@@ -58,7 +58,7 @@
 }
 
 .breadcrumb-link:hover {
-  color: #FF6900;
+  color: #D4982B;
 }
 
 .breadcrumb-separator {
@@ -67,7 +67,7 @@
 }
 
 .breadcrumb-current {
-  color: #FF6900;
+  color: #D4982B;
   font-weight: 500;
 }
 
@@ -105,7 +105,7 @@
 .room-details-main-price {
   font-size: 42px;
   font-weight: 700;
-  color: #FF6900;
+  color: #D4982B;
   line-height: 1;
 }
 
@@ -170,7 +170,7 @@
 .room-details-card-price {
   font-size: 20px;
   font-weight: 400;
-  color: #FF6900;
+  color: #D4982B;
 }
 
 .room-details-card-period {
@@ -182,8 +182,8 @@
 .room-details-btn-check-availability {
   padding: 8px 10px;
   background-color: #fff;
-  color: #FF6900;
-  border: 1.5px solid #FF6900;
+  color: #D4982B;
+  border: 1.5px solid #D4982B;
   border-radius: 6px;
   font-weight: 700;
   font-size: 11px;
@@ -193,7 +193,7 @@
 }
 
 .room-details-btn-check-availability:hover {
-  background-color: #FF6900;
+  background-color: #D4982B;
   color: white;
 }
 
@@ -261,7 +261,7 @@
   align-items: center;
   justify-content: center;
   padding: 10px 16px;
-  background-color: #FF6900;
+  background-color: #D4982B;
   color: white;
   border: none;
   border-radius: 6px;
@@ -407,7 +407,7 @@
   position: absolute;
   top: 15px;
   right: 15px;
-  background-color: #FF6900;
+  background-color: #D4982B;
   color: white;
   padding: 5px 12px;
   border-radius: 20px;
@@ -429,7 +429,7 @@
 .room-details-other-room-price {
   font-size: 18px;
   font-weight: 700;
-  color: #FF6900;
+  color: #D4982B;
   margin-bottom: 8px;
 }
 

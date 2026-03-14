@@ -10,6 +10,8 @@
  * ============================================================================
  */
 
+import crypto from "crypto";
+
 const PAYMONGO_API = "https://api.paymongo.com/v1";
 
 /**
@@ -101,4 +103,66 @@ export async function getCheckoutSession(sessionId) {
 
   const data = await response.json();
   return data.data;
+}
+
+/**
+ * Verify a PayMongo webhook signature.
+ *
+ * PayMongo sends a `Paymongo-Signature` header in the format:
+ *   t=<timestamp>,te=<test_signature>,li=<live_signature>
+ *
+ * We compute HMAC-SHA256 of `<timestamp>.<rawBody>` using the webhook secret
+ * and compare it against the appropriate signature (te for test, li for live).
+ *
+ * @param {string|Buffer} rawBody  - The raw request body (unparsed)
+ * @param {string} signatureHeader - The `Paymongo-Signature` header value
+ * @returns {Object} Parsed event payload
+ * @throws {Error} If signature is invalid or secret is missing
+ */
+export function verifyWebhookSignature(rawBody, signatureHeader) {
+  const secret = process.env.PAYMONGO_WEBHOOK_SECRET;
+  if (!secret) {
+    throw new Error("PAYMONGO_WEBHOOK_SECRET is not set in .env");
+  }
+
+  if (!signatureHeader) {
+    throw new Error("Missing Paymongo-Signature header");
+  }
+
+  // Parse the signature header: t=<ts>,te=<test_sig>,li=<live_sig>
+  const parts = {};
+  signatureHeader.split(",").forEach((part) => {
+    const [key, ...valueParts] = part.split("=");
+    parts[key.trim()] = valueParts.join("=");
+  });
+
+  const timestamp = parts.t;
+  if (!timestamp) {
+    throw new Error("Missing timestamp in Paymongo-Signature header");
+  }
+
+  // Compute expected signature
+  const payload = `${timestamp}.${rawBody}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(payload)
+    .digest("hex");
+
+  // Use test signature in test mode, live signature in production
+  const actualSignature = parts.li || parts.te;
+  if (!actualSignature) {
+    throw new Error("No signature found in Paymongo-Signature header");
+  }
+
+  // Timing-safe comparison to prevent timing attacks
+  const expected = Buffer.from(expectedSignature, "hex");
+  const actual = Buffer.from(actualSignature, "hex");
+
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+    throw new Error("Invalid webhook signature");
+  }
+
+  // Signature valid — parse and return the event
+  const body = typeof rawBody === "string" ? rawBody : rawBody.toString("utf8");
+  return JSON.parse(body);
 }

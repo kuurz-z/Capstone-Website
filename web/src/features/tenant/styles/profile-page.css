@@ -68,7 +68,7 @@
   width: 50px;
   height: 50px;
   border: 4px solid #e5e7eb;
-  border-top-color: #0c375f;
+  border-top-color: #183153;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -107,7 +107,7 @@
 }
 
 .tab-button.active {
-  color: #0c375f;
+  color: #183153;
 }
 
 .tab-button.active::after {
@@ -117,7 +117,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background-color: #0c375f;
+  background-color: #183153;
 }
 
 /* Alerts */
@@ -191,7 +191,7 @@
 .profile-card-header {
   padding: 1.5rem;
   border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #0c375f 0%, #1e5a8e 100%);
+  background: linear-gradient(135deg, #183153 0%, #1e5a8e 100%);
 }
 
 .profile-card-header h2 {
@@ -222,7 +222,7 @@
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid #0c375f;
+  border: 4px solid #183153;
 }
 
 .image-upload-btn {
@@ -231,7 +231,7 @@
   right: 5px;
   width: 40px;
   height: 40px;
-  background: #0c375f;
+  background: #183153;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -279,8 +279,8 @@
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #0c375f;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.1);
+  border-color: #183153;
+  box-shadow: 0 0 0 3px rgba(24, 49, 83, 0.1);
 }
 
 .disabled-input {
@@ -321,14 +321,14 @@
 }
 
 .btn-primary {
-  background: #0c375f;
+  background: #183153;
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
   background: #092d4f;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(12, 55, 95, 0.3);
+  box-shadow: 0 4px 12px rgba(24, 49, 83, 0.3);
 }
 
 .btn:disabled {
@@ -370,7 +370,7 @@
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  background: linear-gradient(135deg, #0c375f 0%, #1e5a8e 100%);
+  background: linear-gradient(135deg, #183153 0%, #1e5a8e 100%);
   color: white;
 }
 
@@ -402,7 +402,7 @@
 .stays-card-header {
   padding: 1.5rem;
   border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #0c375f 0%, #1e5a8e 100%);
+  background: linear-gradient(135deg, #183153 0%, #1e5a8e 100%);
 }
 
 .stays-card-header h2 {
@@ -437,10 +437,10 @@
 }
 
 .stay-item.current-stay {
-  border: 2px solid #0c375f;
+  border: 2px solid #183153;
   background: linear-gradient(
     135deg,
-    rgba(12, 55, 95, 0.05) 0%,
+    rgba(24, 49, 83, 0.05) 0%,
     rgba(30, 90, 142, 0.05) 100%
   );
 }
@@ -462,7 +462,7 @@
 .stay-image-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #0c375f 0%, #1e5a8e 100%);
+  background: linear-gradient(135deg, #183153 0%, #1e5a8e 100%);
   display: flex;
   align-items: center;
   justify-content: center;

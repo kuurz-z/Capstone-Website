@@ -17,7 +17,7 @@ const facilities = [
     title: "High-Speed Wi-Fi",
     description:
       "100 Mbps fiber internet throughout the building for seamless browsing and streaming",
-    color: "#E7710F",
+    color: "#D4982B",
     image:
       "https://images.unsplash.com/photo-1588501360908-30d639a70964?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjB3aWZpJTIwaW50ZXJuZXQlMjBsb3VuZ2V8ZW58MXx8fHwxNzcwNDY1OTc0fDA&ixlib=rb-4.1.0&q=80&w=1080",
   },
@@ -26,7 +26,7 @@ const facilities = [
     title: "Study Lounge",
     description:
       "Quiet, well-lit dedicated spaces perfect for focused studying and academic work",
-    color: "#0C375F",
+    color: "#183153",
     image:
       "https://images.unsplash.com/photo-1516042438821-0abd7a73c4b3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsaWJyYXJ5JTIwc3R1ZHklMjBsb3VuZ2UlMjBxdWlldHxlbnwxfHx8fDE3NzA0NjU5NzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
   },
@@ -44,7 +44,7 @@ const facilities = [
     title: "Laundry Area",
     description:
       "Coin-operated washers and dryers available 24/7 for your convenience",
-    color: "#E7710F",
+    color: "#D4982B",
     image:
       "https://images.unsplash.com/photo-1758279745240-b75977c88fa8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsYXVuZHJ5JTIwcm9vbSUyMHdhc2hlcnMlMjBkcnllcnN8ZW58MXx8fHwxNzcwNDY1OTc1fDA&ixlib=rb-4.1.0&q=80&w=1080",
   },
@@ -53,7 +53,7 @@ const facilities = [
     title: "Common Lounge",
     description:
       "Comfortable shared space to relax, socialize, and build community with residents",
-    color: "#0C375F",
+    color: "#183153",
     image:
       "https://images.unsplash.com/photo-1759038085939-2d32655d95ac?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb21tb24lMjBsb3VuZ2UlMjBzZWF0aW5nJTIwYXJlYXxlbnwxfHx8fDE3NzA0NjU5NzV8MA&ixlib=rb-4.1.0&q=80&w=1080",
   },
@@ -71,7 +71,7 @@ const facilities = [
     title: "Reception Desk",
     description:
       "Friendly staff available daily for assistance, inquiries, and 24/7 security",
-    color: "#E7710F",
+    color: "#D4982B",
     image:
       "https://images.unsplash.com/photo-1648960456182-00643d5d20eb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyZWNlcHRpb24lMjBkZXNrJTIwbG9iYnklMjBob3RlbHxlbnwxfHx8fDE3NzA0NjU5NzZ8MA&ixlib=rb-4.1.0&q=80&w=1080",
   },
@@ -80,7 +80,7 @@ const facilities = [
     title: "Fitness Corner",
     description:
       "Basic gym equipment including weights and cardio machines for staying active",
-    color: "#0C375F",
+    color: "#183153",
     image:
       "https://images.unsplash.com/photo-1589955898954-9c8d4bb86823?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxneW0lMjBlcXVpcG1lbnQlMjB3ZWlnaHRzJTIwZml0bmVzc3xlbnwxfHx8fDE3NzA0NjU5ODB8MA&ixlib=rb-4.1.0&q=80&w=1080",
   },
@@ -90,7 +90,7 @@ export function FacilitiesSection() {
   return (
     <section
       className="py-16 lg:py-20"
-      style={{ backgroundColor: "#0C375F" }}
+      style={{ backgroundColor: "#183153" }}
       id="facilities"
     >
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
@@ -121,7 +121,7 @@ export function FacilitiesSection() {
                 <SpotlightImage
                   spotlightColor={
                     index % 2 === 0
-                      ? "rgba(231, 113, 15, 0.6)"
+                      ? "rgba(212, 152, 43, 0.6)"
                       : "rgba(237, 185, 56, 0.6)"
                   }
                   className="h-48"

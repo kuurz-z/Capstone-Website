@@ -38,7 +38,7 @@ export function InquiryForm() {
           </p>
           <h2
             className="text-4xl lg:text-5xl font-light mb-5 tracking-tight"
-            style={{ color: "#0C375F" }}
+            style={{ color: "#183153" }}
           >
             Reserve Your Slot Today
           </h2>
@@ -200,7 +200,7 @@ export function InquiryForm() {
           <button
             type="submit"
             className="w-full text-white py-4 px-6 rounded-full font-light hover:opacity-90 transition-opacity text-base flex items-center justify-center gap-3"
-            style={{ backgroundColor: "#E7710F" }}
+            style={{ backgroundColor: "#D4982B" }}
           >
             <span>Submit Inquiry</span>
             <Send className="w-5 h-5" />

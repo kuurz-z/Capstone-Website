@@ -38,7 +38,7 @@ export function RoomInventory() {
         {/* Header */}
         <div className="text-center mb-6">
           <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Room Options</p>
-          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#0C375F' }}>
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#183153' }}>
             Choose Your Room Type
           </h2>
           <p className="text-gray-500 max-w-xl mx-auto mb-12 font-normal leading-relaxed">
@@ -63,7 +63,7 @@ export function RoomInventory() {
                 {/* Arrow Button */}
                 <button
                   className="absolute bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-xl hover:shadow-2xl hover:scale-110 transition-all duration-300"
-                  style={{ backgroundColor: '#0C375F' }}
+                  style={{ backgroundColor: '#183153' }}
                 >
                   <ArrowRight className="w-5 h-5" />
                 </button>
@@ -71,7 +71,7 @@ export function RoomInventory() {
 
               {/* Content */}
               <div className="p-8">     
-                <h3 className="font-medium text-2xl mb-2 tracking-tight" style={{ color: '#0C375F' }}>
+                <h3 className="font-medium text-2xl mb-2 tracking-tight" style={{ color: '#183153' }}>
                   {room.title}
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">{room.subtitle}</p>
@@ -95,7 +95,7 @@ export function RoomInventory() {
                 <div className="flex items-center justify-between pt-6 border-t border-gray-100">
                   {/* Price */}
                   <div className="text-right">
-                    <p className="font-semibold text-xl tracking-tight" style={{ color: '#0C375F' }}>
+                    <p className="font-semibold text-xl tracking-tight" style={{ color: '#183153' }}>
                       {room.price}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">per month</p>

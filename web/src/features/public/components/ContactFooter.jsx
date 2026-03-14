@@ -2,7 +2,7 @@ import { Mail, Phone, MapPin, Instagram, Facebook, Twitter } from 'lucide-react'
 
 export function ContactFooter() {
   return (
-    <footer className="py-20 lg:py-24" style={{ backgroundColor: '#0C375F' }}>
+    <footer className="py-20 lg:py-24" style={{ backgroundColor: '#183153' }}>
       <div className="max-w-7xl mx-auto px-8 lg:px-12">
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-16 mb-16">
           {/* Brand */}

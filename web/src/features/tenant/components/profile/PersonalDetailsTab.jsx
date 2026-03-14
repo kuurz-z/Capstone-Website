@@ -101,7 +101,7 @@ const InitialsAvatar = ({ firstName, lastName, profileImage }) => {
   return (
     <div
       className="w-20 h-20 rounded-full flex items-center justify-center"
-      style={{ backgroundColor: "#0C375F" }}
+      style={{ backgroundColor: "#183153" }}
     >
       <span
         style={{
@@ -227,7 +227,7 @@ const PersonalDetailsTab = ({
               <button
                 onClick={() => setIsEditingProfile(true)}
                 className="px-4 py-2 text-sm rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2"
-                style={{ borderColor: "#E8EBF0", color: "#E7710F" }}
+                style={{ borderColor: "#E8EBF0", color: "#D4982B" }}
               >
                 <Edit2 className="w-4 h-4" />
                 Edit
@@ -242,7 +242,7 @@ const PersonalDetailsTab = ({
                 onClick={handleSaveWithValidation}
                 disabled={saving}
                 className="px-5 py-2 text-sm rounded-lg text-white"
-                style={{ backgroundColor: "#E7710F" }}
+                style={{ backgroundColor: "#D4982B" }}
               >
                 {saving ? "Saving..." : "Save Changes"}
               </button>

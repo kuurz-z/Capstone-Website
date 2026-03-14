@@ -48,7 +48,7 @@
 .admin-sidebar-title {
   font-size: 14.5px;
   font-weight: 700;
-  color: #0c375f;
+  color: #183153;
   letter-spacing: -0.01em;
 }
 
@@ -72,7 +72,7 @@
 
 .admin-sidebar-close:hover {
   background: #f1f5f9;
-  color: #0c375f;
+  color: #183153;
 }
 
 /* ── Navigation ────────────────────────────────────────────────────────── */
@@ -127,7 +127,7 @@
 
 .admin-sidebar-link:hover {
   background: #f5f7fa;
-  color: #0c375f;
+  color: #183153;
 }
 
 /* Active indicator bar (left accent) */
@@ -138,7 +138,7 @@
   transform: translateY(-50%);
   width: 3px;
   height: 0;
-  background: #0c375f;
+  background: #183153;
   border-radius: 0 3px 3px 0;
   transition: height 0.2s ease;
 }
@@ -149,8 +149,8 @@
 
 /* Active state */
 .admin-sidebar-link.active {
-  background: #edf4fa;
-  color: #0c375f;
+  background: #EBF0F7;
+  color: #183153;
   font-weight: 600;
 }
 
@@ -164,11 +164,11 @@
 }
 
 .admin-sidebar-link:hover .admin-sidebar-link-icon {
-  color: #0c375f;
+  color: #183153;
 }
 
 .admin-sidebar-link.active .admin-sidebar-link-icon {
-  color: #0c375f;
+  color: #183153;
 }
 
 /* Text */

@@ -6,12 +6,13 @@
    LILYCREST DESIGN SYSTEM — CSS Custom Properties
    ============================================================================= */
 :root {
-  /* ── Brand Colors ─────────────────────────────────────────── */
-  --color-primary: #0c375f; /* Navy — headings, admin sidebar, tabs */
-  --color-primary-hover: #092c4c;
-  --color-primary-light: #edf4fa; /* Light navy tint — badges, focus rings */
-  --color-accent: #e7710f; /* Orange — CTAs, primary buttons on auth */
-  --color-accent-hover: #d16510;
+  /* ── Brand Colors (LILIORA — Navy + Amber) ─────────────────── */
+  --color-primary: #183153; /* Navy — headings, admin sidebar, tabs */
+  --color-primary-hover: #0F2240;
+  --color-primary-light: #EBF0F7; /* Light navy tint — badges, focus rings */
+  --color-accent: #D4982B; /* Amber — CTAs, primary buttons on auth */
+  --color-accent-hover: #BD8724;
+  --color-accent-light: #FDF5E8; /* Soft amber tint — backgrounds */
 
   /* ── Semantic Colors ──────────────────────────────────────── */
   --color-success: #10b981;
@@ -23,8 +24,9 @@
   --color-danger: #ef4444;
   --color-danger-bg: #fef2f2;
   --color-danger-text: #991b1b;
-  --color-info-bg: #edf4fa;
-  --color-info-text: #0c375f;
+  --color-info: #3B82F6;
+  --color-info-bg: #EFF6FF;
+  --color-info-text: #1E40AF;
 
   /* ── Text Scale ───────────────────────────────────────────── */
   --text-primary: #111827;
@@ -59,7 +61,7 @@
   --transition-normal: 0.2s ease;
 
   /* ── Focus Ring ────────────────────────────────────────────── */
-  --focus-ring: 0 0 0 3px rgba(12, 55, 95, 0.08);
+  --focus-ring: 0 0 0 3px rgba(24, 49, 83, 0.08);
 }
 
 html {

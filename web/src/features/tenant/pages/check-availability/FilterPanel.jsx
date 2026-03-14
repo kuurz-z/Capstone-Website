@@ -24,7 +24,7 @@ const FilterPanel = ({
     <div className="bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-start justify-between mb-4">
-          <h3 className="text-lg font-semibold" style={{ color: "#0C375F" }}>
+          <h3 className="text-lg font-semibold" style={{ color: "#183153" }}>
             Filters
           </h3>
           <button
@@ -53,7 +53,7 @@ const FilterPanel = ({
                     checked={selectedBranch === loc}
                     onChange={() => onBranchFilter(loc)}
                     className="w-4 h-4"
-                    style={{ accentColor: "#E7710F" }}
+                    style={{ accentColor: "#D4982B" }}
                   />
                   <span className="text-sm text-gray-700 capitalize">
                     {loc === "All" ? "All Locations" : loc}
@@ -80,7 +80,7 @@ const FilterPanel = ({
                     checked={selectedRoomType === type}
                     onChange={() => onRoomTypeFilter(type)}
                     className="w-4 h-4"
-                    style={{ accentColor: "#E7710F" }}
+                    style={{ accentColor: "#D4982B" }}
                   />
                   <span className="text-sm text-gray-700 capitalize">
                     {type === "All" ? "All Types" : type}
@@ -118,7 +118,7 @@ const FilterPanel = ({
           <button
             onClick={onClose}
             className="px-6 py-2 rounded-lg text-white"
-            style={{ backgroundColor: "#E7710F" }}
+            style={{ backgroundColor: "#D4982B" }}
           >
             Show {filteredCount} Rooms
           </button>

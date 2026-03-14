@@ -32,7 +32,7 @@ export function CTASection() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-10">
             <button
               className="inline-flex items-center justify-center gap-2 text-white px-10 py-5 rounded-full font-normal hover:opacity-90 transition-all duration-300 hover:shadow-xl text-base"
-              style={{ backgroundColor: '#E7710F' }}
+              style={{ backgroundColor: '#D4982B' }}
             >
               Book a Viewing
               <ArrowRight className="w-5 h-5" />

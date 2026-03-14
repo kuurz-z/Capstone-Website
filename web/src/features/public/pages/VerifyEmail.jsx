@@ -106,7 +106,7 @@ function VerifyEmail() {
               width: "40px",
               height: "40px",
               borderRadius: "10px",
-              backgroundColor: "#0C375F",
+              backgroundColor: "#183153",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -118,7 +118,7 @@ function VerifyEmail() {
             style={{
               fontSize: "20px",
               fontWeight: "600",
-              color: "#0C375F",
+              color: "#183153",
               letterSpacing: "0.3px",
             }}
           >
@@ -232,7 +232,7 @@ function VerifyEmail() {
                 style={{
                   display: "inline-block",
                   padding: "12px 36px",
-                  backgroundColor: "#E7710F",
+                  backgroundColor: "#D4982B",
                   color: "white",
                   borderRadius: "10px",
                   textDecoration: "none",
@@ -332,7 +332,7 @@ function VerifyEmail() {
                   style={{
                     display: "inline-block",
                     padding: "12px 28px",
-                    backgroundColor: "#0C375F",
+                    backgroundColor: "#183153",
                     color: "white",
                     borderRadius: "10px",
                     textDecoration: "none",

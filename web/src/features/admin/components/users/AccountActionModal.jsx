@@ -122,8 +122,8 @@ export default function AccountActionModal({ action, user, onConfirm, onClose })
                 marginBottom: "0.25rem",
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = "#0c375f";
-                e.target.style.boxShadow = "0 0 0 3px rgba(12, 55, 95, 0.08)";
+                e.target.style.borderColor = "#183153";
+                e.target.style.boxShadow = "0 0 0 3px rgba(24, 49, 83, 0.08)";
               }}
               onBlur={(e) => {
                 e.target.style.borderColor = "#d1d5db";

@@ -208,7 +208,7 @@ function VisitSchedulesTab() {
                       {s.branch}
                     </div>
                   </td>
-                  <td style={{ fontWeight: 500, color: "#0C375F" }}>
+                  <td style={{ fontWeight: 500, color: "#183153" }}>
                     {fmtDate(s.visitDate)}
                   </td>
                   <td>{s.visitTime}</td>

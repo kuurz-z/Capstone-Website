@@ -6,13 +6,13 @@ const rules = [
     icon: Clock,
     title: 'Curfew Hours',
     description: 'Gate closes at 11:00 PM on weekdays, 12:00 AM on weekends. Late entry requires advance notice.',
-    color: '#E7710F'
+    color: '#D4982B'
   },
   {
     icon: Users,
     title: 'Visitor Policy',
     description: 'Visitors allowed in common areas only from 9:00 AM to 9:00 PM. Register at reception desk.',
-    color: '#0C375F'
+    color: '#183153'
   },
   {
     icon: Volume2,
@@ -24,13 +24,13 @@ const rules = [
     icon: Sparkles,
     title: 'Cleanliness',
     description: 'Keep your room and shared spaces clean. Weekly room inspection by management.',
-    color: '#E7710F'
+    color: '#D4982B'
   },
   {
     icon: Shield,
     title: 'Security',
     description: 'Do not share access codes. Report suspicious activity immediately to staff.',
-    color: '#0C375F'
+    color: '#183153'
   },
   {
     icon: AlertCircle,
@@ -53,7 +53,7 @@ export function RulesSection() {
         {/* Header */}
         <div className="text-center mb-12">
           <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">House Guidelines</p>
-          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#0C375F' }}>
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#183153' }}>
             Rules & Policies
           </h2>
           <p className="text-gray-500 max-w-2xl mx-auto font-normal leading-relaxed">
@@ -80,7 +80,7 @@ export function RulesSection() {
                   >
                     <Icon className="w-5 h-5" style={{ color: rule.color }} />
                   </div>
-                  <h3 className="text-base font-medium tracking-tight flex-1" style={{ color: '#0C375F' }}>
+                  <h3 className="text-base font-medium tracking-tight flex-1" style={{ color: '#183153' }}>
                     {rule.title}
                   </h3>
                   <ChevronDown
@@ -108,7 +108,7 @@ export function RulesSection() {
         {/* Additional Info */}
         <div className="mt-10 p-6 rounded-2xl bg-gradient-to-br from-gray-50 to-white border border-gray-100 max-w-3xl mx-auto">
           <p className="text-sm text-gray-600 leading-relaxed text-center">
-            <span className="font-semibold" style={{ color: '#0C375F' }}>Important:</span> Violation of house rules may result in warnings, fines, or termination of contract. We maintain these policies to ensure a safe and comfortable environment for all residents.
+            <span className="font-semibold" style={{ color: '#183153' }}>Important:</span> Violation of house rules may result in warnings, fines, or termination of contract. We maintain these policies to ensure a safe and comfortable environment for all residents.
           </p>
         </div>
       </div>

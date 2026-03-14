@@ -36,8 +36,8 @@ export function Navigation() {
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         backgroundColor: isScrolled
-          ? "rgba(12, 55, 95, 0.97)"
-          : "rgba(12, 55, 95, 0.6)",
+          ? "rgba(24, 49, 83, 0.97)"
+          : "rgba(24, 49, 83, 0.6)",
         backdropFilter: isScrolled ? "blur(20px) saturate(1.2)" : "blur(8px)",
         boxShadow: isScrolled
           ? "0 1px 0 rgba(255,255,255,0.05), 0 4px 20px rgba(0,0,0,0.15)"
@@ -70,7 +70,7 @@ export function Navigation() {
                 transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
-              <Home className="w-4 h-4" style={{ color: "#0C375F" }} />
+              <Home className="w-4 h-4" style={{ color: "#183153" }} />
             </div>
             <Link
               to="/"
@@ -126,7 +126,7 @@ export function Navigation() {
                       width: "36px",
                       height: "36px",
                       borderRadius: "50%",
-                      backgroundColor: "#E7710F",
+                      backgroundColor: "#D4982B",
                       color: "white",
                       fontSize: "14px",
                       fontWeight: "600",
@@ -135,7 +135,7 @@ export function Navigation() {
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.boxShadow =
-                        "0 0 0 3px rgba(231,113,15,0.3), 0 4px 12px rgba(231,113,15,0.2)";
+                        "0 0 0 3px rgba(212,152,43,0.3), 0 4px 12px rgba(212,152,43,0.2)";
                       e.currentTarget.style.transform = "scale(1.08)";
                     }}
                     onMouseLeave={(e) => {
@@ -170,10 +170,10 @@ export function Navigation() {
             )}
             <Link to="/applicant/check-availability">
               <RippleButton
-                rippleColor="rgba(12, 55, 95, 0.4)"
+                rippleColor="rgba(24, 49, 83, 0.4)"
                 className="hidden md:block rounded-full"
                 style={{
-                  color: "#0C375F",
+                  color: "#183153",
                   backgroundColor: "white",
                   fontSize: "14px",
                   fontWeight: "500",
@@ -234,9 +234,9 @@ export function Navigation() {
               ))}
             <Link to="/applicant/check-availability">
               <RippleButton
-                rippleColor="rgba(12, 55, 95, 0.4)"
+                rippleColor="rgba(24, 49, 83, 0.4)"
                 className="w-full bg-white rounded-full font-light"
-                style={{ color: "#0C375F" }}
+                style={{ color: "#183153" }}
               >
                 Book Now
               </RippleButton>

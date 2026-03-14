@@ -18,7 +18,7 @@ export default function BillingPageSkeleton() {
         {/* Current Bill Hero Card */}
         <div
           style={{
-            background: "linear-gradient(135deg, #0C375F 0%, #1a4a7a 100%)",
+            background: "linear-gradient(135deg, #183153 0%, #1a4a7a 100%)",
             borderRadius: 16,
             padding: "28px 32px",
             marginBottom: 24,

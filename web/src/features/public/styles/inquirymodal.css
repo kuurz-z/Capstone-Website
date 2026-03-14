@@ -51,7 +51,7 @@
 }
 
 .inquiry-modal-close:hover {
-  color: #ff6900;
+  color: #D4982B;
 }
 
 .inquiry-modal-wrapper {
@@ -87,7 +87,7 @@
 }
 
 .required {
-  color: #ff6900;
+  color: #D4982B;
 }
 
 .inquiry-type-buttons {
@@ -109,13 +109,13 @@
 }
 
 .inquiry-type-btn:hover {
-  border-color: #ff6900;
-  color: #ff6900;
+  border-color: #D4982B;
+  color: #D4982B;
 }
 
 .inquiry-type-btn.active {
-  border-color: #ff6900;
-  background-color: #ff6900;
+  border-color: #D4982B;
+  background-color: #D4982B;
   color: white;
 }
 
@@ -147,7 +147,7 @@
 .inquiry-input:focus,
 .inquiry-textarea:focus {
   outline: none;
-  border-color: #ff6900;
+  border-color: #D4982B;
   background-color: white;
 }
 
@@ -163,7 +163,7 @@
 
 .inquiry-btn-submit {
   padding: 14px 20px;
-  background-color: #ff6900;
+  background-color: #D4982B;
   color: white;
   border: none;
   border-radius: 6px;

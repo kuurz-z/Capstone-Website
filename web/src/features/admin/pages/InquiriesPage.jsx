@@ -183,11 +183,11 @@ export default function InquiriesPage({ isEmbedded = false }) {
                       padding: "6px 10px",
                       border:
                         page === pagination.page
-                          ? "1px solid #0C375F"
+                          ? "1px solid #183153"
                           : "1px solid #d1d5db",
                       borderRadius: "6px",
                       backgroundColor:
-                        page === pagination.page ? "#0C375F" : "white",
+                        page === pagination.page ? "#183153" : "white",
                       color: page === pagination.page ? "white" : "#374151",
                       cursor: "pointer",
                       fontSize: "13px",

@@ -42,7 +42,7 @@
 
 .guadalupe-rooms-nav-link:hover,
 .guadalupe-rooms-nav-link.active {
-  color: #FF6900;
+  color: #D4982B;
 }
 
 /* Breadcrumb */
@@ -59,7 +59,7 @@
 }
 
 .breadcrumb-link:hover {
-  color: #FF6900;
+  color: #D4982B;
 }
 
 .breadcrumb-separator {
@@ -68,7 +68,7 @@
 }
 
 .breadcrumb-current {
-  color: #FF6900;
+  color: #D4982B;
   font-weight: 500;
 }
 
@@ -256,7 +256,7 @@
 .guadalupe-room-type-price .price {
   font-size: 32px;
   font-weight: 700;
-  color: #FF6900;
+  color: #D4982B;
 }
 
 .guadalupe-room-type-price .period {
@@ -266,7 +266,7 @@
 
 .guadalupe-btn-view-room-details {
   padding: 12px 28px;
-  background-color: #FF6900;
+  background-color: #D4982B;
   color: white;
   border: none;
   border-radius: 6px;
@@ -310,7 +310,7 @@
 
 .guadalupe-btn-book-tour {
   padding: 14px 35px;
-  background-color: #FF6900;
+  background-color: #D4982B;
   color: white;
   border: none;
   border-radius: 6px;

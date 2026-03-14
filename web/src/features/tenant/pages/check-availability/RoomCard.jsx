@@ -1,12 +1,11 @@
 import React, { useState } from "react";
-import { ChevronLeft, ChevronRight, MapPin, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 
 /**
- * Room card with image carousel, type badge, location, occupancy, and price.
+ * Redesigned Room Card — soft shadows, bed availability dots, muted type badge.
  */
 const RoomCard = ({ room, onClick }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
   const images = room.images?.length ? room.images : [room.image];
 
   const nextImage = (e) => {
@@ -18,82 +17,95 @@ const RoomCard = ({ room, onClick }) => {
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
+  // Parse bed availability for dots — show ALL slots
+  const totalBeds = room.beds?.length || parseInt(room.occupancy?.split("/")[1]) || 0;
+  const currentOccupancy = parseInt(room.occupancy?.split("/")[0]) || 0;
+  const availableBeds = room.beds
+    ? room.beds.filter((b) => b.status === "available" || (b.status === undefined && b.available !== false)).length
+    : totalBeds - currentOccupancy;
+  const takenBeds = totalBeds - availableBeds;
+
   return (
-    <div
-      className="group cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl rounded-2xl"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={onClick}
-    >
-      <div className="relative aspect-square rounded-2xl overflow-hidden mb-3 bg-gray-100">
+    <div className="ca-card" onClick={onClick}>
+      {/* Image carousel */}
+      <div className="ca-card-image-wrap">
         <img
           src={images[currentImageIndex]}
           alt={room.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
         />
 
-        {isHovered && images.length > 1 && (
+        {/* Nav buttons (visible on hover via CSS) */}
+        {images.length > 1 && (
           <>
             <button
+              className="ca-card-nav-btn left"
               onClick={prevImage}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white shadow-md transition-all"
               type="button"
+              aria-label="Previous image"
             >
-              <ChevronLeft className="w-5 h-5 text-gray-800" />
+              <ChevronLeft style={{ width: 16, height: 16, color: "#374151" }} />
             </button>
             <button
+              className="ca-card-nav-btn right"
               onClick={nextImage}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white shadow-md transition-all"
               type="button"
+              aria-label="Next image"
             >
-              <ChevronRight className="w-5 h-5 text-gray-800" />
+              <ChevronRight style={{ width: 16, height: 16, color: "#374151" }} />
             </button>
           </>
         )}
 
+        {/* Dots indicator */}
         {images.length > 1 && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
+          <div className="ca-card-dots">
             {images.map((_, index) => (
               <div
                 key={index}
-                className={`w-1.5 h-1.5 rounded-full transition-all ${index === currentImageIndex ? "bg-white w-4" : "bg-white/60"}`}
+                className={`ca-card-dot ${index === currentImageIndex ? "active" : ""}`}
               />
             ))}
           </div>
         )}
-
-        <div className="absolute top-3 left-3"></div>
       </div>
 
-      <div className="space-y-1">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-lg" style={{ color: "#0C375F" }}>
-              {room.title}
-            </span>
-            <span
-              className="px-2 py-0.5 rounded-md text-xs font-medium"
-              style={{ backgroundColor: "#E7710F", color: "#FFFFFF" }}
-            >
-              {room.type}
-            </span>
+      {/* Card body */}
+      <div className="ca-card-body">
+        <div className="ca-card-title">
+          {room.title}
+          <span className="ca-type-badge">{room.type}</span>
+        </div>
+
+        {/* Bed availability dots — green=available, red=taken */}
+        <div className="ca-bed-dots">
+          <div className="dots">
+            {/* Available beds first (green) */}
+            {Array.from({ length: availableBeds }).map((_, i) => (
+              <div key={`a-${i}`} className="ca-bed-dot available" />
+            ))}
+            {/* Taken beds (red) */}
+            {Array.from({ length: takenBeds }).map((_, i) => (
+              <div key={`t-${i}`} className="ca-bed-dot taken" />
+            ))}
           </div>
-        </div>
-        <p className="text-sm text-gray-500">
-          {room.bedsLeft}
-        </p>
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <MapPin className="w-4 h-4" />
-          <span>{room.branch}</span>
-          <span>•</span>
-          <Users className="w-4 h-4" />
-          <span>{room.occupancy} occupied</span>
-        </div>
-        <div className="pt-2">
-          <span className="text-lg font-semibold" style={{ color: "#0C375F" }}>
-            ₱{room.price.toLocaleString()}
+          <span className="label">
+            {availableBeds === 0
+              ? "Full"
+              : `${availableBeds} of ${totalBeds} open`}
           </span>
-          <span className="text-sm text-gray-600"> / month</span>
+        </div>
+
+        {/* Location */}
+        <div className="ca-card-location">
+          <MapPin />
+          <span>{room.branch}</span>
+        </div>
+
+        {/* Price */}
+        <div className="ca-card-price">
+          ₱{room.price.toLocaleString()}
+          <span> / mo</span>
         </div>
       </div>
     </div>

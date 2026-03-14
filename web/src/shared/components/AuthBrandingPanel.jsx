@@ -31,7 +31,7 @@ const AuthBrandingPanel = ({ imageUrl, headline, subtitle }) => (
     <div className="relative z-20">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center">
-          <Home className="w-6 h-6" style={{ color: "#0C375F" }} />
+          <Home className="w-6 h-6" style={{ color: "#183153" }} />
         </div>
         <span className="font-semibold text-2xl text-white tracking-wide">
           Lilycrest

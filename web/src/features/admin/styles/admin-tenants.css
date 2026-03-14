@@ -75,7 +75,7 @@
 
 .admin-tenants-stat-card-moving-out .admin-tenants-stat-value,
 .admin-tenants-stat-card-moving-out .admin-tenants-stat-label {
-  color: #f97316;
+  color: #D4982B;
 }
 
 /* Tools */
@@ -119,7 +119,7 @@
 
 .admin-tenants-search-input:focus {
   outline: none;
-  border-color: #0C375F;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -145,7 +145,7 @@
 
 .admin-tenants-filter:focus {
   outline: none;
-  border-color: #0C375F;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
@@ -250,7 +250,7 @@
 
 .admin-tenants-status-moving-out {
   background: #ffedd5;
-  color: #f97316;
+  color: #D4982B;
 }
 
 .admin-tenants-room {
@@ -287,8 +287,8 @@
 
 .admin-tenants-action {
   border: none;
-  background: #EDF4FA;
-  color: #0C375F;
+  background: #EBF0F7;
+  color: #183153;
   padding: 6px 12px;
   border-radius: 999px;
   display: inline-flex;

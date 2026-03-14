@@ -60,7 +60,7 @@ const getStatusBadge = (schedule) => {
     {
       test: schedule.scheduleApproved,
       bg: "#E0EBF5",
-      color: "#0C375F",
+      color: "#183153",
       label: "📅 Awaiting Visit",
     },
     {
@@ -276,7 +276,7 @@ export default function VisitDetailsModal({
                   fontWeight: "500",
                   backgroundColor:
                     schedule.viewingType === "inperson" ? "#E0EBF5" : "#F3E8FF",
-                  color: "#0C375F",
+                  color: "#183153",
                 }}
               >
                 {schedule.viewingType === "inperson"

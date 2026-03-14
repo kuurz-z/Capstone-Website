@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useUnreadCount, useNotifications, useMarkAsRead, useMarkAllAsRead } from "../hooks/queries/useNotifications";
+import useNotificationStore from "../stores/notificationStore";
 import "./NotificationBell.css";
 
 // ── Icon helpers ──
@@ -59,21 +60,34 @@ function timeAgo(dateStr) {
 
 /**
  * NotificationBell — bell icon with unread badge + dropdown panel.
- * Works in both tenant and admin layouts.
+ * Combines React Query (polling) + Zustand (real-time Socket.IO) data.
  */
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
 
-  // ── Data ──
+  // ── Data (React Query = polling, Zustand = real-time) ──
   const { data: unreadData } = useUnreadCount();
   const { data: notifData, isLoading } = useNotifications(1, { limit: 8, enabled: isOpen });
   const markAsRead = useMarkAsRead();
   const markAllAsRead = useMarkAllAsRead();
 
-  const unreadCount = unreadData?.unreadCount ?? 0;
-  const notifications = notifData?.notifications ?? [];
+  // Zustand store for real-time notifications
+  const realtimeNotifs = useNotificationStore((s) => s.notifications);
+  const realtimeUnread = useNotificationStore((s) => s.unreadCount);
+
+  // Merge: real-time unread count adds on top of polled count
+  const polledUnread = unreadData?.unreadCount ?? 0;
+  const unreadCount = polledUnread + realtimeUnread;
+
+  // Merge notification lists: real-time first, then polled (deduplicated)
+  const polledNotifs = notifData?.notifications ?? [];
+  const polledIds = new Set(polledNotifs.map((n) => n._id));
+  const mergedNotifications = [
+    ...realtimeNotifs.filter((n) => !polledIds.has(n._id)),
+    ...polledNotifs,
+  ].slice(0, 12);
 
   // ── Click outside to close ──
   useEffect(() => {
@@ -144,13 +158,13 @@ export default function NotificationBell() {
                   <span /><span /><span />
                 </div>
               </div>
-            ) : notifications.length === 0 ? (
+            ) : mergedNotifications.length === 0 ? (
               <div className="nb-empty">
                 <span className="nb-empty-icon">🔔</span>
                 <p>No notifications yet</p>
               </div>
             ) : (
-              notifications.map((notif) => (
+              mergedNotifications.map((notif) => (
                 <div
                   key={notif._id}
                   className={`nb-item ${notif.isRead ? "read" : "unread"}`}

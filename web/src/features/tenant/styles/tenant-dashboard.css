@@ -101,9 +101,9 @@
 }
 
 .tenant-dashboard-pill.active {
-  background: #f97316;
+  background: #D4982B;
   color: #fff;
-  border-color: #f97316;
+  border-color: #D4982B;
 }
 
 .tenant-dashboard-section {
@@ -244,7 +244,7 @@
 }
 
 .tenant-room-cta {
-  background: #f97316;
+  background: #D4982B;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -324,7 +324,7 @@
 }
 
 .tenant-dashboard-cta-primary {
-  background: #f97316;
+  background: #D4982B;
   color: #fff;
 }
 
@@ -470,7 +470,7 @@
 
 .appliance-row span:last-child {
   font-weight: 600;
-  color: #f97316;
+  color: #D4982B;
   min-width: 80px;
   text-align: right;
 }
@@ -507,12 +507,12 @@
 }
 
 .room-details-footer button.primary {
-  background: #f97316;
+  background: #D4982B;
   color: white;
 }
 
 .room-details-footer button.primary:hover {
-  background: #ea580c;
+  background: #BD8724;
 }
 
 .room-details-footer button.primary:disabled {

@@ -4,7 +4,7 @@
 
 :root {
   --fi-border: #e2e8f0;
-  --fi-focus: #E7710F;
+  --fi-focus: #D4982B;
   --fi-valid: #10b981;
   --fi-error: #ef4444;
   --fi-label: #94a3b8;
@@ -30,7 +30,7 @@
 }
 
 .floating-field__wrapper.focused {
-  box-shadow: 0 0 0 3px rgba(231, 113, 15, 0.1);
+  box-shadow: 0 0 0 3px rgba(212, 152, 43, 0.1);
 }
 
 .floating-field__wrapper.has-error {
@@ -169,7 +169,7 @@
 .auth-header__title {
   font-size: 32px;
   font-weight: 600;
-  color: #0C375F;
+  color: #183153;
   margin: 0 0 8px 0;
   letter-spacing: -0.5px;
   line-height: 1.2;
@@ -184,7 +184,7 @@
 
 .auth-header__subtitle a,
 .auth-header__subtitle button {
-  color: #E7710F;
+  color: #D4982B;
   font-weight: 500;
   text-decoration: none;
   background: none;
@@ -205,7 +205,7 @@
   padding: 16px 24px;
   border: none;
   border-radius: 12px;
-  background: #E7710F;
+  background: #D4982B;
   color: #ffffff;
   font-size: 15px;
   font-weight: 600;
@@ -221,14 +221,14 @@
 }
 
 .auth-btn-primary:hover:not(:disabled) {
-  background: #d4650d;
+  background: #BD8724;
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(231, 113, 15, 0.3);
+  box-shadow: 0 6px 20px rgba(212, 152, 43, 0.3);
 }
 
 .auth-btn-primary:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(231, 113, 15, 0.2);
+  box-shadow: 0 2px 8px rgba(212, 152, 43, 0.2);
 }
 
 .auth-btn-primary:disabled {
@@ -319,7 +319,7 @@
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  accent-color: #E7710F;
+  accent-color: #D4982B;
   cursor: pointer;
 }
 
@@ -331,7 +331,7 @@
 
 .auth-forgot-link {
   font-size: 14px;
-  color: #E7710F;
+  color: #D4982B;
   font-weight: 500;
   background: none;
   border: none;
@@ -355,7 +355,7 @@
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  accent-color: #E7710F;
+  accent-color: #D4982B;
   cursor: pointer;
   margin-top: 2px;
   flex-shrink: 0;
@@ -369,7 +369,7 @@
 }
 
 .auth-terms button {
-  color: #E7710F;
+  color: #D4982B;
   font-weight: 500;
   background: none;
   border: none;

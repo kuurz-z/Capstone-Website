@@ -26,7 +26,7 @@ export function HeroSection() {
       {/* Left Side - Content */}
       <div
         className="flex flex-col justify-start px-10 lg:px-20 pt-28 pb-8"
-        style={{ backgroundColor: "#0C375F" }}
+        style={{ backgroundColor: "#183153" }}
       >
         <div className="max-w-xl">
           {/* Badge */}
@@ -71,18 +71,18 @@ export function HeroSection() {
               <button
                 className="text-white px-10 py-6 gap-4 rounded-full font-normal text-base transition-all duration-300"
                 style={{
-                  backgroundColor: "#E7710F",
-                  boxShadow: "0 4px 20px rgba(231, 113, 15, 0.25)",
+                  backgroundColor: "#D4982B",
+                  boxShadow: "0 4px 20px rgba(212, 152, 43, 0.25)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.boxShadow =
-                    "0 6px 30px rgba(231, 113, 15, 0.4)";
+                    "0 6px 30px rgba(212, 152, 43, 0.4)";
                   e.currentTarget.style.transform =
                     "translateY(-2px) scale(1.02)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.boxShadow =
-                    "0 4px 20px rgba(231, 113, 15, 0.25)";
+                    "0 4px 20px rgba(212, 152, 43, 0.25)";
                   e.currentTarget.style.transform = "translateY(0) scale(1)";
                 }}
               >
@@ -127,7 +127,7 @@ export function HeroSection() {
               <CheckCircle className="w-6 h-6 text-green-600" />
             </div>
             <div>
-              <p className="font-semibold" style={{ color: "#0C375F" }}>
+              <p className="font-semibold" style={{ color: "#183153" }}>
                 Trusted by Dormitory Residents
               </p>
               <p className="text-xs text-gray-500">500+ Happy Residents</p>

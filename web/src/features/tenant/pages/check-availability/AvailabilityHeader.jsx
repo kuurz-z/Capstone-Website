@@ -3,25 +3,43 @@ import { Link } from "react-router-dom";
 import {
   Bed,
   Search,
-  SlidersHorizontal,
   User,
   ChevronDown,
   LogOut,
 } from "lucide-react";
 
 /**
- * Header with logo, search bar, filter toggle, and user menu dropdown.
+ * Redesigned header — single row: Logo | Filter Bar | Sign In
+ * Price slider uses local state to prevent jitter.
  */
 const AvailabilityHeader = ({
   user,
   searchQuery,
   setSearchQuery,
-  showFilters,
-  setShowFilters,
+  selectedBranch,
+  onBranchFilter,
+  selectedRoomType,
+  onRoomTypeFilter,
+  availableRoomTypes,
+  maxPrice,
+  setMaxPrice,
+  onClearAll,
   onLogout,
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
+
+  // Local slider state — only commits to parent on release (prevents jitter)
+  const [localPrice, setLocalPrice] = useState(maxPrice);
+  useEffect(() => { setLocalPrice(maxPrice); }, [maxPrice]);
+
+  const handleSliderChange = (e) => setLocalPrice(Number(e.target.value));
+  const handleSliderCommit = () => setMaxPrice(localPrice);
+
+  const priceLabel =
+    localPrice >= 15000
+      ? "Any Price"
+      : `Up to ₱${localPrice.toLocaleString()}`;
 
   const userInitials = user
     ? `${(user.firstName || "")[0] || ""}${(user.lastName || "")[0] || ""}`.toUpperCase() ||
@@ -63,52 +81,102 @@ const AvailabilityHeader = ({
     );
   };
 
+  const hasActiveFilters =
+    selectedBranch !== "All" ||
+    selectedRoomType !== "All" ||
+    maxPrice !== 15000 ||
+    searchQuery.trim() !== "";
+
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
+    <header className="sticky top-0 z-50 bg-white" style={{ borderBottom: "1px solid #F0F0F0" }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+        {/* Single row: Logo | Filter Bar | Sign In */}
+        <div className="ca-header-row">
           {/* Logo */}
           <Link
             to="/"
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            className="ca-logo"
           >
             <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: "#0C375F" }}
+              className="w-9 h-9 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: "#183153" }}
             >
-              <Bed className="w-6 h-6 text-white" />
+              <Bed className="w-5 h-5 text-white" />
             </div>
             <span
-              className="text-xl font-semibold"
-              style={{ color: "#0C375F" }}
+              className="text-lg font-semibold"
+              style={{ color: "#183153" }}
             >
               Lilycrest
             </span>
           </Link>
 
-          {/* Desktop search + filter */}
-          <div className="hidden md:flex items-center gap-4 flex-1 max-w-2xl mx-8">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          {/* Unified Filter Bar */}
+          <div className="ca-filter-bar">
+            {/* Search */}
+            <div className="ca-search-wrap">
+              <Search className="ca-search-icon" />
               <input
                 type="text"
                 placeholder="Search rooms, locations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-full border border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100"
+                className="ca-search-input"
               />
             </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-5 py-3 rounded-full border border-gray-300 hover:border-gray-400 transition-colors"
+
+            {/* Branch dropdown */}
+            <select
+              className="ca-filter-select"
+              value={selectedBranch}
+              onChange={(e) => onBranchFilter(e.target.value)}
             >
-              <SlidersHorizontal className="w-5 h-5" />
-              <span className="text-sm font-medium">Filters</span>
+              <option value="All">All Branches</option>
+              <option value="Gil Puyat">Gil Puyat</option>
+              <option value="Guadalupe">Guadalupe</option>
+            </select>
+
+            {/* Room Type dropdown */}
+            <select
+              className="ca-filter-select"
+              value={selectedRoomType}
+              onChange={(e) => onRoomTypeFilter(e.target.value)}
+            >
+              {availableRoomTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type === "All" ? "All Types" : type}
+                </option>
+              ))}
+            </select>
+
+            {/* Price range slider — local state, commits on release */}
+            <div className="ca-price-slider-wrap">
+              <span className="ca-price-label">{priceLabel}</span>
+              <input
+                type="range"
+                className="ca-price-slider"
+                min={3000}
+                max={15000}
+                step={500}
+                value={localPrice}
+                onChange={handleSliderChange}
+                onMouseUp={handleSliderCommit}
+                onTouchEnd={handleSliderCommit}
+              />
+            </div>
+
+            {/* Clear — always rendered to prevent layout shift */}
+            <button
+              className="ca-clear-btn"
+              onClick={onClearAll}
+              style={{ visibility: hasActiveFilters ? "visible" : "hidden" }}
+            >
+              Clear
             </button>
           </div>
 
           {/* User menu / Sign In */}
-          <div className="flex items-center gap-4">
+          <div className="ca-header-user">
             {user ? (
               <div className="relative" ref={userMenuRef}>
                 <button
@@ -117,7 +185,7 @@ const AvailabilityHeader = ({
                   style={{
                     width: "260px",
                     border: showUserMenu
-                      ? "1.5px solid #E7710F"
+                      ? "1.5px solid #D4982B"
                       : "1.5px solid transparent",
                     backgroundColor: showUserMenu ? "#FFF7ED" : "transparent",
                   }}
@@ -140,8 +208,8 @@ const AvailabilityHeader = ({
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                     style={{
                       background:
-                        "linear-gradient(135deg, #E7710F 0%, #D35400 100%)",
-                      boxShadow: "0 1px 3px rgba(231, 113, 15, 0.3)",
+                        "linear-gradient(135deg, #D4982B 0%, #D35400 100%)",
+                      boxShadow: "0 1px 3px rgba(212, 152, 43, 0.3)",
                     }}
                   >
                     {userInitials}
@@ -177,8 +245,8 @@ const AvailabilityHeader = ({
                           className="w-10 h-10 rounded-[10px] flex items-center justify-center text-white text-sm font-bold shrink-0"
                           style={{
                             background:
-                              "linear-gradient(135deg, #E7710F 0%, #D35400 100%)",
-                            boxShadow: "0 2px 6px rgba(231, 113, 15, 0.25)",
+                              "linear-gradient(135deg, #D4982B 0%, #D35400 100%)",
+                            boxShadow: "0 2px 6px rgba(212, 152, 43, 0.25)",
                           }}
                         >
                           {userInitials}
@@ -278,26 +346,12 @@ const AvailabilityHeader = ({
               <Link
                 to="/signin"
                 className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-300 hover:border-gray-400 transition-colors text-sm font-medium"
-                style={{ color: "#0C375F" }}
+                style={{ color: "#183153" }}
               >
                 <User className="w-4 h-4" />
                 Sign In
               </Link>
             )}
-          </div>
-        </div>
-
-        {/* Mobile search */}
-        <div className="md:hidden pb-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search rooms..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 rounded-full border border-gray-300 focus:border-gray-400 focus:outline-none"
-            />
           </div>
         </div>
       </div>

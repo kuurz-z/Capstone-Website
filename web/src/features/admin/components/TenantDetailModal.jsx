@@ -381,7 +381,7 @@ export default function TenantDetailModal({ tenant, onClose }) {
                           onClose();
                       } catch (err) { showNotification('Transfer failed. Please try again.', 'error'); }
                     }}
-                    style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    style={{ background: '#FFF7ED', color: '#BD8724', border: '1px solid #FED7AA', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.33 1.33 12 4 9.33 6.67M12 4H4M6.67 9.33 4 12l2.67 2.67M4 12h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     Transfer Room

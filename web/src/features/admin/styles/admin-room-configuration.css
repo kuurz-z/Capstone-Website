@@ -20,7 +20,7 @@
 
 .room-config-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #0c375f;
+  border-color: #183153;
 }
 
 .room-config-header {
@@ -45,7 +45,7 @@
 
 .room-status-badge.available {
   background: #e0ebf5;
-  color: #0c375f;
+  color: #183153;
 }
 
 .room-status-badge.unavailable {
@@ -66,7 +66,7 @@
 }
 
 .btn-config {
-  background: #0c375f;
+  background: #183153;
   color: white;
   border: none;
   padding: 10px 16px;
@@ -77,7 +77,7 @@
 }
 
 .btn-config:hover {
-  background: #092c4c;
+  background: #0F2240;
 }
 
 /* Modal Styles */
@@ -222,7 +222,7 @@
 
 .occupancy-fill {
   height: 100%;
-  background: linear-gradient(90deg, #0c375f, #1a6db5);
+  background: linear-gradient(90deg, #183153, #1a6db5);
   transition: width 0.3s ease;
 }
 
@@ -251,12 +251,12 @@
 }
 
 .btn-primary {
-  background: #0c375f;
+  background: #183153;
   color: white;
 }
 
 .btn-primary:hover {
-  background: #092c4c;
+  background: #0F2240;
 }
 
 .btn-secondary {
@@ -297,7 +297,7 @@
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #0c375f;
+  color: #183153;
 }
 
 .admin-filters {
@@ -331,7 +331,7 @@
 .admin-filter-input:focus,
 .admin-filter-select:focus {
   outline: none;
-  border-color: #0c375f;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 

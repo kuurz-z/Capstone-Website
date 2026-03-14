@@ -121,9 +121,9 @@
 }
 
 .admin-filter-select:focus {
-  border-color: #0c375f;
+  border-color: #183153;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.08);
+  box-shadow: 0 0 0 3px rgba(24, 49, 83, 0.08);
 }
 
 /* Primary Button */
@@ -232,7 +232,7 @@
 }
 
 .admin-tab:hover {
-  color: #0c375f;
+  color: #183153;
 }
 
 .admin-tab.active {

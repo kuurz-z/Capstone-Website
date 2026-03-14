@@ -52,8 +52,8 @@
 }
 
 .room-tab.active {
-  color: #0C375F;
-  border-bottom-color: #0C375F;
+  color: #183153;
+  border-bottom-color: #183153;
 }
 
 /* Top Stats - Room Stats */
@@ -102,7 +102,7 @@
 
 .room-stat-partial .room-stat-label,
 .room-stat-partial .room-stat-value {
-  color: #ea580c;
+  color: #BD8724;
 }
 
 .room-stat-available .room-stat-label,
@@ -112,7 +112,7 @@
 
 .room-stat-rate .room-stat-label,
 .room-stat-rate .room-stat-value {
-  color: #0C375F;
+  color: #183153;
 }
 
 .room-stat-occupied {
@@ -131,7 +131,7 @@
 }
 
 .room-stat-rate {
-  background: #EDF4FA;
+  background: #EBF0F7;
   border-color: #bfdbfe;
 }
 
@@ -181,7 +181,7 @@
 
 .bed-stat-reserved .bed-stat-label,
 .bed-stat-reserved .bed-stat-value {
-  color: #ea580c;
+  color: #BD8724;
 }
 
 .bed-stat-available .bed-stat-label,
@@ -247,7 +247,7 @@
 
 .room-search-input:focus {
   outline: none;
-  border-color: #0C375F;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -282,7 +282,7 @@
 
 .room-availability-filter-select:focus {
   outline: none;
-  border-color: #0C375F;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -328,7 +328,7 @@
 }
 
 .room-legend-reserved {
-  color: #fb923c;
+  color: #D4982B;
 }
 
 .room-legend-occupied {
@@ -401,11 +401,11 @@
   transition:
     background 0.2s ease,
     color 0.2s ease;
-  color: #0C375F;
+  color: #183153;
 }
 
 .room-card-info-btn:hover {
-  background: #EDF4FA;
+  background: #EBF0F7;
 }
 
 .room-card-type {
@@ -439,7 +439,7 @@
 }
 
 .room-bed-reserved {
-  color: #fb923c;
+  color: #D4982B;
 }
 
 .room-bed-occupied {

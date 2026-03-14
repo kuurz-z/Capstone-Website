@@ -54,7 +54,7 @@
 }
 
 .contract-card.contract-active {
-  border-color: #0c375f;
+  border-color: #183153;
   border-width: 2px;
 }
 
@@ -100,8 +100,8 @@
 }
 
 .badge-upcoming {
-  background: #edf4fa;
-  color: #0c375f;
+  background: #EBF0F7;
+  color: #183153;
 }
 
 .badge-completed {
@@ -145,7 +145,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #0c375f, #1a5f9e);
+  background: linear-gradient(90deg, #183153, #1a5f9e);
   border-radius: 4px;
   transition: width 0.5s ease;
 }

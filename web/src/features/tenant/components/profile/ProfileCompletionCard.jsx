@@ -83,7 +83,7 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
           }}
         >
           <BarChart3
-            style={{ width: "18px", height: "18px", color: "#E7710F" }}
+            style={{ width: "18px", height: "18px", color: "#D4982B" }}
           />
           Profile Completion
         </div>
@@ -91,7 +91,7 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
           style={{
             fontSize: "14px",
             fontWeight: 700,
-            color: "#E7710F",
+            color: "#D4982B",
           }}
         >
           {pct}%
@@ -112,7 +112,7 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
           style={{
             height: "100%",
             width: `${pct}%`,
-            background: "linear-gradient(90deg, #E7710F, #F59E0B)",
+            background: "linear-gradient(90deg, #D4982B, #F59E0B)",
             borderRadius: "999px",
             transition: "width 0.6s cubic-bezier(0.25,0.8,0.25,1)",
           }}
@@ -144,7 +144,7 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
             style={{
               background: "none",
               border: "none",
-              color: "#E7710F",
+              color: "#D4982B",
               fontSize: "12px",
               fontWeight: 600,
               cursor: "pointer",

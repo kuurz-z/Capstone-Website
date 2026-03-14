@@ -432,7 +432,7 @@ function SignUp() {
     <>
       <div
         className="min-h-screen grid lg:grid-cols-2"
-        style={{ backgroundColor: "#0C375F" }}
+        style={{ backgroundColor: "#183153" }}
       >
         <AuthBrandingPanel
           imageUrl={SIGNUP_IMAGE}

@@ -98,7 +98,7 @@ export default function RoomDetailsModal({
         <div className="flex items-start justify-between p-6 border-b border-gray-200">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-3xl font-light" style={{ color: "#0C375F" }}>
+              <h2 className="text-3xl font-light" style={{ color: "#183153" }}>
                 {room.title}
               </h2>
               <span
@@ -131,7 +131,7 @@ export default function RoomDetailsModal({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-4">
               <SpotlightCard
-                spotlightColor="rgba(231, 113, 15, 0.3)"
+                spotlightColor="rgba(212, 152, 43, 0.3)"
                 className="p-0"
               >
                 <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100">
@@ -170,7 +170,7 @@ export default function RoomDetailsModal({
 
               {images.length > 1 && (
                 <SpotlightCard
-                  spotlightColor="rgba(231, 113, 15, 0.2)"
+                  spotlightColor="rgba(212, 152, 43, 0.2)"
                   className="p-0"
                 >
                   <div className="grid grid-cols-4 gap-2 p-2">
@@ -198,21 +198,21 @@ export default function RoomDetailsModal({
 
             <div className="space-y-6">
               <div className="bg-gray-50 rounded-xl p-5">
-                <h3 className="font-semibold mb-4" style={{ color: "#0C375F" }}>
+                <h3 className="font-semibold mb-4" style={{ color: "#183153" }}>
                   Availability Status
                 </h3>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Capacity</p>
                     <p className="text-2xl font-semibold flex items-center gap-2">
-                      <Users className="w-5 h-5" style={{ color: "#E7710F" }} />
+                      <Users className="w-5 h-5" style={{ color: "#D4982B" }} />
                       {totalBeds} {totalBeds === 1 ? "Bed" : "Beds"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Beds Available</p>
                     <p className="text-2xl font-semibold flex items-center gap-2">
-                      <Bed className="w-5 h-5" style={{ color: "#E7710F" }} />
+                      <Bed className="w-5 h-5" style={{ color: "#D4982B" }} />
                       {availableBeds} / {totalBeds}
                     </p>
                   </div>
@@ -239,13 +239,13 @@ export default function RoomDetailsModal({
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0C375F" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "#183153" }}>
                   Room Information
                 </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                      <Bed className="w-4 h-4" style={{ color: "#E7710F" }} />
+                      <Bed className="w-4 h-4" style={{ color: "#D4982B" }} />
                     </div>
                     <div>
                       <p className="text-gray-500">Type</p>
@@ -256,7 +256,7 @@ export default function RoomDetailsModal({
                     <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                       <svg
                         className="w-4 h-4"
-                        style={{ color: "#E7710F" }}
+                        style={{ color: "#D4982B" }}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -283,7 +283,7 @@ export default function RoomDetailsModal({
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0C375F" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "#183153" }}>
                   Amenities
                 </h3>
                 <div className="grid grid-cols-1 gap-2">
@@ -308,7 +308,7 @@ export default function RoomDetailsModal({
               )}
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0C375F" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "#183153" }}>
                   Appliance Fees (Optional)
                 </h3>
                 <p className="text-sm text-gray-600 mb-3">
@@ -413,7 +413,7 @@ export default function RoomDetailsModal({
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0C375F" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "#183153" }}>
                   Policies & Important Notes
                 </h3>
                 <div className="space-y-2">
@@ -442,7 +442,7 @@ export default function RoomDetailsModal({
             <button
               onClick={onProceed}
               className="px-8 py-4 rounded-xl text-white font-medium hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: "#E7710F" }}
+              style={{ backgroundColor: "#D4982B" }}
               disabled={proceedDisabled}
             >
               {requiresBedSelection && !selectedBed

@@ -50,9 +50,13 @@ import maintenanceRoutes from "./routes/maintenanceRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
+import webhookRoutes from "./routes/webhookRoutes.js";
 
 // --- Background Jobs ---
 import { startScheduler, stopScheduler } from "./utils/scheduler.js";
+
+// --- Real-time ---
+import { initSocket } from "./utils/socket.js";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -157,6 +161,12 @@ app.use(globalLimiter);
  * Response compression — gzip/brotli for all responses
  */
 app.use(compression());
+
+/**
+ * Webhook routes — MUST be before express.json() to preserve raw body
+ * for PayMongo HMAC signature verification.
+ */
+app.use("/api/webhooks", webhookRoutes);
 
 /**
  * Body Parser — JSON and URL-encoded with per-route appropriate limits
@@ -274,6 +284,9 @@ const server = app.listen(PORT, () => {
   );
   logger.info(`📡 API available at http://localhost:${PORT}/api`);
   logger.info(`🏥 Health check: http://localhost:${PORT}/api/health`);
+
+  // Initialize Socket.IO for real-time notifications
+  initSocket(server, allowedOrigins);
 
   // Start cron scheduler (grace periods, bed lock cleanup, overdue billing)
   startScheduler();

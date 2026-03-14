@@ -275,7 +275,7 @@ const SettingsTab = () => {
               }}
             >
               <Shield
-                style={{ width: "18px", height: "18px", color: "#E7710F" }}
+                style={{ width: "18px", height: "18px", color: "#D4982B" }}
               />
             </div>
             <h3
@@ -300,7 +300,7 @@ const SettingsTab = () => {
                 padding: "6px 14px",
                 fontSize: "13px",
                 fontWeight: 500,
-                color: "#E7710F",
+                color: "#D4982B",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -309,7 +309,7 @@ const SettingsTab = () => {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = "#FFF7ED";
-                e.currentTarget.style.borderColor = "#E7710F";
+                e.currentTarget.style.borderColor = "#D4982B";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = "transparent";
@@ -391,9 +391,9 @@ const SettingsTab = () => {
                   disabled={changingPassword}
                   style={inputStyle}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "#E7710F";
+                    e.target.style.borderColor = "#D4982B";
                     e.target.style.boxShadow =
-                      "0 0 0 3px rgba(231,113,15,0.1)";
+                      "0 0 0 3px rgba(212,152,43,0.1)";
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = "#E8EBF0";
@@ -431,9 +431,9 @@ const SettingsTab = () => {
                   disabled={changingPassword}
                   style={inputStyle}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "#E7710F";
+                    e.target.style.borderColor = "#D4982B";
                     e.target.style.boxShadow =
-                      "0 0 0 3px rgba(231,113,15,0.1)";
+                      "0 0 0 3px rgba(212,152,43,0.1)";
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = "#E8EBF0";
@@ -480,9 +480,9 @@ const SettingsTab = () => {
                   disabled={changingPassword}
                   style={inputStyle}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "#E7710F";
+                    e.target.style.borderColor = "#D4982B";
                     e.target.style.boxShadow =
-                      "0 0 0 3px rgba(231,113,15,0.1)";
+                      "0 0 0 3px rgba(212,152,43,0.1)";
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = "#E8EBF0";
@@ -533,7 +533,7 @@ const SettingsTab = () => {
                 onClick={handleChangePassword}
                 disabled={changingPassword}
                 style={{
-                  backgroundColor: "#E7710F",
+                  backgroundColor: "#D4982B",
                   color: "#fff",
                   border: "none",
                   borderRadius: "10px",

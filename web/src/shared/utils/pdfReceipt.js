@@ -49,7 +49,7 @@ export function generateBillingReceipt(bill) {
   let y = 20;
 
   // ─── Colors ───
-  const orange = [231, 113, 15]; // #E7710F
+  const orange = [231, 113, 15]; // #D4982B
   const dark = [31, 41, 55]; // #1F2937
   const gray = [107, 114, 128]; // #6B7280
   const lightGray = [229, 231, 235]; // #E5E7EB

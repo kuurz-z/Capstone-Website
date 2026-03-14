@@ -40,7 +40,7 @@
   left: 0;
   width: 40px;
   height: 3px;
-  background: linear-gradient(90deg, #0c375f, #1a5276);
+  background: linear-gradient(90deg, #183153, #1a5276);
   border-radius: 3px;
 }
 
@@ -106,7 +106,7 @@
   background: linear-gradient(90deg, #dc2626, #ef4444);
 }
 .admin-billing-page .stat-card:nth-child(4)::before {
-  background: linear-gradient(90deg, #0c375f, #2563eb);
+  background: linear-gradient(90deg, #183153, #2563eb);
 }
 
 .admin-billing-page .stat-header {
@@ -141,8 +141,8 @@
 }
 
 .admin-billing-page .stat-icon.blue {
-  background: linear-gradient(135deg, #edf4fa, #dbeafe);
-  color: #0c375f;
+  background: linear-gradient(135deg, #EBF0F7, #dbeafe);
+  color: #183153;
 }
 
 .admin-billing-page .stat-label {
@@ -185,7 +185,7 @@
   content: "";
   width: 3px;
   height: 16px;
-  background: linear-gradient(180deg, #0c375f, #1a5276);
+  background: linear-gradient(180deg, #183153, #1a5276);
   border-radius: 3px;
   flex-shrink: 0;
 }
@@ -204,7 +204,7 @@
   content: "";
   width: 3px;
   height: 18px;
-  background: linear-gradient(180deg, #0c375f, #1a5276);
+  background: linear-gradient(180deg, #183153, #1a5276);
   border-radius: 3px;
 }
 
@@ -240,7 +240,7 @@
   padding: 1rem 1.125rem;
   background: #fff;
   border: none;
-  border-left: 3px solid #0c375f;
+  border-left: 3px solid #183153;
   border-radius: 0.875rem;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -256,7 +256,7 @@
 .admin-billing-page .room-card:hover:not(:disabled) {
   box-shadow:
     0 4px 8px rgba(0, 0, 0, 0.06),
-    0 8px 24px rgba(12, 55, 95, 0.08);
+    0 8px 24px rgba(24, 49, 83, 0.08);
   transform: translateY(-2px);
   border-left-width: 4px;
 }
@@ -294,8 +294,8 @@
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #edf4fa, #dbeafe);
-  color: #0c375f;
+  background: linear-gradient(135deg, #EBF0F7, #dbeafe);
+  color: #183153;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -355,8 +355,8 @@
 .admin-billing-page .room-card-branch {
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #0c375f;
-  background: linear-gradient(135deg, #edf4fa, #dbeafe);
+  color: #183153;
+  background: linear-gradient(135deg, #EBF0F7, #dbeafe);
   padding: 0.1875rem 0.5rem;
   border-radius: 9999px;
   text-transform: capitalize;
@@ -415,9 +415,9 @@
 
 .admin-billing-page .search-box input:focus {
   outline: none;
-  border-color: #0c375f;
+  border-color: #183153;
   background: #fff;
-  box-shadow: 0 0 0 4px rgba(12, 55, 95, 0.06);
+  box-shadow: 0 0 0 4px rgba(24, 49, 83, 0.06);
 }
 
 .admin-billing-page .search-icon {
@@ -468,9 +468,9 @@
 .admin-billing-page select:focus,
 .admin-billing-page .month-filter:focus {
   outline: none;
-  border-color: #0c375f;
+  border-color: #183153;
   background-color: #fff;
-  box-shadow: 0 0 0 4px rgba(12, 55, 95, 0.06);
+  box-shadow: 0 0 0 4px rgba(24, 49, 83, 0.06);
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -490,14 +490,14 @@
 }
 
 .admin-billing-page .btn-primary {
-  background: linear-gradient(135deg, #0c375f, #1a5276);
+  background: linear-gradient(135deg, #183153, #1a5276);
   color: white;
-  box-shadow: 0 2px 6px rgba(12, 55, 95, 0.2);
+  box-shadow: 0 2px 6px rgba(24, 49, 83, 0.2);
 }
 
 .admin-billing-page .btn-primary:hover {
-  background: linear-gradient(135deg, #092c4c, #0c375f);
-  box-shadow: 0 4px 12px rgba(12, 55, 95, 0.3);
+  background: linear-gradient(135deg, #0F2240, #183153);
+  box-shadow: 0 4px 12px rgba(24, 49, 83, 0.3);
   transform: translateY(-1px);
 }
 
@@ -646,10 +646,10 @@
 }
 
 .admin-billing-page .action-btn:hover {
-  border-color: #0c375f;
-  color: #0c375f;
-  background: #edf4fa;
-  box-shadow: 0 2px 6px rgba(12, 55, 95, 0.1);
+  border-color: #183153;
+  color: #183153;
+  background: #EBF0F7;
+  box-shadow: 0 2px 6px rgba(24, 49, 83, 0.1);
 }
 
 /* ── Pagination ─────────────────────────────────────────────────────────── */
@@ -676,10 +676,10 @@
 }
 
 .admin-billing-page .pagination-btn:hover:not(:disabled) {
-  background: #edf4fa;
-  border-color: #0c375f;
-  color: #0c375f;
-  box-shadow: 0 2px 6px rgba(12, 55, 95, 0.08);
+  background: #EBF0F7;
+  border-color: #183153;
+  color: #183153;
+  box-shadow: 0 2px 6px rgba(24, 49, 83, 0.08);
 }
 
 .admin-billing-page .pagination-btn:disabled {
@@ -859,8 +859,8 @@
 
 .admin-billing-page .form-group input:focus,
 .admin-billing-page .form-group select:focus {
-  border-color: #0c375f;
-  box-shadow: 0 0 0 4px rgba(12, 55, 95, 0.06);
+  border-color: #183153;
+  box-shadow: 0 0 0 4px rgba(24, 49, 83, 0.06);
   background: #fff;
 }
 
@@ -893,7 +893,7 @@
   content: "";
   width: 3px;
   height: 14px;
-  background: #0c375f;
+  background: #183153;
   border-radius: 3px;
 }
 
@@ -902,7 +902,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.875rem 1.125rem;
-  background: linear-gradient(135deg, #edf4fa, #dbeafe);
+  background: linear-gradient(135deg, #EBF0F7, #dbeafe);
   border-radius: 0.75rem;
   margin-bottom: 0.875rem;
 }
@@ -915,7 +915,7 @@
 
 .admin-billing-page .bill-total-preview strong {
   font-size: 1.25rem;
-  color: #0c375f;
+  color: #183153;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -973,7 +973,7 @@
   content: "";
   width: 3px;
   height: 14px;
-  background: #0c375f;
+  background: #183153;
   border-radius: 3px;
 }
 
@@ -1063,8 +1063,8 @@
 }
 
 .admin-billing-page .mark-paid-section .form-group input:focus {
-  border-color: #0c375f;
-  box-shadow: 0 0 0 4px rgba(12, 55, 95, 0.06);
+  border-color: #183153;
+  box-shadow: 0 0 0 4px rgba(24, 49, 83, 0.06);
   background: #fff;
 }
 

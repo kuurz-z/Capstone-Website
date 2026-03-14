@@ -17,11 +17,11 @@ const ProfileSidebar = ({
       <Link to="/applicant/check-availability" className="flex items-center gap-3">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: "#0C375F" }}
+          style={{ backgroundColor: "#183153" }}
         >
           <Bed className="w-5 h-5 text-white" />
         </div>
-        <span className="font-semibold text-lg" style={{ color: "#0C375F" }}>
+        <span className="font-semibold text-lg" style={{ color: "#183153" }}>
           Lilycrest
         </span>
       </Link>
@@ -31,7 +31,7 @@ const ProfileSidebar = ({
       <div className="flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: "#0C375F" }}
+          style={{ backgroundColor: "#183153" }}
         >
           <User className="w-6 h-6 text-white" />
         </div>
@@ -61,7 +61,7 @@ const ProfileSidebar = ({
                 : "text-gray-600 hover:bg-gray-50"
             }`}
             style={
-              activeTab === "dashboard" ? { backgroundColor: "#E7710F" } : {}
+              activeTab === "dashboard" ? { backgroundColor: "#D4982B" } : {}
             }
           >
             <LayoutDashboard className="w-5 h-5" />
@@ -90,7 +90,7 @@ const ProfileSidebar = ({
                 : "text-gray-600 hover:bg-gray-50"
             }`}
             style={
-              activeTab === "personal" ? { backgroundColor: "#E7710F" } : {}
+              activeTab === "personal" ? { backgroundColor: "#D4982B" } : {}
             }
           >
             <User className="w-5 h-5" />
@@ -104,7 +104,7 @@ const ProfileSidebar = ({
                 : "text-gray-600 hover:bg-gray-50"
             }`}
             style={
-              activeTab === "history" ? { backgroundColor: "#E7710F" } : {}
+              activeTab === "history" ? { backgroundColor: "#D4982B" } : {}
             }
           >
             <History className="w-5 h-5" />

@@ -8,7 +8,7 @@ export function StorytellingSection() {
           {/* Left - Story */}
           <div>
             <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Our Story</p>
-            <h2 className="text-4xl lg:text-5xl font-normal mb-8 tracking-tight leading-tight" style={{ color: '#0C375F' }}>
+            <h2 className="text-4xl lg:text-5xl font-normal mb-8 tracking-tight leading-tight" style={{ color: '#183153' }}>
               About Lilycrest
             </h2>
             
@@ -26,7 +26,7 @@ export function StorytellingSection() {
 
             <button
               className="text-white px-8 py-5 rounded-full font-normal hover:opacity-90 transition-all duration-300 hover:shadow-lg"
-              style={{ backgroundColor: '#E7710F' }}
+              style={{ backgroundColor: '#D4982B' }}
             >
               Learn More About Us
             </button>
@@ -37,11 +37,11 @@ export function StorytellingSection() {
             <div className="p-8 rounded-3xl bg-white border border-gray-100 hover:shadow-xl transition-all duration-300">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6"
-                style={{ backgroundColor: '#E7710F15' }}
+                style={{ backgroundColor: '#D4982B15' }}
               >
-                <Heart className="w-6 h-6" style={{ color: '#E7710F' }} />
+                <Heart className="w-6 h-6" style={{ color: '#D4982B' }} />
               </div>
-              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#183153' }}>
                 Student-First Approach
               </h3>
               <p className="text-sm text-gray-600 leading-relaxed">
@@ -52,11 +52,11 @@ export function StorytellingSection() {
             <div className="p-8 rounded-3xl bg-white border border-gray-100 hover:shadow-xl transition-all duration-300">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6"
-                style={{ backgroundColor: '#0C375F15' }}
+                style={{ backgroundColor: '#18315315' }}
               >
-                <Users className="w-6 h-6" style={{ color: '#0C375F' }} />
+                <Users className="w-6 h-6" style={{ color: '#183153' }} />
               </div>
-              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#183153' }}>
                 Community Matters
               </h3>
               <p className="text-sm text-gray-600 leading-relaxed">
@@ -71,7 +71,7 @@ export function StorytellingSection() {
               >
                 <Award className="w-6 h-6" style={{ color: '#EDB938' }} />
               </div>
-              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+              <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#183153' }}>
                 Quality & Transparency
               </h3>
               <p className="text-sm text-gray-600 leading-relaxed">

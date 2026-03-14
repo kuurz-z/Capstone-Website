@@ -52,7 +52,7 @@
 .admin-inquiries-stat-card-new {
   background: #fff7ed;
   border-color: #fdba74;
-  color: #f97316;
+  color: #D4982B;
 }
 
 .admin-inquiries-stat-card-responded {
@@ -76,7 +76,7 @@
 
 .admin-inquiries-stat-card-new .admin-inquiries-stat-label,
 .admin-inquiries-stat-card-new .admin-inquiries-stat-value {
-  color: #f97316;
+  color: #D4982B;
 }
 
 .admin-inquiries-stat-card-responded .admin-inquiries-stat-label,
@@ -129,13 +129,13 @@
 
 .admin-inquiries-search-input:focus {
   outline: none;
-  border-color: #0c375f;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .admin-inquiries-filter:focus {
   outline: none;
-  border-color: #0c375f;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -221,12 +221,12 @@
 
 .admin-inquiries-status.new {
   background: #fff7ed;
-  color: #f97316;
+  color: #D4982B;
 }
 
 .admin-inquiries-status.in-progress {
   background: #e0ebf5;
-  color: #0c375f;
+  color: #183153;
 }
 
 .admin-inquiries-status.responded {
@@ -257,7 +257,7 @@
 
 .admin-inquiries-inquiry-type-badge.reservation {
   background: #e0ebf5;
-  color: #0c375f;
+  color: #183153;
 }
 
 .admin-inquiries-inquiry-type-badge.information {
@@ -282,7 +282,7 @@
   border-radius: 6px;
   border: 0px;
   background: transparent;
-  color: #0c375f;
+  color: #183153;
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -262,7 +262,7 @@
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #0c375f;
+  color: #183153;
   cursor: pointer;
   transition: all 0.12s;
   white-space: nowrap;
@@ -309,7 +309,7 @@
 }
 
 .rdm-action-primary {
-  background: #0c375f;
+  background: #183153;
   color: #fff;
 }
 
@@ -415,8 +415,8 @@
 }
 .rdm-extend-dialog-input:focus {
   outline: none;
-  border-color: #0c375f;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.08);
+  border-color: #183153;
+  box-shadow: 0 0 0 3px rgba(24, 49, 83, 0.08);
 }
 .rdm-extend-dialog-unit {
   font-size: 12px;
@@ -448,14 +448,14 @@
   padding: 10px 16px;
   border: none;
   border-radius: 6px;
-  background: #0c375f;
+  background: #183153;
   font-size: 13px;
   font-weight: 600;
   color: #fff;
   cursor: pointer;
 }
 .rdm-extend-dialog-confirm:hover {
-  background: #092c4c;
+  background: #0F2240;
 }
 @keyframes rdmFade {
   from {
@@ -517,8 +517,8 @@
 
 .rdm-notes-input:focus {
   outline: none;
-  border-color: #0c375f;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.06);
+  border-color: #183153;
+  box-shadow: 0 0 0 3px rgba(24, 49, 83, 0.06);
 }
 
 /* ── Expand Buttons ────────────────────────────────── */
@@ -588,7 +588,7 @@
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #0c375f;
+  color: #183153;
   cursor: pointer;
   transition: all 0.12s;
 }

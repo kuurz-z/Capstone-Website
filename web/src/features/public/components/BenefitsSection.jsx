@@ -5,13 +5,13 @@ const benefits = [
     icon: Wifi,
     title: 'High-Speed Internet',
     description: 'Unlimited fiber internet connection perfect for studying and streaming.',
-    color: '#E7710F'
+    color: '#D4982B'
   },
   {
     icon: Shield,
     title: '24/7 Security',
     description: 'Round-the-clock security with CCTV monitoring for your peace of mind.',
-    color: '#0C375F'
+    color: '#183153'
   },
   {
     icon: Zap,
@@ -23,13 +23,13 @@ const benefits = [
     icon: Users,
     title: 'Community Spaces',
     description: 'Shared lounge and study areas to connect with fellow students.',
-    color: '#E7710F'
+    color: '#D4982B'
   },
   {
     icon: Clock,
     title: 'Flexible Terms',
     description: 'Monthly or semester-based contracts with no hidden fees.',
-    color: '#0C375F'
+    color: '#183153'
   },
   {
     icon: Home,
@@ -46,7 +46,7 @@ export function BenefitsSection() {
         {/* Header */}
         <div className="text-center mb-12">
           <p className="text-xs text-gray-500 mb-3 tracking-widest uppercase font-medium">Why Choose Us</p>
-          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#0C375F' }}>
+          <h2 className="text-4xl lg:text-5xl font-normal mb-5 tracking-tight" style={{ color: '#183153' }}>
             Everything You Need to Succeed
           </h2>
           <p className="text-gray-500 max-w-2xl mx-auto font-normal leading-relaxed">
@@ -69,7 +69,7 @@ export function BenefitsSection() {
                 >
                   <Icon className="w-6 h-6" style={{ color: benefit.color }} />
                 </div>
-                <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#0C375F' }}>
+                <h3 className="text-xl font-medium mb-3 tracking-tight" style={{ color: '#183153' }}>
                   {benefit.title}
                 </h3>
                 <p className="text-sm text-gray-600 leading-relaxed">

@@ -196,11 +196,11 @@ const AuditLogsPage = () => {
                       padding: "6px 10px",
                       border:
                         page === pagination.currentPage
-                          ? "1px solid #0C375F"
+                          ? "1px solid #183153"
                           : "1px solid #d1d5db",
                       borderRadius: "6px",
                       backgroundColor:
-                        page === pagination.currentPage ? "#0C375F" : "white",
+                        page === pagination.currentPage ? "#183153" : "white",
                       color:
                         page === pagination.currentPage ? "white" : "#374151",
                       cursor: "pointer",

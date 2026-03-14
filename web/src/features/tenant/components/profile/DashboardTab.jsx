@@ -29,7 +29,7 @@ const DashboardTab = ({
       {/* Welcome Banner */}
       <div
         style={{
-          background: "linear-gradient(135deg, #0C375F 0%, #1E5A8E 100%)",
+          background: "linear-gradient(135deg, #183153 0%, #1E5A8E 100%)",
           borderRadius: "16px",
           padding: "28px 32px",
           marginBottom: "28px",
@@ -45,7 +45,7 @@ const DashboardTab = ({
             width: "160px",
             height: "160px",
             borderRadius: "50%",
-            background: "rgba(231,113,15,0.12)",
+            background: "rgba(212,152,43,0.12)",
           }}
         />
         <div
@@ -95,9 +95,9 @@ const DashboardTab = ({
       >
         <QuickActionCard
           to="/applicant/check-availability"
-          icon={<Bed className="w-5 h-5" style={{ color: "#E7710F" }} />}
+          icon={<Bed className="w-5 h-5" style={{ color: "#D4982B" }} />}
           iconBg="#FFF7ED"
-          hoverColor="#E7710F"
+          hoverColor="#D4982B"
           title="Browse Rooms"
           subtitle="View available rooms"
         />

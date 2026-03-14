@@ -43,7 +43,7 @@
 }
 
 .tenant-signin-back-btn:hover {
-  color: #f97316;
+  color: #D4982B;
 }
 
 .tenant-signin-back-btn::after {
@@ -53,7 +53,7 @@
   left: 16px;
   width: 0;
   height: 2px;
-  background-color: #ff6900;
+  background-color: #D4982B;
   transition: width 0.3s ease;
 }
 
@@ -244,8 +244,8 @@
 
 .tenant-signin-input:focus {
   background: #fff;
-  border-color: #f97316;
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+  border-color: #D4982B;
+  box-shadow: 0 0 0 3px rgba(212, 152, 43, 0.08);
 }
 
 .tenant-signin-input::placeholder {
@@ -348,7 +348,7 @@
 }
 
 .tenant-signin-password-toggle:hover {
-  color: #f97316;
+  color: #D4982B;
 }
 
 .tenant-signin-password-toggle:focus {
@@ -386,7 +386,7 @@
 }
 
 .toggle-password:hover {
-  color: #f97316;
+  color: #D4982B;
 }
 
 .toggle-password:focus {
@@ -402,7 +402,7 @@
 /* Submit Button */
 .tenant-signin-submit {
   margin-top: 6px;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  background: #D4982B;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -411,13 +411,13 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+  box-shadow: 0 4px 12px rgba(212, 152, 43, 0.15);
 }
 
 .tenant-signin-submit:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%);
+  background: #BD8724;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25);
+  box-shadow: 0 8px 20px rgba(212, 152, 43, 0.25);
 }
 
 .tenant-signin-submit:active:not(:disabled) {
@@ -468,7 +468,7 @@
 .forgot-password-link button {
   background: none;
   border: none;
-  color: #ff6900;
+  color: #D4982B;
   font-size: 12px;
   cursor: pointer;
   text-decoration: none;
@@ -478,7 +478,7 @@
 }
 
 .forgot-password-link button:hover {
-  color: #ea580c;
+  color: #BD8724;
   text-decoration: underline;
 }
 
@@ -559,14 +559,14 @@
 }
 
 .tenant-signin-link {
-  color: #f97316;
+  color: #D4982B;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .tenant-signin-link:hover {
-  color: #ea580c;
+  color: #BD8724;
   text-decoration: underline;
 }
 
@@ -653,13 +653,13 @@
 
 .auth-submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(231, 113, 15, 0.35);
+  box-shadow: 0 8px 24px rgba(212, 152, 43, 0.35);
   filter: brightness(1.05);
 }
 
 .auth-submit-btn:active:not(:disabled) {
   transform: translateY(1px) scale(0.98);
-  box-shadow: 0 2px 6px rgba(231, 113, 15, 0.2);
+  box-shadow: 0 2px 6px rgba(212, 152, 43, 0.2);
   transition-duration: 0.08s !important;
 }
 

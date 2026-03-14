@@ -30,13 +30,13 @@ export default function ScrollToTopButton() {
         height: "44px",
         borderRadius: "50%",
         border: "none",
-        backgroundColor: "#E7710F",
+        backgroundColor: "#D4982B",
         color: "white",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: "0 4px 16px rgba(231, 113, 15, 0.3)",
+        boxShadow: "0 4px 16px rgba(212, 152, 43, 0.3)",
         opacity: visible ? 1 : 0,
         transform: visible
           ? "translateY(0) scale(1)"
@@ -46,11 +46,11 @@ export default function ScrollToTopButton() {
           "opacity 0.3s ease, transform 0.3s ease, box-shadow 0.2s ease",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = "0 6px 24px rgba(231, 113, 15, 0.45)";
+        e.currentTarget.style.boxShadow = "0 6px 24px rgba(212, 152, 43, 0.45)";
         e.currentTarget.style.transform = "translateY(-2px) scale(1.08)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "0 4px 16px rgba(231, 113, 15, 0.3)";
+        e.currentTarget.style.boxShadow = "0 4px 16px rgba(212, 152, 43, 0.3)";
         e.currentTarget.style.transform = visible
           ? "translateY(0) scale(1)"
           : "translateY(12px) scale(0.8)";

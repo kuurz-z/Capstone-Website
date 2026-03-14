@@ -51,7 +51,7 @@
 .ar-stat-total {
   background: #f0f4ff;
   border-color: #c7d5f0;
-  color: #0c375f;
+  color: #183153;
 }
 .ar-stat-pending {
   background: #fffbeb;
@@ -103,8 +103,8 @@
 
 .ar-search:focus {
   outline: none;
-  border-color: #0c375f;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.08);
+  border-color: #183153;
+  box-shadow: 0 0 0 3px rgba(24, 49, 83, 0.08);
 }
 
 .ar-select {
@@ -130,8 +130,8 @@
 
 .ar-select:focus {
   outline: none;
-  border-color: #0c375f;
-  box-shadow: 0 0 0 3px rgba(12, 55, 95, 0.08);
+  border-color: #183153;
+  box-shadow: 0 0 0 3px rgba(24, 49, 83, 0.08);
 }
 
 /* ── Table ─────────────────────────────────────────── */
@@ -209,7 +209,7 @@
 .ar-cell-code {
   font-family: "SF Mono", "Cascadia Code", monospace;
   font-size: 12px;
-  color: #0c375f;
+  color: #183153;
   font-weight: 500;
 }
 
@@ -355,9 +355,9 @@
 }
 
 .ar-page-btn.active {
-  background: #0c375f;
+  background: #183153;
   color: #fff;
-  border-color: #0c375f;
+  border-color: #183153;
 }
 
 .ar-page-ellipsis {

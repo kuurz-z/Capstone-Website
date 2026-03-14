@@ -70,7 +70,7 @@
 .inquiry-details-modal-tab-pill {
   padding: 6px 14px;
   background: #ffedd5;
-  color: #f97316;
+  color: #D4982B;
   font-size: 13px;
   font-weight: 500;
   border-radius: 999px;
@@ -148,7 +148,7 @@
 
 .inquiry-details-modal-message-box {
   background: #f9fafb;
-  border-left: 4px solid #0C375F;
+  border-left: 4px solid #183153;
   border-radius: 6px;
   padding: 16px;
 }
@@ -210,7 +210,7 @@
 
 .inquiry-details-modal-response-textarea:focus {
   outline: none;
-  border-color: #0C375F;
+  border-color: #183153;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
@@ -221,7 +221,7 @@
 .inquiry-details-modal-response-button {
   padding: 12px;
   width: 100%;
-  background: #0C375F;
+  background: #183153;
   border: none;
   border-radius: 6px;
   color: #ffffff;
@@ -232,7 +232,7 @@
 }
 
 .inquiry-details-modal-response-button:hover:not(:disabled) {
-  background: #092C4C;
+  background: #0F2240;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 

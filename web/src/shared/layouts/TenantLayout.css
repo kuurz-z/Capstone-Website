@@ -47,7 +47,7 @@
 }
 
 .tenant-menu-toggle:hover {
-  color: #0c375f;
+  color: #183153;
   background: #f1f5f9;
 }
 
@@ -85,7 +85,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0c375f;
+  background: #183153;
   color: white;
   font-weight: 600;
   font-size: 0.875rem;

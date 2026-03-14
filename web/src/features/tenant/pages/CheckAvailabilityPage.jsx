@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
 import { queryClient } from "../../../shared/lib/queryClient";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import "../../../shared/styles/notification.css";
-import "../styles/tenant-dashboard.css";
+import "../styles/check-availability.css";
 import InquiryModal from "../../public/modals/InquiryModal";
 import RoomDetailsModal from "../modals/RoomDetailsModal";
 import CheckAvailabilitySkeleton from "../components/check-availability/CheckAvailabilitySkeleton";
@@ -16,7 +16,6 @@ import CheckAvailabilitySkeleton from "../components/check-availability/CheckAva
 // Extracted sub-components
 import {
   AvailabilityHeader,
-  FilterPanel,
   RoomCard,
   AVAILABLE_APPLIANCES,
   UPCOMING_ROOM,
@@ -46,7 +45,6 @@ function CheckAvailabilityPage() {
   const [selectedRoomType, setSelectedRoomType] = useState("All");
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(15000);
-  const [showFilters, setShowFilters] = useState(false);
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -305,7 +303,7 @@ function CheckAvailabilityPage() {
                 height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#E7710F"
+                stroke="#D4982B"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -317,7 +315,7 @@ function CheckAvailabilityPage() {
             </div>
             <h3
               className="text-xl font-semibold mb-2"
-              style={{ color: "#0C375F" }}
+              style={{ color: "#183153" }}
             >
               Sign in to continue
             </h3>
@@ -339,7 +337,7 @@ function CheckAvailabilityPage() {
                   setTimeout(() => navigate("/signin"), 300);
                 }}
                 className="flex-1 py-3 px-4 rounded-full text-white text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer"
-                style={{ backgroundColor: "#E7710F" }}
+                style={{ backgroundColor: "#D4982B" }}
               >
                 Sign In
               </button>
@@ -352,21 +350,13 @@ function CheckAvailabilityPage() {
 
   // ── Render ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen" style={{ backgroundColor: "#FAFBFC" }}>
       <LoginConfirmBeforeReserveModal />
 
       <AvailabilityHeader
         user={user}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        showFilters={showFilters}
-        setShowFilters={setShowFilters}
-        onLogout={() => setShowLogoutConfirm(true)}
-      />
-
-      <FilterPanel
-        show={showFilters}
-        onClose={() => setShowFilters(false)}
         selectedBranch={selectedBranch}
         onBranchFilter={handleBranchFilter}
         selectedRoomType={selectedRoomType}
@@ -374,86 +364,30 @@ function CheckAvailabilityPage() {
         availableRoomTypes={availableRoomTypes}
         maxPrice={maxPrice}
         setMaxPrice={setMaxPrice}
-        filteredCount={filteredRooms.length}
         onClearAll={clearAllFilters}
+        onLogout={() => setShowLogoutConfirm(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Mobile filter chips */}
-        <div className="md:hidden mb-6 flex gap-2 overflow-x-auto pb-2">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex-shrink-0 px-4 py-2 rounded-full border border-gray-300 text-sm font-medium whitespace-nowrap"
-          >
-            <SlidersHorizontal className="w-4 h-4 inline mr-2" />
-            Filters
-          </button>
-          <button
-            className="flex-shrink-0 px-4 py-2 rounded-full border border-gray-300 text-sm font-medium whitespace-nowrap"
-            onClick={() => handleBranchFilter("Gil Puyat")}
-          >
-            Gil Puyat
-          </button>
-          <button
-            className="flex-shrink-0 px-4 py-2 rounded-full border border-gray-300 text-sm font-medium whitespace-nowrap"
-            onClick={() => handleBranchFilter("Guadalupe")}
-          >
-            Guadalupe
-          </button>
-        </div>
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-semibold mb-2" style={{ color: "#0C375F" }}>
-            Available Rooms
-          </h1>
-          <p className="text-gray-600">
+        <div style={{ marginBottom: "8px" }}>
+          <h1 className="ca-section-title">Available Rooms</h1>
+          <p className="ca-room-count">
             {roomsLoading
               ? "Loading rooms..."
-              : `${filteredRooms.length} rooms available`}
+              : `${filteredRooms.length} room${filteredRooms.length !== 1 ? "s" : ""} found`}
           </p>
           {!user && (
-            <p
-              style={{
-                marginTop: "8px",
-                fontSize: "14px",
-                color: "#6B7280",
-              }}
-            >
-              <button
-                onClick={() => navigate("/signin")}
-                style={{
-                  fontWeight: "600",
-                  color: "#E7710F",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  fontSize: "inherit",
-                }}
-              >
-                Sign in
-              </button>{" "}
+            <p className="ca-signin-prompt">
+              <button onClick={() => navigate("/signin")}>Sign in</button>{" "}
               or{" "}
-              <button
-                onClick={() => navigate("/signup")}
-                style={{
-                  fontWeight: "600",
-                  color: "#E7710F",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  fontSize: "inherit",
-                }}
-              >
-                create an account
-              </button>{" "}
+              <button onClick={() => navigate("/signup")}>create an account</button>{" "}
               to reserve a room
             </p>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="ca-grid">
           {roomsLoading ? (
             <CheckAvailabilitySkeleton />
           ) : roomsError ? (
@@ -472,64 +406,43 @@ function CheckAvailabilityPage() {
         </div>
 
         {filteredRooms.length === 0 && !roomsLoading && !roomsError && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <Search className="w-8 h-8 text-gray-400" />
+          <div className="ca-empty">
+            <div className="ca-empty-icon">
+              <Search style={{ width: 28, height: 28, color: "#9CA3AF" }} />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              No rooms found
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Try adjusting your filters or search criteria
-            </p>
-            <button
-              onClick={clearAllFilters}
-              className="px-6 py-3 rounded-lg text-white"
-              style={{ backgroundColor: "#E7710F" }}
-            >
-              Clear Filters
-            </button>
+            <h3>No rooms match your filters</h3>
+            <p>Try changing the branch, room type, or price range</p>
+            <button onClick={clearAllFilters}>Clear All Filters</button>
           </div>
         )}
 
         {/* Coming Soon */}
-        <section className="mt-16">
-          <h2 className="text-2xl font-semibold mb-2" style={{ color: "#0C375F" }}>
-            Coming Soon
-          </h2>
-          <p className="text-gray-600 mb-6">
-            Rooms that will be available soon
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <article
-              className="group rounded-2xl border border-gray-200 overflow-hidden"
+        <section style={{ marginTop: "56px" }}>
+          <h2 className="ca-section-title">Coming Soon</h2>
+          <p className="ca-section-subtitle">Rooms that will be available soon</p>
+          <div className="ca-grid">
+            <div
+              className="ca-coming-soon-card"
               onClick={() => setIsInquiryModalOpen(true)}
-              style={{ cursor: "pointer" }}
             >
-              <div className="relative aspect-square bg-gray-100">
+              <div className="ca-card-image-wrap">
                 <img
                   src={ROOM_IMAGES.standardRoom}
                   alt={UPCOMING_ROOM.title}
-                  className="w-full h-full object-cover"
+                  loading="lazy"
                 />
-                <div className="absolute top-3 left-3">
-                  <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-white/95 shadow-sm">
-                    Coming Soon
-                  </span>
-                </div>
+                <span className="ca-coming-soon-badge">Coming Soon</span>
               </div>
-              <div className="p-4 space-y-1">
-                <h3 className="text-base font-semibold text-gray-900">
-                  {UPCOMING_ROOM.title}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {UPCOMING_ROOM.branch} · {UPCOMING_ROOM.type}
-                </p>
-                <p className="text-sm text-gray-600">
+              <div className="ca-card-body">
+                <div className="ca-card-title">{UPCOMING_ROOM.title}</div>
+                <div className="ca-card-location">
+                  <span>{UPCOMING_ROOM.branch} · {UPCOMING_ROOM.type}</span>
+                </div>
+                <p style={{ fontSize: "13px", color: "#9CA3AF" }}>
                   Available from {UPCOMING_ROOM.availableFrom}
                 </p>
               </div>
-            </article>
+            </div>
           </div>
         </section>
       </main>

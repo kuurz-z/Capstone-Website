@@ -15,7 +15,7 @@
 .tenant-billing .billing-page-header h1 {
   font-size: 1.75rem;
   font-weight: 600;
-  color: #0c375f;
+  color: #183153;
   margin: 0 0 0.25rem;
 }
 
@@ -28,7 +28,7 @@
 /* ─── Current Bill Hero Card ─── */
 
 .current-bill-hero {
-  background: linear-gradient(135deg, #0c375f 0%, #1a4a7a 100%);
+  background: linear-gradient(135deg, #183153 0%, #1a4a7a 100%);
   border-radius: 16px;
   padding: 2rem;
   color: #fff;
@@ -44,7 +44,7 @@
   right: -20%;
   width: 300px;
   height: 300px;
-  background: rgba(231, 113, 15, 0.1);
+  background: rgba(212, 152, 43, 0.1);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -194,7 +194,7 @@
 .charges-card h3 {
   font-size: 1rem;
   font-weight: 600;
-  color: #0c375f;
+  color: #183153;
   margin: 0 0 1rem;
   display: flex;
   align-items: center;
@@ -242,13 +242,13 @@
 }
 
 .charge-line.total {
-  border-top: 2px solid #0c375f;
+  border-top: 2px solid #183153;
   border-bottom: none;
   margin-top: 0.5rem;
   padding-top: 0.75rem;
   font-weight: 600;
   font-size: 1rem;
-  color: #0c375f;
+  color: #183153;
 }
 
 .charge-line.total .charge-amount {
@@ -283,7 +283,7 @@
 .bill-history-section h3 {
   font-size: 1rem;
   font-weight: 600;
-  color: #0c375f;
+  color: #183153;
   margin: 0 0 1rem;
   display: flex;
   align-items: center;
@@ -309,8 +309,8 @@
 }
 
 .bill-history-item:hover {
-  border-color: #e7710f;
-  box-shadow: 0 2px 8px rgba(231, 113, 15, 0.08);
+  border-color: #D4982B;
+  box-shadow: 0 2px 8px rgba(212, 152, 43, 0.08);
 }
 
 .bill-history-left {
@@ -338,7 +338,7 @@
 
 .bill-history-right .bill-amount {
   font-weight: 600;
-  color: #0c375f;
+  color: #183153;
   font-size: 0.95rem;
 }
 
@@ -389,7 +389,7 @@
 .proof-modal h2 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #0c375f;
+  color: #183153;
   margin: 0 0 0.25rem;
 }
 
@@ -411,7 +411,7 @@
 }
 
 .proof-modal .proof-upload-zone:hover {
-  border-color: #e7710f;
+  border-color: #D4982B;
   background: #fef3e2;
 }
 
@@ -464,7 +464,7 @@
 
 .proof-modal .form-group input:focus {
   outline: none;
-  border-color: #e7710f;
+  border-color: #D4982B;
 }
 
 .proof-modal-actions {
@@ -475,7 +475,7 @@
 
 .proof-modal-actions .btn-submit-proof {
   flex: 1;
-  background: #e7710f;
+  background: #D4982B;
   color: #fff;
   border: none;
   padding: 0.75rem;
