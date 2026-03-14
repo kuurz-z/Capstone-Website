@@ -40,6 +40,8 @@ const notificationSchema = new mongoose.Schema(
       enum: [
         "reservation_confirmed",
         "reservation_cancelled",
+        "reservation_expired",
+        "reservation_noshow",
         "visit_approved",
         "visit_rejected",
         "payment_approved",

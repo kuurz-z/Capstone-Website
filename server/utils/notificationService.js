@@ -153,6 +153,22 @@ const notify = {
       { entityType: "reservation" }),
 
   /**
+   * Reservation auto-expired (unpaid / stale)
+   */
+  reservationExpired: (userId, reservationCode, roomName) =>
+    createNotification(userId, "reservation_expired", "Reservation Expired",
+      `Your reservation ${reservationCode} for ${roomName} has expired due to inactivity. The bed has been released.`,
+      { entityType: "reservation" }),
+
+  /**
+   * Reservation auto-cancelled (no-show after move-in deadline)
+   */
+  reservationNoShow: (userId, reservationCode, roomName, daysOverdue) =>
+    createNotification(userId, "reservation_noshow", "Reservation Cancelled — No Show",
+      `Your reservation ${reservationCode} for ${roomName} has been cancelled. You did not move in within ${daysOverdue} days of your deadline.`,
+      { entityType: "reservation" }),
+
+  /**
    * General notification
    */
   general: (userId, title, message, options = {}) =>

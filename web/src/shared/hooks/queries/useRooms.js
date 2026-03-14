@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { roomApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
@@ -7,6 +7,8 @@ export function useRooms(filters) {
   return useQuery({
     queryKey: queryKeys.rooms.all(filters),
     queryFn: () => roomApi.getAll(filters),
+    placeholderData: keepPreviousData,   // keep stale data visible during refetch
+    refetchOnWindowFocus: false,          // prevent tab-switch refetches
   });
 }
 

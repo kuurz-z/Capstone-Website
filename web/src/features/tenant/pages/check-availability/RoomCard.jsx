@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 /**
  * Redesigned Room Card — soft shadows, bed availability dots, muted type badge.
  */
-const RoomCard = ({ room, onClick }) => {
+const RoomCard = React.memo(({ room, onClick }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const images = room.images?.length ? room.images : [room.image];
 
@@ -110,6 +110,6 @@ const RoomCard = ({ room, onClick }) => {
       </div>
     </div>
   );
-};
+});
 
 export default RoomCard;

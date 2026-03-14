@@ -22,6 +22,8 @@
  *   5. Payment due reminders    — daily at 08:00
  *   6. Contract expiration      — daily at 09:00
  *   7. Firebase ↔ MongoDB sync  — daily at 03:00
+ *   8. Stale reservation expiry — hourly
+ *   9. No-show auto-cancel      — daily at 10:00
  *
  * ============================================================================
  */
@@ -31,6 +33,7 @@ import dayjs from "dayjs";
 import { Reservation, Room, Bill, User } from "../models/index.js";
 import { getAuth } from "../config/firebase.js";
 import notify from "./notificationService.js";
+import { updateOccupancyOnReservationChange } from "./occupancyManager.js";
 
 // ─── Job 1: Overdue Move-In Detection (daily at 08:30) ──────────────────────────
 
@@ -303,6 +306,130 @@ async function cleanupOrphanedAccounts() {
   }
 }
 
+// ─── Job 8: Auto-Expire Stale Reservations (hourly) ───────────────────────
+
+async function expireStaleReservations() {
+  try {
+    const now = dayjs();
+    let expired = 0;
+
+    // Tiered expiration windows by status
+    const tiers = [
+      {
+        statuses: ["pending"],
+        // 2 hours after creation
+        filter: { createdAt: { $lt: now.subtract(2, "hour").toDate() } },
+      },
+      {
+        statuses: ["visit_pending"],
+        // 24 hours after creation (they should have scheduled by now)
+        filter: { createdAt: { $lt: now.subtract(24, "hour").toDate() } },
+      },
+      {
+        statuses: ["visit_approved"],
+        // 48 hours after the visit date passed
+        filter: { visitDate: { $lt: now.subtract(48, "hour").toDate() } },
+      },
+      {
+        statuses: ["payment_pending"],
+        // 48 hours after reaching this status (use updatedAt as proxy)
+        filter: { updatedAt: { $lt: now.subtract(48, "hour").toDate() } },
+      },
+    ];
+
+    for (const tier of tiers) {
+      const reservations = await Reservation.find({
+        status: { $in: tier.statuses },
+        isArchived: false,
+        ...tier.filter,
+      })
+        .populate("userId", "firstName lastName")
+        .populate("roomId", "name");
+
+      for (const reservation of reservations) {
+        const oldStatus = reservation.status;
+        reservation.status = "cancelled";
+        reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-expired from "${oldStatus}" — ${now.format("MMM D, YYYY h:mm A")}`;
+        await reservation.save();
+
+        // Release the bed
+        try {
+          await updateOccupancyOnReservationChange(reservation, "cancelled", oldStatus);
+        } catch (err) {
+          console.error(`⚠️ Bed release failed for ${reservation._id}:`, err.message);
+        }
+
+        // Notify tenant
+        const code = reservation.reservationCode || reservation._id.toString().slice(-6);
+        const roomName = reservation.roomId?.name || "your room";
+        if (reservation.userId?._id) {
+          notify.reservationExpired(reservation.userId._id, code, roomName);
+        }
+
+        expired++;
+      }
+    }
+
+    if (expired > 0) {
+      console.log(`⏰ ${expired} stale reservation(s) auto-expired`);
+    }
+  } catch (error) {
+    console.error("❌ Stale reservation expiration error:", error);
+  }
+}
+
+// ─── Job 9: Auto-Cancel No-Show Reservations (daily at 10:00) ─────────
+
+async function cancelNoShowReservations() {
+  try {
+    const now = dayjs();
+    const graceDays = 7;
+    let cancelled = 0;
+
+    // Find "reserved" (paid) reservations where the move-in deadline + 7 days has passed
+    const reservations = await Reservation.find({
+      status: "reserved",
+      isArchived: false,
+    })
+      .populate("userId", "firstName lastName")
+      .populate("roomId", "name");
+
+    for (const reservation of reservations) {
+      const deadline = reservation.moveInExtendedTo || reservation.targetMoveInDate;
+      if (!deadline) continue;
+
+      const daysOverdue = now.diff(dayjs(deadline), "day");
+      if (daysOverdue < graceDays) continue;
+
+      reservation.status = "cancelled";
+      reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-cancelled: no-show ${daysOverdue} days past move-in — ${now.format("MMM D, YYYY")}`;
+      await reservation.save();
+
+      // Release the bed
+      try {
+        await updateOccupancyOnReservationChange(reservation, "cancelled", "reserved");
+      } catch (err) {
+        console.error(`⚠️ Bed release failed for ${reservation._id}:`, err.message);
+      }
+
+      // Notify tenant
+      const code = reservation.reservationCode || reservation._id.toString().slice(-6);
+      const roomName = reservation.roomId?.name || "your room";
+      if (reservation.userId?._id) {
+        notify.reservationNoShow(reservation.userId._id, code, roomName, daysOverdue);
+      }
+
+      cancelled++;
+    }
+
+    if (cancelled > 0) {
+      console.log(`🚷 ${cancelled} no-show reservation(s) auto-cancelled`);
+    }
+  } catch (error) {
+    console.error("❌ No-show cancellation error:", error);
+  }
+}
+
 // ─── Scheduler Startup ──────────────────────────────────────────────────
 
 const scheduledJobs = [];
@@ -366,6 +493,22 @@ export function startScheduler() {
     cron.schedule("0 3 * * *", cleanupOrphanedAccounts, {
       scheduled: true,
       name: "firebase-mongodb-sync",
+    }),
+  );
+
+  // Job 8: Auto-expire stale reservations — every hour at :15
+  scheduledJobs.push(
+    cron.schedule("15 * * * *", expireStaleReservations, {
+      scheduled: true,
+      name: "stale-reservation-expiry",
+    }),
+  );
+
+  // Job 9: Auto-cancel no-show reservations — daily at 10:00
+  scheduledJobs.push(
+    cron.schedule("0 10 * * *", cancelNoShowReservations, {
+      scheduled: true,
+      name: "noshow-reservation-cancel",
     }),
   );
 
