@@ -18,6 +18,11 @@
  *   - HMAC-SHA256 signature verification via Paymongo-Signature header
  *   - No auth middleware (server-to-server, verified by signature)
  *
+ * IMPORTANT — ALWAYS RETURN HTTP 200:
+ *   PayMongo disables webhooks that return 4xx/5xx status codes.
+ *   All responses MUST return 200, even on signature failures or errors.
+ *   Errors are logged server-side but never communicated via HTTP status.
+ *
  * ============================================================================
  */
 
@@ -245,14 +250,12 @@ export const handlePaymongoWebhook = async (req, res) => {
 
     res.status(200).json({ received: true });
   } catch (error) {
-    // Signature verification failures → 401 (PayMongo will retry)
-    if (error.message.includes("signature") || error.message.includes("Missing")) {
-      logger.error({ err: error }, "Webhook: Signature verification failed");
-      return res.status(401).json({ error: "Invalid signature" });
-    }
-
-    // Application errors → 200 (don't want PayMongo to retry)
-    logger.error({ err: error }, "Webhook: Processing error (returning 200 to prevent retry)");
-    res.status(200).json({ received: true, error: error.message });
+    // ALWAYS return 200 to PayMongo — returning 4xx/5xx causes webhook disablement.
+    // Per PayMongo: "ensure that all webhook responses return an HTTP status code of 200"
+    logger.error(
+      { err: error },
+      "Webhook: Error during processing (returning 200 per PayMongo guidelines)",
+    );
+    res.status(200).json({ received: true });
   }
 };

@@ -153,7 +153,15 @@ app.use(
 );
 
 /**
- * Global rate limit — 100 requests per 15 min per IP
+ * Webhook routes — MUST be before BOTH the rate limiter AND express.json().
+ * - Before rate limiter: PayMongo calls must never receive 429 (causes webhook disablement)
+ * - Before express.json(): Preserves raw body for HMAC signature verification
+ */
+app.use("/api/webhooks", webhookRoutes);
+
+/**
+ * Global rate limit — 1000 requests per 15 min per IP
+ * (registered AFTER webhook routes so PayMongo is never rate-limited)
  */
 app.use(globalLimiter);
 
@@ -161,12 +169,6 @@ app.use(globalLimiter);
  * Response compression — gzip/brotli for all responses
  */
 app.use(compression());
-
-/**
- * Webhook routes — MUST be before express.json() to preserve raw body
- * for PayMongo HMAC signature verification.
- */
-app.use("/api/webhooks", webhookRoutes);
 
 /**
  * Body Parser — JSON and URL-encoded with per-route appropriate limits
