@@ -1,5 +1,5 @@
-import "../styles/inquirymodal.css";
 import { useState } from "react";
+
 import { inquiryApi } from "../../../shared/api/apiClient";
 
 function InquiryModal({ isOpen, onClose, defaultBranch = "general" }) {

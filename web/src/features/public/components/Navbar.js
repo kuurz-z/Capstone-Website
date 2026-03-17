@@ -35,7 +35,7 @@ export function Navigation({ type } = {}) {
       const el = document.getElementById(id);
       if (el) {
         const observer = new IntersectionObserver(handleIntersect, {
-          rootMargin: "-30% 0px -60% 0px",
+          rootMargin: "-20% 0px -70% 0px",
           threshold: 0,
         });
         observer.observe(el);
@@ -45,6 +45,12 @@ export function Navigation({ type } = {}) {
 
     return () => observers.forEach((obs) => obs.disconnect());
   }, []);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    document.body.style.overflow = isMenuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [isMenuOpen]);
 
   // Determine profile URL based on role
   const isAdmin = user?.role === "admin" || user?.role === "superAdmin";
@@ -104,7 +110,7 @@ export function Navigation({ type } = {}) {
           transition: "padding 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
-        <div className="flex justify-between items-center">
+        <div className="relative flex items-center">
           {/* Logo + Theme Toggle (left side) */}
           <div className="flex items-center gap-3">
             <Link
@@ -125,8 +131,15 @@ export function Navigation({ type } = {}) {
             )}
           </div>
 
-          {/* Desktop Nav Links */}
-          <div className="hidden md:flex items-center gap-1">
+          {/* Desktop Nav Links — absolutely centered */}
+          <div
+            className="hidden md:flex items-center gap-1"
+            style={{
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+            }}
+          >
             {navLinks.map((link) => {
               const isActive = activeSection === link.id;
               return (
@@ -134,6 +147,7 @@ export function Navigation({ type } = {}) {
                   key={link.href}
                   href={link.href}
                   className="no-underline"
+                  aria-current={isActive ? "true" : undefined}
                   style={{
                     color: isActive
                       ? (isScrolled ? "var(--lp-accent)" : "white")
@@ -180,7 +194,7 @@ export function Navigation({ type } = {}) {
           </div>
 
           {/* Right Side: Sign In + Book Now + Mobile hamburger */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 ml-auto">
             {!loading && (
               <>
                 {isAuthenticated ? (
@@ -272,6 +286,8 @@ export function Navigation({ type } = {}) {
               className="md:hidden bg-transparent border-none cursor-pointer"
               style={{ color: isScrolled ? "var(--lp-text)" : "white" }}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
+              aria-expanded={isMenuOpen}
+              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>

@@ -24,7 +24,7 @@ const benefits = [
   {
     icon: Clock,
     title: 'Flexible Terms',
-    description: 'Monthly or semester-based contracts with no hidden fees.',
+    description: 'Monthly or long-term contracts with no hidden fees.',
   },
   {
     icon: Home,
@@ -35,10 +35,10 @@ const benefits = [
 
 export function BenefitsSection() {
   return (
-    <section className="py-20 lg:py-28" style={{ backgroundColor: 'var(--lp-bg)' }}>
+    <section className="py-16 lg:py-20" style={{ backgroundColor: 'var(--lp-bg)' }}>
       <div className="max-w-screen-2xl mx-auto px-8 lg:px-12">
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <p
             className="text-xs mb-3 tracking-widest uppercase font-medium"
             style={{ color: 'var(--lp-accent)' }}

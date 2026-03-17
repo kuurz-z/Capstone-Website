@@ -64,7 +64,13 @@ export default function ScrollReveal({
         ease: [0.25, 0.1, 0.25, 1], // cubic-bezier for buttery smooth
       }}
       className={className}
-      style={{ ...style, willChange: "opacity, transform" }}
+      style={{ ...style }}
+      onAnimationStart={() => {
+        if (ref.current) ref.current.style.willChange = "opacity, transform";
+      }}
+      onAnimationComplete={() => {
+        if (ref.current) ref.current.style.willChange = "auto";
+      }}
     >
       {children}
     </motion.div>

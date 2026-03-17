@@ -35,7 +35,7 @@ const rules = [
 ];
 
 export function RulesSection() {
-  const [expandedIndex, setExpandedIndex] = useState(null);
+  const [expandedIndex, setExpandedIndex] = useState(0);
 
   const toggleRule = (index) => {
     setExpandedIndex(expandedIndex === index ? null : index);
@@ -66,7 +66,8 @@ export function RulesSection() {
               <button
                 key={index}
                 onClick={() => toggleRule(index)}
-                className="text-left p-6 rounded-2xl transition-[box-shadow,transform] duration-300 cursor-pointer focus:outline-none"
+                aria-expanded={isExpanded}
+                className="text-left w-full p-6 rounded-2xl transition-[box-shadow,transform] duration-300 cursor-pointer focus:outline-none"
                 style={{
                   backgroundColor: 'var(--lp-bg-card)',
                   border: '1px solid var(--lp-border)',
@@ -116,16 +117,19 @@ export function RulesSection() {
           })}
         </div>
 
-        {/* Additional Info */}
+        {/* Important Warning — enhanced visibility */}
         <div
-          className="mt-10 p-6 rounded-2xl max-w-3xl mx-auto"
+          className="mt-10 p-6 rounded-2xl max-w-3xl mx-auto flex gap-4 items-start"
           style={{
             backgroundColor: 'var(--lp-bg-card)',
             border: '1px solid var(--lp-border)',
+            borderLeft: '3px solid var(--lp-accent)',
           }}
         >
-          <p className="text-sm leading-relaxed text-center" style={{ color: 'var(--lp-text-secondary)' }}>
-            <span className="font-semibold" style={{ color: 'var(--lp-text)' }}>Important:</span> Violation of house rules may result in warnings, fines, or termination of contract. We maintain these policies to ensure a safe and comfortable environment for all residents.
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--lp-accent)' }} />
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--lp-text-secondary)' }}>
+            <span className="font-semibold" style={{ color: 'var(--lp-text)' }}>Important: </span>
+            Violation of house rules may result in warnings, fines, or termination of contract. We maintain these policies to ensure a safe and comfortable environment for all residents.
           </p>
         </div>
       </div>

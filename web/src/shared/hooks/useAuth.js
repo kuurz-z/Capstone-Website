@@ -94,6 +94,15 @@ export const AuthProvider = ({ children }) => {
    * @private
    */
   const checkAuth = async () => {
+    // Guard: Skip auth check during email verification resend flow.
+    // The resend button temporarily signs in to Firebase just to call
+    // sendEmailVerification(). We must NOT treat that transient sign-in
+    // as a real login session or the user gets navigated in unexpectedly.
+    if (sessionStorage.getItem("resendInProgress") === "1") {
+      setLoading(false);
+      return;
+    }
+
     try {
       const userData = await authApi.getCurrentUser();
 
@@ -102,6 +111,13 @@ export const AuthProvider = ({ children }) => {
       if (!auth.currentUser) {
         setUser(null);
         setIsAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+
+      // Guard: double-check the resend flag in case it was set while the
+      // API call was in-flight (the transient sign-in can be very fast)
+      if (sessionStorage.getItem("resendInProgress") === "1") {
         setLoading(false);
         return;
       }

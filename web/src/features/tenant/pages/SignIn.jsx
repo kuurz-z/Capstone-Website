@@ -59,6 +59,8 @@ function SignIn() {
   const [lockoutCountdown, setLockoutCountdown] = useState(0);
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const [resending, setResending] = useState(false);
+  const [resendCooldownEnd, setResendCooldownEnd] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [verifiedSuccess, setVerifiedSuccess] = useState(false);
 
   // Load remembered email on mount
@@ -117,6 +119,23 @@ function SignIn() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [lockoutUntil]);
+
+  // ── Resend cooldown (precise timestamp-based) ─────────────
+  useEffect(() => {
+    if (!resendCooldownEnd) return;
+    const tick = () => {
+      const remaining = Math.ceil((resendCooldownEnd - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setResendCooldownEnd(null);
+        setResendCooldown(0);
+      } else {
+        setResendCooldown(remaining);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 500);
+    return () => clearInterval(interval);
+  }, [resendCooldownEnd]);
 
   const isLockedOut = lockoutUntil && Date.now() < lockoutUntil;
 
@@ -438,32 +457,36 @@ function SignIn() {
 
           {/* Unverified email banner with resend button */}
           {unverifiedEmail && (
-            <div
-              style={{
-                background: "#FEF3C7",
-                border: "1px solid #F59E0B",
-                borderRadius: "12px",
-                padding: "16px 20px",
-                marginBottom: "20px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "14px",
-                  color: "#92400E",
-                  lineHeight: 1.5,
-                }}
-              >
-                <strong>Email not verified.</strong> Check your inbox (and spam folder) for the verification link.
-              </p>
+            <div className="verify-banner" role="alert">
+              {/* Mail icon */}
+              <svg className="verify-banner__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+
+              {/* Text */}
+              <div className="verify-banner__text">
+                <span className="verify-banner__title">Email not verified</span>
+                <span className="verify-banner__desc">A link was sent to your email.</span>
+              </div>
+
+              {/* Action */}
               <button
                 type="button"
-                disabled={resending}
+                disabled={resending || resendCooldown > 0}
+                className="verify-banner__action"
                 onClick={async () => {
+                  if (!formData.password.trim()) {
+                    showNotification(
+                      "Please re-enter your password to resend the verification email.",
+                      "warning",
+                    );
+                    setTimeout(() => {
+                      const el = document.getElementById("password");
+                      if (el) { el.focus(); }
+                    }, 100);
+                    return;
+                  }
                   setResending(true);
                   sessionStorage.setItem("resendInProgress", "1");
                   try {
@@ -475,7 +498,7 @@ function SignIn() {
                     await sendEmailVerification(cred.user, {
                       url: `${window.location.origin}/verify-email`,
                     });
-                    await auth.signOut();
+                    setResendCooldownEnd(Date.now() + 60_000);
                     showNotification(
                       "Verification email sent! Check your inbox.",
                       "success",
@@ -485,28 +508,25 @@ function SignIn() {
                     showNotification(
                       err.code === "auth/too-many-requests"
                         ? "Too many requests. Please wait a few minutes."
+                        : err.code === "auth/wrong-password" || err.code === "auth/invalid-credential"
+                        ? "Incorrect password. Please re-enter your password."
                         : "Could not resend. Please try signing in again.",
                       "error",
                     );
                   } finally {
+                    try { await auth.signOut(); } catch (_) { /* ignore */ }
                     sessionStorage.removeItem("resendInProgress");
                     setResending(false);
                   }
                 }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#D97706",
-                  fontWeight: 600,
-                  fontSize: "13px",
-                  cursor: resending ? "not-allowed" : "pointer",
-                  textDecoration: "underline",
-                  padding: 0,
-                  alignSelf: "flex-start",
-                  opacity: resending ? 0.6 : 1,
-                }}
               >
-                {resending ? "Sending..." : "Resend verification email"}
+                {resending ? (
+                  <><Loader2 className="w-3 h-3 auth-spinner" />&nbsp;Sending…</>
+                ) : resendCooldown > 0 ? (
+                  <span className="verify-banner__timer">{resendCooldown}s</span>
+                ) : (
+                  "Resend"
+                )}
               </button>
             </div>
           )}

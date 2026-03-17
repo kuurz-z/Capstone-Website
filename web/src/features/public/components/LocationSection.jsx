@@ -1,4 +1,5 @@
-import { MapPin, Bus, Train, Building2, ShoppingBag, GraduationCap } from 'lucide-react';
+import { useState } from 'react';
+import { MapPin, Bus, ShoppingBag, GraduationCap, Building2 } from 'lucide-react';
 
 const locations = [
   {
@@ -18,117 +19,184 @@ const locations = [
     nearbySchools: ['University of Santo Tomas (4 km)', 'PUP Manila (3.5 km)', 'Adamson University (4 km)'],
     transportation: ['Guadalupe MRT Station (3 min walk)', 'Multiple jeepney routes', 'EDSA Carousel Bus Stop'],
     landmarks: ['Guadalupe Commercial Center (5 min)', 'Landmark Makati (15 min)', 'Mini Stop (1 min walk)'],
-  }
+  },
 ];
 
 export function LocationSection() {
+  const [activeTab, setActiveTab] = useState(0);
+  const location = locations[activeTab];
+
   return (
-    <section className="py-20 lg:py-24" style={{ backgroundColor: 'var(--lp-bg)' }} id="location">
+    <section className="py-16 lg:py-20" style={{ backgroundColor: 'var(--lp-bg)' }} id="location">
       <div className="max-w-screen-2xl mx-auto px-8 lg:px-12">
         {/* Header */}
-        <div className="text-center mb-12">
-          <p className="text-xs mb-3 tracking-widest uppercase font-medium" style={{ color: 'var(--lp-accent)' }}>Where We Are</p>
+        <div className="text-center mb-10">
+          <p className="text-xs mb-3 tracking-widest uppercase font-medium" style={{ color: 'var(--lp-accent)' }}>
+            Where We Are
+          </p>
           <h2 className="text-3xl lg:text-4xl font-medium mb-5 tracking-tight" style={{ color: 'var(--lp-text)' }}>
             Strategic Locations
           </h2>
           <p className="max-w-2xl mx-auto font-normal leading-relaxed" style={{ color: 'var(--lp-text-secondary)' }}>
-            Both branches are strategically located near universities, public transport, and essential establishments.
+            Both branches are strategically located near public transport and essential establishments.
           </p>
         </div>
 
-        {/* Location Cards */}
-        <div className="space-y-16">
-          {locations.map((location, index) => (
-            <div key={index} className="grid lg:grid-cols-2 gap-8 items-start">
-              {/* Map */}
-              <div
-                className="rounded-2xl overflow-hidden order-2 lg:order-1"
+        {/* Branch Tabs */}
+        <div className="flex justify-center mb-8">
+          <div
+            className="inline-flex rounded-full p-1.5"
+            style={{
+              backgroundColor: 'var(--lp-bg-card)',
+              border: '1px solid var(--lp-border)',
+            }}
+          >
+            {locations.map((loc, i) => (
+              <button
+                key={loc.branch}
+                onClick={() => setActiveTab(i)}
+                className="relative px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300"
                 style={{
-                  border: '1px solid var(--lp-border)',
-                  boxShadow: 'var(--lp-card-shadow-hover)',
+                  backgroundColor: activeTab === i ? 'var(--lp-accent)' : 'transparent',
+                  color: activeTab === i ? '#ffffff' : 'var(--lp-text-secondary)',
+                  boxShadow: activeTab === i ? '0 4px 14px rgba(255, 140, 66, 0.3)' : 'none',
                 }}
               >
-                <div className="aspect-[4/3] relative" style={{ backgroundColor: 'var(--lp-bg-card)' }}>
-                  <iframe
-                    src={location.mapEmbed}
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    allowFullScreen
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    title={`${location.branch} Location Map`}
-                  ></iframe>
+                <MapPin
+                  className="inline-block w-3.5 h-3.5 mr-1.5"
+                  style={{ verticalAlign: 'text-bottom' }}
+                />
+                {loc.branch}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div
+          key={activeTab}
+          className="grid lg:grid-cols-2 gap-8 items-start"
+          style={{ animation: 'locFadeIn 0.3s ease forwards' }}
+        >
+          {/* Map */}
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{
+              border: '1px solid var(--lp-border)',
+              boxShadow: 'var(--lp-card-shadow-hover)',
+            }}
+          >
+            <div className="aspect-[4/3] relative" style={{ backgroundColor: 'var(--lp-bg-card)' }}>
+              <iframe
+                src={location.mapEmbed}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title={`${location.branch} Location Map`}
+              />
+            </div>
+          </div>
+
+          {/* Details */}
+          <div>
+            <div className="mb-6">
+              <div
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium mb-4"
+                style={{
+                  backgroundColor: 'var(--lp-icon-bg)',
+                  color: 'var(--lp-accent)',
+                }}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                {location.branch} Branch
+              </div>
+              <h3 className="text-xl font-medium mb-2 tracking-tight" style={{ color: 'var(--lp-text)' }}>
+                {location.address}
+              </h3>
+              <p className="text-sm" style={{ color: 'var(--lp-text-muted)' }}>{location.coordinates}</p>
+            </div>
+
+            {/* Nearby info grid */}
+            <div className="space-y-5">
+              {/* Nearby Schools */}
+              <div
+                className="p-5 rounded-2xl"
+                style={{
+                  backgroundColor: 'var(--lp-bg-card)',
+                  border: '1px solid var(--lp-border)',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <GraduationCap className="w-4 h-4" style={{ color: 'var(--lp-accent)' }} />
+                  <h4 className="text-sm font-medium" style={{ color: 'var(--lp-text)' }}>Nearby Universities</h4>
                 </div>
+                <ul className="space-y-1.5">
+                  {location.nearbySchools.map((school, idx) => (
+                    <li key={idx} className="text-sm flex items-center gap-2" style={{ color: 'var(--lp-text-secondary)' }}>
+                      <span style={{ color: 'var(--lp-accent)', fontSize: '10px' }}>●</span>
+                      {school}
+                    </li>
+                  ))}
+                </ul>
               </div>
 
-              {/* Details */}
-              <div className="order-1 lg:order-2">
-                <div className="mb-6">
-                  <div
-                    className="inline-block px-4 py-2 rounded-full text-xs font-medium mb-4"
-                    style={{
-                      backgroundColor: 'var(--lp-icon-bg)',
-                      color: 'var(--lp-accent)',
-                    }}
-                  >
-                    {location.branch} Branch
-                  </div>
-                  <h3 className="text-2xl font-medium mb-3 tracking-tight" style={{ color: 'var(--lp-text)' }}>
-                    {location.address}
-                  </h3>
-                  <p className="text-sm" style={{ color: 'var(--lp-text-muted)' }}>{location.coordinates}</p>
+              {/* Transportation */}
+              <div
+                className="p-5 rounded-2xl"
+                style={{
+                  backgroundColor: 'var(--lp-bg-card)',
+                  border: '1px solid var(--lp-border)',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Bus className="w-4 h-4" style={{ color: 'var(--lp-accent)' }} />
+                  <h4 className="text-sm font-medium" style={{ color: 'var(--lp-text)' }}>Transportation Access</h4>
                 </div>
+                <ul className="space-y-1.5">
+                  {location.transportation.map((t, idx) => (
+                    <li key={idx} className="text-sm flex items-center gap-2" style={{ color: 'var(--lp-text-secondary)' }}>
+                      <span style={{ color: 'var(--lp-accent)', fontSize: '10px' }}>●</span>
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-                {/* Nearby Schools */}
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <GraduationCap className="w-5 h-5" style={{ color: 'var(--lp-accent)' }} />
-                    <h4 className="text-sm font-normal" style={{ color: 'var(--lp-text)' }}>Nearby Universities</h4>
-                  </div>
-                  <ul className="space-y-2">
-                    {location.nearbySchools.map((school, idx) => (
-                      <li key={idx} className="text-sm pl-7" style={{ color: 'var(--lp-text-secondary)' }}>
-                        • {school}
-                      </li>
-                    ))}
-                  </ul>
+              {/* Landmarks */}
+              <div
+                className="p-5 rounded-2xl"
+                style={{
+                  backgroundColor: 'var(--lp-bg-card)',
+                  border: '1px solid var(--lp-border)',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <ShoppingBag className="w-4 h-4" style={{ color: 'var(--lp-accent)' }} />
+                  <h4 className="text-sm font-medium" style={{ color: 'var(--lp-text)' }}>Nearby Establishments</h4>
                 </div>
-
-                {/* Transportation */}
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Bus className="w-5 h-5" style={{ color: 'var(--lp-accent)' }} />
-                    <h4 className="text-sm font-normal" style={{ color: 'var(--lp-text)' }}>Transportation Access</h4>
-                  </div>
-                  <ul className="space-y-2">
-                    {location.transportation.map((transport, idx) => (
-                      <li key={idx} className="text-sm pl-7" style={{ color: 'var(--lp-text-secondary)' }}>
-                        • {transport}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Landmarks */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <ShoppingBag className="w-5 h-5" style={{ color: 'var(--lp-accent)' }} />
-                    <h4 className="text-sm font-normal" style={{ color: 'var(--lp-text)' }}>Nearby Establishments</h4>
-                  </div>
-                  <ul className="space-y-2">
-                    {location.landmarks.map((landmark, idx) => (
-                      <li key={idx} className="text-sm pl-7" style={{ color: 'var(--lp-text-secondary)' }}>
-                        • {landmark}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ul className="space-y-1.5">
+                  {location.landmarks.map((l, idx) => (
+                    <li key={idx} className="text-sm flex items-center gap-2" style={{ color: 'var(--lp-text-secondary)' }}>
+                      <span style={{ color: 'var(--lp-accent)', fontSize: '10px' }}>●</span>
+                      {l}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
-          ))}
+          </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes locFadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </section>
   );
 }
