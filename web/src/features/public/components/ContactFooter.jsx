@@ -199,7 +199,7 @@ export function ContactFooter() {
         <div className="pt-6" style={{ borderTop: '1px solid var(--lp-border)' }}>
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-xs font-light" style={{ color: 'var(--lp-text-muted)' }}>
-              © 2026 Lilycrest. All rights reserved.
+              © {new Date().getFullYear()} Lilycrest. All rights reserved.
             </p>
             <div className="flex gap-6">
               <Link

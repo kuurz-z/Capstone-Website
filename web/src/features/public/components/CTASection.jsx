@@ -45,7 +45,7 @@ export function CTASection() {
             style={{ color: 'var(--lp-text-secondary)' }}
           >
             Browse available rooms, schedule a viewing, and move in with
-            confidence. We're here to make it easy.
+            confidence. Move in as soon as <strong style={{ color: 'var(--lp-text)', fontWeight: '500' }}>7 days</strong>. No hidden fees. Flexible terms.
           </p>
 
           {/* CTA Buttons */}

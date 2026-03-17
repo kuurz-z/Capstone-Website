@@ -54,7 +54,6 @@ const reservationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Room",
       required: true,
-      index: true,
     },
 
     // Bed Assignment
@@ -264,7 +263,6 @@ const reservationSchema = new mongoose.Schema(
         "archived",
       ],
       default: "pending",
-      index: true,
     },
 
     // --- Overdue Move-In Tracking ---
@@ -311,7 +309,6 @@ const reservationSchema = new mongoose.Schema(
     isArchived: {
       type: Boolean,
       default: false,
-      index: true,
     },
     archivedAt: {
       type: Date,
@@ -413,13 +410,21 @@ reservationSchema.post("save", async function (doc, next) {
 });
 
 // ============================================================================
-// INDEXES
+// INDEXES — consolidated, no duplicates
 // ============================================================================
 
+// Lookup: user's reservations filtered by status (most common query pattern)
 reservationSchema.index({ userId: 1, status: 1 });
+// Lookup: room availability — which reservations are on a given room+date
 reservationSchema.index({ roomId: 1, checkInDate: 1 });
-reservationSchema.index({ status: 1, checkInDate: 1 });
-reservationSchema.index({ isArchived: 1, status: 1 });
+// Admin listing: filter by status + archive flag together (avoids COLLSCAN)
+reservationSchema.index({ status: 1, isArchived: 1 });
+// Room-level status queries (e.g. find all checked-in reservations for a room)
+reservationSchema.index({ roomId: 1, status: 1 });
+// Overdue move-in cron: finds reserved + non-archived by move-in date
+reservationSchema.index({ status: 1, targetMoveInDate: 1 });
+// Billing: active reservations lookup by branch
+reservationSchema.index({ branch: 1, status: 1, isArchived: 1 });
 
 // ============================================================================
 // METHODS
@@ -519,13 +524,6 @@ reservationSchema.statics.findOverdueMoveIns = function () {
   });
 };
 
-// ============================================================================
-// INDEXES (compound indexes for common query patterns)
-// ============================================================================
-
-reservationSchema.index({ userId: 1, status: 1 }); // User's reservations by status
-reservationSchema.index({ roomId: 1, status: 1 }); // Room availability queries
-reservationSchema.index({ status: 1, isArchived: 1 }); // Admin listing filters
 
 // ============================================================================
 // EXPORT

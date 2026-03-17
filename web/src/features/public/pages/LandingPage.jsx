@@ -4,17 +4,32 @@ import { HeroSection } from "../components/HeroSection";
 import { BenefitsSection } from "../components/BenefitsSection";
 import { SocialProofSection } from "../components/SocialProofSection";
 import { RoomInventory } from "../components/RoomInventory";
-
 import { FacilitiesSection } from "../components/FacilitiesSection";
 import { LocationSection } from "../components/LocationSection";
 import { RulesSection } from "../components/RulesSection";
 import { StorytellingSection } from "../components/StorytellingSection";
-
 import { InquiryForm } from "../components/InquiryForm";
 import { CTASection } from "../components/CTASection";
 import ScrollReveal from "../../../shared/components/ScrollReveal";
 import ScrollToTopButton from "../../../shared/components/ScrollToTopButton";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
+import RouteErrorBoundary from "../../../shared/components/RouteErrorBoundary";
+
+/* Lightweight section fallback — only hides the broken section, not the whole page */
+function SectionFallback({ name }) {
+  return (
+    <div
+      style={{
+        padding: "40px 24px",
+        textAlign: "center",
+        color: "var(--lp-text-muted)",
+        fontSize: "13px",
+      }}
+    >
+      {name} section is temporarily unavailable.
+    </div>
+  );
+}
 
 function LandingPageContent() {
   const { theme } = useTheme();
@@ -24,72 +39,94 @@ function LandingPageContent() {
       <Navbar type="landing" currentPage="home" />
 
       {/* 1. HOOK — First impression */}
-      <HeroSection />
+      <RouteErrorBoundary name="HeroSection" fallback={<SectionFallback name="Hero" />}>
+        <HeroSection />
+      </RouteErrorBoundary>
 
       {/* 2. FEATURES — Why choose us */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-up">
-          <BenefitsSection />
+          <RouteErrorBoundary name="BenefitsSection" fallback={<SectionFallback name="Benefits" />}>
+            <BenefitsSection />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* 3. PRODUCT — What we offer */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-up" delay={0.1}>
-          <RoomInventory />
+          <RouteErrorBoundary name="RoomInventory" fallback={<SectionFallback name="Rooms" />}>
+            <RoomInventory />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* 4. FACILITIES — Shared spaces */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-up">
-          <FacilitiesSection />
+          <RouteErrorBoundary name="FacilitiesSection" fallback={<SectionFallback name="Facilities" />}>
+            <FacilitiesSection />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* 5. CONVENIENCE — Where we are */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-up">
-          <LocationSection />
+          <RouteErrorBoundary name="LocationSection" fallback={<SectionFallback name="Location" />}>
+            <LocationSection />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* 6. TRUST — Social proof */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-up">
-          <SocialProofSection />
+          <RouteErrorBoundary name="SocialProofSection" fallback={<SectionFallback name="Testimonials" />}>
+            <SocialProofSection />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* 7. STORY — Brand identity */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-left">
-          <StorytellingSection />
+          <RouteErrorBoundary name="StorytellingSection" fallback={<SectionFallback name="About" />}>
+            <StorytellingSection />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* 8. TRANSPARENCY — House rules */}
       <ScrollReveal variant="fade">
-        <RulesSection />
+        <RouteErrorBoundary name="RulesSection" fallback={<SectionFallback name="Rules" />}>
+          <RulesSection />
+        </RouteErrorBoundary>
       </ScrollReveal>
 
       {/* 9. ACTION — Convert the visitor */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-up">
-          <InquiryForm />
+          <RouteErrorBoundary name="InquiryForm" fallback={<SectionFallback name="Inquiry Form" />}>
+            <InquiryForm />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* 10. FINAL CTA */}
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="zoom">
-          <CTASection />
+          <RouteErrorBoundary name="CTASection" fallback={<SectionFallback name="CTA" />}>
+            <CTASection />
+          </RouteErrorBoundary>
         </ScrollReveal>
       </div>
 
       {/* FOOTER */}
       <ScrollReveal variant="fade">
-        <ContactFooter />
+        <RouteErrorBoundary name="ContactFooter" fallback={<SectionFallback name="Footer" />}>
+          <ContactFooter />
+        </RouteErrorBoundary>
       </ScrollReveal>
 
       <ScrollToTopButton />

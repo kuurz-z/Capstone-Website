@@ -14,13 +14,13 @@ export function StorytellingSection() {
             
             <div className="space-y-5 mb-8">
               <p className="leading-relaxed" style={{ color: 'var(--lp-text-secondary)' }}>
-                Lilycrest was founded in 2019 by former university students who understood the struggle of finding quality, affordable accommodation near campus. We experienced firsthand the challenges of overpriced, poorly maintained dormitories with unreliable utilities.
+                Lilycrest was founded by people who understood the struggle of finding quality, affordable accommodation close to the places that matter. We experienced firsthand the challenges of overpriced, poorly maintained housing with unreliable utilities.
               </p>
               <p className="leading-relaxed" style={{ color: 'var(--lp-text-secondary)' }}>
-                Today, we've created the living spaces we wished existed during our college years. Every detail—from the high-speed internet to the 24/7 security—is designed with student needs in mind.
+                Today, we've created the living spaces we wished existed. Every detail — from the high-speed internet to the 24/7 security — is designed with your comfort and peace of mind in focus.
               </p>
               <p className="leading-relaxed" style={{ color: 'var(--lp-text-secondary)' }}>
-                Our mission is simple: provide students with a safe, comfortable, and inspiring home where they can focus on what truly matters—their education and personal growth.
+                Our mission is simple: provide residents with a safe, comfortable, and inspiring home where they can focus on what truly matters — their personal and professional growth.
               </p>
             </div>
 
@@ -40,15 +40,15 @@ export function StorytellingSection() {
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              Learn More About Us
+              Get In Touch
             </a>
           </div>
 
           {/* Right - Values */}
           <div className="space-y-5">
             {[
-              { icon: Heart, title: 'Student-First Approach', desc: 'Every decision we make prioritizes the comfort, safety, and success of our residents. Your wellbeing is our top priority.' },
-              { icon: Users, title: 'Community Matters', desc: 'We foster a supportive environment where students can build lasting friendships and professional networks.' },
+              { icon: Heart, title: 'Resident-First Approach', desc: 'Every decision we make prioritizes the comfort, safety, and well-being of our residents. Your peace of mind is our top priority.' },
+              { icon: Users, title: 'Community Matters', desc: 'We foster a supportive environment where residents can build lasting friendships and meaningful connections.' },
               { icon: Award, title: 'Quality & Transparency', desc: 'No hidden fees, no surprises. We maintain high standards and communicate openly with all our residents.' },
             ].map((item, i) => {
               const Icon = item.icon;

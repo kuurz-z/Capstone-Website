@@ -14,7 +14,7 @@ const testimonials = [
     role: "Working Professional",
     initials: "JR",
     quote:
-      "I compared 5 dorms before choosing Lilycrest. Best value for money — all utilities included, no surprise charges.",
+      "I compared 5 places before choosing Lilycrest. Best value for money — all utilities included, no surprise charges.",
     rating: 5,
   },
   {
@@ -23,6 +23,30 @@ const testimonials = [
     initials: "AC",
     quote:
       "The community here is amazing. I've made lifelong friends, and the 24/7 security gives my family peace of mind.",
+    rating: 5,
+  },
+  {
+    name: "Carlos Mendoza",
+    role: "New Resident",
+    initials: "CM",
+    quote:
+      "Moving in was completely stress-free. Everything was furnished and ready to go. I was settled in on the same day.",
+    rating: 5,
+  },
+  {
+    name: "Patricia Lim",
+    role: "Remote Worker",
+    initials: "PL",
+    quote:
+      "Stable internet and a quiet environment — exactly what I needed for remote work. The flexible contract terms are a huge plus.",
+    rating: 5,
+  },
+  {
+    name: "David Tan",
+    role: "Long-term Resident",
+    initials: "DT",
+    quote:
+      "I've been here for 2 years and I honestly can't picture living anywhere else. The management is responsive and the community is great.",
     rating: 5,
   },
 ];
@@ -144,9 +168,9 @@ export function SocialProofSection() {
         />
 
         <div
-          className="flex gap-8 py-4"
+          className="lp-marquee-track flex gap-8 py-4"
           style={{
-            animation: "marquee-scroll 45s linear infinite",
+            animation: "marquee-scroll 55s linear infinite",
             width: "max-content",
           }}
           onMouseEnter={(e) => {
@@ -167,6 +191,9 @@ export function SocialProofSection() {
         @keyframes marquee-scroll {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .lp-marquee-track { animation: none !important; }
         }
       `}</style>
     </section>

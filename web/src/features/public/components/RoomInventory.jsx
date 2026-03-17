@@ -60,6 +60,7 @@ export function RoomInventory() {
           {roomListings.map((room) => (
             <div
               key={room.id}
+              role="article"
               className="group rounded-2xl overflow-hidden transition-all duration-300"
               style={{
                 backgroundColor: 'var(--lp-bg-card)',
@@ -76,21 +77,12 @@ export function RoomInventory() {
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              {/* Popular Badge */}
-              {room.popular && (
-                <div
-                  className="text-center py-2.5 text-white text-xs font-medium tracking-wider uppercase"
-                  style={{ backgroundColor: 'var(--lp-accent)' }}
-                >
-                  Most Popular
-                </div>
-              )}
-
-              {/* Image */}
+              {/* Image - Popular badge now a corner ribbon */}
               <div className="relative h-72 overflow-hidden">
                 <img
                   src={room.image}
                   alt={room.title}
+                  loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -109,6 +101,16 @@ export function RoomInventory() {
                   </span>
                   <span className="text-xs ml-1" style={{ color: 'var(--lp-text-muted)' }}>/mo</span>
                 </div>
+
+                {/* Corner Ribbon — replaces full-width bar */}
+                {room.popular && (
+                  <span
+                    className="absolute top-4 right-4 text-white text-xs font-medium tracking-wider uppercase px-3 py-1.5 rounded-full"
+                    style={{ backgroundColor: 'var(--lp-accent)' }}
+                  >
+                    ★ Most Popular
+                  </span>
+                )}
               </div>
 
               {/* Content */}
@@ -123,9 +125,9 @@ export function RoomInventory() {
                   {room.description}
                 </p>
 
-                {/* Inclusions */}
+                {/* Inclusions — capped at 4 to prevent overflow */}
                 <div className="flex flex-wrap gap-2 mb-6">
-                  {room.inclusions.map((item, idx) => (
+                  {room.inclusions.slice(0, 4).map((item, idx) => (
                     <span
                       key={idx}
                       className="text-xs px-3 py-1.5 rounded-full font-light"
@@ -137,9 +139,20 @@ export function RoomInventory() {
                       {item}
                     </span>
                   ))}
+                  {room.inclusions.length > 4 && (
+                    <span
+                      className="text-xs px-3 py-1.5 rounded-full font-light"
+                      style={{
+                        backgroundColor: 'var(--lp-icon-bg)',
+                        color: 'var(--lp-text-muted)',
+                      }}
+                    >
+                      +{room.inclusions.length - 4} more
+                    </span>
+                  )}
                 </div>
 
-                {/* CTA Button */}
+                {/* CTA Button — improved ghost contrast */}
                 <Link
                   to="/applicant/check-availability"
                   className="flex items-center justify-center gap-2 w-full py-4 rounded-full text-sm font-medium transition-all duration-300"
@@ -151,19 +164,22 @@ export function RoomInventory() {
                           boxShadow: '0 4px 12px rgba(255, 140, 66, 0.25)',
                         }
                       : {
-                          border: '1px solid var(--lp-accent)',
+                          border: '1.5px solid var(--lp-accent)',
                           color: 'var(--lp-accent)',
                           backgroundColor: 'transparent',
+                          fontWeight: '500',
                         }
                   }
                   onMouseEnter={(e) => {
                     if (!room.popular) {
-                      e.currentTarget.style.backgroundColor = 'var(--lp-icon-bg)';
+                      e.currentTarget.style.backgroundColor = 'var(--lp-accent)';
+                      e.currentTarget.style.color = '#ffffff';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!room.popular) {
                       e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = 'var(--lp-accent)';
                     }
                   }}
                 >

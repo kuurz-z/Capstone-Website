@@ -28,6 +28,9 @@ const PrivacyPolicyPage = React.lazy(
 const TermsOfServicePage = React.lazy(
   () => import("./features/public/pages/TermsOfServicePage"),
 );
+const NotFoundPage = React.lazy(
+  () => import("./features/public/pages/NotFoundPage"),
+);
 
 // Admin Pages
 const AdminLayout = React.lazy(
@@ -373,6 +376,18 @@ function AppContent() {
                   <MaintenancePage />
                 </RouteErrorBoundary>
               </ProtectedRoute>
+            }
+          />
+
+          {/* ============================================================ */}
+          {/* 404 — catch-all for unmatched routes                        */}
+          {/* ============================================================ */}
+          <Route
+            path="*"
+            element={
+              <RouteErrorBoundary name="NotFound">
+                <NotFoundPage />
+              </RouteErrorBoundary>
             }
           />
 

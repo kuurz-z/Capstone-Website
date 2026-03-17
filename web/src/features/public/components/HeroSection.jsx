@@ -118,7 +118,7 @@ export function HeroSection() {
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(to right, rgba(10, 22, 40, 0.92) 0%, rgba(10, 22, 40, 0.75) 50%, rgba(10, 22, 40, 0.4) 100%)",
+              "linear-gradient(to right, rgba(10, 22, 40, 0.93) 0%, rgba(10, 22, 40, 0.82) 45%, rgba(10, 22, 40, 0.58) 75%, rgba(10, 22, 40, 0.45) 100%)",
           }}
         />
 
@@ -132,7 +132,7 @@ export function HeroSection() {
             >
               <Sparkles className="w-4 h-4 text-white/90" />
               <span className="text-white/80 text-xs font-light tracking-wider uppercase">
-                Premium Living
+                Quality Urban Living
               </span>
             </motion.div>
 
@@ -196,11 +196,18 @@ export function HeroSection() {
               ✓ No hidden fees · ✓ Flexible terms · ✓ Visit first, decide later
             </motion.p>
 
-            {/* Stats — compact inline row */}
+            {/* Stats — enhanced glassmorphism strip */}
             <motion.div
               {...fadeUp(1.1)}
               ref={statRef}
-              className="flex items-center gap-0 flex-wrap"
+              className="inline-flex items-center gap-0 flex-wrap"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "50px",
+                padding: "10px 20px",
+              }}
             >
               {stats.map((stat, i) => {
                 const Icon = stat.icon;
@@ -211,7 +218,7 @@ export function HeroSection() {
                         className="mx-4 hidden sm:block"
                         style={{
                           width: '1px',
-                          height: '28px',
+                          height: '24px',
                           backgroundColor: 'rgba(255,255,255,0.2)',
                         }}
                       />
