@@ -169,6 +169,14 @@ const notify = {
       { entityType: "reservation" }),
 
   /**
+   * Admin warning: unactioned visit_pending reservation approaching auto-expiry
+   */
+  stalePendingVisitWarning: (adminUserId, tenantName, roomName, daysPending) =>
+    createNotification(adminUserId, "general", "Unactioned Visit Request",
+      `${tenantName} has a visit request for ${roomName} pending for ${daysPending} days. It will auto-expire in ${14 - daysPending} day${(14 - daysPending) === 1 ? "" : "s"} if not acted on.`,
+      { entityType: "reservation" }),
+
+  /**
    * General notification
    */
   general: (userId, title, message, options = {}) =>

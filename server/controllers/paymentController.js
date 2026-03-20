@@ -18,8 +18,9 @@ import dayjs from "dayjs";
 import { createCheckoutSession, getCheckoutSession } from "../config/paymongo.js";
 import { Bill, Reservation, User } from "../models/index.js";
 import logger from "../middleware/logger.js";
-import { sendPaymentApprovedEmail } from "../config/email.js";
+import { sendPaymentApprovedEmail, sendPaymentReceiptEmail } from "../config/email.js";
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
+import { BUSINESS } from "../config/constants.js";
 import {
   sendSuccess,
   AppError,
@@ -139,7 +140,7 @@ export const createDepositCheckout = async (req, res, next) => {
       }
     }
 
-    const amount = 2000;
+    const amount = BUSINESS.DEPOSIT_AMOUNT;
     const roomName = reservation.roomId?.name || "Room";
 
     const { checkoutUrl, sessionId } = await createCheckoutSession({
@@ -182,8 +183,30 @@ export const checkSessionStatus = async (req, res, next) => {
     const isPaid = paidPayments.length > 0;
     logger.info({ isPaid, totalPayments: payments.length, paidPayments: paidPayments.length }, "Payment check result");
 
-    // Declare outside so it's accessible in the response
+
+    // ── Extract payment method FIRST so it's available for all emails ──
     let paymentMethod = null;
+    if (paidPayments.length > 0) {
+      const firstPayment = paidPayments[0];
+      const payObj = firstPayment?.attributes || firstPayment;
+      const rawType =
+        payObj?.source?.type ||
+        session.attributes?.payment_method_used ||
+        "online";
+
+      const METHOD_LABELS = {
+        gcash:       "GCash",
+        grab_pay:    "GrabPay",
+        paymaya:     "Maya",
+        card:        "Credit / Debit Card",
+        dob:         "Online Banking",
+        billease:    "BillEase",
+        qrph:        "QR Ph",
+        online:      "Online Payment (PayMongo)",
+      };
+      paymentMethod = METHOD_LABELS[rawType] || `PayMongo — ${rawType}`;
+      logger.info({ rawType, paymentMethod }, "Payment method detected");
+    }
 
     if (isPaid) {
       const metadata = session.attributes.metadata || {};
@@ -225,7 +248,7 @@ export const checkSessionStatus = async (req, res, next) => {
                 tenantName,
                 amount: bill.totalAmount,
                 description: `Monthly Bill — ${monthStr}`,
-                paymentMethod: "PayMongo (Online)",
+                paymentMethod: paymentMethod || "Online Payment (PayMongo)",
                 paymentDate: dayjs().format("MMMM D, YYYY"),
                 referenceId: paidPayments[0]?.id || sessionId,
               });
@@ -236,17 +259,6 @@ export const checkSessionStatus = async (req, res, next) => {
         } else {
           logger.info({ billId: metadata.billId }, "Bill already marked as paid — skipping");
         }
-      }
-
-      // Extract payment method from PayMongo's data (before saving to reservation)
-      if (isPaid && paidPayments.length > 0) {
-        const firstPayment = paidPayments[0];
-        const payObj = firstPayment?.attributes || firstPayment;
-        paymentMethod =
-          payObj?.source?.type ||
-          session.attributes?.payment_method_used ||
-          "online";
-        logger.info({ paymentMethod }, "Payment method detected");
       }
 
       // Auto-mark the reservation deposit as paid
@@ -276,9 +288,9 @@ export const checkSessionStatus = async (req, res, next) => {
               await sendPaymentReceiptEmail({
                 to: tenant.email,
                 tenantName,
-                amount: 2000,
+                amount: BUSINESS.DEPOSIT_AMOUNT,
                 description: `Reservation Deposit — ${roomName}`,
-                paymentMethod: "PayMongo (Online)",
+                paymentMethod: paymentMethod || "Online Payment (PayMongo)",
                 paymentDate: dayjs().format("MMMM D, YYYY"),
                 referenceId: paidPayments[0]?.id || sessionId,
               });

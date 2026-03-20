@@ -1,0 +1,179 @@
+@import "../../styles/design-tokens.css";
+
+.data-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.data-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Table ── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+/* ── Header ── */
+.data-table__th {
+  padding: 11px 16px;
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+  user-select: none;
+  background: var(--bg-page);
+}
+
+.data-table__th--sortable {
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.data-table__th--sortable:hover {
+  color: var(--text-primary);
+}
+
+.data-table__th--right { text-align: right; }
+.data-table__th--center { text-align: center; }
+
+.data-table__th-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Body rows ── */
+.data-table__row {
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.data-table__row:not(:last-child) .data-table__td {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.data-table__row:hover {
+  background: var(--bg-hover);
+}
+
+.data-table__row--clickable {
+  cursor: pointer;
+}
+
+.data-table__row--clickable:active {
+  background: var(--bg-active);
+}
+
+/* ── Cells ── */
+.data-table__td {
+  padding: 12px 16px;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.data-table__td--right { text-align: right; }
+.data-table__td--center { text-align: center; }
+
+/* ── Skeleton loading ── */
+.data-table__row--skeleton .data-table__td {
+  padding: 14px 16px;
+}
+
+.data-table__skeleton {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border-light) 50%, var(--bg-hover) 75%);
+  background-size: 200% 100%;
+  animation: dtShimmer 1.5s infinite;
+  width: 60%;
+}
+
+@keyframes dtShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.data-table__row--skeleton:nth-child(1) .data-table__skeleton { width: 80%; }
+.data-table__row--skeleton:nth-child(2) .data-table__skeleton { width: 55%; }
+.data-table__row--skeleton:nth-child(3) .data-table__skeleton { width: 70%; }
+.data-table__row--skeleton:nth-child(4) .data-table__skeleton { width: 45%; }
+.data-table__row--skeleton:nth-child(5) .data-table__skeleton { width: 65%; }
+
+/* ── Pagination ── */
+.data-table__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 4px 0;
+}
+
+.data-table__pagination-info {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.data-table__pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.data-table__page-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.data-table__page-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.data-table__page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.data-table__page-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .data-table__th {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+  .data-table__td {
+    padding: 10px 12px;
+    font-size: var(--font-size-sm);
+  }
+}

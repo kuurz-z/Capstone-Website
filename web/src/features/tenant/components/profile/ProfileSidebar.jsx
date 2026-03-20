@@ -36,8 +36,7 @@ const NAV_SECTIONS = [
       { id: "billing", label: "My Bills", icon: CreditCard },
       { id: "reservation", label: "My Reservation", icon: Bed },
       { id: "contract", label: "My Contract", icon: FileText },
-      { id: "history", label: "Activity Log", icon: History },
-      { id: "stays", label: "My Stays", icon: Home },
+      { id: "history", label: "My History", icon: History },
     ],
   },
   {
@@ -64,8 +63,8 @@ const NavButton = ({ item, isActive, onClick, collapsed }) => (
       borderRadius: 6,
       border: "none",
       cursor: "pointer",
-      backgroundColor: isActive ? "#fff" : "transparent",
-      color: isActive ? "#FF8C42" : "#374151",
+      backgroundColor: isActive ? "var(--surface-card)" : "transparent",
+      color: isActive ? "#FF8C42" : "var(--text-body)",
       fontWeight: isActive ? 600 : 500,
       fontSize: 14,
       transition: "background 0.15s, color 0.15s",
@@ -73,7 +72,7 @@ const NavButton = ({ item, isActive, onClick, collapsed }) => (
       overflow: "hidden",
     }}
     onMouseEnter={(e) => {
-      if (!isActive) e.currentTarget.style.backgroundColor = "#fff";
+      if (!isActive) e.currentTarget.style.backgroundColor = "var(--surface-hover)";
     }}
     onMouseLeave={(e) => {
       if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
@@ -179,7 +178,7 @@ const ProfileSidebar = ({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "16px 14px",
-          borderBottom: "1px solid #E2E8F0",
+          borderBottom: "1px solid var(--border-subtle)",
           minHeight: 68,
         }}
       >
@@ -193,7 +192,7 @@ const ProfileSidebar = ({
               width: 36,
               height: 36,
               borderRadius: 8,
-              backgroundColor: "#0A1628",
+              backgroundColor: "var(--color-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -206,7 +205,7 @@ const ProfileSidebar = ({
             style={{
               fontWeight: 600,
               fontSize: 18,
-              color: "#0A1628",
+              color: "var(--text-heading)",
               letterSpacing: "-0.01em",
               whiteSpace: "nowrap",
               opacity: showCollapsed ? 0 : 1,
@@ -240,7 +239,7 @@ const ProfileSidebar = ({
       <div
         style={{
           padding: "14px 14px",
-          borderBottom: "1px solid #E2E8F0",
+          borderBottom: "1px solid var(--border-subtle)",
           display: "flex",
           alignItems: "center",
           gap: 12,
@@ -323,10 +322,10 @@ const ProfileSidebar = ({
             transition: `opacity ${TRANSITION}`,
           }}
         >
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#1F2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {fullName}
           </p>
-          <p style={{ margin: "2px 0 0", fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {profileData.email}
           </p>
         </div>
@@ -347,21 +346,26 @@ const ProfileSidebar = ({
             textDecoration: "none",
             fontSize: 13,
             fontWeight: 600,
-            color: "#0A1628",
-            border: "1.5px solid #0A1628",
+            color: "var(--text-heading)",
+            border: "1.5px solid var(--text-heading)",
             borderLeft: "3.5px solid #FF8C42",
             transition: "background 0.2s, color 0.2s, box-shadow 0.2s",
             whiteSpace: "nowrap",
             overflow: "hidden",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#0A1628";
+            const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+            e.currentTarget.style.backgroundColor = isDark ? "#FF8C42" : "var(--color-primary)";
             e.currentTarget.style.color = "#fff";
-            e.currentTarget.style.boxShadow = "0 2px 8px rgba(10,22,40,0.18)";
+            e.currentTarget.style.borderColor = isDark ? "#FF8C42" : "var(--color-primary)";
+            e.currentTarget.style.boxShadow = isDark
+              ? "0 2px 10px rgba(255,140,66,0.3)"
+              : "0 2px 8px rgba(10,22,40,0.18)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "#0A1628";
+            e.currentTarget.style.color = "var(--text-heading)";
+            e.currentTarget.style.borderColor = "var(--text-heading)";
             e.currentTarget.style.boxShadow = "none";
           }}
         >
@@ -400,7 +404,7 @@ const ProfileSidebar = ({
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: "0.1em",
-                color: "#94A3B8",
+                color: "var(--text-muted)",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 opacity: showCollapsed ? 0 : 1,
@@ -415,7 +419,7 @@ const ProfileSidebar = ({
             <div
               style={{
                 height: 1,
-                backgroundColor: "#E2E8F0",
+                backgroundColor: "var(--border-subtle)",
                 margin: showCollapsed ? "4px 6px 8px" : "0 6px",
                 opacity: showCollapsed ? 0.8 : 0,
                 transition: `opacity ${TRANSITION}, margin ${TRANSITION}`,
@@ -437,7 +441,7 @@ const ProfileSidebar = ({
       </nav>
 
       {/* ── Sign Out ──────────────────────────────────────────────────────── */}
-      <div style={{ padding: "16px 8px 12px", borderTop: "1px solid #E8EBF0" }}>
+      <div style={{ padding: "16px 8px 12px", borderTop: "1px solid var(--border-card)" }}>
         <button
           onClick={onLogout}
           title="Sign Out"
@@ -476,7 +480,7 @@ const ProfileSidebar = ({
 
       {/* ── Collapse toggle (desktop only) ─────────────────────────────── */}
       {!isMobile && (
-        <div style={{ padding: "8px 8px 12px", borderTop: "1px solid #E8EBF0" }}>
+        <div style={{ padding: "8px 8px 12px", borderTop: "1px solid var(--border-card)" }}>
           <button
             onClick={toggleCollapsed}
             title={showCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -491,14 +495,14 @@ const ProfileSidebar = ({
               borderRadius: 8,
               cursor: "pointer",
               backgroundColor: "transparent",
-              color: "#64748B",
+              color: "var(--text-secondary)",
               fontWeight: 500,
               fontSize: 14,
               transition: `background 0.15s, color 0.15s`,
               whiteSpace: "nowrap",
               overflow: "hidden",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#F3F4F6"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--surface-muted)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
           >
             <ChevronLeft
@@ -538,8 +542,8 @@ const ProfileSidebar = ({
             left: 0,
             right: 0,
             height: 56,
-            backgroundColor: "#F1F5F9",
-            borderBottom: "1px solid #E2E8F0",
+            backgroundColor: "var(--surface-sidebar)",
+            borderBottom: "1px solid var(--border-subtle)",
             display: "flex",
             alignItems: "center",
             padding: "0 16px",
@@ -554,7 +558,7 @@ const ProfileSidebar = ({
               border: "none",
               cursor: "pointer",
               padding: 4,
-              color: "#0A1628",
+              color: "var(--text-heading)",
               display: "flex",
               alignItems: "center",
             }}
@@ -571,7 +575,7 @@ const ProfileSidebar = ({
                 width: 30,
                 height: 30,
                 borderRadius: 6,
-                backgroundColor: "#0A1628",
+                backgroundColor: "var(--color-primary)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -579,7 +583,7 @@ const ProfileSidebar = ({
             >
               <Bed style={{ width: 16, height: 16, color: "#fff" }} />
             </div>
-            <span style={{ fontWeight: 600, fontSize: 16, color: "#0A1628" }}>
+            <span style={{ fontWeight: 600, fontSize: 16, color: "var(--text-heading)" }}>
               Lilycrest
             </span>
           </Link>
@@ -607,8 +611,8 @@ const ProfileSidebar = ({
             left: 0,
             bottom: 0,
             width: 280,
-            backgroundColor: "#F1F5F9",
-            borderRight: "1px solid #E2E8F0",
+            backgroundColor: "var(--surface-sidebar)",
+            borderRight: "1px solid var(--border-subtle)",
             zIndex: 50,
             transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
             transition: `transform ${TRANSITION}`,
@@ -630,11 +634,11 @@ const ProfileSidebar = ({
         width: W,
         minWidth: W,
         maxWidth: W,
-        backgroundColor: "#F1F5F9",
-        borderRight: "1px solid #E2E8F0",
+        backgroundColor: "var(--surface-sidebar)",
+        borderRight: "1px solid var(--border-subtle)",
         display: "flex",
         flexDirection: "column",
-        minHeight: "100vh",
+        height: "100vh",
         position: "sticky",
         top: 0,
         flexShrink: 0,

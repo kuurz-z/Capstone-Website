@@ -196,18 +196,18 @@ export const getBillingHistory = async (req, res, next) => {
 
 export const getBillingStats = async (req, res, next) => {
   try {
-    const admin = await getAdminInfo(req);
+    // req.branchFilter is set by filterByBranch middleware:
+    //   null → superAdmin (cross-branch), string → regular admin's branch
+    const isSuperAdmin = req.isSuperAdmin;
+    const branch = req.branchFilter;   // null for SA, branch string for admin
     if (
-      !admin.isSuperAdmin &&
-      (!admin.branch || !["gil-puyat", "guadalupe"].includes(admin.branch))
+      !isSuperAdmin &&
+      (!branch || !["gil-puyat", "guadalupe"].includes(branch))
     )
       return res.status(403).json({ error: "Invalid branch" });
-    const monthlyRevenue = await Bill.getMonthlyRevenueByBranch(
-      admin.branch,
-      12,
-    );
-    const paymentStats = await Bill.getPaymentStats(admin.branch);
-    res.json({ branch: admin.branch, monthlyRevenue, paymentStats });
+    const monthlyRevenue = await Bill.getMonthlyRevenueByBranch(branch, 12);
+    const paymentStats = await Bill.getPaymentStats(branch);
+    res.json({ branch, monthlyRevenue, paymentStats });
   } catch (error) {
     next(error);
   }
@@ -235,18 +235,22 @@ export const markBillAsPaid = async (req, res, next) => {
 
 export const getBillsByBranch = async (req, res, next) => {
   try {
-    const admin = await getAdminInfo(req);
-    const branch =
-      admin.isSuperAdmin && req.query.branch ? req.query.branch : admin.branch;
+    const isSuperAdmin = req.isSuperAdmin;
+    // Regular admin: req.branchFilter is their branch (enforced by middleware)
+    // Super admin: req.branchFilter is null, can pass branch via query
+    const branch = req.branchFilter ||
+      (isSuperAdmin && req.query.branch ? req.query.branch : null);
 
-    if (!branch || !["gil-puyat", "guadalupe"].includes(branch)) {
-      if (admin.isSuperAdmin && !req.query.branch) {
+    if (!branch) {
+      if (isSuperAdmin) {
         // Super admin without branch filter — get all
         const result = await fetchBills({ isArchived: false }, req.query);
         return res.json(result);
       }
       return res.status(403).json({ error: "Invalid branch" });
     }
+    if (!["gil-puyat", "guadalupe"].includes(branch))
+      return res.status(403).json({ error: "Invalid branch" });
 
     const result = await fetchBills({ branch, isArchived: false }, req.query);
     res.json(result);
@@ -293,12 +297,27 @@ export const generateRoomBill = async (req, res, next) => {
     const tenantInfos = [];
     const seenUserIds = new Set();
 
-    // Source 1: Bed occupancy data
+    // Source 1: Bed occupancy data — batch fetch all reservations in one query (N+1 fix)
+    const bedReservationIds = occupiedBeds
+      .map((b) => b.occupiedBy?.reservationId)
+      .filter(Boolean);
+
+    const bedReservations = bedReservationIds.length > 0
+      ? await Reservation.find({
+          _id: { $in: bedReservationIds },
+          status: "checked-in",
+          isArchived: { $ne: true },
+        }).populate("userId", "firstName lastName email")
+      : [];
+
+    // O(1) lookup by reservation ID
+    const bedReservationMap = new Map(
+      bedReservations.map((r) => [String(r._id), r]),
+    );
+
     for (const bed of occupiedBeds) {
       if (!bed.occupiedBy.reservationId) continue;
-      const reservation = await Reservation.findById(
-        bed.occupiedBy.reservationId,
-      ).populate("userId", "firstName lastName email");
+      const reservation = bedReservationMap.get(String(bed.occupiedBy.reservationId));
       if (!reservation?.userId || reservation.status !== "checked-in") continue;
       if (seenUserIds.has(String(reservation.userId._id))) continue;
       seenUserIds.add(String(reservation.userId._id));
@@ -539,59 +558,70 @@ export const getRoomsWithTenants = async (req, res, next) => {
       )
       .sort({ name: 1 });
 
+    // Batch fetch ALL checked-in reservations for every room in one query (N+1 fix)
+    // Was: 1 Reservation.find() per room inside Promise.all → N+1 queries
+    // Now: 2 queries total regardless of number of rooms
+    const roomIds = rooms.map((r) => r._id);
+    const allReservations = await Reservation.find({
+      roomId: { $in: roomIds },
+      status: "checked-in",
+      isArchived: { $ne: true },
+    })
+      .populate("userId", "firstName lastName email")
+      .lean();
+
+    // Group reservations by roomId for O(1) access
+    const reservationsByRoom = new Map();
+    for (const r of allReservations) {
+      const key = String(r.roomId);
+      if (!reservationsByRoom.has(key)) reservationsByRoom.set(key, []);
+      reservationsByRoom.get(key).push(r);
+    }
+
     res.json({
-      rooms: await Promise.all(
-        rooms.map(async (room) => {
-          // Get checked-in reservations with tenant details
-          const reservations = await Reservation.find({
-            roomId: room._id,
-            status: "checked-in",
-            isArchived: { $ne: true },
-          })
-            .populate("userId", "firstName lastName email")
-            .lean();
+      rooms: rooms.map((room) => {
+        const reservations = reservationsByRoom.get(String(room._id)) || [];
 
-          const tenants = reservations
-            .filter((r) => r.userId)
-            .map((r) => {
-              // Find which bed this tenant is on
-              const bed = room.beds.find(
-                (b) =>
-                  b.occupiedBy?.reservationId?.toString() === r._id.toString(),
-              );
-              return {
-                userId: r.userId._id,
-                reservationId: r._id,
-                name:
-                  `${r.userId.firstName || ""} ${r.userId.lastName || ""}`.trim() ||
-                  "Tenant",
-                email: r.userId.email || "",
-                checkInDate: r.checkInDate,
-                monthlyRent:
-                  r.monthlyRent ||
-                  r.totalPrice ||
-                  room.monthlyPrice ||
-                  room.price ||
-                  0,
-                customCharges: r.customCharges || [],
-                bedPosition: bed?.position || null,
-              };
-            });
+        const tenants = reservations
+          .filter((r) => r.userId)
+          .map((r) => {
+            // Find which bed this tenant occupies
+            const bed = room.beds.find(
+              (b) =>
+                b.occupiedBy?.reservationId?.toString() === r._id.toString(),
+            );
+            return {
+              userId: r.userId._id,
+              reservationId: r._id,
+              name:
+                `${r.userId.firstName || ""} ${r.userId.lastName || ""}`.trim() ||
+                "Tenant",
+              email: r.userId.email || "",
+              checkInDate: r.checkInDate,
+              monthlyRent:
+                r.monthlyRent ||
+                r.totalPrice ||
+                room.monthlyPrice ||
+                room.price ||
+                0,
+              customCharges: r.customCharges || [],
+              bedPosition: bed?.position || null,
+            };
+          });
 
-          return {
-            id: room._id,
-            name: room.name,
-            roomNumber: room.roomNumber,
-            branch: room.branch,
-            type: room.type,
-            capacity: room.capacity,
-            currentOccupancy: tenants.length,
-            tenantCount: tenants.length,
-            roomPrice: room.monthlyPrice || room.price || 0,
-            tenants,
-          };
-        }),
-      ),
+        return {
+          id: room._id,
+          name: room.name,
+          roomNumber: room.roomNumber,
+          branch: room.branch,
+          type: room.type,
+          capacity: room.capacity,
+          currentOccupancy: tenants.length,
+          tenantCount: tenants.length,
+          roomPrice: room.monthlyPrice || room.price || 0,
+          tenants,
+        };
+      }),
     });
   } catch (error) {
     next(error);

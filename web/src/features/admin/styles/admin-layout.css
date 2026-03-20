@@ -1,31 +1,44 @@
 /* =============================================================================
-   ADMIN LAYOUT - Shared layout for all admin pages
+   ADMIN LAYOUT — Notion-style content area
    ============================================================================= */
+
+/* When admin layout is active, body must not scroll — only .admin-content scrolls */
+html:has(.admin-layout),
+html:has(.admin-layout) body {
+  overflow: hidden;
+  height: 100vh;
+}
 
 .admin-layout {
   display: flex;
   min-height: 100vh;
-  background: #f8fafc;
+  height: 100vh;
+  background: #ffffff;
 }
 
+/* Content shifts based on sidebar state */
 .admin-layout-main {
   flex: 1;
-  margin-left: 260px;
+  margin-left: 240px;
   display: flex;
   flex-direction: column;
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Top Bar */
+.admin-layout--collapsed .admin-layout-main {
+  margin-left: 64px;
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
 .admin-topbar {
-  background: white;
-  height: 60px;
-  min-height: 60px;
+  background: #ffffff;
+  height: 52px;
+  min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2rem;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -34,56 +47,58 @@
 .admin-topbar-left {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 10px;
 }
 
 .admin-menu-toggle {
   display: none;
   background: none;
   border: none;
-  font-size: 1.25rem;
-  color: #64748b;
+  color: #91918e;
   cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  transition: all 0.2s;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.12s;
 }
 
 .admin-menu-toggle:hover {
-  color: #0A1628;
-  background: #f1f5f9;
+  color: #37352f;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .admin-topbar-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 14px;
+  font-weight: 500;
+  color: #37352f;
   margin: 0;
 }
 
 .admin-topbar-right {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 12px;
 }
 
 .admin-topbar-date {
-  font-size: 0.8125rem;
-  color: #94a3b8;
+  font-size: 13px;
+  color: #91918e;
   font-weight: 400;
 }
 
-/* Content Area */
+/* ── Content area ─────────────────────────────────────────────────────────── */
 .admin-content {
   flex: 1;
-  padding: 2rem;
-  overflow-y: auto;
+  padding: 24px;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  background: #f9f9f8;
+  min-height: calc(100vh - 52px);
 }
 
-/* Mobile Responsive */
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .admin-layout-main {
-    margin-left: 0;
+    margin-left: 0 !important;
   }
 
   .admin-menu-toggle {
@@ -93,36 +108,41 @@
   }
 
   .admin-topbar {
-    padding: 0 1rem;
-    height: 56px;
-    min-height: 56px;
+    padding: 0 16px;
+    height: 48px;
+    min-height: 48px;
   }
 
   .admin-content {
-    padding: 1rem;
+    padding: 16px;
+    min-height: calc(100vh - 48px);
+  }
+
+  .admin-topbar-date {
+    display: none;
   }
 }
 
-/* Tablet */
+/* ── Tablet ───────────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) and (min-width: 769px) {
   .admin-topbar {
-    padding: 0 1.5rem;
+    padding: 0 20px;
   }
 
   .admin-content {
-    padding: 1.5rem;
+    padding: 20px;
   }
 }
 
-/* Print */
+/* ── Print ────────────────────────────────────────────────────────────────── */
 @media print {
   .admin-topbar,
-  .admin-sidebar {
+  .sb {
     display: none;
   }
 
   .admin-layout-main {
-    margin-left: 0;
+    margin-left: 0 !important;
   }
 
   .admin-content {

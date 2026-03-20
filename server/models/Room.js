@@ -384,7 +384,9 @@ roomSchema.methods.isBedAvailable = function (bedId) {
  * @param {string} roomId - The room ObjectId
  * @returns {Promise<Room|null>} Updated room or null if already at capacity
  */
-roomSchema.statics.atomicIncreaseOccupancy = async function (roomId) {
+roomSchema.statics.atomicIncreaseOccupancy = async function (roomId, session) {
+  const opts = { new: true };
+  if (session) opts.session = session;
   return this.findOneAndUpdate(
     {
       _id: roomId,
@@ -400,7 +402,7 @@ roomSchema.statics.atomicIncreaseOccupancy = async function (roomId) {
         },
       },
     ],
-    { new: true },
+    opts,
   );
 };
 
@@ -410,7 +412,9 @@ roomSchema.statics.atomicIncreaseOccupancy = async function (roomId) {
  * @param {string} roomId - The room ObjectId
  * @returns {Promise<Room|null>} Updated room or null if already at 0
  */
-roomSchema.statics.atomicDecreaseOccupancy = async function (roomId) {
+roomSchema.statics.atomicDecreaseOccupancy = async function (roomId, session) {
+  const opts = { new: true };
+  if (session) opts.session = session;
   return this.findOneAndUpdate(
     {
       _id: roomId,
@@ -424,7 +428,7 @@ roomSchema.statics.atomicDecreaseOccupancy = async function (roomId) {
         },
       },
     ],
-    { new: true },
+    opts,
   );
 };
 

@@ -4,6 +4,7 @@ import {
   formatRoomType,
   fmtDate,
 } from "../../../../shared/utils/formatDate";
+import { CreditCard } from "lucide-react";
 
 /**
  * Step 4 — Reservation Fee Payment
@@ -183,7 +184,7 @@ const ReservationPaymentStep = ({
             }}
           >
             <div className="info-box-title" style={{ color: "#065F46" }}>
-              💳 Pay via GCash, Maya, or Card
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><CreditCard size={15} /> Pay via GCash, Maya, or Card</span>
             </div>
             <div className="info-text" style={{ color: "#047857" }}>
               You'll be redirected to PayMongo's secure checkout to pay ₱2,000.
@@ -204,7 +205,7 @@ const ReservationPaymentStep = ({
           >
             {payingOnline
               ? "Redirecting to PayMongo…"
-              : "💳 Pay ₱2,000 Online"}
+              : <span style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}><CreditCard size={16} /> Pay ₱2,000 Online</span>}
           </button>
           <span style={{ fontSize: 12, color: "#94A3B8", textAlign: "right" }}>
             Didn't finish paying? No worries — clicking the button will resume your session.

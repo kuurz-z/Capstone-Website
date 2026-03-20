@@ -26,10 +26,13 @@
 
 import { getAuth } from "../config/firebase.js";
 import crypto from "crypto";
+import { User } from "../models/index.js";
+
+import { CACHE } from "../config/constants.js";
 
 /* ─── In-memory token verification cache (avoids hitting Firebase each request) ── */
 const tokenCache = new Map();
-const TOKEN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const TOKEN_CACHE_TTL = CACHE.TOKEN_TTL_MS;
 
 function getCachedToken(token) {
   const key = crypto.createHash("sha256").update(token).digest("hex");
@@ -39,22 +42,32 @@ function getCachedToken(token) {
     tokenCache.delete(key);
     return null;
   }
+  entry.lastAccess = Date.now(); // Update on every read — enables LRU eviction
   return entry.decoded;
 }
 
 function setCachedToken(token, decoded) {
   const key = crypto.createHash("sha256").update(token).digest("hex");
-  tokenCache.set(key, { decoded, ts: Date.now() });
-  // Evict old entries if cache grows too large
-  if (tokenCache.size > 500) {
-    const oldest = tokenCache.keys().next().value;
-    tokenCache.delete(oldest);
+  // Evict least-recently-accessed entry when cache is full
+  // (LRU is better than FIFO — keeps active users' tokens cached)
+  if (tokenCache.size >= CACHE.MAX_TOKEN_ENTRIES) {
+    let lruKey = null;
+    let lruTime = Infinity;
+    for (const [k, v] of tokenCache) {
+      const lastUsed = v.lastAccess || v.ts;
+      if (lastUsed < lruTime) {
+        lruTime = lastUsed;
+        lruKey = k;
+      }
+    }
+    if (lruKey) tokenCache.delete(lruKey);
   }
+  tokenCache.set(key, { decoded, ts: Date.now(), lastAccess: Date.now() });
 }
 
 /* ─── In-memory account status cache (avoids hitting MongoDB each request) ── */
 const accountStatusCache = new Map();
-const ACCOUNT_STATUS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const ACCOUNT_STATUS_CACHE_TTL = CACHE.ACCOUNT_STATUS_TTL_MS;
 
 function getCachedAccountStatus(uid) {
   const entry = accountStatusCache.get(uid);
@@ -68,7 +81,7 @@ function getCachedAccountStatus(uid) {
 
 function setCachedAccountStatus(uid, status) {
   accountStatusCache.set(uid, { status, ts: Date.now() });
-  if (accountStatusCache.size > 500) {
+  if (accountStatusCache.size > CACHE.MAX_ACCOUNT_STATUS_ENTRIES) {
     const oldest = accountStatusCache.keys().next().value;
     accountStatusCache.delete(oldest);
   }
@@ -131,7 +144,6 @@ export const verifyToken = async (req, res, next) => {
     // Block suspended/banned users from accessing any protected endpoint
     let accountStatus = getCachedAccountStatus(decodedToken.uid);
     if (accountStatus === undefined) {
-      const { User } = await import("../models/index.js");
       const dbUser = await User.findOne({ firebaseUid: decodedToken.uid }).select("accountStatus").lean();
       accountStatus = dbUser?.accountStatus || null;
       setCachedAccountStatus(decodedToken.uid, accountStatus);
@@ -204,7 +216,6 @@ export const verifyAdmin = async (req, res, next) => {
     }
 
     // Fallback: Check MongoDB role (handles missing Firebase custom claims)
-    const { User } = await import("../models/index.js");
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
 
     if (dbUser && (dbUser.role === "admin" || dbUser.role === "superAdmin")) {
@@ -263,7 +274,6 @@ export const verifySuperAdmin = async (req, res, next) => {
     }
 
     // Fallback: Check MongoDB role (handles missing Firebase custom claims)
-    const { User } = await import("../models/index.js");
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
 
     if (dbUser && dbUser.role === "superAdmin") {
@@ -328,7 +338,6 @@ export const verifyApplicant = async (req, res, next) => {
     }
 
     // Fallback: Check MongoDB role (handles missing/stale Firebase custom claims)
-    const { User } = await import("../models/index.js");
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
     if (dbUser && (dbUser.role === "admin" || dbUser.role === "superAdmin")) {
       return res.status(403).json({

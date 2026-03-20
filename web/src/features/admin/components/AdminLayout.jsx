@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
@@ -13,17 +13,43 @@ const PAGE_TITLES = {
   "/admin/users": "Accounts",
   "/admin/room-availability": "Rooms",
   "/admin/audit-logs": "Activity Log",
+  "/admin/billing": "Billing",
+  "/admin/branches": "Branches",
+  "/admin/roles": "Permissions",
+  "/admin/settings": "Settings",
 };
+
+const COLLAPSE_STORAGE_KEY = "sidebar-collapsed";
 
 export default function AdminLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
 
   const pageTitle = PAGE_TITLES[location.pathname] || "Admin";
 
+  const handleToggleCollapse = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(COLLAPSE_STORAGE_KEY, String(next)); } catch {}
+      return next;
+    });
+  };
+
   return (
-    <div className="admin-layout">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <div className={`admin-layout ${collapsed ? "admin-layout--collapsed" : ""}`}>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        collapsed={collapsed}
+        onToggleCollapse={handleToggleCollapse}
+      />
 
       <div className="admin-layout-main">
         {/* Top Bar */}

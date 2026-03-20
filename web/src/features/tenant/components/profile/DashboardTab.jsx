@@ -3,7 +3,7 @@ import ReservationDashboard from "../ReservationDashboard";
 import ProfileCompletionCard from "./ProfileCompletionCard";
 import VisitPassCard3D from "./VisitPassCard3D";
 import VisitPassEmpty from "./VisitPassEmpty";
-import { Calendar, Clock, CheckCircle, AlertCircle } from "lucide-react";
+import { Calendar, Clock, AlertCircle } from "lucide-react";
 
 /* ── Status Banner — contextual info based on reservation state ── */
 const StatusBanner = ({ reservation }) => {
@@ -15,32 +15,16 @@ const StatusBanner = ({ reservation }) => {
   const visitApproved = reservation.visitApproved || reservation.scheduleApproved;
   const hasApplication = reservation.firstName && reservation.lastName && reservation.mobileNumber;
 
-  // Confirmed — show reservation code
-  if (isConfirmed && reservation.reservationCode) {
-    return (
-      <div style={{ ...bannerBase, background: "#F0FDF4", borderColor: "#BBF7D0" }}>
-        <CheckCircle size={18} color="#059669" style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#065F46" }}>
-            Reservation Confirmed
-          </span>
-          <span style={{ fontSize: 12, color: "#047857", marginLeft: 8 }}>
-            Code: <strong>{reservation.reservationCode}</strong>
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   // Visit scheduled but not approved — countdown
   if (visitDate && !visitApproved) {
     const daysUntil = Math.ceil((new Date(visitDate) - new Date()) / (1000 * 60 * 60 * 24));
     const dateStr = new Date(visitDate).toLocaleDateString("en-US", { month: "short", day: "numeric" });
     return (
-      <div style={{ ...bannerBase, background: "#EFF6FF", borderColor: "#BFDBFE" }}>
+      <div style={{ ...bannerBase, background: "rgba(37, 99, 235, 0.08)", borderColor: "rgba(37, 99, 235, 0.2)" }}>
         <Calendar size={18} color="#2563EB" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#1E40AF" }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-heading, #1E40AF)" }}>
             {daysUntil > 0
               ? `Visit in ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`
               : daysUntil === 0
@@ -51,7 +35,7 @@ const StatusBanner = ({ reservation }) => {
             {dateStr}{reservation.visitTime ? ` · ${reservation.visitTime}` : ""}
           </span>
         </div>
-        <span style={{ fontSize: 11, color: "#D97706", fontWeight: 600, background: "#FFFBEB", padding: "3px 10px", borderRadius: 12 }}>
+        <span style={{ fontSize: 11, color: "#D97706", fontWeight: 600, background: "rgba(217, 119, 6, 0.1)", padding: "3px 10px", borderRadius: 12 }}>
           Pending Approval
         </span>
       </div>
@@ -61,7 +45,7 @@ const StatusBanner = ({ reservation }) => {
   // Visit approved, application not yet submitted
   if (visitApproved && !hasApplication) {
     return (
-      <div style={{ ...bannerBase, background: "#FFF7ED", borderColor: "#FED7AA" }}>
+      <div style={{ ...bannerBase, background: "rgba(234, 88, 12, 0.08)", borderColor: "rgba(234, 88, 12, 0.2)" }}>
         <AlertCircle size={18} color="#EA580C" style={{ flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: "#9A3412" }}>
           Visit approved — complete your application to continue
@@ -73,7 +57,7 @@ const StatusBanner = ({ reservation }) => {
   // Application submitted, payment pending
   if (hasApplication && !isConfirmed) {
     return (
-      <div style={{ ...bannerBase, background: "#FFF7ED", borderColor: "#FED7AA" }}>
+      <div style={{ ...bannerBase, background: "rgba(217, 119, 6, 0.08)", borderColor: "rgba(217, 119, 6, 0.2)" }}>
         <Clock size={18} color="#D97706" style={{ flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: "#92400E" }}>
           Application submitted — pay the reservation fee to secure your spot
@@ -196,7 +180,7 @@ const DashboardTab = ({
 /* ── styles ─────────────────────────────────────────────── */
 const S = {
   root: {
-    maxWidth: 960,
+    width: "100%",
   },
   pageHeader: {
     marginBottom: 16,

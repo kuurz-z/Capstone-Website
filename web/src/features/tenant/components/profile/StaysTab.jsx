@@ -18,6 +18,19 @@ import {
 import { useMyStays } from "../../../../shared/hooks/queries/useUsers";
 import dayjs from "dayjs";
 
+// Shared empty state style — matches My Bills
+const emptyStyle = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  textAlign: "center",
+  padding: "56px 24px",
+  background: "#fff",
+  borderRadius: 10,
+  border: "1px solid #E8EBF0",
+};
+
 // ── Stay Card ───────────────────────────────────────────────
 const StayCard = ({ stay, isCurrent }) => {
   const room = stay.roomId || {};
@@ -239,87 +252,23 @@ const StaysTab = () => {
 
       {/* Error */}
       {error && !hasAnyStays && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "50vh",
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 16,
-              padding: "56px 40px",
-              textAlign: "center",
-              border: "1px solid #E8EBF0",
-              maxWidth: 420,
-              width: "100%",
-            }}
-          >
-            <div
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "#F8FAFC",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 20px",
-              }}
-            >
-              <Home className="w-7 h-7" style={{ color: "#CBD5E1" }} />
-            </div>
-            <h3 style={{ color: "#1F2937", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>No Stay History</h3>
-            <p style={{ color: "#94A3B8", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-              Your room assignments will appear here once you've stayed at Lilycrest.
-            </p>
-          </div>
+        <div style={emptyStyle}>
+          <Home size={48} color="#D1D5DB" />
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>No Stay History</h3>
+          <p style={{ fontSize: 13, color: "#9CA3AF", maxWidth: 280, margin: 0 }}>
+            Your room assignments will appear here once you've stayed at Lilycrest.
+          </p>
         </div>
       )}
 
       {/* Empty state — only when no error */}
       {!error && !hasAnyStays && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "50vh",
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 16,
-              padding: "56px 40px",
-              textAlign: "center",
-              border: "1px solid #E8EBF0",
-              maxWidth: 420,
-              width: "100%",
-            }}
-          >
-            <div
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "#F8FAFC",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 20px",
-              }}
-            >
-              <Home className="w-7 h-7" style={{ color: "#CBD5E1" }} />
-            </div>
-            <h3 style={{ color: "#1F2937", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>No Stay History</h3>
-            <p style={{ color: "#94A3B8", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-              Your room assignments will appear here once you've stayed at Lilycrest.
-            </p>
-          </div>
+        <div style={emptyStyle}>
+          <Home size={48} color="#D1D5DB" />
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>No Stay History</h3>
+          <p style={{ fontSize: 13, color: "#9CA3AF", maxWidth: 280, margin: 0 }}>
+            Your room assignments will appear here once you've stayed at Lilycrest.
+          </p>
         </div>
       )}
     </div>

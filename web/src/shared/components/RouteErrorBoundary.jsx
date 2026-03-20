@@ -59,12 +59,12 @@ class RouteErrorBoundary extends React.Component {
         >
           <div
             style={{
-              background: "#fff",
+              background: "var(--surface-card, #fff)",
               borderRadius: "16px",
               padding: "48px",
               maxWidth: "480px",
               boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
-              border: "1px solid #f0f0f0",
+              border: "1px solid var(--border-card, #f0f0f0)",
             }}
           >
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>⚠️</div>
@@ -72,7 +72,7 @@ class RouteErrorBoundary extends React.Component {
               style={{
                 margin: "0 0 8px 0",
                 fontSize: "20px",
-                color: "#1a1a2e",
+                color: "var(--text-heading, #1a1a2e)",
               }}
             >
               Something went wrong
@@ -80,7 +80,7 @@ class RouteErrorBoundary extends React.Component {
             <p
               style={{
                 margin: "0 0 24px 0",
-                color: "#666",
+                color: "var(--text-muted, #666)",
                 fontSize: "14px",
                 lineHeight: "1.5",
               }}
@@ -129,7 +129,7 @@ class RouteErrorBoundary extends React.Component {
                 style={{
                   marginTop: "24px",
                   padding: "16px",
-                  background: "#fef2f2",
+                  background: "rgba(220, 38, 38, 0.06)",
                   borderRadius: "8px",
                   fontSize: "12px",
                   textAlign: "left",

@@ -24,6 +24,8 @@
  *   7. Firebase ↔ MongoDB sync  — daily at 03:00
  *   8. Stale reservation expiry — hourly
  *   9. No-show auto-cancel      — daily at 10:00
+ *  10. Stale visit_pending warn  — daily at 08:00
+ *  11. Archive stale cancelled   — daily at 02:00
  *
  * ============================================================================
  */
@@ -34,6 +36,8 @@ import { Reservation, Room, Bill, User } from "../models/index.js";
 import { getAuth } from "../config/firebase.js";
 import notify from "./notificationService.js";
 import { updateOccupancyOnReservationChange } from "./occupancyManager.js";
+import logger from "../middleware/logger.js";
+import { BUSINESS } from "../config/constants.js";
 
 // ─── Job 1: Overdue Move-In Detection (daily at 08:30) ──────────────────────────
 
@@ -64,10 +68,10 @@ async function detectOverdueMoveIns() {
     }
 
     if (notified > 0) {
-      console.log(`📢 ${notified} overdue move-in alerts sent`);
+      logger.info({ count: notified }, "Overdue move-in alerts sent");
     }
   } catch (error) {
-    console.error("❌ Overdue move-in detection error:", error);
+    logger.error({ err: error }, "Overdue move-in detection failed");
   }
 }
 
@@ -94,9 +98,10 @@ async function cleanupExpiredBedLocks() {
     }
 
     if (totalUnlocked > 0) {
+      logger.info({ count: totalUnlocked }, "Expired bed locks released");
     }
   } catch (error) {
-    console.error("❌ Bed lock cleanup error:", error);
+    logger.error({ err: error }, "Bed lock cleanup failed");
   }
 }
 
@@ -115,9 +120,10 @@ async function markOverdueBills() {
     );
 
     if (result.modifiedCount > 0) {
+      logger.info({ count: result.modifiedCount }, "Bills marked overdue");
     }
   } catch (error) {
-    console.error("❌ Overdue bill marking error:", error);
+    logger.error({ err: error }, "Overdue bill marking failed");
   }
 }
 
@@ -137,7 +143,7 @@ async function computeOverduePenalties() {
       const daysLate = now.diff(dayjs(bill.dueDate), "day");
       if (daysLate <= 0) continue;
 
-      const ratePerDay = bill.penaltyDetails?.ratePerDay || 50;
+      const ratePerDay = bill.penaltyDetails?.ratePerDay || BUSINESS.PENALTY_RATE_PER_DAY;
       const newPenalty = daysLate * ratePerDay;
       const oldPenalty = bill.charges?.penalty || 0;
 
@@ -166,9 +172,10 @@ async function computeOverduePenalties() {
     }
 
     if (updated > 0) {
+      logger.info({ count: updated }, "Overdue penalties recomputed");
     }
   } catch (error) {
-    console.error("❌ Penalty computation error:", error);
+    logger.error({ err: error }, "Penalty computation failed");
   }
 }
 
@@ -198,9 +205,10 @@ async function sendPaymentReminders() {
     }
 
     if (sent > 0) {
+      logger.info({ count: sent }, "Payment due reminders sent");
     }
   } catch (error) {
-    console.error("❌ Payment reminder error:", error);
+    logger.error({ err: error }, "Payment reminder failed");
   }
 }
 
@@ -233,9 +241,10 @@ async function checkContractExpirations() {
     }
 
     if (sent > 0) {
+      logger.info({ count: sent }, "Contract expiration alerts sent");
     }
   } catch (error) {
-    console.error("❌ Contract expiration check error:", error);
+    logger.error({ err: error }, "Contract expiration check failed");
   }
 }
 
@@ -244,7 +253,7 @@ async function checkContractExpirations() {
 async function cleanupOrphanedAccounts() {
   const auth = getAuth();
   if (!auth) {
-    console.warn("⚠️ [Sync] Firebase Admin not initialized — skipping sync cleanup");
+    logger.warn("Sync: Firebase Admin not initialized — skipping orphan cleanup");
     return;
   }
 
@@ -273,9 +282,9 @@ async function cleanupOrphanedAccounts() {
         try {
           await auth.deleteUser(fbUser.uid);
           deletedFirebase++;
-          console.log(`🔥 [Sync] Deleted orphaned Firebase account: ${fbUser.email}`);
+          logger.info({ email: fbUser.email }, "Sync: deleted orphaned Firebase account");
         } catch (err) {
-          console.error(`❌ [Sync] Failed to delete Firebase user ${fbUser.email}:`, err.message);
+          logger.error({ err, email: fbUser.email }, "Sync: failed to delete Firebase user");
         }
       }
     }
@@ -285,24 +294,27 @@ async function cleanupOrphanedAccounts() {
     for (const [uid, mgUser] of mongoByUid) {
       if (!firebaseUids.has(uid)) {
         if (mgUser.role === "admin" || mgUser.role === "superAdmin") {
-          console.warn(`⚠️ [Sync] Skipping orphaned admin MongoDB record: ${mgUser.email}`);
+          logger.warn({ email: mgUser.email }, "Sync: skipping orphaned admin record — manual review required");
           continue;
         }
         try {
           await User.deleteOne({ firebaseUid: uid });
           deletedMongo++;
-          console.log(`🍃 [Sync] Deleted orphaned MongoDB record: ${mgUser.email}`);
+          logger.info({ email: mgUser.email }, "Sync: deleted orphaned MongoDB record");
         } catch (err) {
-          console.error(`❌ [Sync] Failed to delete MongoDB user ${mgUser.email}:`, err.message);
+          logger.error({ err, email: mgUser.email }, "Sync: failed to delete MongoDB user");
         }
       }
     }
 
     if (deletedFirebase > 0 || deletedMongo > 0) {
-      console.log(`🔄 [Sync] Cleanup complete: ${deletedFirebase} Firebase + ${deletedMongo} MongoDB orphan(s) removed`);
+      logger.info(
+        { deletedFirebase, deletedMongo },
+        "Sync: orphan cleanup complete",
+      );
     }
   } catch (error) {
-    console.error("❌ [Sync] Firebase ↔ MongoDB sync cleanup error:", error.message);
+    logger.error({ err: error }, "Sync: Firebase-MongoDB cleanup failed");
   }
 }
 
@@ -318,22 +330,22 @@ async function expireStaleReservations() {
       {
         statuses: ["pending"],
         // 2 hours after creation
-        filter: { createdAt: { $lt: now.subtract(2, "hour").toDate() } },
+        filter: { createdAt: { $lt: now.subtract(BUSINESS.STALE_PENDING_HOURS, "hour").toDate() } },
       },
       {
         statuses: ["visit_pending"],
         // 24 hours after creation (they should have scheduled by now)
-        filter: { createdAt: { $lt: now.subtract(24, "hour").toDate() } },
+        filter: { createdAt: { $lt: now.subtract(BUSINESS.STALE_VISIT_PENDING_HOURS, "hour").toDate() } },
       },
       {
         statuses: ["visit_approved"],
         // 48 hours after the visit date passed
-        filter: { visitDate: { $lt: now.subtract(48, "hour").toDate() } },
+        filter: { visitDate: { $lt: now.subtract(BUSINESS.STALE_VISIT_APPROVED_HOURS, "hour").toDate() } },
       },
       {
         statuses: ["payment_pending"],
         // 48 hours after reaching this status (use updatedAt as proxy)
-        filter: { updatedAt: { $lt: now.subtract(48, "hour").toDate() } },
+        filter: { updatedAt: { $lt: now.subtract(BUSINESS.STALE_PAYMENT_PENDING_HOURS, "hour").toDate() } },
       },
     ];
 
@@ -356,7 +368,7 @@ async function expireStaleReservations() {
         try {
           await updateOccupancyOnReservationChange(reservation, { status: oldStatus });
         } catch (err) {
-          console.error(`⚠️ Bed release failed for ${reservation._id}:`, err.message);
+          logger.error({ err, reservationId: String(reservation._id) }, "Stale expiry: bed release failed");
         }
 
         // Notify tenant
@@ -371,10 +383,10 @@ async function expireStaleReservations() {
     }
 
     if (expired > 0) {
-      console.log(`⏰ ${expired} stale reservation(s) auto-expired`);
+      logger.info({ count: expired }, "Stale reservations auto-expired");
     }
   } catch (error) {
-    console.error("❌ Stale reservation expiration error:", error);
+    logger.error({ err: error }, "Stale reservation expiration failed");
   }
 }
 
@@ -383,7 +395,7 @@ async function expireStaleReservations() {
 async function cancelNoShowReservations() {
   try {
     const now = dayjs();
-    const graceDays = 7;
+    const graceDays = BUSINESS.NOSHOW_GRACE_DAYS;
     let cancelled = 0;
 
     // Find "reserved" (paid) reservations where the move-in deadline + 7 days has passed
@@ -409,7 +421,7 @@ async function cancelNoShowReservations() {
       try {
         await updateOccupancyOnReservationChange(reservation, { status: "reserved" });
       } catch (err) {
-        console.error(`⚠️ Bed release failed for ${reservation._id}:`, err.message);
+        logger.error({ err, reservationId: String(reservation._id) }, "No-show cancel: bed release failed");
       }
 
       // Notify tenant
@@ -423,10 +435,96 @@ async function cancelNoShowReservations() {
     }
 
     if (cancelled > 0) {
-      console.log(`🚷 ${cancelled} no-show reservation(s) auto-cancelled`);
+      logger.info({ count: cancelled }, "No-show reservations auto-cancelled");
     }
   } catch (error) {
-    console.error("❌ No-show cancellation error:", error);
+    logger.error({ err: error }, "No-show cancellation failed");
+  }
+}
+
+// ─── Job 10: Warn Admins About Stale Visit-Pending (daily at 08:00) ─────
+
+async function warnStaleVisitPending() {
+  try {
+    const now = dayjs();
+    const warnDays = BUSINESS.VISIT_PENDING_WARN_DAYS;
+    const cutoff = now.subtract(warnDays, "day").toDate();
+    let warned = 0;
+
+    // Find visit_pending reservations older than VISIT_PENDING_WARN_DAYS
+    const staleVisits = await Reservation.find({
+      status: "visit_pending",
+      isArchived: false,
+      createdAt: { $lt: cutoff },
+    })
+      .populate("userId", "firstName lastName")
+      .populate("roomId", "name branch");
+
+    for (const reservation of staleVisits) {
+      const branch = reservation.roomId?.branch;
+      if (!branch) continue;
+
+      const daysPending = now.diff(dayjs(reservation.createdAt), "day");
+      const tenantName = reservation.userId
+        ? `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim()
+        : "Unknown applicant";
+      const roomName = reservation.roomId?.name || "Unknown room";
+
+      // Find admins for this branch
+      const branchAdmins = await User.find({
+        role: { $in: ["admin", "superAdmin"] },
+        branch: branch,
+        isArchived: false,
+      }).select("_id");
+
+      for (const admin of branchAdmins) {
+        notify.stalePendingVisitWarning(admin._id, tenantName, roomName, daysPending);
+        warned++;
+      }
+    }
+
+    if (warned > 0) {
+      logger.info({ count: warned }, "Stale visit_pending admin warnings sent");
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Stale visit_pending warning job failed");
+  }
+}
+
+// ─── Job 11: Auto-Archive Old Cancelled Reservations (daily at 02:00) ───
+
+async function archiveStaleCancelled() {
+  try {
+    const now = dayjs();
+    const cutoff = now.subtract(BUSINESS.ARCHIVE_CANCELLED_AFTER_DAYS, "day").toDate();
+    let archived = 0;
+
+    // Find cancelled, non-archived records older than threshold
+    // Only auto-archive if user never submitted personal info (safe to hide)
+    const staleRecords = await Reservation.find({
+      status: "cancelled",
+      isArchived: false,
+      updatedAt: { $lt: cutoff },
+      $or: [
+        { firstName: null },
+        { firstName: "" },
+        { firstName: { $exists: false } },
+      ],
+    });
+
+    for (const reservation of staleRecords) {
+      reservation.isArchived = true;
+      reservation.archivedAt = now.toDate();
+      reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-archived: cancelled ${BUSINESS.ARCHIVE_CANCELLED_AFTER_DAYS}+ days ago — ${now.format("MMM D, YYYY")}`;
+      await reservation.save();
+      archived++;
+    }
+
+    if (archived > 0) {
+      logger.info({ count: archived }, "Stale cancelled reservations auto-archived");
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Stale cancelled reservation archiving failed");
   }
 }
 
@@ -509,6 +607,22 @@ export function startScheduler() {
     cron.schedule("0 10 * * *", cancelNoShowReservations, {
       scheduled: true,
       name: "noshow-reservation-cancel",
+    }),
+  );
+
+  // Job 10: Warn admins about stale visit_pending reservations — daily at 08:00
+  scheduledJobs.push(
+    cron.schedule("0 8 * * *", warnStaleVisitPending, {
+      scheduled: true,
+      name: "stale-visit-pending-warning",
+    }),
+  );
+
+  // Job 11: Auto-archive old cancelled reservations — daily at 02:00
+  scheduledJobs.push(
+    cron.schedule("0 2 * * *", archiveStaleCancelled, {
+      scheduled: true,
+      name: "archive-stale-cancelled",
     }),
   );
 

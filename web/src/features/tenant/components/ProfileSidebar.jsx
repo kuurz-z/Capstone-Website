@@ -11,9 +11,9 @@ const ProfileSidebar = ({
 }) => (
   <aside
     className="w-64 bg-white border-r flex flex-col h-screen sticky top-0 self-start overflow-y-auto"
-    style={{ borderColor: "#E8EBF0" }}
+    style={{ borderColor: "var(--border-card, #E8EBF0)" }}
   >
-    <div className="p-6 border-b" style={{ borderColor: "#E8EBF0" }}>
+    <div className="p-6 border-b" style={{ borderColor: "var(--border-card, #E8EBF0)" }}>
       <Link to="/applicant/check-availability" className="flex items-center gap-3">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -21,13 +21,13 @@ const ProfileSidebar = ({
         >
           <Bed className="w-5 h-5 text-white" />
         </div>
-        <span className="font-semibold text-lg" style={{ color: "#0A1628" }}>
+        <span className="font-semibold text-lg" style={{ color: "var(--text-heading, #0A1628)" }}>
           Lilycrest
         </span>
       </Link>
     </div>
 
-    <div className="p-4 border-b" style={{ borderColor: "#E8EBF0" }}>
+    <div className="p-4 border-b" style={{ borderColor: "var(--border-card, #E8EBF0)" }}>
       <div className="flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center"
@@ -38,7 +38,7 @@ const ProfileSidebar = ({
         <div className="flex-1 min-w-0">
           <p
             className="text-sm font-medium truncate"
-            style={{ color: "#1F2937" }}
+            style={{ color: "var(--text-heading, #1F2937)" }}
           >
             {fullName}
           </p>
@@ -114,7 +114,7 @@ const ProfileSidebar = ({
       </div>
     </nav>
 
-    <div className="p-4 border-t" style={{ borderColor: "#E8EBF0" }}>
+    <div className="p-4 border-t" style={{ borderColor: "var(--border-card, #E8EBF0)" }}>
       <Link
         to="/signin"
         onClick={handleLogout}

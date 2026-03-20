@@ -5,6 +5,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ScrollToTop from "./shared/components/ScrollToTop";
 import { FirebaseAuthProvider } from "./shared/hooks/FirebaseAuthContext";
 import { AuthProvider, useAuth } from "./shared/hooks/useAuth";
+import { ThemeProvider } from "./features/public/context/ThemeContext";
 import GlobalLoading from "./shared/components/GlobalLoading";
 import RouteErrorBoundary from "./shared/components/RouteErrorBoundary";
 import { useEffect } from "react";
@@ -12,6 +13,7 @@ import { useEffect } from "react";
 // Guards (kept as static imports — small files, needed immediately)
 import RequireAdmin from "./shared/guards/RequireAdmin";
 import RequireNonAdmin from "./shared/guards/RequireNonAdmin";
+import RequireSuperAdmin from "./shared/guards/RequireSuperAdmin";
 import ProtectedRoute from "./shared/components/ProtectedRoute";
 
 // ============================================================================
@@ -58,6 +60,18 @@ const UserManagementPage = React.lazy(
 );
 const AdminBillingPage = React.lazy(
   () => import("./features/admin/pages/AdminBillingPage"),
+);
+const SuperAdminDashboard = React.lazy(
+  () => import("./features/super-admin/pages/SuperAdminDashboard"),
+);
+const BranchManagementPage = React.lazy(
+  () => import("./features/super-admin/pages/BranchManagementPage"),
+);
+const RolePermissionsPage = React.lazy(
+  () => import("./features/super-admin/pages/RolePermissionsPage"),
+);
+const SystemSettingsPage = React.lazy(
+  () => import("./features/super-admin/pages/SystemSettingsPage"),
 );
 
 // Applicant / Tenant Pages
@@ -274,7 +288,51 @@ function AppContent() {
                 </RouteErrorBoundary>
               }
             />
+
+            {/* ── Super Admin only routes (inside /admin layout) ── */}
+            <Route
+              path="branches"
+              element={
+                <RequireSuperAdmin>
+                  <RouteErrorBoundary name="Branches">
+                    <BranchManagementPage />
+                  </RouteErrorBoundary>
+                </RequireSuperAdmin>
+              }
+            />
+            <Route
+              path="roles"
+              element={
+                <RequireSuperAdmin>
+                  <RouteErrorBoundary name="Roles">
+                    <RolePermissionsPage />
+                  </RouteErrorBoundary>
+                </RequireSuperAdmin>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <RequireSuperAdmin>
+                  <RouteErrorBoundary name="Settings">
+                    <SystemSettingsPage />
+                  </RouteErrorBoundary>
+                </RequireSuperAdmin>
+              }
+            />
           </Route>
+
+          {/* ============================================================ */}
+          {/* LEGACY SUPER ADMIN REDIRECTS — preserve old bookmarks         */}
+          {/* ============================================================ */}
+          <Route path="/super-admin" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="/super-admin/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="/super-admin/users" element={<Navigate to="/admin/users" replace />} />
+          <Route path="/super-admin/tenants" element={<Navigate to="/admin/tenants" replace />} />
+          <Route path="/super-admin/activity-logs" element={<Navigate to="/admin/audit-logs" replace />} />
+          <Route path="/super-admin/branches" element={<Navigate to="/admin/branches" replace />} />
+          <Route path="/super-admin/roles" element={<Navigate to="/admin/roles" replace />} />
+          <Route path="/super-admin/settings" element={<Navigate to="/admin/settings" replace />} />
           <Route
             path="/verify-email"
             element={
@@ -406,7 +464,9 @@ function App() {
   return (
     <FirebaseAuthProvider>
       <AuthProvider>
-        <AppContent />
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
       </AuthProvider>
     </FirebaseAuthProvider>
   );

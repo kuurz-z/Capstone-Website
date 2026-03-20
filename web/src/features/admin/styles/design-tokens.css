@@ -1,0 +1,84 @@
+/* =============================================================================
+   DESIGN TOKENS — Notion-style shared variables
+   ============================================================================= */
+
+:root {
+  /* ── Text ── */
+  --text-primary: #37352f;
+  --text-secondary: #6b6b6b;
+  --text-muted: #91918e;
+  --text-inverse: #ffffff;
+
+  /* ── Surfaces ── */
+  --bg-page: #f9f9f8;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.06);
+  --bg-elevated: #ffffff;
+
+  /* ── Borders ── */
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.14);
+
+  /* ── Status colors ── */
+  --status-success: #0f7b6c;
+  --status-success-bg: rgba(15, 123, 108, 0.08);
+  --status-warning: #c77d0a;
+  --status-warning-bg: rgba(199, 125, 10, 0.08);
+  --status-error: #eb5757;
+  --status-error-bg: rgba(235, 87, 87, 0.08);
+  --status-info: #2f80ed;
+  --status-info-bg: rgba(47, 128, 237, 0.08);
+  --status-neutral: #91918e;
+  --status-neutral-bg: rgba(145, 145, 142, 0.08);
+
+  /* ── Accent ── */
+  --accent-blue: #2f80ed;
+  --accent-blue-bg: rgba(47, 128, 237, 0.08);
+  --accent-green: #0f7b6c;
+  --accent-green-bg: rgba(15, 123, 108, 0.08);
+  --accent-orange: #c77d0a;
+  --accent-orange-bg: rgba(199, 125, 10, 0.08);
+  --accent-red: #eb5757;
+  --accent-red-bg: rgba(235, 87, 87, 0.08);
+  --accent-purple: #6b48ff;
+  --accent-purple-bg: rgba(107, 72, 255, 0.08);
+
+  /* ── Radius ── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* ── Spacing ── */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-page: 24px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-drawer: 0 0 24px rgba(0, 0, 0, 0.12);
+
+  /* ── Typography ── */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+
+  /* ── Transitions ── */
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 0.12s;
+  --duration-normal: 0.2s;
+  --duration-slow: 0.3s;
+}

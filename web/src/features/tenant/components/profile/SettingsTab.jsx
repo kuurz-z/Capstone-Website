@@ -19,7 +19,10 @@ import {
   AlertCircle,
   Monitor,
   LogOut,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { useTheme } from "../../../../features/public/context/ThemeContext";
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -63,6 +66,7 @@ const SettingsTab = () => {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [signingOutAll, setSigningOutAll] = useState(false);
+  const [savedTheme, setSavedTheme] = useState(false);
 
   const hasEmailAuth = isEmailPasswordAccount();
   const socialProvider = getSocialProvider();
@@ -191,9 +195,9 @@ const SettingsTab = () => {
 
   // ── Shared styles ──
   const cardStyle = {
-    backgroundColor: "#fff",
+    backgroundColor: "var(--surface-card)",
     borderRadius: "12px",
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card)",
     padding: "24px",
     marginBottom: "20px",
   };
@@ -202,17 +206,17 @@ const SettingsTab = () => {
     display: "block",
     fontSize: "13px",
     fontWeight: 600,
-    color: "#374151",
+    color: "var(--text-body)",
     marginBottom: "6px",
   };
 
   const inputStyle = {
     width: "100%",
     padding: "10px 40px 10px 14px",
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card)",
     borderRadius: "10px",
     fontSize: "14px",
-    color: "#1F2937",
+    color: "var(--text-heading)",
     outline: "none",
     boxSizing: "border-box",
     transition: "border-color 0.2s, box-shadow 0.2s",
@@ -225,31 +229,132 @@ const SettingsTab = () => {
     transform: "translateY(-50%)",
     background: "none",
     border: "none",
-    color: "#94A3B8",
+    color: "var(--text-muted)",
     cursor: "pointer",
     padding: "4px",
     display: "flex",
     alignItems: "center",
   };
 
+  const { theme, setTheme } = useTheme();
+  const [pendingTheme, setPendingTheme] = useState(theme);
+
+  const handleSaveTheme = () => {
+    setTheme(pendingTheme);
+    setSavedTheme(true);
+    setTimeout(() => setSavedTheme(false), 2000);
+  };
+
+  const themeChanged = pendingTheme !== theme;
+
   return (
-    <div className="max-w-5xl">
+    <div style={{ width: "100%" }}>
       {/* Header */}
       <div style={{ marginBottom: "24px" }}>
         <h1
           style={{
             fontSize: "22px",
             fontWeight: 700,
-            color: "#1F2937",
+            color: "var(--text-heading)",
             margin: "0 0 4px",
             letterSpacing: "-0.01em",
           }}
         >
           Settings
         </h1>
-        <p style={{ fontSize: "14px", color: "#94A3B8", margin: 0 }}>
+        <p style={{ fontSize: "14px", color: "var(--text-muted)", margin: 0 }}>
           Manage your account security and preferences
         </p>
+      </div>
+
+      {/* APPEARANCE SECTION */}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+          <div style={{ width: "36px", height: "36px", borderRadius: "10px", backgroundColor: "rgba(255, 140, 66, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Sun style={{ width: "18px", height: "18px", color: "#FF8C42" }} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-heading)", margin: 0 }}>Appearance</h3>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}>Choose how Lilycrest looks on this device</p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {[
+            { id: "light",  icon: Sun,     label: "Light",  sub: "Always use the light theme" },
+            { id: "dark",   icon: Moon,    label: "Dark",   sub: "Always use the dark theme" },
+            { id: "system", icon: Monitor, label: "System", sub: "Match your device\u2019s system setting" },
+          ].map(({ id, icon: Icon, label, sub }) => (
+            <button
+              key={id}
+              onClick={() => setPendingTheme(id)}
+              style={{
+                display: "flex", alignItems: "center", gap: "14px",
+                width: "100%",
+                padding: "14px 16px",
+                borderRadius: "10px",
+                border: pendingTheme === id ? "2px solid #FF8C42" : "1.5px solid var(--border-card, #E8EBF0)",
+                background: pendingTheme === id ? "rgba(255, 140, 66, 0.08)" : "var(--surface-card, #fff)",
+                cursor: "pointer", textAlign: "left",
+                transition: "all 0.15s",
+              }}
+            >
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: pendingTheme === id ? "rgba(255, 140, 66, 0.12)" : "var(--surface-muted, #F3F4F6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon size={18} color={pendingTheme === id ? "#FF8C42" : "#6B7280"} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: pendingTheme === id ? "#FF8C42" : "var(--text-heading)" }}>{label}</p>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-muted, #94A3B8)" }}>{sub}</p>
+              </div>
+              {pendingTheme === id && (
+                <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#FF8C42", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Save Changes button */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
+          <button
+            onClick={handleSaveTheme}
+            disabled={!themeChanged && !savedTheme}
+            style={{
+              padding: "10px 24px",
+              borderRadius: 10,
+              border: "none",
+              background: savedTheme ? "#059669" : themeChanged ? "#FF8C42" : "#E5E7EB",
+              color: themeChanged || savedTheme ? "#fff" : "#9CA3AF",
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: themeChanged ? "pointer" : "default",
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            {savedTheme ? "✓ Saved!" : "Save Changes"}
+          </button>
+          {themeChanged && !savedTheme && (
+            <button
+              onClick={() => setPendingTheme(theme)}
+              style={{
+                padding: "10px 16px",
+                borderRadius: 10,
+                border: "1.5px solid var(--border-card)",
+                background: "transparent",
+                color: "var(--text-secondary)",
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+            >
+              Discard
+            </button>
+          )}
+        </div>
       </div>
 
       {/* SECURITY SECTION — Change Password */}
@@ -268,7 +373,7 @@ const SettingsTab = () => {
                 width: "36px",
                 height: "36px",
                 borderRadius: "10px",
-                backgroundColor: "#FFF7ED",
+                backgroundColor: "rgba(255, 140, 66, 0.1)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -282,7 +387,7 @@ const SettingsTab = () => {
               style={{
                 fontSize: "16px",
                 fontWeight: 600,
-                color: "#1F2937",
+                color: "var(--text-heading)",
                 margin: 0,
               }}
             >
@@ -295,7 +400,7 @@ const SettingsTab = () => {
               onClick={() => setShowPasswordForm(true)}
               style={{
                 background: "none",
-                border: "1px solid #E8EBF0",
+                border: "1px solid var(--border-card)",
                 borderRadius: "8px",
                 padding: "6px 14px",
                 fontSize: "13px",
@@ -308,12 +413,12 @@ const SettingsTab = () => {
                 transition: "all 0.2s",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#FFF7ED";
+                e.currentTarget.style.backgroundColor = "rgba(255, 140, 66, 0.08)";
                 e.currentTarget.style.borderColor = "#FF8C42";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.borderColor = "#E8EBF0";
+                e.currentTarget.style.borderColor = "var(--border-card)";
               }}
             >
               <Lock style={{ width: "14px", height: "14px" }} />
@@ -330,9 +435,9 @@ const SettingsTab = () => {
               alignItems: "center",
               gap: "12px",
               padding: "16px",
-              backgroundColor: "#F8FAFC",
+              backgroundColor: "var(--surface-muted, #F8FAFC)",
               borderRadius: "10px",
-              border: "1px solid #E8EBF0",
+              border: "1px solid var(--border-card)",
             }}
           >
             <Info
@@ -343,13 +448,13 @@ const SettingsTab = () => {
                 style={{
                   fontSize: "14px",
                   fontWeight: 500,
-                  color: "#1F2937",
+                  color: "var(--text-heading)",
                   margin: "0 0 2px",
                 }}
               >
                 Managed by {socialProvider}
               </p>
-              <p style={{ fontSize: "13px", color: "#94A3B8", margin: 0 }}>
+              <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
                 Your account uses {socialProvider} sign-in. Password management
                 is handled by {socialProvider}.
               </p>
@@ -359,7 +464,7 @@ const SettingsTab = () => {
 
         {/* Email/password — info text */}
         {hasEmailAuth && !showPasswordForm && (
-          <p style={{ color: "#6B7280", fontSize: "14px", margin: 0 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: 0 }}>
             You can update your password here. You'll need to enter your
             current password first for security.
           </p>
@@ -396,7 +501,7 @@ const SettingsTab = () => {
                       "0 0 0 3px rgba(212,152,43,0.1)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = "#E8EBF0";
+                    e.target.style.borderColor = "var(--border-card)";
                     e.target.style.boxShadow = "none";
                   }}
                 />
@@ -436,7 +541,7 @@ const SettingsTab = () => {
                       "0 0 0 3px rgba(212,152,43,0.1)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = "#E8EBF0";
+                    e.target.style.borderColor = "var(--border-card)";
                     e.target.style.boxShadow = "none";
                   }}
                 />
@@ -456,7 +561,7 @@ const SettingsTab = () => {
               <p
                 style={{
                   fontSize: "12px",
-                  color: "#94A3B8",
+                  color: "var(--text-muted)",
                   margin: "4px 0 0",
                 }}
               >
@@ -485,7 +590,7 @@ const SettingsTab = () => {
                       "0 0 0 3px rgba(212,152,43,0.1)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = "#E8EBF0";
+                    e.target.style.borderColor = "var(--border-card)";
                     e.target.style.boxShadow = "none";
                   }}
                 />
@@ -518,12 +623,12 @@ const SettingsTab = () => {
                 disabled={changingPassword}
                 style={{
                   background: "none",
-                  border: "1px solid #E8EBF0",
+                  border: "1px solid var(--border-card)",
                   borderRadius: "10px",
                   padding: "10px 20px",
                   fontSize: "14px",
                   fontWeight: 500,
-                  color: "#6B7280",
+                  color: "var(--text-secondary)",
                   cursor: "pointer",
                 }}
               >
@@ -569,7 +674,7 @@ const SettingsTab = () => {
               width: "36px",
               height: "36px",
               borderRadius: "10px",
-              backgroundColor: "#FEF3C7",
+              backgroundColor: "rgba(217, 119, 6, 0.12)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -583,7 +688,7 @@ const SettingsTab = () => {
             style={{
               fontSize: "16px",
               fontWeight: 600,
-              color: "#1F2937",
+              color: "var(--text-heading)",
               margin: 0,
             }}
           >
@@ -594,10 +699,10 @@ const SettingsTab = () => {
         {/* Current session info */}
         <div
           style={{
-            backgroundColor: "#F0FDF4",
+            backgroundColor: "rgba(34, 197, 94, 0.08)",
             borderRadius: "10px",
             padding: "14px 16px",
-            border: "1px solid #BBF7D0",
+            border: "1px solid rgba(34, 197, 94, 0.2)",
             marginBottom: "12px",
             display: "flex",
             alignItems: "center",
@@ -615,10 +720,10 @@ const SettingsTab = () => {
               }}
             />
             <div>
-              <p style={{ fontSize: "13px", fontWeight: 600, color: "#166534", margin: 0 }}>
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "#22C55E", margin: 0 }}>
                 Current Session
               </p>
-              <p style={{ fontSize: "12px", color: "#4ADE80", margin: "2px 0 0" }}>
+              <p style={{ fontSize: "12px", color: "var(--text-muted, #4ADE80)", margin: "2px 0 0" }}>
                 {navigator.userAgent.includes("Chrome") ? "Chrome" :
                   navigator.userAgent.includes("Firefox") ? "Firefox" :
                     navigator.userAgent.includes("Safari") ? "Safari" : "Browser"}{" "}on{" "}
@@ -631,7 +736,7 @@ const SettingsTab = () => {
               fontSize: "11px",
               fontWeight: 500,
               color: "#16A34A",
-              backgroundColor: "#DCFCE7",
+              backgroundColor: "rgba(34, 197, 94, 0.12)",
               padding: "3px 8px",
               borderRadius: "6px",
             }}
@@ -682,9 +787,9 @@ const SettingsTab = () => {
             justifyContent: "center",
             gap: "8px",
             padding: "10px 16px",
-            border: "1px solid #FCA5A5",
+            border: "1px solid rgba(239, 68, 68, 0.25)",
             borderRadius: "10px",
-            backgroundColor: "#FEF2F2",
+            backgroundColor: "rgba(239, 68, 68, 0.06)",
             color: "#DC2626",
             fontSize: "13px",
             fontWeight: 600,
@@ -694,13 +799,13 @@ const SettingsTab = () => {
           }}
           onMouseEnter={(e) => {
             if (!signingOutAll) {
-              e.currentTarget.style.backgroundColor = "#FEE2E2";
+              e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.12)";
               e.currentTarget.style.borderColor = "#EF4444";
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#FEF2F2";
-            e.currentTarget.style.borderColor = "#FCA5A5";
+            e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.06)";
+            e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.25)";
           }}
         >
           <LogOut style={{ width: "14px", height: "14px" }} />
@@ -723,7 +828,7 @@ const SettingsTab = () => {
               width: "36px",
               height: "36px",
               borderRadius: "10px",
-              backgroundColor: "#EEF2FF",
+              backgroundColor: "rgba(99, 102, 241, 0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -737,7 +842,7 @@ const SettingsTab = () => {
             style={{
               fontSize: "16px",
               fontWeight: 600,
-              color: "#1F2937",
+              color: "var(--text-heading)",
               margin: 0,
             }}
           >
@@ -812,7 +917,7 @@ const SettingsTab = () => {
 const AccountInfoItem = ({ label, value }) => (
   <div
     style={{
-      backgroundColor: "#F8FAFC",
+      backgroundColor: "var(--surface-muted, #F8FAFC)",
       borderRadius: "10px",
       padding: "14px 16px",
     }}
@@ -821,7 +926,7 @@ const AccountInfoItem = ({ label, value }) => (
       style={{
         fontSize: "12px",
         fontWeight: 600,
-        color: "#94A3B8",
+        color: "var(--text-muted)",
         textTransform: "uppercase",
         letterSpacing: "0.5px",
         margin: "0 0 4px",
@@ -833,7 +938,7 @@ const AccountInfoItem = ({ label, value }) => (
       style={{
         fontSize: "14px",
         fontWeight: 500,
-        color: "#1F2937",
+        color: "var(--text-heading)",
         margin: 0,
       }}
     >

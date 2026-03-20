@@ -4,6 +4,12 @@ export function statusBadgeClass(status) {
   switch (status?.toLowerCase()) {
     case "pending":
       return "ar-badge-pending";
+    case "visit_pending":
+      return "ar-badge-default";
+    case "visit_approved":
+      return "ar-badge-confirmed";
+    case "payment_pending":
+      return "ar-badge-pending";
     case "confirmed":
       return "ar-badge-confirmed";
     case "checked-in":
@@ -23,6 +29,12 @@ export function statusLabel(status) {
   switch (status?.toLowerCase()) {
     case "pending":
       return "Pending";
+    case "visit_pending":
+      return "Visit Pending";
+    case "visit_approved":
+      return "Visit Approved";
+    case "payment_pending":
+      return "Payment Pending";
     case "confirmed":
       return "Confirmed";
     case "checked-in":
@@ -39,7 +51,7 @@ export function statusLabel(status) {
 }
 
 export function checkOverdue(r) {
-  if (r.status !== "pending" && r.status !== "reserved") return false;
+  if (!["pending", "reserved", "payment_pending"].includes(r.status)) return false;
   const moveIn = new Date(r.moveInDate);
   return !isNaN(moveIn.getTime()) && moveIn < new Date();
 }
@@ -120,12 +132,14 @@ export default function ReservationTable({
                     >
                       View
                     </button>
+                    {onDelete && (
                     <button
                       className="ar-btn ar-btn-delete"
                       onClick={() => onDelete(r.id)}
                     >
                       Delete
                     </button>
+                    )}
                   </div>
                 </td>
               </tr>

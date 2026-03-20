@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import ReservationItem from "../components/ReservationItem";
-import InquiryItem from "../components/InquiryItem";
+import { Link } from "react-router-dom";
+import { LayoutGrid, MessageSquare, CalendarCheck, Clock } from "lucide-react";
+import { useAuth } from "../../../shared/hooks/useAuth";
 import {
   formatRoomType,
   formatBranch,
@@ -10,11 +11,14 @@ import {
 
 import { useDashboardData } from "../../../shared/hooks/queries/useDashboard";
 import { useBillingStats } from "../../../shared/hooks/queries/useBilling";
-import DashboardStatsBar from "../components/dashboard/DashboardStatsBar";
+import { PageShell, SummaryBar, StatusBadge } from "../components/shared";
 import ReservationStatusChart from "../components/dashboard/ReservationStatusChart";
+import "../styles/design-tokens.css";
 import "../styles/admin-dashboard.css";
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "superAdmin";
   const {
     occupancy,
     inquiryStats,
@@ -27,7 +31,7 @@ export default function Dashboard() {
 
   const { data: billingStats } = useBillingStats();
 
-  // ── Derive all dashboard data from query results ──
+  // ── Derive dashboard data ──
   const occupancyStats = occupancy.data?.statistics || occupancy.data;
   const inquiryStatsData = inquiryStats.data;
   const userStatsData = userStats.data;
@@ -38,20 +42,8 @@ export default function Dashboard() {
     return raw?.inquiries || [];
   })();
 
-  const getMonthSeries = (monthsBack = 5) => {
-    const now = new Date();
-    const series = [];
-    for (let i = monthsBack - 1; i >= 0; i -= 1) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      series.push({
-        key: `${date.getFullYear()}-${date.getMonth()}`,
-        month: String(date.getMonth() + 1).padStart(2, "0"),
-      });
-    }
-    return series;
-  };
-
-  const stats = useMemo(() => {
+  // ── Summary bar pills ──
+  const summaryItems = useMemo(() => {
     const totalInquiries = inquiryStatsData?.total || 0;
     const availableBeds =
       (occupancyStats?.totalCapacity || 0) -
@@ -60,60 +52,52 @@ export default function Dashboard() {
     const activeBookings = (reservations || []).filter((r) =>
       ["confirmed", "checked-in"].includes(r.status),
     ).length;
-    const approvedCount = activeBookings;
+    const revenue = billingStats?.totalCollected
+      ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
+      : "₱0";
 
     return [
       {
-        id: 1,
         label: "Total Inquiries",
-        value: String(totalInquiries),
-        icon: "inquiries",
-        color: "#0F4A7F",
-        percentage: inquiryStatsData?.recentCount
+        value: totalInquiries,
+        trend: inquiryStatsData?.recentCount
           ? `${inquiryStatsData.recentCount} last 7d`
-          : "-",
+          : null,
+        color: "blue",
       },
       {
-        id: 2,
         label: "Available Beds",
-        value: String(Math.max(availableBeds, 0)),
-        icon: "rooms",
-        color: "#F59E0B",
-        percentage: occupancyStats?.overallOccupancyRate || "-",
+        value: Math.max(availableBeds, 0),
+        trend: occupancyStats?.overallOccupancyRate
+          ? `${String(occupancyStats.overallOccupancyRate).replace('%', '')}% occ.`
+          : null,
+        color: "green",
       },
       {
-        id: 3,
         label: "Registered Users",
-        value: String(registeredUsers),
-        icon: "tenants",
-        color: "#10B981",
-        percentage: userStatsData?.activeCount
+        value: registeredUsers,
+        trend: userStatsData?.activeCount
           ? `${userStatsData.activeCount} active`
-          : "-",
+          : null,
+        color: "purple",
       },
       {
-        id: 4,
         label: "Active Bookings",
-        value: String(activeBookings),
-        icon: "reservations",
-        color: "#A855F7",
-        percentage: approvedCount ? `${approvedCount} confirmed` : "-",
+        value: activeBookings,
+        color: "orange",
       },
       {
-        id: 5,
         label: "Total Revenue",
-        value: billingStats?.totalCollected
-          ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
-          : "₱0",
-        icon: "billing",
-        color: "#3B82F6",
-        percentage: billingStats?.overdueCount
+        value: revenue,
+        trend: billingStats?.overdueCount
           ? `${billingStats.overdueCount} overdue`
-          : "0 overdue",
+          : null,
+        color: "blue",
       },
     ];
   }, [occupancyStats, inquiryStatsData, userStatsData, reservations, billingStats]);
 
+  // ── Recent items ──
   const recentInquiries = useMemo(
     () =>
       (inquiryItems || []).slice(0, 4).map((item) => ({
@@ -122,7 +106,7 @@ export default function Dashboard() {
           `${item.firstName || ""} ${item.lastName || ""}`.trim() ||
           item.name ||
           "Unknown",
-        email: item.email || "-",
+        email: item.email || "—",
         branch: formatBranch(item.branch),
         time: formatRelativeTime(item.createdAt),
         status:
@@ -170,55 +154,103 @@ export default function Dashboard() {
     : null;
 
   return (
-    <div className="admin-dashboard-main">
-      {error && <div className="admin-dashboard-error">{error}</div>}
-      {isLoading && (
-        <div className="admin-dashboard-loading">Loading dashboard...</div>
-      )}
+    <PageShell>
+      <PageShell.Summary>
+        {error && <div className="dash-error">{error}</div>}
+        {isLoading && <div className="dash-loading">Loading dashboard...</div>}
 
-      <DashboardStatsBar stats={stats} />
-
-      <div className="admin-dashboard-bottom-section">
-        {/* Recent Inquiries */}
-        <div className="admin-dashboard-inquiries-section">
-          <div className="admin-dashboard-inquiries-header">
-            <h2 className="admin-dashboard-section-title">Recent Inquiries</h2>
-            <a href="/admin/inquiries" className="admin-dashboard-view-all">
-              View All
-            </a>
+        {/* Super Admin callout */}
+        {isSuperAdmin && (
+          <div className="dash-callout">
+            <div className="dash-callout__left">
+              <div className="dash-callout__icon">
+                <LayoutGrid size={15} strokeWidth={2} />
+              </div>
+              <div>
+                <p className="dash-callout__title">System Overview</p>
+                <p className="dash-callout__desc">
+                  View aggregated metrics and branch comparison across all locations.
+                </p>
+              </div>
+            </div>
+            <Link to="/admin/dashboard" className="dash-callout__btn">
+              Open →
+            </Link>
           </div>
-          <div className="admin-dashboard-inquiries-list">
-            {recentInquiries.length > 0 ? (
-              recentInquiries.map((inquiry) => (
-                <InquiryItem key={inquiry.id} inquiry={inquiry} />
+        )}
+
+        <SummaryBar items={summaryItems} />
+      </PageShell.Summary>
+
+      <PageShell.Content>
+        {/* Two-column grid: Inquiries + Reservation Chart */}
+        <div className="dash-grid">
+          <div className="dash-card">
+            <div className="dash-card__header">
+              <h2 className="dash-card__title">Recent Inquiries</h2>
+              <Link to="/admin/reservations" className="dash-card__link">View All</Link>
+            </div>
+            <div className="dash-card__list">
+              {recentInquiries.length > 0 ? (
+                recentInquiries.map((inq) => (
+                  <div key={inq.id} className="dash-list-item">
+                    <div className="dash-list-item__icon">
+                      <MessageSquare size={16} />
+                    </div>
+                    <div className="dash-list-item__body">
+                      <span className="dash-list-item__name">{inq.name}</span>
+                      <span className="dash-list-item__sub">{inq.email}</span>
+                      <div className="dash-list-item__meta">
+                        <span>{inq.branch}</span>
+                        <span className="dash-list-item__time">
+                          <Clock size={11} /> {inq.time}
+                        </span>
+                      </div>
+                    </div>
+                    <StatusBadge status={inq.status} />
+                  </div>
+                ))
+              ) : (
+                <p className="dash-empty">No recent inquiries.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="dash-card">
+            <ReservationStatusChart reservationStatus={reservationStatus} />
+          </div>
+        </div>
+
+        {/* Recent Reservations */}
+        <div className="dash-card dash-card--full">
+          <div className="dash-card__header">
+            <h2 className="dash-card__title">Recent Reservations</h2>
+            <Link to="/admin/reservations" className="dash-card__link">View All</Link>
+          </div>
+          <div className="dash-card__list">
+            {recentReservations.length > 0 ? (
+              recentReservations.map((res) => (
+                <div key={res.id} className="dash-list-item">
+                  <div className="dash-list-item__icon dash-list-item__icon--purple">
+                    <CalendarCheck size={16} />
+                  </div>
+                  <div className="dash-list-item__body">
+                    <span className="dash-list-item__name">{res.roomType}</span>
+                    <span className="dash-list-item__sub">{res.guestName}</span>
+                    <div className="dash-list-item__meta">
+                      <span>{res.branch}</span>
+                      <span>{res.date}</span>
+                    </div>
+                  </div>
+                  <StatusBadge status={res.status} />
+                </div>
               ))
             ) : (
-              <p className="admin-dashboard-empty">No recent inquiries.</p>
+              <p className="dash-empty">No recent reservations.</p>
             )}
           </div>
         </div>
-
-        <ReservationStatusChart reservationStatus={reservationStatus} />
-      </div>
-
-      {/* Recent Reservations */}
-      <div className="admin-dashboard-reservations-full-section">
-        <div className="admin-dashboard-reservations-header">
-          <h2 className="admin-dashboard-section-title">Recent Reservations</h2>
-          <a href="/admin/reservations" className="admin-dashboard-view-all">
-            View All
-          </a>
-        </div>
-        <div className="admin-dashboard-reservations-list">
-          {recentReservations.length > 0 ? (
-            recentReservations.map((reservation) => (
-              <ReservationItem key={reservation.id} reservation={reservation} />
-            ))
-          ) : (
-            <p className="admin-dashboard-empty">No recent reservations.</p>
-          )}
-        </div>
-      </div>
-    </div>
+      </PageShell.Content>
+    </PageShell>
   );
 }

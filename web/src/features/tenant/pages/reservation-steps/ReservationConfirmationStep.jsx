@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { formatBranch, fmtDate } from "../../../../shared/utils/formatDate";
 import { formatPaymentMethod } from "../../../../shared/utils/formatPaymentMethod";
+import { Home, Calendar, CreditCard, ClipboardList, Printer, CheckCircle } from "lucide-react";
 
 /**
  * Step 5 — Reservation Secured
@@ -138,7 +139,7 @@ const ReservationConfirmationStep = ({
             />
           </svg>
         </div>
-        <h1 style={s.celebrationTitle}>You're All Set! 🎉</h1>
+        <h1 style={s.celebrationTitle}>You're All Set!</h1>
         <p style={s.celebrationSubtitle}>
           Your room has been reserved. Here's a summary of your reservation.
         </p>
@@ -156,7 +157,7 @@ const ReservationConfirmationStep = ({
       {/* ── Quick Summary Grid ────────────────────────────────── */}
       <div style={s.summaryGrid}>
         <div style={s.summaryCard}>
-          <div style={s.summaryIcon}>🏠</div>
+          <div style={s.summaryIcon}><Home size={22} color="#6B7280" /></div>
           <div style={s.summaryLabel}>Room</div>
           <div style={s.summaryValue}>
             {room.roomNumber || room.name || room.title || "—"}
@@ -164,15 +165,15 @@ const ReservationConfirmationStep = ({
           <div style={s.summaryMeta}>{formatBranch(room.branch)}</div>
         </div>
         <div style={s.summaryCard}>
-          <div style={s.summaryIcon}>📅</div>
+          <div style={s.summaryIcon}><Calendar size={22} color="#6B7280" /></div>
           <div style={s.summaryLabel}>Move-In Date</div>
           <div style={s.summaryValue}>{fmtDate(finalMoveInDate)}</div>
           <div style={s.summaryMeta}>{leaseDuration || 12}-month lease</div>
         </div>
         <div style={s.summaryCard}>
-          <div style={s.summaryIcon}>💳</div>
+          <div style={s.summaryIcon}><CreditCard size={22} color="#6B7280" /></div>
           <div style={s.summaryLabel}>Payment</div>
-          <div style={{ ...s.summaryValue, color: "#059669" }}>✓ Paid</div>
+          <div style={{ ...s.summaryValue, color: "#059669", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}><CheckCircle size={14} color="#059669" /> Paid</div>
           <div style={s.summaryMeta}>
             {formatPaymentMethod(paymentMethod)}
           </div>
@@ -181,7 +182,7 @@ const ReservationConfirmationStep = ({
 
       {/* ── What Happens Next ─────────────────────────────────── */}
       <div style={s.nextStepsCard}>
-        <h3 style={s.nextStepsTitle}>📋 What happens next?</h3>
+        <h3 style={{ ...s.nextStepsTitle, display: "flex", alignItems: "center", gap: 8 }}><ClipboardList size={16} color="#9A3412" /> What happens next?</h3>
         <div style={s.stepsList}>
           <div style={s.nextStep}>
             <div style={s.stepNumber}>1</div>
@@ -245,7 +246,7 @@ const ReservationConfirmationStep = ({
       {/* ── Print Receipt Link ────────────────────────────────── */}
       <div style={s.printRow}>
         <button onClick={handlePrint} style={s.printLink}>
-          🖨️ Print / Download Receipt
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Printer size={14} /> Print / Download Receipt</span>
         </button>
       </div>
 
@@ -280,7 +281,7 @@ const s = {
     background: "linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 50%, #fefce8 100%)",
     borderRadius: 16,
     marginBottom: 20,
-    border: "1px solid #d1fae5",
+    border: "1px solid rgba(16, 185, 129, 0.2)",
   },
   checkCircle: {
     width: 72,
@@ -312,7 +313,7 @@ const s = {
   codeCard: {
     textAlign: "center",
     padding: "20px 24px",
-    background: "#fff",
+    background: "var(--surface-card, #fff)",
     borderRadius: 12,
     border: "2px dashed #d1d5db",
     marginBottom: 20,
@@ -329,7 +330,7 @@ const s = {
     fontSize: 32,
     fontWeight: 800,
     letterSpacing: "4px",
-    color: "#111827",
+    color: "var(--text-heading, #111827)",
     fontFamily: "'Courier New', monospace",
     marginBottom: 8,
   },
@@ -349,12 +350,13 @@ const s = {
   summaryCard: {
     textAlign: "center",
     padding: "16px 12px",
-    background: "#fff",
+    background: "var(--surface-card, #fff)",
     borderRadius: 12,
-    border: "1px solid #E5E7EB",
+    border: "1px solid var(--border-card, #E5E7EB)",
   },
   summaryIcon: {
-    fontSize: 24,
+    display: "flex",
+    justifyContent: "center",
     marginBottom: 6,
   },
   summaryLabel: {
@@ -368,7 +370,7 @@ const s = {
   summaryValue: {
     fontSize: 15,
     fontWeight: 700,
-    color: "#111827",
+    color: "var(--text-heading, #111827)",
     marginBottom: 2,
   },
   summaryMeta: {
@@ -379,9 +381,9 @@ const s = {
   /* next steps */
   nextStepsCard: {
     padding: "20px 24px",
-    background: "#FFF7ED",
+    background: "rgba(255, 140, 66, 0.08)",
     borderRadius: 12,
-    border: "1px solid #FED7AA",
+    border: "1px solid rgba(255, 140, 66, 0.25)",
     marginBottom: 24,
   },
   nextStepsTitle: {
@@ -448,9 +450,9 @@ const s = {
   secondaryBtn: {
     flex: 1,
     padding: "14px 16px",
-    background: "#fff",
+    background: "var(--surface-card, #fff)",
     color: "#374151",
-    border: "1px solid #D1D5DB",
+    border: "1px solid var(--border-card, #D1D5DB)",
     borderRadius: 10,
     fontSize: 14,
     fontWeight: 600,
@@ -480,7 +482,7 @@ const s = {
     justifyContent: "center",
     gap: 12,
     padding: "10px 16px",
-    background: "#F3F4F6",
+    background: "var(--surface-muted, #F3F4F6)",
     borderRadius: 8,
   },
   redirectText: {

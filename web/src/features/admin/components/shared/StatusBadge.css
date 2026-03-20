@@ -1,0 +1,71 @@
+@import "../../styles/design-tokens.css";
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+}
+
+.status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Success (Active, Approved, Paid, Checked In) ── */
+.status-badge--success {
+  background: var(--status-success-bg);
+  color: var(--status-success);
+}
+.status-badge--success .status-badge__dot {
+  background: var(--status-success);
+  box-shadow: 0 0 0 2px rgba(15, 157, 88, 0.15);
+}
+
+/* ── Warning (Pending, Partial, Moving Out) ── */
+.status-badge--warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+}
+.status-badge--warning .status-badge__dot {
+  background: var(--status-warning);
+  box-shadow: 0 0 0 2px rgba(199, 125, 10, 0.15);
+}
+
+/* ── Error (Overdue, Cancelled, Denied, Banned) ── */
+.status-badge--error {
+  background: var(--status-error-bg);
+  color: var(--status-error);
+}
+.status-badge--error .status-badge__dot {
+  background: var(--status-error);
+  box-shadow: 0 0 0 2px rgba(235, 87, 87, 0.15);
+}
+
+/* ── Info (Reserved, Confirmed, New) ── */
+.status-badge--info {
+  background: var(--status-info-bg);
+  color: var(--status-info);
+}
+.status-badge--info .status-badge__dot {
+  background: var(--status-info);
+  box-shadow: 0 0 0 2px rgba(46, 170, 220, 0.15);
+}
+
+/* ── Neutral (Unknown, Inactive, Suspended) ── */
+.status-badge--neutral {
+  background: var(--status-neutral-bg);
+  color: var(--status-neutral);
+}
+.status-badge--neutral .status-badge__dot {
+  background: var(--status-neutral);
+  box-shadow: 0 0 0 2px rgba(145, 146, 158, 0.15);
+}

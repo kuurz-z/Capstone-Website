@@ -34,7 +34,7 @@ const RequireSuperAdmin = ({ children }) => {
 
   // Redirect if not authenticated or not super admin
   if (!isAuthenticated || user?.role !== "superAdmin") {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/signin" replace />;
   }
 
   return children;

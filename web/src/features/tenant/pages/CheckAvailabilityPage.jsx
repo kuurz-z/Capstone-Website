@@ -356,7 +356,7 @@ function CheckAvailabilityPage() {
 
   // ── Render ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#FAFBFC" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "var(--surface-page)" }}>
       <LoginConfirmBeforeReserveModal />
 
       <AvailabilityHeader

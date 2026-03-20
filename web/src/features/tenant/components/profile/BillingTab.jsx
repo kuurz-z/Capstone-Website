@@ -256,7 +256,7 @@ const BillingTab = () => {
   /* ── Loading skeleton ── */
   if (loading) {
     return (
-      <div style={{ maxWidth: 1200 }}>
+      <div style={{ width: "100%" }}>
         <div style={s.heading}>
           <h1 style={s.title}>My Bills</h1>
           <p style={s.subtitle}>Loading your billing information...</p>
@@ -279,7 +279,7 @@ const BillingTab = () => {
   /* ── Empty state ── */
   if (bills.length === 0) {
     return (
-      <div style={{ maxWidth: 1200 }}>
+      <div style={{ width: "100%" }}>
         <div style={s.heading}>
           <h1 style={s.title}>My Bills</h1>
           <p style={s.subtitle}>Track your monthly charges and payments</p>
@@ -298,7 +298,7 @@ const BillingTab = () => {
   }
 
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ width: "100%" }}>
       {/* Header */}
       <div style={s.heading}>
         <h1 style={s.title}>My Bills</h1>
@@ -380,8 +380,8 @@ const BillingTab = () => {
 /* ── Styles ─────────────────────────────────────────── */
 const s = {
   heading: { marginBottom: 24 },
-  title: { fontSize: 22, fontWeight: 700, color: "#0A1628", margin: 0 },
-  subtitle: { fontSize: 13, color: "#9CA3AF", marginTop: 4 },
+  title: { fontSize: 22, fontWeight: 700, color: "var(--text-heading)", margin: 0 },
+  subtitle: { fontSize: 13, color: "var(--text-muted)", marginTop: 4 },
 
   statsRow: {
     display: "grid",
@@ -390,9 +390,9 @@ const s = {
     marginBottom: 20,
   },
   statCard: {
-    background: "#fff",
+    background: "var(--surface-card)",
     borderRadius: 10,
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card)",
     padding: "16px 18px",
   },
 
@@ -408,8 +408,8 @@ const s = {
     padding: "6px 14px",
     borderRadius: 20,
     border: "1px solid #E5E7EB",
-    background: "#fff",
-    color: "#6B7280",
+    background: "var(--surface-card)",
+    color: "var(--text-secondary)",
     fontSize: 13,
     fontWeight: 500,
     cursor: "pointer",
@@ -429,9 +429,9 @@ const s = {
   },
 
   billCard: {
-    background: "#fff",
+    background: "var(--surface-card)",
     borderRadius: 10,
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card)",
     overflow: "hidden",
   },
   billHeader: {
@@ -455,21 +455,21 @@ const s = {
 
   breakdown: {
     padding: "0 18px 16px",
-    borderTop: "1px solid #F3F4F6",
+    borderTop: "1px solid var(--border-divider)",
   },
   chargeRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     padding: "10px 0",
-    borderBottom: "1px solid #F9FAFB",
+    borderBottom: "1px solid var(--border-divider)",
   },
   totalRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     padding: "14px 0 10px",
-    borderTop: "1px solid #E5E7EB",
+    borderTop: "1px solid var(--border-card)",
     marginTop: 4,
   },
 
@@ -502,9 +502,9 @@ const s = {
     justifyContent: "center",
     textAlign: "center",
     padding: "56px 24px",
-    background: "#fff",
+    background: "var(--surface-card)",
     borderRadius: 10,
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card)",
   },
 
   viewAllLink: {

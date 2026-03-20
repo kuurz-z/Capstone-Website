@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import useBodyScrollLock from "../../shared/hooks/useBodyScrollLock";
 
 /**
  * Minimal, professional confirmation modal.
@@ -33,13 +34,8 @@ export default function ConfirmModal({
     return () => document.removeEventListener("keydown", handler);
   }, [isOpen, onClose]);
 
-  // Prevent body scroll when open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-      return () => (document.body.style.overflow = "");
-    }
-  }, [isOpen]);
+  // Prevent body scroll when open — compensate for scrollbar width
+  useBodyScrollLock(isOpen);
 
   if (!isOpen) return null;
 
@@ -47,25 +43,25 @@ export default function ConfirmModal({
   const palette = {
     danger: {
       icon: "#DC2626",
-      iconBg: "#FEF2F2",
+      iconBg: "rgba(220, 38, 38, 0.08)",
       btn: "#DC2626",
       btnHover: "#B91C1C",
     },
     warning: {
       icon: "#D97706",
-      iconBg: "#FFFBEB",
+      iconBg: "rgba(217, 119, 6, 0.08)",
       btn: "#D97706",
       btnHover: "#B45309",
     },
     info: {
       icon: "#0A1628",
-      iconBg: "#EFF6FF",
+      iconBg: "rgba(10, 22, 40, 0.06)",
       btn: "#0A1628",
       btnHover: "#092d4f",
     },
     success: {
       icon: "#059669",
-      iconBg: "#ECFDF5",
+      iconBg: "rgba(5, 150, 105, 0.08)",
       btn: "#059669",
       btnHover: "#047857",
     },
@@ -166,7 +162,7 @@ export default function ConfirmModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#fff",
+          background: "var(--surface-card, #fff)",
           borderRadius: 12,
           boxShadow:
             "0 4px 24px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.06)",
@@ -207,7 +203,7 @@ export default function ConfirmModal({
                 margin: 0,
                 fontSize: 15,
                 fontWeight: 600,
-                color: "#0f172a",
+                color: "var(--text-heading, #0f172a)",
                 lineHeight: 1.4,
               }}
             >
@@ -221,7 +217,7 @@ export default function ConfirmModal({
               style={{
                 margin: 0,
                 fontSize: 13,
-                color: "#64748b",
+                color: "var(--text-muted, #64748b)",
                 lineHeight: 1.5,
                 paddingLeft: 46,
               }}
@@ -232,7 +228,7 @@ export default function ConfirmModal({
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: "#f1f5f9", margin: "0 24px" }} />
+        <div style={{ height: 1, background: "var(--border-subtle, #f1f5f9)", margin: "0 24px" }} />
 
         {/* Actions */}
         <div
@@ -248,17 +244,17 @@ export default function ConfirmModal({
             disabled={loading}
             style={{
               padding: "8px 18px",
-              border: "1px solid #e2e8f0",
+              border: "1px solid var(--border-card, #e2e8f0)",
               borderRadius: 6,
-              background: "#fff",
+              background: "var(--surface-card, #fff)",
               fontSize: 13,
               fontWeight: 500,
-              color: "#475569",
+              color: "var(--text-secondary, #475569)",
               cursor: "pointer",
               transition: "background 0.15s",
             }}
-            onMouseEnter={(e) => (e.target.style.background = "#f8fafc")}
-            onMouseLeave={(e) => (e.target.style.background = "#fff")}
+            onMouseEnter={(e) => (e.target.style.background = "var(--surface-muted, #f8fafc)")}
+            onMouseLeave={(e) => (e.target.style.background = "var(--surface-card, #fff)")}
           >
             {cancelText}
           </button>

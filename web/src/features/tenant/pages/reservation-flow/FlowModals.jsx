@@ -1,4 +1,5 @@
 import React from "react";
+import { LogIn, AlertTriangle, Home, CheckCircle } from "lucide-react";
 
 /**
  * Inline confirmation modals for the reservation flow:
@@ -46,7 +47,7 @@ export const LoginConfirmModal = ({ show, onLogin, onDismiss }) => {
   return (
     <div style={overlayStyle}>
       <div style={cardStyle}>
-        <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔐</div>
+        <div style={{ marginBottom: "16px", display: "flex", justifyContent: "center" }}><div style={{ width: 56, height: 56, borderRadius: "50%", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}><LogIn size={28} color="#2563EB" /></div></div>
         <h2
           style={{ marginBottom: "12px", fontSize: "20px", fontWeight: "600" }}
         >
@@ -83,7 +84,7 @@ export const CancelConfirmModal = ({ show, onConfirm, onDismiss }) => {
   return (
     <div style={overlayStyle}>
       <div style={cardStyle}>
-        <div style={{ fontSize: "40px", marginBottom: "16px" }}>⚠️</div>
+        <div style={{ marginBottom: "16px", display: "flex", justifyContent: "center" }}><div style={{ width: 52, height: 52, borderRadius: "50%", background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center" }}><AlertTriangle size={26} color="#D97706" /></div></div>
         <h2
           style={{ marginBottom: "12px", fontSize: "20px", fontWeight: "600" }}
         >
@@ -130,7 +131,9 @@ export const StageConfirmModal = ({
   const message = isStage1
     ? "Are you sure you want to proceed with this room selection? A reservation draft will be created."
     : "Are you sure you want to submit your reservation? Once submitted, you will need to wait for admin confirmation.";
-  const icon = isStage1 ? "🏠" : "✅";
+  const IconComponent = isStage1 ? Home : CheckCircle;
+  const iconBg = isStage1 ? "#FEF3C7" : "#ECFDF5";
+  const iconColor = isStage1 ? "#D97706" : "#059669";
 
   return (
     <div style={overlayStyle}>
@@ -147,15 +150,14 @@ export const StageConfirmModal = ({
             width: "56px",
             height: "56px",
             borderRadius: "50%",
-            background: "#FEF3C7",
+            background: iconBg,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             margin: "0 auto 16px",
-            fontSize: "24px",
           }}
         >
-          {icon}
+          <IconComponent size={26} color={iconColor} />
         </div>
         <h3
           style={{

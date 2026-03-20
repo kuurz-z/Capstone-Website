@@ -16,6 +16,7 @@
 
 import { useEffect, useRef } from "react";
 import { io } from "socket.io-client";
+import { useQueryClient } from "@tanstack/react-query";
 import useNotificationStore from "../stores/notificationStore";
 import useAuth from "./useAuth";
 
@@ -24,6 +25,7 @@ const SOCKET_URL = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://
 export default function useSocketClient() {
   const { user, dbUser } = useAuth();
   const socketRef = useRef(null);
+  const qc = useQueryClient();
   const addNotification = useNotificationStore((s) => s.addNotification);
   const setConnected = useNotificationStore((s) => s.setConnected);
 
@@ -57,6 +59,12 @@ export default function useSocketClient() {
     // Listen for real-time notifications
     socket.on("notification:new", (notification) => {
       addNotification(notification);
+    });
+
+    // Listen for room availability changes — invalidate rooms cache
+    // so all useRooms() queries refetch automatically (TanStack Query)
+    socket.on("room:updated", () => {
+      qc.invalidateQueries({ queryKey: ["rooms"] });
     });
 
     socketRef.current = socket;

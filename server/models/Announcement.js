@@ -158,18 +158,15 @@ announcementSchema.methods.isActive = function () {
 announcementSchema.statics.findForBranch = function (branch, options = {}) {
   const now = new Date();
   const query = {
-    $or: [{ targetBranch: "both" }, { targetBranch: branch }],
+    $and: [
+      { $or: [{ targetBranch: "both" }, { targetBranch: branch }] },
+      { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] },
+    ],
     startsAt: { $lte: now },
-    $or: [{ endsAt: null }, { endsAt: { $gt: now } }],
     isArchived: false,
   };
 
-  let query_final = {
-    $or: [{ targetBranch: "both" }, { targetBranch: branch }],
-    isArchived: false,
-  };
-
-  return this.find(query_final)
+  return this.find(query)
     .sort({ isPinned: -1, publishedAt: -1 })
     .limit(options.limit || 50);
 };

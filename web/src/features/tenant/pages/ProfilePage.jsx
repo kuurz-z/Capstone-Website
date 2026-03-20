@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import "../../../shared/styles/notification.css";
+import "../styles/profile-page.css";
+import "../styles/profile-dark-overrides.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import ProfilePageSkeleton from "../components/profile/ProfilePageSkeleton";
@@ -15,6 +17,7 @@ import {
 import { useCurrentUser } from "../../../shared/hooks/queries/useUsers";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import { billingApi } from "../../../shared/api/billingApi";
+import { ThemeProvider } from "../../../features/public/context/ThemeContext";
 
 // Sub-components
 import {
@@ -29,7 +32,6 @@ import {
   ProfileCompletionCard,
   ContractTab,
   ReservationAgreementPage,
-  StaysTab,
 } from "../components/profile";
 
 // ─────────────────────────────────────────────────────────────
@@ -361,6 +363,12 @@ const ProfilePage = () => {
       selectedReservation.status === "reserved" ||
       selectedReservation.paymentStatus === "paid");
 
+  // My Reservation page only shows confirmed (paid/reserved) reservations.
+  // Pending stages show the empty state instead.
+  const confirmedReservation = isReservationConfirmed
+    ? (selectedReservation || activeReservation)
+    : null;
+
   // Prevent browser back button when reservation is reserved
   useEffect(() => {
     if (!isReservationConfirmed) return;
@@ -400,8 +408,9 @@ const ProfilePage = () => {
 
   // ── Render ─────────────────────────────────────────────────
   return (
+    <ThemeProvider>
     <>
-      <div className="min-h-screen flex" style={{ backgroundColor: "#F7F8FA", overflow: "hidden" }}>
+      <div className="min-h-screen flex" style={{ backgroundColor: "var(--surface-page)" }}>
         <ProfileSidebar
           activeTab={activeTab}
           setActiveTab={handleTabChange}
@@ -444,7 +453,7 @@ const ProfilePage = () => {
 
               {activeTab === "reservation" && (
                 <ReservationAgreementPage
-                  reservation={selectedReservation || activeReservation}
+                  reservation={confirmedReservation}
                   onBack={() => setActiveTab("dashboard")}
                 />
               )}
@@ -452,12 +461,11 @@ const ProfilePage = () => {
               {activeTab === "contract" && <ContractTab />}
 
               {activeTab === "history" && (
-                <ActivityHistoryTab reservation={selectedReservation || activeReservation} />
+                <ActivityHistoryTab reservations={reservations} />
               )}
 
               {activeTab === "notifications" && <NotificationsTab />}
               {activeTab === "settings" && <SettingsTab />}
-              {activeTab === "stays" && <StaysTab />}
             </div>
           </main>
         </div>
@@ -492,6 +500,7 @@ const ProfilePage = () => {
         cancelText="Keep Editing"
       />
     </>
+    </ThemeProvider>
   );
 };
 

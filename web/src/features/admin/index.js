@@ -1,5 +1,4 @@
 // Admin feature exports
-export { default as AdminLoginPage } from "./pages/AdminLoginPage";
 export { default as Dashboard } from "./pages/Dashboard";
 export { default as InquiriesPage } from "./pages/InquiriesPage";
 export { default as ReservationsPage } from "./pages/ReservationsPage";

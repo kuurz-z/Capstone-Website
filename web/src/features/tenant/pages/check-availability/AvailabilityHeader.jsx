@@ -89,7 +89,7 @@ const AvailabilityHeader = ({
 
   return (
     <header className="sticky top-0 z-50 bg-white" style={{ borderBottom: "1px solid #F0F0F0" }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-screen-2xl mx-auto px-8 lg:px-12">
         {/* Single row: Logo | Filter Bar | Sign In */}
         <div className="ca-header-row">
           {/* Logo */}
@@ -105,7 +105,7 @@ const AvailabilityHeader = ({
             </div>
             <span
               className="text-lg font-semibold"
-              style={{ color: "#0A1628" }}
+              style={{ color: "var(--text-heading)" }}
             >
               Lilycrest
             </span>
@@ -186,19 +186,20 @@ const AvailabilityHeader = ({
                     width: "260px",
                     border: showUserMenu
                       ? "1.5px solid #FF8C42"
-                      : "1.5px solid transparent",
-                    backgroundColor: showUserMenu ? "#FFF7ED" : "transparent",
+                      : "1.5px solid var(--border-card, transparent)",
+                    backgroundColor: showUserMenu ? "rgba(255,140,66,0.1)" : "rgba(255,255,255,0.04)",
+                    boxShadow: showUserMenu ? "none" : "0 1px 4px rgba(0,0,0,0.15)",
                   }}
                   onMouseEnter={(e) => {
                     if (!showUserMenu) {
-                      e.currentTarget.style.backgroundColor = "#F9FAFB";
-                      e.currentTarget.style.borderColor = "#E5E7EB";
+                      e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                      e.currentTarget.style.borderColor = "var(--border-card)";
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!showUserMenu) {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.borderColor = "transparent";
+                      e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)";
+                      e.currentTarget.style.borderColor = "var(--border-card, transparent)";
                     }
                   }}
                   aria-label="User menu"
@@ -214,7 +215,7 @@ const AvailabilityHeader = ({
                   >
                     {userInitials}
                   </div>
-                  <span className="flex-1 text-sm font-medium text-gray-700 truncate leading-tight text-left">
+                  <span className="flex-1 text-sm font-medium truncate leading-tight text-left" style={{ color: "var(--text-heading)" }}>
                     {userDisplayName}
                   </span>
                   <ChevronDown
@@ -224,20 +225,20 @@ const AvailabilityHeader = ({
 
                 {showUserMenu && (
                   <div
-                    className="absolute right-0 mt-1.5 w-full bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden"
+                    className="absolute right-0 mt-1.5 w-full rounded-2xl shadow-xl z-50 overflow-hidden"
                     style={{
+                      backgroundColor: "var(--surface-elevated)",
+                      border: "1px solid var(--border-card)",
                       animation: "fadeIn 0.18s ease-out",
-                      boxShadow:
-                        "0 10px 40px -8px rgba(0,0,0,0.12), 0 4px 12px -2px rgba(0,0,0,0.06)",
+                      boxShadow: "0 10px 40px -8px rgba(0,0,0,0.3), 0 4px 12px -2px rgba(0,0,0,0.2)",
                     }}
                   >
                     {/* User identity */}
                     <div
-                      className="px-3 pt-3 pb-2.5"
+                      className="px-3 pt-3 pb-3.5"
                       style={{
-                        background:
-                          "linear-gradient(180deg, #FAFBFC 0%, #FFFFFF 100%)",
-                        borderBottom: "1px solid #F3F4F6",
+                        background: "var(--surface-muted)",
+                        borderBottom: "1px solid var(--border-divider)",
                       }}
                     >
                       <div className="flex items-center gap-2.5">
@@ -255,15 +256,15 @@ const AvailabilityHeader = ({
                           <div className="flex items-center gap-1.5">
                             <p
                               className="text-[13px] font-semibold truncate leading-none"
-                              style={{ color: "#1A1A2E" }}
+                              style={{ color: "var(--text-heading)" }}
                             >
                               {userDisplayName}
                             </p>
                             {roleBadge(user?.role)}
                           </div>
                           <p
-                            className="text-[11px] truncate mt-1 leading-none"
-                            style={{ color: "#9CA3AF" }}
+                            className="text-[11px] truncate mt-1.5 leading-tight"
+                            style={{ color: "var(--text-muted)" }}
                           >
                             {user?.email || ""}
                           </p>
@@ -275,9 +276,9 @@ const AvailabilityHeader = ({
                       <Link
                         to="/applicant/profile"
                         className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150"
-                        style={{ color: "#374151" }}
+                        style={{ color: "var(--text-body)" }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = "#F9FAFB";
+                          e.currentTarget.style.backgroundColor = "rgba(148, 163, 184, 0.15)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = "transparent";
@@ -286,11 +287,11 @@ const AvailabilityHeader = ({
                       >
                         <div
                           className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: "#F3F4F6" }}
+                          style={{ backgroundColor: "var(--surface-muted)" }}
                         >
                           <User
                             className="w-4 h-4"
-                            style={{ color: "#6B7280" }}
+                            style={{ color: "var(--text-secondary)" }}
                           />
                         </div>
                         <div>
@@ -299,7 +300,7 @@ const AvailabilityHeader = ({
                           </p>
                           <p
                             className="text-[11px] leading-tight mt-0.5"
-                            style={{ color: "#9CA3AF" }}
+                            style={{ color: "var(--text-muted)" }}
                           >
                             View your dashboard
                           </p>
@@ -309,7 +310,7 @@ const AvailabilityHeader = ({
                     {/* Sign Out */}
                     <div
                       className="px-2 pb-2 pt-1"
-                      style={{ borderTop: "1px solid #F3F4F6" }}
+                      style={{ borderTop: "1px solid var(--border-divider)" }}
                     >
                       <button
                         onClick={() => {
@@ -319,7 +320,7 @@ const AvailabilityHeader = ({
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150"
                         style={{ color: "#EF4444" }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = "#FEF2F2";
+                          e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.12)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = "transparent";
@@ -327,7 +328,7 @@ const AvailabilityHeader = ({
                       >
                         <div
                           className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: "#FEF2F2" }}
+                          style={{ backgroundColor: "rgba(239,68,68,0.12)" }}
                         >
                           <LogOut
                             className="w-4 h-4"
@@ -346,7 +347,7 @@ const AvailabilityHeader = ({
               <Link
                 to="/signin"
                 className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-300 hover:border-gray-400 transition-colors text-sm font-medium"
-                style={{ color: "#0A1628" }}
+                style={{ color: "var(--text-heading)" }}
               >
                 <User className="w-4 h-4" />
                 Sign In

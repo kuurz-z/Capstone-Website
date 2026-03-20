@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { inquiryApi } from "../../../shared/api/apiClient";
+import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
 import "../styles/inquiry-details-modal.css";
 
 export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
@@ -7,6 +8,8 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  useBodyScrollLock(!!inquiry);
 
   if (!inquiry) return null;
 
@@ -75,7 +78,7 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
           <span
             className={`inquiry-details-modal-status-badge ${inquiry.status}`}
           >
-            {inquiry.status}
+            {inquiry.status === "resolved" ? "Responded" : inquiry.status === "in-progress" ? "In Progress" : inquiry.status}
           </span>
         </div>
 

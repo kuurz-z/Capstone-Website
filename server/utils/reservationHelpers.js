@@ -76,6 +76,41 @@ export const validateMoveInDate = (dateStr) => {
 };
 
 /**
+ * Validate check-in prerequisites against the existing reservation document.
+ * Returns an array of human-readable failure reasons (empty = all clear).
+ *
+ * Rules:
+ *  1. Current status must be exactly "reserved" — no skipping the queue.
+ *  2. Payment must be confirmed (paymentStatus === "paid").
+ *  3. A site visit must have been approved — UNLESS the tenant is flagged
+ *     as out-of-town and has previously received visitApproved via admin.
+ */
+export const getCheckinBlockers = (reservation) => {
+  const blockers = [];
+
+  if (reservation.status !== "reserved") {
+    blockers.push(
+      `Reservation must be in "Reserved" state before check-in (currently "${reservation.status}").`
+    );
+  }
+
+  if (reservation.paymentStatus !== "paid") {
+    blockers.push(
+      "Payment must be confirmed (status: Paid) before check-in."
+    );
+  }
+
+  const visitWaived = reservation.isOutOfTown === true;
+  if (!reservation.visitApproved && !visitWaived) {
+    blockers.push(
+      "Site visit must be completed and approved by admin before check-in."
+    );
+  }
+
+  return blockers;
+};
+
+/**
  * Handle status transitions (confirmed / checked-in / cancelled).
  * Centralises ~55 lines duplicated in updateReservation, releaseSlot, archiveReservation.
  *
@@ -147,6 +182,7 @@ export const USER_UPDATE_FLAT_FIELDS = [
   "viewingType",
   "visitDate",
   "visitTime",
+  "visitScheduledAt",
   "isOutOfTown",
   "currentLocation",
   "visitApproved",

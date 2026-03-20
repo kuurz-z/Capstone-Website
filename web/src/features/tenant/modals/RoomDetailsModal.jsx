@@ -98,7 +98,7 @@ export default function RoomDetailsModal({
         <div className="flex items-start justify-between p-6 border-b border-gray-200">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-3xl font-light" style={{ color: "#0A1628" }}>
+              <h2 className="text-3xl font-light" style={{ color: "var(--text-heading, #0A1628)" }}>
                 {room.title}
               </h2>
               <span
@@ -198,7 +198,7 @@ export default function RoomDetailsModal({
 
             <div className="space-y-6">
               <div className="bg-gray-50 rounded-xl p-5">
-                <h3 className="font-semibold mb-4" style={{ color: "#0A1628" }}>
+                <h3 className="font-semibold mb-4" style={{ color: "var(--text-heading, #0A1628)" }}>
                   Availability Status
                 </h3>
                 <div className="grid grid-cols-2 gap-4 mb-4">
@@ -239,7 +239,7 @@ export default function RoomDetailsModal({
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0A1628" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "var(--text-heading, #0A1628)" }}>
                   Room Information
                 </h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -283,7 +283,7 @@ export default function RoomDetailsModal({
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0A1628" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "var(--text-heading, #0A1628)" }}>
                   Amenities
                 </h3>
                 <div className="grid grid-cols-1 gap-2">
@@ -308,7 +308,7 @@ export default function RoomDetailsModal({
               )}
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0A1628" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "var(--text-heading, #0A1628)" }}>
                   Appliance Fees (Optional)
                 </h3>
                 <p className="text-sm text-gray-600 mb-3">
@@ -346,9 +346,9 @@ export default function RoomDetailsModal({
                         style={{
                           width: "32px",
                           height: "32px",
-                          border: "1px solid #e5e7eb",
+                          border: "1px solid var(--border-card, #e5e7eb)",
                           borderRadius: "6px",
-                          background: "white",
+                          background: "var(--surface-card, white)",
                           cursor: "pointer",
                           fontSize: "16px",
                         }}
@@ -375,9 +375,9 @@ export default function RoomDetailsModal({
                         style={{
                           width: "32px",
                           height: "32px",
-                          border: "1px solid #e5e7eb",
+                          border: "1px solid var(--border-card, #e5e7eb)",
                           borderRadius: "6px",
-                          background: "white",
+                          background: "var(--surface-card, white)",
                           cursor: "pointer",
                           fontSize: "16px",
                         }}
@@ -391,12 +391,12 @@ export default function RoomDetailsModal({
                         }
                         style={{
                           padding: "6px 12px",
-                          border: "1px solid #e5e7eb",
+                          border: "1px solid var(--border-card, #e5e7eb)",
                           borderRadius: "6px",
-                          background: "white",
+                          background: "var(--surface-card, white)",
                           cursor: "pointer",
                           fontSize: "13px",
-                          color: "#6b7280",
+                          color: "var(--text-muted, #6b7280)",
                         }}
                       >
                         ✕
@@ -413,7 +413,7 @@ export default function RoomDetailsModal({
               </div>
 
               <div>
-                <h3 className="font-semibold mb-3" style={{ color: "#0A1628" }}>
+                <h3 className="font-semibold mb-3" style={{ color: "var(--text-heading, #0A1628)" }}>
                   Policies & Important Notes
                 </h3>
                 <div className="space-y-2">

@@ -56,7 +56,10 @@ export const getAuditLogs = async (req, res, next) => {
     } = req.query;
 
     const filters = {
-      type, severity, user, role, branch,
+      type, severity, user, role,
+      // If req.branchFilter is set (regular admin), it overrides the client-sent branch.
+      // If req.branchFilter is null (super admin), use the client-sent branch param.
+      branch: req.branchFilter !== undefined ? (req.branchFilter || branch) : branch,
       startDate, endDate, search,
     };
 
@@ -85,7 +88,10 @@ export const getAuditLogs = async (req, res, next) => {
  */
 export const getAuditStats = async (req, res, next) => {
   try {
-    const { branch } = req.query;
+    // Regular admin: use their assigned branch. Super admin: use query param or all.
+    const branch = req.branchFilter !== undefined
+      ? (req.branchFilter || req.query.branch)
+      : req.query.branch;
     const stats = await AuditLog.getStats(branch);
     sendSuccess(res, stats);
   } catch (error) {

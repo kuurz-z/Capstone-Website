@@ -33,6 +33,7 @@ import { sendPaymentApprovedEmail } from "../config/email.js";
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
 import { notify } from "../utils/notificationService.js";
 import logger from "../middleware/logger.js";
+import { BUSINESS } from "../config/constants.js";
 
 /* ─── helpers ───────────────────────────────────── */
 
@@ -117,7 +118,7 @@ async function handleDepositPayment(metadata, eventData) {
         to: tenant.email,
         tenantName: `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
         billingMonth: "Reservation Deposit",
-        paidAmount: reservation.totalPrice || 2000,
+        paidAmount: reservation.totalPrice || BUSINESS.DEPOSIT_AMOUNT,
         branchName: reservation.roomId?.branch || "",
       });
     }

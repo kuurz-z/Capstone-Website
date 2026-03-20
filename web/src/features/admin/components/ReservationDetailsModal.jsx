@@ -1,14 +1,34 @@
 import { useState } from "react";
+import { Calendar, Eye, ClipboardList, CreditCard } from "lucide-react";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
+import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
 import "../styles/reservation-details-modal.css";
 
 /* ─── constants ─────────────────────────────────── */
 const STATUS_MAP = {
   pending: {
     label: "Pending Review",
+    color: "#b45309",
+    bg: "#fffbeb",
+    dot: "#f59e0b",
+  },
+  visit_pending: {
+    label: "Visit Pending",
+    color: "#1d4ed8",
+    bg: "#eff6ff",
+    dot: "#3b82f6",
+  },
+  visit_approved: {
+    label: "Visit Approved",
+    color: "#7c3aed",
+    bg: "#f5f3ff",
+    dot: "#8b5cf6",
+  },
+  payment_pending: {
+    label: "Payment Pending",
     color: "#b45309",
     bg: "#fffbeb",
     dot: "#f59e0b",
@@ -133,6 +153,8 @@ export default function ReservationDetailsModal({
     variant: "info",
     onConfirm: null,
   });
+
+  useBodyScrollLock(!!reservation);
 
   if (!reservation) return null;
 
@@ -315,24 +337,29 @@ export default function ReservationDetailsModal({
             {/* Actions */}
             {status !== "cancelled" && status !== "checked-out" && (
               <div className="rdm-actions-card">
-                {status === "pending" && (
-                  <button
-                    className="rdm-action rdm-action-primary"
-                    onClick={() =>
-                      doAction(
-                        "confirm",
-                        () =>
-                          reservationApi.update(reservation.id, {
-                            status: "reserved",
-                          }),
-                        "Reservation confirmed",
-                      )
-                    }
-                    disabled={isSubmitting}
-                  >
-                    Confirm Payment & Reserve Bed
-                  </button>
-                )}
+
+                {/* ── Stage guidance cards (read-only stages) ─────────── */}
+                {(() => {
+                  const STAGE_GUIDANCE = {
+                    pending:         { Icon: Calendar,      message: "Waiting for the tenant to schedule a site visit." },
+                    visit_pending:   { Icon: Eye,           message: "Tenant has scheduled a visit — approve or reject it in the Visit Schedules tab." },
+                    visit_approved:  { Icon: ClipboardList, message: "Visit approved. Waiting for the tenant to complete their application and pay the reservation fee." },
+                    payment_pending: { Icon: CreditCard,    message: "Payment submitted — awaiting automatic verification from the payment gateway." },
+                  };
+                  const guide = STAGE_GUIDANCE[status];
+                  if (!guide) return null;
+                  const { Icon, message } = guide;
+                  return (
+                    <div className="rdm-stage-guide">
+                      <div className="rdm-stage-guide-icon-wrap">
+                        <Icon size={16} strokeWidth={1.75} />
+                      </div>
+                      <p className="rdm-stage-guide-msg">{message}</p>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Check In (reserved stage only, already gated via status) ─── */}
                 {status === "reserved" && (
                   <>
                     <button
@@ -340,17 +367,16 @@ export default function ReservationDetailsModal({
                       onClick={() =>
                         doAction(
                           "checkin",
-                          () =>
-                            reservationApi.update(reservation.id, {
-                              status: "checked-in",
-                            }),
+                          () => reservationApi.update(reservation.id, { status: "checked-in" }),
                           "Tenant checked in successfully",
                         )
                       }
                       disabled={isSubmitting}
+                      title="Mark tenant as moved in"
                     >
-                      Check In — Tenant Has Moved In
+                      ✓ Check In — Tenant Has Moved In
                     </button>
+
                     <button
                       className="rdm-action rdm-action-extend"
                       onClick={() => setShowExtendPrompt(true)}
@@ -360,6 +386,8 @@ export default function ReservationDetailsModal({
                     </button>
                   </>
                 )}
+
+                {/* ── Cancel (all pre-check-in stages) ─────────────── */}
                 <div className="rdm-action-divider" />
                 {status !== "checked-in" && (
                   <button
@@ -367,10 +395,7 @@ export default function ReservationDetailsModal({
                     onClick={() =>
                       doAction(
                         "cancel",
-                        () =>
-                          reservationApi.update(reservation.id, {
-                            status: "cancelled",
-                          }),
+                        () => reservationApi.update(reservation.id, { status: "cancelled" }),
                         "Reservation cancelled",
                       )
                     }

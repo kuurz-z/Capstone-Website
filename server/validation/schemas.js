@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { clean } from "../utils/sanitize.js";
 
 // ─── Shared Primitives ──────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ export const registerSchema = z.object({
     .trim(),
   phone: z.string().optional(),
   branch: branch.optional(),
-  email: email.optional(),
+  email: email, // Required — Firebase always provides email via token; User model enforces it too
 });
 
 // ─── Auth: Set Role ──────────────────────────────────────────────────────
@@ -80,8 +81,8 @@ export const createInquirySchema = z.object({
   name: z.string().min(1, "Name is required").max(100).trim(),
   email: email,
   phone: z.string().optional(),
-  subject: z.string().min(1, "Subject is required").max(200).trim(),
-  message: z.string().min(1, "Message is required").max(2000).trim(),
+  subject: z.string().min(1, "Subject is required").max(200).trim().transform(clean),
+  message: z.string().min(1, "Message is required").max(2000).trim().transform(clean),
   branch: z.enum(["gil-puyat", "guadalupe", "general"], {
     errorMap: () => ({
       message: "Branch must be 'gil-puyat', 'guadalupe', or 'general'",
@@ -94,9 +95,9 @@ export const createInquirySchema = z.object({
 export const createRoomSchema = z.object({
   name: z.string().min(1, "Room name is required").trim(),
   branch: branch,
-  type: z.enum(["standard", "premium", "deluxe", "suite"], {
+  type: z.enum(["private", "double-sharing", "quadruple-sharing"], {
     errorMap: () => ({
-      message: "Type must be standard, premium, deluxe, or suite",
+      message: "Type must be private, double-sharing, or quadruple-sharing",
     }),
   }),
   capacity: z.number().int().positive("Capacity must be a positive integer"),
@@ -110,21 +111,21 @@ export const createRoomSchema = z.object({
 // ─── Announcements: Create Announcement ──────────────────────────────────
 
 export const createAnnouncementSchema = z.object({
-  title: z.string().min(1, "Title is required").max(200).trim(),
-  content: z.string().min(1, "Content is required").max(5000).trim(),
+  title: z.string().min(1, "Title is required").max(200).trim().transform(clean),
+  content: z.string().min(1, "Content is required").max(5000).trim().transform(clean),
   category: z.string().min(1, "Category is required").trim(),
   targetBranch: z.enum(["gil-puyat", "guadalupe", "both"]).optional().default("both"),
   requiresAcknowledgment: z.boolean().optional().default(false),
-  visibility: z.enum(["public", "private"]).optional().default("public"),
+  visibility: z.enum(["public", "tenants-only", "staff-only"]).optional().default("public"),
 });
 
 // ─── Maintenance: Create Request ─────────────────────────────────────────
 
 export const createMaintenanceSchema = z.object({
   category: z.string().min(1, "Category is required").trim(),
-  title: z.string().min(1, "Title is required").max(200).trim(),
-  description: z.string().min(1, "Description is required").max(2000).trim(),
-  urgency: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
+  title: z.string().min(1, "Title is required").max(200).trim().transform(clean),
+  description: z.string().min(1, "Description is required").max(2000).trim().transform(clean),
+  urgency: z.enum(["low", "medium", "high"]).optional().default("medium"),
 });
 
 // ─── Billing: Generate Room Bill ─────────────────────────────────────────

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, FileText, X, CheckCircle } from "lucide-react";
+import { Calendar, Clock, FileText, X, CheckCircle, AlertTriangle } from "lucide-react";
 import { showNotification } from "../../../../shared/utils/notification";
 import { PoliciesTermsModal } from "../../modals/PoliciesAndConsent";
 
@@ -79,8 +79,8 @@ const S = {
     background: selected
       ? "rgba(255,140,66,0.08)"
       : hovered
-      ? "#F8FAFC"
-      : "#fff",
+      ? "var(--surface-muted, #F8FAFC)"
+      : "var(--surface-card, #fff)",
     cursor: "pointer",
     textAlign: "center",
     transition: "all 0.15s ease",
@@ -96,7 +96,7 @@ const S = {
   dateNum: (selected) => ({
     fontSize: "16px",
     fontWeight: 700,
-    color: selected ? "#0A1628" : "#334155",
+    color: selected ? "var(--text-heading, #0A1628)" : "var(--text-secondary, #334155)",
   }),
   tomorrowPill: {
     position: "absolute",
@@ -124,8 +124,8 @@ const S = {
     background: selected
       ? "rgba(255,140,66,0.08)"
       : hovered
-      ? "#F8FAFC"
-      : "#fff",
+      ? "var(--surface-muted, #F8FAFC)"
+      : "var(--surface-card, #fff)",
     cursor: "pointer",
     textAlign: "center",
     fontSize: "14px",
@@ -146,7 +146,7 @@ const S = {
     zIndex: 1000,
   },
   modalCard: {
-    background: "white",
+    background: "var(--surface-card, white)",
     borderRadius: "16px",
     padding: "32px",
     maxWidth: "480px",
@@ -190,6 +190,8 @@ const ReservationVisitStep = ({
   onAfterClose,
   readOnly,
   agreedToPrivacy,
+  scheduleRejected,
+  scheduleRejectionReason,
 }) => {
   const navigate = useNavigate();
   // Initialize from parent state; always true when read-only (already submitted)
@@ -276,12 +278,43 @@ const ReservationVisitStep = ({
         </p>
       </div>
 
+      {/* Rejection Banner */}
+      {scheduleRejected && (
+        <div
+          style={{
+            background: "rgba(220, 38, 38, 0.06)",
+            border: "1px solid #FECACA",
+            borderRadius: "12px",
+            padding: "16px 20px",
+            marginBottom: "16px",
+            display: "flex",
+            gap: "12px",
+            alignItems: "flex-start",
+          }}
+        >
+          <AlertTriangle size={20} color="#DC2626" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "#DC2626", marginBottom: "4px" }}>
+              Your previous visit schedule was rejected
+            </div>
+            {scheduleRejectionReason && (
+              <div style={{ fontSize: "13px", color: "#7F1D1D", marginBottom: "8px", lineHeight: 1.5 }}>
+                <strong>Reason:</strong> {scheduleRejectionReason}
+              </div>
+            )}
+            <div style={{ fontSize: "13px", color: "#991B1B" }}>
+              Please select a new date and time below to reschedule your visit.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Read-Only Banner */}
       {readOnly && (
         <div
           className="info-box"
           style={{
-            background: "#FEF3C7",
+            background: "rgba(245, 158, 11, 0.12)",
             borderColor: "#F59E0B",
             marginBottom: "16px",
           }}
@@ -518,27 +551,27 @@ function ConfirmModal({ visitDate, visitTime, onConfirm, onClose }) {
         <div
           style={{
             width: "56px", height: "56px", borderRadius: "50%",
-            background: "#EFF6FF", display: "flex", alignItems: "center",
+            background: "rgba(59, 130, 246, 0.08)", display: "flex", alignItems: "center",
             justifyContent: "center", margin: "0 auto 16px",
           }}
         >
           <Calendar size={24} color="#3B82F6" />
         </div>
 
-        <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#1F2937", margin: "0 0 6px" }}>
+        <h3 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text-heading, #1F2937)", margin: "0 0 6px" }}>
           Confirm Your Visit
         </h3>
-        <p style={{ fontSize: "14px", color: "#6B7280", margin: "0 0 16px", lineHeight: "1.5" }}>
+        <p style={{ fontSize: "14px", color: "var(--text-muted, #6B7280)", margin: "0 0 16px", lineHeight: "1.5" }}>
           You're booking a visit on:
         </p>
 
         <div
           style={{
-            background: "#F8FAFC", borderRadius: "10px", padding: "14px 16px",
+            background: "var(--surface-muted, #F8FAFC)", borderRadius: "10px", padding: "14px 16px",
             marginBottom: "20px", border: "1px solid #E2E8F0",
           }}
         >
-          <div style={{ fontSize: "16px", fontWeight: 700, color: "#0A1628", marginBottom: "4px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-heading, #0A1628)", marginBottom: "4px" }}>
             {visitDate && fmtDateFull(visitDate + "T00:00:00")}
           </div>
           <div style={{ fontSize: "14px", color: "#FF8C42", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
@@ -595,12 +628,12 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
         <div style={{ textAlign: "center", marginBottom: "24px" }}>
           <div style={{
             width: "52px", height: "52px", borderRadius: "50%",
-            background: "#DCFCE7", display: "flex", alignItems: "center",
+            background: "rgba(22, 163, 74, 0.08)", display: "flex", alignItems: "center",
             justifyContent: "center", margin: "0 auto 12px",
           }}>
             <CheckCircle size={28} color="#16A34A" strokeWidth={2.5} />
           </div>
-          <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#1F2937", margin: "0 0 4px" }}>
+          <h3 style={{ fontSize: "20px", fontWeight: "700", color: "var(--text-heading, #1F2937)", margin: "0 0 4px" }}>
             Visit Confirmed!
           </h3>
           <p style={{ fontSize: "14px", color: "#6B7280", margin: 0 }}>
@@ -617,7 +650,7 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
         }}>
           {/* Receipt header strip */}
           <div style={{
-            background: "#F9FAFB",
+            background: "var(--surface-muted, #F9FAFB)",
             borderBottom: "1px solid #E5E7EB",
             padding: "10px 16px",
             display: "flex",
@@ -629,7 +662,7 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
             </span>
             <span style={{
               fontSize: "11px", fontWeight: 600, color: "#2563EB",
-              background: "#EFF6FF", padding: "2px 8px", borderRadius: 999,
+              background: "rgba(59, 130, 246, 0.08)", padding: "2px 8px", borderRadius: 999,
             }}>
               Visit Scheduled
             </span>
@@ -644,7 +677,7 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
               alignItems: "center",
               padding: "11px 16px",
               borderBottom: "1px solid #F3F4F6",
-              background: "#FFFBF7",
+              background: "rgba(255, 140, 66, 0.04)",
             }}>
               <span style={{ fontSize: "13px", color: "#6B7280" }}>Visit Code</span>
               <span style={{
@@ -672,7 +705,7 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
               }}>
                 <span style={{ fontSize: "13px", color: "#6B7280" }}>{row.label}</span>
                 <span style={{
-                  fontSize: "13px", fontWeight: 600, color: "#111827",
+                  fontSize: "13px", fontWeight: 600, color: "var(--text-heading, #111827)",
                   textTransform: row.capitalize ? "capitalize" : "none",
                 }}>
                   {row.value}
@@ -685,7 +718,7 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
         {/* â”€â”€ Note â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div style={{
           display: "flex", alignItems: "flex-start", gap: "10px",
-          background: "#F0F9FF", border: "1px solid #BAE6FD",
+          background: "rgba(14, 165, 233, 0.06)", border: "1px solid rgba(14, 165, 233, 0.25)",
           borderRadius: "10px", padding: "12px 14px", marginBottom: "20px",
         }}>
           <Clock size={15} color="#0284C7" style={{ flexShrink: 0, marginTop: "2px" }} />

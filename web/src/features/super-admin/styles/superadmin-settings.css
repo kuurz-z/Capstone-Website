@@ -1,52 +1,95 @@
-/* Super Admin Settings Styles */
+/* ============================================================
+   SUPER ADMIN SETTINGS PAGE
+   Design system: sa2 (Stripe-inspired)
+   ============================================================ */
 
-.superadmin-settings {
-  padding: 2rem;
+.sa-settings-section {
+  margin-bottom: 24px;
 }
 
-.superadmin-settings__header {
-  margin-bottom: 2rem;
-}
-
-.superadmin-settings__section {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-bottom: 1.5rem;
-}
-
-.superadmin-settings__title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #f0f0f0;
-}
-
-.superadmin-settings__field {
-  margin-bottom: 1.5rem;
-}
-
-.superadmin-settings__label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-
-.superadmin-settings__input,
-.superadmin-settings__select,
-.superadmin-settings__textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-family: inherit;
-}
-
-.superadmin-settings__actions {
+.sa-settings-grid {
   display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sa-setting-item {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid #f8fafc;
+  align-items: flex-start;
+}
+
+.sa-setting-item:last-child {
+  border-bottom: none;
+}
+
+.sa-setting-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sa-setting-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sa-setting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.sa-setting-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.sa-setting-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #6366f1;
+  white-space: nowrap;
+}
+
+.sa-setting-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sa-setting-env {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: #f8fafc;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.sa-setting-env code {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+  color: #64748b;
+}
+
+@media (max-width: 600px) {
+  .sa-setting-header {
+    flex-direction: column;
+    gap: 4px;
+  }
 }

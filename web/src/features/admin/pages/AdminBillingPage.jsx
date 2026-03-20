@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { billingApi } from "../../../shared/api/apiClient";
 import { useAuth } from "../../../shared/hooks/useAuth";
-import { TrendingUp, ShieldAlert, Clock, AlertTriangle, Download } from "lucide-react";
+import { usePermissions } from "../../../shared/hooks/usePermissions";
+import { AlertTriangle, Download, DollarSign } from "lucide-react";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
 import { exportToCSV, BILLING_COLUMNS } from "../../../shared/utils/exportUtils";
@@ -12,20 +13,21 @@ import {
   useRoomsWithTenants,
 } from "../../../shared/hooks/queries/useBilling";
 
-import BillingStatsBar from "../components/billing/BillingStatsBar";
 import BillingRoomGrid from "../components/billing/BillingRoomGrid";
-import BillsToolbar from "../components/billing/BillsToolbar";
-import BillsTable from "../components/billing/BillsTable";
 import GenerateBillModal from "../components/billing/GenerateBillModal";
 import BillDetailModal from "../components/billing/BillDetailModal";
 import PaymentRequestsTab from "../components/PaymentRequestsTab";
+import { PageShell, SummaryBar, ActionBar, DataTable, StatusBadge } from "../components/shared";
+import "../styles/design-tokens.css";
 import "../styles/admin-billing.css";
 
 const AdminBillingPage = () => {
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === "superAdmin";
+  const { can } = usePermissions();
   const queryClient = useQueryClient();
 
-  // ── State ──
+  // State
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -33,20 +35,17 @@ const AdminBillingPage = () => {
   const [activeTab, setActiveTab] = useState("billing");
 
   // Rooms
-  const [roomBranchFilter, setRoomBranchFilter] = useState("");
+  const [roomBranchFilter, setRoomBranchFilter] = useState(
+    isSuperAdmin ? "" : (user?.branch || "")
+  );
   const [roomTypeFilter, setRoomTypeFilter] = useState("");
 
   // Generate modal
   const [showGenerate, setShowGenerate] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [genMonth, setGenMonth] = useState(
-    new Date().toISOString().slice(0, 7),
-  );
+  const [genMonth, setGenMonth] = useState(new Date().toISOString().slice(0, 7));
   const [genDueDate, setGenDueDate] = useState("");
-  const [genCharges, setGenCharges] = useState({
-    electricity: "",
-    water: "",
-  });
+  const [genCharges, setGenCharges] = useState({ electricity: "", water: "" });
   const [generating, setGenerating] = useState(false);
 
   // Detail modal
@@ -55,7 +54,7 @@ const AdminBillingPage = () => {
   const [payNote, setPayNote] = useState("");
   const [paying, setPaying] = useState(false);
 
-  // ── TanStack Query ──
+  // TanStack Query
   const billParams = useMemo(() => {
     const params = { page, limit: 15 };
     if (search) params.search = search;
@@ -72,7 +71,6 @@ const AdminBillingPage = () => {
   const meta = billsResponse?.pagination || { total: 0, page: 1, totalPages: 1 };
   const rooms = roomsResponse?.rooms || [];
 
-  // ── Filtered rooms (client-side) ──
   const filteredRooms = useMemo(() => {
     return rooms.filter((r) => {
       if (roomBranchFilter && r.branch !== roomBranchFilter) return false;
@@ -81,34 +79,26 @@ const AdminBillingPage = () => {
     });
   }, [rooms, roomBranchFilter, roomTypeFilter]);
 
-  const refetchAll = () => {
-    queryClient.invalidateQueries({ queryKey: ["billing"] });
-  };
+  const refetchAll = () => queryClient.invalidateQueries({ queryKey: ["billing"] });
 
-  // ── Room card click → open generate modal ──
+  // Handlers
   const handleRoomClick = (room) => {
+    if (!can("manageBilling")) return;
     if (room.tenantCount === 0) return;
     setSelectedRoom(room);
-    const now = new Date();
-    const currentMonth = now.toISOString().slice(0, 7);
+    const currentMonth = new Date().toISOString().slice(0, 7);
     setGenMonth(currentMonth);
-    // Default due date = 30 days from billing month start
     const monthDate = new Date(currentMonth + "-01");
     const defaultDue = new Date(monthDate);
     defaultDue.setDate(defaultDue.getDate() + 30);
     setGenDueDate(defaultDue.toISOString().slice(0, 10));
-    setGenCharges({
-      electricity: "",
-      water: "",
-    });
+    setGenCharges({ electricity: "", water: "" });
     setShowGenerate(true);
   };
 
-  const genTotal =
-    Number(genCharges.electricity || 0) + Number(genCharges.water || 0);
-
   const handleGenerate = async () => {
     if (!selectedRoom) return;
+    const genTotal = Number(genCharges.electricity || 0) + Number(genCharges.water || 0);
     if (genTotal <= 0) return showNotification("Please enter at least one utility charge.", "error");
     setGenerating(true);
     try {
@@ -117,47 +107,32 @@ const AdminBillingPage = () => {
         roomId: selectedRoom.id,
         billingMonth: monthDate.toISOString(),
         dueDate: genDueDate || undefined,
-        charges: {
-          electricity: Number(genCharges.electricity) || 0,
-          water: Number(genCharges.water) || 0,
-        },
+        charges: { electricity: Number(genCharges.electricity) || 0, water: Number(genCharges.water) || 0 },
       });
       setShowGenerate(false);
       setSelectedRoom(null);
       refetchAll();
     } catch (err) {
-      showNotification(getFriendlyError(err, "Failed to generate bills. Please try again."), "error");
-    } finally {
-      setGenerating(false);
-    }
+      showNotification(getFriendlyError(err, "Failed to generate bills."), "error");
+    } finally { setGenerating(false); }
   };
 
-  // ── Mark as paid ──
   const handleMarkPaid = async () => {
     if (!detailBill) return;
     setPaying(true);
     try {
-      await billingApi.markAsPaid(
-        detailBill._id,
-        Number(payAmount) || detailBill.totalAmount,
-        payNote,
-      );
-      setDetailBill(null);
-      setPayAmount("");
-      setPayNote("");
+      await billingApi.markAsPaid(detailBill._id, Number(payAmount) || detailBill.totalAmount, payNote);
+      setDetailBill(null); setPayAmount(""); setPayNote("");
       refetchAll();
     } catch (err) {
-      showNotification(getFriendlyError(err, "Failed to mark as paid. Please try again."), "error");
-    } finally {
-      setPaying(false);
-    }
+      showNotification(getFriendlyError(err, "Failed to mark as paid."), "error");
+    } finally { setPaying(false); }
   };
 
-  // ── Apply penalties ──
   const handleApplyPenalties = async () => {
     if (!window.confirm("Apply ₱50/day penalties to all overdue bills?")) return;
     try {
-      const res = await billingApi.applyPenalties();
+      await billingApi.applyPenalties();
       showNotification("Penalties applied successfully.", "success");
       refetchAll();
     } catch (err) {
@@ -165,176 +140,175 @@ const AdminBillingPage = () => {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      const params = {};
+      if (statusFilter) params.status = statusFilter;
+      if (monthFilter) params.month = monthFilter;
+      const res = await billingApi.getExportData(params);
+      exportToCSV(res.data || [], BILLING_COLUMNS, `billing_export_${new Date().toISOString().slice(0, 10)}`);
+    } catch (err) {
+      showNotification(getFriendlyError(err, "Export failed."), "error");
+    }
+  };
+
+  // Summary
+  const summaryItems = [
+    { label: "Total Revenue", value: stats?.totalCollected ? `₱${Number(stats.totalCollected).toLocaleString()}` : "₱0", color: "green" },
+    { label: "Pending", value: stats?.pendingCount || 0, color: "orange" },
+    { label: "Overdue", value: stats?.overdueCount || 0, color: "red" },
+    { label: "Paid", value: stats?.paidCount || 0, color: "blue" },
+  ];
+
+  // Tabs
+  const tabs = [
+    { key: "billing", label: "Billing", icon: DollarSign },
+    { key: "payments", label: "Payment Requests" },
+  ];
+
+  // Filters
+  const actionFilters = [
+    {
+      key: "status",
+      options: [
+        { value: "", label: "All Status" },
+        { value: "pending", label: "Pending" },
+        { value: "paid", label: "Paid" },
+        { value: "overdue", label: "Overdue" },
+        { value: "partial", label: "Partial" },
+      ],
+      value: statusFilter,
+      onChange: (v) => { setStatusFilter(v); setPage(1); },
+    },
+    {
+      key: "month",
+      options: [
+        { value: "", label: "All Months" },
+        ...(() => {
+          const months = [];
+          const now = new Date();
+          for (let i = 0; i < 6; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const val = d.toISOString().slice(0, 7);
+            const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+            months.push({ value: val, label });
+          }
+          return months;
+        })(),
+      ],
+      value: monthFilter,
+      onChange: (v) => { setMonthFilter(v); setPage(1); },
+    },
+  ];
+
+  const actions = [
+    ...(can("manageBilling") ? [{ label: "Apply Penalties", icon: AlertTriangle, onClick: handleApplyPenalties, variant: "danger" }] : []),
+    { label: "Export CSV", icon: Download, onClick: handleExport, variant: "ghost" },
+  ];
+
+  // Table columns
+  const columns = [
+    {
+      key: "tenant",
+      label: "Tenant",
+      render: (row) => row.tenantId?.firstName
+        ? `${row.tenantId.firstName} ${row.tenantId.lastName || ""}`
+        : row.tenantId?.email || "—",
+    },
+    {
+      key: "room",
+      label: "Room",
+      render: (row) => row.roomId?.name || row.roomId?.roomNumber || "—",
+    },
+    {
+      key: "billingMonth",
+      label: "Month",
+      render: (row) => row.billingMonth
+        ? new Date(row.billingMonth).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+        : "—",
+    },
+    {
+      key: "totalAmount",
+      label: "Amount",
+      align: "right",
+      render: (row) => row.totalAmount ? `₱${Number(row.totalAmount).toLocaleString()}` : "—",
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (row) => <StatusBadge status={row.status || "pending"} />,
+    },
+    {
+      key: "dueDate",
+      label: "Due",
+      render: (row) => row.dueDate ? new Date(row.dueDate).toLocaleDateString() : "—",
+    },
+  ];
+
   return (
-    <div className="admin-billing-page">
-      <div className="admin-billing-container">
-        {/* Header */}
-        <div className="billing-header">
-          <div>
-            <h1>Billing Management</h1>
-            <p className="billing-subtitle">
-              Select a room to generate bills — utilities are auto-split among
-              tenants
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <button
-            className="btn btn-outline"
-            onClick={handleApplyPenalties}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              background: "#fef2f2",
-              color: "#dc2626",
-              border: "1px solid #fecaca",
-              padding: "0.5rem 1rem",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-            }}
-          >
-            <AlertTriangle size={14} /> Apply Penalties
-          </button>
-          <button
-            className="btn btn-outline"
-            onClick={async () => {
-              try {
-                const params = {};
-                if (statusFilter) params.status = statusFilter;
-                if (monthFilter) params.month = monthFilter;
-                const res = await billingApi.getExportData(params);
-                exportToCSV(res.data || [], BILLING_COLUMNS, `billing_export_${new Date().toISOString().slice(0, 10)}`);
-              } catch (err) {
-                showNotification(getFriendlyError(err, "Export failed. Please try again."), "error");
-              }
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              background: "#f0fdf4",
-              color: "#16a34a",
-              border: "1px solid #bbf7d0",
-              padding: "0.5rem 1rem",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-            }}
-          >
-            <Download size={14} /> Export CSV
-          </button>
-          </div>
-        </div>
+    <PageShell tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
+      <PageShell.Summary>
+        {activeTab === "billing" && <SummaryBar items={summaryItems} />}
+      </PageShell.Summary>
 
-        {/* Tabs */}
-        <div className="admin-tabs" style={{ marginBottom: "20px" }}>
-          <button className={`admin-tab ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>Billing</button>
-          <button className={`admin-tab ${activeTab === "payments" ? "active" : ""}`} onClick={() => setActiveTab("payments")}>Payment Requests</button>
-        </div>
-
-        {activeTab === "payments" && <PaymentRequestsTab />}
-
+      <PageShell.Actions>
         {activeTab === "billing" && (
-        <>
-        {/* Stats */}
-        <BillingStatsBar stats={stats} />
+          <ActionBar
+            search={{ value: search, onChange: (v) => { setSearch(v); setPage(1); }, placeholder: "Search bills..." }}
+            filters={actionFilters}
+            actions={actions}
+          />
+        )}
+      </PageShell.Actions>
 
+      <PageShell.Content>
+        {activeTab === "billing" && (
+          <>
+            {/* Room grid for bill generation */}
+            <BillingRoomGrid
+              filteredRooms={filteredRooms}
+              roomsLoading={roomsLoading}
+              roomBranchFilter={roomBranchFilter}
+              roomTypeFilter={roomTypeFilter}
+              onBranchChange={setRoomBranchFilter}
+              onTypeChange={setRoomTypeFilter}
+              onRoomClick={handleRoomClick}
+            />
 
-        {/* Room Cards */}
-        <BillingRoomGrid
-          filteredRooms={filteredRooms}
-          roomsLoading={roomsLoading}
-          roomBranchFilter={roomBranchFilter}
-          roomTypeFilter={roomTypeFilter}
-          onBranchChange={setRoomBranchFilter}
-          onTypeChange={setRoomTypeFilter}
-          onRoomClick={handleRoomClick}
-        />
+            <h3 className="billing-section-title">Bill History</h3>
 
-        {/* Bill History */}
-        <h2 className="section-title">
-          <TrendingUp size={18} />
-          Bill History
-        </h2>
-
-        <BillsToolbar
-          search={search}
-          onSearchChange={setSearch}
-          statusFilter={statusFilter}
-          onStatusChange={setStatusFilter}
-          monthFilter={monthFilter}
-          onMonthChange={setMonthFilter}
-        />
-
-        <BillsTable
-          bills={bills}
-          loading={loading}
-          onViewBill={setDetailBill}
-        />
-
-        {/* Pagination */}
-        {meta.totalPages > 1 && (
-          <div className="pagination">
-            <button
-              disabled={meta.page <= 1}
-              onClick={() => setPage(Math.max(1, meta.page - 1))}
-            >
-              Previous
-            </button>
-            <span>
-              Page {meta.page} of {meta.totalPages}
-            </span>
-            <button
-              disabled={meta.page >= meta.totalPages}
-              onClick={() => setPage(meta.page + 1)}
-            >
-              Next
-            </button>
-          </div>
+            <DataTable
+              columns={columns}
+              data={bills}
+              loading={loading}
+              onRowClick={setDetailBill}
+              pagination={{
+                page: page,
+                pageSize: 15,
+                total: meta.total,
+                onPageChange: setPage,
+              }}
+              emptyState={{ icon: DollarSign, title: "No bills found", description: "Generate bills from the room grid above." }}
+            />
+          </>
         )}
 
-      </>
-      )}
-      </div>
+        {activeTab === "payments" && <PaymentRequestsTab />}
+      </PageShell.Content>
 
-      {/* Generate Bill Modal */}
+      {/* Modals */}
       {showGenerate && selectedRoom && (
-        <GenerateBillModal
-          selectedRoom={selectedRoom}
-          genMonth={genMonth}
-          genDueDate={genDueDate}
-          genCharges={genCharges}
-          generating={generating}
-          onMonthChange={setGenMonth}
-          onDueDateChange={setGenDueDate}
-          onChargesChange={setGenCharges}
-          onGenerate={handleGenerate}
-          onClose={() => {
-            setShowGenerate(false);
-            setSelectedRoom(null);
-          }}
-        />
+        <GenerateBillModal selectedRoom={selectedRoom} genMonth={genMonth} genDueDate={genDueDate}
+          genCharges={genCharges} generating={generating} onMonthChange={setGenMonth}
+          onDueDateChange={setGenDueDate} onChargesChange={setGenCharges} onGenerate={handleGenerate}
+          onClose={() => { setShowGenerate(false); setSelectedRoom(null); }} />
       )}
-
-      {/* Bill Detail Modal */}
       {detailBill && (
-        <BillDetailModal
-          bill={detailBill}
-          payAmount={payAmount}
-          payNote={payNote}
-          paying={paying}
-          onPayAmountChange={setPayAmount}
-          onPayNoteChange={setPayNote}
-          onMarkPaid={handleMarkPaid}
-          onClose={() => {
-            setDetailBill(null);
-            setPayAmount("");
-            setPayNote("");
-          }}
-        />
+        <BillDetailModal bill={detailBill} payAmount={payAmount} payNote={payNote} paying={paying}
+          onPayAmountChange={setPayAmount} onPayNoteChange={setPayNote} onMarkPaid={handleMarkPaid}
+          onClose={() => { setDetailBill(null); setPayAmount(""); setPayNote(""); }} />
       )}
-    </div>
+    </PageShell>
   );
 };
 

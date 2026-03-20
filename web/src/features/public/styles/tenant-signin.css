@@ -760,3 +760,94 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.3px;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SIGN IN — DARK MODE
+   ══════════════════════════════════════════════════════════════ */
+
+html[data-theme="dark"] .tenant-signin-navbar {
+  background: var(--surface-sidebar);
+  border-bottom-color: var(--border-card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme="dark"] .tenant-signin-back-btn { color: var(--text-body); }
+
+html[data-theme="dark"] .tenant-signin-page {
+  background: var(--surface-page);
+}
+
+html[data-theme="dark"] .tenant-signin-card {
+  background: var(--surface-card);
+}
+
+html[data-theme="dark"] .tenant-signin-right {
+  background: var(--surface-card);
+}
+
+html[data-theme="dark"] .tenant-signin-title    { color: var(--text-heading); }
+html[data-theme="dark"] .tenant-signin-subtitle { color: var(--text-secondary); }
+
+html[data-theme="dark"] .tenant-signin-input {
+  background: var(--surface-input) !important;
+  border-color: var(--border-card) !important;
+  color: var(--text-body) !important;
+}
+html[data-theme="dark"] .tenant-signin-input:focus {
+  background: var(--surface-input) !important;
+  border-color: #FF8C42 !important;
+  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.15) !important;
+}
+html[data-theme="dark"] .tenant-signin-input:hover {
+  background: var(--surface-input) !important;
+  border-color: var(--text-muted) !important;
+}
+html[data-theme="dark"] .tenant-signin-input::placeholder { color: var(--text-muted) !important; }
+
+html[data-theme="dark"] .tenant-signin-input.input-valid {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+html[data-theme="dark"] .tenant-signin-input.input-valid:focus {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12) !important;
+}
+html[data-theme="dark"] .tenant-signin-input.input-error {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+
+html[data-theme="dark"] .tenant-signin-social-btn {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-card) !important;
+  color: var(--text-body) !important;
+}
+html[data-theme="dark"] .tenant-signin-social-btn:hover {
+  background: var(--surface-hover) !important;
+  border-color: var(--text-muted) !important;
+}
+
+html[data-theme="dark"] .tenant-signin-divider::before,
+html[data-theme="dark"] .tenant-signin-divider::after {
+  border-bottom-color: var(--border-subtle) !important;
+}
+html[data-theme="dark"] .tenant-signin-divider-text { color: var(--text-secondary) !important; }
+
+html[data-theme="dark"] .tenant-signin-footer { color: var(--text-secondary) !important; }
+
+html[data-theme="dark"] .verify-banner {
+  background: var(--surface-elevated) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+html[data-theme="dark"] .verify-banner__title { color: var(--text-heading) !important; }
+html[data-theme="dark"] .verify-banner__desc  { color: var(--text-secondary) !important; }
+html[data-theme="dark"] .verify-banner__timer { color: var(--text-muted) !important; }
+
+html[data-theme="dark"] .tenant-signin-submit:disabled {
+  background: var(--surface-muted) !important;
+  color: var(--text-muted) !important;
+}
+
+html[data-theme="dark"] .tenant-signin-password-toggle { color: var(--text-muted) !important; }
+html[data-theme="dark"] .toggle-password               { color: var(--text-muted) !important; }

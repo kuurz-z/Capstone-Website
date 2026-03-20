@@ -285,6 +285,37 @@
   gap: 10px;
 }
 
+/* ── Stage Guidance Card ───────────────────────────── */
+.rdm-stage-guide {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #d1d5db;
+  border-radius: 8px;
+  padding: 11px 14px;
+}
+
+.rdm-stage-guide-icon-wrap {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.rdm-stage-guide-msg {
+  font-size: 12.5px;
+  color: #6b7280;
+  line-height: 1.55;
+  margin: 0;
+}
+
 .rdm-action {
   padding: 12px 20px;
   border: none;
@@ -356,6 +387,81 @@
   background: #e2e8f0;
   margin: 2px 0;
 }
+
+/* ── Blocked Check-in Button ───────────────────────── */
+.rdm-action-blocked {
+  background: #94a3b8 !important;
+  cursor: not-allowed !important;
+  opacity: 0.8;
+}
+
+/* ── Check-in Prerequisite Checklist ───────────────── */
+.rdm-checkin-gate {
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: -4px;
+  animation: rdm-slideUp 0.15s ease-out;
+}
+
+.rdm-checkin-gate-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin: 0 0 8px;
+}
+
+.rdm-checkin-gate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rdm-checkin-gate-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.rdm-checkin-gate-icon {
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.rdm-checkin-gate-item.ok .rdm-checkin-gate-icon {
+  color: #059669;
+}
+
+.rdm-checkin-gate-item.fail .rdm-checkin-gate-icon {
+  color: #dc2626;
+}
+
+.rdm-checkin-gate-text {
+  color: #1e293b;
+}
+
+.rdm-checkin-gate-item.ok .rdm-checkin-gate-text {
+  color: #065f46;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.rdm-checkin-gate-hint {
+  color: #b45309;
+  font-size: 12px;
+}
+
+
 
 /* ── Extend Move-in Popup ─────────────────────── */
 .rdm-extend-overlay {

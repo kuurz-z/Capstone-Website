@@ -7,14 +7,14 @@
    ============================================================================= */
 :root {
   /* ── Brand Colors (Lilycrest — Deep Navy + Vivid Orange) ──── */
-  --color-primary: #0A1628; /* Deep Navy — headings, admin sidebar, tabs */
-  --color-primary-hover: #1E3A5F; /* Steel Blue */
-  --color-primary-light: #FFF4EB; /* Orange Subtle — badges, focus rings */
-  --color-accent: #FF8C42; /* Vivid Orange — CTAs, primary buttons */
-  --color-accent-hover: #E0752E; /* Deep Orange */
-  --color-accent-light: #FFE0C2; /* Light Peach — soft backgrounds */
-  --color-accent-soft: #FFE0C2; /* Orange Soft */
-  --color-accent-subtle: #FFF4EB; /* Orange Subtle */
+  --color-primary: #0A1628;
+  --color-primary-hover: #1E3A5F;
+  --color-primary-light: #FFF4EB;
+  --color-accent: #FF8C42;
+  --color-accent-hover: #E0752E;
+  --color-accent-light: #FFE0C2;
+  --color-accent-soft: #FFE0C2;
+  --color-accent-subtle: #FFF4EB;
 
   /* ── Semantic Colors ──────────────────────────────────────── */
   --color-success: #059669;
@@ -30,14 +30,31 @@
   --color-info-bg: #EFF6FF;
   --color-info-text: #1E40AF;
 
-  /* ── Text Scale ───────────────────────────────────────────── */
+  /* ── Surface Tokens (unified with landing page palette) ──── */
+  --surface-page:      #ffffff;
+  --surface-sidebar:   #f8fafc;
+  --surface-card:      #ffffff;
+  --surface-elevated:  #ffffff;
+  --surface-muted:     #f1f5f9;
+  --surface-input:     #f8fafc;
+  --surface-hover:     #f1f5f9;
+
+  /* ── Text Tokens ────────────────────────────────────────────── */
+  --text-heading:   #0A1628;
+  --text-body:      #1e293b;
+  --text-secondary: #4b5563;
+  --text-muted:     #6b7280;
+
+  /* ── Border Tokens ──────────────────────────────────────────── */
+  --border-card:    #e5e7eb;
+  --border-subtle:  #f1f5f9;
+  --border-divider: #e5e7eb;
+
+  /* ── Text Scale (legacy) ─────────────────────────────────── */
   --text-primary: #0F172A;
-  --text-secondary: #374151;
-  --text-tertiary: #6b7280;
-  --text-muted: #9ca3af;
   --text-white: #ffffff;
 
-  /* ── Borders & Backgrounds ────────────────────────────────── */
+  /* ── Borders & Backgrounds (legacy) ─────────────────────── */
   --border-default: #e5e7eb;
   --border-strong: #d1d5db;
   --bg-page: #F8FAFC;
@@ -341,4 +358,148 @@ code {
   to {
     transform: scale(1);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LILYCREST — GLOBAL DARK MODE
+   Triggered by: html[data-theme="dark"] (set by ThemeContext)
+   Surface hierarchy:  page < sidebar < card < elevated < overlay
+   ══════════════════════════════════════════════════════════════════ */
+
+html[data-theme="dark"] {
+  /* ── Surfaces (matched to landing page --lp-* palette) ──────── */
+  --surface-page:      #0B1120;   /* deepest base */
+  --surface-sidebar:   #0F1A2E;   /* slightly lifted */
+  --surface-card:      #131D30;   /* card / panel */
+  --surface-elevated:  #1A2840;   /* modals, dropdowns */
+  --surface-muted:     #0F1A2E;   /* inset / subtle */
+  --surface-input:     #0B1120;   /* inputs (sunken) */
+  --surface-hover:     #1A2840;   /* hover state */
+
+  /* ── Typography (matched to --lp-text-*) ─────────────────────── */
+  --text-heading:   #f1f5f9;
+  --text-body:      #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+
+  /* ── Borders (matched to --lp-border) ────────────────────────── */
+  --border-card:    #1E293B;
+  --border-subtle:  #162032;
+  --border-divider: #1E293B;
+
+  /* ── Legacy compat aliases ───────────────────────────────────── */
+  --bg-page:  #0B1120;
+  --bg-muted: #0F1A2E;
+  --bg-white: #131D30;
+
+  color-scheme: dark;
+}
+
+/* ── Global body ─────────────────────────────────────────────── */
+html {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+body {
+  background-color: var(--surface-page);
+  color: var(--text-body);
+}
+
+/* ── Form elements ───────────────────────────────────────────── */
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: var(--surface-input) !important;
+  color: var(--text-body) !important;
+  border-color: var(--border-card) !important;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+html[data-theme="dark"] {
+  scrollbar-color: #1E293B #0B1120;
+}
+html[data-theme="dark"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: #0B1120; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 4px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   CSS ATTRIBUTE OVERRIDES
+   Catches any component still using hardcoded inline colors.
+   React serialises backgroundColor:"#fff" as background-color:rgb(255,255,255).
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Pure white → card surface */
+html[data-theme="dark"] [style*="background-color: rgb(255, 255, 255)"],
+html[data-theme="dark"] [style*="background: rgb(255, 255, 255)"],
+html[data-theme="dark"] [style*="background-color: rgba(255, 255, 255"] {
+  background-color: var(--surface-card) !important;
+}
+
+/* Near-white page backgrounds (F7…, F8…, F9… hex → rgb(24x, …)) */
+html[data-theme="dark"] [style*="background-color: rgb(247,"],
+html[data-theme="dark"] [style*="background-color: rgb(248,"],
+html[data-theme="dark"] [style*="background-color: rgb(249,"],
+html[data-theme="dark"] [style*="background-color: rgb(241,"],
+html[data-theme="dark"] [style*="background-color: rgb(243,"],
+html[data-theme="dark"] [style*="background: rgb(247,"],
+html[data-theme="dark"] [style*="background: rgb(248,"],
+html[data-theme="dark"] [style*="background: rgb(243,"] {
+  background-color: var(--surface-page) !important;
+}
+
+/* Inline border colors (E8EBF0 → rgb(232,…) ; E2E8F0 → rgb(226,…)) */
+html[data-theme="dark"] [style*="border: 1px solid rgb(232,"],
+html[data-theme="dark"] [style*="border: 1px solid rgb(226,"],
+html[data-theme="dark"] [style*="border-color: rgb(232,"],
+html[data-theme="dark"] [style*="border-bottom: 1px solid rgb(232,"],
+html[data-theme="dark"] [style*="border-top: 1px solid rgb(232,"] {
+  border-color: var(--border-card) !important;
+}
+
+/* Dark navy headings (#0A1628 → rgb(10,22,40)) */
+html[data-theme="dark"] [style*="color: rgb(10, 22, 40)"],
+html[data-theme="dark"] [style*="color: rgb(31, 41, 55)"],
+html[data-theme="dark"] [style*="color: rgb(17, 24, 39)"],
+html[data-theme="dark"] [style*="color: rgb(55, 65, 81)"] {
+  color: var(--text-heading) !important;
+}
+
+/* Secondary / muted text */
+html[data-theme="dark"] [style*="color: rgb(107, 114, 128)"],
+html[data-theme="dark"] [style*="color: rgb(100, 116, 139)"] {
+  color: var(--text-secondary) !important;
+}
+html[data-theme="dark"] [style*="color: rgb(156, 163, 175)"],
+html[data-theme="dark"] [style*="color: rgb(148, 163, 184)"] {
+  color: var(--text-muted) !important;
+}
+
+/* Tailwind utility classes */
+html[data-theme="dark"] .bg-white {
+  background-color: var(--surface-card) !important;
+}
+html[data-theme="dark"] .bg-gray-50,
+html[data-theme="dark"] .bg-gray-100 {
+  background-color: var(--surface-muted) !important;
+}
+html[data-theme="dark"] .text-gray-900,
+html[data-theme="dark"] .text-gray-800,
+html[data-theme="dark"] .text-gray-700 {
+  color: var(--text-heading) !important;
+}
+html[data-theme="dark"] .text-gray-600,
+html[data-theme="dark"] .text-gray-500 {
+  color: var(--text-secondary) !important;
+}
+html[data-theme="dark"] .text-gray-400 {
+  color: var(--text-muted) !important;
+}
+html[data-theme="dark"] .border-gray-200,
+html[data-theme="dark"] .border-gray-100 {
+  border-color: var(--border-card) !important;
 }

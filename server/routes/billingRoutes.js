@@ -10,7 +10,8 @@
  */
 
 import express from "express";
-import { verifyToken } from "../middleware/auth.js";
+import { verifyToken, verifyAdmin } from "../middleware/auth.js";
+import { filterByBranch } from "../middleware/branchAccess.js";
 import * as billingController from "../controllers/billingController.js";
 
 const router = express.Router();
@@ -54,65 +55,68 @@ router.post("/:billId/submit-proof", billingController.submitPaymentProof);
  * GET /api/billing/stats
  * Get billing statistics by branch (Admin only)
  */
-router.get("/stats", billingController.getBillingStats);
+router.get("/stats", verifyAdmin, filterByBranch, billingController.getBillingStats);
 
 /**
  * GET /api/billing/branch
  * Get all bills for a branch (Admin only)
  */
-router.get("/branch", billingController.getBillsByBranch);
+router.get("/branch", verifyAdmin, filterByBranch, billingController.getBillsByBranch);
 
 /**
  * GET /api/billing/rooms
  * Get rooms with occupants for bill generation (Admin only)
  */
-router.get("/rooms", billingController.getRoomsWithTenants);
+router.get("/rooms", verifyAdmin, filterByBranch, billingController.getRoomsWithTenants);
 
 /**
  * GET /api/billing/pending-verifications
  * Get bills with pending payment proof verifications (Admin only)
  */
-router.get("/pending-verifications", billingController.getPendingVerifications);
+router.get("/pending-verifications", verifyAdmin, filterByBranch, billingController.getPendingVerifications);
 
 /**
  * GET /api/billing/report
  * Get billing report (revenue, overdue, penalties) (Admin only)
  */
-router.get("/report", billingController.getBillingReport);
+router.get("/report", verifyAdmin, filterByBranch, billingController.getBillingReport);
 
 /**
  * POST /api/billing/generate-room
  * Generate room-based bills distributed among tenants (Admin only)
  */
-router.post("/generate-room", billingController.generateRoomBill);
+router.post("/generate-room", verifyAdmin, filterByBranch, billingController.generateRoomBill);
 
 /**
  * POST /api/billing/:billId/verify
  * Admin approves or rejects payment proof
  */
-router.post("/:billId/verify", billingController.verifyPayment);
+router.post("/:billId/verify", verifyAdmin, filterByBranch, billingController.verifyPayment);
 
 /**
  * POST /api/billing/:billId/mark-paid
  * Mark a bill as paid (Admin only)
  */
-router.post("/:billId/mark-paid", billingController.markBillAsPaid);
+router.post("/:billId/mark-paid", verifyAdmin, filterByBranch, billingController.markBillAsPaid);
 
 /**
  * POST /api/billing/apply-penalties
  * Auto-calculate and apply penalties to overdue bills (Admin only)
  */
-router.post("/apply-penalties", billingController.applyPenalties);
+router.post("/apply-penalties", verifyAdmin, filterByBranch, billingController.applyPenalties);
 
 /**
  * GET /api/billing/export
  * Get flattened billing data for CSV export (Admin only).
  * Query: ?branch=gil-puyat&status=overdue&month=2026-01
  */
-router.get("/export", async (req, res) => {
+router.get("/export", verifyAdmin, filterByBranch, async (req, res) => {
   try {
     const { Bill } = await import("../models/index.js");
-    const { branch, status, month } = req.query;
+    // Regular admins: branch is forced from req.branchFilter (their assigned branch)
+    // Super admins: branch comes from query param
+    const branch = req.branchFilter || req.query.branch;
+    const { status, month } = req.query;
 
     const filter = { isArchived: { $ne: true } };
     if (branch) filter.branch = branch;

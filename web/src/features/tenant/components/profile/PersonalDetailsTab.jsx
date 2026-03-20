@@ -47,15 +47,15 @@ const validateField = (field, value) => {
 
 /* ── Styles ──────────────────────────────────────── */
 const s = {
-  container: { maxWidth: 1200 },
+  container: { width: "100%" },
   heading: { marginBottom: 24 },
-  title: { fontSize: 22, fontWeight: 700, color: "#0A1628", margin: 0 },
-  subtitle: { fontSize: 13, color: "#9CA3AF", marginTop: 4 },
+  title: { fontSize: 22, fontWeight: 700, color: "var(--text-heading, #0A1628)", margin: 0 },
+  subtitle: { fontSize: 13, color: "var(--text-muted, #9CA3AF)", marginTop: 4 },
 
   card: {
-    background: "#fff",
+    background: "var(--surface-card, #fff)",
     borderRadius: 12,
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card, #E8EBF0)",
     marginBottom: 16,
     overflow: "hidden",
   },
@@ -64,7 +64,7 @@ const s = {
     alignItems: "center",
     gap: 10,
     padding: "16px 20px",
-    borderBottom: "1px solid #F1F5F9",
+    borderBottom: "1px solid var(--border-subtle, #F1F5F9)",
   },
   cardHeaderIcon: {
     width: 32,
@@ -78,7 +78,7 @@ const s = {
   cardHeaderTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: "#0A1628",
+    color: "var(--text-heading, #0A1628)",
     margin: 0,
   },
   cardBody: {
@@ -92,7 +92,7 @@ const s = {
   fieldLabel: {
     fontSize: 11,
     fontWeight: 600,
-    color: "#94A3B8",
+    color: "var(--text-muted, #94A3B8)",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     marginBottom: 4,
@@ -100,13 +100,13 @@ const s = {
   fieldValue: {
     fontSize: 14,
     fontWeight: 500,
-    color: "#1F2937",
+    color: "var(--text-heading, #1F2937)",
     margin: 0,
   },
   fieldEmpty: {
     fontSize: 14,
     fontWeight: 400,
-    color: "#CBD5E1",
+    color: "var(--text-muted, #CBD5E1)",
     fontStyle: "italic",
     margin: 0,
   },
@@ -114,9 +114,9 @@ const s = {
     width: "100%",
     padding: "8px 12px",
     fontSize: 14,
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card, #E8EBF0)",
     borderRadius: 8,
-    color: "#1F2937",
+    color: "var(--text-heading, #1F2937)",
     outline: "none",
     transition: "border-color 0.15s, box-shadow 0.15s",
     boxSizing: "border-box",
@@ -137,9 +137,9 @@ const s = {
 
   // Profile card (top card)
   profileCard: {
-    background: "#fff",
+    background: "var(--surface-card, #fff)",
     borderRadius: 12,
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card, #E8EBF0)",
     padding: "24px",
     marginBottom: 16,
     display: "flex",
@@ -170,17 +170,17 @@ const s = {
   profileName: {
     fontSize: 18,
     fontWeight: 700,
-    color: "#0A1628",
+    color: "var(--text-heading, #0A1628)",
     margin: 0,
   },
   profileEmail: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "var(--text-secondary, #6B7280)",
     margin: "2px 0 0",
   },
   profileLocation: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: "var(--text-muted, #9CA3AF)",
     margin: "2px 0 0",
   },
 
@@ -190,9 +190,9 @@ const s = {
     alignItems: "center",
     gap: 6,
     padding: "8px 16px",
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card, #E8EBF0)",
     borderRadius: 8,
-    background: "#fff",
+    background: "var(--surface-card, #fff)",
     fontSize: 13,
     fontWeight: 600,
     color: "#FF8C42",
@@ -218,12 +218,12 @@ const s = {
     alignItems: "center",
     gap: 6,
     padding: "8px 16px",
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card, #E8EBF0)",
     borderRadius: 8,
-    background: "#fff",
+    background: "var(--surface-card, #fff)",
     fontSize: 13,
     fontWeight: 500,
-    color: "#6B7280",
+    color: "var(--text-secondary, #6B7280)",
     cursor: "pointer",
     transition: "all 0.15s",
   },
@@ -575,8 +575,8 @@ const PersonalDetailsTab = ({
               <button
                 onClick={handleCancel}
                 style={s.cancelBtn}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-muted, #F8FAFC)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--surface-card, #fff)")}
               >
                 <X size={14} /> Cancel
               </button>
@@ -604,12 +604,12 @@ const PersonalDetailsTab = ({
               onClick={() => setIsEditingProfile(true)}
               style={s.editBtn}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#FFF8ED";
+                e.currentTarget.style.background = "rgba(255, 140, 66, 0.06)";
                 e.currentTarget.style.borderColor = "#FF8C42";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#fff";
-                e.currentTarget.style.borderColor = "#E8EBF0";
+                e.currentTarget.style.background = "var(--surface-card, #fff)";
+                e.currentTarget.style.borderColor = "var(--border-card, #E8EBF0)";
               }}
             >
               <Edit2 size={14} /> Edit Profile

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import { uploadToImageKit, validateFile } from "../../../../../shared/utils/imageUpload";
+import { CheckCircle, AlertTriangle, Upload } from "lucide-react";
 
 /** Format bytes into a human-readable string */
 function formatFileSize(bytes) {
@@ -145,8 +146,8 @@ const FileUploadField = ({
           </>
         ) : isUploaded ? (
           <div>
-            <div style={{ color: "#059669", fontWeight: 600, fontSize: "14px", marginBottom: "4px" }}>
-              ✓ Uploaded successfully
+            <div style={{ color: "#059669", fontWeight: 600, fontSize: "14px", marginBottom: "4px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <CheckCircle size={15} /> Uploaded successfully
             </div>
             {fileMeta ? (
               <div style={{ fontSize: "12px", color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", flexWrap: "wrap" }}>
@@ -164,18 +165,18 @@ const FileUploadField = ({
             </div>
           </div>
         ) : isFile ? (
-          <div style={{ color: "#059669", fontWeight: 500 }}>✓ {value.name}</div>
+          <div style={{ color: "#059669", fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}><CheckCircle size={14} /> {value.name}</div>
         ) : (
           <>
-            <div style={{ fontSize: "20px", marginBottom: "8px", color: "#6B7280" }}>↑</div>
+            <div style={{ marginBottom: "8px", color: "#9CA3AF" }}><Upload size={20} /></div>
             <div style={{ color: "#666" }}>Click to upload or drag and drop</div>
           </>
         )}
 
         {/* Error message */}
         {error && !uploading && (
-          <div style={{ fontSize: "12px", color: "#EF4444", marginTop: "6px", fontWeight: 500 }}>
-            ⚠ {error}
+          <div style={{ fontSize: "12px", color: "#EF4444", marginTop: "6px", fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+            <AlertTriangle size={12} /> {error}
           </div>
         )}
 

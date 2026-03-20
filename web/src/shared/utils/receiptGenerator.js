@@ -1,240 +1,241 @@
 import jsPDF from "jspdf";
 
 /**
- * Generate a downloadable PDF receipt matching the Lilycrest email template.
+ * Builds the PDF receipt, faithfully matching the server-side email template
+ * (generatePaymentReceiptHtml in server/config/email.js).
  *
- * Layout mirrors the email: dark navy header → "Order details" section →
- * amount, description, payment method + date, reference ID → navy footer.
- *
- * @param {Object} reservation - The reservation object with payment details
- * @param {Object} profile - The user profile (name, email)
+ * Color references from the email:
+ *   Header/Footer bg : #183153  → [24, 49, 83]
+ *   Gold label       : #D4982B  → [212, 152, 43]
+ *   Dark text        : #111827  → [17, 24, 39]
+ *   Body text        : #374151  → [55, 65, 81]
+ *   Muted / labels   : #9CA3AF  → [156, 163, 175]
+ *   Sub-muted        : #6B7280  → [107, 114, 128]
+ *   Divider line     : #E5E7EB  → [229, 231, 235]
  */
-export function generateDepositReceipt(reservation, profile) {
+function buildReceiptDoc(reservation, profile) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 25;
-  const contentWidth = pageWidth - margin * 2;
-  let y = 0;
+  const pageWidth  = doc.internal.pageSize.getWidth();
+  const margin     = 20;
+  const W          = pageWidth - margin * 2;   // usable content width
+  let y            = 0;
 
-  // ── Colors (matching email template) ──
-  const navy = [24, 49, 83]; // #0A1628
-  const gold = [212, 152, 43]; // #FF8C42
-  const darkText = [17, 24, 39]; // #111827
-  const bodyText = [55, 65, 81]; // #374151
-  const mutedText = [156, 163, 175]; // #9CA3AF
-  const lightLine = [229, 231, 235]; // #E5E7EB
-  const white = [255, 255, 255];
+  // ── palette ────────────────────────────────────────────────────────────────
+  const navy     = [24, 49, 83];      // #183153 — header / footer bg
+  const gold     = [212, 152, 43];    // #D4982B — "Your receipt from" + footer brand
+  const darkText = [17, 24, 39];      // #111827 — amount value
+  const bodyText = [55, 65, 81];      // #374151 — greeting, values
+  const muted    = [156, 163, 175];   // #9CA3AF — section labels
+  const subMuted = [107, 114, 128];   // #6B7280 — subtitle, reference value
+  const divider  = [229, 231, 235];   // #E5E7EB — horizontal rule
+  const white    = [255, 255, 255];
 
-  // ── Helper: draw filled rectangle ──
-  const fillRect = (x, yPos, w, h, color) => {
+  // ── helpers ─────────────────────────────────────────────────────────────────
+  const fill = (x, yy, w, h, color) => {
     doc.setFillColor(...color);
-    doc.rect(x, yPos, w, h, "F");
+    doc.rect(x, yy, w, h, "F");
   };
-
-  // ── Helper: draw horizontal line ──
-  const drawLine = (yPos) => {
-    doc.setDrawColor(...lightLine);
-    doc.setLineWidth(0.3);
-    doc.line(margin, yPos, pageWidth - margin, yPos);
+  const hRule = (yy, colorArr = divider) => {
+    doc.setDrawColor(...colorArr);
+    doc.setLineWidth(0.25);
+    doc.line(margin, yy, pageWidth - margin, yy);
   };
-
-  // ── Helper: format date ──
-  const formatDate = (d) => {
-    if (!d) return "—";
+  const fmt = (d) => {
+    if (!d) return "\u2014";
     return new Date(d).toLocaleDateString("en-PH", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+      year: "numeric", month: "long", day: "numeric",
     });
   };
+  const set = (font, style, size, color) => {
+    doc.setFont(font, style);
+    doc.setFontSize(size);
+    doc.setTextColor(...color);
+  };
 
-  const room = reservation.roomId || {};
+  const room     = reservation.roomId || {};
   const fullName = profile
     ? `${profile.firstName || ""} ${profile.lastName || ""}`.trim()
-    : "—";
+    : "\u2014";
+
+  const roomName = room.name || "Room";
+  const branch   =
+    room.branch === "gil-puyat"   ? "Gil Puyat"
+    : room.branch === "guadalupe" ? "Guadalupe"
+    : room.branch || "Lilycrest";
 
   // ==========================================================================
-  // HEADER — Dark navy block (matches email #0A1628)
+  // HEADER  — dark navy, "Your receipt from" + "LILYCREST DORMITORY"
   // ==========================================================================
-  const headerHeight = 38;
-  fillRect(0, 0, pageWidth, headerHeight, navy);
+  const headerH = 36;
+  fill(0, 0, pageWidth, headerH, navy);
 
-  // "Your receipt from" in gold
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...gold);
-  doc.text("Your receipt from", margin, 16);
+  // "Your receipt from"  →  gold, 10pt, normal
+  set("helvetica", "normal", 10, gold);
+  doc.text("Your receipt from", margin, 14);
 
-  // "LILYCREST DORMITORY" in white bold
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(...white);
-  doc.text("LILYCREST DORMITORY", margin, 28);
+  // "LILYCREST DORMITORY"  →  white, 24pt, bold, letter-spacing via charSpace
+  set("helvetica", "bold", 20, white);
+  doc.text("LILYCREST DORMITORY", margin, 27);
 
-  y = headerHeight + 16;
+  y = headerH + 14;
 
   // ==========================================================================
   // GREETING
   // ==========================================================================
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
-  doc.setTextColor(...bodyText);
+  set("helvetica", "bold", 13, bodyText);
   doc.text(`Hi ${fullName},`, margin, y);
   y += 7;
-  doc.setFontSize(10);
-  doc.setTextColor(...mutedText);
-  doc.text("Thank you for your payment. Here's a copy of your receipt.", margin, y);
+
+  set("helvetica", "normal", 10, subMuted);
+  doc.text("Thank you for your payment. Here\u2019s a copy of your receipt.", margin, y);
   y += 14;
 
   // ==========================================================================
-  // "ORDER DETAILS" SECTION
+  // SECTION LABEL — "Order details"  (sentence-case, matching email)
   // ==========================================================================
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...mutedText);
-  doc.text("ORDER DETAILS", margin, y);
+  set("helvetica", "normal", 8, muted);
+  doc.text("Order details", margin, y);
   y += 3;
-  drawLine(y);
+  hRule(y);
   y += 10;
 
-  // ── Amount paid ──
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...mutedText);
-  doc.text("AMOUNT PAID", margin, y);
-  y += 8;
+  // ── Amount paid label ──
+  set("helvetica", "normal", 8, muted);
+  doc.text("Amount paid", margin, y);
+  y += 7;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(...darkText);
-  doc.text("₱ 2,000.00", margin, y);
+  // ── Amount value  (28pt bold — matches email's 28px weight) ──
+  set("helvetica", "bold", 26, darkText);
+  doc.text("\u20B1 2,000.00", margin, y);
+  y += 13;
+
+  // ── Description label ──
+  set("helvetica", "normal", 8, muted);
+  doc.text("Description", margin, y);
+  y += 6;
+
+  set("helvetica", "normal", 10, bodyText);
+  doc.text(`Security Deposit \u2014 ${roomName} (${branch})`, margin, y);
   y += 12;
 
-  // ── Description ──
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...mutedText);
-  doc.text("DESCRIPTION", margin, y);
-  y += 6;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...bodyText);
-  const roomName = room.name || "Room";
-  const branch = room.branch === "gil-puyat" ? "Gil Puyat" : room.branch === "guadalupe" ? "Guadalupe" : room.branch || "Lilycrest";
-  doc.text(`Security Deposit — ${roomName} (${branch})`, margin, y);
-  y += 10;
-
-  drawLine(y);
+  hRule(y);
   y += 8;
 
-  // ── Payment method + Date paid (side by side) ──
-  const halfWidth = contentWidth / 2;
+  // ── Payment method | Date paid  (two columns, matching email layout) ──
+  const col2 = margin + W / 2;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...mutedText);
-  doc.text("PAYMENT METHOD", margin, y);
-  doc.text("DATE PAID", margin + halfWidth, y);
+  set("helvetica", "normal", 8, muted);
+  doc.text("Payment method", margin, y);
+  doc.text("Date paid", col2, y);
   y += 6;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...bodyText);
-  const paymentMethod = reservation.paymentMethod === "paymongo" ? "Online (PayMongo)" : reservation.paymentMethod || "Online";
+  const paymentMethod =
+    reservation.paymentMethod === "paymongo"
+      ? "Online (PayMongo)"
+      : reservation.paymentMethod || "Online";
+
+  set("helvetica", "bold", 10, bodyText);
   doc.text(paymentMethod, margin, y);
-  doc.text(formatDate(reservation.paymentDate), margin + halfWidth, y);
+  doc.text(fmt(reservation.paymentDate), col2, y);
   y += 10;
 
-  drawLine(y);
+  hRule(y);
   y += 8;
 
-  // ── Reference ──
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...mutedText);
-  doc.text("REFERENCE", margin, y);
+  // ── Reference label + value  (monospace, matching email) ──
+  set("helvetica", "normal", 8, muted);
+  doc.text("Reference", margin, y);
   y += 6;
 
-  doc.setFont("courier", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...bodyText);
-  const refId = reservation.paymongoPaymentId || reservation.reservationCode || reservation._id?.slice(-8)?.toUpperCase() || "—";
-  doc.text(refId, margin, y);
-  y += 12;
+  const refId =
+    reservation.paymongoPaymentId ||
+    reservation.reservationCode ||
+    reservation._id?.slice(-8)?.toUpperCase() ||
+    "\u2014";
 
-  drawLine(y);
+  set("courier", "normal", 9, subMuted);
+  doc.text(refId, margin, y);
+  y += 14;
+
+  hRule(y);
   y += 10;
 
   // ==========================================================================
-  // RESERVATION INFO
+  // RESERVATION DETAILS  (extra section below the receipt block)
   // ==========================================================================
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...mutedText);
-  doc.text("RESERVATION DETAILS", margin, y);
+  set("helvetica", "normal", 8, muted);
+  doc.text("Reservation details", margin, y);
   y += 3;
-  drawLine(y);
+  hRule(y);
   y += 8;
 
-  const addDetailRow = (label, value) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...mutedText);
+  const addRow = (label, value) => {
+    set("helvetica", "normal", 8, muted);
     doc.text(label, margin, y);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...bodyText);
-    doc.text(String(value || "—"), margin + halfWidth, y);
+    set("helvetica", "bold", 10, bodyText);
+    doc.text(String(value || "\u2014"), col2, y);
     y += 8;
   };
 
-  addDetailRow("TENANT", fullName);
-  addDetailRow("EMAIL", profile?.email || "—");
-  addDetailRow("ROOM", roomName);
-  addDetailRow("BRANCH", branch);
-  addDetailRow("LEASE", `${reservation.leaseDuration || 12} months`);
-  addDetailRow("MOVE-IN", formatDate(reservation.targetMoveInDate || reservation.finalMoveInDate));
+  addRow("Tenant",  fullName);
+  addRow("Email",   profile?.email || "\u2014");
+  addRow("Room",    roomName);
+  addRow("Branch",  branch);
+  addRow("Lease",   `${reservation.leaseDuration || 12} months`);
+  addRow("Move-in", fmt(reservation.targetMoveInDate || reservation.finalMoveInDate));
   if (reservation.selectedBed?.position) {
-    addDetailRow("BED", `${reservation.selectedBed.position}`);
+    addRow("Bed", reservation.selectedBed.position);
   }
 
-  y += 6;
+  y += 8;
 
   // ==========================================================================
-  // FOOTER — Dark navy block (matches email footer)
+  // FOOTER  — dark navy, matching email footer exactly
   // ==========================================================================
   const footerY = y + 4;
-  const footerHeight = 30;
-  fillRect(0, footerY, pageWidth, footerHeight, navy);
+  const footerH = 34;
+  fill(0, footerY, pageWidth, footerH, navy);
 
+  // "You're receiving this e-mail because…"  →  white 70%, 9pt
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(255, 255, 255, 180);
+  doc.setTextColor(255, 255, 255);
+  doc.setGState(new doc.GState({ opacity: 0.7 }));
   doc.text(
-    "You're receiving this because you made a payment at Lilycrest Dormitory.",
+    "You\u2019re receiving this because you made a payment at Lilycrest Dormitory.",
     pageWidth / 2,
-    footerY + 10,
+    footerY + 9,
     { align: "center" },
   );
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...gold);
-  doc.text("🏠 Lilycrest Dormitory", pageWidth / 2, footerY + 18, { align: "center" });
+  // "Lilycrest Dormitory"  →  gold, 11pt, bold
+  doc.setGState(new doc.GState({ opacity: 1 }));
+  set("helvetica", "bold", 11, gold);
+  doc.text("Lilycrest Dormitory", pageWidth / 2, footerY + 18, { align: "center" });
 
+  // "Dormitory Management System"  →  white 50%, 8pt  (as in email)
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(255, 255, 255, 130);
-  doc.text(
-    `Generated on ${new Date().toLocaleString("en-PH")}`,
-    pageWidth / 2,
-    footerY + 24,
-    { align: "center" },
-  );
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.setGState(new doc.GState({ opacity: 0.5 }));
+  doc.text("Dormitory Management System", pageWidth / 2, footerY + 26, { align: "center" });
 
-  // ── Save ──
+  // reset opacity so it doesn't bleed
+  doc.setGState(new doc.GState({ opacity: 1 }));
+
+  return doc;
+}
+
+/** Download the receipt PDF directly to the user's device. */
+export function generateDepositReceipt(reservation, profile) {
+  const doc = buildReceiptDoc(reservation, profile);
   const filename = `Lilycrest_Receipt_${reservation.reservationCode || "deposit"}.pdf`;
   doc.save(filename);
+}
+
+/** Open the receipt PDF in a new browser tab without downloading. */
+export function viewDepositReceipt(reservation, profile) {
+  const doc = buildReceiptDoc(reservation, profile);
+  const blobUrl = doc.output("bloburl");
+  window.open(blobUrl, "_blank");
 }

@@ -26,6 +26,8 @@
  * ============================================================================
  */
 
+import { User } from "../models/index.js";
+
 /**
  * All available permissions in the system
  */
@@ -87,7 +89,6 @@ export const requirePermission = (permission) => {
       }
 
       // Get user from DB to check permissions
-      const { User } = await import("../models/index.js");
       const dbUser = await User.findOne({ firebaseUid: req.user.uid })
         .select("permissions role")
         .lean();
@@ -137,7 +138,6 @@ export const requireAnyPermission = (permissions) => {
     try {
       if (req.isSuperAdmin) return next();
 
-      const { User } = await import("../models/index.js");
       const dbUser = await User.findOne({ firebaseUid: req.user.uid })
         .select("permissions role")
         .lean();

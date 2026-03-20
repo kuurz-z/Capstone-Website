@@ -23,6 +23,7 @@ import {
   verifyAdmin,
   verifySuperAdmin,
 } from "../middleware/auth.js";
+import { filterByBranch } from "../middleware/branchAccess.js";
 import {
   getAuditLogs,
   getAuditStats,
@@ -45,14 +46,14 @@ const router = express.Router();
  * @access  Admin, SuperAdmin
  * @query   type, severity, user, branch, startDate, endDate, search, limit, offset
  */
-router.get("/", verifyToken, verifyAdmin, getAuditLogs);
+router.get("/", verifyToken, verifyAdmin, filterByBranch, getAuditLogs);
 
 /**
  * @route   GET /api/audit-logs/stats
  * @desc    Get audit log statistics
  * @access  Admin, SuperAdmin
  */
-router.get("/stats", verifyToken, verifyAdmin, getAuditStats);
+router.get("/stats", verifyToken, verifyAdmin, filterByBranch, getAuditStats);
 
 /**
  * @route   GET /api/audit-logs/security/failed-logins

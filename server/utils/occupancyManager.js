@@ -15,8 +15,11 @@
  * ============================================================================
  */
 
+import mongoose from "mongoose";
 import Room from "../models/Room.js";
 import Reservation from "../models/Reservation.js";
+import logger from "../middleware/logger.js";
+import { emitRoomUpdate } from "./socket.js";
 
 /**
  * Update occupancy when reservation status changes
@@ -28,114 +31,120 @@ export const updateOccupancyOnReservationChange = async (
   reservation,
   oldData,
 ) => {
+  const oldStatus = oldData?.status;
+  const newStatus = reservation.status;
+
+  // If status hasn't changed, no writes needed — skip opening a session
+  if (oldStatus === newStatus) {
+    return Room.findById(reservation.roomId);
+  }
+
+  const session = await mongoose.startSession();
+  let finalRoom = null;
+
   try {
-    const room = await Room.findById(reservation.roomId);
-    if (!room) {
-      return null;
-    }
+    // session.withTransaction() handles commit, abort, and retry on
+    // transient write conflicts automatically (MongoServerError code 112)
+    await session.withTransaction(async () => {
+      const room = await Room.findById(reservation.roomId).session(session);
+      if (!room) return;
 
-    const oldStatus = oldData?.status;
-    const newStatus = reservation.status;
-
-    // If status hasn't changed, no occupancy update needed
-    if (oldStatus === newStatus) {
-      return room;
-    }
-
-
-    // === INCREASE OCCUPANCY ===
-    // When transitioning to reserved or checked-in (if not already reserved)
-    if (
-      newStatus === "reserved" &&
-      oldStatus !== "reserved" &&
-      oldStatus !== "checked-in"
-    ) {
-      const updated = await Room.atomicIncreaseOccupancy(room._id);
-      if (!updated) {
-      }
-
-      // Assign bed if selected (needs loaded doc)
-      if (reservation.selectedBed?.id) {
-        // Re-fetch room after atomic update to get latest state
-        const freshRoom = await Room.findById(room._id);
-        if (freshRoom) {
-          const assigned = freshRoom.occupyBed(
-            reservation.selectedBed.id,
-            reservation.userId,
-            reservation._id,
-          );
-          if (assigned) {
-            await freshRoom.save();
-          }
+      // === INCREASE OCCUPANCY ===
+      // Transition to reserved (from any state that isn't already reserved/checked-in)
+      if (
+        newStatus === "reserved" &&
+        oldStatus !== "reserved" &&
+        oldStatus !== "checked-in"
+      ) {
+        const updated = await Room.atomicIncreaseOccupancy(room._id, session);
+        if (!updated) {
+          logger.warn({ roomId: String(room._id) }, "Occupancy increase: no room matched atomic update");
         }
-      }
-    }
-
-    // When checked-in from pending (in case reserved was skipped)
-    if (
-      newStatus === "checked-in" &&
-      oldStatus !== "reserved" &&
-      oldStatus !== "checked-in"
-    ) {
-      await Room.atomicIncreaseOccupancy(room._id);
-
-      if (reservation.selectedBed?.id) {
-        const freshRoom = await Room.findById(room._id);
-        if (freshRoom) {
-          const assigned = freshRoom.occupyBed(
-            reservation.selectedBed.id,
-            reservation.userId,
-            reservation._id,
-          );
-          if (assigned) {
-            await freshRoom.save();
-          }
-        }
-      }
-    }
-
-    // === DECREASE OCCUPANCY ===
-    // When transitioning to cancelled
-    if (newStatus === "cancelled" && oldStatus !== "cancelled") {
-      await Room.atomicDecreaseOccupancy(room._id);
-
-      // Vacate bed if it was occupied
-      if (reservation.selectedBed?.id) {
-        const freshRoom = await Room.findById(room._id);
-        if (freshRoom) {
-          const vacated = freshRoom.vacateBed(reservation.selectedBed.id);
-          if (vacated) {
-            await freshRoom.save();
-          }
-        }
-      }
-    }
-
-    // When transitioning to checked-out
-    if (newStatus === "checked-out" && oldStatus !== "checked-out") {
-      if (oldStatus === "reserved" || oldStatus === "checked-in") {
-        await Room.atomicDecreaseOccupancy(room._id);
 
         if (reservation.selectedBed?.id) {
-          const freshRoom = await Room.findById(room._id);
+          const freshRoom = await Room.findById(room._id).session(session);
+          if (freshRoom) {
+            const assigned = freshRoom.occupyBed(
+              reservation.selectedBed.id,
+              reservation.userId,
+              reservation._id,
+            );
+            if (assigned) await freshRoom.save({ session });
+          }
+        }
+      }
+
+      // Transition to checked-in directly (reserved step was skipped)
+      if (
+        newStatus === "checked-in" &&
+        oldStatus !== "reserved" &&
+        oldStatus !== "checked-in"
+      ) {
+        await Room.atomicIncreaseOccupancy(room._id, session);
+
+        if (reservation.selectedBed?.id) {
+          const freshRoom = await Room.findById(room._id).session(session);
+          if (freshRoom) {
+            const assigned = freshRoom.occupyBed(
+              reservation.selectedBed.id,
+              reservation.userId,
+              reservation._id,
+            );
+            if (assigned) await freshRoom.save({ session });
+          }
+        }
+      }
+
+      // === DECREASE OCCUPANCY ===
+      if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+        await Room.atomicDecreaseOccupancy(room._id, session);
+
+        if (reservation.selectedBed?.id) {
+          const freshRoom = await Room.findById(room._id).session(session);
           if (freshRoom) {
             const vacated = freshRoom.vacateBed(reservation.selectedBed.id);
-            if (vacated) {
-              await freshRoom.save();
+            if (vacated) await freshRoom.save({ session });
+          }
+        }
+      }
+
+      if (newStatus === "checked-out" && oldStatus !== "checked-out") {
+        if (oldStatus === "reserved" || oldStatus === "checked-in") {
+          await Room.atomicDecreaseOccupancy(room._id, session);
+
+          if (reservation.selectedBed?.id) {
+            const freshRoom = await Room.findById(room._id).session(session);
+            if (freshRoom) {
+              const vacated = freshRoom.vacateBed(reservation.selectedBed.id);
+              if (vacated) await freshRoom.save({ session });
             }
           }
         }
       }
+
+      // Fetch final state within the same session so the return value is consistent
+      finalRoom = await Room.findById(room._id).session(session);
+    });
+
+    // Broadcast the updated room state to all connected browsers
+    // so room cards update live without a manual refresh
+    if (finalRoom) {
+      emitRoomUpdate(finalRoom._id, {
+        currentOccupancy: finalRoom.currentOccupancy,
+        available: finalRoom.available,
+        capacity: finalRoom.capacity,
+      });
     }
-
-    // Re-fetch room for return value (atomic ops already updated it)
-    const finalRoom = await Room.findById(room._id);
-
 
     return finalRoom;
   } catch (error) {
-    console.error("❌ Occupancy update error:", error);
+    logger.error(
+      { err: error, reservationId: String(reservation._id) },
+      "Occupancy update failed — transaction aborted",
+    );
     throw error;
+  } finally {
+    session.endSession();
   }
 };
 
@@ -192,10 +201,9 @@ export const recalculateRoomOccupancy = async (roomId) => {
     // Save the room
     await room.save();
 
-
     return room;
   } catch (error) {
-    console.error("❌ Recalculate occupancy error:", error);
+    logger.error({ err: error, roomId: String(roomId) }, "Recalculate occupancy failed");
     throw error;
   }
 };
@@ -254,7 +262,7 @@ export const getRoomOccupancyStatus = async (roomId) => {
       })),
     };
   } catch (error) {
-    console.error("❌ Get occupancy status error:", error);
+    logger.error({ err: error, roomId: String(roomId) }, "Get occupancy status failed");
     throw error;
   }
 };
@@ -299,7 +307,7 @@ export const getBranchOccupancyStats = async (branch = null) => {
       rooms: stats,
     };
   } catch (error) {
-    console.error("❌ Get branch occupancy stats error:", error);
+    logger.error({ err: error, branch }, "Get branch occupancy stats failed");
     throw error;
   }
 };

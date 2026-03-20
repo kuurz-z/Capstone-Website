@@ -1,0 +1,60 @@
+/* ══════════════════════════════════════════════════════════════
+   PROFILE DARK MODE — Inline-style overrides (need !important)
+   ══════════════════════════════════════════════════════════════ */
+
+/* bg-white Tailwind class */
+html[data-theme="dark"] .profile-page .bg-white {
+  background-color: var(--surface-card) !important;
+}
+
+/* Cream/orange tint cards → dark warm tint */
+html[data-theme="dark"] .profile-page [style*="FFF7ED"],
+html[data-theme="dark"] .profile-page [style*="FFFBEB"],
+html[data-theme="dark"] .profile-page [style*="FFF8ED"],
+html[data-theme="dark"] .profile-page [style*="FFFBF5"] {
+  background: rgba(255, 140, 66, 0.08) !important;
+  background-color: rgba(255, 140, 66, 0.08) !important;
+}
+
+/* Pink/red tint backgrounds */
+html[data-theme="dark"] .profile-page [style*="FEE2E2"],
+html[data-theme="dark"] .profile-page [style*="fee2e2"] {
+  background: rgba(239, 68, 68, 0.1) !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Green tint backgrounds */
+html[data-theme="dark"] .profile-page [style*="ECFDF5"],
+html[data-theme="dark"] .profile-page [style*="D1FAE5"],
+html[data-theme="dark"] .profile-page [style*="e8f5e9"] {
+  background: rgba(16, 185, 129, 0.1) !important;
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+/* Blue tint backgrounds */
+html[data-theme="dark"] .profile-page [style*="EFF6FF"],
+html[data-theme="dark"] .profile-page [style*="DBEAFE"] {
+  background: rgba(59, 130, 246, 0.1) !important;
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Gray backgrounds */
+html[data-theme="dark"] .profile-page [style*="f3f4f6"],
+html[data-theme="dark"] .profile-page [style*="F3F4F6"],
+html[data-theme="dark"] .profile-page [style*="f8fafc"],
+html[data-theme="dark"] .profile-page [style*="F8FAFC"],
+html[data-theme="dark"] .profile-page [style*="f9fafb"],
+html[data-theme="dark"] .profile-page [style*="F9FAFB"] {
+  background: var(--surface-muted) !important;
+  background-color: var(--surface-muted) !important;
+}
+
+/* Light borders → dark */
+html[data-theme="dark"] .profile-page [style*="E8EBF0"],
+html[data-theme="dark"] .profile-page [style*="e5e7eb"] {
+  border-color: var(--border-card) !important;
+}
+
+html[data-theme="dark"] .profile-page [style*="FED7AA"] {
+  border-color: rgba(255, 140, 66, 0.2) !important;
+}

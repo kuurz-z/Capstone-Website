@@ -16,6 +16,7 @@
  */
 
 import { Server } from "socket.io";
+import logger from "../middleware/logger.js";
 
 let io = null;
 
@@ -52,7 +53,7 @@ export function initSocket(httpServer, allowedOrigins = []) {
     });
   });
 
-  console.log("🔌 Socket.IO initialized");
+  logger.info("Socket.IO initialized");
   return io;
 }
 
@@ -85,3 +86,18 @@ export function emitToAdmins(event, payload) {
     io.to("admins").emit(event, payload);
   }
 }
+
+/**
+ * Broadcast room availability update to ALL connected clients.
+ * Called after any occupancy change so every open browser refreshes
+ * the affected room card without needing a manual page reload.
+ *
+ * @param {string|ObjectId} roomId - The room that changed
+ * @param {Object} data - Partial room data to attach (occupancy, available, capacity)
+ */
+export function emitRoomUpdate(roomId, data = {}) {
+  if (io) {
+    io.emit("room:updated", { roomId: String(roomId), ...data });
+  }
+}
+

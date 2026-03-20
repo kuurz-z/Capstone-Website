@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
+import { CalendarDays, User, Home, MapPin, Monitor, Check, X, Clock, Ban } from "lucide-react";
+import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
 
 /* ─── tiny helpers ────────────────────────────────── */
 const InfoField = ({ label, children }) => (
@@ -21,7 +23,7 @@ const InfoField = ({ label, children }) => (
   </div>
 );
 
-const Section = ({ icon, title, children }) => (
+const Section = ({ icon: Icon, title, children }) => (
   <div style={{ marginBottom: "24px" }}>
     <h3
       style={{
@@ -29,9 +31,13 @@ const Section = ({ icon, title, children }) => (
         fontWeight: "600",
         color: "#1F2937",
         marginBottom: "12px",
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
       }}
     >
-      {icon} {title}
+      {Icon && <Icon size={15} style={{ color: "#6B7280", flexShrink: 0 }} />}
+      {title}
     </h3>
     <div
       style={{
@@ -49,36 +55,22 @@ const Section = ({ icon, title, children }) => (
   </div>
 );
 
+const STATUS_CONFIGS = [
+  { test: (s) => s.visitApproved,    bg: "#D1FAE5", color: "#047857", label: "Visit Completed",   Icon: Check },
+  { test: (s) => s.scheduleApproved, bg: "#E0EBF5", color: "#0A5C9B", label: "Awaiting Visit",    Icon: CalendarDays },
+  { test: (s) => s.scheduleRejected, bg: "#FEE2E2", color: "#DC2626", label: "Schedule Rejected", Icon: Ban },
+];
+
 const getStatusBadge = (schedule) => {
-  const configs = [
-    {
-      test: schedule.visitApproved,
-      bg: "#D1FAE5",
-      color: "#047857",
-      label: "✓ Visit Completed",
-    },
-    {
-      test: schedule.scheduleApproved,
-      bg: "#E0EBF5",
-      color: "#0A1628",
-      label: "📅 Awaiting Visit",
-    },
-    {
-      test: schedule.scheduleRejected,
-      bg: "#FEE2E2",
-      color: "#DC2626",
-      label: "✕ Schedule Rejected",
-    },
-  ];
-  const cfg = configs.find((c) => c.test) || {
-    bg: "#FEF3C7",
-    color: "#92400E",
-    label: "⏳ Pending Approval",
+  const cfg = STATUS_CONFIGS.find((c) => c.test(schedule)) || {
+    bg: "#FEF3C7", color: "#92400E", label: "Pending Approval", Icon: Clock,
   };
   return (
     <span
       style={{
-        display: "inline-block",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
         padding: "6px 14px",
         borderRadius: "20px",
         fontSize: "13px",
@@ -87,6 +79,7 @@ const getStatusBadge = (schedule) => {
         color: cfg.color,
       }}
     >
+      <cfg.Icon size={13} />
       {cfg.label}
     </span>
   );
@@ -112,6 +105,8 @@ export default function VisitDetailsModal({
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useBodyScrollLock(!!schedule);
 
   if (!schedule) return null;
 
@@ -202,13 +197,15 @@ export default function VisitDetailsModal({
             style={{
               background: "transparent",
               border: "none",
-              fontSize: "24px",
               cursor: "pointer",
               color: "#6B7280",
-              padding: "4px",
+              padding: "6px",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: "6px",
             }}
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 
@@ -242,7 +239,7 @@ export default function VisitDetailsModal({
             </div>
           )}
 
-          <Section icon="👤" title="Customer Information">
+          <Section icon={User} title="Customer Information">
             <InfoField label="Full Name">{schedule.customer}</InfoField>
             <InfoField label="Email">{schedule.email}</InfoField>
             <InfoField label="Phone">{schedule.phone || "N/A"}</InfoField>
@@ -251,12 +248,12 @@ export default function VisitDetailsModal({
             </InfoField>
           </Section>
 
-          <Section icon="🏠" title="Room Information">
+          <Section icon={Home} title="Room Information">
             <InfoField label="Room">{schedule.room}</InfoField>
             <InfoField label="Branch">{schedule.branch}</InfoField>
           </Section>
 
-          <Section icon="📅" title="Visit Details">
+          <Section icon={CalendarDays} title="Visit Details">
             <div>
               <p
                 style={{
@@ -279,9 +276,7 @@ export default function VisitDetailsModal({
                   color: "#0A1628",
                 }}
               >
-                {schedule.viewingType === "inperson"
-                  ? "🏠 In-Person"
-                  : "💻 Virtual"}
+                {schedule.viewingType === "inperson" ? "In-Person" : "Virtual"}
               </span>
             </div>
             <InfoField label="Request Date">
@@ -290,11 +285,106 @@ export default function VisitDetailsModal({
             {schedule.isOutOfTown && (
               <div style={{ gridColumn: "span 2" }}>
                 <InfoField label="Current Location (Out of Town)">
-                  📍 {schedule.currentLocation || "Not specified"}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <MapPin size={13} style={{ color: "#6B7280" }} />
+                    {schedule.currentLocation || "Not specified"}
+                  </span>
                 </InfoField>
               </div>
             )}
           </Section>
+
+          {/* Visit History Timeline */}
+          {schedule.visitHistory && schedule.visitHistory.length > 0 && (
+            <div style={{ marginBottom: "24px" }}>
+              <h3
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#1F2937",
+                  marginBottom: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <Clock size={15} style={{ color: "#6B7280" }} />
+                Visit Schedule History
+              </h3>
+              <div
+                style={{
+                  backgroundColor: "#F9FAFB",
+                  borderRadius: "8px",
+                  padding: "16px",
+                }}
+              >
+                {schedule.visitHistory
+                  .slice()
+                  .sort((a, b) => new Date(b.scheduledAt || b.rejectedAt || 0) - new Date(a.scheduledAt || a.rejectedAt || 0))
+                  .map((entry, idx) => {
+                    const statusStyles = {
+                      pending:   { bg: "#FEF3C7", color: "#92400E", label: "Scheduled" },
+                      rejected:  { bg: "#FEE2E2", color: "#DC2626", label: "Rejected" },
+                      approved:  { bg: "#D1FAE5", color: "#047857", label: "Approved" },
+                      cancelled: { bg: "#F3F4F6", color: "#6B7280", label: "Cancelled" },
+                    };
+                    const s = statusStyles[entry.status] || statusStyles.pending;
+                    const entryDate = entry.visitDate
+                      ? new Date(entry.visitDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "N/A";
+                    const actionDate = entry.rejectedAt || entry.approvedAt || entry.scheduledAt;
+                    const actionDateStr = actionDate
+                      ? new Date(actionDate).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                      : "";
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "12px",
+                          padding: "10px 0",
+                          borderBottom: idx < schedule.visitHistory.length - 1 ? "1px solid #E5E7EB" : "none",
+                        }}
+                      >
+                        {/* Timeline dot */}
+                        <div style={{
+                          width: 8, height: 8, borderRadius: "50%",
+                          backgroundColor: s.color, marginTop: 6, flexShrink: 0,
+                        }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                            <span style={{
+                              fontSize: "13px", fontWeight: 600, color: "#1F2937",
+                            }}>
+                              Visit on {entryDate}
+                              {entry.visitTime ? ` at ${entry.visitTime}` : ""}
+                            </span>
+                            <span style={{
+                              fontSize: "11px", fontWeight: 600, padding: "2px 8px",
+                              borderRadius: "10px", backgroundColor: s.bg, color: s.color,
+                            }}>
+                              {s.label}
+                            </span>
+                          </div>
+                          {entry.rejectionReason && (
+                            <div style={{ fontSize: "12px", color: "#7F1D1D", marginTop: "2px" }}>
+                              Reason: {entry.rejectionReason}
+                            </div>
+                          )}
+                          {actionDateStr && (
+                            <div style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "2px" }}>
+                              {actionDateStr}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           {/* Rejection Form */}
           {rejectMode && showRejectBtn && (
@@ -317,6 +407,36 @@ export default function VisitDetailsModal({
               >
                 Reject Visit Schedule
               </h4>
+              <p style={{ fontSize: "12px", color: "#7F1D1D", margin: "0 0 10px" }}>
+                Select a reason or type a custom message:
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
+                {[
+                  { label: "Schedule conflict", text: "The selected date/time conflicts with an existing schedule. Please choose a different slot." },
+                  { label: "Branch unavailable", text: "The branch is temporarily unavailable for visits on the selected date. Please pick another date." },
+                  { label: "Capacity reached", text: "Visit capacity has been reached for this date. Please select an alternative date." },
+                  { label: "Incomplete info", text: "We need additional information before approving your visit. Please update your reservation details." },
+                ].map((t) => (
+                  <button
+                    key={t.label}
+                    type="button"
+                    onClick={() => setRejectReason(t.text)}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: "20px",
+                      border: rejectReason === t.text ? "1.5px solid #DC2626" : "1px solid #FECACA",
+                      background: rejectReason === t.text ? "#FEE2E2" : "white",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      color: "#7F1D1D",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
@@ -400,9 +520,12 @@ export default function VisitDetailsModal({
                 fontSize: "14px",
                 fontWeight: "500",
                 cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              ✕ Reject Schedule
+              <Ban size={15} /> Reject Schedule
             </button>
           )}
           <button

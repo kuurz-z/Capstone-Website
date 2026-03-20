@@ -507,3 +507,70 @@
     gap: 1rem;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   TENANT COMMON — DARK MODE
+   ══════════════════════════════════════════════════════════════ */
+
+html[data-theme="dark"] .page-header h1 { color: var(--text-heading); }
+html[data-theme="dark"] .page-header p  { color: var(--text-secondary); }
+
+html[data-theme="dark"] .section-card {
+  background: var(--surface-card);
+  border-color: var(--border-card);
+}
+html[data-theme="dark"] .section-card h2 { color: var(--text-heading); }
+
+html[data-theme="dark"] .balance-card,
+html[data-theme="dark"] .breakdown-card {
+  background: var(--surface-card);
+  border-color: var(--border-card);
+}
+html[data-theme="dark"] .due-date        { color: var(--text-secondary); }
+html[data-theme="dark"] .balance-amount  { color: var(--text-heading); }
+html[data-theme="dark"] .breakdown-item  { border-bottom-color: var(--border-subtle); }
+
+html[data-theme="dark"] .payment-history-table th {
+  background: var(--surface-muted);
+  color: var(--text-body);
+}
+html[data-theme="dark"] .payment-history-table th,
+html[data-theme="dark"] .payment-history-table td {
+  border-bottom-color: var(--border-subtle);
+}
+
+html[data-theme="dark"] .maintenance-item { border-color: var(--border-card); }
+html[data-theme="dark"] .maintenance-item:hover { background: var(--surface-hover); }
+html[data-theme="dark"] .maintenance-info h3 { color: var(--text-heading); }
+html[data-theme="dark"] .maintenance-info p  { color: var(--text-secondary); }
+
+html[data-theme="dark"] .filter-tabs .tab {
+  background: var(--surface-card);
+  border-color: var(--border-card);
+  color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .announcement-card {
+  background: var(--surface-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .announcement-header h3 { color: var(--text-heading); }
+html[data-theme="dark"] .announcement-date     { color: var(--text-muted); }
+html[data-theme="dark"] .announcement-content  { color: var(--text-body); }
+
+html[data-theme="dark"] .settings-item        { border-bottom-color: var(--border-subtle); }
+html[data-theme="dark"] .settings-item h4     { color: var(--text-heading); }
+html[data-theme="dark"] .settings-item p      { color: var(--text-secondary); }
+
+html[data-theme="dark"] .form-group label     { color: var(--text-body); }
+html[data-theme="dark"] .form-control {
+  border-color: var(--border-card);
+  color: var(--text-body);
+}
+
+html[data-theme="dark"] .btn-secondary {
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  border-color: var(--border-card);
+}
+html[data-theme="dark"] .btn-secondary:hover { background: var(--surface-hover); }

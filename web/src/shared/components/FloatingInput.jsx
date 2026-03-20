@@ -39,11 +39,8 @@ const FloatingInput = ({
   const hasValue = value.length > 0;
   const showValid = valid && hasValue && !focused;
 
-  // Border color logic
-  let borderColor = "var(--fi-border)";
-  if (focused) borderColor = "var(--fi-focus)";
-  if (showValid) borderColor = "var(--fi-valid)";
-  if (error) borderColor = "var(--fi-error)";
+  // Border color — always neutral; state indicated by label color only
+  const borderColor = "var(--fi-border)";
 
   return (
     <div className="floating-field">

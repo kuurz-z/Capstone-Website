@@ -213,6 +213,16 @@ function getInquiryType(subject) {
   return type || "General";
 }
 
+const STATUS_LABELS = {
+  resolved:    "Responded",
+  "in-progress": "In Progress",
+  pending:     "Pending",
+  closed:      "Closed",
+};
+function formatStatus(status) {
+  return STATUS_LABELS[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : "—");
+}
+
 export default function InquiryTable({
   inquiries,
   loading,
@@ -279,7 +289,7 @@ export default function InquiryTable({
           </div>
           <div className="admin-inquiries-cell">
             <span className={`admin-inquiries-status ${inquiry.status}`}>
-              {inquiry.status}
+              {formatStatus(inquiry.status)}
             </span>
           </div>
           <div className="admin-inquiries-cell admin-inquiries-actions">

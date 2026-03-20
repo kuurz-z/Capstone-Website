@@ -11,17 +11,17 @@ const STATUS_CONFIG = {
     icon: "⚠️",
     title: "Account Suspended",
     message: "Your account has been temporarily suspended. You won't be able to access most features until your account is reactivated. Please contact support for assistance.",
-    bgColor: "#fffbeb",
-    borderColor: "#fbbf24",
-    textColor: "#92400e",
+    bgColor: "rgba(217, 119, 6, 0.08)",
+    borderColor: "rgba(217, 119, 6, 0.4)",
+    textColor: "#D97706",
   },
   banned: {
     icon: "🚫",
     title: "Account Banned",
     message: "Your account has been permanently disabled due to policy violations. If you believe this is a mistake, please contact administration.",
-    bgColor: "#fef2f2",
-    borderColor: "#f87171",
-    textColor: "#991b1b",
+    bgColor: "rgba(220, 38, 38, 0.06)",
+    borderColor: "rgba(239, 68, 68, 0.4)",
+    textColor: "#DC2626",
   },
 };
 

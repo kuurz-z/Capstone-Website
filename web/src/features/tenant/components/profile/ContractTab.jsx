@@ -134,41 +134,21 @@ const ContractTab = () => {
 
   if (error || !contract) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "60vh",
-        }}
-      >
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 16,
-            padding: "56px 40px",
-            textAlign: "center",
-            border: "1px solid #E8EBF0",
-            maxWidth: 420,
-            width: "100%",
-          }}
-        >
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              background: "#F8FAFC",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 20px",
-            }}
-          >
-            <FileText className="w-7 h-7" style={{ color: "#CBD5E1" }} />
-          </div>
-          <h3 style={{ color: "#1F2937", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>No Active Contract</h3>
-          <p style={{ color: "#94A3B8", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+      <div style={{ width: "100%" }}>
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#0A1628", margin: "0 0 4px" }}>My Contract</h1>
+          <p style={{ fontSize: 13, color: "#9CA3AF", margin: 0 }}>Your lease agreement and progress</p>
+        </div>
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          textAlign: "center", padding: "56px 24px",
+          background: "#fff", borderRadius: 10, border: "1px solid #E8EBF0",
+        }}>
+          <FileText size={48} color="#D1D5DB" />
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>
+            No Active Contract
+          </h3>
+          <p style={{ fontSize: 13, color: "#9CA3AF", maxWidth: 320, margin: 0 }}>
             Your lease contract will appear here once you've been checked in by the admin. If you have questions, contact your branch manager.
           </p>
         </div>
@@ -179,7 +159,7 @@ const ContractTab = () => {
   const monthsLeft = contract.leaseDuration - contract.monthsCompleted;
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ width: "100%" }}>
       {/* ── Header ──────────────────────────────────── */}
       <div
         style={{

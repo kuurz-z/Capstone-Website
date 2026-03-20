@@ -22,7 +22,7 @@ const ModalOverlay = ({ isOpen, onClose, children }) => {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#fff",
+          background: "var(--surface-card, #fff)",
           borderRadius: "12px",
           maxWidth: "640px",
           width: "100%",
@@ -43,10 +43,10 @@ const SectionTitle = ({ children }) => (
     style={{
       fontSize: "14px",
       fontWeight: "700",
-      color: "#111827",
+      color: "var(--text-heading, #111827)",
       margin: "20px 0 10px",
       paddingBottom: "6px",
-      borderBottom: "1px solid #F3F4F6",
+      borderBottom: "1px solid var(--border-card, #F3F4F6)",
     }}
   >
     {children}
@@ -62,7 +62,7 @@ const PolicyList = ({ items }) => (
     }}
   >
     {items.map((item, i) => (
-      <li key={i} style={{ marginBottom: "6px", color: "#374151" }}>
+      <li key={i} style={{ marginBottom: "6px", color: "var(--text-body, #374151)" }}>
         {item}
       </li>
     ))}
@@ -80,7 +80,7 @@ export function PoliciesTermsModal({ isOpen, onClose }) {
           justifyContent: "space-between",
           alignItems: "center",
           padding: "20px 24px",
-          borderBottom: "1px solid #E5E7EB",
+          borderBottom: "1px solid var(--border-card, #E5E7EB)",
           flexShrink: 0,
         }}
       >
@@ -89,7 +89,7 @@ export function PoliciesTermsModal({ isOpen, onClose }) {
             fontSize: "18px",
             fontWeight: "700",
             margin: 0,
-            color: "#111827",
+            color: "var(--text-heading, #111827)",
           }}
         >
           Policies & Terms of Service
@@ -104,7 +104,7 @@ export function PoliciesTermsModal({ isOpen, onClose }) {
             padding: "4px",
             display: "flex",
             alignItems: "center",
-            color: "#6B7280",
+            color: "var(--text-muted, #6B7280)",
           }}
         >
           <X size={20} />
@@ -118,7 +118,7 @@ export function PoliciesTermsModal({ isOpen, onClose }) {
           overflowY: "auto",
           fontSize: "13px",
           lineHeight: "1.7",
-          color: "#374151",
+          color: "var(--text-body, #374151)",
           flex: 1,
         }}
       >
@@ -164,7 +164,7 @@ export function PoliciesTermsModal({ isOpen, onClose }) {
       <div
         style={{
           padding: "16px 24px",
-          borderTop: "1px solid #E5E7EB",
+          borderTop: "1px solid var(--border-card, #E5E7EB)",
           flexShrink: 0,
         }}
       >
@@ -200,7 +200,7 @@ export function PrivacyConsentModal({ isOpen, onClose }) {
           justifyContent: "space-between",
           alignItems: "center",
           padding: "20px 24px",
-          borderBottom: "1px solid #E5E7EB",
+          borderBottom: "1px solid var(--border-card, #E5E7EB)",
           flexShrink: 0,
         }}
       >
@@ -209,7 +209,7 @@ export function PrivacyConsentModal({ isOpen, onClose }) {
             fontSize: "18px",
             fontWeight: "700",
             margin: 0,
-            color: "#111827",
+            color: "var(--text-heading, #111827)",
           }}
         >
           Privacy Consent & Certification
@@ -224,7 +224,7 @@ export function PrivacyConsentModal({ isOpen, onClose }) {
             padding: "4px",
             display: "flex",
             alignItems: "center",
-            color: "#6B7280",
+            color: "var(--text-muted, #6B7280)",
           }}
         >
           <X size={20} />
@@ -238,7 +238,7 @@ export function PrivacyConsentModal({ isOpen, onClose }) {
           overflowY: "auto",
           fontSize: "13px",
           lineHeight: "1.7",
-          color: "#374151",
+          color: "var(--text-body, #374151)",
           flex: 1,
         }}
       >
@@ -289,7 +289,7 @@ export function PrivacyConsentModal({ isOpen, onClose }) {
           style={{
             marginBottom: "0",
             fontStyle: "italic",
-            color: "#6B7280",
+            color: "var(--text-muted, #6B7280)",
             fontSize: "12px",
           }}
         >
@@ -303,7 +303,7 @@ export function PrivacyConsentModal({ isOpen, onClose }) {
       <div
         style={{
           padding: "16px 24px",
-          borderTop: "1px solid #E5E7EB",
+          borderTop: "1px solid var(--border-card, #E5E7EB)",
           flexShrink: 0,
         }}
       >

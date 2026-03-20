@@ -112,9 +112,9 @@ const NotificationsTab = () => {
 
   // ── Styles ──
   const cardStyle = {
-    backgroundColor: "#fff",
+    backgroundColor: "var(--surface-card, #fff)",
     borderRadius: "12px",
-    border: "1px solid #E8EBF0",
+    border: "1px solid var(--border-card, #E8EBF0)",
     overflow: "hidden",
   };
 
@@ -134,7 +134,7 @@ const NotificationsTab = () => {
             style={{
               fontSize: "22px",
               fontWeight: 700,
-              color: "#1F2937",
+              color: "var(--text-heading, #1F2937)",
               margin: "0 0 4px",
             }}
           >
@@ -160,7 +160,7 @@ const NotificationsTab = () => {
               </span>
             )}
           </h1>
-          <p style={{ fontSize: "14px", color: "#94A3B8", margin: 0 }}>
+          <p style={{ fontSize: "14px", color: "var(--text-muted, #94A3B8)", margin: 0 }}>
             Stay updated on your reservations, payments, and more
           </p>
         </div>
@@ -174,17 +174,17 @@ const NotificationsTab = () => {
               alignItems: "center",
               gap: "6px",
               backgroundColor: "transparent",
-              border: "1px solid #E8EBF0",
+              border: "1px solid var(--border-card, #E8EBF0)",
               borderRadius: "8px",
               padding: "8px 14px",
               fontSize: "13px",
               fontWeight: 500,
-              color: "#6B7280",
+              color: "var(--text-secondary, #6B7280)",
               cursor: "pointer",
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#F8FAFC";
+              e.currentTarget.style.backgroundColor = "var(--surface-muted, #F8FAFC)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = "transparent";
@@ -225,7 +225,7 @@ const NotificationsTab = () => {
               width: "64px",
               height: "64px",
               borderRadius: "50%",
-              backgroundColor: "#F8FAFC",
+              backgroundColor: "var(--surface-muted, #F8FAFC)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -234,10 +234,10 @@ const NotificationsTab = () => {
           >
             <Bell style={{ width: "28px", height: "28px", color: "#CBD5E1" }} />
           </div>
-          <p style={{ fontSize: "16px", fontWeight: 600, color: "#1F2937", margin: "0 0 4px" }}>
+          <p style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-heading, #1F2937)", margin: "0 0 4px" }}>
             No notifications yet
           </p>
-          <p style={{ fontSize: "14px", color: "#94A3B8", margin: 0 }}>
+          <p style={{ fontSize: "14px", color: "var(--text-muted, #94A3B8)", margin: 0 }}>
             You're all caught up! We'll notify you when something happens.
           </p>
         </div>
@@ -275,8 +275,8 @@ const NotificationsTab = () => {
                         gap: "12px",
                         padding: "16px 20px",
                         borderBottom:
-                          idx < items.length - 1 ? "1px solid #F1F5F9" : "none",
-                        backgroundColor: notification.isRead ? "#fff" : "#FFFBF5",
+                          idx < items.length - 1 ? "1px solid var(--border-subtle, #F1F5F9)" : "none",
+                        backgroundColor: notification.isRead ? "var(--surface-card, #fff)" : "rgba(255, 140, 66, 0.04)",
                         cursor: notification.isRead ? "default" : "pointer",
                         transition: "background-color 0.15s",
                       }}
@@ -317,7 +317,7 @@ const NotificationsTab = () => {
                             style={{
                               fontSize: "14px",
                               fontWeight: notification.isRead ? 500 : 600,
-                              color: "#1F2937",
+                              color: "var(--text-heading, #1F2937)",
                             }}
                           >
                             {notification.title}
@@ -338,7 +338,7 @@ const NotificationsTab = () => {
                         <p
                           style={{
                             fontSize: "13px",
-                            color: "#6B7280",
+                            color: "var(--text-secondary, #6B7280)",
                             margin: "0 0 4px",
                             lineHeight: 1.4,
                           }}
@@ -394,9 +394,9 @@ const NotificationsTab = () => {
                   alignItems: "center",
                   gap: "4px",
                   padding: "6px 12px",
-                  border: "1px solid #E8EBF0",
+                  border: "1px solid var(--border-card, #E8EBF0)",
                   borderRadius: "8px",
-                  backgroundColor: "#fff",
+                  backgroundColor: "var(--surface-card, #fff)",
                   fontSize: "13px",
                   color: page <= 1 ? "#CBD5E1" : "#6B7280",
                   cursor: page <= 1 ? "not-allowed" : "pointer",
@@ -418,9 +418,9 @@ const NotificationsTab = () => {
                   alignItems: "center",
                   gap: "4px",
                   padding: "6px 12px",
-                  border: "1px solid #E8EBF0",
+                  border: "1px solid var(--border-card, #E8EBF0)",
                   borderRadius: "8px",
-                  backgroundColor: "#fff",
+                  backgroundColor: "var(--surface-card, #fff)",
                   fontSize: "13px",
                   color: page >= pagination.totalPages ? "#CBD5E1" : "#6B7280",
                   cursor: page >= pagination.totalPages ? "not-allowed" : "pointer",

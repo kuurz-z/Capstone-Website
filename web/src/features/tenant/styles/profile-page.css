@@ -3,9 +3,14 @@
    ============================================================================= */
 
 .profile-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   padding: 2rem;
+}
+
+/* Shared class for all profile tab content wrappers */
+.profile-tab-content {
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Profile Alert */
@@ -631,4 +636,163 @@
   .stat-value {
     font-size: 1.5rem;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE PAGE — DARK MODE
+   ══════════════════════════════════════════════════════════════ */
+
+html[data-theme="dark"] .profile-page-header h1 { color: var(--text-heading); }
+html[data-theme="dark"] .profile-page-header p  { color: var(--text-secondary); }
+
+html[data-theme="dark"] .profile-tabs {
+  border-bottom-color: var(--border-subtle);
+}
+html[data-theme="dark"] .tab-button       { color: var(--text-secondary); }
+html[data-theme="dark"] .tab-button:hover { color: var(--text-body); }
+html[data-theme="dark"] .tab-button.active {
+  color: var(--text-heading);
+}
+html[data-theme="dark"] .tab-button.active::after {
+  background-color: var(--text-heading);
+}
+
+html[data-theme="dark"] .loading-spinner {
+  border-color: var(--border-card);
+  border-top-color: var(--text-heading);
+}
+
+/* Cards & Panels */
+html[data-theme="dark"] .profile-card {
+  background: var(--surface-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .profile-card-header {
+  border-bottom-color: var(--border-card);
+}
+html[data-theme="dark"] .profile-card-body {
+  background: var(--surface-card);
+}
+
+/* Stat cards */
+html[data-theme="dark"] .stat-card {
+  background: var(--surface-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+html[data-theme="dark"] .stat-value {
+  color: var(--text-heading);
+}
+html[data-theme="dark"] .stat-label {
+  color: var(--text-secondary);
+}
+
+/* Stays card */
+html[data-theme="dark"] .stays-card {
+  background: var(--surface-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .stays-card-header {
+  border-bottom-color: var(--border-card);
+}
+html[data-theme="dark"] .stay-item {
+  border-color: var(--border-card);
+}
+html[data-theme="dark"] .stay-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .stay-item.current-stay {
+  border-color: #FF8C42;
+  background: rgba(255, 140, 66, 0.05);
+}
+html[data-theme="dark"] .stay-details h3 {
+  color: var(--text-heading);
+}
+html[data-theme="dark"] .stay-branch,
+html[data-theme="dark"] .stay-type {
+  color: var(--text-secondary);
+}
+html[data-theme="dark"] .stay-dates span {
+  color: var(--text-body);
+}
+
+/* Form elements */
+html[data-theme="dark"] .form-group label {
+  color: var(--text-body);
+}
+html[data-theme="dark"] .form-group input,
+html[data-theme="dark"] .form-group textarea,
+html[data-theme="dark"] .form-group select {
+  background: var(--surface-muted);
+  border-color: var(--border-card);
+  color: var(--text-heading);
+}
+html[data-theme="dark"] .form-group input:focus,
+html[data-theme="dark"] .form-group textarea:focus,
+html[data-theme="dark"] .form-group select:focus {
+  border-color: #FF8C42;
+  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+}
+html[data-theme="dark"] .disabled-input {
+  background-color: var(--surface-muted);
+  color: var(--text-secondary);
+}
+html[data-theme="dark"] .form-hint {
+  color: var(--text-secondary);
+}
+
+/* Alerts */
+html[data-theme="dark"] .alert-warning {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+html[data-theme="dark"] .alert-error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+html[data-theme="dark"] .alert-success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+/* Status badges - softer in dark mode */
+html[data-theme="dark"] .status-pending {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+html[data-theme="dark"] .status-confirmed {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+html[data-theme="dark"] .status-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+html[data-theme="dark"] .status-completed {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+html[data-theme="dark"] .status-cancelled {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+/* No stays empty state */
+html[data-theme="dark"] .no-stays {
+  color: var(--text-secondary);
+}
+
+/* Buttons */
+html[data-theme="dark"] .btn-primary {
+  background: #FF8C42;
+  color: white;
+}
+html[data-theme="dark"] .btn-primary:hover:not(:disabled) {
+  background: #e67a33;
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3);
 }

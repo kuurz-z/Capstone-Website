@@ -4,6 +4,7 @@
 
 :root {
   --fi-border: #e2e8f0;
+  --fi-border-focus: #b0bec5;
   --fi-focus: #FF8C42;
   --fi-valid: #10b981;
   --fi-error: #ef4444;
@@ -23,28 +24,20 @@
 /* ── Wrapper (input + label) ── */
 .floating-field__wrapper {
   position: relative;
-  border: 1.5px solid var(--border-color, var(--fi-border));
+  border: 1px solid var(--border-color, var(--fi-border));
   border-radius: var(--fi-radius);
   background: var(--fi-bg);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
 .floating-field__wrapper.focused {
-  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
-}
-
-.floating-field__wrapper.has-error {
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
-}
-
-.floating-field__wrapper.is-valid:not(.focused) {
-  box-shadow: none;
+  border-color: var(--fi-border-focus);
 }
 
 /* ── Input ── */
 .floating-field__input {
   width: 100%;
-  padding: 16px 16px 10px;
+  padding: 26px 16px 8px;
   font-size: 15px;
   font-weight: 450;
   color: var(--fi-text);
@@ -58,6 +51,23 @@
 
 .floating-field__input::placeholder {
   color: transparent;
+}
+
+/* Kill Chrome autofill blue background — uses fi-bg so it works in both themes */
+.floating-field__input:-webkit-autofill,
+.floating-field__input:-webkit-autofill:hover,
+.floating-field__input:-webkit-autofill:focus,
+.floating-field__input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  -webkit-text-fill-color: var(--fi-text) !important;
+  caret-color: var(--fi-text) !important;
+  transition: background-color 600000s 0s, color 600000s 0s !important;
+}
+.floating-field__input:autofill {
+  -webkit-box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  -webkit-text-fill-color: var(--fi-text) !important;
 }
 
 .floating-field__input:disabled {
@@ -80,15 +90,14 @@
   line-height: 1;
 }
 
-/* Float up when focused or has value — sits ON the border */
+/* Float up when focused or has value — inside the field, no bg needed */
 .floating-field__input:focus ~ .floating-field__label,
 .floating-field__input:not(:placeholder-shown) ~ .floating-field__label {
-  top: 0;
-  transform: translateY(-50%) scale(0.72);
+  top: 8px;
+  transform: scale(0.72);
   color: var(--fi-label-active);
   font-weight: 500;
-  background: white;
-  padding: 0 6px;
+  padding: 0;
 }
 
 .floating-field__wrapper.focused .floating-field__label {
@@ -545,4 +554,94 @@
   .auth-header__title {
     font-size: 26px;
   }
+}
+
+/* ============================================
+   DARK MODE — Auth Forms (Sign-In / Sign-Up)
+   ============================================ */
+
+html[data-theme="dark"] {
+  --fi-border: #1E293B;
+  --fi-border-focus: #3d4f66;
+  --fi-label: #64748b;
+  --fi-label-active: #94a3b8;
+  --fi-text: #f1f5f9;
+  --fi-bg: #0B1120;
+}
+
+/* Form container (the white right panel) */
+html[data-theme="dark"] .bg-white {
+  background-color: var(--surface-card) !important;
+}
+
+/* Auth header */
+html[data-theme="dark"] .auth-header__title {
+  color: #f1f5f9 !important;
+}
+html[data-theme="dark"] .auth-header__subtitle {
+  color: #94a3b8 !important;
+}
+
+/* Floating input wrapper */
+html[data-theme="dark"] .floating-field__wrapper {
+  background: var(--fi-bg) !important;
+  border-color: var(--fi-border) !important;
+}
+
+/* Floating input text */
+html[data-theme="dark"] .floating-field__input {
+  color: var(--fi-text) !important;
+  -webkit-text-fill-color: var(--fi-text) !important;
+}
+
+/* Adornment (eye icon, etc.) */
+html[data-theme="dark"] .floating-field__adornment button {
+  color: #64748b !important;
+}
+html[data-theme="dark"] .floating-field__adornment button:hover {
+  color: #94a3b8 !important;
+}
+
+/* Google button */
+html[data-theme="dark"] .auth-btn-google {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-card) !important;
+  color: var(--text-body) !important;
+}
+html[data-theme="dark"] .auth-btn-google:hover:not(:disabled) {
+  background: var(--surface-hover) !important;
+  border-color: #64748b !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Divider */
+html[data-theme="dark"] .auth-divider::before,
+html[data-theme="dark"] .auth-divider::after {
+  background: var(--border-card) !important;
+}
+html[data-theme="dark"] .auth-divider__text {
+  color: #64748b !important;
+}
+
+/* Remember me / Terms */
+html[data-theme="dark"] .auth-remember span {
+  color: #94a3b8 !important;
+}
+html[data-theme="dark"] .auth-terms span {
+  color: #94a3b8 !important;
+}
+
+/* Password strength box */
+html[data-theme="dark"] .password-strength {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-card) !important;
+}
+html[data-theme="dark"] .password-strength__label {
+  color: #94a3b8 !important;
+}
+html[data-theme="dark"] .password-strength__track {
+  background: #1E293B !important;
+}
+html[data-theme="dark"] .password-strength__check {
+  color: #94a3b8 !important;
 }

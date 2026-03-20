@@ -1,4 +1,5 @@
 import React from "react";
+import { Home, MapPin, Tag } from "lucide-react";
 
 /**
  * Compact room info banner showing room name, branch, type, and price.
@@ -10,14 +11,14 @@ const RoomInfoBanner = ({ room }) => {
 
   return (
     <div className="rf-room-banner">
-      <div className="rf-room-banner-icon">🏠</div>
+      <div className="rf-room-banner-icon"><Home size={18} color="#FF8C42" /></div>
       <div className="rf-room-banner-info">
         <div className="rf-room-banner-name">
           {room.title || room.name || room.id || "Room"}
         </div>
         <div className="rf-room-banner-meta">
-          <span>📍 {capitalize(room.branch) || "Branch"}</span>
-          <span>🏷️ {capitalize(room.type) || "Type"}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={12} /> {capitalize(room.branch) || "Branch"}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Tag size={12} /> {capitalize(room.type) || "Type"}</span>
         </div>
       </div>
       <div className="rf-room-banner-price">

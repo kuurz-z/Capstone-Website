@@ -1,4 +1,5 @@
 import React from "react";
+import { Check } from "lucide-react";
 
 /**
  * Progress bar showing section completion count and auto-save status.
@@ -51,7 +52,7 @@ const ApplicationProgressBar = ({
           }}
         >
           {completedCount === totalSections
-            ? "✓ Ready to submit"
+            ? <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Check size={12} /> Ready to submit</span>
             : `${Math.round((completedCount / totalSections) * 100)}%`}
         </span>
       </div>

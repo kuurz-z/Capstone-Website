@@ -89,6 +89,11 @@ const reservationSchema = new mongoose.Schema(
     },
     visitDate: Date,
     visitTime: String,
+    // When the tenant submitted the visit schedule request (≠ the visit appointment date)
+    visitScheduledAt: {
+      type: Date,
+      default: null,
+    },
     isOutOfTown: Boolean,
     currentLocation: String,
     scheduleApproved: {
@@ -117,6 +122,24 @@ const reservationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+    },
+
+    // Visit History — each schedule/rejection attempt is logged here
+    visitHistory: {
+      type: [
+        {
+          visitDate: Date,
+          visitTime: String,
+          viewingType: { type: String, default: "inperson" },
+          status: { type: String, enum: ["pending", "rejected", "approved", "cancelled"], default: "pending" },
+          rejectionReason: String,
+          scheduledAt: { type: Date, default: Date.now },
+          rejectedAt: Date,
+          rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          approvedAt: Date,
+        },
+      ],
+      default: [],
     },
 
     // =========================================================================
@@ -396,49 +419,8 @@ reservationSchema.pre("save", async function (next) {
   next();
 });
 
-// ============================================================================
-// POST-SAVE HOOKS - OCCUPANCY TRACKING
-// ============================================================================
-
-/**
- * After saving reservation, update room occupancy
- */
-reservationSchema.post("save", async function (doc, next) {
-  try {
-    const Room = mongoose.model("Room");
-
-    // Get the room
-    const room = await Room.findById(this.roomId);
-    if (!room) {
-      console.warn(`⚠️ Room ${this.roomId} not found for occupancy update`);
-      return next();
-    }
-
-    // Get the previous version to detect status changes
-    if (this.isNew) {
-      // New reservation - no occupancy impact until confirmed
-      return next();
-    }
-
-    // Track status change for occupancy management
-    const originalReservation = this.constructor.findById(this._id);
-    // For occupancy, we need to check if status changed
-
-    // Status transitions that affect occupancy:
-    // pending -> reserved: increase occupancy, occupy bed
-    // reserved -> checked-in: no occupancy change (already counted)
-    // any -> cancelled: decrease occupancy, vacate bed
-    // checked-in -> checked-out: decrease occupancy, vacate bed
-
-    // Since we can't easily do this via post-save (no access to previousValues),
-    // we'll handle this in the controller where we have access to old data
-
-    next();
-  } catch (error) {
-    console.error("❌ Occupancy update error in post-save:", error);
-    next();
-  }
-});
+// NOTE: post('save') hook removed — it queried Room.findById() but never acted
+// on the result. Occupancy is managed atomically in controllers via occupancyManager.js.
 
 // ============================================================================
 // INDEXES — consolidated, no duplicates
@@ -454,8 +436,9 @@ reservationSchema.index({ status: 1, isArchived: 1 });
 reservationSchema.index({ roomId: 1, status: 1 });
 // Overdue move-in cron: finds reserved + non-archived by move-in date
 reservationSchema.index({ status: 1, targetMoveInDate: 1 });
-// Billing: active reservations lookup by branch
-reservationSchema.index({ branch: 1, status: 1, isArchived: 1 });
+// REMOVED: { branch: 1, status: 1, isArchived: 1 } — phantom index.
+// Reservation has no 'branch' field; branch lives on the Room document.
+// Use roomId → Room.branch for any branch-level billing queries.
 
 // ============================================================================
 // METHODS

@@ -54,9 +54,9 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
   return (
     <div
       style={{
-        backgroundColor: "#fff",
+        backgroundColor: "var(--surface-card, #fff)",
         borderRadius: "12px",
-        border: "1px solid #E8EBF0",
+        border: "1px solid var(--border-card, #E8EBF0)",
         padding: "20px 24px",
         marginBottom: "20px",
       }}
@@ -77,7 +77,7 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
             gap: "8px",
             fontSize: "14px",
             fontWeight: 600,
-            color: "#1F2937",
+            color: "var(--text-heading, #1F2937)",
           }}
         >
           <BarChart3
@@ -101,7 +101,7 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
         style={{
           width: "100%",
           height: "8px",
-          backgroundColor: "#F1F5F9",
+          backgroundColor: "var(--surface-muted, #F1F5F9)",
           borderRadius: "999px",
           overflow: "hidden",
         }}
@@ -129,7 +129,7 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
         <p
           style={{
             fontSize: "12px",
-            color: "#94A3B8",
+            color: "var(--text-muted, #94A3B8)",
             margin: 0,
           }}
         >

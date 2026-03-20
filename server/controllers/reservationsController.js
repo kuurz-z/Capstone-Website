@@ -19,6 +19,7 @@ import {
   validateMoveInDate,
   handleStatusTransition,
   buildUserUpdatePayload,
+  getCheckinBlockers,
 } from "../utils/reservationHelpers.js";
 import { sendReservationConfirmedEmail, sendVisitApprovedEmail } from "../config/email.js";
 import {
@@ -348,6 +349,24 @@ export const updateReservation = async (req, res, next) => {
       req.body.paymentStatus = "paid";
       req.body.approvedDate = new Date();
     }
+
+    // ── Check-in gate: enforce full prerequisite checklist ─────────────
+    // Prevents admins from bypassing the proper flow (visit → payment →
+    // reservation confirmed) and jumping straight to checked-in.
+    if (
+      req.body.status === "checked-in" &&
+      existingReservation.status !== "checked-in"
+    ) {
+      const blockers = getCheckinBlockers(existingReservation);
+      if (blockers.length > 0) {
+        return res.status(400).json({
+          error: "Check-in prerequisites not met. Please resolve the following before checking in the tenant.",
+          code: "CHECKIN_PREREQUISITES_NOT_MET",
+          missing: blockers,
+        });
+      }
+    }
+
     await handleStatusTransition(
       req.body.status,
       existingReservation.status,
@@ -365,11 +384,22 @@ export const updateReservation = async (req, res, next) => {
     // Whitelist admin-allowed fields to prevent mass-assignment
     const ADMIN_ALLOWED = [
       "status", "paymentStatus", "notes", "checkInDate", "checkOutDate",
-      "approvedDate", "visitApproved", "documentsApproved",
+      "approvedDate", "visitApproved", "scheduleApproved", "documentsApproved",
       "documentRejectionReason", "nbiApproved", "nbiRejectionReason",
       "companyIDApproved", "companyIDRejectionReason",
       "scheduleRejected", "scheduleRejectionReason",
     ];
+
+    // Remove a single visitHistory entry by index
+    if (req.body.removeVisitHistoryIndex !== undefined) {
+      const idx = Number(req.body.removeVisitHistoryIndex);
+      const history = reservation.visitHistory || [];
+      if (idx >= 0 && idx < history.length) {
+        history.splice(idx, 1);
+        reservation.visitHistory = history;
+        reservation.markModified("visitHistory");
+      }
+    }
 
     // Auto-set rejection metadata when admin rejects a visit schedule
     if (req.body.scheduleRejected === true && !existingReservation.scheduleRejected) {
@@ -377,7 +407,49 @@ export const updateReservation = async (req, res, next) => {
       reservation.scheduleRejectedBy = req.adminId || null;
       // Clear visit approval so tenant can reschedule
       reservation.visitApproved = false;
+      // Status-driven: keep at visit_pending so tenant can reschedule
+      reservation.status = "visit_pending";
+
+      // Archive the rejected visit attempt to history
+      if (existingReservation.visitDate) {
+        if (!reservation.visitHistory) reservation.visitHistory = [];
+        const attemptNumber = reservation.visitHistory.length + 1;
+        reservation.visitHistory.push({
+          visitDate: existingReservation.visitDate,
+          visitTime: existingReservation.visitTime,
+          viewingType: existingReservation.viewingType || "inperson",
+          status: "rejected",
+          rejectionReason: req.body.scheduleRejectionReason || "",
+          scheduledAt: existingReservation.createdAt,
+          rejectedAt: new Date(),
+          rejectedBy: req.adminId || null,
+          attemptNumber,
+        });
+      }
     }
+
+    // Auto-transition: visit_pending → visit_approved when admin approves visit
+    if (req.body.visitApproved === true && !existingReservation.visitApproved) {
+      if (["pending", "visit_pending"].includes(existingReservation.status)) {
+        reservation.status = "visit_approved";
+      }
+
+      // Archive the approved visit attempt to history
+      if (existingReservation.visitDate) {
+        if (!reservation.visitHistory) reservation.visitHistory = [];
+        const attemptNumber = reservation.visitHistory.length + 1;
+        reservation.visitHistory.push({
+          visitDate: existingReservation.visitDate,
+          visitTime: existingReservation.visitTime,
+          viewingType: existingReservation.viewingType || "inperson",
+          status: "approved",
+          scheduledAt: existingReservation.createdAt,
+          approvedAt: new Date(),
+          attemptNumber,
+        });
+      }
+    }
+
     for (const key of ADMIN_ALLOWED) {
       if (req.body[key] !== undefined) reservation[key] = req.body[key];
     }
@@ -431,6 +503,17 @@ export const updateReservation = async (req, res, next) => {
       } catch (emailErr) {
         logger.warn({ err: emailErr, requestId: req.id }, "Confirmation email failed (non-fatal)");
       }
+      // In-app notification — reservation confirmed
+      try {
+        const { notify } = await import("../utils/notificationService.js");
+        await notify.reservationConfirmed(
+          updatedReservation.userId._id,
+          updatedReservation.reservationCode || "N/A",
+          updatedReservation.roomId?.name || "your room",
+        );
+      } catch (notifyErr) {
+        logger.warn({ err: notifyErr, requestId: req.id }, "Reservation confirmed notification failed (non-fatal)");
+      }
     }
 
     // Send visit-approved email when admin approves a visit
@@ -449,6 +532,16 @@ export const updateReservation = async (req, res, next) => {
         });
       } catch (emailErr) {
         logger.warn({ err: emailErr, requestId: req.id }, "Visit approved email failed (non-fatal)");
+      }
+      // In-app notification — visit approved
+      try {
+        const { notify } = await import("../utils/notificationService.js");
+        await notify.visitApproved(
+          updatedReservation.userId._id,
+          updatedReservation.roomId?.branch || "the dormitory",
+        );
+      } catch (notifyErr) {
+        logger.warn({ err: notifyErr, requestId: req.id }, "Visit approved notification failed (non-fatal)");
       }
     }
 
@@ -502,9 +595,54 @@ export const updateReservationByUser = async (req, res, next) => {
     // Build update payload from config-driven field mapping
     const updates = buildUserUpdatePayload(req.body);
 
+    // ── Soft-cancel: preserve history, mark as cancelled ─────
+    if (req.body.cancelReservation === true) {
+      // Log current visit to history as "cancelled" if there's an active visit
+      if (reservation.visitDate) {
+        const existingHistory = reservation.visitHistory || [];
+        updates.visitHistory = [
+          ...existingHistory,
+          {
+            visitDate: reservation.visitDate,
+            visitTime: reservation.visitTime,
+            viewingType: reservation.viewingType || "inperson",
+            status: "cancelled",
+            scheduledAt: reservation.createdAt,
+            cancelledAt: new Date(),
+            attemptNumber: existingHistory.length + 1,
+          },
+        ];
+      }
+      updates.status = "cancelled";
+
+      const updated = await Reservation.findByIdAndUpdate(
+        reservationId,
+        { $set: updates },
+        { new: true, runValidators: true },
+      ).populate("userId", "firstName lastName email phone")
+       .populate("roomId", "roomNumber roomType floor branch priceMonthly");
+
+      return res.json({
+        message: "Reservation cancelled",
+        reservation: updated,
+      });
+
+      // In-app notification — reservation cancelled (fire-and-forget after response)
+      if (updated?.userId) {
+        const { notify } = await import("../utils/notificationService.js").catch(() => ({ notify: null }));
+        if (notify) {
+          notify.reservationCancelled(
+            updated.userId,
+            updated.reservationCode || "N/A",
+            updates.cancellationReason || "",
+          ).catch((e) => logger.warn({ err: e, requestId: req.id }, "Cancel notification failed (non-fatal)"));
+        }
+      }
+    }
+
     // Generate visitCode when visitDate is first set (bypassed by findByIdAndUpdate)
     if (updates.visitDate) {
-      const existingForCode = await Reservation.findById(reservationId).select("visitCode").lean();
+      const existingForCode = await Reservation.findById(reservationId).select("visitCode visitScheduledAt").lean();
       if (!existingForCode?.visitCode) {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let visitCode = null;
@@ -516,12 +654,44 @@ export const updateReservationByUser = async (req, res, next) => {
         }
         updates.visitCode = visitCode || ("VIS-" + Date.now().toString(36).toUpperCase().slice(-6));
       }
+      // Stamp the submission time — this is "when the tenant scheduled the visit",
+      // NOT the visit appointment date. Always refresh on rescheduling too.
+      updates.visitScheduledAt = new Date();
+    }
+
+    // ── Status-driven auto-transitions ──────────────────────
+    // Reset rejection state when tenant reschedules after a rejection
+    if (updates.visitDate && updates.agreedToPrivacy && reservation.scheduleRejected) {
+      updates.scheduleRejected = false;
+      updates.scheduleRejectionReason = null;
+      updates.scheduleRejectedAt = null;
+      updates.status = "visit_pending";
+      // Don't push "pending" to visitHistory — the active visit row shows the current attempt.
+      // Only terminal outcomes (rejected, approved, cancelled) belong in visitHistory.
+    }
+    // pending → visit_pending: when tenant first schedules a visit
+    if (updates.visitDate && updates.agreedToPrivacy) {
+      if (reservation.status === "pending") {
+        updates.status = "visit_pending";
+        // Don't push "pending" to visitHistory here — the active visit row shows current state.
+        // History only records terminal outcomes (rejected, approved, cancelled).
+      }
+    }
+    // visit_approved → payment_pending: when tenant submits full application
+    if (updates.firstName && updates.lastName && updates.mobileNumber) {
+      if (reservation.status === "visit_approved") {
+        updates.status = "payment_pending";
+      }
     }
 
     // Payment proof handling
     if (req.body.proofOfPaymentUrl) {
       updates.paymentStatus = "pending";
       updates.paymentDate = new Date();
+      // Ensure status reflects payment stage
+      if (["visit_approved", "payment_pending"].includes(reservation.status)) {
+        updates.status = "payment_pending";
+      }
       const existing = await Reservation.findById(reservationId);
       if (!existing.paymentReference) {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
