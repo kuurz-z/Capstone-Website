@@ -9,6 +9,7 @@ import {
   CalendarCheck,
   Users,
   BedDouble,
+  Activity,
   Receipt,
   UserCog,
   FileText,
@@ -25,16 +26,16 @@ import "../styles/admin-sidebar.css";
 /* ─── Navigation structure ─── */
 const NAV_ITEMS = [
   // WORKSPACE group
-  { to: "/admin/dashboard",          icon: LayoutDashboard, text: "Dashboard",    group: "workspace" },
-  { to: "/admin/reservations",       icon: CalendarCheck,   text: "Reservations", group: "workspace" },
-  { to: "/admin/room-availability",  icon: BedDouble,       text: "Rooms",        group: "workspace" },
-  { to: "/admin/tenants",            icon: Users,           text: "Tenants",      group: "workspace" },
-  { to: "/admin/billing",            icon: Receipt,         text: "Billing",      group: "workspace" },
+  { to: "/admin/dashboard",          icon: LayoutDashboard, text: "Dashboard",       group: "workspace" },
+  { to: "/admin/reservations",       icon: CalendarCheck,   text: "Reservations",    group: "workspace" },
+  { to: "/admin/room-availability",  icon: BedDouble,       text: "Room Management", group: "workspace" },
+  { to: "/admin/digital-twin",       icon: Activity,        text: "Digital Twin",    group: "workspace" },
+  { to: "/admin/tenants",            icon: Users,           text: "Tenants",         group: "workspace" },
+  { to: "/admin/billing",            icon: Receipt,         text: "Billing",         group: "workspace" },
   // SYSTEM group
   { to: "/admin/users",              icon: UserCog,         text: "Accounts",     group: "system" },
   { to: "/admin/audit-logs",         icon: FileText,        text: "Activity Log", group: "system" },
   { to: "/admin/branches",           icon: Building2,       text: "Branches",     group: "system", saOnly: true },
-  { to: "/admin/roles",              icon: Shield,          text: "Permissions",  group: "system", saOnly: true },
   { to: "/admin/settings",           icon: Settings,        text: "Settings",     group: "system", saOnly: true },
 ];
 
@@ -42,14 +43,14 @@ const STORAGE_KEY = "sidebar-collapsed";
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout, globalLoading } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutInProgress, setLogoutInProgress] = useState(false);
   const logoutCalledRef = React.useRef(false);
   const [hoveredItem, setHoveredItem] = useState(null);
 
   // Filter items based on role
-  const visibleItems = NAV_ITEMS.filter((item) => !item.saOnly || isSuperAdmin);
+  const visibleItems = NAV_ITEMS.filter((item) => !item.saOnly || isOwner);
 
   // Group items
   const workspaceItems = visibleItems.filter((i) => i.group === "workspace");
@@ -101,7 +102,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
   const displayName = user
     ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Admin"
     : "Admin";
-  const roleLabel = isSuperAdmin ? "Super Admin" : "Branch Admin";
+  const roleLabel = isOwner ? "Owner" : "Branch Admin";
   const initials = user
     ? `${(user.firstName || "A")[0]}${(user.lastName || "")[0] || ""}`.toUpperCase()
     : "A";
@@ -145,7 +146,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
           {!collapsed && (
             <div className="sb-brand-text">
               <span className="sb-title">Lilycrest</span>
-              <span className="sb-subtitle">{isSuperAdmin ? "Super Admin" : "Admin Panel"}</span>
+              <span className="sb-subtitle">{isOwner ? "Owner" : "Admin Panel"}</span>
             </div>
           )}
         </div>

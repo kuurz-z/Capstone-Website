@@ -53,7 +53,7 @@ export function Navigation({ type } = {}) {
   }, [isMenuOpen]);
 
   // Determine profile URL based on role
-  const isAdmin = user?.role === "admin" || user?.role === "superAdmin";
+  const isAdmin = user?.role === "branch_admin" || user?.role === "owner";
   const profileUrl = isAdmin ? "/admin/dashboard" : "/applicant/profile";
 
   // Display name: first name, or email prefix

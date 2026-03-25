@@ -380,7 +380,7 @@
 .form-control:focus {
   outline: none;
   border-color: #0A1628;
-  box-shadow: 0 0 0 3px rgba(10, 22, 40, 0.1);
+  box-shadow: 0 0 0 1.5px rgba(10, 22, 40, 0.08);
 }
 
 .form-actions {

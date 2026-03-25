@@ -80,7 +80,7 @@
   --transition-normal: 0.2s ease;
 
   /* ── Focus Ring ────────────────────────────────────────────── */
-  --focus-ring: 0 0 0 3px rgba(10, 22, 40, 0.08);
+  --focus-ring: 0 0 0 1.5px rgba(10, 22, 40, 0.07);
 }
 
 html {
@@ -204,22 +204,22 @@ section[id] {
 /* ── Inquiry Form Focus States (CSS-only, no JS delay) ──── */
 .inquiry-field:focus {
   border-color: var(--lp-accent) !important;
-  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.1);
+  box-shadow: 0 0 0 1.5px rgba(255, 140, 66, 0.08);
   outline: none;
 }
 
 .inquiry-field.has-error:focus {
   border-color: #ef4444 !important;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 0 1.5px rgba(239, 68, 68, 0.08);
 }
 
 /* Stronger glow on dark backgrounds */
 .landing-page[data-theme="dark"] .inquiry-field:focus {
-  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.2);
+  box-shadow: 0 0 0 1.5px rgba(255, 140, 66, 0.15);
 }
 
 .landing-page[data-theme="dark"] .inquiry-field.has-error:focus {
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 0 1.5px rgba(239, 68, 68, 0.15);
 }
 
 /* ── Dark Mode Global Overrides ───────────────────────────── */

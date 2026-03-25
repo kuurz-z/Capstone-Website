@@ -4,7 +4,7 @@ export default function AddUserModal({
   addForm,
   addFormErrors,
   isCreating,
-  isSuperAdmin,
+  isOwner,
   onFormChange,
   onSubmit,
   onClose,
@@ -162,7 +162,7 @@ export default function AddUserModal({
                 required
               >
                 <option value="applicant">Applicant</option>
-                {isSuperAdmin && <option value="admin">Admin</option>}
+                {isOwner && <option value="branch_admin">Branch Admin</option>}
               </select>
             </div>
             <div className="form-group">

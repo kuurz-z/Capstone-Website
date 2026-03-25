@@ -24,7 +24,7 @@ const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
  * Creates a Firebase Auth user + MongoDB record.
  * Sends a password-reset email so the user can set their own password.
  *
- * Access: Admin (applicant only) | Super Admin (applicant or admin)
+ * Access: Admin (applicant only) | Owner (applicant or branch_admin)
  */
 export const createUser = async (req, res, next) => {
   let firebaseUid = null; // track for rollback
@@ -52,21 +52,21 @@ export const createUser = async (req, res, next) => {
 
     // --- Validate role ---
     const allowedRole = role || "applicant";
-    if (allowedRole === "superAdmin") {
+    if (allowedRole === "owner") {
       return res.status(403).json({
-        error: "Cannot create Super Admin accounts",
+        error: "Cannot create Owner accounts",
         code: "ROLE_FORBIDDEN",
       });
     }
-    if (allowedRole === "admin" && !req.isSuperAdmin) {
+    if (allowedRole === "branch_admin" && !req.isSuperAdmin) {
       return res.status(403).json({
-        error: "Only Super Admins can create admin accounts",
+        error: "Only owners can create branch admin accounts",
         code: "ROLE_FORBIDDEN",
       });
     }
-    if (!["applicant", "admin"].includes(allowedRole)) {
+    if (!["applicant", "branch_admin"].includes(allowedRole)) {
       return res.status(400).json({
-        error: "Role must be 'applicant' or 'admin'",
+        error: "Role must be 'applicant' or 'branch_admin'",
         code: "INVALID_ROLE",
       });
     }
@@ -106,8 +106,8 @@ export const createUser = async (req, res, next) => {
     firebaseUid = firebaseUser.uid;
 
     // If creating an admin, set Firebase custom claims
-    if (allowedRole === "admin") {
-      await auth.setCustomUserClaims(firebaseUid, { admin: true });
+    if (allowedRole === "branch_admin") {
+      await auth.setCustomUserClaims(firebaseUid, { branch_admin: true });
     }
 
     // --- Create MongoDB user record ---
@@ -180,7 +180,7 @@ export const getUserStats = async (req, res, next) => {
       { $group: { _id: "$role", count: { $sum: 1 } } },
     ]);
 
-    // Get counts by branch (for super admin)
+    // Get counts by branch (for owner)
     let branchCounts = [];
     if (req.isSuperAdmin) {
       branchCounts = await User.aggregate([
@@ -204,7 +204,7 @@ export const getUserStats = async (req, res, next) => {
       total,
       activeCount,
       verifiedCount,
-      byRole: { user: 0, tenant: 0, admin: 0, superAdmin: 0 },
+      byRole: { applicant: 0, tenant: 0, branch_admin: 0, owner: 0 },
       byBranch: {},
     };
 
@@ -427,12 +427,12 @@ export const updateUser = async (req, res, next) => {
     delete updateData.firebaseUid;
     delete updateData.createdAt;
 
-    // Only super admins can change roles
+    // Only owners can change roles
     if (updateData.role && !req.isSuperAdmin) {
       delete updateData.role;
     }
 
-    // Only super admins can change branch assignment
+    // Only owners can change branch assignment
     if (updateData.branch !== undefined && !req.isSuperAdmin) {
       delete updateData.branch;
     }
@@ -532,9 +532,9 @@ export const suspendUser = async (req, res, next) => {
     if (!targetUser)
       return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
 
-    // Prevent suspending admins unless you're a super admin
-    if ((targetUser.role === "admin" || targetUser.role === "superAdmin") && !req.isSuperAdmin)
-      return res.status(403).json({ error: "Only super admins can suspend admin accounts", code: "ROLE_FORBIDDEN" });
+    // Prevent suspending admins unless you're the owner
+    if ((targetUser.role === "branch_admin" || targetUser.role === "owner") && !req.isSuperAdmin)
+      return res.status(403).json({ error: "Only the owner can suspend admin accounts", code: "ROLE_FORBIDDEN" });
 
     const adminUser = await User.findOne({ firebaseUid: req.user.uid });
     const oldData = targetUser.toObject();
@@ -570,9 +570,9 @@ export const reactivateUser = async (req, res, next) => {
     if (targetUser.accountStatus === "active")
       return res.status(400).json({ error: "User is already active", code: "ALREADY_ACTIVE" });
 
-    // Only super admin can reactivate banned users
+    // Only owner can reactivate banned users
     if (targetUser.accountStatus === "banned" && !req.isSuperAdmin)
-      return res.status(403).json({ error: "Only super admins can reactivate banned accounts", code: "ROLE_FORBIDDEN" });
+      return res.status(403).json({ error: "Only the owner can reactivate banned accounts", code: "ROLE_FORBIDDEN" });
 
     const adminUser = await User.findOne({ firebaseUid: req.user.uid });
     const oldData = targetUser.toObject();
@@ -606,9 +606,9 @@ export const banUser = async (req, res, next) => {
     if (!targetUser)
       return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
 
-    // Cannot ban super admins
-    if (targetUser.role === "superAdmin")
-      return res.status(403).json({ error: "Cannot ban super admin accounts", code: "ROLE_FORBIDDEN" });
+    // Cannot ban owners
+    if (targetUser.role === "owner")
+      return res.status(403).json({ error: "Cannot ban owner accounts", code: "ROLE_FORBIDDEN" });
 
     const adminUser = await User.findOne({ firebaseUid: req.user.uid });
     const oldData = targetUser.toObject();
@@ -724,10 +724,10 @@ export const updatePermissions = async (req, res, next) => {
     if (!targetUser)
       return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
 
-    // Only allow modifying admin permissions (not superAdmin or applicant/tenant)
-    if (targetUser.role !== "admin")
+    // Only allow modifying branch_admin permissions (not owner or applicant/tenant)
+    if (targetUser.role !== "branch_admin")
       return res.status(400).json({
-        error: "Permissions can only be set on admin accounts",
+        error: "Permissions can only be set on branch admin accounts",
         code: "ROLE_NOT_ADMIN",
       });
 

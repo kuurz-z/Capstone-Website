@@ -66,11 +66,11 @@ const getUserInfo = (req) => {
     email: req?.user?.email || "anonymous",
     userId: req?.user?.mongoId || null,
     role:
-      req?.user?.role || req?.user?.admin
-        ? "admin"
-        : req?.user?.superAdmin
-          ? "superAdmin"
-          : "user",
+      req?.user?.role || req?.user?.branch_admin
+        ? "branch_admin"
+        : req?.user?.owner
+          ? "owner"
+          : "applicant",
     branch: req?.user?.branch || "",
   };
 };

@@ -32,7 +32,7 @@ import {
 const HEAVY_FIELDS =
   "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
 const POPULATE_USER = ["userId", "firstName lastName email"];
-const POPULATE_ROOM = ["roomId", "name branch type price"];
+const POPULATE_ROOM = ["roomId", "name branch type price capacity beds floor"];
 
 /* ── Cached user lookup (saves ~50-100ms per API call) ──── */
 const userCache = new Map();
@@ -64,9 +64,10 @@ export const getReservations = async (req, res, next) => {
         .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
 
     let query;
-    if (dbUser.role === "superAdmin") {
+    if (dbUser.role === "owner") {
+      // Owner: see all branches
       query = { isArchived: { $ne: true } };
-    } else if (dbUser.role === "admin") {
+    } else if (dbUser.role === "branch_admin") {
       const roomIds = (
         await Room.find({ branch: dbUser.branch }).select("_id")
       ).map((r) => r._id);
@@ -102,7 +103,7 @@ export const getReservationById = async (req, res, next) => {
 
     const reservation = await Reservation.findById(reservationId)
       .populate(...POPULATE_USER)
-      .populate("roomId", "name branch type price floor");
+      .populate(...POPULATE_ROOM);
     if (!reservation)
       return res.status(404).json({
         error: "Reservation not found",
@@ -110,8 +111,8 @@ export const getReservationById = async (req, res, next) => {
       });
 
     if (
-      dbUser.role !== "admin" &&
-      dbUser.role !== "superAdmin" &&
+      dbUser.role !== "branch_admin" &&
+      dbUser.role !== "owner" &&
       String(reservation.userId?._id) !== String(dbUser._id)
     ) {
       return res.status(403).json({
@@ -348,6 +349,10 @@ export const updateReservation = async (req, res, next) => {
     ) {
       req.body.paymentStatus = "paid";
       req.body.approvedDate = new Date();
+      // Stamp paymentDate if not already set (e.g. admin manually confirming)
+      if (!existingReservation.paymentDate) {
+        req.body.paymentDate = new Date();
+      }
     }
 
     // ── Check-in gate: enforce full prerequisite checklist ─────────────
@@ -383,8 +388,8 @@ export const updateReservation = async (req, res, next) => {
 
     // Whitelist admin-allowed fields to prevent mass-assignment
     const ADMIN_ALLOWED = [
-      "status", "paymentStatus", "notes", "checkInDate", "checkOutDate",
-      "approvedDate", "visitApproved", "scheduleApproved", "documentsApproved",
+      "status", "paymentStatus", "paymentDate", "notes", "checkInDate", "checkOutDate",
+      "approvedDate", "reservedAt", "visitApproved", "scheduleApproved", "documentsApproved",
       "documentRejectionReason", "nbiApproved", "nbiRejectionReason",
       "companyIDApproved", "companyIDRejectionReason",
       "scheduleRejected", "scheduleRejectionReason",
@@ -420,7 +425,8 @@ export const updateReservation = async (req, res, next) => {
           viewingType: existingReservation.viewingType || "inperson",
           status: "rejected",
           rejectionReason: req.body.scheduleRejectionReason || "",
-          scheduledAt: existingReservation.createdAt,
+          // Use visitScheduledAt (when tenant submitted the schedule), not createdAt
+          scheduledAt: existingReservation.visitScheduledAt || existingReservation.createdAt,
           rejectedAt: new Date(),
           rejectedBy: req.adminId || null,
           attemptNumber,
@@ -433,6 +439,8 @@ export const updateReservation = async (req, res, next) => {
       if (["pending", "visit_pending"].includes(existingReservation.status)) {
         reservation.status = "visit_approved";
       }
+      // Stamp the approval time so the activity timeline can show it
+      reservation.scheduleApprovedAt = new Date();
 
       // Archive the approved visit attempt to history
       if (existingReservation.visitDate) {
@@ -443,7 +451,8 @@ export const updateReservation = async (req, res, next) => {
           visitTime: existingReservation.visitTime,
           viewingType: existingReservation.viewingType || "inperson",
           status: "approved",
-          scheduledAt: existingReservation.createdAt,
+          // Use visitScheduledAt (when tenant submitted the schedule), not createdAt
+          scheduledAt: existingReservation.visitScheduledAt || existingReservation.createdAt,
           approvedAt: new Date(),
           attemptNumber,
         });
@@ -659,6 +668,30 @@ export const updateReservationByUser = async (req, res, next) => {
       updates.visitScheduledAt = new Date();
     }
 
+    // ── Visit time-slot collision check ─────────────────────
+    // Prevent two applicants from booking the same room at the same date/time
+    if (updates.visitDate) {
+      const conflicting = await Reservation.findOne({
+        _id: { $ne: reservationId },
+        roomId: reservation.roomId,
+        visitDate: updates.visitDate,
+        visitTime: updates.visitTime || reservation.visitTime,
+        status: { $in: ["visit_pending", "visit_approved"] },
+        isArchived: { $ne: true },
+      }).select("_id visitDate visitTime").lean();
+
+      if (conflicting) {
+        return res.status(409).json({
+          error: "This time slot is already taken. Please choose a different date or time.",
+          code: "VISIT_SLOT_CONFLICT",
+          conflict: {
+            visitDate: conflicting.visitDate,
+            visitTime: conflicting.visitTime,
+          },
+        });
+      }
+    }
+
     // ── Status-driven auto-transitions ──────────────────────
     // Reset rejection state when tenant reschedules after a rejection
     if (updates.visitDate && updates.agreedToPrivacy && reservation.scheduleRejected) {
@@ -681,6 +714,10 @@ export const updateReservationByUser = async (req, res, next) => {
     if (updates.firstName && updates.lastName && updates.mobileNumber) {
       if (reservation.status === "visit_approved") {
         updates.status = "payment_pending";
+      }
+      // Stamp submission time if not already set (first-time application)
+      if (!reservation.applicationSubmittedAt) {
+        updates.applicationSubmittedAt = new Date();
       }
     }
 
@@ -739,13 +776,13 @@ export const deleteReservation = async (req, res, next) => {
       });
 
     const isOwner = String(reservation.userId) === String(dbUser._id);
-    const isAdmin = dbUser.role === "admin" || dbUser.role === "superAdmin";
+    const isAdmin = dbUser.role === "branch_admin" || dbUser.role === "owner";
     if (!isOwner && !isAdmin)
       return res.status(403).json({
         error: "Access denied. You can only delete your own reservation.",
         code: "RESERVATION_ACCESS_DENIED",
       });
-    if (dbUser.role === "admin" && reservation.roomId?.branch !== dbUser.branch)
+    if (dbUser.role === "branch_admin" && reservation.roomId?.branch !== dbUser.branch)
       return res.status(403).json({
         error: `Access denied. You can only manage reservations for ${dbUser.branch} branch.`,
         code: "BRANCH_ACCESS_DENIED",
@@ -1135,13 +1172,28 @@ export const checkoutReservation = async (req, res, next) => {
       }
     }
 
-    // 3. Update user status
+    // 3. Update user status + sync Firebase claims
     const userId = reservation.userId?._id || reservation.userId;
     if (userId) {
-      await User.findByIdAndUpdate(userId, {
+      const tenantUser = await User.findByIdAndUpdate(userId, {
         tenantStatus: "inactive",
         role: "applicant", // Revert to applicant so they can re-reserve
-      });
+      }, { new: true });
+      // Sync Firebase claims so token immediately reflects demotion
+      if (tenantUser?.firebaseUid) {
+        try {
+          const { getAuth } = await import("../config/firebase.js");
+          const auth = getAuth();
+          if (auth) {
+            await auth.setCustomUserClaims(tenantUser.firebaseUid, {
+              role: "applicant",
+              tenantStatus: "inactive",
+            });
+          }
+        } catch (e) {
+          logger.warn({ err: e, requestId: req.id }, "Firebase claims sync on checkout failed (non-fatal)");
+        }
+      }
     }
 
     // 4. Notify tenant

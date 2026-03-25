@@ -10,7 +10,7 @@ import "../styles/admin-audit-logs.css";
 
 const AuditLogsPage = () => {
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const { authFetch } = useApiClient();
 
   const [currentPage, setCurrentPage] = useState(1);

@@ -16,10 +16,10 @@
 // User Roles (matches server/models/User.js)
 // -----------------------------------------------------------------------------
 export const USER_ROLES = {
-  USER: "user", // Default role, not yet a tenant
+  APPLICANT: "applicant", // Registered, not yet a tenant
   TENANT: "tenant", // Active tenant (moved in)
-  ADMIN: "admin", // Branch administrator
-  SUPER_ADMIN: "superAdmin", // System-wide administrator (camelCase to match backend)
+  BRANCH_ADMIN: "branch_admin", // Branch administrator
+  OWNER: "owner", // System-wide owner
 };
 
 // -----------------------------------------------------------------------------

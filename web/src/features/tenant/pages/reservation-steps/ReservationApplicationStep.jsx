@@ -28,47 +28,15 @@ import {
   AgreementsSection,
 } from "./components";
 
-/* ─── Section Header — clean divider with label ─── */
-const SectionHeader = React.memo(({ number, title, id, sectionRef }) => (
+/* ─── Section Header — clean divider with number + label ─── */
+const SectionHeader = React.memo(({ number, title, id, sectionRef, isFirst }) => (
   <div
     ref={sectionRef}
     id={`section-${id}`}
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "12px",
-      padding: "20px 0 12px",
-      marginTop: number > 1 ? "8px" : 0,
-      borderTop: number > 1 ? "1px solid #E5E7EB" : "none",
-    }}
+    className={`rf-section-header${isFirst ? " rf-section-header--first" : ""}`}
   >
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "28px",
-        height: "28px",
-        borderRadius: "50%",
-        backgroundColor: "#0A1628",
-        color: "#fff",
-        fontSize: "13px",
-        fontWeight: "600",
-        flexShrink: 0,
-      }}
-    >
-      {number}
-    </span>
-    <span
-      style={{
-        fontSize: "15px",
-        fontWeight: "600",
-        color: "#0f172a",
-        letterSpacing: "-0.01em",
-      }}
-    >
-      {title}
-    </span>
+    <span className="rf-section-header__num">{number}</span>
+    <span className="rf-section-header__title">{title}</span>
   </div>
 ));
 
@@ -76,119 +44,57 @@ const SectionHeader = React.memo(({ number, title, id, sectionRef }) => (
 // ReservationApplicationStep — flat layout with section headers
 // ─────────────────────────────────────────────────────────────
 const ReservationApplicationStep = ({
-  billingEmail,
-  selfiePhoto,
-  setSelfiePhoto,
-  lastName,
-  setLastName,
-  firstName,
-  setFirstName,
-  middleName,
-  setMiddleName,
-  nickname,
-  setNickname,
-  mobileNumber,
-  setMobileNumber,
-  birthday,
-  setBirthday,
-  maritalStatus,
-  setMaritalStatus,
-  nationality,
-  setNationality,
-  educationLevel,
-  setEducationLevel,
-  addressUnitHouseNo,
-  setAddressUnitHouseNo,
-  addressStreet,
-  setAddressStreet,
-  addressRegion,
-  setAddressRegion,
-  addressBarangay,
-  setAddressBarangay,
-  addressCity,
-  setAddressCity,
-  addressProvince,
-  setAddressProvince,
-  validIDFront,
-  setValidIDFront,
-  validIDBack,
-  setValidIDBack,
-  nbiClearance,
-  setNbiClearance,
-  nbiReason,
-  setNbiReason,
-  personalNotes,
-  setPersonalNotes,
-  emergencyContactName,
-  setEmergencyContactName,
-  emergencyRelationship,
-  setEmergencyRelationship,
-  emergencyContactNumber,
-  setEmergencyContactNumber,
-  healthConcerns,
-  setHealthConcerns,
-  employerSchool,
-  setEmployerSchool,
-  employerAddress,
-  setEmployerAddress,
-  employerContact,
-  setEmployerContact,
-  startDate,
-  setStartDate,
-  occupation,
-  setOccupation,
-  companyID,
-  setCompanyID,
-  companyIDReason,
-  setCompanyIDReason,
-  previousEmployment,
-  setPreviousEmployment,
-  preferredRoomNumber,
-  setPreferredRoomNumber,
-  referralSource,
-  setReferralSource,
-  referrerName,
-  setReferrerName,
-  targetMoveInDate,
-  setTargetMoveInDate,
-  estimatedMoveInTime,
-  setEstimatedMoveInTime,
-  leaseDuration,
-  setLeaseDuration,
-  workSchedule,
-  setWorkSchedule,
-  workScheduleOther,
-  setWorkScheduleOther,
-  agreedToPrivacy,
-  setAgreedToPrivacy,
-  agreedToCertification,
-  setAgreedToCertification,
-  devBypassValidation,
-  setDevBypassValidation,
-  onPrev,
-  onNext,
-  readOnly,
-  saveStatus,
-  showValidationErrors,
-  applicationSubmitted,
-  paymentApproved,
-  onEditApplication,
-  scrollToSection,
-  onClearScrollToSection,
+  billingEmail, selfiePhoto, setSelfiePhoto,
+  lastName, setLastName, firstName, setFirstName,
+  middleName, setMiddleName, nickname, setNickname,
+  mobileNumber, setMobileNumber, birthday, setBirthday,
+  maritalStatus, setMaritalStatus, nationality, setNationality,
+  educationLevel, setEducationLevel,
+  addressUnitHouseNo, setAddressUnitHouseNo,
+  addressStreet, setAddressStreet,
+  addressRegion, setAddressRegion,
+  addressBarangay, setAddressBarangay,
+  addressCity, setAddressCity,
+  addressProvince, setAddressProvince,
+  validIDFront, setValidIDFront,
+  validIDBack, setValidIDBack,
+  nbiClearance, setNbiClearance,
+  nbiReason, setNbiReason,
+  personalNotes, setPersonalNotes,
+  emergencyContactName, setEmergencyContactName,
+  emergencyRelationship, setEmergencyRelationship,
+  emergencyContactNumber, setEmergencyContactNumber,
+  healthConcerns, setHealthConcerns,
+  employerSchool, setEmployerSchool,
+  employerAddress, setEmployerAddress,
+  employerContact, setEmployerContact,
+  startDate, setStartDate,
+  occupation, setOccupation,
+  companyID, setCompanyID,
+  companyIDReason, setCompanyIDReason,
+  previousEmployment, setPreviousEmployment,
+  preferredRoomNumber, setPreferredRoomNumber,
+  referralSource, setReferralSource,
+  referrerName, setReferrerName,
+  targetMoveInDate, setTargetMoveInDate,
+  estimatedMoveInTime, setEstimatedMoveInTime,
+  leaseDuration, setLeaseDuration,
+  workSchedule, setWorkSchedule,
+  workScheduleOther, setWorkScheduleOther,
+  agreedToPrivacy, setAgreedToPrivacy,
+  agreedToCertification, setAgreedToCertification,
+  devBypassValidation, setDevBypassValidation,
+  onPrev, onNext, readOnly, saveStatus,
+  showValidationErrors, applicationSubmitted, paymentApproved,
+  onEditApplication, scrollToSection, onClearScrollToSection,
 }) => {
-  // ── Modal state ────────────────────────────────────────────
   const [showPoliciesModal, setShowPoliciesModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState({
-    open: false,
-    title: "",
-    message: "",
-    variant: "info",
-    onConfirm: null,
+    open: false, title: "", message: "", variant: "info", onConfirm: null,
   });
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // ── Section refs for scroll-to-error ──────────────────────
   const sectionRefs = useRef({});
   useEffect(() => {
     if (!scrollToSection) return;
@@ -196,23 +102,18 @@ const ReservationApplicationStep = ({
       const el = sectionRefs.current[scrollToSection];
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "start" });
-        // Brief highlight flash
         el.style.transition = "background-color 0.3s ease";
-        el.style.backgroundColor = "#FEF3C7";
-        setTimeout(() => {
-          el.style.backgroundColor = "transparent";
-        }, 1500);
+        el.style.backgroundColor = "rgba(255, 140, 66, 0.12)";
+        setTimeout(() => { el.style.backgroundColor = "transparent"; }, 1500);
       }
       onClearScrollToSection?.();
     }, 100);
   }, [scrollToSection, onClearScrollToSection]);
 
-  // ── Input handlers ─────────────────────────────────────────
   const handleNameInput = (value, setter) => setter(value.replace(/\d+/g, ""));
   const handlePhoneInput = (value, setter) => {
     let cleaned = value.replace(/[^0-9+]/g, "");
-    if (!cleaned.startsWith("+63"))
-      cleaned = "+63" + cleaned.replace(/^\+?63?/, "");
+    if (!cleaned.startsWith("+63")) cleaned = "+63" + cleaned.replace(/^\+?63?/, "");
     if (cleaned.length <= 13) setter(cleaned);
   };
   const handleGeneralInput = (value, setter, maxLength = 100) => {
@@ -232,198 +133,79 @@ const ReservationApplicationStep = ({
     setTargetMoveInDate(value);
   };
 
-  // ── Reset all ──────────────────────────────────────────────
   const handleResetAll = () => {
     setConfirmModal({
       open: true,
       title: "Reset All Fields",
-      message:
-        "This will clear all fields in the application form. This action cannot be undone.",
+      message: "This will clear all fields in the application form. This action cannot be undone.",
       variant: "danger",
       confirmText: "Reset All",
-      onConfirm: () => {
-        setConfirmModal((p) => ({ ...p, open: false }));
-        doResetAll();
-      },
+      onConfirm: () => { setConfirmModal((p) => ({ ...p, open: false })); doResetAll(); },
     });
   };
+
   const doResetAll = () => {
     [
-      setFirstName,
-      setLastName,
-      setMiddleName,
-      setNickname,
-      setMobileNumber,
-      setBirthday,
-      setAddressUnitHouseNo,
-      setAddressStreet,
-      setAddressBarangay,
-      setAddressCity,
-      setAddressProvince,
-      setNbiReason,
-      setEmergencyContactName,
-      setEmergencyRelationship,
-      setEmergencyContactNumber,
-      setHealthConcerns,
-      setEmployerSchool,
-      setEmployerAddress,
-      setEmployerContact,
-      setStartDate,
-      setOccupation,
-      setPreviousEmployment,
-      setCompanyIDReason,
-      setReferralSource,
-      setReferrerName,
-      setTargetMoveInDate,
-      setEstimatedMoveInTime,
-      setWorkSchedule,
+      setFirstName, setLastName, setMiddleName, setNickname, setMobileNumber,
+      setBirthday, setAddressUnitHouseNo, setAddressStreet, setAddressBarangay,
+      setAddressCity, setAddressProvince, setNbiReason, setEmergencyContactName,
+      setEmergencyRelationship, setEmergencyContactNumber, setHealthConcerns,
+      setEmployerSchool, setEmployerAddress, setEmployerContact, setStartDate,
+      setOccupation, setPreviousEmployment, setCompanyIDReason, setReferralSource,
+      setReferrerName, setTargetMoveInDate, setEstimatedMoveInTime, setWorkSchedule,
       setWorkScheduleOther,
     ].forEach((s) => s(""));
-    setMaritalStatus("");
-    setNationality("");
-    setEducationLevel("");
-    [
-      setSelfiePhoto,
-      setValidIDFront,
-      setValidIDBack,
-      setNbiClearance,
-      setCompanyID,
-    ].forEach((s) => s(null));
-    setAgreedToPrivacy(false);
-    setAgreedToCertification(false);
+    setMaritalStatus(""); setNationality(""); setEducationLevel("");
+    [setSelfiePhoto, setValidIDFront, setValidIDBack, setNbiClearance, setCompanyID].forEach((s) => s(null));
+    setAgreedToPrivacy(false); setAgreedToCertification(false);
     setFieldErrors({});
   };
 
-  // ── Dev auto-fill (development only) ────────────────────────
   const devAutoFill = () => {
-    setFirstName("Juan");
-    setLastName("Dela Cruz");
-    setMiddleName("Santos");
-    setNickname("JD");
-    setMobileNumber("+639171234567");
-    setBirthday("2000-05-15");
-    setMaritalStatus("single");
-    setNationality("Filipino");
-    setEducationLevel("college");
-    setAddressUnitHouseNo("Unit 12-B");
-    setAddressStreet("Rizal Avenue");
+    setFirstName("Juan"); setLastName("Dela Cruz"); setMiddleName("Santos"); setNickname("JD");
+    setMobileNumber("+639171234567"); setBirthday("2000-05-15");
+    setMaritalStatus("single"); setNationality("Filipino"); setEducationLevel("college");
+    setAddressUnitHouseNo("Unit 12-B"); setAddressStreet("Rizal Avenue");
     setPersonalNotes("Test applicant - dev auto-fill");
-    setNbiReason("");
-    setCompanyIDReason("");
-    // Emergency contact
-    setEmergencyContactName("Maria Dela Cruz");
-    setEmergencyRelationship("parent");
-    setEmergencyContactNumber("+639181234567");
-    setHealthConcerns("None");
-    // Employment
-    setEmployerSchool("University of the Philippines");
-    setEmployerAddress("Diliman, Quezon City");
-    setEmployerContact("+639191234567");
-    setStartDate("2024-06-01");
-    setOccupation("Software Developer");
-    setPreviousEmployment("Accenture Philippines");
-    // Preferences
-    setReferralSource("online");
-    setReferrerName("Google Search");
-    setEstimatedMoveInTime("morning");
-    setWorkSchedule("day");
-    setWorkScheduleOther("");
-    // Agreements
-    setAgreedToPrivacy(true);
-    setAgreedToCertification(true);
+    setNbiReason(""); setCompanyIDReason("");
+    setEmergencyContactName("Maria Dela Cruz"); setEmergencyRelationship("parent"); setEmergencyContactNumber("+639181234567");
+    setHealthConcerns("None"); setEmployerSchool("University of the Philippines");
+    setEmployerAddress("Diliman, Quezon City"); setEmployerContact("+639191234567");
+    setStartDate("2024-06-01"); setOccupation("Software Developer"); setPreviousEmployment("Accenture Philippines");
+    setReferralSource("online"); setReferrerName("Google Search");
+    setEstimatedMoveInTime("morning"); setWorkSchedule("day"); setWorkScheduleOther("");
+    setAgreedToPrivacy(true); setAgreedToCertification(true);
   };
 
-  // ── Date constraints ───────────────────────────────────────
-  const { birthdayMin, birthdayMax, moveInMin, moveInMax } =
-    getDateConstraints();
+  const { birthdayMin, birthdayMax, moveInMin, moveInMax } = getDateConstraints();
 
-  // ── Render ─────────────────────────────────────────────────
   return (
     <div className="reservation-card">
       {/* Header */}
       <div className="main-header">
-        <div className="main-header-badge">
-          <span>Step 3 · Verification</span>
-        </div>
+        <div className="main-header-badge"><span>Step 3 · Verification</span></div>
         <h2 className="main-header-title">Tenant Application</h2>
         <p className="main-header-subtitle">
           Complete all fields below. Required fields are marked with{" "}
-          <span style={{ color: "#dc2626", fontWeight: 600 }}>*</span>
+          <span className="rf-required">*</span>
         </p>
       </div>
 
       {/* Read-Only Banner */}
       {readOnly && (
-        <div
-          className="info-box"
-          style={{
-            background: "#FEF3C7",
-            borderColor: "#F59E0B",
-            marginBottom: "16px",
-          }}
-        >
-          <div className="info-box-title" style={{ color: "#92400E" }}>
-            This section is locked
-          </div>
-          <div className="info-text" style={{ color: "#78350F" }}>
-            Your application data is saved and cannot be edited at this time.
-          </div>
+        <div className="rf-locked-banner">
+          <div className="info-box-title">This section is locked</div>
+          <div className="info-text">Your application data is saved and cannot be edited at this time.</div>
         </div>
       )}
 
       {/* Top actions row */}
       {!readOnly && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            marginBottom: "4px",
-            gap: "12px",
-          }}
-        >
-          {saveStatus && (
-            <span
-              style={{
-                fontSize: "12px",
-                color: "#6B7280",
-                fontStyle: "italic",
-              }}
-            >
-              {saveStatus}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handleResetAll}
-            style={{
-              background: "none",
-              border: "1px solid #D1D5DB",
-              borderRadius: "6px",
-              padding: "6px 14px",
-              fontSize: "12px",
-              fontWeight: "500",
-              color: "#6B7280",
-              cursor: "pointer",
-            }}
-          >
-            Reset All
-          </button>
+        <div className="rf-top-actions">
+          {saveStatus && <span className="rf-save-status">{saveStatus}</span>}
+          <button type="button" onClick={handleResetAll} className="rf-reset-btn">Reset All</button>
           {import.meta.env.DEV && (
-            <button
-              type="button"
-              onClick={devAutoFill}
-              style={{
-                background: "#F59E0B",
-                border: "none",
-                borderRadius: "6px",
-                padding: "6px 14px",
-                fontSize: "12px",
-                fontWeight: "600",
-                color: "white",
-                cursor: "pointer",
-              }}
-            >
+            <button type="button" onClick={devAutoFill} className="rf-dev-fill-btn">
               ⚡ Dev Auto-Fill
             </button>
           )}
@@ -431,33 +213,18 @@ const ReservationApplicationStep = ({
       )}
 
       {/* Form body */}
-      <div
-        style={{
-          pointerEvents: readOnly ? "none" : "auto",
-          opacity: readOnly ? 0.7 : 1,
-        }}
-      >
+      <div className={readOnly ? "rf-readonly-wrapper" : ""}>
         {/* ─── Section 1: Photo & Email ─── */}
-        <SectionHeader
-          number={1}
-          title="Email & Photo"
-          id="photo"
-          sectionRef={(el) => { sectionRefs.current.photo = el; }}
-        />
+        <SectionHeader number={1} title="Email & Photo" id="photo" isFirst
+          sectionRef={(el) => { sectionRefs.current.photo = el; }} />
         <PhotoEmailSection
-          billingEmail={billingEmail}
-          selfiePhoto={selfiePhoto}
-          setSelfiePhoto={setSelfiePhoto}
-          showValidationErrors={showValidationErrors}
+          billingEmail={billingEmail} selfiePhoto={selfiePhoto}
+          setSelfiePhoto={setSelfiePhoto} showValidationErrors={showValidationErrors}
         />
 
         {/* ─── Section 2: Personal Information ─── */}
-        <SectionHeader
-          number={2}
-          title="Personal Information"
-          id="personal"
-          sectionRef={(el) => { sectionRefs.current.personal = el; }}
-        />
+        <SectionHeader number={2} title="Personal Information" id="personal"
+          sectionRef={(el) => { sectionRefs.current.personal = el; }} />
         <PersonalInfoSection
           {...{
             lastName, setLastName, firstName, setFirstName,
@@ -484,12 +251,8 @@ const ReservationApplicationStep = ({
         />
 
         {/* ─── Section 3: Emergency Contact ─── */}
-        <SectionHeader
-          number={3}
-          title="Emergency Contact"
-          id="emergency"
-          sectionRef={(el) => { sectionRefs.current.emergency = el; }}
-        />
+        <SectionHeader number={3} title="Emergency Contact" id="emergency"
+          sectionRef={(el) => { sectionRefs.current.emergency = el; }} />
         <EmergencyContactSection
           {...{
             emergencyContactName, setEmergencyContactName,
@@ -502,12 +265,8 @@ const ReservationApplicationStep = ({
         />
 
         {/* ─── Section 4: Employment / School ─── */}
-        <SectionHeader
-          number={4}
-          title="Employment / School"
-          id="employment"
-          sectionRef={(el) => { sectionRefs.current.employment = el; }}
-        />
+        <SectionHeader number={4} title="Employment / School" id="employment"
+          sectionRef={(el) => { sectionRefs.current.employment = el; }} />
         <EmploymentSection
           {...{
             employerSchool, setEmployerSchool,
@@ -524,12 +283,8 @@ const ReservationApplicationStep = ({
         />
 
         {/* ─── Section 5: Dorm Preferences ─── */}
-        <SectionHeader
-          number={5}
-          title="Dorm Preferences"
-          id="dorm"
-          sectionRef={(el) => { sectionRefs.current.dorm = el; }}
-        />
+        <SectionHeader number={5} title="Dorm Preferences" id="dorm"
+          sectionRef={(el) => { sectionRefs.current.dorm = el; }} />
         <DormPreferencesSection
           {...{
             referralSource, setReferralSource,
@@ -547,52 +302,9 @@ const ReservationApplicationStep = ({
 
         {/* ─── Section 6: Agreements & Consent ─── */}
         <div ref={(el) => { sectionRefs.current.agreements = el; }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "20px 0 12px",
-              marginTop: "8px",
-              borderTop: "1px solid #E5E7EB",
-            }}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "28px",
-                height: "28px",
-                borderRadius: "50%",
-                backgroundColor: "#0A1628",
-                color: "#fff",
-                fontSize: "13px",
-                fontWeight: "600",
-                flexShrink: 0,
-              }}
-            >
-              6
-            </span>
-            <span
-              style={{
-                fontSize: "15px",
-                fontWeight: "600",
-                color: "#0f172a",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Agreements & Consent
-            </span>
-          </div>
+          <SectionHeader number={6} title="Agreements & Consent" id="agreements" />
           <AgreementsSection
-            {...{
-              agreedToPrivacy,
-              setAgreedToPrivacy,
-              agreedToCertification,
-              setAgreedToCertification,
-              showValidationErrors,
-            }}
+            {...{ agreedToPrivacy, setAgreedToPrivacy, agreedToCertification, setAgreedToCertification, showValidationErrors }}
             onShowPolicies={() => setShowPoliciesModal(true)}
             onShowPrivacy={() => setShowPrivacyModal(true)}
           />
@@ -600,21 +312,13 @@ const ReservationApplicationStep = ({
       </div>
 
       {/* Modals */}
-      <PoliciesTermsModal
-        isOpen={showPoliciesModal}
-        onClose={() => setShowPoliciesModal(false)}
-      />
-      <PrivacyConsentModal
-        isOpen={showPrivacyModal}
-        onClose={() => setShowPrivacyModal(false)}
-      />
+      <PoliciesTermsModal isOpen={showPoliciesModal} onClose={() => setShowPoliciesModal(false)} />
+      <PrivacyConsentModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
 
       {/* Footer buttons */}
       {readOnly && applicationSubmitted && !paymentApproved && (
         <div className="stage-buttons" style={{ justifyContent: "flex-end" }}>
-          <button onClick={onEditApplication} className="btn btn-primary">
-            Edit Application
-          </button>
+          <button onClick={onEditApplication} className="btn btn-primary">Edit Application</button>
         </div>
       )}
       {!readOnly && (

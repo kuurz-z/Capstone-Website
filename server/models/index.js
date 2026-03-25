@@ -38,12 +38,10 @@ import Bill from "./Bill.js";
 import RoomBill from "./RoomBill.js";
 import Announcement from "./Announcement.js";
 import MaintenanceRequest from "./MaintenanceRequest.js";
-import AcknowledgmentAccount from "./AcknowledgmentAccount.js";
-import UserSession from "./UserSession.js";
 import Notification from "./Notification.js";
-import BedHistory from "./BedHistory.js";
 import Payment from "./Payment.js";
 import LoginLog from "./LoginLog.js";
+import AcknowledgmentAccount from "./AcknowledgmentAccount.js";
 
 // ============================================================================
 // NAMED EXPORTS
@@ -59,12 +57,10 @@ export {
   RoomBill,
   Announcement,
   MaintenanceRequest,
-  AcknowledgmentAccount,
-  UserSession,
   Notification,
-  BedHistory,
   Payment,
   LoginLog,
+  AcknowledgmentAccount,
 };
 
 // ============================================================================
@@ -84,7 +80,7 @@ export const INQUIRY_BRANCHES = ["gil-puyat", "guadalupe", "general"];
 /**
  * Valid user roles
  */
-export const USER_ROLES = ["user", "tenant", "admin", "superAdmin"];
+export const USER_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
 
 /**
  * Valid tenant statuses
@@ -181,9 +177,7 @@ export default {
   Announcement,
   MaintenanceRequest,
   AcknowledgmentAccount,
-  UserSession,
   Notification,
-  BedHistory,
   Payment,
   LoginLog,
   ROOM_BRANCHES,

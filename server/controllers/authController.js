@@ -20,7 +20,7 @@ import {
 
 
 const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
-const VALID_ROLES = ["applicant", "tenant", "admin", "superAdmin"];
+const VALID_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
 
 export const register = async (req, res, next) => {
   try {
@@ -206,7 +206,7 @@ export const login = async (req, res, next) => {
     }
 
     // Block unverified non-admin users from logging in
-    const isAdminRole = user.role === "admin" || user.role === "superAdmin";
+    const isAdminRole = user.role === "branch_admin" || user.role === "owner";
     if (!user.isEmailVerified && !isAdminRole) {
       await auditLogger.logLogin(req, user, false, "Email not verified");
       LoginLog.logEvent({ userId: user._id, email: user.email, action: "login_failed", success: false, failureReason: "Email not verified", req });
@@ -299,11 +299,18 @@ export const getProfile = async (req, res, next) => {
       isEmailVerified: user.isEmailVerified,
       // Extended profile fields
       gender: user.gender || "",
+      civilStatus: user.civilStatus || "",
+      nationality: user.nationality || "",
+      occupation: user.occupation || "",
       address: user.address || "",
       city: user.city || "",
+      province: user.province || "",
+      zipCode: user.zipCode || "",
       dateOfBirth: user.dateOfBirth || null,
       emergencyContact: user.emergencyContact || "",
       emergencyPhone: user.emergencyPhone || "",
+      emergencyRelationship: user.emergencyRelationship || "",
+      // Legacy fields
       studentId: user.studentId || "",
       school: user.school || "",
       yearLevel: user.yearLevel || "",
@@ -355,11 +362,17 @@ export const updateProfile = async (req, res, next) => {
 
     // Sanitize input — extended profile fields
     const gender = req.body.gender !== undefined ? req.body.gender : undefined;
+    const civilStatus = req.body.civilStatus !== undefined ? req.body.civilStatus : undefined;
+    const nationality = req.body.nationality !== undefined ? sanitizeText(req.body.nationality) : undefined;
+    const occupation = req.body.occupation !== undefined ? sanitizeText(req.body.occupation) : undefined;
     const address = req.body.address !== undefined ? sanitizeText(req.body.address) : undefined;
     const city = req.body.city !== undefined ? sanitizeText(req.body.city) : undefined;
+    const province = req.body.province !== undefined ? sanitizeText(req.body.province) : undefined;
+    const zipCode = req.body.zipCode !== undefined ? sanitizeText(req.body.zipCode) : undefined;
     const dateOfBirth = req.body.dateOfBirth !== undefined ? req.body.dateOfBirth : undefined;
     const emergencyContact = req.body.emergencyContact !== undefined ? sanitizeText(req.body.emergencyContact) : undefined;
     const emergencyPhone = req.body.emergencyPhone !== undefined ? sanitizePhone(req.body.emergencyPhone) : undefined;
+    const emergencyRelationship = req.body.emergencyRelationship !== undefined ? sanitizeText(req.body.emergencyRelationship) : undefined;
     const studentId = req.body.studentId !== undefined ? sanitizeText(req.body.studentId) : undefined;
     const school = req.body.school !== undefined ? sanitizeText(req.body.school) : undefined;
     const yearLevel = req.body.yearLevel !== undefined ? sanitizeText(req.body.yearLevel) : undefined;
@@ -372,11 +385,17 @@ export const updateProfile = async (req, res, next) => {
     if (profileImage !== undefined) updateData.profileImage = profileImage;
     // Extended fields
     if (gender !== undefined) updateData.gender = gender;
+    if (civilStatus !== undefined) updateData.civilStatus = civilStatus;
+    if (nationality !== undefined) updateData.nationality = nationality;
+    if (occupation !== undefined) updateData.occupation = occupation;
     if (address !== undefined) updateData.address = address;
     if (city !== undefined) updateData.city = city;
+    if (province !== undefined) updateData.province = province;
+    if (zipCode !== undefined) updateData.zipCode = zipCode;
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth || null;
     if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
     if (emergencyPhone !== undefined) updateData.emergencyPhone = emergencyPhone;
+    if (emergencyRelationship !== undefined) updateData.emergencyRelationship = emergencyRelationship;
     if (studentId !== undefined) updateData.studentId = studentId;
     if (school !== undefined) updateData.school = school;
     if (yearLevel !== undefined) updateData.yearLevel = yearLevel;
@@ -416,11 +435,17 @@ export const updateProfile = async (req, res, next) => {
         role: user.role,
         // Extended fields
         gender: user.gender || "",
+        civilStatus: user.civilStatus || "",
+        nationality: user.nationality || "",
+        occupation: user.occupation || "",
         address: user.address || "",
         city: user.city || "",
+        province: user.province || "",
+        zipCode: user.zipCode || "",
         dateOfBirth: user.dateOfBirth || null,
         emergencyContact: user.emergencyContact || "",
         emergencyPhone: user.emergencyPhone || "",
+        emergencyRelationship: user.emergencyRelationship || "",
         studentId: user.studentId || "",
         school: user.school || "",
         yearLevel: user.yearLevel || "",
@@ -515,11 +540,11 @@ export const setRole = async (req, res, next) => {
 
     // Set Firebase custom claims based on role
     const claims = {};
-    if (role === "admin") {
-      claims.admin = true;
-    } else if (role === "superAdmin") {
-      claims.superAdmin = true;
-      claims.admin = true; // SuperAdmins also have admin privileges
+    if (role === "branch_admin") {
+      claims.branch_admin = true;
+    } else if (role === "owner") {
+      claims.owner = true;
+      claims.branch_admin = true; // Owners also have branch_admin privileges
     }
 
     // Find user by MongoDB _id

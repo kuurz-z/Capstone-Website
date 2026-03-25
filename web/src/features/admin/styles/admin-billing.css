@@ -1,11 +1,11 @@
 /* =============================================================================
-   BILLING — Notion-style (polished)
+   BILLING — Refined light-mode design
    ============================================================================= */
 @import "design-tokens.css";
 
 .billing-section-title {
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text-primary);
   margin: var(--spacing-xl) 0 var(--spacing-lg);
   padding-bottom: 10px;

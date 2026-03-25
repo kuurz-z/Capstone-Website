@@ -64,7 +64,7 @@ const normalizeRoom = (room) => {
 export const getRooms = async (req, res, next) => {
   try {
     const { branch, type, available } = req.query;
-    const filter = {};
+    const filter = { isArchived: false };
 
     if (branch) filter.branch = branch;
     if (type) filter.type = type;

@@ -40,7 +40,7 @@ const RequireAdmin = ({ children }) => {
   }
 
   // Check backend authentication and admin role
-  const isAdmin = user?.role === "admin" || user?.role === "superAdmin";
+  const isAdmin = user?.role === "branch_admin" || user?.role === "owner";
   if (!isAuthenticated || !isAdmin) {
     return <Navigate to="/signin" replace />;
   }

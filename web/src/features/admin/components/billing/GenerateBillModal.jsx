@@ -241,7 +241,7 @@ export default function GenerateBillModal({
                     <span
                       style={{
                         fontWeight: 600,
-                        color: "#0A1628",
+                        color: "#1a1a1a",
                         fontSize: "0.9rem",
                       }}
                     >

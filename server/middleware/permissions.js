@@ -9,8 +9,8 @@
  *   router.post('/billing/generate', verifyToken, verifyAdmin, requirePermission('manageBilling'), handler)
  *
  * HOW IT WORKS:
- * 1. SuperAdmins bypass all permission checks (full access)
- * 2. Regular admins must have the specific permission in their `permissions` array
+ * 1. Owners bypass all permission checks (full access)
+ * 2. Branch admins must have the specific permission in their `permissions` array
  * 3. If the admin has no permissions array, they are denied by default
  *
  * AVAILABLE PERMISSIONS:
@@ -48,7 +48,7 @@ export const ALL_PERMISSIONS = [
 export const DEFAULT_PERMISSIONS = {
   applicant: [],
   tenant: [],
-  admin: [
+  branch_admin: [
     "manageReservations",
     "manageTenants",
     "manageBilling",
@@ -56,7 +56,7 @@ export const DEFAULT_PERMISSIONS = {
     "manageMaintenance",
     "manageAnnouncements",
   ],
-  superAdmin: [...ALL_PERMISSIONS],
+  owner: [...ALL_PERMISSIONS],
 };
 
 /**
@@ -83,8 +83,8 @@ export const PERMISSION_LABELS = {
 export const requirePermission = (permission) => {
   return async (req, res, next) => {
     try {
-      // SuperAdmins bypass all permission checks
-      if (req.isSuperAdmin) {
+      // Owners bypass all permission checks
+      if (req.isOwner || req.isSuperAdmin) {
         return next();
       }
 
@@ -100,9 +100,10 @@ export const requirePermission = (permission) => {
         });
       }
 
-      // SuperAdmins always pass (fallback check)
-      if (dbUser.role === "superAdmin") {
-        req.isSuperAdmin = true;
+      // Owners always pass (fallback check)
+      if (dbUser.role === "owner") {
+        req.isOwner = true;
+        req.isSuperAdmin = true; // backward compat
         return next();
       }
 
@@ -149,8 +150,9 @@ export const requireAnyPermission = (permissions) => {
         });
       }
 
-      if (dbUser.role === "superAdmin") {
-        req.isSuperAdmin = true;
+      if (dbUser.role === "owner") {
+        req.isOwner = true;
+        req.isSuperAdmin = true; // backward compat
         return next();
       }
 

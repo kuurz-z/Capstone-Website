@@ -80,7 +80,7 @@ router.get("/scheduled", verifyToken, async (req, res) => {
     const MaintenanceRequest = (await import("../models/MaintenanceRequest.js")).default;
     const { User } = await import("../models/index.js");
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
-    if (!dbUser || !["admin", "superAdmin"].includes(dbUser.role)) {
+    if (!dbUser || !["branch_admin", "owner"].includes(dbUser.role)) {
       return res.status(403).json({ error: "Admin access required" });
     }
 
@@ -89,7 +89,7 @@ router.get("/scheduled", verifyToken, async (req, res) => {
       status: { $nin: ["completed", "cancelled"] },
       isArchived: false,
     };
-    if (dbUser.role === "admin") filter.branch = dbUser.branch;
+    if (dbUser.role === "branch_admin") filter.branch = dbUser.branch;
 
     const requests = await MaintenanceRequest.find(filter)
       .populate("roomId", "name branch")
@@ -114,12 +114,12 @@ router.get("/costs", verifyToken, async (req, res) => {
     const MaintenanceRequest = (await import("../models/MaintenanceRequest.js")).default;
     const { User } = await import("../models/index.js");
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
-    if (!dbUser || !["admin", "superAdmin"].includes(dbUser.role)) {
+    if (!dbUser || !["branch_admin", "owner"].includes(dbUser.role)) {
       return res.status(403).json({ error: "Admin access required" });
     }
 
     const matchFilter = { status: "completed", isArchived: false };
-    if (dbUser.role === "admin") matchFilter.branch = dbUser.branch;
+    if (dbUser.role === "branch_admin") matchFilter.branch = dbUser.branch;
 
     const costs = await MaintenanceRequest.aggregate([
       { $match: matchFilter },

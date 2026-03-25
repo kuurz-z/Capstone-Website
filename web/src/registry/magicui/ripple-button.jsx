@@ -1,35 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef } from "react";
 
+/**
+ * RippleButton — button with a Material-style ripple effect on click.
+ * Used by Navbar.js for the "Book Now" button.
+ */
 export function RippleButton({
   children,
-  rippleColor = "#ffffff",
+  rippleColor = "rgba(255, 255, 255, 0.5)",
   className = "",
+  style = {},
+  onClick,
   ...props
 }) {
-  const [ripples, setRipples] = useState([]);
   const buttonRef = useRef(null);
-
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.textContent = `
-      @keyframes ripple {
-        from {
-          transform: scale(0);
-          opacity: 0.6;
-        }
-        to {
-          transform: scale(1);
-          opacity: 0;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-    return () => {
-      if (style.parentNode) {
-        style.parentNode.removeChild(style);
-      }
-    };
-  }, []);
 
   const handleClick = (e) => {
     const button = buttonRef.current;
@@ -38,54 +21,46 @@ export function RippleButton({
     const rect = button.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const size = Math.max(rect.width, rect.height);
-    const radius = size / 2;
+    const size = Math.max(rect.width, rect.height) * 2;
 
-    const newRipple = {
-      id: Date.now() + Math.random(),
-      x: x - radius,
-      y: y - radius,
-      size,
-    };
+    const ripple = document.createElement("span");
+    Object.assign(ripple.style, {
+      position: "absolute",
+      width: `${size}px`,
+      height: `${size}px`,
+      left: `${x - size / 2}px`,
+      top: `${y - size / 2}px`,
+      borderRadius: "50%",
+      backgroundColor: rippleColor,
+      transform: "scale(0)",
+      animation: "ripple-expand 0.5s linear",
+      pointerEvents: "none",
+    });
 
-    setRipples((prev) => [...prev, newRipple]);
+    button.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
 
-    // Remove ripple after animation
-    setTimeout(() => {
-      setRipples((prev) => prev.filter((r) => r.id !== newRipple.id));
-    }, 600);
-
-    // Call original onClick if provided
-    if (props.onClick) {
-      props.onClick(e);
-    }
+    if (onClick) onClick(e);
   };
 
   return (
-    <button
-      ref={buttonRef}
-      onClick={handleClick}
-      className={`relative ${className}`}
-      {...props}
-    >
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {ripples.map((ripple) => (
-          <span
-            key={ripple.id}
-            style={{
-              position: "absolute",
-              left: `${ripple.x}px`,
-              top: `${ripple.y}px`,
-              width: `${ripple.size}px`,
-              height: `${ripple.size}px`,
-              backgroundColor: rippleColor,
-              borderRadius: "50%",
-              animation: "ripple 600ms ease-out forwards",
-            }}
-          />
-        ))}
-      </div>
-      <span className="relative zIndex-10">{children}</span>
-    </button>
+    <>
+      <style>{`
+        @keyframes ripple-expand {
+          to { transform: scale(2); opacity: 0; }
+        }
+      `}</style>
+      <button
+        ref={buttonRef}
+        className={className}
+        style={{ position: "relative", overflow: "hidden", cursor: "pointer", border: "none", ...style }}
+        onClick={handleClick}
+        {...props}
+      >
+        {children}
+      </button>
+    </>
   );
 }
+
+export default RippleButton;

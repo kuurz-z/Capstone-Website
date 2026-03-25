@@ -1,60 +1,53 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
-const SpotlightCard = ({
+/**
+ * SpotlightCard — card container with a mouse-following radial gradient spotlight effect.
+ * Used by RoomDetailsModal.jsx for image display containers.
+ */
+function SpotlightCard({
   children,
+  spotlightColor = "rgba(255, 255, 255, 0.1)",
   className = "",
-  spotlightColor = "rgba(255, 255, 255, 0.25)",
-}) => {
-  const divRef = useRef(null);
-  const [isFocused, setIsFocused] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [opacity, setOpacity] = useState(0);
+  style = {},
+  ...props
+}) {
+  const containerRef = useRef(null);
 
   const handleMouseMove = (e) => {
-    if (!divRef.current || isFocused) return;
-
-    const rect = divRef.current.getBoundingClientRect();
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  const handleFocus = () => {
-    setIsFocused(true);
-    setOpacity(0.6);
-  };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-    setOpacity(0);
-  };
-
-  const handleMouseEnter = () => {
-    setOpacity(0.6);
-  };
-
-  const handleMouseLeave = () => {
-    setOpacity(0);
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    el.style.setProperty("--spot-x", `${x}px`);
+    el.style.setProperty("--spot-y", `${y}px`);
   };
 
   return (
     <div
-      ref={divRef}
+      ref={containerRef}
+      className={className}
       onMouseMove={handleMouseMove}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      className={`relative rounded-3xl border border-neutral-800 bg-neutral-900 overflow-hidden ${className}`}
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        borderRadius: "16px",
+        border: "1px solid rgba(0,0,0,0.08)",
+        ...style,
+      }}
+      {...props}
     >
+      {children}
       <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 ease-in-out"
         style={{
-          opacity,
-          background: `radial-gradient(circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 80%)`,
+          position: "absolute",
+          inset: 0,
+          background: `radial-gradient(circle 180px at var(--spot-x, 50%) var(--spot-y, 50%), ${spotlightColor}, transparent 70%)`,
+          pointerEvents: "none",
         }}
       />
-      {children}
     </div>
   );
-};
+}
 
 export default SpotlightCard;

@@ -33,7 +33,7 @@ const RequireSuperAdmin = ({ children }) => {
   }
 
   // Redirect if not authenticated or not super admin
-  if (!isAuthenticated || user?.role !== "superAdmin") {
+  if (!isAuthenticated || user?.role !== "owner") {
     return <Navigate to="/signin" replace />;
   }
 

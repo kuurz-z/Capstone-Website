@@ -37,6 +37,7 @@ import {
 import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import SocialAuthButtons from "../../../shared/components/SocialAuthButtons";
 import FloatingInput from "../../../shared/components/FloatingInput";
+import PhoneInput, { isValidPhoneNumber } from "../../../shared/components/PhoneInput";
 import TermsModal from "../../tenant/modals/TermsModal";
 import "../../../shared/styles/auth-forms.css";
 import "../styles/tenant-signup.css";
@@ -91,7 +92,7 @@ function SignUp() {
   useEffect(() => {
     if (socialAuthRef.current) return; // skip while checking duplicate
     if (!authLoading && isAuthenticated && user) {
-      if (user.role === "admin" || user.role === "superAdmin")
+      if (user.role === "branch_admin" || user.role === "owner")
         navigate("/admin/dashboard", { replace: true });
       else navigate("/", { replace: true });
     }
@@ -100,11 +101,9 @@ function SignUp() {
   // ── Form handling ──────────────────────────────────────────
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "phone" && value && !/^[0-9]*$/.test(value)) return;
-    if (name === "phone" && value.length > 11) return;
+    // phone is now handled separately by PhoneInput — skip old guards
     const sanitizedValue =
       name === "firstName" || name === "lastName" ? sanitizeName(value) : value;
-
     setFormData({ ...formData, [name]: sanitizedValue });
     setTouched({ ...touched, [name]: true });
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -112,6 +111,17 @@ function SignUp() {
       setPasswordStrength(calculatePasswordStrength(value));
     const timer = setTimeout(() => validateField(name, value), 300);
     setDebounceTimer(timer);
+  };
+
+  // Called directly by PhoneInput with the E.164 value
+  const handlePhoneChange = (e164) => {
+    setFormData((prev) => ({ ...prev, phone: e164 }));
+    setTouched((prev) => ({ ...prev, phone: true }));
+    // Use libphonenumber-js for accurate per-country validation
+    const isValid = e164 && e164.startsWith("+") && isValidPhoneNumber(e164);
+    const error = isValid ? null : "Enter a valid phone number";
+    setValidationErrors((prev) => ({ ...prev, phone: error }));
+    setFieldValid((prev) => ({ ...prev, phone: isValid }));
   };
 
   const validateField = (fieldName, value) => {
@@ -127,9 +137,11 @@ function SignUp() {
         error = validateEmail(value);
         break;
       case "phone":
-        if (!value.trim()) error = "Phone number is required";
-        else if (!/^[0-9]{11}$/.test(value))
-          error = "Phone must be exactly 11 digits";
+        if (!value || !value.trim()) {
+          error = "Phone number is required";
+        } else if (!value.startsWith("+") || !isValidPhoneNumber(value.trim())) {
+          error = "Enter a valid phone number";
+        }
         break;
       case "password":
         error = validatePassword(value);
@@ -198,11 +210,11 @@ function SignUp() {
     if (emailError) {
       return scrollToField("email", emailError);
     }
-    if (!formData.phone.trim()) {
+    if (!formData.phone || !formData.phone.trim()) {
       return scrollToField("phone", "Phone number is required");
     }
-    if (!/^[0-9]{1,11}$/.test(formData.phone)) {
-      return scrollToField("phone", "Phone number must be 1-11 digits only");
+    if (!/^\+\d{7,15}$/.test(formData.phone.trim())) {
+      return scrollToField("phone", "Enter a valid phone number with country code");
     }
     const passwordError = validatePassword(formData.password);
     if (passwordError) {
@@ -499,17 +511,15 @@ function SignUp() {
                 valid={touched.email && fieldValid.email}
               />
 
-              <FloatingInput
+              <PhoneInput
+                authStyle
                 label="Phone number"
-                name="phone"
-                type="tel"
                 value={formData.phone}
-                onChange={handleChange}
-                disabled={loading}
-                inputMode="numeric"
-                maxLength={11}
-                error={touched.phone ? validationErrors.phone : null}
+                onChange={handlePhoneChange}
+                hasError={touched.phone && !fieldValid.phone}
                 valid={touched.phone && fieldValid.phone}
+                error={touched.phone ? validationErrors.phone : null}
+                required
               />
 
               <div>

@@ -1,6 +1,6 @@
 export default function EditUserModal({
   editForm,
-  isSuperAdmin,
+  isOwner,
   onFormChange,
   onSubmit,
   onClose,
@@ -116,9 +116,9 @@ export default function EditUserModal({
               >
                 <option value="applicant">Applicant</option>
                 <option value="tenant">Tenant</option>
-                <option value="admin">Admin</option>
-                {isSuperAdmin && (
-                  <option value="superAdmin">Super Admin</option>
+                <option value="branch_admin">Branch Admin</option>
+                {isOwner && (
+                  <option value="owner">Owner</option>
                 )}
               </select>
             </div>

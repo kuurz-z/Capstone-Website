@@ -12,6 +12,8 @@
 - [CSRF Protection](#csrf-protection)
 - [Branch-Level Data Isolation](#branch-level-data-isolation)
 - [Rate Limiting](#rate-limiting)
+- [Security Headers](#security-headers)
+- [Webhook Security](#webhook-security)
 - [Audit Logging](#audit-logging)
 - [Validation Rules Reference](#validation-rules-reference)
 - [Error Handling](#error-handling)
@@ -27,11 +29,15 @@ Client Request
     │
     ▼
 ┌─────────────────────────┐
-│   Rate Limiter          │  Throttle excessive requests
+│   Security Headers      │  Helmet (CSP, HSTS, X-Frame-Options)
+├─────────────────────────┤
+│   Rate Limiter          │  Tiered throttling (global, auth, public)
 ├─────────────────────────┤
 │   Token Verification    │  Firebase Admin SDK validates JWT
 ├─────────────────────────┤
 │   Role & Branch Guard   │  RBAC + branch-level data isolation
+├─────────────────────────┤
+│   Permission Check      │  Granular permission verification
 ├─────────────────────────┤
 │   Input Validation      │  Sanitize & validate all user input
 ├─────────────────────────┤
@@ -51,7 +57,8 @@ Client Request
 | `middleware/validation.js`   | Input sanitization and format validation     |
 | `middleware/csrf.js`         | CSRF token generation and verification       |
 | `middleware/branchAccess.js` | Branch-level data isolation                  |
-| `middleware/rateLimiter.js`  | Request rate limiting                        |
+| `middleware/permissions.js`  | Granular permission checks                   |
+| `middleware/rateLimiter.js`  | Tiered request rate limiting                 |
 | `middleware/errorHandler.js` | Centralized error handling                   |
 
 ---
@@ -90,6 +97,12 @@ router.put(
   controller.update, // Execute
 );
 ```
+
+### Granular Permissions
+
+**File:** `middleware/permissions.js`
+
+Beyond role checks, specific actions are gated by fine-grained permission checks. This allows controlling access at a more granular level than the four base roles.
 
 ---
 
@@ -167,13 +180,54 @@ const bills = await Bill.find({
 
 **File:** `middleware/rateLimiter.js`
 
-Authentication endpoints are protected against brute-force and credential-stuffing attacks through request throttling. Excessive requests from a single source are rejected with a `429 Too Many Requests` response.
+Tiered rate limiting protects against brute-force, credential-stuffing, and denial-of-service attacks:
+
+| Tier       | Scope                 | Limit            | Purpose                          |
+| ---------- | --------------------- | ---------------- | -------------------------------- |
+| **Global** | All endpoints         | 1000 / 15 min    | General abuse prevention         |
+| **Auth**   | `/api/auth/*`         | Strict per-IP    | Brute-force login prevention     |
+| **Public** | `/api/inquiries/*`    | Moderate per-IP  | Spam inquiry prevention          |
+
+Excessive requests from a single source are rejected with a `429 Too Many Requests` response.
+
+> **Note:** Webhook routes (`/api/webhooks`) are registered **before** the rate limiter to prevent PayMongo callbacks from being throttled.
+
+---
+
+## Security Headers
+
+**File:** `server.js` (via Helmet)
+
+The server uses [Helmet](https://helmetjs.github.io/) to set secure HTTP headers:
+
+| Header                    | Purpose                                        |
+| ------------------------- | ---------------------------------------------- |
+| Content-Security-Policy   | Restricts resource loading sources             |
+| Strict-Transport-Security | Enforces HTTPS connections                     |
+| X-Content-Type-Options    | Prevents MIME-type sniffing                    |
+| X-Frame-Options           | Prevents clickjacking                          |
+| X-XSS-Protection          | Enables browser XSS filtering                 |
+
+---
+
+## Webhook Security
+
+**File:** `controllers/webhookController.js`
+
+PayMongo payment webhooks are secured via HMAC signature verification:
+
+1. PayMongo signs each webhook payload with a shared secret
+2. The webhook controller receives the raw body (before JSON parsing)
+3. An HMAC-SHA256 signature is computed and compared to PayMongo's signature
+4. Invalid signatures are rejected with a 401 response
+
+This ensures that only genuine PayMongo events are processed, preventing forged payment confirmations.
 
 ---
 
 ## Audit Logging
 
-**File:** `utils/auditLogger.js`  
+**File:** `utils/auditLogger.js`
 **Model:** `models/AuditLog.js`
 
 All administrative actions are recorded with:
@@ -253,3 +307,5 @@ try {
 - [Express.js Security Best Practices](https://expressjs.com/en/advanced/best-practice-security.html)
 - [Firebase Security Rules](https://firebase.google.com/docs/rules)
 - [Mongoose Security Considerations](https://mongoosejs.com/docs/security.html)
+- [Helmet.js](https://helmetjs.github.io/)
+- [PayMongo Webhooks](https://developers.paymongo.com/docs/webhooks)

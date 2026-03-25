@@ -32,7 +32,7 @@ async function getAdminInfo(req) {
   return {
     role: dbUser?.role || "user",
     branch: dbUser?.branch || null,
-    isSuperAdmin: dbUser?.role === "superAdmin",
+    isSuperAdmin: dbUser?.role === "owner",
     _id: dbUser?._id || null,
   };
 }
@@ -120,6 +120,37 @@ async function fetchBills(filter, query) {
 
 /** Round to 2 decimal places */
 const r2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * Compute per-tenant water share based on room type.
+ *
+ * Business rules (client-defined):
+ *   - quadruple-sharing → ₱0 (water included in monthly rent)
+ *   - double-sharing    → room water total ÷ number of tenants
+ *   - private           → full room water charge to single tenant
+ *
+ * @param {string}  roomType    – Room.type enum value
+ * @param {number}  totalWater  – Total water charge entered for the room
+ * @param {number}  tenantCount – Number of checked-in tenants in the room
+ * @returns {number} Per-tenant water amount
+ */
+const computeWaterShare = (roomType, totalWater, tenantCount) => {
+  if (!totalWater || totalWater <= 0) return 0;
+  switch (roomType) {
+    case "quadruple-sharing":
+      // Water is already included in monthly rent — no separate charge
+      return 0;
+    case "double-sharing":
+      // Equal split among all tenants in the room
+      return tenantCount > 0 ? r2(totalWater / tenantCount) : 0;
+    case "private":
+      // Full charge to the single tenant
+      return r2(totalWater);
+    default:
+      // Fallback: equal split
+      return tenantCount > 0 ? r2(totalWater / tenantCount) : 0;
+  }
+};
 
 /* ─── controllers ────────────────────────────────── */
 
@@ -421,7 +452,7 @@ export const generateRoomBill = async (req, res, next) => {
       if (await Bill.findOne(dupeFilter)) continue;
 
       const te = r2(roomCharges.electricity * share);
-      const tw = r2(roomCharges.water * share);
+      const tw = computeWaterShare(room.type, roomCharges.water, tenantInfos.length);
       const utilityShare = te + tw;
 
       // Custom charges from reservation (appliance fees, etc.)
@@ -951,6 +982,272 @@ export const getBillingReport = async (req, res, next) => {
   }
 };
 
+// ============================================================================
+// ADMIN: Delete a bill (hard delete — for orphaned / erroneous bills)
+// ============================================================================
+
+export const deleteBill = async (req, res, next) => {
+  try {
+    const { billId } = req.params;
+    const admin = await getAdminInfo(req);
+
+    const bill = await Bill.findById(billId);
+    if (!bill) return res.status(404).json({ error: "Bill not found" });
+
+    // Branch isolation — admins can only delete bills from their branch
+    if (!admin.isSuperAdmin && bill.branch !== admin.branch)
+      return res.status(403).json({ error: "Access denied" });
+
+    // Guard: don't delete paid bills (audit trail matters)
+    if (bill.status === "paid")
+      return res.status(400).json({
+        error: "Cannot delete a paid bill. Paid bills must be retained for audit purposes.",
+      });
+
+    await bill.deleteOne();
+
+    logger.info(
+      { billId, deletedBy: admin._id, branch: bill.branch },
+      "Bill deleted by admin",
+    );
+
+    res.json({ success: true, message: "Bill deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// ADMIN: Bulk-generate bills for all occupied rooms in a branch
+// ============================================================================
+
+export const generateBulkBills = async (req, res, next) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const {
+      billingMonth,
+      dueDate,
+      defaultCharges = {},
+    } = req.body;
+
+    const branch =
+      admin.isSuperAdmin && req.body.branch ? req.body.branch : admin.branch;
+    if (!branch)
+      return res.status(400).json({ error: "Branch is required" });
+
+    const monthDate = dayjs(billingMonth || undefined);
+    const monthStart = monthDate.startOf("month").toDate();
+    const monthEnd = monthDate.endOf("month").toDate();
+    const billDueDate = dueDate
+      ? dayjs(dueDate).toDate()
+      : monthDate.add(1, "month").date(15).toDate();
+
+    // Find all rooms in this branch
+    const rooms = await Room.find({ branch, isArchived: false });
+    const adminUser = await User.findOne({ firebaseUid: req.user.uid });
+
+    const summary = {
+      roomsProcessed: 0,
+      roomsSkipped: 0,
+      billsGenerated: 0,
+      errors: [],
+    };
+
+    for (const room of rooms) {
+      // Skip if a RoomBill already exists for this room + month
+      const existing = await RoomBill.findOne({
+        roomId: room._id,
+        billingMonth: monthStart,
+        isArchived: false,
+      });
+      if (existing) {
+        summary.roomsSkipped++;
+        continue;
+      }
+
+      // Find checked-in tenants for this room
+      const checkedInReservations = await Reservation.find({
+        roomId: room._id,
+        status: "checked-in",
+        isArchived: { $ne: true },
+      }).populate("userId", "firstName lastName email");
+
+      if (checkedInReservations.length === 0) {
+        summary.roomsSkipped++;
+        continue;
+      }
+
+      // Build tenant info
+      const tenantInfos = [];
+      const seenUserIds = new Set();
+
+      for (const reservation of checkedInReservations) {
+        if (!reservation?.userId) continue;
+        if (seenUserIds.has(String(reservation.userId._id))) continue;
+        seenUserIds.add(String(reservation.userId._id));
+
+        const rent =
+          reservation.monthlyRent ||
+          reservation.totalPrice ||
+          room.monthlyPrice ||
+          room.price ||
+          0;
+        const customCharges = reservation.customCharges || [];
+        const moveInDate = reservation.checkInDate || monthStart;
+        const tenantStart = dayjs(
+          Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()),
+        );
+        const tenantEnd = dayjs(
+          Math.min(Date.now(), dayjs(monthEnd).add(1, "day").valueOf()),
+        );
+        const daysInRoom =
+          Math.max(1, (tenantEnd.diff(tenantStart, "day", true) | 0) || 1);
+
+        tenantInfos.push({
+          userId: reservation.userId._id,
+          reservationId: reservation._id,
+          userName:
+            `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim() ||
+            "Tenant",
+          email: reservation.userId.email || "",
+          rent,
+          customCharges,
+          daysInRoom,
+          moveInDate,
+        });
+      }
+
+      if (tenantInfos.length === 0) {
+        summary.roomsSkipped++;
+        continue;
+      }
+
+      try {
+        // Use per-room charges if provided, otherwise use defaults
+        const roomCharges = {
+          electricity: Number(defaultCharges.electricity) || 0,
+          water: Number(defaultCharges.water) || 0,
+        };
+        const totalUtilities = roomCharges.electricity + roomCharges.water;
+        const totalOccupantDays = tenantInfos.reduce(
+          (s, t) => s + t.daysInRoom,
+          0,
+        );
+
+        const generatedBills = [];
+        const tenantBreakdown = [];
+
+        for (const tenant of tenantInfos) {
+          const share = tenant.daysInRoom / totalOccupantDays;
+          // Skip if bill already exists for this tenant+month
+          const dupeFilter = {
+            userId: tenant.userId,
+            billingMonth: monthStart,
+            isArchived: false,
+          };
+          if (tenant.reservationId)
+            dupeFilter.reservationId = tenant.reservationId;
+          if (await Bill.findOne(dupeFilter)) continue;
+
+          // Room-type-aware water splitting
+          const te = r2(roomCharges.electricity * share);
+          const tw = computeWaterShare(
+            room.type,
+            roomCharges.water,
+            tenantInfos.length,
+          );
+          const utilityShare = te + tw;
+
+          const tenantCustomCharges = tenant.customCharges || [];
+          const customChargesTotal = tenantCustomCharges.reduce(
+            (sum, c) => sum + (Number(c.amount) || 0),
+            0,
+          );
+          const totalAmount = tenant.rent + utilityShare + customChargesTotal;
+
+          const bill = new Bill({
+            reservationId: tenant.reservationId,
+            userId: tenant.userId,
+            branch: room.branch,
+            roomId: room._id,
+            billingMonth: monthStart,
+            dueDate: billDueDate,
+            proRataDays: tenant.daysInRoom,
+            charges: {
+              rent: tenant.rent,
+              electricity: te,
+              water: tw,
+              applianceFees: customChargesTotal,
+              corkageFees: 0,
+              penalty: 0,
+              discount: 0,
+            },
+            additionalCharges: tenantCustomCharges.map((c) => ({
+              name: c.name,
+              amount: c.amount,
+            })),
+            totalAmount,
+            status: "pending",
+          });
+          await bill.save();
+          generatedBills.push(bill._id);
+          tenantBreakdown.push({
+            userId: tenant.userId,
+            reservationId: tenant.reservationId,
+            daysInRoom: tenant.daysInRoom,
+            proRataShare: Math.round(share * 10000) / 10000,
+            rent: tenant.rent,
+            utilityShare,
+            totalAmount,
+            billId: bill._id,
+          });
+        }
+
+        if (generatedBills.length > 0) {
+          const roomBill = new RoomBill({
+            roomId: room._id,
+            branch: room.branch,
+            billingMonth: monthStart,
+            dueDate: billDueDate,
+            charges: roomCharges,
+            totalCharges: totalUtilities,
+            generatedBills,
+            status: "generated",
+            generatedBy: adminUser?._id || null,
+            tenantBreakdown,
+          });
+          await roomBill.save();
+          await Bill.updateMany(
+            { _id: { $in: generatedBills } },
+            { $set: { roomBillId: roomBill._id } },
+          );
+          summary.billsGenerated += generatedBills.length;
+        }
+
+        summary.roomsProcessed++;
+      } catch (roomErr) {
+        logger.error(
+          { err: roomErr, roomId: String(room._id) },
+          "Bulk bill generation failed for room",
+        );
+        summary.errors.push({
+          room: room.name,
+          error: roomErr.message,
+        });
+      }
+    }
+
+    const statusCode = summary.billsGenerated > 0 ? 201 : 200;
+    res.status(statusCode).json({
+      success: true,
+      message: `Bulk generation complete: ${summary.billsGenerated} bills created across ${summary.roomsProcessed} rooms (${summary.roomsSkipped} skipped)`,
+      summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getCurrentBilling,
   getBillingHistory,
@@ -958,6 +1255,7 @@ export default {
   markBillAsPaid,
   getBillsByBranch,
   generateRoomBill,
+  generateBulkBills,
   getRoomsWithTenants,
   getMyBills,
   submitPaymentProof,
@@ -965,4 +1263,5 @@ export default {
   getPendingVerifications,
   applyPenalties,
   getBillingReport,
+  deleteBill,
 };

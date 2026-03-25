@@ -50,8 +50,8 @@ export default function AuditFilterPanel({ filters, onFilterChange }) {
           <option value="all">All Roles</option>
           <option value="user">User</option>
           <option value="tenant">Tenant</option>
-          <option value="admin">Admin</option>
-          <option value="superAdmin">Super Admin</option>
+          <option value="branch_admin">Branch Admin</option>
+          <option value="owner">Owner</option>
         </select>
       </div>
     </div>

@@ -138,6 +138,7 @@ export default function SuperAdminDashboard() {
     { label: "Room Availability", to: "/admin/room-availability" },
     { label: "Billing", to: "/admin/billing" },
     { label: "Tenants", to: "/admin/tenants" },
+    { label: "User Management", to: "/admin/users" },
     { label: "Audit Logs", to: "/admin/audit-logs" },
   ];
 

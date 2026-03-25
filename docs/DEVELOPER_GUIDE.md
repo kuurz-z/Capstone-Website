@@ -8,12 +8,13 @@ Practical guide for programmers working on the Lilycrest Dormitory Management Sy
 
 ### Prerequisites
 
-| Tool          | Version | Purpose          |
-| ------------- | ------- | ---------------- |
-| Node.js       | 16+     | Runtime          |
-| MongoDB Atlas | —       | Database (cloud) |
-| Firebase      | —       | Authentication   |
-| npm           | 8+      | Package manager  |
+| Tool          | Version | Purpose                   |
+| ------------- | ------- | ------------------------- |
+| Node.js       | 16+     | Runtime                   |
+| MongoDB Atlas | —       | Database (cloud)          |
+| Firebase      | —       | Authentication            |
+| PayMongo      | —       | Online payment processing |
+| npm           | 8+      | Package manager           |
 
 ### Setup Steps
 
@@ -56,6 +57,9 @@ cd web && npm run dev
 | `EMAIL_USER`            | `your-gmail@gmail.com`    | Gmail for sending emails         |
 | `EMAIL_PASSWORD`        | `your-app-password`       | Gmail app-specific password      |
 | `FRONTEND_URL`          | `http://localhost:3000`   | Frontend URL for CORS            |
+| `PAYMONGO_SECRET_KEY`   | `sk_test_...`             | PayMongo API secret key          |
+| `PAYMONGO_WEBHOOK_SECRET`| `whsk_...`               | PayMongo webhook signing key     |
+| `IMAGEKIT_PRIVATE_KEY`  | `private_...`             | ImageKit private key for uploads |
 
 ### Frontend (`web/.env`)
 
@@ -88,6 +92,7 @@ cd web && npm run dev
 | Route files      | camelCase + Routes     | `authRoutes.js`          |
 | Controller files | camelCase + Controller | `authController.js`      |
 | Model files      | PascalCase             | `User.js`                |
+| Zustand stores   | camelCase + Store      | `notificationStore.js`   |
 | Branches         | kebab-case             | `gil-puyat`, `guadalupe` |
 | Roles            | camelCase              | `superAdmin`, `tenant`   |
 
@@ -97,6 +102,8 @@ cd web && npm run dev
 - **Backend**: Domain-based organization in `server/` (controllers, models, routes)
 - **Shared code**: Goes in `web/src/shared/`
 - **Feature-specific code**: Stays in its feature module
+- **State management**: Zustand stores in `web/src/shared/stores/`
+- **Query management**: React Query config in `web/src/shared/lib/`
 
 ---
 
@@ -188,6 +195,67 @@ await AuditLogger.log({
 });
 ```
 
+### 6. Zustand Store Pattern (Frontend)
+
+Global state management with Zustand:
+
+```javascript
+// shared/stores/notificationStore.js
+import { create } from "zustand";
+
+const useNotificationStore = create((set) => ({
+  unreadCount: 0,
+  setUnreadCount: (count) => set({ unreadCount: count }),
+}));
+```
+
+### 7. React Query Pattern (Frontend)
+
+Server state management with centralized query keys:
+
+```javascript
+// shared/lib/queryKeys.js
+export const queryKeys = {
+  billing: { current: ["billing", "current"], history: ["billing", "history"] },
+};
+
+// In a component
+const { data } = useQuery({
+  queryKey: queryKeys.billing.current,
+  queryFn: () => billingApi.getCurrentBilling(),
+});
+```
+
+### 8. WebSocket Pattern (Frontend)
+
+Real-time communication via Socket.io:
+
+```javascript
+// shared/hooks/useSocketClient.js
+const socket = useSocketClient();
+
+useEffect(() => {
+  socket.on("notification", (data) => {
+    // Update notification count
+  });
+}, [socket]);
+```
+
+### 9. PayMongo Checkout Pattern (Backend)
+
+Online payment flow:
+
+```javascript
+// 1. Tenant requests checkout session
+const session = await paymongoClient.createCheckoutSession({
+  amount, description, metadata
+});
+
+// 2. Tenant completes payment on PayMongo hosted page
+
+// 3. PayMongo sends webhook → webhookController verifies HMAC → updates bill/reservation
+```
+
 ---
 
 ## How to Add a New Feature
@@ -209,8 +277,9 @@ await AuditLogger.log({
 
 1. Create the page component in `features/{role}/pages/`
 2. Create the CSS file in `features/{role}/styles/`
-3. Add the route in `App.js` (tenant/public) or `AdminApp.js` (admin)
-4. Add sidebar link if needed (in the layout component)
+3. Add the route in `App.js` with `React.lazy()` and `<RouteErrorBoundary>`
+4. Wrap with appropriate guard (`ProtectedRoute`, `RequireAdmin`, etc.)
+5. Add sidebar link if needed (in the layout component)
 
 ---
 
@@ -219,7 +288,7 @@ await AuditLogger.log({
 | Role         | Access                     | Can Do                                                              |
 | ------------ | -------------------------- | ------------------------------------------------------------------- |
 | `applicant`  | Public pages + reservation | Browse rooms, submit inquiries, create reservations                 |
-| `tenant`     | Tenant portal              | View bills, submit maintenance requests, manage profile             |
+| `tenant`     | Tenant portal              | View bills, submit maintenance requests, manage profile, pay online |
 | `admin`      | Admin dashboard            | Manage reservations, tenants, rooms, billing for their branch       |
 | `superAdmin` | Everything                 | System-wide user management, branch configuration, all admin powers |
 
@@ -250,6 +319,12 @@ Role transitions:
 
 - Make sure you're using the correct import path (relative, not absolute)
 - Frontend uses `VITE_` prefix for env vars, not `REACT_APP_`
+
+### PayMongo webhook not received
+
+- Ensure webhook routes are registered **before** `express.json()` in `server.js`
+- Check that `PAYMONGO_WEBHOOK_SECRET` matches the key set in PayMongo dashboard
+- Webhook endpoint must be publicly accessible (can't test on localhost without a tunnel)
 
 ---
 

@@ -44,9 +44,19 @@ html[data-theme="dark"] .profile-page [style*="F3F4F6"],
 html[data-theme="dark"] .profile-page [style*="f8fafc"],
 html[data-theme="dark"] .profile-page [style*="F8FAFC"],
 html[data-theme="dark"] .profile-page [style*="f9fafb"],
-html[data-theme="dark"] .profile-page [style*="F9FAFB"] {
+html[data-theme="dark"] .profile-page [style*="F9FAFB"],
+html[data-theme="dark"] .profile-page [style*="FAFBFC"],
+html[data-theme="dark"] .profile-page [style*="fafbfc"],
+html[data-theme="dark"] .profile-page [style*="F1F5F9"],
+html[data-theme="dark"] .profile-page [style*="f1f5f9"] {
   background: var(--surface-muted) !important;
   background-color: var(--surface-muted) !important;
+}
+
+/* Dashed placeholder borders */
+html[data-theme="dark"] .profile-page [style*="E2E8F0"],
+html[data-theme="dark"] .profile-page [style*="e2e8f0"] {
+  border-color: var(--border-card) !important;
 }
 
 /* Light borders → dark */

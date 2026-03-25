@@ -124,14 +124,15 @@ const buildDocs = (r) => [
 ];
 
 const PERSONAL_FIELDS = (r) => [
-  ["First Name", fmt(r.firstName)],
-  ["Last Name", fmt(r.lastName)],
-  ["Middle Name", fmt(r.middleName)],
-  ["Nickname", fmt(r.nickname)],
-  ["Birthday", fmtDate(r.birthday)],
+  ["First Name",     fmt(r.firstName  || r.userId?.firstName)],
+  ["Last Name",      fmt(r.lastName   || r.userId?.lastName)],
+  ["Middle Name",    fmt(r.middleName)],
+  ["Nickname",       fmt(r.nickname)],
+  ["Birthday",       fmtDate(r.birthday)],
   ["Marital Status", fmt(r.maritalStatus)],
-  ["Nationality", fmt(r.nationality)],
-  ["Education", fmt(r.educationLevel)],
+  ["Nationality",    fmt(r.nationality)],
+  ["Education",      fmt(r.educationLevel)],
+  ["Phone",          fmt(r.phone || r.mobileNumber)],
 ];
 
 /* ─── component ─────────────────────────────────── */

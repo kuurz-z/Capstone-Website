@@ -273,7 +273,7 @@ export default function VisitDetailsModal({
                   fontWeight: "500",
                   backgroundColor:
                     schedule.viewingType === "inperson" ? "#E0EBF5" : "#F3E8FF",
-                  color: "#0A1628",
+                  color: "#1a1a1a",
                 }}
               >
                 {schedule.viewingType === "inperson" ? "In-Person" : "Virtual"}

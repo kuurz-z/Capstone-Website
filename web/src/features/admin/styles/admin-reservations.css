@@ -1,5 +1,5 @@
 /* =============================================================================
-   RESERVATIONS — design system (matches reference UI)
+   RESERVATIONS — Refined design system
    ============================================================================= */
 @import "design-tokens.css";
 
@@ -83,8 +83,8 @@
 }
 
 .res-icon-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
   background: var(--bg-card);
@@ -106,29 +106,29 @@
 .res-icon-btn--danger {
   color: var(--status-error);
   background: var(--status-error-bg);
-  border-color: rgba(235, 87, 87, 0.2);
+  border-color: rgba(225, 75, 75, 0.15);
 }
 
 .res-icon-btn--danger:hover {
-  background: rgba(235, 87, 87, 0.14);
-  border-color: rgba(235, 87, 87, 0.35);
+  background: rgba(225, 75, 75, 0.12);
+  border-color: rgba(225, 75, 75, 0.3);
 }
 
 .res-icon-btn--success {
   color: var(--accent-green);
   background: var(--accent-green-bg);
-  border-color: rgba(16, 185, 129, 0.2);
+  border-color: rgba(13, 150, 104, 0.15);
 }
 
 .res-icon-btn--success:hover {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(13, 150, 104, 0.12);
+  border-color: rgba(13, 150, 104, 0.3);
 }
 
 /* ── Three-dot kebab button ── */
 .res-kebab-btn {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-md);
   border: none;
   background: transparent;
@@ -147,13 +147,13 @@
 
 /* ── Legacy text action buttons (kept for compatibility) ── */
 .res-action-btn {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 550;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
 }
@@ -164,25 +164,25 @@
 }
 
 .res-action-btn--danger {
-  border-color: rgba(235, 87, 87, 0.2);
+  border-color: rgba(225, 75, 75, 0.15);
   color: var(--status-error);
   background: var(--status-error-bg);
 }
 
 .res-action-btn--danger:hover {
-  background: rgba(235, 87, 87, 0.14);
+  background: rgba(225, 75, 75, 0.12);
 }
 
 .res-action-btn--success {
-  border-color: rgba(16, 185, 129, 0.25);
+  border-color: rgba(13, 150, 104, 0.2);
   color: var(--accent-green);
   background: var(--accent-green-bg);
   font-weight: 600;
 }
 
 .res-action-btn--success:hover {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(13, 150, 104, 0.12);
+  border-color: rgba(13, 150, 104, 0.35);
 }
 
 .res-action-btn--success:disabled {

@@ -1,25 +1,42 @@
 import { useState } from "react";
 
-export function ImageWithFallback({ src, alt, fallbackSrc, className, ...rest }) {
-  const [currentSrc, setCurrentSrc] = useState(src);
+/**
+ * ImageWithFallback — renders an img with a graceful placeholder on error.
+ * Used by FacilitiesSection.jsx for facility card images.
+ */
+export function ImageWithFallback({ src, alt, className = "", style = {}, ...props }) {
+  const [errored, setErrored] = useState(false);
 
-  const handleError = () => {
-    if (fallbackSrc && currentSrc !== fallbackSrc) {
-      setCurrentSrc(fallbackSrc);
-      return;
-    }
-    setCurrentSrc(
-      "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=",
+  if (errored || !src) {
+    return (
+      <div
+        className={className}
+        style={{
+          backgroundColor: "var(--lp-icon-bg, #f1f5f9)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          ...style,
+        }}
+        aria-label={alt}
+      >
+        <span style={{ color: "var(--lp-text-muted, #94a3b8)", fontSize: "12px" }}>
+          {alt || "Image unavailable"}
+        </span>
+      </div>
     );
-  };
+  }
 
   return (
     <img
-      src={currentSrc}
+      src={src}
       alt={alt}
       className={className}
-      onError={handleError}
-      {...rest}
+      style={style}
+      onError={() => setErrored(true)}
+      {...props}
     />
   );
 }
+
+export default ImageWithFallback;

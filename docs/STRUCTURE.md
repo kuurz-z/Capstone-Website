@@ -17,12 +17,12 @@ Capstone-Website/
 │   └── STRUCTURE.md        # This file
 │
 ├── server/                  # 🖥️ Backend (Express.js + MongoDB)
-│   ├── config/             # Configuration (DB, Firebase, Email)
-│   ├── controllers/        # Request handlers & business logic
-│   ├── middleware/         # Auth, validation, CSRF, rate limiting
-│   ├── models/             # Mongoose schemas
-│   ├── routes/             # Express route definitions
-│   ├── utils/              # Helper functions & utilities
+│   ├── config/             # Configuration (DB, Firebase, Email, PayMongo, Constants)
+│   ├── controllers/        # Request handlers & business logic (13 controllers)
+│   ├── middleware/         # Auth, validation, CSRF, rate limiting, permissions
+│   ├── models/             # Mongoose schemas (16 models)
+│   ├── routes/             # Express route definitions (13 route files)
+│   ├── utils/              # Helper functions, scheduler, socket, notifications
 │   └── server.js           # Entry point
 │
 ├── web/                     # 🌐 Frontend (React + Vite)
@@ -31,7 +31,7 @@ Capstone-Website/
 │       ├── assets/         # Images
 │       ├── features/       # Role-based modules
 │       ├── firebase/       # Firebase config
-│       ├── shared/         # Shared components/utils
+│       ├── shared/         # Shared components/utils/stores
 │       ├── App.js          # Main routing
 │       └── index.js        # Entry point
 │
@@ -46,16 +46,21 @@ Capstone-Website/
 src/
 ├── features/                # 🎯 Role-based feature modules
 │   ├── public/             # Public pages (no auth required)
-│   ├── tenant/             # Tenant/resident features
+│   ├── tenant/             # Applicant & tenant features
 │   ├── admin/              # Branch admin features
-│   └── super-admin/        # System admin features
+│   ├── super-admin/        # System admin features (nested in admin layout)
+│   └── shared/             # Cross-feature shared components
 │
 ├── shared/                  # ♻️ Shared across all features
-│   ├── api/                # API client functions
+│   ├── api/                # API client functions (14 modules)
 │   ├── components/         # Reusable UI components
+│   ├── data/               # Static data files
 │   ├── guards/             # Route protection components
 │   ├── hooks/              # Custom React hooks
 │   ├── layouts/            # Page layouts
+│   ├── lib/                # React Query client & query keys
+│   ├── stores/             # Zustand state stores
+│   ├── styles/             # Shared CSS files
 │   └── utils/              # Helper functions
 │
 ├── assets/                  # 🖼️ Static assets
@@ -68,7 +73,6 @@ src/
 │   └── config.js
 │
 ├── App.js                   # Main app with routing
-├── AdminApp.js              # Admin app entry
 ├── App.css                  # Global app styles
 ├── index.js                 # Entry point
 └── index.css                # Global CSS
@@ -87,47 +91,48 @@ features/{role}/
 ├── modals/              # Modal dialogs
 ├── hooks/               # Feature-specific hooks
 ├── styles/              # CSS files
+├── context/             # React context providers
 └── index.js             # Barrel exports
 ```
 
 ### Public Feature (`features/public/`)
 
 - Landing page with branch information
-- Branch information pages (Gil Puyat, Guadalupe)
-- Room listings and details with filters
-- Inquiry submission modal
-- FAQs page
+- Sign up with comprehensive validation
+- Email verification page
+- Privacy policy & terms of service
+- 404 Not Found page
 
 ### Tenant Feature (`features/tenant/`)
 
-- Sign up / Sign in / Forgot password
-- Branch selection
+- Sign in / Forgot password
+- Profile management with demographic details & document uploads
+- Check availability with room browsing & bed selection
+- Multi-step reservation flow with payment
 - Dashboard with overview
-- Profile management
-- Billing & payment history
+- Billing & payment history with PDF receipts
 - Maintenance requests
-- Announcements
+- Announcements with acknowledgment
 - Contract management
-- Reservation flow (multi-step)
 
 ### Admin Feature (`features/admin/`)
 
-- Admin login
-- Dashboard with statistics
+- Dashboard with statistics & quick actions
 - Reservations management (with embedded Inquiries tab)
 - Tenant management
 - Room management (Availability + Setup + Occupancy tabs)
 - Billing management (room-based bill generation)
+- Maintenance management
 - User management
 - Audit logs
 
 ### Super Admin Feature (`features/super-admin/`)
 
-- System dashboard
-- User management
+Pages nested inside the admin layout via `RequireSuperAdmin` guard:
+
+- System-wide dashboard with cross-branch comparisons
 - Branch management
 - Role/permissions management
-- Activity logs
 - System settings
 
 ---
@@ -137,9 +142,11 @@ features/{role}/
 ```
 server/
 ├── config/
+│   ├── constants.js             # Shared constants & status enums
 │   ├── database.js              # MongoDB connection
+│   ├── email.js                 # Nodemailer configuration
 │   ├── firebase.js              # Firebase Admin SDK
-│   └── email.js                 # Nodemailer configuration
+│   └── paymongo.js              # PayMongo API client
 │
 ├── controllers/
 │   ├── authController.js        # Auth (register, login, profile)
@@ -148,19 +155,23 @@ server/
 │   ├── reservationsController.js # Reservation lifecycle
 │   ├── inquiriesController.js   # Inquiry management
 │   ├── billingController.js     # Bill generation & payment
+│   ├── paymentController.js     # PayMongo checkout & processing
 │   ├── announcementsController.js # Announcement management
 │   ├── maintenanceController.js # Maintenance requests
+│   ├── notificationController.js # In-app notifications
 │   ├── occupancyController.js   # Occupancy endpoints
-│   └── auditController.js       # Audit log retrieval
+│   ├── auditController.js       # Audit log retrieval
+│   └── webhookController.js     # PayMongo webhook handler
 │
 ├── middleware/
 │   ├── auth.js                  # JWT/Firebase token verification
 │   ├── branchAccess.js          # Branch-based access control
 │   ├── csrf.js                  # CSRF token protection
 │   ├── errorHandler.js          # Centralized error handling
-│   ├── logger.js                # Request logging
-│   ├── rateLimiter.js           # Rate limiting
-│   ├── requestId.js             # Request ID generation
+│   ├── logger.js                # Structured request logging (Pino)
+│   ├── permissions.js           # Granular permission checks
+│   ├── rateLimiter.js           # Tiered rate limiting
+│   ├── requestId.js             # Request ID generation & tracing
 │   └── validation.js            # Input sanitization & validation
 │
 ├── models/
@@ -170,10 +181,15 @@ server/
 │   ├── Inquiry.js               # Public inquiries
 │   ├── Bill.js                  # Tenant billing records
 │   ├── RoomBill.js              # Room-based utility bills
+│   ├── Payment.js               # Payment transactions
 │   ├── Announcement.js          # Branch-targeted announcements
 │   ├── MaintenanceRequest.js    # Maintenance requests
 │   ├── AcknowledgmentAccount.js # Announcement engagement
+│   ├── Notification.js          # In-app notifications
 │   ├── AuditLog.js              # Admin action audit trail
+│   ├── BedHistory.js            # Bed assignment tracking
+│   ├── LoginLog.js              # User login activity
+│   ├── UserSession.js           # Active session tracking
 │   ├── archive/                 # Archive utility schemas
 │   └── index.js                 # Central model exports
 │
@@ -184,14 +200,24 @@ server/
 │   ├── reservationsRoutes.js    # /api/reservations/*
 │   ├── inquiriesRoutes.js       # /api/inquiries/*
 │   ├── billingRoutes.js         # /api/billing/*
+│   ├── paymentRoutes.js         # /api/payments/*
 │   ├── announcementRoutes.js    # /api/announcements/*
 │   ├── maintenanceRoutes.js     # /api/maintenance/*
+│   ├── notificationRoutes.js    # /api/notifications/*
+│   ├── uploadRoutes.js          # /api/upload/*
+│   ├── webhookRoutes.js         # /api/webhooks/*
 │   └── auditRoutes.js           # /api/audit-logs/*
 │
 ├── utils/
 │   ├── auditLogger.js           # Audit logging utility
+│   ├── bedLockCleanup.js        # Expired bed lock cleanup
+│   ├── gracePeriodJob.js        # Reservation grace period enforcement
+│   ├── notificationService.js   # Notification creation & delivery
 │   ├── occupancyManager.js      # Room occupancy logic
-│   └── reservationHelpers.js    # Reservation helper functions
+│   ├── reservationHelpers.js    # Reservation helper functions
+│   ├── sanitize.js              # Input sanitization utilities
+│   ├── scheduler.js             # Cron job scheduler
+│   └── socket.js                # Socket.io initialization
 │
 └── server.js                    # Express app entry point
 ```
@@ -214,24 +240,37 @@ server/
 | `billingApi.js`      | Billing & payment                            |
 | `announcementApi.js` | Announcements                                |
 | `maintenanceApi.js`  | Maintenance requests                         |
+| `notificationApi.js` | In-app notifications                         |
 | `auditApi.js`        | Audit log retrieval                          |
 | `commonApi.js`       | Common/shared API utilities                  |
 | `tenantApi.js`       | Tenant-specific API calls                    |
 
 ### Guards (`shared/guards/`)
 
-| Guard                   | Purpose                    |
-| ----------------------- | -------------------------- |
-| `RequireAuth.jsx`       | Require authenticated user |
-| `RequireAdmin.jsx`      | Require admin role         |
-| `RequireSuperAdmin.jsx` | Require super admin role   |
+| Guard                   | Purpose                                 |
+| ----------------------- | --------------------------------------- |
+| `RequireAuth.jsx`       | Require authenticated user              |
+| `RequireAdmin.jsx`      | Require admin or superAdmin role        |
+| `RequireSuperAdmin.jsx` | Require super admin role                |
+| `RequireNonAdmin.jsx`   | Block admins from auth pages (redirect) |
 
 ### Hooks (`shared/hooks/`)
 
-| Hook                     | Purpose                        |
-| ------------------------ | ------------------------------ |
-| `useAuth.js`             | Auth state and methods         |
-| `FirebaseAuthContext.js` | Firebase auth context provider |
+| Hook                     | Purpose                             |
+| ------------------------ | ----------------------------------- |
+| `useAuth.js`             | Auth state, login, logout, profile  |
+| `FirebaseAuthContext.js` | Firebase auth context provider      |
+| `useBodyScrollLock.js`   | Prevent body scroll on modal open   |
+| `usePermissions.js`      | Check user permissions              |
+| `useSocketClient.js`     | WebSocket connection & events       |
+
+### State Management (`shared/stores/` & `shared/lib/`)
+
+| File                    | Purpose                              |
+| ----------------------- | ------------------------------------ |
+| `notificationStore.js`  | Zustand store for notification state |
+| `queryClient.js`        | React Query client configuration     |
+| `queryKeys.js`          | Centralized query key definitions    |
 
 ---
 
@@ -248,6 +287,8 @@ server/
 | Routes      | camelCase + Routes     | `authRoutes.js`       |
 | Controllers | camelCase + Controller | `authController.js`   |
 | Models      | PascalCase             | `User.js`             |
+| Stores      | camelCase + Store      | `notificationStore.js`|
+| Query Keys  | camelCase              | `queryKeys.js`        |
 
 ---
 
@@ -255,49 +296,55 @@ server/
 
 ### Public Routes
 
-| Path               | Component          |
-| ------------------ | ------------------ |
-| `/`                | LandingPage        |
-| `/gil-puyat`       | GPuyatPage         |
-| `/gil-puyat/rooms` | GPuyatRoomsPage    |
-| `/guadalupe`       | GuadalupePage      |
-| `/guadalupe/rooms` | GuadalupeRoomsPage |
-| `/faqs`            | FAQsPage           |
+| Path                | Component           |
+| ------------------- | ------------------- |
+| `/`                 | LandingPage         |
+| `/signup`           | SignUp              |
+| `/signin`           | SignIn              |
+| `/forgot-password`  | ForgotPassword      |
+| `/verify-email`     | VerifyEmail         |
+| `/privacy-policy`   | PrivacyPolicyPage   |
+| `/terms-of-service` | TermsOfServicePage  |
 
-### Tenant Routes (Protected)
+### Applicant / Tenant Routes (Protected)
 
-| Path                       | Component         |
-| -------------------------- | ----------------- |
-| `/tenant/signin`           | SignIn            |
-| `/tenant/signup`           | SignUp            |
-| `/tenant/forgot-password`  | ForgotPassword    |
-| `/tenant/branch-selection` | BranchSelection   |
-| `/tenant/dashboard`        | TenantDashboard   |
-| `/tenant/profile`          | ProfilePage       |
-| `/tenant/billing`          | BillingPage       |
-| `/tenant/maintenance`      | MaintenancePage   |
-| `/tenant/announcements`    | AnnouncementsPage |
-| `/tenant/contracts`        | ContractsPage     |
+| Path                            | Component              |
+| ------------------------------- | ---------------------- |
+| `/applicant/profile`            | ProfilePage            |
+| `/applicant/check-availability` | CheckAvailabilityPage  |
+| `/applicant/reservation`        | ReservationFlowPage    |
+| `/applicant/billing`            | BillingPage            |
+| `/applicant/maintenance`        | MaintenancePage        |
+| `/applicant/announcements`      | AnnouncementsPage      |
+| `/applicant/contracts`          | ContractsPage          |
 
 ### Admin Routes (Protected)
 
 | Path                       | Component            |
 | -------------------------- | -------------------- |
-| `/admin/login`             | AdminLoginPage       |
 | `/admin/dashboard`         | Dashboard            |
 | `/admin/reservations`      | ReservationsPage     |
 | `/admin/tenants`           | TenantsPage          |
 | `/admin/room-availability` | RoomAvailabilityPage |
 | `/admin/billing`           | AdminBillingPage     |
-| `/admin/users`             | UserManagement       |
-| `/admin/audit-logs`        | AuditLogs            |
+| `/admin/maintenance`       | MaintenancePage      |
+| `/admin/users`             | UserManagementPage   |
+| `/admin/audit-logs`        | AuditLogsPage        |
 
-### Super Admin Routes (Protected)
+### Super Admin Routes (Protected — nested under `/admin`)
 
-| Path                     | Component            |
-| ------------------------ | -------------------- |
-| `/super-admin/dashboard` | SuperAdminDashboard  |
-| `/super-admin/users`     | UserManagementPage   |
-| `/super-admin/branches`  | BranchManagementPage |
-| `/super-admin/logs`      | ActivityLogsPage     |
-| `/super-admin/settings`  | SystemSettingsPage   |
+| Path               | Component            |
+| ------------------ | -------------------- |
+| `/admin/branches`  | BranchManagementPage |
+| `/admin/roles`     | RolePermissionsPage  |
+| `/admin/settings`  | SystemSettingsPage   |
+
+### Legacy Redirects
+
+| Old Path                     | Redirects To                |
+| ---------------------------- | --------------------------- |
+| `/admin/login`               | `/signin`                   |
+| `/tenant/forgot-password`    | `/forgot-password`          |
+| `/super-admin/*`             | `/admin/*` (equivalent)     |
+| `/applicant/dashboard`       | `/applicant/profile`        |
+| `/applicant/rooms`           | `/applicant/check-availability` |

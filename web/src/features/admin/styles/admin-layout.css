@@ -1,6 +1,7 @@
 /* =============================================================================
-   ADMIN LAYOUT — Notion-style content area
+   ADMIN LAYOUT — Refined light-mode content area
    ============================================================================= */
+@import "design-tokens.css";
 
 /* When admin layout is active, body must not scroll — only .admin-content scrolls */
 html:has(.admin-layout),
@@ -13,32 +14,37 @@ html:has(.admin-layout) body {
   display: flex;
   min-height: 100vh;
   height: 100vh;
-  background: #ffffff;
+  background: var(--bg-page);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Content shifts based on sidebar state */
 .admin-layout-main {
   flex: 1;
-  margin-left: 240px;
+  margin-left: 248px;
   display: flex;
   flex-direction: column;
-  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 0.3s var(--ease-out);
 }
 
 .admin-layout--collapsed .admin-layout-main {
-  margin-left: 64px;
+  margin-left: 68px;
 }
 
 /* ── Top bar ──────────────────────────────────────────────────────────────── */
 .admin-topbar {
-  background: #ffffff;
-  height: 52px;
-  min-height: 52px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  height: 54px;
+  min-height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 0 var(--spacing-page);
+  border-bottom: 1px solid var(--border-light);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -54,23 +60,24 @@ html:has(.admin-layout) body {
   display: none;
   background: none;
   border: none;
-  color: #91918e;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 6px;
-  border-radius: 6px;
-  transition: all 0.12s;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .admin-menu-toggle:hover {
-  color: #37352f;
-  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .admin-topbar-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: #37352f;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .admin-topbar-right {
@@ -80,19 +87,50 @@ html:has(.admin-layout) body {
 }
 
 .admin-topbar-date {
-  font-size: 13px;
-  color: #91918e;
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
   font-weight: 400;
 }
 
 /* ── Content area ─────────────────────────────────────────────────────────── */
 .admin-content {
   flex: 1;
-  padding: 24px;
+  padding: var(--spacing-page);
   overflow-y: scroll;
   scrollbar-gutter: stable;
-  background: #f9f9f8;
-  min-height: calc(100vh - 52px);
+  background: var(--bg-page);
+  min-height: calc(100vh - 54px);
+}
+
+/* Subtle custom scrollbar for the content area */
+.admin-content::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+}
+.admin-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+/* ── Page entry animation ─────────────────────────────────────────────────── */
+@keyframes adminPageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-content > * {
+  animation: adminPageFadeIn 0.35s var(--ease-out) both;
 }
 
 /* ── Mobile ───────────────────────────────────────────────────────────────── */

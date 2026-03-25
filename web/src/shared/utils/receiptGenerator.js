@@ -131,8 +131,8 @@ function buildReceiptDoc(reservation, profile) {
 
   const paymentMethod =
     reservation.paymentMethod === "paymongo"
-      ? "Online (PayMongo)"
-      : reservation.paymentMethod || "Online";
+      ? "Online Payment"
+      : reservation.paymentMethod || "Online Payment";
 
   set("helvetica", "bold", 10, bodyText);
   doc.text(paymentMethod, margin, y);
@@ -239,3 +239,221 @@ export function viewDepositReceipt(reservation, profile) {
   const blobUrl = doc.output("bloburl");
   window.open(blobUrl, "_blank");
 }
+
+// ==========================================================================
+// BILLING RECEIPT PDF — matches email receipt template (generatePaymentReceiptHtml)
+// Called from pdfReceipt.js via BillingPage "Download Receipt"
+// ==========================================================================
+
+/**
+ * Builds a billing payment receipt PDF matching the email receipt template.
+ * @param {Object} bill - Bill object with paymentDate, totalAmount, etc.
+ */
+function buildBillingReceiptDoc(bill) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth  = doc.internal.pageSize.getWidth();
+  const margin     = 20;
+  const W          = pageWidth - margin * 2;
+  let y            = 0;
+
+  const navy     = [24, 49, 83];
+  const gold     = [212, 152, 43];
+  const darkText = [17, 24, 39];
+  const bodyText = [55, 65, 81];
+  const muted    = [156, 163, 175];
+  const subMuted = [107, 114, 128];
+  const divider  = [229, 231, 235];
+  const white    = [255, 255, 255];
+
+  const fill = (x, yy, w, h, color) => {
+    doc.setFillColor(...color);
+    doc.rect(x, yy, w, h, "F");
+  };
+  const hRule = (yy, colorArr = divider) => {
+    doc.setDrawColor(...colorArr);
+    doc.setLineWidth(0.25);
+    doc.line(margin, yy, pageWidth - margin, yy);
+  };
+  const fmt = (d) => {
+    if (!d) return "\u2014";
+    return new Date(d).toLocaleDateString("en-PH", {
+      year: "numeric", month: "long", day: "numeric",
+    });
+  };
+  const set = (font, style, size, color) => {
+    doc.setFont(font, style);
+    doc.setFontSize(size);
+    doc.setTextColor(...color);
+  };
+
+  const col2 = margin + W / 2;
+
+  // ── HEADER ──
+  const headerH = 36;
+  fill(0, 0, pageWidth, headerH, navy);
+  set("helvetica", "normal", 10, gold);
+  doc.text("Your receipt from", margin, 14);
+  set("helvetica", "bold", 20, white);
+  doc.text("LILYCREST DORMITORY", margin, 27);
+  y = headerH + 14;
+
+  // ── GREETING ──
+  set("helvetica", "bold", 13, bodyText);
+  doc.text("Payment Receipt", margin, y);
+  y += 7;
+  set("helvetica", "normal", 10, subMuted);
+  doc.text("Thank you for your payment. Here\u2019s a copy of your receipt.", margin, y);
+  y += 14;
+
+  // ── ORDER DETAILS ──
+  set("helvetica", "normal", 8, muted);
+  doc.text("Order details", margin, y);
+  y += 3;
+  hRule(y);
+  y += 10;
+
+  set("helvetica", "normal", 8, muted);
+  doc.text("Amount paid", margin, y);
+  y += 7;
+
+  const amount = bill.paidAmount || bill.totalAmount || 0;
+  set("helvetica", "bold", 26, darkText);
+  doc.text(
+    `\u20B1 ${Number(amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+    margin,
+    y,
+  );
+  y += 13;
+
+  set("helvetica", "normal", 8, muted);
+  doc.text("Description", margin, y);
+  y += 6;
+
+  const monthLabel = bill.billingMonth
+    ? new Date(bill.billingMonth).toLocaleDateString("en-PH", { year: "numeric", month: "long" })
+    : "Monthly Bill";
+  set("helvetica", "normal", 10, bodyText);
+  doc.text(`Monthly Bill \u2014 ${monthLabel}`, margin, y);
+  y += 12;
+
+  hRule(y);
+  y += 8;
+
+  // ── Payment method | Date paid ──
+  set("helvetica", "normal", 8, muted);
+  doc.text("Payment method", margin, y);
+  doc.text("Date paid", col2, y);
+  y += 6;
+
+  const METHOD_LABELS = {
+    gcash: "GCash", paymaya: "Maya", maya: "Maya",
+    card: "Credit/Debit Card", grabpay: "GrabPay",
+    grab_pay: "GrabPay", paymongo: "Online Payment",
+    cash: "Cash", bank: "Bank Transfer",
+  };
+  const rawMethod = (bill.paymentMethod || "").toLowerCase().replace(/[_\s-]/g, "");
+  const paymentMethodLabel = METHOD_LABELS[rawMethod] || bill.paymentMethod || "Online Payment";
+
+  set("helvetica", "bold", 10, bodyText);
+  doc.text(paymentMethodLabel, margin, y);
+  doc.text(fmt(bill.paymentDate || bill.updatedAt), col2, y);
+  y += 10;
+
+  hRule(y);
+  y += 8;
+
+  // ── Reference ──
+  set("helvetica", "normal", 8, muted);
+  doc.text("Reference", margin, y);
+  y += 6;
+
+  const refId =
+    bill.paymongoPaymentId ||
+    bill.id?.slice(-8)?.toUpperCase() ||
+    bill._id?.slice(-8)?.toUpperCase() ||
+    "\u2014";
+
+  set("courier", "normal", 9, subMuted);
+  doc.text(refId, margin, y);
+  y += 14;
+
+  hRule(y);
+  y += 10;
+
+  // ── Billing details ──
+  set("helvetica", "normal", 8, muted);
+  doc.text("Billing details", margin, y);
+  y += 3;
+  hRule(y);
+  y += 8;
+
+  const addRow = (label, value) => {
+    set("helvetica", "normal", 8, muted);
+    doc.text(label, margin, y);
+    set("helvetica", "bold", 10, bodyText);
+    doc.text(String(value || "\u2014"), col2, y);
+    y += 8;
+  };
+
+  addRow("Billing Period", monthLabel);
+  addRow("Room", bill.room || "\u2014");
+  addRow("Branch", bill.branch || "\u2014");
+  if (bill.charges?.rent) addRow("Rent", `\u20B1${Number(bill.charges.rent).toLocaleString()}`);
+  if (bill.charges?.electricity) addRow("Electricity", `\u20B1${Number(bill.charges.electricity).toLocaleString()}`);
+  if (bill.charges?.water) addRow("Water", `\u20B1${Number(bill.charges.water).toLocaleString()}`);
+  if (bill.charges?.penalty) addRow("Penalty", `\u20B1${Number(bill.charges.penalty).toLocaleString()}`);
+
+  y += 8;
+
+  // ── FOOTER ──
+  const footerY = y + 4;
+  const footerH = 34;
+  fill(0, footerY, pageWidth, footerH, navy);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.setGState(new doc.GState({ opacity: 0.7 }));
+  doc.text(
+    "You\u2019re receiving this because you made a payment at Lilycrest Dormitory.",
+    pageWidth / 2, footerY + 9, { align: "center" },
+  );
+
+  doc.setGState(new doc.GState({ opacity: 1 }));
+  set("helvetica", "bold", 11, gold);
+  doc.text("Lilycrest Dormitory", pageWidth / 2, footerY + 18, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.setGState(new doc.GState({ opacity: 0.5 }));
+  doc.text("Dormitory Management System", pageWidth / 2, footerY + 26, { align: "center" });
+  doc.setGState(new doc.GState({ opacity: 1 }));
+
+  return doc;
+}
+
+/**
+ * Download a billing payment receipt as PDF.
+ * Called from pdfReceipt.js → BillingPage "Download Receipt" button.
+ */
+export function generateReceiptPDF(bill) {
+  const doc = buildBillingReceiptDoc(bill);
+  const receiptNo = bill.paymongoPaymentId
+    ? bill.paymongoPaymentId.slice(-12).toUpperCase()
+    : (bill.id || bill._id || "receipt").slice(-8).toUpperCase();
+  doc.save(`Lilycrest_Receipt_${receiptNo}.pdf`);
+}
+
+/**
+ * Download a billing statement as PDF (charge breakdown).
+ * Called from pdfUtils.js → BillingPage "Download Statement" button.
+ */
+export function generateBillingReceiptPDF(bill) {
+  const doc = buildBillingReceiptDoc(bill);
+  const monthSlug = bill.billingMonth
+    ? new Date(bill.billingMonth).toLocaleDateString("en-PH", { year: "numeric", month: "short" }).replace(/\s/g, "-")
+    : "statement";
+  doc.save(`Lilycrest_Statement_${monthSlug}.pdf`);
+}
+

@@ -83,6 +83,25 @@ New methods for occupancy tracking:
 - `countsTowardOccupancy()` - Check if reservation affects room capacity
 - `getOccupancyStatus()` - Get occupancy information
 
+### BedHistory Model
+
+**File:** `models/BedHistory.js`
+
+Tracks all bed assignment changes for audit and historical analysis:
+
+```javascript
+{
+  roomId: ObjectId,          // Room reference
+  bedId: String,             // Bed identifier
+  userId: ObjectId,          // Tenant assigned/removed
+  reservationId: ObjectId,   // Associated reservation
+  action: String,            // "assigned" or "vacated"
+  timestamp: Date            // When the change occurred
+}
+```
+
+---
+
 ## API Endpoints
 
 ### 1. Get Room Occupancy Status
@@ -280,6 +299,23 @@ import { getBranchOccupancyStats } from "./utils/occupancyManager.js";
 const stats = await getBranchOccupancyStats("gil-puyat");
 ```
 
+### Bed Lock Cleanup
+
+**File:** `utils/bedLockCleanup.js`
+
+A scheduled job that automatically releases expired bed locks from abandoned reservations. When a tenant begins a reservation flow but never completes it, the system temporarily locks the selected bed. This cleanup job periodically scans for stale locks and releases them so the beds become available again.
+
+Run frequency: **Every 10 minutes** (via `utils/scheduler.js`)
+
+### Scheduled Jobs
+
+The occupancy system integrates with the cron scheduler for automated maintenance:
+
+| Job              | Frequency  | Purpose                                         |
+| ---------------- | ---------- | ----------------------------------------------- |
+| Bed Lock Cleanup | Every 10m  | Release expired temporary bed locks             |
+| Grace Period     | Every 5m   | Auto-expire unpaid reservations past grace      |
+
 ### Logging
 
 All occupancy changes are logged with:
@@ -288,6 +324,7 @@ All occupancy changes are logged with:
 - Occupancy change (increase/decrease)
 - Bed assignments/vacancies
 - Previous and new occupancy counts
+- Bed history records via `BedHistory` model
 
 ## Integration with Existing Modules
 
@@ -307,12 +344,17 @@ All occupancy changes are logged with:
 - Room availability automatically recalculated
 - Used in availability checking for room selection
 
+## Vacancy Date Forecasting
+
+The system now includes vacancy date forecasting via the `/api/payments/vacancy-dates` endpoint. This computes expected vacancy dates from `checkInDate + leaseDuration` for all checked-in reservations, providing admins with visibility into upcoming room availability.
+
+---
+
 ## Future Enhancements
 
 Potential features for future implementation:
 
-1. **Occupancy Forecasting** — Predict future occupancy based on pending reservations
-2. **Peak Hours Analysis** — Identify peak occupancy periods
-3. **Bed Preference Analytics** — Track popular bed positions
-4. **Occupancy Notifications** — Alert admins when rooms approach full capacity
-5. **Waitlist Management** — Auto-waitlist when room becomes full
+1. **Peak Hours Analysis** — Identify peak occupancy periods
+2. **Bed Preference Analytics** — Track popular bed positions (data available via `BedHistory`)
+3. **Occupancy Notifications** — Alert admins when rooms approach full capacity
+4. **Waitlist Management** — Auto-waitlist when room becomes full

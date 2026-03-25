@@ -612,6 +612,12 @@ export default function useReservationFlow() {
                 navigate("/applicant/profile");
                 return;
               }
+              // Re-fetch reservation to get the newly generated reservationCode
+              // (the pre-save hook creates it when status transitions to "reserved")
+              try {
+                const updated = await reservationApi.getById(resId);
+                if (updated?.reservationCode) setReservationCode(updated.reservationCode);
+              } catch { /* non-critical — code just won't display */ }
               setCurrentStage(5);
               setHighestStageReached(5);
               setPaymentSubmitted(true);

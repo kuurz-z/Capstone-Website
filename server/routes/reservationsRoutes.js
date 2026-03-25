@@ -41,6 +41,7 @@ import {
 import {
   getRoomOccupancy,
   getBranchOccupancyStatistics,
+  getVacancyForecast,
 } from "../controllers/occupancyController.js";
 
 const router = express.Router();
@@ -288,5 +289,17 @@ router.get("/occupancy/:roomId", verifyToken, getRoomOccupancy);
  * @returns {Object} Branch occupancy statistics with all rooms
  */
 router.get("/stats/occupancy", verifyToken, getBranchOccupancyStatistics);
+
+/**
+ * GET /api/reservations/vacancy-forecast
+ *
+ * Get expected vacancy dates per occupied bed.
+ * Query: ?branch=gil-puyat or ?roomId=<id>
+ *
+ * Access: Admin | Super Admin
+ *
+ * @returns {Object} Vacancy forecast per room/bed
+ */
+router.get("/vacancy-forecast", verifyToken, verifyAdmin, getVacancyForecast);
 
 export default router;

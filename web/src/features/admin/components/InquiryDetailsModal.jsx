@@ -1,13 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { inquiryApi } from "../../../shared/api/apiClient";
 import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
 import "../styles/inquiry-details-modal.css";
+
+/* ── Module-level helpers (no closure deps — no reason to recreate per render) ── */
+const STATUS_LABEL = {
+  resolved:    "Responded",
+  "in-progress": "In Progress",
+};
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return "N/A";
+  return new Date(dateString).toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
   const [response, setResponse] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const timerRef = useRef(null);
+
+  // Cancel pending timer if the modal unmounts before 1.5 s
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   useBodyScrollLock(!!inquiry);
 
@@ -25,8 +46,8 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
       setSuccess(true);
       setResponse("");
 
-      setTimeout(() => {
-        if (onUpdate) onUpdate();
+      timerRef.current = setTimeout(() => {
+        onUpdate?.();
       }, 1500);
     } catch (err) {
       console.error(err);
@@ -34,17 +55,6 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   return (
@@ -78,7 +88,7 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
           <span
             className={`inquiry-details-modal-status-badge ${inquiry.status}`}
           >
-            {inquiry.status === "resolved" ? "Responded" : inquiry.status === "in-progress" ? "In Progress" : inquiry.status}
+            {STATUS_LABEL[inquiry.status] ?? inquiry.status}
           </span>
         </div>
 

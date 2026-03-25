@@ -185,11 +185,14 @@ export const checkSessionStatus = async (req, res, next) => {
 
 
     // ── Extract payment method FIRST so it's available for all emails ──
+    // rawPaymentType = machine key for DB enum ("gcash", "card", etc.)
+    // paymentMethod  = display label for emails  ("GCash", "Credit / Debit Card", etc.)
     let paymentMethod = null;
+    let rawPaymentType = null;
     if (paidPayments.length > 0) {
       const firstPayment = paidPayments[0];
       const payObj = firstPayment?.attributes || firstPayment;
-      const rawType =
+      rawPaymentType =
         payObj?.source?.type ||
         session.attributes?.payment_method_used ||
         "online";
@@ -204,8 +207,8 @@ export const checkSessionStatus = async (req, res, next) => {
         qrph:        "QR Ph",
         online:      "Online Payment (PayMongo)",
       };
-      paymentMethod = METHOD_LABELS[rawType] || `PayMongo — ${rawType}`;
-      logger.info({ rawType, paymentMethod }, "Payment method detected");
+      paymentMethod = METHOD_LABELS[rawPaymentType] || `PayMongo — ${rawPaymentType}`;
+      logger.info({ rawPaymentType, paymentMethod }, "Payment method detected");
     }
 
     if (isPaid) {
@@ -269,7 +272,7 @@ export const checkSessionStatus = async (req, res, next) => {
           const oldStatus = reservation.status;
           reservation.paymentStatus = "paid";
           reservation.paymentDate = new Date();
-          reservation.paymentMethod = paymentMethod || "paymongo";
+          reservation.paymentMethod = rawPaymentType || "paymongo";
           reservation.paymongoPaymentId = paidPayments[0]?.id || sessionId;
           reservation.status = "reserved"; // triggers reservation code generation in pre-save hook
           await reservation.save();

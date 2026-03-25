@@ -90,6 +90,7 @@ export const getInquiries = async (req, res, next) => {
     const {
       status,
       branch,
+      search,
       page = 1,
       limit = 20,
       sort = "createdAt",
@@ -108,6 +109,15 @@ export const getInquiries = async (req, res, next) => {
     if (status) {
       // Map frontend "responded" to backend "resolved"
       query.status = status === "responded" ? "resolved" : status;
+    }
+
+    if (search && search.trim()) {
+      const regex = new RegExp(search.trim(), "i");
+      query.$or = [
+        { name: regex },
+        { email: regex },
+        { subject: regex },
+      ];
     }
 
     // Pagination

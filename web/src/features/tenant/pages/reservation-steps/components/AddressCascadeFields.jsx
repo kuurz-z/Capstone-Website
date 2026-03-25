@@ -279,7 +279,7 @@ const AddressCascadeFields = ({
       {/* Unit / House No. */}
       <div className="form-group" data-field="addressUnitHouseNo">
         <label className="form-label">
-          Unit / House No. <span style={{ color: "#dc2626" }}>*</span>
+          Unit / House No. <span className="rf-required">*</span>
         </label>
         <input
           type="text"
@@ -297,7 +297,7 @@ const AddressCascadeFields = ({
           style={{ border: errBorder(showValidationErrors, addressUnitHouseNo) || "1.5px solid #999" }}
         />
         {fieldErrors.addressUnitHouseNo && (
-          <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+          <div className="rf-field-error">
             {fieldErrors.addressUnitHouseNo}
           </div>
         )}
@@ -306,7 +306,7 @@ const AddressCascadeFields = ({
       {/* Street */}
       <div className="form-group" data-field="addressStreet">
         <label className="form-label">
-          Street <span style={{ color: "#dc2626" }}>*</span>
+          Street <span className="rf-required">*</span>
         </label>
         <input
           type="text"
@@ -324,7 +324,7 @@ const AddressCascadeFields = ({
           style={{ border: errBorder(showValidationErrors, addressStreet) || "1.5px solid #999" }}
         />
         {fieldErrors.addressStreet && (
-          <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+          <div className="rf-field-error">
             {fieldErrors.addressStreet}
           </div>
         )}
@@ -333,7 +333,7 @@ const AddressCascadeFields = ({
       {/* Region */}
       <div className="form-group" data-field="addressRegion">
         <label className="form-label">
-          Region <span style={{ color: "#dc2626" }}>*</span>
+          Region <span className="rf-required">*</span>
         </label>
         <select
           style={{
@@ -354,7 +354,7 @@ const AddressCascadeFields = ({
           ))}
         </select>
         {showValidationErrors && !addressRegion && (
-          <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+          <div className="rf-field-error">
             Region is required
           </div>
         )}
@@ -364,7 +364,7 @@ const AddressCascadeFields = ({
       {!isNCR && (
         <div className="form-group" data-field="addressProvince">
           <label className="form-label">
-            Province <span style={{ color: "#dc2626" }}>*</span>
+            Province <span className="rf-required">*</span>
           </label>
           <select
             style={{
@@ -389,7 +389,7 @@ const AddressCascadeFields = ({
             ))}
           </select>
           {showValidationErrors && regionSelected && !addressProvince && (
-            <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+            <div className="rf-field-error">
               Province is required
             </div>
           )}
@@ -399,7 +399,7 @@ const AddressCascadeFields = ({
       {/* City / Municipality (disabled until province is selected) */}
       <div className="form-group" data-field="addressCity">
         <label className="form-label">
-          City / Municipality <span style={{ color: "#dc2626" }}>*</span>
+          City / Municipality <span className="rf-required">*</span>
         </label>
         <select
           style={{
@@ -426,7 +426,7 @@ const AddressCascadeFields = ({
           ))}
         </select>
         {showValidationErrors && provinceReady && regionSelected && !addressCity && (
-          <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+          <div className="rf-field-error">
             City is required
           </div>
         )}
@@ -435,7 +435,7 @@ const AddressCascadeFields = ({
       {/* Barangay (disabled until city is selected) */}
       <div className="form-group" data-field="addressBarangay">
         <label className="form-label">
-          Barangay <span style={{ color: "#dc2626" }}>*</span>
+          Barangay <span className="rf-required">*</span>
         </label>
         <select
           style={{
@@ -460,7 +460,7 @@ const AddressCascadeFields = ({
           ))}
         </select>
         {showValidationErrors && cityReady && !addressBarangay && (
-          <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+          <div className="rf-field-error">
             Barangay is required
           </div>
         )}

@@ -35,14 +35,14 @@ function initials(name = "") {
 
 function ReservationsPage() {
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const { can } = usePermissions();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("reservations");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState(
-    isSuperAdmin ? "all" : (user?.branch || "all")
+    isOwner ? "all" : (user?.branch || "all")
   );
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -82,28 +82,40 @@ function ReservationsPage() {
 
   const handleView = async (id) => {
     try {
-      const { data: r } = await reservationApi.getById(id);
+      const r = await reservationApi.getById(id);
       setSelectedReservation({
         ...r, id: r._id,
         customer: `${r.userId?.firstName || ""} ${r.userId?.lastName || ""}`.trim() || "Unknown",
         email: r.userId?.email || "—",
         room: r.roomId?.name || "—",
         branch: r.roomId?.branch === "gil-puyat" ? "Gil Puyat" : "Guadalupe",
+        roomType: r.roomId?.type || "",
         status: r.status || "pending",
         totalPrice: r.totalPrice, paymentStatus: r.paymentStatus,
+        paymentMethod: r.paymentMethod,
         createdAt: r.createdAt, reservationCode: r.reservationCode || "—",
+        // ── Stage 3: Personal details (stored on reservation, not on userId) ──
+        firstName: r.firstName,
+        lastName: r.lastName,
+        middleName: r.middleName,
+        nickname: r.nickname,
+        phone: r.mobileNumber || r.phone,
         birthday: r.birthday, maritalStatus: r.maritalStatus,
         nationality: r.nationality, educationLevel: r.educationLevel,
         address: r.address, emergencyContact: r.emergencyContact,
         healthConcerns: r.healthConcerns, employment: r.employment,
+        // ── Documents ──
         selfiePhotoUrl: r.selfiePhotoUrl, validIDFrontUrl: r.validIDFrontUrl,
         validIDBackUrl: r.validIDBackUrl, validIDType: r.validIDType,
         nbiClearanceUrl: r.nbiClearanceUrl, nbiReason: r.nbiReason,
         companyIDUrl: r.companyIDUrl, companyIDReason: r.companyIDReason,
-        finalMoveInDate: r.finalMoveInDate, paymentMethod: r.paymentMethod,
+        // ── Dates & scheduling ──
+        finalMoveInDate: r.finalMoveInDate,
         proofOfPaymentUrl: r.proofOfPaymentUrl, leaseDuration: r.leaseDuration,
         billingEmail: r.billingEmail, checkInDate: r.checkInDate,
+        moveInDate: r.checkInDate,
         visitDate: r.visitDate, visitTime: r.visitTime, visitApproved: r.visitApproved,
+        notes: r.notes,
       });
     } catch {
       const fallback = reservations.find((x) => x.id === id);
@@ -175,7 +187,7 @@ function ReservationsPage() {
   ];
 
   const filters = [
-    ...(isSuperAdmin ? [{
+    ...(isOwner ? [{
       key: "branch",
       options: [
         { value: "all", label: "All Branches" },

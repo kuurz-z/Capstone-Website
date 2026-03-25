@@ -1,78 +1,45 @@
-import { motion, useInView } from "framer-motion";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 /**
- * ScrollReveal — wraps any section and animates it into view on scroll.
- *
- * Variants:
- *   "fade-up"   — fades in + slides up (default)
- *   "fade-left" — fades in + slides from left
- *   "fade-right"— fades in + slides from right
- *   "zoom"      — fades in + scales up slightly
- *   "fade"      — simple fade-in, no movement
- *
- * Props:
- *   delay   — extra delay in seconds (default 0)
- *   width   — "fit" | "full" (default "full")
- *   once    — animate only once (default true)
+ * ScrollReveal — animates children into view using IntersectionObserver.
+ * Supports variants: fade-up, fade-left, fade-right, fade, zoom
  */
-
-const variants = {
-  "fade-up": {
-    hidden: { opacity: 0, y: 60 },
-    visible: { opacity: 1, y: 0 },
-  },
-  "fade-left": {
-    hidden: { opacity: 0, x: -60 },
-    visible: { opacity: 1, x: 0 },
-  },
-  "fade-right": {
-    hidden: { opacity: 0, x: 60 },
-    visible: { opacity: 1, x: 0 },
-  },
-  zoom: {
-    hidden: { opacity: 0, scale: 0.92 },
-    visible: { opacity: 1, scale: 1 },
-  },
-  fade: {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1 },
-  },
-};
-
-export default function ScrollReveal({
-  children,
-  variant = "fade-up",
-  delay = 0,
-  duration = 0.7,
-  once = true,
-  className = "",
-  style = {},
-}) {
+export default function ScrollReveal({ children, variant = "fade-up", delay = 0, threshold = 0.1 }) {
   const ref = useRef(null);
-  const isInView = useInView(ref, { once, margin: "-80px 0px" });
 
-  return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={variants[variant] || variants["fade-up"]}
-      transition={{
-        duration,
-        delay,
-        ease: [0.25, 0.1, 0.25, 1], // cubic-bezier for buttery smooth
-      }}
-      className={className}
-      style={{ ...style }}
-      onAnimationStart={() => {
-        if (ref.current) ref.current.style.willChange = "opacity, transform";
-      }}
-      onAnimationComplete={() => {
-        if (ref.current) ref.current.style.willChange = "auto";
-      }}
-    >
-      {children}
-    </motion.div>
-  );
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const getTransform = () => {
+      switch (variant) {
+        case "fade-up": return "translateY(32px)";
+        case "fade-left": return "translateX(-32px)";
+        case "fade-right": return "translateX(32px)";
+        case "zoom": return "scale(0.95)";
+        default: return "none";
+      }
+    };
+
+    Object.assign(el.style, {
+      opacity: "0",
+      transform: getTransform(),
+      transition: `opacity 0.6s ease ${delay}s, transform 0.6s ease ${delay}s`,
+    });
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          Object.assign(el.style, { opacity: "1", transform: "none" });
+          observer.unobserve(el);
+        }
+      },
+      { threshold }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [variant, delay, threshold]);
+
+  return <div ref={ref}>{children}</div>;
 }

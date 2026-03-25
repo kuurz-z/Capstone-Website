@@ -23,7 +23,7 @@ import "../styles/admin-billing.css";
 
 const AdminBillingPage = () => {
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const { can } = usePermissions();
   const queryClient = useQueryClient();
 
@@ -36,7 +36,7 @@ const AdminBillingPage = () => {
 
   // Rooms
   const [roomBranchFilter, setRoomBranchFilter] = useState(
-    isSuperAdmin ? "" : (user?.branch || "")
+    isOwner ? "" : (user?.branch || "")
   );
   const [roomTypeFilter, setRoomTypeFilter] = useState("");
 

@@ -1,10 +1,13 @@
-/* PermissionEditor component styles */
+/* ═══════════════════════════════════════════════════
+   Permission Editor — Design Token Migration
+   ═══════════════════════════════════════════════════ */
+@import "design-tokens.css";
 
 .permission-editor {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-card);
 }
 
 /* Header */
@@ -13,8 +16,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-inset);
 }
 
 .pe-title {
@@ -25,9 +28,9 @@
 
 .pe-title h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .pe-header-actions {
@@ -39,29 +42,30 @@
 .pe-link-btn {
   background: none;
   border: none;
-  color: #6366f1;
-  font-size: 12px;
+  color: var(--accent-purple);
+  font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
   padding: 2px 4px;
-  border-radius: 4px;
-  transition: background 0.15s;
+  border-radius: var(--radius-xs);
+  transition: background var(--duration-fast) var(--ease-out);
 }
 
 .pe-link-btn:hover {
-  background: #eef2ff;
+  background: var(--accent-purple-bg);
 }
 
 .pe-divider {
-  color: #cbd5e1;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  opacity: 0.5;
 }
 
 .pe-badge-full {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
-  color: #059669;
-  background: #ecfdf5;
+  color: var(--status-success);
+  background: var(--status-success-bg);
   padding: 3px 10px;
   border-radius: 20px;
 }
@@ -71,7 +75,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1px;
-  background: #e2e8f0;
+  background: var(--border-light);
 }
 
 .pe-item {
@@ -79,22 +83,22 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--bg-card);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-fast) var(--ease-out);
   user-select: none;
 }
 
 .pe-item:hover:not(.readonly) {
-  background: #f8fafc;
+  background: var(--bg-hover);
 }
 
 .pe-item.active {
-  background: #f0fdf4;
+  background: var(--accent-green-bg);
 }
 
 .pe-item.active:hover:not(.readonly) {
-  background: #dcfce7;
+  background: rgba(13, 150, 104, 0.08);
 }
 
 .pe-item.readonly {
@@ -114,15 +118,15 @@
 
 .pe-item-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .pe-item-desc {
   display: block;
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -133,18 +137,19 @@
 }
 
 .pe-check {
-  color: #22c55e;
+  color: var(--accent-green);
 }
 
 .pe-x {
-  color: #cbd5e1;
+  color: var(--text-muted);
+  opacity: 0.5;
 }
 
 /* Footer */
 .pe-footer {
   padding: 12px 18px;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-inset);
   display: flex;
   justify-content: flex-end;
 }
@@ -154,18 +159,19 @@
   align-items: center;
   gap: 6px;
   padding: 8px 18px;
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   color: #fff;
-  background: #6366f1;
+  background: var(--accent-purple);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .pe-save-btn:hover:not(:disabled) {
-  background: #4f46e5;
+  filter: brightness(0.9);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.22);
 }
 
 .pe-save-btn:disabled {

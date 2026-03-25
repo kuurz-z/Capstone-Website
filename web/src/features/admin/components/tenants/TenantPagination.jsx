@@ -61,10 +61,10 @@ export default function TenantPagination({
                   padding: "6px 10px",
                   border:
                     page === currentPage
-                      ? "1px solid #0A1628"
+                      ? "1px solid #2e7cf6"
                       : "1px solid #d1d5db",
                   borderRadius: "6px",
-                  backgroundColor: page === currentPage ? "#0A1628" : "white",
+                  backgroundColor: page === currentPage ? "#2e7cf6" : "white",
                   color: page === currentPage ? "white" : "#374151",
                   cursor: "pointer",
                   fontSize: "13px",

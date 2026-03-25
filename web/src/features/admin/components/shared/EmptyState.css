@@ -5,16 +5,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 52px 24px;
   text-align: center;
   gap: 12px;
 }
 
 .empty-state__icon {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: var(--radius-lg);
-  background: var(--bg-hover);
+  background: var(--bg-inset);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,8 +23,9 @@
 }
 
 .empty-state__icon svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  opacity: 0.6;
 }
 
 .empty-state__title {
@@ -39,4 +40,5 @@
   color: var(--text-muted);
   margin: 0;
   max-width: 300px;
+  line-height: 1.5;
 }

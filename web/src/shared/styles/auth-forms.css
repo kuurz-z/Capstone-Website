@@ -31,7 +31,7 @@
 }
 
 .floating-field__wrapper.focused {
-  border-color: var(--fi-border-focus);
+  border-color: #cbd5e1;
 }
 
 /* ── Input ── */
@@ -402,8 +402,32 @@
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  accent-color: #FF8C42;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid #FF8C42;
+  background: transparent;
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.auth-remember input[type="checkbox"]:checked {
+  background: #FF8C42;
+  border-color: #FF8C42;
+}
+
+.auth-remember input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 5px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
 }
 
 .auth-remember span {
@@ -438,10 +462,33 @@
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  accent-color: #FF8C42;
   cursor: pointer;
   margin-top: 2px;
   flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid #FF8C42;
+  background: transparent;
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.auth-terms input[type="checkbox"]:checked {
+  background: #FF8C42;
+  border-color: #FF8C42;
+}
+
+.auth-terms input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 6px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
 }
 
 .auth-terms span {
@@ -627,8 +674,14 @@ html[data-theme="dark"] .auth-divider__text {
 html[data-theme="dark"] .auth-remember span {
   color: #94a3b8 !important;
 }
+html[data-theme="dark"] .auth-remember input[type="checkbox"] {
+  border-color: #FF8C42 !important;
+}
 html[data-theme="dark"] .auth-terms span {
   color: #94a3b8 !important;
+}
+html[data-theme="dark"] .auth-terms input[type="checkbox"] {
+  border-color: #FF8C42 !important;
 }
 
 /* Password strength box */
@@ -644,4 +697,52 @@ html[data-theme="dark"] .password-strength__track {
 }
 html[data-theme="dark"] .password-strength__check {
   color: #94a3b8 !important;
+}
+
+/* ============================================
+   DARK MODE — PhoneInput Country Dropdown
+   ============================================ */
+
+html[data-theme="dark"] .pi-dropdown {
+  background: #0f172a !important;
+  border-color: #1E293B !important;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-theme="dark"] .pi-dropdown-search {
+  border-bottom-color: #1E293B !important;
+}
+
+html[data-theme="dark"] .pi-dropdown-search input {
+  color: #f1f5f9 !important;
+  caret-color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .pi-dropdown-search input::placeholder {
+  color: #475569 !important;
+}
+
+html[data-theme="dark"] .pi-section-label {
+  color: #475569 !important;
+}
+
+html[data-theme="dark"] .pi-option {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .pi-option:hover {
+  background: #1E293B !important;
+}
+
+html[data-theme="dark"] .pi-option span:nth-child(2) {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .pi-option span:nth-child(3) {
+  color: #64748b !important;
+}
+
+/* Selected option in dark mode */
+html[data-theme="dark"] .pi-option[style*="rgba(255,140,66"] span:nth-child(3) {
+  color: #FF8C42 !important;
 }

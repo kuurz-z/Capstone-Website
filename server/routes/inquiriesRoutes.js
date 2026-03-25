@@ -22,7 +22,7 @@
  */
 
 import express from "express";
-import { verifyToken, verifyAdmin, verifySuperAdmin } from "../middleware/auth.js";
+import { verifyToken, verifyAdmin, verifyOwner } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import { inquiryLimiter } from "../middleware/rateLimiter.js";
 import { validate } from "../validation/validate.js";
@@ -63,7 +63,7 @@ router.get("/stats", verifyToken, verifyAdmin, filterByBranch, getInquiryStats);
  *
  * Access: Super Admin only
  */
-router.get("/branch/:branch", verifyToken, verifySuperAdmin, getInquiriesByBranch);
+router.get("/branch/:branch", verifyToken, verifyOwner, getInquiriesByBranch);
 
 // ============================================================================
 // GET ALL INQUIRIES

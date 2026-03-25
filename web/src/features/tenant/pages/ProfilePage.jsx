@@ -75,25 +75,31 @@ const ProfilePage = () => {
     role: "",
     tenantStatus: "none",
     createdAt: "",
+    gender: "",
+    civilStatus: "",
+    nationality: "",
+    occupation: "",
     address: "",
     city: "",
+    province: "",
+    zipCode: "",
     dateOfBirth: "",
     emergencyContact: "",
     emergencyPhone: "",
-
+    emergencyRelationship: "",
   });
 
+  // editData: ONLY the fields PersonalDetailsTab can write.
+  // phone/address/emergency are collected by the reservation application form.
   const [editData, setEditData] = useState({
     firstName: "",
     lastName: "",
-    phone: "",
     profileImage: "",
-    address: "",
-    city: "",
     dateOfBirth: "",
-    emergencyContact: "",
-    emergencyPhone: "",
-
+    gender: "",
+    civilStatus: "",
+    nationality: "",
+    occupation: "",
   });
 
   // ── TanStack Query data fetching ──────────────────────────
@@ -108,17 +114,16 @@ const ProfilePage = () => {
   useEffect(() => {
     if (!profile) return;
     setProfileData(profile);
+    // Only sync editable identity fields into editData
     setEditData({
       firstName: profile.firstName || "",
       lastName: profile.lastName || "",
-      phone: profile.phone || "",
       profileImage: profile.profileImage || "",
-      address: profile.address || "",
-      city: profile.city || "",
       dateOfBirth: profile.dateOfBirth || "",
-      emergencyContact: profile.emergencyContact || "",
-      emergencyPhone: profile.emergencyPhone || "",
-
+      gender: profile.gender || "",
+      civilStatus: profile.civilStatus || "",
+      nationality: profile.nationality || "",
+      occupation: profile.occupation || "",
     });
   }, [profile]);
 
@@ -369,17 +374,12 @@ const ProfilePage = () => {
     ? (selectedReservation || activeReservation)
     : null;
 
-  // Prevent browser back button when reservation is reserved
+  // Prevent browser back button when reservation is confirmed — silently block, no toast
   useEffect(() => {
     if (!isReservationConfirmed) return;
     window.history.pushState(null, "", window.location.href);
     const handlePopState = () => {
       window.history.pushState(null, "", window.location.href);
-      showNotification(
-        "Your reservation is secured. You cannot go back to edit previous steps.",
-        "info",
-        3000,
-      );
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);

@@ -78,4 +78,10 @@ export const queryKeys = {
     admin: ["dashboard", "admin"],
     tenant: ["dashboard", "tenant"],
   },
+
+  // ── Digital Twin ──
+  digitalTwin: {
+    snapshot: (branch) => ["digital-twin", "snapshot", branch || "all"],
+    roomDetail: (roomId) => ["digital-twin", "roomDetail", roomId],
+  },
 };

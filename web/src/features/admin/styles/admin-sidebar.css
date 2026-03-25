@@ -1,25 +1,26 @@
 /* =============================================================================
-   SIDEBAR — Notion-style minimalist design
+   SIDEBAR — Refined light-mode minimalist design
    ============================================================================= */
+@import "design-tokens.css";
 
 /* ── Sidebar shell ────────────────────────────────────────────────────────── */
 .sb {
-  width: 240px;
+  width: 248px;
   height: 100vh;
-  background: #ffffff;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   position: fixed;
   left: 0;
   top: 0;
   z-index: 1000;
-  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.3s var(--ease-out);
   overflow: hidden;
 }
 
 .sb--collapsed {
-  width: 64px;
+  width: 68px;
 }
 
 /* ── Brand header ─────────────────────────────────────────────────────────── */
@@ -27,8 +28,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 14px 12px;
-  min-height: 56px;
+  padding: 18px 16px 14px;
+  min-height: 58px;
 }
 
 .sb-brand {
@@ -40,15 +41,15 @@
 }
 
 .sb-logo {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   flex-shrink: 0;
 }
 
 .sb--collapsed .sb-logo {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
 }
 
 .sb--collapsed .sb-brand {
@@ -64,16 +65,16 @@
 }
 
 .sb-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #37352f;
-  letter-spacing: -0.01em;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
 .sb-subtitle {
   font-size: 11px;
   font-weight: 400;
-  color: #91918e;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -82,17 +83,17 @@
   display: none;
   background: none;
   border: none;
-  color: #91918e;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
-  transition: all 0.15s;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--ease-out);
   flex-shrink: 0;
 }
 
 .sb-close:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #37352f;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* ── Navigation ───────────────────────────────────────────────────────────── */
@@ -111,11 +112,11 @@
   background: transparent;
 }
 .sb-nav::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.06);
   border-radius: 3px;
 }
 .sb-nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.12);
 }
 
 /* ── Group ────────────────────────────────────────────────────────────────── */
@@ -125,12 +126,12 @@
 
 .sb-group-label {
   display: block;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #91918e;
-  padding: 18px 16px 6px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 20px 18px 6px;
   user-select: none;
 }
 
@@ -146,7 +147,7 @@
 }
 
 .sb--collapsed .sb-menu-item {
-  padding: 1px 6px;
+  padding: 1px 8px;
 }
 
 /* ── Link ─────────────────────────────────────────────────────────────────── */
@@ -154,26 +155,26 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px;
-  color: #91918e;
+  padding: 7px 10px;
+  color: var(--text-muted);
   text-decoration: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 400;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 450;
   position: relative;
-  transition: all 0.12s ease;
+  transition: all var(--duration-fast) var(--ease-out);
   white-space: nowrap;
   overflow: hidden;
 }
 
 .sb--collapsed .sb-link {
   justify-content: center;
-  padding: 8px;
+  padding: 9px;
 }
 
 .sb-link:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #37352f;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Active indicator bar */
@@ -182,22 +183,22 @@
   left: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 2px;
+  width: 2.5px;
   height: 0;
-  background: #37352f;
+  background: var(--accent-blue);
   border-radius: 0 2px 2px 0;
-  transition: height 0.2s ease;
+  transition: height 0.25s var(--ease-out);
 }
 
 .sb-link.active .sb-link-indicator {
   height: 55%;
 }
 
-/* Active state — no colored background, just bold + dark */
+/* Active state */
 .sb-link.active {
-  background: rgba(0, 0, 0, 0.04);
-  color: #37352f;
-  font-weight: 500;
+  background: var(--accent-blue-bg);
+  color: var(--text-primary);
+  font-weight: 550;
 }
 
 /* Icon */
@@ -205,16 +206,16 @@
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  stroke-width: 1.8;
-  transition: color 0.12s;
+  stroke-width: 1.75;
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
 .sb-link:hover .sb-link-icon {
-  color: #37352f;
+  color: var(--text-primary);
 }
 
 .sb-link.active .sb-link-icon {
-  color: #37352f;
+  color: var(--accent-blue);
 }
 
 /* Text */
@@ -227,20 +228,20 @@
 /* ── Tooltip (collapsed mode) ─────────────────────────────────────────────── */
 .sb-tooltip {
   position: absolute;
-  left: calc(100% + 8px);
+  left: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%);
-  background: #37352f;
-  color: #ffffff;
+  background: var(--text-primary);
+  color: var(--text-inverse);
   font-size: 12px;
   font-weight: 500;
-  padding: 5px 10px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
   white-space: nowrap;
   z-index: 1100;
   pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  animation: sbTooltipIn 0.12s ease;
+  box-shadow: var(--shadow-lg);
+  animation: sbTooltipIn 0.15s var(--ease-out);
 }
 
 .sb-tooltip::before {
@@ -250,7 +251,7 @@
   top: 50%;
   transform: translateY(-50%);
   border: 4px solid transparent;
-  border-right-color: #37352f;
+  border-right-color: var(--text-primary);
   border-left: none;
 }
 
@@ -261,15 +262,15 @@
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 .sb-footer {
-  padding: 8px 8px 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 10px 10px 14px;
+  border-top: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
 .sb--collapsed .sb-footer {
-  padding: 8px 6px 12px;
+  padding: 10px 8px 14px;
   align-items: center;
 }
 
@@ -279,26 +280,26 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 7px 10px;
   background: none;
   border: none;
-  color: #91918e;
+  color: var(--text-muted);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 400;
-  transition: all 0.12s ease;
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .sb--collapsed .sb-collapse-toggle {
   justify-content: center;
   width: auto;
-  padding: 8px;
+  padding: 9px;
 }
 
 .sb-collapse-toggle:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #37352f;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Profile pill */
@@ -306,8 +307,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
 }
@@ -318,11 +319,11 @@
 }
 
 .sb-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: #f0efed;
-  color: #37352f;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -341,8 +342,8 @@
 
 .sb-profile-name {
   font-size: 13px;
-  font-weight: 500;
-  color: #37352f;
+  font-weight: 550;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -351,7 +352,7 @@
 .sb-profile-role {
   font-size: 11px;
   font-weight: 400;
-  color: #91918e;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -361,39 +362,40 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 7px 10px;
   background: none;
   border: none;
-  color: #91918e;
+  color: var(--text-muted);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 400;
-  transition: all 0.12s ease;
+  transition: all var(--duration-fast) var(--ease-out);
   position: relative;
 }
 
 .sb--collapsed .sb-signout {
   justify-content: center;
   width: auto;
-  padding: 8px;
+  padding: 9px;
 }
 
 .sb-signout:hover {
-  background: rgba(235, 87, 87, 0.08);
-  color: #eb5757;
+  background: var(--status-error-bg);
+  color: var(--status-error);
 }
 
 /* ── Logout confirmation modal ────────────────────────────────────────────── */
 .sb-logout-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 999999;
-  animation: sbFadeIn 0.15s ease;
+  animation: sbFadeIn 0.2s var(--ease-out);
 }
 
 @keyframes sbFadeIn {
@@ -402,22 +404,27 @@
 }
 
 .sb-logout-modal {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.15),
-              0 0 0 1px rgba(0, 0, 0, 0.04);
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
   max-width: 360px;
   width: 90%;
-  padding: 28px 24px 20px;
+  padding: 28px 24px 22px;
   text-align: center;
+  animation: sbModalIn 0.25s var(--ease-out);
+}
+
+@keyframes sbModalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .sb-logout-modal-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: rgba(235, 87, 87, 0.08);
-  color: #eb5757;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-lg);
+  background: var(--status-error-bg);
+  color: var(--status-error);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -427,15 +434,15 @@
 .sb-logout-modal-title {
   margin: 0 0 6px;
   font-size: 16px;
-  font-weight: 600;
-  color: #37352f;
+  font-weight: 650;
+  color: var(--text-primary);
 }
 
 .sb-logout-modal-text {
   margin: 0 0 20px;
   font-size: 13px;
-  color: #91918e;
-  line-height: 1.5;
+  color: var(--text-muted);
+  line-height: 1.55;
 }
 
 .sb-logout-modal-actions {
@@ -446,33 +453,33 @@
 .sb-logout-modal-cancel,
 .sb-logout-modal-confirm {
   flex: 1;
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 550;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all var(--duration-fast) var(--ease-out);
   border: 1px solid transparent;
 }
 
 .sb-logout-modal-cancel {
-  background: rgba(0, 0, 0, 0.04);
-  color: #37352f;
-  border-color: rgba(0, 0, 0, 0.08);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  border-color: var(--border-default);
 }
 
 .sb-logout-modal-cancel:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--bg-active);
 }
 
 .sb-logout-modal-confirm {
-  background: #eb5757;
+  background: var(--status-error);
   color: white;
-  border-color: #eb5757;
+  border-color: var(--status-error);
 }
 
 .sb-logout-modal-confirm:hover {
-  background: #d94444;
+  background: #cf3f3f;
 }
 
 .sb-logout-modal-confirm:disabled,
@@ -486,24 +493,24 @@
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(3px);
   z-index: 999;
-  animation: sbFadeIn 0.2s ease;
+  animation: sbFadeIn 0.2s var(--ease-out);
 }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sb {
-    width: 260px !important;    /* Override collapsed state on mobile */
+    width: 268px !important;
     transform: translateX(-100%);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s var(--ease-out);
     box-shadow: none;
   }
 
   .sb--open {
     transform: translateX(0);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+    box-shadow: 4px 0 28px rgba(0, 0, 0, 0.1);
   }
 
   .sb-close {
@@ -512,7 +519,6 @@
     justify-content: center;
   }
 
-  /* Hide collapse toggle on mobile — full sidebar always */
   .sb-collapse-toggle {
     display: none;
   }
@@ -521,7 +527,6 @@
     display: block;
   }
 
-  /* In mobile, always show text even if desktop was collapsed */
   .sb .sb-link {
     justify-content: flex-start;
   }

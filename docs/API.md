@@ -127,6 +127,46 @@ Content-Type: application/json
 
 ---
 
+## Payments (`/api/payments`)
+
+| Method | Endpoint                      | Auth  | Description                                  |
+| ------ | ----------------------------- | ----- | -------------------------------------------- |
+| POST   | `/bill/:billId/checkout`      | JWT   | Create PayMongo checkout session for a bill   |
+| POST   | `/deposit/:resId/checkout`    | JWT   | Create PayMongo checkout session for deposit  |
+| GET    | `/session/:sessionId/status`  | JWT   | Check PayMongo checkout session status        |
+| GET    | `/history`                    | JWT   | Get payment history for authenticated tenant  |
+| GET    | `/bill/:billId/payments`      | JWT   | Get all payments for a specific bill          |
+| GET    | `/vacancy-dates`              | Admin | Get expected vacancy dates for occupied beds  |
+
+### Create Bill Checkout
+
+```http
+POST /api/payments/bill/:billId/checkout
+Authorization: Bearer <jwt_token>
+```
+
+Creates a PayMongo checkout session and returns the checkout URL for the tenant to complete payment.
+
+### Create Deposit Checkout
+
+```http
+POST /api/payments/deposit/:resId/checkout
+Authorization: Bearer <jwt_token>
+```
+
+Creates a PayMongo checkout session for a reservation deposit payment.
+
+### Check Session Status
+
+```http
+GET /api/payments/session/:sessionId/status
+Authorization: Bearer <jwt_token>
+```
+
+Returns whether a PayMongo checkout session has been paid.
+
+---
+
 ## Announcements (`/api/announcements`)
 
 | Method | Endpoint                       | Auth  | Description                      |
@@ -159,6 +199,17 @@ Content-Type: application/json
 
 ---
 
+## Notifications (`/api/notifications`)
+
+| Method | Endpoint                   | Auth | Description                 |
+| ------ | -------------------------- | ---- | --------------------------- |
+| GET    | `/`                        | JWT  | Get notifications (paginated)|
+| GET    | `/unread-count`            | JWT  | Get unread notification count|
+| PATCH  | `/read-all`                | JWT  | Mark all as read             |
+| PATCH  | `/:notificationId/read`    | JWT  | Mark single as read          |
+
+---
+
 ## Users (`/api/users`)
 
 | Method | Endpoint           | Auth  | Description           |
@@ -172,11 +223,78 @@ Content-Type: application/json
 
 ---
 
+## Uploads (`/api/upload`)
+
+| Method | Endpoint         | Auth | Description                                |
+| ------ | ---------------- | ---- | ------------------------------------------ |
+| GET    | `/imagekit-auth` | JWT  | Get ImageKit upload authentication params  |
+
+### Get ImageKit Auth
+
+```http
+GET /api/upload/imagekit-auth
+Authorization: Bearer <jwt_token>
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "uuid-token",
+    "expire": 1234567890,
+    "signature": "hmac-sha1-signature"
+  }
+}
+```
+
+---
+
+## Webhooks (`/api/webhooks`)
+
+| Method | Endpoint    | Auth           | Description                       |
+| ------ | ----------- | -------------- | --------------------------------- |
+| POST   | `/paymongo` | HMAC Signature | Receive PayMongo payment events   |
+
+> **Note:** Webhook routes are registered before the global rate limiter and JSON body parser to preserve raw body for HMAC signature verification. No JWT auth is required — verification is done via PayMongo's webhook signing secret.
+
+---
+
 ## Audit Logs (`/api/audit-logs`)
 
 | Method | Endpoint | Auth  | Description    |
 | ------ | -------- | ----- | -------------- |
 | GET    | `/`      | Admin | Get audit logs |
+
+---
+
+## Health (`/api/health`)
+
+| Method | Endpoint | Auth   | Description                         |
+| ------ | -------- | ------ | ----------------------------------- |
+| GET    | `/`      | Public | Deep health check                   |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "checks": {
+      "mongodb": { "status": "ok", "latency": "5ms" },
+      "memory": { "status": "ok", "heapUsed": "45MB", "heapTotal": "64MB" },
+      "uptime": "3600s"
+    },
+    "environment": "development"
+  },
+  "meta": {
+    "requestId": "uuid",
+    "timestamp": "2026-03-21T00:00:00.000Z"
+  }
+}
+```
 
 ---
 
@@ -217,6 +335,14 @@ All error responses follow a consistent format:
 }
 ```
 
+### 429 Too Many Requests
+
+```json
+{
+  "error": "Too many requests, please try again later"
+}
+```
+
 ### 500 Internal Server Error
 
 ```json
@@ -239,9 +365,10 @@ All error responses follow a consistent format:
 
 ## Authentication Types
 
-| Type         | Usage                                                                  |
-| ------------ | ---------------------------------------------------------------------- |
-| **Firebase** | `Authorization: Bearer <firebase_id_token>` — Used for register/login  |
-| **JWT**      | `Authorization: Bearer <jwt_token>` — Used for all protected endpoints |
-| **Admin**    | JWT + admin/superAdmin role required                                   |
-| **Public**   | No authentication needed                                               |
+| Type             | Usage                                                                  |
+| ---------------- | ---------------------------------------------------------------------- |
+| **Firebase**     | `Authorization: Bearer <firebase_id_token>` — Used for register/login  |
+| **JWT**          | `Authorization: Bearer <jwt_token>` — Used for all protected endpoints |
+| **Admin**        | JWT + admin/superAdmin role required                                   |
+| **Public**       | No authentication needed                                               |
+| **HMAC Signature** | PayMongo webhook signing secret verification                         |

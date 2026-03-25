@@ -123,12 +123,7 @@
   gap: 10px;
 }
 
-.tenant-signup-logo {
-  width: 80px;
-  height: 80px;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
-}
-
+.tenant-signup-logo,
 .tenant-signup-logo-icon {
   width: 80px;
   height: 80px;
@@ -517,40 +512,6 @@
 }
 .strength-bar.active.strong {
   background: #10b981;
-}
-
-/* Password Requirements Checklist */
-.password-requirements {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.requirement {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: #6b7280;
-  transition: all 0.3s ease;
-}
-
-.requirement svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.requirement.met {
-  color: #10b981;
-}
-
-.requirement.met svg {
-  color: #10b981;
-}
-
-.requirement:not(.met) svg {
-  color: #d1d5db;
 }
 
 /* Password Match Indicator */

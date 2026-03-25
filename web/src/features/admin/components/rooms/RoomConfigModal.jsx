@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { formatRoomType, formatBranch } from "../../utils/formatters";
-
-const BED_STATUS_STYLES = {
-  available: { bg: "#D1FAE5", color: "#059669", label: "Available" },
-  occupied: { bg: "#FEE2E2", color: "#DC2626", label: "Occupied" },
-  maintenance: { bg: "#F3F4F6", color: "#6B7280", label: "🔧 Maintenance" },
-};
+import { X, Lock, CheckCircle, Info } from "lucide-react";
 
 export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) {
   const [saving, setSaving] = useState(false);
-  const getBedStatus = (bed) => bed.status || (bed.available === false ? "occupied" : "available");
+
+  const getBedStatus = (bed) => 
+    bed.status || (bed.available === false ? "occupied" : "available");
 
   const handleSave = async () => {
     setSaving(true);
@@ -28,18 +25,35 @@ export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) 
       <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-header">
           <h2>Configure Room: {room.name}</h2>
-          <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">✕</button>
+          <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+            <X size={20} />
+          </button>
         </div>
 
         <div className="admin-modal-body">
           <div className="room-info-section">
             <h3>Room Information</h3>
             <div className="info-grid">
-              <div><strong>Type:</strong> {formatRoomType(room.type)}</div>
-              <div><strong>Capacity:</strong> {room.capacity} pax</div>
-              <div><strong>Floor:</strong> {room.floor}</div>
-              <div><strong>Branch:</strong> {formatBranch(room.branch)}</div>
-              <div><strong>Price:</strong> ₱{Number(room.price || 0).toLocaleString()}</div>
+              <div>
+                <strong>Type</strong>
+                {formatRoomType(room.type)}
+              </div>
+              <div>
+                <strong>Capacity</strong>
+                {room.capacity} pax
+              </div>
+              <div>
+                <strong>Floor</strong>
+                Floor {room.floor}
+              </div>
+              <div>
+                <strong>Branch</strong>
+                {formatBranch(room.branch)}
+              </div>
+              <div>
+                <strong>Base Price</strong>
+                ₱{Number(room.price || 0).toLocaleString()}
+              </div>
             </div>
           </div>
 
@@ -49,23 +63,32 @@ export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) 
               {room.beds && room.beds.length > 0 ? (
                 room.beds.map((bed, index) => {
                   const status = getBedStatus(bed);
-                  const style = BED_STATUS_STYLES[status];
                   return (
-                    <div key={bed.id || index} className="bed-item" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: "8px", marginBottom: "8px", border: "1px solid #E5E7EB" }}>
-                      <div className="bed-info" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                        <strong>{bed.id}</strong>
-                        <span style={{ color: "#6B7280", fontSize: "13px" }}>{bed.position}</span>
-                        <span style={{ padding: "2px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: 600, background: style.bg, color: style.color }}>{style.label}</span>
+                    <div key={bed.id || index} className="bed-item">
+                      <div className="bed-info">
+                        <span className="bed-id">{bed.id}</span>
+                        <span className="bed-position">{bed.position}</span>
+                        <span className={`status-badge ${status}`}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </span>
                       </div>
-                      <div>
+                      <div className="bed-actions">
                         {status === "occupied" ? (
-                          <span style={{ fontSize: "12px", color: "#9CA3AF" }}>In use</span>
+                          <span className="bed-locked-text">Occupied</span>
                         ) : (
                           <button
+                            className={status === "maintenance" ? "btn-primary" : "btn-secondary"}
                             onClick={() => onToggleBed(bed.id)}
-                            style={{ padding: "4px 14px", borderRadius: "6px", border: "1px solid #E5E7EB", background: status === "maintenance" ? "#10B981" : "#6B7280", color: "white", fontSize: "12px", fontWeight: 500, cursor: "pointer" }}
+                            style={{ padding: "4px 10px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}
                           >
-                            {status === "maintenance" ? "Unlock" : "Lock 🔧"}
+                            {status === "maintenance" ? (
+                              <>Unlock</>
+                            ) : (
+                              <>
+                                <Lock size={12} />
+                                Maintenance
+                              </>
+                            )}
                           </button>
                         )}
                       </div>
@@ -73,7 +96,7 @@ export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) 
                   );
                 })
               ) : (
-                <p className="no-beds">No beds configured</p>
+                <p className="no-beds">No beds have been configured for this room.</p>
               )}
             </div>
           </div>
@@ -81,16 +104,21 @@ export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) 
           <div className="occupancy-info">
             <h3>Current Occupancy</h3>
             <div className="occupancy-bar">
-              <div className="occupancy-fill" style={{ width: `${(room.currentOccupancy / room.capacity) * 100}%` }} />
+              <div 
+                className="occupancy-fill" 
+                style={{ width: `${(room.currentOccupancy / room.capacity) * 100}%` }} 
+              />
             </div>
-            <p>{room.currentOccupancy} of {room.capacity} beds occupied</p>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
+              {room.currentOccupancy} of {room.capacity} beds currently occupied
+            </p>
           </div>
         </div>
 
         <div className="admin-modal-footer">
-          <button className="btn-secondary" onClick={onClose}>Close</button>
+          <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? "Saving Changes..." : "Save Changes"}
           </button>
         </div>
       </div>

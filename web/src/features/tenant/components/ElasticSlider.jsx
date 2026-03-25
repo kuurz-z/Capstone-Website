@@ -1,210 +1,117 @@
-import {
-  animate,
-  motion,
-  useMotionValue,
-  useMotionValueEvent,
-  useTransform,
-} from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useState, useCallback } from "react";
 
-const MAX_OVERFLOW = 50;
-
-export default function ElasticSlider({
-  defaultValue = 50,
+/**
+ * ElasticSlider — a styled range slider with left/right icon buttons.
+ * Used by FilterPanel.jsx for the price range filter.
+ */
+function ElasticSlider({
+  defaultValue = 5000,
   startingValue = 0,
-  maxValue = 100,
-  className = "",
+  maxValue = 15000,
   isStepped = false,
-  stepSize = 1,
-  leftIcon = <>-</>,
-  rightIcon = <>+</>,
-  onChange,
-}) {
-  return (
-    <div
-      className={`flex flex-col items-center justify-center gap-4 w-64 ${className}`}
-    >
-      <Slider
-        defaultValue={defaultValue}
-        startingValue={startingValue}
-        maxValue={maxValue}
-        isStepped={isStepped}
-        stepSize={stepSize}
-        leftIcon={leftIcon}
-        rightIcon={rightIcon}
-        onChange={onChange}
-      />
-    </div>
-  );
-}
-
-function Slider({
-  defaultValue,
-  startingValue,
-  maxValue,
-  isStepped,
-  stepSize,
+  stepSize = 100,
   leftIcon,
   rightIcon,
   onChange,
 }) {
   const [value, setValue] = useState(defaultValue);
-  const sliderRef = useRef(null);
-  const [region, setRegion] = useState("middle");
-  const clientX = useMotionValue(0);
-  const overflow = useMotionValue(0);
-  const scale = useMotionValue(1);
 
-  useEffect(() => {
-    setValue(defaultValue);
-  }, [defaultValue]);
+  const step = isStepped ? stepSize : 1;
 
-  useMotionValueEvent(clientX, "change", (latest) => {
-    if (sliderRef.current) {
-      const { left, right } = sliderRef.current.getBoundingClientRect();
-      let newValue;
+  const handleChange = useCallback(
+    (e) => {
+      const v = Number(e.target.value);
+      setValue(v);
+      if (onChange) onChange(v);
+    },
+    [onChange]
+  );
 
-      if (latest < left) {
-        setRegion("left");
-        newValue = left - latest;
-      } else if (latest > right) {
-        setRegion("right");
-        newValue = latest - right;
-      } else {
-        setRegion("middle");
-        newValue = 0;
-      }
-
-      overflow.jump(decay(newValue, MAX_OVERFLOW));
-    }
-  });
-
-  const handlePointerMove = (e) => {
-    if (e.buttons > 0 && sliderRef.current) {
-      const { left, width } = sliderRef.current.getBoundingClientRect();
-      let newValue =
-        startingValue +
-        ((e.clientX - left) / width) * (maxValue - startingValue);
-
-      if (isStepped) {
-        newValue = Math.round(newValue / stepSize) * stepSize;
-      }
-
-      newValue = Math.min(Math.max(newValue, startingValue), maxValue);
-      setValue(newValue);
-      if (onChange) onChange(newValue);
-      clientX.jump(e.clientX);
-    }
+  const decrement = () => {
+    const next = Math.max(startingValue, value - step);
+    setValue(next);
+    if (onChange) onChange(next);
   };
 
-  const handlePointerDown = (e) => {
-    handlePointerMove(e);
-    e.currentTarget.setPointerCapture(e.pointerId);
+  const increment = () => {
+    const next = Math.min(maxValue, value + step);
+    setValue(next);
+    if (onChange) onChange(next);
   };
 
-  const handlePointerUp = () => {
-    animate(overflow, 0, { type: "spring", bounce: 0.5 });
-  };
-
-  const getRangePercentage = () => {
-    const totalRange = maxValue - startingValue;
-    if (totalRange === 0) return 0;
-    return ((value - startingValue) / totalRange) * 100;
-  };
+  const percent = ((value - startingValue) / (maxValue - startingValue)) * 100;
 
   return (
-    <>
-      <motion.div
-        onHoverStart={() => animate(scale, 1.2)}
-        onHoverEnd={() => animate(scale, 1)}
-        onTouchStart={() => animate(scale, 1.2)}
-        onTouchEnd={() => animate(scale, 1)}
-        style={{
-          scale,
-          opacity: useTransform(scale, [1, 1.2], [0.7, 1]),
-        }}
-        className="flex w-full touch-none select-none items-center justify-center gap-4"
-      >
-        <motion.div
-          animate={{
-            scale: region === "left" ? [1, 1.4, 1] : 1,
-            transition: { duration: 0.25 },
-          }}
-          style={{
-            x: useTransform(() =>
-              region === "left" ? -overflow.get() / scale.get() : 0,
-            ),
-          }}
-        >
-          {leftIcon}
-        </motion.div>
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+      {/* Value Display */}
+      <div style={{ fontSize: "22px", fontWeight: "700", color: "#FF8C42" }}>
+        ₱{value.toLocaleString()}
+      </div>
 
-        <div
-          ref={sliderRef}
-          className="relative flex w-full max-w-xs flex-grow cursor-grab touch-none select-none items-center py-4"
-          onPointerMove={handlePointerMove}
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-        >
-          <motion.div
-            style={{
-              scaleX: useTransform(() => {
-                if (sliderRef.current) {
-                  const { width } = sliderRef.current.getBoundingClientRect();
-                  return 1 + overflow.get() / width;
-                }
-              }),
-              scaleY: useTransform(overflow, [0, MAX_OVERFLOW], [1, 0.8]),
-              transformOrigin: useTransform(() => {
-                if (sliderRef.current) {
-                  const { left, width } =
-                    sliderRef.current.getBoundingClientRect();
-                  return clientX.get() < left + width / 2 ? "right" : "left";
-                }
-              }),
-              height: useTransform(scale, [1, 1.2], [6, 12]),
-              marginTop: useTransform(scale, [1, 1.2], [0, -3]),
-              marginBottom: useTransform(scale, [1, 1.2], [0, -3]),
-            }}
-            className="flex flex-grow"
+      {/* Slider Row */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
+        {leftIcon && (
+          <button
+            type="button"
+            onClick={decrement}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", display: "flex" }}
           >
-            <div className="relative h-full flex-grow overflow-hidden rounded-full bg-gray-400">
-              <div
-                className="absolute h-full bg-gray-500 rounded-full"
-                style={{ width: `${getRangePercentage()}%` }}
-              />
-            </div>
-          </motion.div>
+            {leftIcon}
+          </button>
+        )}
+
+        <div style={{ flex: 1, position: "relative" }}>
+          {/* Track fill */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              transform: "translateY(-50%)",
+              height: "4px",
+              width: `${percent}%`,
+              backgroundColor: "#FF8C42",
+              borderRadius: "2px",
+              pointerEvents: "none",
+              zIndex: 1,
+            }}
+          />
+          <input
+            type="range"
+            min={startingValue}
+            max={maxValue}
+            step={step}
+            value={value}
+            onChange={handleChange}
+            style={{
+              width: "100%",
+              accentColor: "#FF8C42",
+              cursor: "pointer",
+              position: "relative",
+              zIndex: 2,
+              background: "transparent",
+            }}
+          />
         </div>
 
-        <motion.div
-          animate={{
-            scale: region === "right" ? [1, 1.4, 1] : 1,
-            transition: { duration: 0.25 },
-          }}
-          style={{
-            x: useTransform(() =>
-              region === "right" ? overflow.get() / scale.get() : 0,
-            ),
-          }}
-        >
-          {rightIcon}
-        </motion.div>
-      </motion.div>
-      <p className="text-center text-sm font-semibold text-gray-900 mt-3 relative z-10">
-        ₱{Math.round(value).toLocaleString()}
-      </p>
-    </>
+        {rightIcon && (
+          <button
+            type="button"
+            onClick={increment}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", display: "flex" }}
+          >
+            {rightIcon}
+          </button>
+        )}
+      </div>
+
+      {/* Min/Max labels */}
+      <div style={{ display: "flex", justifyContent: "space-between", width: "100%", fontSize: "12px", color: "#9ca3af" }}>
+        <span>₱{startingValue.toLocaleString()}</span>
+        <span>₱{maxValue.toLocaleString()}</span>
+      </div>
+    </div>
   );
 }
 
-function decay(value, max) {
-  if (max === 0) {
-    return 0;
-  }
-
-  const entry = value / max;
-  const sigmoid = 2 * (1 / (1 + Math.exp(-entry)) - 0.5);
-
-  return sigmoid * max;
-}
+export default ElasticSlider;

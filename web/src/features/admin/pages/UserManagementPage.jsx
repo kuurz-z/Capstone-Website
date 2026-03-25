@@ -15,7 +15,7 @@ import "../styles/admin-users.css";
 
 function UserManagementPage() {
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const { authFetch } = useApiClient();
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState(null);
@@ -210,13 +210,13 @@ function UserManagementPage() {
         { value: "all", label: "All Roles" },
         { value: "applicant", label: "Applicant" },
         { value: "tenant", label: "Tenant" },
-        { value: "admin", label: "Admin" },
-        ...(isSuperAdmin ? [{ value: "superAdmin", label: "Super Admin" }] : []),
+        { value: "branch_admin", label: "Branch Admin" },
+        ...(isOwner ? [{ value: "owner", label: "Owner" }] : []),
       ],
       value: roleFilter,
       onChange: (v) => { setRoleFilter(v); setCurrentPage(1); },
     },
-    ...(isSuperAdmin ? [{
+    ...(isOwner ? [{
       key: "branch",
       options: [
         { value: "all", label: "All Branches" },
@@ -278,7 +278,7 @@ function UserManagementPage() {
         return (
           <div className="user-actions" onClick={(e) => e.stopPropagation()}>
             <button className="user-action-btn" onClick={() => handleEditClick(row)}>Edit</button>
-            {isSuperAdmin && !isCurrentUser && (
+            {isOwner && !isCurrentUser && (
               <>
                 {row.accountStatus !== "suspended" && (
                   <button className="user-action-btn user-action-btn--warn" onClick={() => setAccountAction({ type: "suspend", user: row })}>
@@ -299,7 +299,7 @@ function UserManagementPage() {
     },
   ];
 
-  const actions = isSuperAdmin
+  const actions = isOwner
     ? [{ label: "Add User", icon: UserPlus, onClick: () => {
         setAddForm({ username: "", firstName: "", lastName: "", email: "", phone: "", role: "applicant", password: "" });
         setAddFormErrors({});
@@ -338,12 +338,12 @@ function UserManagementPage() {
 
       {/* Modals (kept — creation/destruction needs distinct UI) */}
       {isEditModalOpen && (
-        <EditUserModal editForm={editForm} isSuperAdmin={isSuperAdmin}
+        <EditUserModal editForm={editForm} isOwner={isOwner}
           onFormChange={setEditForm} onSubmit={handleUpdateUser} onClose={() => setIsEditModalOpen(false)} />
       )}
       {isAddModalOpen && (
         <AddUserModal addForm={addForm} addFormErrors={addFormErrors} isCreating={isCreating}
-          isSuperAdmin={isSuperAdmin} onFormChange={handleAddFormChange} onSubmit={handleCreateUser}
+          isOwner={isOwner} onFormChange={handleAddFormChange} onSubmit={handleCreateUser}
           onClose={() => setIsAddModalOpen(false)} />
       )}
       {isDeleteModalOpen && (

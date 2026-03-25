@@ -4,51 +4,34 @@ import { Calendar, Clock, FileText, X, CheckCircle, AlertTriangle } from "lucide
 import { showNotification } from "../../../../shared/utils/notification";
 import { PoliciesTermsModal } from "../../modals/PoliciesAndConsent";
 
-/* â”€â”€ Available time slots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Available time slots ─────────────────────────────────────────────── */
 const TIME_SLOTS = [
-  "08:00 AM",
-  "09:00 AM",
-  "10:00 AM",
-  "11:00 AM",
-  "01:00 PM",
-  "02:00 PM",
-  "03:00 PM",
-  "04:00 PM",
+  "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM",
+  "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM",
 ];
 
-/* â”€â”€ Helper: generate next N weekdays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Helper: generate next N weekdays ───────────────────────────────── */
 function getAvailableDates(count = 10) {
   const dates = [];
   const d = new Date();
   d.setDate(d.getDate() + 1); // start from tomorrow
   while (dates.length < count) {
     const day = d.getDay();
-    if (day !== 0 && day !== 6) {
-      // skip weekends
-      dates.push(new Date(d));
-    }
+    if (day !== 0 && day !== 6) dates.push(new Date(d));
     d.setDate(d.getDate() + 1);
   }
   return dates;
 }
 
 function fmtDate(date) {
-  return date.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function fmtDateFull(dateStr) {
   if (!dateStr) return "N/A";
-  // Strip any existing time portion before parsing to avoid timezone-shifted dates
   const cleanDate = String(dateStr).split("T")[0];
   return new Date(cleanDate + "T12:00:00").toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
   });
 }
 
@@ -56,165 +39,36 @@ function toISODate(date) {
   return date.toISOString().split("T")[0];
 }
 
-/* â”€â”€ Inline styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-const S = {
-  dateGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)",
-    gap: "10px",
-    marginBottom: "8px",
-  },
-  // Phase 5: button reset base â€” used by date + time cards
-  cardBtn: {
-    all: "unset",
-    boxSizing: "border-box",
-    display: "block",
-    width: "100%",
-    cursor: "pointer",
-  },
-  dateCard: (selected, hovered) => ({
-    padding: "12px 10px",
-    borderRadius: "10px",
-    border: selected ? "2px solid #FF8C42" : "2px solid #E2E8F0",
-    background: selected
-      ? "rgba(255,140,66,0.08)"
-      : hovered
-      ? "var(--surface-muted, #F8FAFC)"
-      : "var(--surface-card, #fff)",
-    cursor: "pointer",
-    textAlign: "center",
-    transition: "all 0.15s ease",
-    position: "relative",
-  }),
-  dateDay: (selected) => ({
-    fontSize: "11px",
-    fontWeight: 600,
-    color: selected ? "#FF8C42" : "#94A3B8",
-    textTransform: "uppercase",
-    marginBottom: "4px",
-  }),
-  dateNum: (selected) => ({
-    fontSize: "16px",
-    fontWeight: 700,
-    color: selected ? "var(--text-heading, #0A1628)" : "var(--text-secondary, #334155)",
-  }),
-  tomorrowPill: {
-    position: "absolute",
-    top: "-9px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    background: "#0A1628",
-    color: "#fff",
-    fontSize: "9px",
-    fontWeight: 700,
-    letterSpacing: "0.04em",
-    padding: "2px 6px",
-    borderRadius: "20px",
-    whiteSpace: "nowrap",
-  },
-  timeGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
-    gap: "8px",
-  },
-  timeSlot: (selected, hovered) => ({
-    padding: "10px 12px",
-    borderRadius: "8px",
-    border: selected ? "2px solid #FF8C42" : "2px solid #E2E8F0",
-    background: selected
-      ? "rgba(255,140,66,0.08)"
-      : hovered
-      ? "var(--surface-muted, #F8FAFC)"
-      : "var(--surface-card, #fff)",
-    cursor: "pointer",
-    textAlign: "center",
-    fontSize: "14px",
-    fontWeight: selected ? 600 : 500,
-    color: selected ? "#FF8C42" : "#475569",
-    transition: "all 0.15s ease",
-  }),
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-  },
-  modalCard: {
-    background: "var(--surface-card, white)",
-    borderRadius: "16px",
-    padding: "32px",
-    maxWidth: "480px",
-    width: "90%",
-    maxHeight: "90vh",
-    overflow: "auto",
-    boxShadow: "0 8px 30px rgba(0,0,0,0.2)",
-  },
-};
-
 /**
- * Step 2 â€” Visit Scheduling & Policies
- * User picks an available date + time slot, reviews policies, then confirms.
- * After confirmation, a receipt is shown and user returns to the dashboard.
+ * Step 2 — Visit Scheduling & Policies
  */
 const ReservationVisitStep = ({
-  targetMoveInDate,
-  viewingType,
-  setViewingType,
-  isOutOfTown,
-  setIsOutOfTown,
-  currentLocation,
-  setCurrentLocation,
-  visitApproved,
-  onPrev,
-  onNext,
-  visitorName,
-  setVisitorName,
-  visitorPhone,
-  setVisitorPhone,
-  visitorEmail,
-  setVisitorEmail,
-  visitDate,
-  setVisitDate,
-  visitTime,
-  setVisitTime,
-  reservationData,
-  reservationCode,
-  visitCode,
-  onSaveVisit,
-  onAfterClose,
-  readOnly,
-  agreedToPrivacy,
-  scheduleRejected,
-  scheduleRejectionReason,
+  targetMoveInDate, viewingType, setViewingType,
+  isOutOfTown, setIsOutOfTown, currentLocation, setCurrentLocation,
+  visitApproved, onPrev, onNext,
+  visitorName, setVisitorName, visitorPhone, setVisitorPhone, visitorEmail, setVisitorEmail,
+  visitDate, setVisitDate, visitTime, setVisitTime,
+  reservationData, reservationCode, visitCode,
+  onSaveVisit, onAfterClose, readOnly, agreedToPrivacy,
+  scheduleRejected, scheduleRejectionReason,
 }) => {
   const navigate = useNavigate();
-  // Initialize from parent state; always true when read-only (already submitted)
   const [policiesAccepted, setPoliciesAccepted] = useState(agreedToPrivacy || readOnly || false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showPoliciesModal, setShowPoliciesModal] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  // visitCode resolved after save â€” may differ from prop if code was just generated
   const [resolvedVisitCode, setResolvedVisitCode] = useState(visitCode || null);
   const [isSaving, setIsSaving] = useState(false);
-  // Phase 1: hover tracking
   const [hoveredDate, setHoveredDate] = useState(null);
   const [hoveredTime, setHoveredTime] = useState(null);
 
   const availableDates = useMemo(() => getAvailableDates(10), []);
 
-  /* â”€â”€ handlers â”€â”€ */
   const handleConfirmSubmit = async () => {
     setShowConfirmModal(false);
     setIsSaving(true);
     try {
-      // Save visit to server first â€” this generates visitCode on the backend
       const code = onSaveVisit ? await onSaveVisit() : null;
       setResolvedVisitCode(code || visitCode || null);
     } catch (err) {
@@ -234,7 +88,6 @@ const ReservationVisitStep = ({
 
   const canSubmit = policiesAccepted && visitDate && visitTime && !isSubmitted;
 
-  // Phase 4: dynamic CTA label
   const ctaLabel = useCallback(() => {
     if (!visitDate) return "Select a date to continue";
     if (!visitTime) return "Select a time to continue";
@@ -245,20 +98,17 @@ const ReservationVisitStep = ({
   const handleSubmitWithValidation = () => {
     if (!visitDate) {
       showNotification("Please select a visit date to continue.", "error", 3000);
-      const el = document.getElementById("visit-date-section");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById("visit-date-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     if (!visitTime) {
       showNotification("Please select a time slot for your visit.", "error", 3000);
-      const el = document.getElementById("visit-time-section");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById("visit-time-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     if (!policiesAccepted) {
       showNotification("Please agree to the policies and terms to continue.", "error", 3000);
-      const el = document.getElementById("visit-policies-section");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById("visit-policies-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     setShowConfirmModal(true);
@@ -268,9 +118,7 @@ const ReservationVisitStep = ({
     <div className="reservation-card">
       {/* Step Header */}
       <div className="main-header">
-        <div className="main-header-badge">
-          <span>Step 2 Â· Verification</span>
-        </div>
+        <div className="main-header-badge"><span>Step 2 · Verification</span></div>
         <h2 className="main-header-title">Schedule Your Visit</h2>
         <p className="main-header-subtitle">
           Pick an available date and time to visit the dormitory. Review our
@@ -280,29 +128,16 @@ const ReservationVisitStep = ({
 
       {/* Rejection Banner */}
       {scheduleRejected && (
-        <div
-          style={{
-            background: "rgba(220, 38, 38, 0.06)",
-            border: "1px solid #FECACA",
-            borderRadius: "12px",
-            padding: "16px 20px",
-            marginBottom: "16px",
-            display: "flex",
-            gap: "12px",
-            alignItems: "flex-start",
-          }}
-        >
-          <AlertTriangle size={20} color="#DC2626" style={{ flexShrink: 0, marginTop: 2 }} />
+        <div className="rf-rejection-banner">
+          <AlertTriangle size={20} color="var(--rf-error-text)" style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
-            <div style={{ fontSize: "14px", fontWeight: 600, color: "#DC2626", marginBottom: "4px" }}>
-              Your previous visit schedule was rejected
-            </div>
+            <div className="rf-rejection-banner__title">Your previous visit schedule was rejected</div>
             {scheduleRejectionReason && (
-              <div style={{ fontSize: "13px", color: "#7F1D1D", marginBottom: "8px", lineHeight: 1.5 }}>
+              <div className="rf-rejection-banner__reason">
                 <strong>Reason:</strong> {scheduleRejectionReason}
               </div>
             )}
-            <div style={{ fontSize: "13px", color: "#991B1B" }}>
+            <div className="rf-rejection-banner__hint">
               Please select a new date and time below to reschedule your visit.
             </div>
           </div>
@@ -311,77 +146,43 @@ const ReservationVisitStep = ({
 
       {/* Read-Only Banner */}
       {readOnly && (
-        <div
-          className="info-box"
-          style={{
-            background: "rgba(245, 158, 11, 0.12)",
-            borderColor: "#F59E0B",
-            marginBottom: "16px",
-          }}
-        >
-          <div className="info-box-title" style={{ color: "#92400E" }}>
-            This section is locked
-          </div>
-          <div className="info-text" style={{ color: "#78350F" }}>
-            Your visit has been scheduled. This step can no longer be edited.
-          </div>
+        <div className="rf-locked-banner">
+          <div className="info-box-title">This section is locked</div>
+          <div className="info-text">Your visit has been scheduled. This step can no longer be edited.</div>
         </div>
       )}
 
-      {/* Form content wrapper â€” disable interaction when readOnly */}
-      <div
-        style={{
-          pointerEvents: readOnly ? "none" : "auto",
-          opacity: readOnly ? 0.7 : 1,
-        }}
-      >
-        {/* â”€â”€ Card 1: Select Date â”€â”€ */}
+      {/* Form content wrapper */}
+      <div className={readOnly ? "rf-readonly-wrapper" : ""}>
+        {/* ── Card 1: Select Date ── */}
         <div className="content-card" id="visit-date-section">
           <div className="card-section-title">
             <Calendar size={15} style={{ marginRight: 6, flexShrink: 0 }} />
             Choose a Date
           </div>
-          <p
-            style={{
-              fontSize: "13px",
-              color: "#64748B",
-              marginBottom: "14px",
-              marginTop: "-8px",
-            }}
-          >
-            Available weekdays for the next 2 weeks
-          </p>
-          <div style={S.dateGrid}>
+          <p className="rf-section-hint">Available weekdays for the next 2 weeks</p>
+          <div className="rf-date-grid">
             {availableDates.map((date, idx) => {
               const iso = toISODate(date);
               const selected = visitDate === iso;
-              const hovered = hoveredDate === iso;
               return (
                 <button
                   key={iso}
                   type="button"
-                  style={{ ...S.cardBtn, position: "relative" }}
-                  onClick={() => {
-                    setVisitDate(iso);
-                    if (visitTime) setVisitTime(""); // reset time on date change
-                  }}
+                  className="rf-date-btn"
+                  onClick={() => { setVisitDate(iso); if (visitTime) setVisitTime(""); }}
                   onMouseEnter={() => setHoveredDate(iso)}
                   onMouseLeave={() => setHoveredDate(null)}
                   aria-pressed={selected}
                   aria-label={date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                 >
-                  <div style={S.dateCard(selected, hovered)}>
-                    {idx === 0 && (
-                      <span style={S.tomorrowPill}>Tomorrow</span>
-                    )}
-                    <div style={S.dateDay(selected)}>
+                  <div className={`rf-date-card${selected ? " selected" : ""}`}>
+                    {idx === 0 && <span className="rf-today-pill">Tomorrow</span>}
+                    <div className="rf-date-day">
                       {date.toLocaleDateString("en-US", { weekday: "short" })}
                     </div>
-                    <div style={S.dateNum(selected)}>
-                      {date.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
+                    <div className="rf-date-num">
+                      {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </div>
                   </div>
                 </button>
@@ -390,58 +191,43 @@ const ReservationVisitStep = ({
           </div>
         </div>
 
-        {/* â”€â”€ Card 2: Select Time â€” always visible, dimmed until date chosen â”€â”€ */}
+        {/* ── Card 2: Select Time ── */}
         <div
           className="content-card"
           id="visit-time-section"
-          style={{
-            opacity: visitDate ? 1 : 0.45,
-            transition: "opacity 0.2s ease",
-            pointerEvents: visitDate ? "auto" : "none",
-          }}
+          style={{ opacity: visitDate ? 1 : 0.45, transition: "opacity 0.2s ease", pointerEvents: readOnly ? "none" : (visitDate ? "auto" : "none") }}
         >
           <div className="card-section-title">
             <Clock size={15} style={{ marginRight: 6, flexShrink: 0 }} />
             Choose a Time
           </div>
-          <p
-            style={{
-              fontSize: "13px",
-              color: "#64748B",
-              marginBottom: "14px",
-              marginTop: "-8px",
-            }}
-          >
-            {visitDate ? (
-              <>Available time slots for{" "}
-              <strong>{fmtDate(new Date(visitDate + "T00:00:00"))}</strong></>
-            ) : (
-              "Select a date first to see available times"
-            )}
+          <p className="rf-section-hint">
+            {visitDate
+              ? <><span>Available time slots for </span><strong>{fmtDate(new Date(visitDate + "T00:00:00"))}</strong></>
+              : "Select a date first to see available times"}
           </p>
-          <div style={S.timeGrid}>
+          <div className="rf-time-grid">
             {TIME_SLOTS.map((slot) => {
               const selected = visitTime === slot;
-              const hovered = hoveredTime === slot;
               return (
                 <button
                   key={slot}
                   type="button"
-                  style={S.cardBtn}
+                  className="rf-time-btn"
                   onClick={() => setVisitTime(slot)}
                   onMouseEnter={() => setHoveredTime(slot)}
                   onMouseLeave={() => setHoveredTime(null)}
                   aria-pressed={selected}
                   aria-label={slot}
                 >
-                  <div style={S.timeSlot(selected, hovered)}>{slot}</div>
+                  <div className={`rf-time-slot${selected ? " selected" : ""}`}>{slot}</div>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* â”€â”€ Card 3: Policies & Terms â€” collapsed to single checkbox line â”€â”€ */}
+        {/* ── Card 3: Policies & Terms ── */}
         <div className="content-card" id="visit-policies-section">
           <div className="card-section-title">
             <FileText size={15} style={{ marginRight: 6, flexShrink: 0 }} />
@@ -456,22 +242,14 @@ const ReservationVisitStep = ({
             />
             <label htmlFor="policies-accepted" className="checkbox-label">
               I have read and agree to the{" "}
-              <span
-                onClick={() => setShowPoliciesModal(true)}
-                style={{
-                  color: "#2563EB",
-                  textDecoration: "underline",
-                  cursor: "pointer",
-                  fontWeight: 500,
-                }}
-              >
+              <span className="rf-policies-link" onClick={() => setShowPoliciesModal(true)}>
                 dormitory policies, terms & conditions, and privacy policy
               </span>
             </label>
           </div>
         </div>
 
-        {/* â”€â”€ Actions â”€â”€ */}
+        {/* ── Actions ── */}
         <div className="stage-buttons" style={{ justifyContent: "flex-end" }}>
           <button
             onClick={handleSubmitWithValidation}
@@ -482,9 +260,8 @@ const ReservationVisitStep = ({
           </button>
         </div>
       </div>
-      {/* Close pointer-events wrapper */}
 
-      {/* â•â•â•â•â•â•â•â• Confirmation Modal â€” outside pointerEvents wrapper â•â•â•â•â•â•â•â• */}
+      {/* Confirmation Modal */}
       {showConfirmModal && (
         <ConfirmModal
           visitDate={visitDate}
@@ -494,7 +271,7 @@ const ReservationVisitStep = ({
         />
       )}
 
-      {/* â•â•â•â•â•â•â•â• Receipt Modal â€” outside pointerEvents wrapper â•â•â•â•â•â•â•â• */}
+      {/* Receipt Modal */}
       {showReceiptModal && (
         <ReceiptModal
           visitDate={visitDate}
@@ -515,11 +292,10 @@ const ReservationVisitStep = ({
   );
 };
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   ConfirmModal â€” extracted sub-component
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ══════════════════════════════════════════════════════════════
+   ConfirmModal — extracted sub-component
+   ══════════════════════════════════════════════════════════════ */
 function ConfirmModal({ visitDate, visitTime, onConfirm, onClose }) {
-  // Escape key to close
   useEffect(() => {
     const handler = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handler);
@@ -527,74 +303,44 @@ function ConfirmModal({ visitDate, visitTime, onConfirm, onClose }) {
   }, [onClose]);
 
   return (
-    <div style={S.modalOverlay} onClick={onClose}>
+    <div className="rf-modal-overlay" onClick={onClose}>
       <div
-        style={{ ...S.modalCard, maxWidth: "420px", textAlign: "center" }}
+        className="rf-modal-card"
+        style={{ maxWidth: "420px", textAlign: "center" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* X close */}
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            position: "absolute", top: "16px", right: "16px",
-            background: "none", border: "none", cursor: "pointer",
-            color: "#94A3B8", padding: "4px", borderRadius: "6px",
-            display: "flex", alignItems: "center",
-          }}
-          aria-label="Close"
-        >
+        <button type="button" onClick={onClose} className="rf-modal-close-btn" aria-label="Close">
           <X size={18} />
         </button>
 
-        {/* Calendar icon */}
-        <div
-          style={{
-            width: "56px", height: "56px", borderRadius: "50%",
-            background: "rgba(59, 130, 246, 0.08)", display: "flex", alignItems: "center",
-            justifyContent: "center", margin: "0 auto 16px",
-          }}
-        >
+        <div className="rf-modal-icon-wrap">
           <Calendar size={24} color="#3B82F6" />
         </div>
 
-        <h3 style={{ fontSize: "18px", fontWeight: "700", color: "var(--text-heading, #1F2937)", margin: "0 0 6px" }}>
-          Confirm Your Visit
-        </h3>
-        <p style={{ fontSize: "14px", color: "var(--text-muted, #6B7280)", margin: "0 0 16px", lineHeight: "1.5" }}>
-          You're booking a visit on:
-        </p>
+        <h3 className="rf-modal-title">Confirm Your Visit</h3>
+        <p className="rf-modal-subtitle">You're booking a visit on:</p>
 
-        <div
-          style={{
-            background: "var(--surface-muted, #F8FAFC)", borderRadius: "10px", padding: "14px 16px",
-            marginBottom: "20px", border: "1px solid #E2E8F0",
-          }}
-        >
-          <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-heading, #0A1628)", marginBottom: "4px" }}>
+        <div className="rf-confirm-date-box">
+          <div className="rf-confirm-date-box__date">
             {visitDate && fmtDateFull(visitDate + "T00:00:00")}
           </div>
-          <div style={{ fontSize: "14px", color: "#FF8C42", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+          <div className="rf-confirm-date-box__time">
             <Clock size={13} />{visitTime}
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "12px" }}>
-          <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>
-            Go Back
-          </button>
-          <button onClick={onConfirm} className="btn btn-primary" style={{ flex: 1 }}>
-            Yes, Book Visit
-          </button>
+        <div className="rf-modal-actions">
+          <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Go Back</button>
+          <button onClick={onConfirm} className="btn btn-primary" style={{ flex: 1 }}>Yes, Book Visit</button>
         </div>
       </div>
     </div>
   );
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   ReceiptModal â€” extracted sub-component
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ══════════════════════════════════════════════════════════════
+   ReceiptModal — extracted sub-component
+   ══════════════════════════════════════════════════════════════ */
 function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reservationData, onClose }) {
   useEffect(() => {
     const handler = (e) => { if (e.key === "Escape") onClose(); };
@@ -606,108 +352,48 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
   const branch = reservationData?.room?.branch || "N/A";
 
   return (
-    <div style={S.modalOverlay}>
-      <div style={{ ...S.modalCard, position: "relative", maxWidth: 420 }}>
-
-        {/* X close */}
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            position: "absolute", top: "16px", right: "16px",
-            background: "none", border: "none", cursor: "pointer",
-            color: "#94A3B8", padding: "4px", borderRadius: "6px",
-            display: "flex", alignItems: "center",
-          }}
-          aria-label="Close"
-        >
+    <div className="rf-modal-overlay">
+      <div className="rf-modal-card" style={{ maxWidth: 420 }}>
+        <button type="button" onClick={onClose} className="rf-modal-close-btn" aria-label="Close">
           <X size={18} />
         </button>
 
-        {/* â”€â”€ Success header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* Success header */}
         <div style={{ textAlign: "center", marginBottom: "24px" }}>
-          <div style={{
-            width: "52px", height: "52px", borderRadius: "50%",
-            background: "rgba(22, 163, 74, 0.08)", display: "flex", alignItems: "center",
-            justifyContent: "center", margin: "0 auto 12px",
-          }}>
+          <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "rgba(22,163,74,0.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
             <CheckCircle size={28} color="#16A34A" strokeWidth={2.5} />
           </div>
-          <h3 style={{ fontSize: "20px", fontWeight: "700", color: "var(--text-heading, #1F2937)", margin: "0 0 4px" }}>
-            Visit Confirmed!
-          </h3>
-          <p style={{ fontSize: "14px", color: "#6B7280", margin: 0 }}>
-            Your visit has been booked successfully
-          </p>
+          <h3 className="rf-modal-title">Visit Confirmed!</h3>
+          <p className="rf-modal-subtitle">Your visit has been booked successfully</p>
         </div>
 
-        {/* â”€â”€ Receipt card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div style={{
-          border: "1px solid #E5E7EB",
-          borderRadius: "12px",
-          overflow: "hidden",
-          marginBottom: "16px",
-        }}>
-          {/* Receipt header strip */}
-          <div style={{
-            background: "var(--surface-muted, #F9FAFB)",
-            borderBottom: "1px solid #E5E7EB",
-            padding: "10px 16px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.08em", color: "#9CA3AF", textTransform: "uppercase" }}>
-              Booking Summary
-            </span>
-            <span style={{
-              fontSize: "11px", fontWeight: 600, color: "#2563EB",
-              background: "rgba(59, 130, 246, 0.08)", padding: "2px 8px", borderRadius: 999,
-            }}>
-              Visit Scheduled
-            </span>
+        {/* Receipt card */}
+        <div className="rf-receipt-card">
+          <div className="rf-receipt-header">
+            <span className="rf-receipt-header__label">Booking Summary</span>
+            <span className="rf-receipt-header__badge">Visit Scheduled</span>
           </div>
-
-          {/* Receipt rows */}
-          <div style={{ padding: "4px 0" }}>
-            {/* Visit code â€” highlighted row */}
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "11px 16px",
-              borderBottom: "1px solid #F3F4F6",
-              background: "rgba(255, 140, 66, 0.04)",
-            }}>
-              <span style={{ fontSize: "13px", color: "#6B7280" }}>Visit Code</span>
-              <span style={{
-                fontSize: "14px", fontWeight: 700,
-                color: visitCode ? "#FF8C42" : "#9CA3AF",
-                fontFamily: visitCode ? "'Courier New', monospace" : "inherit",
-                letterSpacing: visitCode ? "0.08em" : 0,
-              }}>
-                {visitCode || "Generatingâ€¦"}
-              </span>
+          <div className="rf-receipt-rows">
+            {/* Visit code — highlighted row */}
+            <div className="rf-receipt-row rf-receipt-row--highlighted">
+              <span className="rf-receipt-row__label">Visit Code</span>
+              {visitCode
+                ? <span className="rf-receipt-row__code">{visitCode}</span>
+                : <span className="rf-receipt-row__code rf-receipt-row__code--pending">Generating…</span>
+              }
             </div>
-
             {[
-              { label: "Date",   value: fmtDateFull(visitDate) },
-              { label: "Time",   value: visitTime },
-              { label: "Room",   value: room },
-              { label: "Branch", value: branch, capitalize: true },
-            ].map((row, i, arr) => (
-              <div key={row.label} style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "11px 16px",
-                borderBottom: i < arr.length - 1 ? "1px solid #F3F4F6" : "none",
-              }}>
-                <span style={{ fontSize: "13px", color: "#6B7280" }}>{row.label}</span>
-                <span style={{
-                  fontSize: "13px", fontWeight: 600, color: "var(--text-heading, #111827)",
-                  textTransform: row.capitalize ? "capitalize" : "none",
-                }}>
+              { label: "Date",   value: fmtDateFull(visitDate), capitalize: false },
+              { label: "Time",   value: visitTime,              capitalize: false },
+              { label: "Room",   value: room,                   capitalize: false },
+              { label: "Branch", value: branch,                 capitalize: true  },
+            ].map((row) => (
+              <div key={row.label} className="rf-receipt-row">
+                <span className="rf-receipt-row__label">{row.label}</span>
+                <span
+                  className="rf-receipt-row__value"
+                  style={{ textTransform: row.capitalize ? "capitalize" : "none" }}
+                >
                   {row.value}
                 </span>
               </div>
@@ -715,26 +401,18 @@ function ReceiptModal({ visitDate, visitTime, visitCode, reservationCode, reserv
           </div>
         </div>
 
-        {/* â”€â”€ Note â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: "10px",
-          background: "rgba(14, 165, 233, 0.06)", border: "1px solid rgba(14, 165, 233, 0.25)",
-          borderRadius: "10px", padding: "12px 14px", marginBottom: "20px",
-        }}>
-          <Clock size={15} color="#0284C7" style={{ flexShrink: 0, marginTop: "2px" }} />
-          <p style={{ fontSize: "13px", color: "#0369A1", margin: 0, lineHeight: 1.5 }}>
+        {/* Note */}
+        <div className="rf-visit-note">
+          <Clock size={15} color="var(--rf-info-icon)" style={{ flexShrink: 0, marginTop: "2px" }} />
+          <p className="rf-visit-note__text">
             Please arrive on time. After your visit, the admin will verify your attendance and approve your reservation to proceed.
           </p>
         </div>
 
-        {/* â”€â”€ CTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <button onClick={onClose} className="btn btn-primary btn-full">
-          Return to Dashboard
-        </button>
+        <button onClick={onClose} className="btn btn-primary btn-full">Return to Dashboard</button>
       </div>
     </div>
   );
 }
 
 export default ReservationVisitStep;
-

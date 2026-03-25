@@ -1,6 +1,7 @@
 import React from "react";
 import FileUploadField from "./FileUploadField";
 import AddressCascadeFields from "./AddressCascadeFields";
+import PhoneInput from "../../../../../shared/components/PhoneInput";
 
 const errBorder = (show, value) =>
   show && !value ? "1.5px solid #dc2626" : undefined;
@@ -65,30 +66,25 @@ const PersonalInfoSection = ({
     <div className="form-row">
       <div className="form-group" data-field="mobileNumber">
         <label className="form-label">
-          Mobile Number <span style={{ color: "#dc2626" }}>*</span>
+          Mobile Number <span className="rf-required">*</span>
         </label>
-        <input
-          type="tel"
-          className="form-input"
-          placeholder="+63912345678"
+        <PhoneInput
           value={mobileNumber}
-          onChange={(e) => handlePhoneInput(e.target.value, setMobileNumber)}
-          onBlur={() =>
-            validateField("mobileNumber", mobileNumber, (v) => {
-              const valid = /^\+63\d{10}$/.test(v);
-              return {
-                valid,
-                error: valid ? null : "Enter valid PH mobile (+63 + 10 digits)",
-              };
-            })
-          }
-          style={{ border: errBorder(showValidationErrors, mobileNumber) }}
+          onChange={(e164) => setMobileNumber(e164)}
+          hasError={showValidationErrors && !mobileNumber}
+          required
         />
-        <FieldError error={showValidationErrors && !mobileNumber ? "Mobile number is required" : fieldErrors.mobileNumber} />
+        <FieldError
+          error={
+            showValidationErrors && !mobileNumber
+              ? "Mobile number is required"
+              : fieldErrors.mobileNumber
+          }
+        />
       </div>
       <div className="form-group" data-field="birthday">
         <label className="form-label">
-          Birthday <span style={{ color: "#dc2626" }}>*</span>
+          Birthday <span className="rf-required">*</span>
         </label>
         <input
           type="date"
@@ -103,7 +99,7 @@ const PersonalInfoSection = ({
               return { valid, error: valid ? null : "Birthday is required" };
             });
           }}
-          style={{ colorScheme: "light", cursor: "pointer", border: errBorder(showValidationErrors, birthday) }}
+          style={{ cursor: "pointer", border: errBorder(showValidationErrors, birthday) }}
         />
         <FieldError error={showValidationErrors && !birthday ? "Birthday is required" : fieldErrors.birthday} />
       </div>
@@ -113,7 +109,7 @@ const PersonalInfoSection = ({
     <div className="form-row">
       <div className="form-group" data-field="maritalStatus">
         <label className="form-label">
-          Marital Status <span style={{ color: "#dc2626" }}>*</span>
+          Marital Status <span className="rf-required">*</span>
         </label>
         <select
           className="form-select"
@@ -130,7 +126,7 @@ const PersonalInfoSection = ({
       </div>
       <div className="form-group" data-field="nationality">
         <label className="form-label">
-          Nationality <span style={{ color: "#dc2626" }}>*</span>
+          Nationality <span className="rf-required">*</span>
         </label>
         <input
           type="text"
@@ -153,7 +149,7 @@ const PersonalInfoSection = ({
     {/* Education */}
     <div className="form-group" data-field="educationLevel">
       <label className="form-label">
-        Educational Attainment <span style={{ color: "#dc2626" }}>*</span>
+        Educational Attainment <span className="rf-required">*</span>
       </label>
       <select
         className="form-select"
@@ -171,11 +167,9 @@ const PersonalInfoSection = ({
     </div>
 
     {/* ── Permanent Address (PSGC Cascading Dropdowns) ──────── */}
-    <div style={{ marginTop: "8px", marginBottom: "4px" }}>
-      <h4 style={{ fontSize: "14px", fontWeight: 600, color: "#374151", margin: "0 0 4px" }}>
-        Permanent Address
-      </h4>
-      <p style={{ fontSize: "12px", color: "#6B7280", margin: 0 }}>
+    <div className="rf-address-heading-wrap">
+      <h4 className="rf-address-heading">Permanent Address</h4>
+      <p className="rf-address-hint">
         Select your region first — province, city, and barangay will load automatically.
       </p>
     </div>
@@ -265,9 +259,7 @@ const PersonalInfoSection = ({
 const FieldError = ({ error }) => {
   if (!error) return null;
   return (
-    <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
-      {error}
-    </div>
+    <div className="rf-field-error">{error}</div>
   );
 };
 
@@ -277,7 +269,7 @@ const NameField = ({
 }) => (
   <div className="form-group" data-field={required ? fieldKey : undefined}>
     <label className="form-label">
-      {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
+      {label} {required && <span className="rf-required">*</span>}
     </label>
     <input
       type="text"
@@ -295,7 +287,7 @@ const NameField = ({
           };
         })
       }
-      style={{ border: required ? errBorder(showValidationErrors, value) : "1.5px solid #999" }}
+      style={{ border: required ? errBorder(showValidationErrors, value) : "1.5px solid var(--rf-text-muted)" }}
     />
     <FieldError error={showValidationErrors && required && !value ? `${label} is required` : errors[fieldKey]} />
   </div>

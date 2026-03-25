@@ -132,7 +132,7 @@ export default function BillDetailModal({
                     alignItems: "center",
                     gap: "0.5rem",
                     fontSize: "0.95rem",
-                    color: "#0A1628",
+                    color: "#1a1a1a",
                   }}
                 >
                   <Eye size={16} /> Payment Proof

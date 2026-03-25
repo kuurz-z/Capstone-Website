@@ -9,11 +9,11 @@ import "../styles/admin-tenants.css";
 
 export default function TenantsPage() {
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState(
-    isSuperAdmin ? "all" : (user?.branch || "all")
+    isOwner ? "all" : (user?.branch || "all")
   );
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -106,7 +106,7 @@ export default function TenantsPage() {
   ];
 
   const filters = [
-    ...(isSuperAdmin ? [{
+    ...(isOwner ? [{
       key: "branch",
       options: [
         { value: "all", label: "All Branches" },

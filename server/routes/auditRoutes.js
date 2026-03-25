@@ -12,7 +12,7 @@
  * - POST /api/audit-logs - Create new log entry
  * - POST /api/audit-logs/export - Export logs
  * - GET /api/audit-logs/security/failed-logins - Get failed login attempts
- * - DELETE /api/audit-logs/cleanup - Cleanup old logs (SuperAdmin only)
+ * - DELETE /api/audit-logs/cleanup - Cleanup old logs (Owner only)
  *
  * ============================================================================
  */
@@ -21,7 +21,7 @@ import express from "express";
 import {
   verifyToken,
   verifyAdmin,
-  verifySuperAdmin,
+  verifyOwner,
 } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
@@ -91,8 +91,8 @@ router.post("/export", verifyToken, verifyAdmin, exportAuditLogs);
 /**
  * @route   DELETE /api/audit-logs/cleanup
  * @desc    Archive/delete old audit logs
- * @access  SuperAdmin only
+ * @access  Owner only
  */
-router.delete("/cleanup", verifyToken, verifySuperAdmin, cleanupAuditLogs);
+router.delete("/cleanup", verifyToken, verifyOwner, cleanupAuditLogs);
 
 export default router;

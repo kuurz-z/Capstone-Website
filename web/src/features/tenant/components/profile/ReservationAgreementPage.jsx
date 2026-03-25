@@ -280,7 +280,15 @@ const ReservationAgreementPage = ({ reservation, onBack }) => {
                 branchDisplay,
                 `${ordinal(room.floor || 1)} Floor`,
                 roomType,
-                room.capacity ? `${room.capacity} beds` : null,
+                (() => {
+                  const cap = room.capacity || (
+                    room.type === "private" ? 1
+                    : room.type === "double-sharing" ? 2
+                    : room.type === "quadruple-sharing" ? 4
+                    : null
+                  );
+                  return cap ? `${cap} ${cap === 1 ? "person" : "persons"}` : null;
+                })(),
               ].filter(Boolean).map((tag) => (
                 <span
                   key={tag}
@@ -322,16 +330,31 @@ const ReservationAgreementPage = ({ reservation, onBack }) => {
                 <span style={{ color: "#64748B", display: "flex", alignItems: "center", gap: 6 }}>
                   <Users size={14} /> Capacity
                 </span>
-                <span style={{ color: "var(--text-heading, #0A1628)", fontWeight: 600 }}>{room.capacity ? `${room.capacity} beds` : "N/A"}</span>
-              </div>
-              <div style={detailRow}>
-                <span style={{ color: "#64748B", display: "flex", alignItems: "center", gap: 6 }}>
-                  <Bed size={14} /> Assigned Bed
-                </span>
                 <span style={{ color: "var(--text-heading, #0A1628)", fontWeight: 600 }}>
-                  {reservation.selectedBed?.position || "TBD"}
+                  {(() => {
+                    const cap = room.capacity || (
+                      room.type === "private" ? 1
+                      : room.type === "double-sharing" ? 2
+                      : room.type === "quadruple-sharing" ? 4
+                      : null
+                    );
+                    if (!cap) return "N/A";
+                    return `${cap} ${cap === 1 ? "person" : "persons"}`;
+                  })()}
                 </span>
               </div>
+              {room.type !== "private" && (
+                <div style={detailRow}>
+                  <span style={{ color: "#64748B", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Bed size={14} /> Assigned Bed
+                  </span>
+                  <span style={{ color: "var(--text-heading, #0A1628)", fontWeight: 600 }}>
+                    {reservation.selectedBed?.position
+                      ? reservation.selectedBed.position.charAt(0).toUpperCase() + reservation.selectedBed.position.slice(1) + " Bed"
+                      : "TBD"}
+                  </span>
+                </div>
+              )}
               {room.description && (
                 <div style={{ ...detailRow, borderBottom: "none", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
                   <span style={{ color: "#64748B", fontSize: 12, fontWeight: 500 }}>Description</span>

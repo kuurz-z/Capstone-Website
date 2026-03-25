@@ -8,22 +8,22 @@
  * Available Endpoints:
  * - GET    /api/users                    - Get all users (filtered by branch)
  * - GET    /api/users/stats              - Get user statistics
- * - GET    /api/users/branch/:branch     - Get users for specific branch (super admin)
+ * - GET    /api/users/branch/:branch     - Get users for specific branch (owner)
  * - GET    /api/users/email-by-username  - Get email by username (public)
  * - GET    /api/users/:userId            - Get specific user by ID
  * - PUT    /api/users/:userId            - Update user
- * - DELETE /api/users/:userId            - Delete user (super admin only)
+ * - DELETE /api/users/:userId            - Delete user (owner only)
  *
  * Branch Access Rules:
- * - Regular admins: Can only access users from their assigned branch
- * - Super admins: Can access users from ALL branches
+ * - Branch admins: Can only access users from their assigned branch
+ * - Owners: Can access users from ALL branches
  */
 
 import express from "express";
 import {
   verifyToken,
   verifyAdmin,
-  verifySuperAdmin,
+  verifyOwner,
 } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
@@ -53,7 +53,7 @@ const router = express.Router();
  *
  * Get user statistics for dashboard.
  *
- * Access: Admin (filtered by branch) | Super Admin (all branches)
+ * Access: Admin (filtered by branch) | Owner (all branches)
  */
 router.get("/stats", verifyToken, verifyAdmin, filterByBranch, getUserStats);
 
@@ -66,9 +66,9 @@ router.get("/stats", verifyToken, verifyAdmin, filterByBranch, getUserStats);
  *
  * Get all users for a specific branch.
  *
- * Access: Super Admin only
+ * Access: Owner only
  */
-router.get("/branch/:branch", verifyToken, verifySuperAdmin, getUsersByBranch);
+router.get("/branch/:branch", verifyToken, verifyOwner, getUsersByBranch);
 
 // ============================================================================
 // PUBLIC ENDPOINT - Email by Username
@@ -92,9 +92,9 @@ router.get("/email-by-username", getEmailByUsername);
  * Create a new user account from the admin panel.
  * Creates both a Firebase Auth account and a MongoDB user record.
  *
- * Access: Super Admin only
+ * Access: Owner only
  */
-router.post("/", verifyToken, verifySuperAdmin, createUser);
+router.post("/", verifyToken, verifyOwner, createUser);
 
 // ============================================================================
 // ACCOUNT STATUS MANAGEMENT
@@ -117,16 +117,16 @@ router.patch("/:userId/reactivate", verifyToken, verifyAdmin, filterByBranch, re
 /**
  * PATCH /api/users/:userId/ban
  * Ban a user account permanently.
- * Access: Super Admin only
+ * Access: Owner only
  */
-router.patch("/:userId/ban", verifyToken, verifySuperAdmin, banUser);
+router.patch("/:userId/ban", verifyToken, verifyOwner, banUser);
 
 /**
  * PATCH /api/users/:userId/permissions
  * Update an admin user's permissions.
- * Access: Super Admin only
+ * Access: Owner only
  */
-router.patch("/:userId/permissions", verifyToken, verifySuperAdmin, updatePermissions);
+router.patch("/:userId/permissions", verifyToken, verifyOwner, updatePermissions);
 
 // ============================================================================
 // GET ALL USERS
@@ -141,8 +141,8 @@ router.patch("/:userId/permissions", verifyToken, verifySuperAdmin, updatePermis
  * Access: Admin (filtered by branch) | Super Admin (all branches)
  *
  * Query Parameters:
- * - role: Filter by role (user, tenant, admin, superAdmin)
- * - branch: Filter by branch (super admin only)
+ * - role: Filter by role (applicant, tenant, branch_admin, owner)
+ * - branch: Filter by branch (owner only)
  * - isActive: Filter by active status (true/false)
  * - page: Page number for pagination (default: 1)
  * - limit: Items per page (default: 20)
@@ -186,9 +186,9 @@ router.get("/:userId", verifyToken, verifyAdmin, filterByBranch, getUserById);
  *
  * Update a user's information.
  *
- * Access: Super Admin only
+ * Access: Owner only
  */
-router.put("/:userId", verifyToken, verifySuperAdmin, updateUser);
+router.put("/:userId", verifyToken, verifyOwner, updateUser);
 
 // ============================================================================
 // DELETE USER (Super Admin only)
@@ -199,8 +199,8 @@ router.put("/:userId", verifyToken, verifySuperAdmin, updateUser);
  *
  * Delete a user permanently.
  *
- * Access: Super Admin only
+ * Access: Owner only
  */
-router.delete("/:userId", verifyToken, verifySuperAdmin, deleteUser);
+router.delete("/:userId", verifyToken, verifyOwner, deleteUser);
 
 export default router;

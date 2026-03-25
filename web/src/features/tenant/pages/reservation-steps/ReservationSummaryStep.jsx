@@ -1,12 +1,8 @@
 import React from "react";
-import {
-  formatBranch,
-  formatRoomType,
-} from "../../../../shared/utils/formatDate";
+import { formatBranch, formatRoomType } from "../../../../shared/utils/formatDate";
 
 /**
  * Step 1 — Room Selection Summary
- * Shows the selected room details before the user confirms and proceeds.
  */
 const ReservationSummaryStep = ({ reservationData, onNext, readOnly }) => {
   const room = reservationData?.room || {};
@@ -15,9 +11,7 @@ const ReservationSummaryStep = ({ reservationData, onNext, readOnly }) => {
     <div className="reservation-card">
       {/* Step Header */}
       <div className="main-header">
-        <div className="main-header-badge">
-          <span>Step 1 · Getting Started</span>
-        </div>
+        <div className="main-header-badge"><span>Step 1 · Getting Started</span></div>
         <h2 className="main-header-title">Room Summary</h2>
         <p className="main-header-subtitle">
           Review the details of your selected room below. Once confirmed, you'll
@@ -50,12 +44,8 @@ const ReservationSummaryStep = ({ reservationData, onNext, readOnly }) => {
           {reservationData?.selectedBed && (
             <div className="summary-row">
               <span className="summary-label">Selected Bed</span>
-              <span
-                className="summary-value"
-                style={{ textTransform: "capitalize" }}
-              >
-                {reservationData.selectedBed.position} Bed (
-                {reservationData.selectedBed.id})
+              <span className="summary-value" style={{ textTransform: "capitalize" }}>
+                {reservationData.selectedBed.position} Bed ({reservationData.selectedBed.id})
               </span>
             </div>
           )}
@@ -69,9 +59,7 @@ const ReservationSummaryStep = ({ reservationData, onNext, readOnly }) => {
           )}
           <div className="total-section">
             <span>Monthly Rent</span>
-            <span className="total-amount">
-              ₱{(room.price || 0).toLocaleString()}
-            </span>
+            <span className="total-amount">₱{(room.price || 0).toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -87,16 +75,9 @@ const ReservationSummaryStep = ({ reservationData, onNext, readOnly }) => {
 
       {/* Read-Only Notice */}
       {readOnly && (
-        <div
-          className="info-box"
-          style={{ background: "#FEF3C7", borderColor: "#F59E0B" }}
-        >
-          <div className="info-box-title" style={{ color: "#92400E" }}>
-            This step is locked
-          </div>
-          <div className="info-text" style={{ color: "#78350F" }}>
-            Room selection has been confirmed and cannot be changed.
-          </div>
+        <div className="rf-locked-banner">
+          <div className="info-box-title">This step is locked</div>
+          <div className="info-text">Room selection has been confirmed and cannot be changed.</div>
         </div>
       )}
 
@@ -104,7 +85,7 @@ const ReservationSummaryStep = ({ reservationData, onNext, readOnly }) => {
       {!readOnly && (
         <div className="stage-buttons" style={{ justifyContent: "flex-end" }}>
           <button onClick={onNext} className="btn btn-primary">
-            Confirm Room & Continue
+            Confirm Room &amp; Continue
           </button>
         </div>
       )}

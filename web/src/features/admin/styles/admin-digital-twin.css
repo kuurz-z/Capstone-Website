@@ -1,0 +1,824 @@
+@import "design-tokens.css";
+
+/* =============================================================================
+   DIGITAL TWIN PAGE
+   Professional minimalist styling for the live dormitory overview.
+   ============================================================================= */
+
+/* ── View Tabs (Visual Map | Occupancy | Trends) ── */
+.dt-view-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin-bottom: var(--spacing-lg);
+  width: fit-content;
+}
+
+.dt-view-tab {
+  padding: 8px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  font-family: var(--font-family);
+}
+
+.dt-view-tab--active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.dt-view-tab:hover:not(.dt-view-tab--active) {
+  color: var(--text-primary);
+}
+
+/* ── Toolbar (branch tabs + search) ── */
+.dt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+/* ── Search ── */
+.dt-search {
+  flex-shrink: 0;
+}
+
+.dt-search__input {
+  padding: 7px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  width: 220px;
+  transition: border-color var(--duration-fast) var(--ease-out);
+  outline: none;
+}
+
+.dt-search__input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.dt-search__input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Pill Filters ── */
+.dt-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.dt-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dt-filter-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+
+.dt-filter-pill {
+  padding: 4px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 550;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  font-family: var(--font-family);
+}
+
+.dt-filter-pill:hover:not(.dt-filter-pill--active) {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.dt-filter-pill--active {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+}
+
+.dt-filter-clear {
+  padding: 4px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-blue);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.dt-filter-clear:hover {
+  opacity: 0.7;
+}
+
+/* ── Floor Count Badge ── */
+.dt-floor-count {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* ── Alert Ribbon ── */
+.dt-alert-ribbon {
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.dt-alert-ribbon__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--status-warning);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.dt-alert-ribbon__toggle:hover {
+  background: var(--bg-hover);
+}
+
+.dt-alert-ribbon__count {
+  color: var(--text-primary);
+}
+
+.dt-alert-ribbon__list {
+  border-top: 1px solid var(--border-light);
+  padding: 6px 0;
+}
+
+.dt-alert-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: var(--font-size-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.dt-alert-item:hover {
+  background: var(--bg-hover);
+}
+
+.dt-alert-item--critical .dt-alert-item__icon {
+  color: var(--status-error);
+}
+
+.dt-alert-item--warning .dt-alert-item__icon {
+  color: var(--status-warning);
+}
+
+.dt-alert-item--info .dt-alert-item__icon {
+  color: var(--accent-blue);
+}
+
+.dt-alert-item__msg {
+  flex: 1;
+  color: var(--text-secondary);
+}
+
+.dt-alert-item__view {
+  padding: 3px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-blue);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.dt-alert-item__view:hover {
+  background: var(--accent-blue);
+  color: #fff;
+  border-color: var(--accent-blue);
+}
+
+.dt-alert-ribbon__more {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--accent-blue);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-family);
+}
+
+/* ── Branch Tabs ── */
+.dt-branch-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin-bottom: var(--spacing-lg);
+  width: fit-content;
+}
+
+.dt-branch-tab {
+  padding: 7px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 550;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  font-family: var(--font-family);
+}
+
+.dt-branch-tab--active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.dt-branch-tab:hover:not(.dt-branch-tab--active) {
+  color: var(--text-primary);
+}
+
+/* ── Legend ── */
+.dt-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: var(--spacing-lg);
+  padding: 8px 14px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-sm);
+  width: fit-content;
+}
+
+.dt-legend__title {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dt-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.dt-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Floor Group ── */
+.dt-floor-group {
+  margin-bottom: var(--spacing-xl);
+}
+
+.dt-floor-label {
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--spacing-md);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* ── Room Grid ── */
+.dt-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+/* ── Room Card ── */
+.dt-room-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--health-color, var(--status-success));
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-family);
+  transition: all var(--duration-normal) var(--ease-out);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dt-room-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-strong);
+}
+
+.dt-room-card--selected {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 1px var(--accent-blue), var(--shadow-md);
+}
+
+.dt-room-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.dt-room-card__name {
+  font-size: var(--font-size-md);
+  font-weight: 650;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.dt-room-card__type {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+  background: var(--bg-inset);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+}
+
+/* Bed dots */
+.dt-room-card__beds {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.dt-room-card__bed-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.dt-room-card:hover .dt-room-card__bed-dot {
+  transform: scale(1.15);
+}
+
+/* Occupancy bar */
+.dt-room-card__occupancy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dt-room-card__bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-inset);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.dt-room-card__bar-fill {
+  height: 100%;
+  background: var(--accent-blue);
+  border-radius: 2px;
+  transition: width 0.4s var(--ease-out);
+}
+
+.dt-room-card__occ-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: 550;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* Bottom indicators */
+.dt-room-card__indicators {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dt-room-card__indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+}
+
+.dt-room-card__indicator--maint {
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+}
+
+.dt-room-card__indicator--overdue {
+  background: var(--status-error-bg);
+  color: var(--status-error);
+}
+
+.dt-room-card__health-badge {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+/* ── Loading / Empty ── */
+.dt-loading,
+.dt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
+}
+
+/* ── Detail Drawer ── */
+.dt-drawer__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(3px);
+  z-index: 999;
+  animation: dtFadeIn 0.2s var(--ease-out);
+}
+
+@keyframes dtFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dt-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 440px;
+  max-width: 92vw;
+  height: 100vh;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-drawer);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  animation: dtSlideIn 0.3s var(--ease-out);
+}
+
+@keyframes dtSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.dt-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.dt-drawer__title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.dt-drawer__close {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.dt-drawer__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.dt-drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+
+.dt-drawer__body::-webkit-scrollbar {
+  width: 4px;
+}
+.dt-drawer__body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+}
+
+.dt-drawer__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.dt-drawer__section {
+  margin-bottom: 22px;
+}
+
+.dt-drawer__section-label {
+  font-size: var(--font-size-xs);
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dt-drawer__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+}
+
+.dt-drawer__row:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dt-drawer__row-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.dt-drawer__row-value {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  font-weight: 550;
+}
+
+/* ── Health Gauge ── */
+.dt-health-gauge {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 0;
+}
+
+.dt-health-gauge__ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 4px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  background: conic-gradient(
+    var(--color) calc(var(--score) * 1%),
+    var(--bg-inset) calc(var(--score) * 1%)
+  );
+}
+
+.dt-health-gauge__ring::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  background: var(--bg-card);
+  border-radius: 50%;
+}
+
+.dt-health-gauge__value {
+  position: relative;
+  z-index: 1;
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color);
+}
+
+.dt-health-gauge__breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* ── Bed Row ── */
+.dt-bed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.dt-bed-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dt-bed-row__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dt-bed-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dt-bed-row__position {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.dt-bed-row__tenant {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.dt-bed-row__since {
+  margin-left: 6px;
+  color: var(--text-muted);
+}
+
+.dt-bed-row__vacant {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Maintenance Row ── */
+.dt-maint-row {
+  padding: 8px 0;
+}
+
+.dt-maint-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dt-maint-row__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.dt-maint-row__title {
+  font-size: var(--font-size-sm);
+  font-weight: 550;
+  color: var(--text-primary);
+}
+
+.dt-maint-row__meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.dt-maint-row__cat {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.dt-maint-row__urgency {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.dt-maint-row__urgency--high {
+  color: var(--status-error);
+}
+
+.dt-maint-row__urgency--medium {
+  color: var(--status-warning);
+}
+
+.dt-maint-row__urgency--low {
+  color: var(--status-success);
+}
+
+/* ── Billing Row ── */
+.dt-billing-group {
+  margin-bottom: 12px;
+}
+
+.dt-billing-group__name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.dt-billing-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: var(--font-size-xs);
+}
+
+.dt-billing-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dt-billing-row__month {
+  color: var(--text-muted);
+  min-width: 70px;
+}
+
+.dt-billing-row__amount {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .dt-room-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px;
+  }
+
+  .dt-room-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .dt-legend {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dt-drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}

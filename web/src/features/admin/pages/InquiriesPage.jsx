@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { MessageSquare, MailCheck, CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { inquiryApi } from "../../../shared/api/apiClient";
+import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import InquiryDetailsModal from "../components/InquiryDetailsModal";
 import { useInquiries, useInquiryStats } from "../../../shared/hooks/queries/useInquiries";
@@ -31,6 +32,8 @@ export default function InquiriesPage({ isEmbedded = false }) {
   const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", variant: "info", onConfirm: null });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [sortBy, setSortBy] = useState("recent");
   const [page, setPage] = useState(1);
   const LIMIT = 10;
 
@@ -38,13 +41,23 @@ export default function InquiriesPage({ isEmbedded = false }) {
     const p = { page, limit: LIMIT };
     if (statusFilter) p.status = statusFilter;
     if (searchTerm) p.search = searchTerm;
+    if (branchFilter) p.branch = branchFilter;
     return p;
-  }, [page, statusFilter, searchTerm]);
+  }, [page, statusFilter, searchTerm, branchFilter]);
 
   const { data: inquiriesData, isLoading: loading } = useInquiries(params);
   const { data: statsData } = useInquiryStats();
 
-  const inquiries = inquiriesData?.inquiries || [];
+  const rawInquiries = inquiriesData?.inquiries || [];
+  const inquiries = useMemo(() => {
+    const getName = (inq) => inq.name || `${inq.firstName || ""} ${inq.lastName || ""}`.trim() || "";
+    const arr = [...rawInquiries];
+    if (sortBy === "oldest") arr.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    else if (sortBy === "name-az") arr.sort((a, b) => getName(a).localeCompare(getName(b)));
+    else if (sortBy === "name-za") arr.sort((a, b) => getName(b).localeCompare(getName(a)));
+    // "recent" → default API order (newest first)
+    return arr;
+  }, [rawInquiries, sortBy]);
   const total = inquiriesData?.pagination?.total || 0;
   const totalPages = inquiriesData?.pagination?.pages || 1;
 
@@ -63,8 +76,14 @@ export default function InquiriesPage({ isEmbedded = false }) {
       variant: "warning", confirmText: "Archive",
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, open: false }));
-        try { await inquiryApi.archive(inquiryId); refetchAll(); }
-        catch (err) { console.error("Error archiving inquiry:", err); }
+        try {
+          await inquiryApi.archive(inquiryId);
+          refetchAll();
+          showNotification("Inquiry archived successfully", "success", 3000);
+        } catch (err) {
+          console.error("Error archiving inquiry:", err);
+          showNotification(err.message || "Failed to archive inquiry", "error", 3000);
+        }
       },
     });
   };
@@ -77,14 +96,35 @@ export default function InquiriesPage({ isEmbedded = false }) {
 
   const filters = [
     {
+      key: "branch",
+      options: [
+        { value: "",           label: "All Branches" },
+        { value: "gil-puyat",  label: "Gil Puyat" },
+        { value: "guadalupe",  label: "Guadalupe" },
+      ],
+      value: branchFilter,
+      onChange: (v) => { setBranchFilter(v); setPage(1); },
+    },
+    {
       key: "status",
       options: [
-        { value: "", label: "All" },
-        { value: "pending", label: "Pending" },
+        { value: "",         label: "All Status" },
+        { value: "pending",  label: "Pending" },
         { value: "resolved", label: "Resolved" },
       ],
       value: statusFilter,
       onChange: (v) => { setStatusFilter(v); setPage(1); },
+    },
+    {
+      key: "sort",
+      options: [
+        { value: "recent",  label: "Most Recent" },
+        { value: "oldest",  label: "Oldest First" },
+        { value: "name-az", label: "Name A–Z" },
+        { value: "name-za", label: "Name Z–A" },
+      ],
+      value: sortBy,
+      onChange: (v) => setSortBy(v),
     },
   ];
 

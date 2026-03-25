@@ -29,7 +29,7 @@ const DormPreferencesSection = ({
     <div className="form-group" data-field="referralSource">
       <label className="form-label">
         How Did You First Learn About Lilycrest Gil Puyat?{" "}
-        <span style={{ color: "#dc2626" }}>*</span>
+        <span className="rf-required">*</span>
       </label>
       <div
         className="radio-group"
@@ -75,7 +75,7 @@ const DormPreferencesSection = ({
     {/* Move-in Date */}
     <div className="form-group" data-field="targetMoveInDate">
       <label className="form-label">
-        Target Move In Date (within 3 months) <span style={{ color: "#dc2626" }}>*</span>
+        Target Move In Date (within 3 months) <span className="rf-required">*</span>
       </label>
       <input
         type="date"
@@ -101,7 +101,7 @@ const DormPreferencesSection = ({
     {/* Move-in Time */}
     <div className="form-group" data-field="estimatedMoveInTime">
       <label className="form-label">
-        Estimated Time of Move In (8:00 AM to 6:00 PM) <span style={{ color: "#dc2626" }}>*</span>
+        Estimated Time of Move In (8:00 AM to 6:00 PM) <span className="rf-required">*</span>
       </label>
       <select
         className="form-select"
@@ -147,7 +147,7 @@ const DormPreferencesSection = ({
     {/* Work Schedule */}
     <div className="form-group" data-field="workSchedule">
       <label className="form-label">
-        Work Schedule <span style={{ color: "#dc2626" }}>*</span>
+        Work Schedule <span className="rf-required">*</span>
       </label>
       <div
         className="radio-group"
@@ -195,7 +195,7 @@ const DormPreferencesSection = ({
 const FieldError = ({ error }) => {
   if (!error) return null;
   return (
-    <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+    <div className="rf-field-error">
       {error}
     </div>
   );

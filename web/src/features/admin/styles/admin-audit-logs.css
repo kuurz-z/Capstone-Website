@@ -1,15 +1,15 @@
 /* =============================================================================
-   AUDIT LOGS — Notion-style (polished)
+   AUDIT LOGS — Refined light-mode design
    ============================================================================= */
 @import "design-tokens.css";
 
 .audit-type-badge {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: capitalize;
   color: var(--text-secondary);
   background: var(--bg-active);
-  padding: 3px 8px;
+  padding: 3px 10px;
   border-radius: 99px;
   letter-spacing: 0.02em;
 }
@@ -20,5 +20,5 @@
   white-space: normal;
   word-break: break-word;
   max-width: 400px;
-  line-height: 1.45;
+  line-height: 1.5;
 }

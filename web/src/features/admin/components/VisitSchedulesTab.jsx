@@ -6,7 +6,7 @@ import ConfirmModal from "../../../shared/components/ConfirmModal";
 import VisitDetailsModal from "./VisitDetailsModal";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import { useQueryClient } from "@tanstack/react-query";
-import { SummaryBar, DataTable, StatusBadge } from "./shared";
+import { SummaryBar, ActionBar, DataTable, StatusBadge } from "./shared";
 import "../styles/design-tokens.css";
 import "../styles/admin-reservations.css";
 
@@ -32,6 +32,9 @@ function VisitSchedulesTab() {
   const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", variant: "info", onConfirm: null });
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [activeFilter, setActiveFilter] = useState(-1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("recent");
 
   const { data: rawReservations = [], isLoading: loading } = useReservations();
 
@@ -60,6 +63,9 @@ function VisitSchedulesTab() {
         // 1. Add historical rows from visitHistory (dimmed, read-only)
         if (r.visitHistory && r.visitHistory.length > 0) {
           r.visitHistory.forEach((h, idx) => {
+            // Determine the timestamp when the admin acted (approved or rejected)
+            const actionedAt = h.approvedAt || h.rejectedAt || null;
+            const actionedLabel = h.status === "approved" ? "Approved" : h.status === "rejected" ? "Rejected" : h.status === "cancelled" ? "Cancelled" : null;
             rows.push({
               ...base,
               id: `${r._id}-history-${idx}`,
@@ -69,11 +75,14 @@ function VisitSchedulesTab() {
               scheduleApproved: h.status === "approved",
               scheduleRejected: h.status === "rejected",
               scheduleRejectionReason: h.rejectionReason || "",
-              scheduledDate: h.scheduledAt || r.createdAt,
-              historyStatus: h.status, // pending | rejected | approved | cancelled
+              // scheduledAt = when tenant submitted (visitScheduledAt recorded on the attempt)
+              scheduledDate: h.scheduledAt || r.visitScheduledAt || r.createdAt,
+              actionedAt,
+              actionedLabel,
+              historyStatus: h.status,
               isHistorical: true,
               historyIndex: idx,
-              attemptNumber: h.attemptNumber || null, // use persisted number
+              attemptNumber: h.attemptNumber || null,
             });
           });
         }
@@ -92,15 +101,18 @@ function VisitSchedulesTab() {
             scheduleRejected: false,
             scheduleRejectionReason: "",
             status: r.status,
-            scheduledDate: r.createdAt,
+            // visitScheduledAt = when the tenant submitted the schedule form
+            scheduledDate: r.visitScheduledAt || r.createdAt,
+            actionedAt: null,
+            actionedLabel: null,
             isHistorical: false,
             attemptNumber: (r.visitHistory?.length || 0) + 1,
           });
         }
       });
 
-    // Sort: newest first, but group by reservation
-    rows.sort((a, b) => new Date(b.visitDate || 0) - new Date(a.visitDate || 0));
+    // Sort: newest REQUEST first (when the applicant submitted the schedule)
+    rows.sort((a, b) => new Date(b.scheduledDate || 0) - new Date(a.scheduledDate || 0));
     return rows;
   }, [rawReservations]);
 
@@ -111,55 +123,75 @@ function VisitSchedulesTab() {
 
   const refetchAll = () => queryClient.invalidateQueries({ queryKey: ["reservations"] });
 
-  const confirmAction = (title, message, variant, confirmText, action) => {
+  const confirmAction = (title, message, variant, confirmText, action, successMsg = null, errorMsg = null) => {
     setConfirmModal({
       open: true, title, message, variant, confirmText,
       onConfirm: async () => {
         setConfirmModal((p) => ({ ...p, open: false }));
-        try { await action(); refetchAll(); }
-        catch { showNotification(`Failed: ${title}`, "error"); }
+        try {
+          await action();
+          refetchAll();
+          if (successMsg) showNotification(successMsg, "success", 3000);
+        }
+        catch { showNotification(errorMsg || `Failed: ${title}`, "error", 3000); }
       },
     });
   };
 
   const handleVerify = (id) => {
-    confirmAction("Verify Attendance", "Confirm the applicant's on-site attendance?", "info", "Verify",
+    confirmAction(
+      "Verify Attendance",
+      "Confirm the applicant's on-site attendance?",
+      "info", "Verify",
       async () => {
         setActionLoading(id);
         try {
           await reservationApi.update(id, { scheduleApproved: true, visitApproved: true, status: "visit_approved" });
-          showNotification("Attendance verified", "success");
         } finally {
           setActionLoading(null);
         }
       },
+      "Attendance verified successfully",
+      "Failed to verify attendance. Please try again.",
     );
   };
 
   const handleRevoke = (id) => {
-    confirmAction("Revoke Verification", "Revoke this applicant's attendance verification?", "danger", "Revoke",
+    confirmAction(
+      "Revoke Verification",
+      "Revoke this applicant's attendance verification?",
+      "danger", "Revoke",
       async () => {
         await reservationApi.update(id, { scheduleApproved: false, visitApproved: false });
-        showNotification("Verification revoked", "success");
       },
+      "Verification revoked successfully",
+      "Failed to revoke verification. Please try again.",
     );
   };
 
   const handleDelete = (id) => {
-    confirmAction("Delete Visit Schedule", "This will permanently delete this visit schedule.", "danger", "Delete",
+    confirmAction(
+      "Delete Visit Schedule",
+      "This will permanently delete this visit schedule.",
+      "danger", "Delete",
       async () => {
         await reservationApi.delete(id);
-        showNotification("Visit schedule deleted", "success");
       },
+      "Visit schedule deleted",
+      "Failed to delete visit schedule. Please try again.",
     );
   };
 
   const handleDeleteHistoryEntry = (reservationId, historyIndex) => {
-    confirmAction("Delete History Entry", "Remove this visit history entry?", "danger", "Delete",
+    confirmAction(
+      "Delete History Entry",
+      "Remove this visit history entry?",
+      "danger", "Delete",
       async () => {
         await reservationApi.update(reservationId, { removeVisitHistoryIndex: historyIndex });
-        showNotification("History entry removed", "success");
       },
+      "History entry removed",
+      "Failed to remove history entry. Please try again.",
     );
   };
 
@@ -175,14 +207,57 @@ function VisitSchedulesTab() {
     { label: "Rejected",        value: rejected.length,  icon: Ban,          color: "orange" },
   ];
 
-  // Filter data based on active summary card
+  // Filter data based on active summary card, then apply search/branch/sort
   const displayData = useMemo(() => {
-    if (activeFilter === 0) return upcoming;
-    if (activeFilter === 1) return completed;
-    if (activeFilter === 2) return noShows;
-    if (activeFilter === 3) return rejected;
-    return schedules;
-  }, [activeFilter, schedules, upcoming, completed, noShows, rejected]);
+    let base;
+    if (activeFilter === 0) base = upcoming;
+    else if (activeFilter === 1) base = completed;
+    else if (activeFilter === 2) base = noShows;
+    else if (activeFilter === 3) base = rejected;
+    else base = schedules;
+
+    const q = searchTerm.trim().toLowerCase();
+    let result = base.filter((s) => {
+      const matchSearch = !q ||
+        s.customer.toLowerCase().includes(q) ||
+        s.email.toLowerCase().includes(q) ||
+        s.reservationCode.toLowerCase().includes(q) ||
+        s.room.toLowerCase().includes(q);
+      const matchBranch = branchFilter === "all" || s.branch.toLowerCase() === branchFilter.toLowerCase();
+      return matchSearch && matchBranch;
+    });
+
+    if (sortBy === "oldest") result = [...result].sort((a, b) => new Date(a.scheduledDate || 0) - new Date(b.scheduledDate || 0));
+    else if (sortBy === "name-az") result = [...result].sort((a, b) => a.customer.localeCompare(b.customer));
+    else if (sortBy === "name-za") result = [...result].sort((a, b) => b.customer.localeCompare(a.customer));
+    // "recent" is the default (already sorted by newest scheduledDate)
+
+    return result;
+  }, [activeFilter, schedules, upcoming, completed, noShows, rejected, searchTerm, branchFilter, sortBy]);
+
+  const visitFilters = [
+    {
+      key: "branch",
+      options: [
+        { value: "all",        label: "All Branches" },
+        { value: "Gil Puyat",  label: "Gil Puyat" },
+        { value: "Guadalupe",  label: "Guadalupe" },
+      ],
+      value: branchFilter,
+      onChange: (v) => setBranchFilter(v),
+    },
+    {
+      key: "sort",
+      options: [
+        { value: "recent",   label: "Most Recent" },
+        { value: "oldest",   label: "Oldest First" },
+        { value: "name-az", label: "Name A–Z" },
+        { value: "name-za", label: "Name Z–A" },
+      ],
+      value: sortBy,
+      onChange: (v) => setSortBy(v),
+    },
+  ];
 
   const columns = [
     {
@@ -223,8 +298,27 @@ function VisitSchedulesTab() {
     { key: "branch", label: "Branch", render: (row) => <span style={{ opacity: row.isHistorical ? 0.55 : 1 }}>{row.branch}</span> },
     { key: "room",   label: "Room",   render: (row) => <span style={{ opacity: row.isHistorical ? 0.55 : 1 }}>{row.room}</span> },
     {
+      key: "scheduledDate",
+      label: "Requested",
+      render: (row) => {
+        const d = row.scheduledDate;
+        if (!d) return <span style={{ color: "var(--text-muted)", opacity: row.isHistorical ? 0.55 : 1 }}>—</span>;
+        const date = new Date(d);
+        return (
+          <div style={{ lineHeight: 1.5, opacity: row.isHistorical ? 0.55 : 1 }}>
+            <div style={{ fontWeight: 500, color: "var(--text-primary)", fontSize: "var(--font-size-sm)" }}>
+              {date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </div>
+            <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+              {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       key: "visitDate",
-      label: "Date & Time",
+      label: "Visit Appointment",
       render: (row) => (
         <div style={{ lineHeight: 1.5, opacity: row.isHistorical ? 0.55 : 1 }}>
           <div style={{ fontWeight: 500, color: "var(--text-primary)" }}>
@@ -238,6 +332,22 @@ function VisitSchedulesTab() {
       key: "status",
       label: "Status",
       render: (row) => {
+        // Shared helper: render actioned timestamp below a badge
+        const ActionedTime = () => {
+          if (!row.actionedAt) return null;
+          const d = new Date(row.actionedAt);
+          return (
+            <div style={{ marginTop: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-primary)", fontWeight: 500 }}>
+                {d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </div>
+              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                {d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+              </div>
+            </div>
+          );
+        };
+
         // Historical entries
         if (row.isHistorical) {
           const map = {
@@ -247,7 +357,12 @@ function VisitSchedulesTab() {
             pending:   { status: "pending",  label: "Scheduled" },
           };
           const cfg = map[row.historyStatus] || map.pending;
-          return <span style={{ opacity: 0.55 }}><StatusBadge status={cfg.status} label={cfg.label} /></span>;
+          return (
+            <div style={{ opacity: 0.55 }}>
+              <StatusBadge status={cfg.status} label={cfg.label} />
+              <ActionedTime />
+            </div>
+          );
         }
         // Active entries
         if (row.scheduleRejected) {
@@ -256,7 +371,12 @@ function VisitSchedulesTab() {
         const isUpcoming = !row.visitApproved && new Date(row.visitDate) >= new Date();
         const status = row.visitApproved ? "verified" : isUpcoming ? "pending" : "overdue";
         const label  = row.visitApproved ? "Completed" : isUpcoming ? "Upcoming" : "No Show";
-        return <StatusBadge status={status} label={label} />;
+        return (
+          <div>
+            <StatusBadge status={status} label={label} />
+            <ActionedTime />
+          </div>
+        );
       },
     },
     {
@@ -292,7 +412,7 @@ function VisitSchedulesTab() {
                   disabled={actionLoading === row.id}
                   onClick={(e) => { e.stopPropagation(); handleVerify(row.id); }}
                 >
-                  Confirm
+                  Approve
                 </button>
                 <button
                   className="res-icon-btn"
@@ -329,6 +449,14 @@ function VisitSchedulesTab() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-lg)" }}>
       <SummaryBar items={summaryItems} onItemClick={setActiveFilter} activeIndex={activeFilter} />
+      <ActionBar
+        search={{
+          value: searchTerm,
+          onChange: (v) => setSearchTerm(v),
+          placeholder: "Search by name, email, code, or room...",
+        }}
+        filters={visitFilters}
+      />
       <DataTable
         columns={columns}
         data={displayData}

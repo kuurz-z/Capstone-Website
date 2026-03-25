@@ -13,7 +13,7 @@ import { useEffect } from "react";
 // Guards (kept as static imports — small files, needed immediately)
 import RequireAdmin from "./shared/guards/RequireAdmin";
 import RequireNonAdmin from "./shared/guards/RequireNonAdmin";
-import RequireSuperAdmin from "./shared/guards/RequireSuperAdmin";
+import RequireOwner from "./shared/guards/RequireOwner";
 import ProtectedRoute from "./shared/components/ProtectedRoute";
 
 // ============================================================================
@@ -60,6 +60,15 @@ const UserManagementPage = React.lazy(
 );
 const AdminBillingPage = React.lazy(
   () => import("./features/admin/pages/AdminBillingPage"),
+);
+const InquiriesPage = React.lazy(
+  () => import("./features/admin/pages/InquiriesPage"),
+);
+const OccupancyTrackingPage = React.lazy(
+  () => import("./features/admin/pages/OccupancyTrackingPage"),
+);
+const DigitalTwinPage = React.lazy(
+  () => import("./features/admin/pages/DigitalTwinPage"),
 );
 const SuperAdminDashboard = React.lazy(
   () => import("./features/super-admin/pages/SuperAdminDashboard"),
@@ -231,6 +240,18 @@ function AppContent() {
               }
             />
 
+            {/* Super Admin — system-wide overview */}
+            <Route
+              path="dashboard/super"
+              element={
+                <RequireOwner>
+                  <RouteErrorBoundary name="SuperAdminDashboard">
+                    <SuperAdminDashboard />
+                  </RouteErrorBoundary>
+                </RequireOwner>
+              }
+            />
+
             <Route
               path="reservations"
               element={
@@ -288,36 +309,61 @@ function AppContent() {
                 </RouteErrorBoundary>
               }
             />
+            <Route
+              path="inquiries"
+              element={
+                <RouteErrorBoundary name="Inquiries">
+                  <InquiriesPage />
+                </RouteErrorBoundary>
+              }
+            />
+            {/* Legacy routes — redirect to unified Rooms page */}
+            <Route
+              path="room-configuration"
+              element={<Navigate to="/admin/room-availability" replace />}
+            />
+            <Route
+              path="occupancy"
+              element={<Navigate to="/admin/room-availability" replace />}
+            />
+            <Route
+              path="digital-twin"
+              element={
+                <RouteErrorBoundary name="DigitalTwin">
+                  <DigitalTwinPage />
+                </RouteErrorBoundary>
+              }
+            />
 
             {/* ── Super Admin only routes (inside /admin layout) ── */}
             <Route
               path="branches"
               element={
-                <RequireSuperAdmin>
+                <RequireOwner>
                   <RouteErrorBoundary name="Branches">
                     <BranchManagementPage />
                   </RouteErrorBoundary>
-                </RequireSuperAdmin>
+                </RequireOwner>
               }
             />
             <Route
               path="roles"
               element={
-                <RequireSuperAdmin>
+                <RequireOwner>
                   <RouteErrorBoundary name="Roles">
                     <RolePermissionsPage />
                   </RouteErrorBoundary>
-                </RequireSuperAdmin>
+                </RequireOwner>
               }
             />
             <Route
               path="settings"
               element={
-                <RequireSuperAdmin>
+                <RequireOwner>
                   <RouteErrorBoundary name="Settings">
                     <SystemSettingsPage />
                   </RouteErrorBoundary>
-                </RequireSuperAdmin>
+                </RequireOwner>
               }
             />
           </Route>

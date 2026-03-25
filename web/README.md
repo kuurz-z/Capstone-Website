@@ -6,11 +6,15 @@ React-based frontend for the Lilycrest Dormitory Management System.
 
 ## Technology Stack
 
-- **React 19** - UI framework
-- **Vite** - Build tool & dev server
-- **React Router** - Client-side routing
-- **Firebase Auth** - Authentication
-- **CSS Modules** - Component styling
+- **React 19** — UI framework
+- **Vite** — Build tool & dev server
+- **React Router** — Client-side routing
+- **Firebase Auth** — Authentication
+- **Zustand** — Lightweight state management
+- **React Query** — Server state & data fetching
+- **Socket.io Client** — Real-time notifications
+- **libphonenumber-js** — Phone number validation & formatting
+- **CSS Modules** — Component styling
 
 ---
 
@@ -19,18 +23,23 @@ React-based frontend for the Lilycrest Dormitory Management System.
 ```
 src/
 ├── features/              # Role-based modules
-│   ├── public/           # Public pages (landing, rooms, FAQs)
-│   ├── tenant/           # Tenant dashboard & features
+│   ├── public/           # Public pages (landing, signup, legal, verify email)
+│   ├── tenant/           # Applicant & tenant features
 │   ├── admin/            # Branch admin interface
-│   └── super-admin/      # System admin interface
+│   ├── super-admin/      # System admin pages (nested in admin layout)
+│   └── shared/           # Cross-feature shared components
 │
 ├── shared/               # Shared across all roles
-│   ├── api/             # API client functions
+│   ├── api/             # API client functions (14 modules)
 │   ├── components/      # Reusable UI components
-│   ├── guards/          # Route protection
+│   ├── data/            # Static data files
+│   ├── guards/          # Route protection (4 guards)
 │   ├── hooks/           # Custom React hooks
 │   ├── layouts/         # Page layouts
-│   └── utils/           # Helper functions
+│   ├── lib/             # React Query client & query keys
+│   ├── stores/          # Zustand state stores
+│   ├── styles/          # Shared CSS files
+│   └── utils/           # Helper functions (15+ utilities)
 │
 ├── assets/              # Images and static files
 ├── firebase/            # Firebase configuration
@@ -99,64 +108,76 @@ Outputs to `build/` directory.
 
 - Email/password signup/login
 - Google OAuth integration
-- Email verification
+- Email verification with dedicated verify page
 - Password reset
-- Branch selection on first login
+- Unified sign-in for all roles (tenants, admins, super admins)
 
 ### Public Features
 
-- Landing page
-- Branch information pages (Gil Puyat, Guadalupe)
-- Room listings with filters
+- Landing page with branch information
+- Room listings with filters via Check Availability page
 - Inquiry submission modal
-- FAQs page
+- Privacy policy & terms of service pages
+- Sign up with comprehensive validation
 
-### Tenant Portal
+### Applicant & Tenant Portal
 
-- Dashboard with overview
-- Billing & payment history
-- Maintenance requests
-- Announcements
+- Profile page with demographic details & document uploads
+- Check availability with room browsing & bed selection
+- Multi-step reservation flow with payment upload
+- Online payment via PayMongo (deposits & monthly bills)
+- Billing dashboard with payment history & PDF receipts
+- Maintenance request submission & tracking
+- Announcements with acknowledgment
 - Contract management
-- Profile settings
+- In-app notifications with real-time updates
 
 ### Admin Dashboard
 
-- Reservations management (inquiries + reservations)
+- Dashboard with statistics & quick actions
+- Reservations management (with embedded Inquiries tab)
 - Tenant management
-- Room management (availability + setup + occupancy)
+- Room management (Availability + Setup + Occupancy tabs)
+- Billing management (room-based bill generation)
+- Maintenance request management
 - User management
 - Audit logs
 
 ### Super Admin Panel
 
-- System-wide user management
+- System-wide dashboard with cross-branch comparisons
 - Branch management
-- Role & permissions
-- Activity logs
+- Role & permissions management
 - System settings
 
 ---
 
 ## API Integration
 
-All API calls use `apiClient.js` with automatic:
+All API calls use modular API clients in `shared/api/` with automatic:
 
-- Firebase token injection
-- Error handling
-- Request/response formatting
+- Firebase token injection via `httpClient.js`
+- Error handling & response formatting
+- Base URL configuration
 
-**Example**:
+**API Modules:**
 
-```javascript
-import { roomApi } from "../shared/api/apiClient";
-
-// Fetch rooms
-const rooms = await roomApi.getAll({ branch: "gil-puyat" });
-
-// Create reservation
-const reservation = await reservationApi.create(reservationData);
-```
+| Module              | Purpose                      |
+| ------------------- | ---------------------------- |
+| `httpClient.js`     | Core fetch wrapper with auth |
+| `apiClient.js`      | Shared API configuration     |
+| `authApi.js`        | Authentication endpoints     |
+| `roomApi.js`        | Room browsing & management   |
+| `reservationApi.js` | Reservation CRUD             |
+| `inquiryApi.js`     | Inquiry submission           |
+| `billingApi.js`     | Billing & payments           |
+| `userApi.js`        | User management              |
+| `announcementApi.js`| Announcements                |
+| `maintenanceApi.js` | Maintenance requests         |
+| `notificationApi.js`| In-app notifications         |
+| `auditApi.js`       | Audit log retrieval          |
+| `commonApi.js`      | Common/shared utilities      |
+| `tenantApi.js`      | Tenant-specific calls        |
 
 ---
 
@@ -164,40 +185,81 @@ const reservation = await reservationApi.create(reservationData);
 
 ### Public Routes
 
-- `/` - Landing page
-- `/gil-puyat` - Gil Puyat branch info
-- `/guadalupe` - Guadalupe branch info
-- `/rooms/*` - Room listings
-- `/faqs` - FAQs page
-- `/signin` - Tenant sign in
-- `/signup` - Tenant sign up
+- `/` — Landing page
+- `/signup` — Sign up (unified)
+- `/signin` — Sign in (unified, all roles)
+- `/forgot-password` — Password reset
+- `/verify-email` — Email verification
+- `/privacy-policy` — Privacy policy
+- `/terms-of-service` — Terms of service
 
-### Protected Routes (Tenant)
+### Protected Routes (Applicant / Tenant)
 
-- `/tenant/dashboard` - Tenant dashboard
-- `/tenant/profile` - Profile settings
-- `/tenant/billing` - Billing & payments
-- `/tenant/maintenance` - Maintenance requests
-- `/tenant/announcements` - Announcements
-- `/tenant/contracts` - Contract details
+- `/applicant/profile` — Profile management
+- `/applicant/check-availability` — Room browsing & bed selection
+- `/applicant/reservation` — Multi-step reservation flow
+- `/applicant/billing` — Billing & payments
+- `/applicant/maintenance` — Maintenance requests
+- `/applicant/announcements` — Announcements
+- `/applicant/contracts` — Contract details
 
 ### Protected Routes (Admin)
 
-- `/admin/dashboard` - Admin dashboard
-- `/admin/reservations` - Inquiries + Reservations
-- `/admin/tenants` - Tenant management
-- `/admin/room-availability` - Room management (tabs)
-- `/admin/users` - User management
-- `/admin/audit-logs` - Audit trail
+- `/admin/dashboard` — Admin dashboard
+- `/admin/reservations` — Inquiries + Reservations
+- `/admin/tenants` — Tenant management
+- `/admin/room-availability` — Room management (tabs)
+- `/admin/billing` — Billing management
+- `/admin/maintenance` — Maintenance management
+- `/admin/users` — User management
+- `/admin/audit-logs` — Audit trail
 
-### Protected Routes (Super Admin)
+### Protected Routes (Super Admin — nested under `/admin`)
 
-- `/super-admin/dashboard` - System overview
-- `/super-admin/users` - User management
-- `/super-admin/branches` - Branch management
-- `/super-admin/roles` - Role & permissions
-- `/super-admin/activity-logs` - Activity logs
-- `/super-admin/settings` - System settings
+- `/admin/branches` — Branch management
+- `/admin/roles` — Role & permissions
+- `/admin/settings` — System settings
+
+### Legacy Redirects
+
+Old `/super-admin/*`, `/tenant/*`, and `/admin/login` paths automatically redirect to their new equivalents.
+
+---
+
+## Route Guards
+
+| Guard                   | Purpose                                    |
+| ----------------------- | ------------------------------------------ |
+| `RequireAuth.jsx`       | Require authenticated user                 |
+| `RequireAdmin.jsx`      | Require admin or superAdmin role           |
+| `RequireSuperAdmin.jsx` | Require super admin role                   |
+| `RequireNonAdmin.jsx`   | Block admins from auth pages (redirect)    |
+| `ProtectedRoute`        | Role-based route protection component      |
+
+---
+
+## State Management
+
+### Zustand Stores (`shared/stores/`)
+
+- `notificationStore.js` — In-app notification state & unread counts
+
+### React Query (`shared/lib/`)
+
+- `queryClient.js` — Configured query client with default options
+- `queryKeys.js` — Centralized query key definitions for cache management
+
+---
+
+## Custom Hooks
+
+| Hook                     | Purpose                             |
+| ------------------------ | ----------------------------------- |
+| `useAuth.js`             | Auth state, login, logout, profile  |
+| `FirebaseAuthContext.js` | Firebase auth context provider      |
+| `useBodyScrollLock.js`   | Prevent body scroll on modal open   |
+| `usePermissions.js`      | Check user permissions              |
+| `useSocketClient.js`     | WebSocket connection & events       |
 
 ---
 
@@ -207,37 +269,61 @@ const reservation = await reservationApi.create(reservationData);
 
 Each role has its own feature module with:
 
-- `pages/` - Page components
-- `components/` - Feature-specific components
-- `modals/` - Modal dialogs
-- `hooks/` - Custom hooks
-- `services/` - API services
-- `styles/` - CSS files
-- `index.js` - Barrel exports
+- `pages/` — Page components
+- `components/` — Feature-specific components
+- `modals/` — Modal dialogs
+- `hooks/` — Custom hooks
+- `styles/` — CSS files
+- `index.js` — Barrel exports
 
-### Embedded Component Pattern
+### Lazy Loading & Code Splitting
 
-Components that work standalone or embedded in tabs:
+All page components are lazy-loaded with `React.lazy()` for optimal bundle sizes:
 
 ```jsx
-function Page({ isEmbedded = false }) {
-  const content = <section>...</section>;
-
-  if (isEmbedded) return content;
-  return (
-    <Layout>
-      <Sidebar />
-      {content}
-    </Layout>
-  );
-}
+const BillingPage = React.lazy(
+  () => import("./features/tenant/pages/BillingPage"),
+);
 ```
+
+### Route Error Boundaries
+
+Every route is wrapped in `<RouteErrorBoundary>` for crash isolation:
+
+```jsx
+<RouteErrorBoundary name="Billing">
+  <BillingPage />
+</RouteErrorBoundary>
+```
+
+---
+
+## Utility Functions
+
+| Utility              | Purpose                                |
+| -------------------- | -------------------------------------- |
+| `auth.js`            | Auth helper functions                  |
+| `authValidation.js`  | Form validation rules                  |
+| `constants.js`       | App-wide constants                     |
+| `currency.js`        | Currency formatting (₱)               |
+| `exportUtils.js`     | Data export (CSV, Excel)               |
+| `formatDate.js`      | Date formatting helpers                |
+| `formatPaymentMethod.js` | Payment method display formatting  |
+| `friendlyError.js`   | User-friendly error messages           |
+| `imageUpload.js`     | ImageKit upload helpers                |
+| `notification.js`    | Toast notification utilities           |
+| `pdfReceipt.js`      | PDF receipt generation                 |
+| `pdfUtils.js`        | PDF utility functions                  |
+| `psgcApi.js`         | Philippine address API (PSGC)          |
+| `receiptGenerator.js`| Receipt template generation            |
+| `reservationCode.js` | Reservation code utilities             |
 
 ---
 
 ## Styling
 
 - Global styles: `App.css`, `index.css`
+- Shared styles: `shared/styles/`
 - Component styles: Feature-specific CSS files
 - Naming convention: BEM (Block Element Modifier)
 
@@ -261,6 +347,7 @@ Vite provides instant hot module replacement. Changes appear immediately without
 - Use custom hooks for reusable logic
 - Put shared code in `shared/`
 - Keep feature code isolated in `features/{role}/`
+- Use Zustand for cross-component state, React Query for server state
 
 ---
 
@@ -289,11 +376,12 @@ netlify deploy --prod --dir=build
 
 ## Documentation
 
-- [Main README](../README.md) - Project overview
-- [API Documentation](../docs/API.md) - API endpoints
-- [Authentication Guide](../docs/AUTHENTICATION.md) - Auth flows
-- [Project Structure](../docs/STRUCTURE.md) - Full structure
-- [Security Guide](../docs/SECURITY.md) - Security implementation
+- [Main README](../README.md) — Project overview
+- [API Documentation](../docs/API.md) — API endpoints
+- [Authentication Guide](../docs/AUTHENTICATION.md) — Auth flows
+- [Project Structure](../docs/STRUCTURE.md) — Full structure
+- [Security Guide](../docs/SECURITY.md) — Security implementation
+- [Developer Guide](../docs/DEVELOPER_GUIDE.md) — Coding patterns & conventions
 
 ---
 

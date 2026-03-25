@@ -220,7 +220,7 @@ export const AuthProvider = ({ children }) => {
     try {
       // Set logout intent for route guards
       const isAdminRole =
-        user && (user.role === "admin" || user.role === "superAdmin");
+        user && (user.role === "branch_admin" || user.role === "owner");
       const intent = isAdminRole ? user.role : "user";
       logoutIntentRef.current = intent;
       setLogoutIntent(intent);
@@ -276,15 +276,15 @@ export const AuthProvider = ({ children }) => {
    * @returns {boolean} True if user has admin privileges
    */
   const isAdmin = () => {
-    return user?.role === "admin" || user?.role === "superAdmin";
+    return user?.role === "branch_admin" || user?.role === "owner";
   };
 
   /**
    * Check if current user is a super admin
    * @returns {boolean} True if user is super admin
    */
-  const isSuperAdmin = () => {
-    return user?.role === "superAdmin";
+  const isOwner = () => {
+    return user?.role === "owner";
   };
 
   /**
@@ -311,7 +311,7 @@ export const AuthProvider = ({ children }) => {
         refreshUser,
         updateUser,
         isAdmin,
-        isSuperAdmin,
+        isOwner,
       }}
     >
       {children}

@@ -10,7 +10,6 @@ import { CreditCard } from "lucide-react";
  * Step 4 — Reservation Fee Payment
  * PayMongo online checkout only (GCash, Maya, Card).
  */
-
 const ReservationPaymentStep = ({
   reservationData,
   leaseDuration,
@@ -23,16 +22,13 @@ const ReservationPaymentStep = ({
   readOnly,
 }) => {
   const room = reservationData?.room || {};
-  const roomName =
-    room.name || room.roomNumber || room.title || room.id || "N/A";
+  const roomName = room.name || room.roomNumber || room.title || room.id || "N/A";
 
   return (
     <div className="reservation-card">
       {/* Step Header */}
       <div className="main-header">
-        <div className="main-header-badge">
-          <span>Step 4 · Finalization</span>
-        </div>
+        <div className="main-header-badge"><span>Step 4 · Finalization</span></div>
         <h2 className="main-header-title">Reservation Fee Payment</h2>
         <p className="main-header-subtitle">
           Review your reservation breakdown and pay the one-time reservation fee
@@ -40,32 +36,16 @@ const ReservationPaymentStep = ({
         </p>
       </div>
 
-      {/* Read-Only Banner */}
+      {/* Read-Only Banner — Payment Complete */}
       {readOnly && (
-        <div
-          className="info-box"
-          style={{
-            background: "#ECFDF5",
-            borderColor: "#10B981",
-            marginBottom: "20px",
-          }}
-        >
-          <div className="info-box-title" style={{ color: "#065F46" }}>
-            Payment Complete
-          </div>
-          <div className="info-text" style={{ color: "#047857" }}>
-            Your reservation fee has been paid and your room is reserved.
-          </div>
+        <div className="rf-success-banner">
+          <div className="info-box-title">Payment Complete</div>
+          <div className="info-text">Your reservation fee has been paid and your room is reserved.</div>
         </div>
       )}
 
       {/* Form content wrapper */}
-      <div
-        style={{
-          pointerEvents: readOnly ? "none" : "auto",
-          opacity: readOnly ? 0.7 : 1,
-        }}
-      >
+      <div className={readOnly ? "rf-readonly-wrapper" : ""}>
         {/* Reservation Breakdown */}
         <div className="content-card">
           <div className="card-section-title">
@@ -76,9 +56,7 @@ const ReservationPaymentStep = ({
           <div className="summary-section">
             <div className="summary-row">
               <span className="summary-label">Room</span>
-              <span className="summary-value" style={{ fontWeight: "600" }}>
-                {roomName}
-              </span>
+              <span className="summary-value">{roomName}</span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Branch</span>
@@ -86,24 +64,17 @@ const ReservationPaymentStep = ({
             </div>
             <div className="summary-row">
               <span className="summary-label">Room Type</span>
-              <span className="summary-value">
-                {formatRoomType(room.type)}
-              </span>
+              <span className="summary-value">{formatRoomType(room.type)}</span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Monthly Rent</span>
-              <span
-                className="summary-value"
-                style={{ color: "var(--rf-accent)" }}
-              >
+              <span className="summary-value" style={{ color: "var(--rf-accent)" }}>
                 ₱{(room.price || 0).toLocaleString()}
               </span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Lease Duration</span>
-              <span className="summary-value">
-                {leaseDuration || 12} months
-              </span>
+              <span className="summary-value">{leaseDuration || 12} months</span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Target Move-In Date</span>
@@ -113,8 +84,7 @@ const ReservationPaymentStep = ({
               <div className="summary-row">
                 <span className="summary-label">Selected Bed</span>
                 <span className="summary-value">
-                  {reservationData.selectedBed.position} (
-                  {reservationData.selectedBed.id})
+                  {reservationData.selectedBed.position} ({reservationData.selectedBed.id})
                 </span>
               </div>
             )}
@@ -130,27 +100,16 @@ const ReservationPaymentStep = ({
           <div className="card-section-title">
             <div className="icon"></div>
             Adjust Move-In Date
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 400,
-                color: "var(--rf-text-muted)",
-                marginLeft: "auto",
-              }}
-            >
-              Optional
-            </span>
+            <span className="rf-optional-label">Optional</span>
           </div>
-
           <div className="form-group">
             <label className="form-label">Move-In Date</label>
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div className="rf-date-input-row">
               <input
                 type="date"
                 className="form-input"
                 value={finalMoveInDate}
                 onChange={(e) => setFinalMoveInDate(e.target.value)}
-                style={{ flex: 1 }}
               />
               <button
                 type="button"
@@ -174,19 +133,11 @@ const ReservationPaymentStep = ({
             <div className="icon"></div>
             Secure Online Payment
           </div>
-
-          <div
-            className="info-box"
-            style={{
-              background: "#ECFDF5",
-              borderColor: "#10B981",
-              marginBottom: "0",
-            }}
-          >
-            <div className="info-box-title" style={{ color: "#065F46" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><CreditCard size={15} /> Pay via GCash, Maya, or Card</span>
+          <div className="rf-payment-info-box">
+            <div className="info-box-title">
+              <span className="rf-pay-btn-icon"><CreditCard size={15} /> Pay via GCash, Maya, or Card</span>
             </div>
-            <div className="info-text" style={{ color: "#047857" }}>
+            <div className="info-text">
               You'll be redirected to PayMongo's secure checkout to pay ₱2,000.
               Your reservation will be automatically confirmed once payment is
               received. A receipt will be available after payment.
@@ -197,7 +148,7 @@ const ReservationPaymentStep = ({
 
       {/* Pay Online Button */}
       {!readOnly && (
-      <div className="stage-buttons" style={{ justifyContent: "flex-end", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+        <div className="stage-buttons" style={{ justifyContent: "flex-end", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
           <button
             onClick={onPayOnline}
             className="btn btn-primary btn-pay-online-reservation"
@@ -205,9 +156,10 @@ const ReservationPaymentStep = ({
           >
             {payingOnline
               ? "Redirecting to PayMongo…"
-              : <span style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}><CreditCard size={16} /> Pay ₱2,000 Online</span>}
+              : <span className="rf-pay-btn-icon"><CreditCard size={16} /> Pay ₱2,000 Online</span>
+            }
           </button>
-          <span style={{ fontSize: 12, color: "#94A3B8", textAlign: "right" }}>
+          <span className="rf-pay-hint">
             Didn't finish paying? No worries — clicking the button will resume your session.
           </span>
         </div>

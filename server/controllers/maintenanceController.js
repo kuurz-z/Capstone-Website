@@ -143,8 +143,8 @@ export const getRequest = async (req, res, next) => {
 
     if (
       request.userId.toString() !== userId &&
-      req.user.role !== "admin" &&
-      req.user.role !== "superAdmin"
+      req.user.role !== "branch_admin" &&
+      req.user.role !== "owner"
     ) {
       throw new AppError("Access denied", 403, "FORBIDDEN");
     }

@@ -85,7 +85,7 @@ async function run() {
   const existingMongo = await User.findOne({ email: EMAIL });
   if (existingMongo) {
     // Update role and firebaseUid just in case they drifted
-    existingMongo.role = "superAdmin";
+    existingMongo.role = "owner";
     existingMongo.firebaseUid = firebaseUid;
     existingMongo.accountStatus = "active";
     existingMongo.isActive = true;
@@ -100,7 +100,7 @@ async function run() {
       username:  "superadmin",
       firstName: "Super",
       lastName:  "Admin",
-      role:      "superAdmin",
+      role:      "owner",
       branch:    null,
       accountStatus: "active",
       isActive:  true,

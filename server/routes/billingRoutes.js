@@ -88,6 +88,13 @@ router.get("/report", verifyAdmin, filterByBranch, billingController.getBillingR
 router.post("/generate-room", verifyAdmin, filterByBranch, billingController.generateRoomBill);
 
 /**
+ * POST /api/billing/generate-bulk
+ * Generate bills for ALL occupied rooms in the admin's branch (Admin only)
+ * Body: { billingMonth?, dueDate?, defaultCharges?: { electricity, water } }
+ */
+router.post("/generate-bulk", verifyAdmin, filterByBranch, billingController.generateBulkBills);
+
+/**
  * POST /api/billing/:billId/verify
  * Admin approves or rejects payment proof
  */
@@ -98,6 +105,13 @@ router.post("/:billId/verify", verifyAdmin, filterByBranch, billingController.ve
  * Mark a bill as paid (Admin only)
  */
 router.post("/:billId/mark-paid", verifyAdmin, filterByBranch, billingController.markBillAsPaid);
+
+/**
+ * DELETE /api/billing/:billId
+ * Hard-delete an orphaned or erroneous bill (Admin only)
+ * Note: paid bills cannot be deleted.
+ */
+router.delete("/:billId", verifyAdmin, filterByBranch, billingController.deleteBill);
 
 /**
  * POST /api/billing/apply-penalties

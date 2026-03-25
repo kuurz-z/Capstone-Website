@@ -29,7 +29,7 @@ export default function BranchManagementPage() {
         (r) => r.branch === branch.key
       );
       const admins = users.filter(
-        (u) => (u.role === "admin" || u.role === "superAdmin") && u.branch === branch.key
+        (u) => (u.role === "branch_admin" || u.role === "owner") && u.branch === branch.key
       );
       const tenants = users.filter(
         (u) => u.role === "tenant" && u.branch === branch.key
@@ -144,8 +144,8 @@ export default function BranchManagementPage() {
                       <span className="sa-branch-admin-name">
                         {admin.firstName} {admin.lastName}
                       </span>
-                      <span className={`sa2-badge sa2-badge-${admin.role === "superAdmin" ? "checked-in" : "reserved"}`}>
-                        {admin.role === "superAdmin" ? "super admin" : "admin"}
+                      <span className={`sa2-badge sa2-badge-${admin.role === "owner" ? "checked-in" : "reserved"}`}>
+                        {admin.role === "owner" ? "owner" : "branch admin"}
                       </span>
                     </div>
                   ))}

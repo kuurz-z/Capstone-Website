@@ -29,17 +29,17 @@ import { useAuth } from "./useAuth";
 export function usePermissions() {
   const { user } = useAuth();
 
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const permissions = user?.permissions || [];
 
   const can = useMemo(() => {
     // SuperAdmins bypass all checks — they have full access
-    if (isSuperAdmin) {
+    if (isOwner) {
       return () => true;
     }
     // Regular admins check their permissions array
     return (permission) => permissions.includes(permission);
-  }, [isSuperAdmin, permissions]);
+  }, [isOwner, permissions]);
 
-  return { can, isSuperAdmin, permissions };
+  return { can, isOwner, permissions };
 }

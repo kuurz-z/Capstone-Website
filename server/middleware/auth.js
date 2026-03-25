@@ -7,20 +7,20 @@
  *
  * Middleware Functions:
  * 1. verifyToken: Validates Firebase ID token (required for all protected routes)
- * 2. verifyAdmin: Checks if user has admin privileges
- * 3. verifySuperAdmin: Checks if user has super admin privileges
- * 4. verifyUser: Ensures user is NOT an admin (for user-only endpoints)
+ * 2. verifyAdmin: Checks if user has admin privileges (branch_admin or owner)
+ * 3. verifyOwner: Checks if user has owner privileges
+ * 4. verifyApplicant: Ensures user is NOT an admin (for applicant/tenant-only endpoints)
  *
  * Usage:
  * - Apply verifyToken to all routes that require authentication
  * - Chain verifyAdmin after verifyToken for admin-only routes
- * - Chain verifySuperAdmin after verifyToken for super-admin-only routes
- * - Chain verifyUser after verifyToken for user-only routes
+ * - Chain verifyOwner after verifyToken for owner-only routes
+ * - Chain verifyApplicant after verifyToken for applicant/tenant-only routes
  *
  * Example:
  *   router.get('/protected', verifyToken, handler)
  *   router.post('/admin-only', verifyToken, verifyAdmin, handler)
- *   router.delete('/super-admin', verifyToken, verifySuperAdmin, handler)
+ *   router.delete('/owner-only', verifyToken, verifyOwner, handler)
  *   router.post('/user-only', verifyToken, verifyApplicant, handler)
  */
 
@@ -190,7 +190,7 @@ export const verifyToken = async (req, res, next) => {
  * Must be used AFTER verifyToken middleware.
  *
  * Checks in order:
- * 1. Firebase custom claims (admin: true or superAdmin: true) — fast path
+ * 1. Firebase custom claims (branch_admin: true or owner: true) — fast path
  * 2. Fallback: MongoDB user role (handles missing custom claims)
  *
  * @middleware
@@ -211,17 +211,17 @@ export const verifyAdmin = async (req, res, next) => {
     }
 
     // Check custom claims from Firebase ID token (fast path)
-    if (req.user.admin || req.user.superAdmin) {
+    if (req.user.branch_admin || req.user.owner) {
       return next();
     }
 
     // Fallback: Check MongoDB role (handles missing Firebase custom claims)
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
 
-    if (dbUser && (dbUser.role === "admin" || dbUser.role === "superAdmin")) {
+    if (dbUser && (dbUser.role === "branch_admin" || dbUser.role === "owner")) {
       // Attach role info to req.user for downstream middleware
-      req.user.admin = dbUser.role === "admin" || dbUser.role === "superAdmin";
-      req.user.superAdmin = dbUser.role === "superAdmin";
+      req.user.branch_admin = dbUser.role === "branch_admin" || dbUser.role === "owner";
+      req.user.owner = dbUser.role === "owner";
       req.user.dbRole = dbUser.role;
       return next();
     }
@@ -241,23 +241,23 @@ export const verifyAdmin = async (req, res, next) => {
 };
 
 /**
- * Verify Super Admin Role
+ * Verify Owner Role
  *
- * Middleware to check if the authenticated user has super admin privileges.
+ * Middleware to check if the authenticated user has owner privileges.
  * Must be used AFTER verifyToken middleware.
  *
- * Checks for the 'superAdmin' custom claim in the Firebase ID token.
+ * Checks for the 'owner' custom claim in the Firebase ID token.
  *
- * SECURITY: This prevents unauthorized access to super-admin-only endpoints.
+ * SECURITY: This prevents unauthorized access to owner-only endpoints.
  *
  * @middleware
  * @param {Object} req - Express request object (must have req.user from verifyToken)
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  *
- * @returns {void} Calls next() if super admin, sends 403 error otherwise
+ * @returns {void} Calls next() if owner, sends 403 error otherwise
  */
-export const verifySuperAdmin = async (req, res, next) => {
+export const verifyOwner = async (req, res, next) => {
   try {
     // Ensure verifyToken was called first
     if (!req.user || !req.user.uid) {
@@ -268,28 +268,28 @@ export const verifySuperAdmin = async (req, res, next) => {
     }
 
     // Check custom claims from Firebase ID token (fast path)
-    if (req.user.superAdmin) {
-      req.isSuperAdmin = true;
+    if (req.user.owner) {
+      req.isOwner = true;
       return next();
     }
 
     // Fallback: Check MongoDB role (handles missing Firebase custom claims)
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
 
-    if (dbUser && dbUser.role === "superAdmin") {
-      req.user.superAdmin = true;
-      req.user.admin = true;
+    if (dbUser && dbUser.role === "owner") {
+      req.user.owner = true;
+      req.user.branch_admin = true;
       req.user.dbRole = dbUser.role;
-      req.isSuperAdmin = true;
+      req.isOwner = true;
       return next();
     }
 
     return res.status(403).json({
-      error: "Access denied. Super admin privileges required.",
-      code: "SUPER_ADMIN_ACCESS_DENIED",
+      error: "Access denied. Owner privileges required.",
+      code: "OWNER_ACCESS_DENIED",
     });
   } catch (error) {
-    console.error("❌ Super admin verification error:", error.message);
+    console.error("❌ Owner verification error:", error.message);
 
     res.status(403).json({
       error: "Access denied",
@@ -306,7 +306,7 @@ export const verifySuperAdmin = async (req, res, next) => {
  *
  * Ensures that admin users cannot access applicant-only endpoints.
  * Users with "applicant", "tenant" roles will pass this check.
- * Admin and superAdmin users will be denied access.
+ * branch_admin and owner users will be denied access.
  *
  * SECURITY: This prevents privilege escalation where admins
  * could access applicant endpoints with their elevated permissions.
@@ -330,7 +330,7 @@ export const verifyApplicant = async (req, res, next) => {
 
     // Check that user does NOT have admin privileges
     // This prevents admins from accessing applicant-only endpoints
-    if (req.user.admin || req.user.superAdmin) {
+    if (req.user.branch_admin || req.user.owner) {
       return res.status(403).json({
         error: "Access denied. Applicant endpoint - admin access not allowed.",
         code: "APPLICANT_ENDPOINT_ADMIN_DENIED",
@@ -339,7 +339,7 @@ export const verifyApplicant = async (req, res, next) => {
 
     // Fallback: Check MongoDB role (handles missing/stale Firebase custom claims)
     const dbUser = await User.findOne({ firebaseUid: req.user.uid });
-    if (dbUser && (dbUser.role === "admin" || dbUser.role === "superAdmin")) {
+    if (dbUser && (dbUser.role === "branch_admin" || dbUser.role === "owner")) {
       return res.status(403).json({
         error: "Access denied. Applicant endpoint - admin access not allowed.",
         code: "APPLICANT_ENDPOINT_ADMIN_DENIED",

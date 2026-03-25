@@ -18,7 +18,7 @@ import "../styles/admin-dashboard.css";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
+  const isOwner = user?.role === "owner";
   const {
     occupancy,
     inquiryStats,
@@ -160,7 +160,7 @@ export default function Dashboard() {
         {isLoading && <div className="dash-loading">Loading dashboard...</div>}
 
         {/* Super Admin callout */}
-        {isSuperAdmin && (
+        {isOwner && (
           <div className="dash-callout">
             <div className="dash-callout__left">
               <div className="dash-callout__icon">
@@ -173,7 +173,7 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <Link to="/admin/dashboard" className="dash-callout__btn">
+            <Link to="/admin/dashboard/super" className="dash-callout__btn">
               Open →
             </Link>
           </div>

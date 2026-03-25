@@ -102,6 +102,9 @@ const ProfileSidebar = ({
   onLogout,
   onUpdateImage,
 }) => {
+  // Guard: render nothing if profile data hasn't loaded yet
+  if (!profileData) return null;
+
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [collapsed, setCollapsed] = useState(
@@ -139,7 +142,7 @@ const ProfileSidebar = ({
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
-      localStorage.setItem("sidebar-collapsed", !prev);
+      localStorage.setItem("sidebar-collapsed", prev ? "false" : "true");
       return !prev;
     });
   };

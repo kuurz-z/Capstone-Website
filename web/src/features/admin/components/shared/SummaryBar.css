@@ -13,19 +13,20 @@
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 14px 18px;
+  padding: 16px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--duration-fast) var(--ease-out),
-              transform var(--duration-fast) var(--ease-out);
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out);
 }
 
 .summary-pill:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
 }
 
 .summary-pill--clickable {
@@ -34,8 +35,9 @@
 }
 
 .summary-pill--active {
-  box-shadow: var(--shadow-md), 0 0 0 2px currentColor;
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: transparent;
 }
 .summary-pill--active.summary-pill--blue   { box-shadow: var(--shadow-md), 0 0 0 2px var(--accent-blue); }
 .summary-pill--active.summary-pill--green  { box-shadow: var(--shadow-md), 0 0 0 2px var(--accent-green); }
@@ -45,8 +47,8 @@
 
 /* ── Icon (left) ── */
 .summary-pill__icon {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -64,15 +66,15 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 
 .summary-pill__value {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 750;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .summary-pill__label {
@@ -90,7 +92,7 @@
   margin-top: 2px;
 }
 
-/* ── Color variants (value color + icon tint only — no borders, no backgrounds) ── */
+/* ── Color variants ── */
 .summary-pill--blue   .summary-pill__value { color: var(--accent-blue); }
 .summary-pill--blue   .summary-pill__icon  { background: var(--accent-blue-bg);   color: var(--accent-blue); }
 
@@ -115,7 +117,7 @@
   .summary-pill {
     min-width: calc(50% - 4px);
     flex: 1 1 calc(50% - 4px);
-    padding: 12px 14px;
+    padding: 14px 16px;
   }
   .summary-pill__value { font-size: 22px; }
 }

@@ -104,6 +104,11 @@ const reservationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Timestamp of when admin approved the visit schedule
+    scheduleApprovedAt: {
+      type: Date,
+      default: null,
+    },
 
     // Visit Schedule Rejection
     scheduleRejected: {
@@ -215,6 +220,11 @@ const reservationSchema = new mongoose.Schema(
     agreedToCertification: {
       type: Boolean,
       default: false,
+    },
+    // When the tenant submitted the application form (personal details step)
+    applicationSubmittedAt: {
+      type: Date,
+      default: null,
     },
 
     // =========================================================================

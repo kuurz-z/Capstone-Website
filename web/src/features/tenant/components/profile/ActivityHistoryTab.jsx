@@ -34,7 +34,7 @@ const formatMethod = (m) => {
   return map[m] || m || "Online";
 };
 
-/* ── Build timeline from a single reservation ────── */
+/* ── Build timeline from a single reservation ───── */
 const buildTimeline = (r) => {
   if (!r) return [];
   const events = [];
@@ -56,14 +56,15 @@ const buildTimeline = (r) => {
         ? fmtDate(attempt.visitDate) + (attempt.visitTime ? ` at ${attempt.visitTime}` : "")
         : "Date not set";
 
-      // Event 1: Tenant scheduled the visit
+      // Event 1: Tenant submitted the visit schedule request
       if (attempt.status !== "cancelled") {
         events.push({
           id: `visit-${idx}-scheduled`,
           icon: Calendar, iconBg: "#DBEAFE", iconColor: "#2563EB",
           title: `Visit Scheduled${suffix}`,
-          description: `${viewType} visit booked for ${visitDateStr}`,
-          date: attempt.scheduledAt || r.createdAt,
+          description: `${viewType} visit requested for ${visitDateStr}`,
+          // scheduledAt = when the tenant submitted the schedule form (visitScheduledAt)
+          date: attempt.scheduledAt,
           status: "Scheduled", statusColor: "#D97706", statusBg: "#FFFBEB",
         });
       }
@@ -75,7 +76,7 @@ const buildTimeline = (r) => {
           icon: CheckCircle, iconBg: "#F0FDF4", iconColor: "#059669",
           title: `Visit Approved${suffix}`,
           description: `Admin confirmed your ${viewType.toLowerCase()} visit on ${visitDateStr}`,
-          date: attempt.approvedAt || attempt.scheduledAt || r.createdAt,
+          date: attempt.approvedAt,
           status: "Approved", statusColor: "#059669", statusBg: "#F0FDF4",
         });
       } else if (attempt.status === "rejected") {
@@ -84,7 +85,7 @@ const buildTimeline = (r) => {
           icon: XCircle, iconBg: "#FEF2F2", iconColor: "#DC2626",
           title: `Visit Rejected${suffix}`,
           description: attempt.rejectionReason || "Admin rejected the schedule. Please reschedule.",
-          date: attempt.rejectedAt || attempt.scheduledAt || r.createdAt,
+          date: attempt.rejectedAt,
           status: "Rejected", statusColor: "#DC2626", statusBg: "#FEF2F2",
         });
       } else if (attempt.status === "cancelled") {
@@ -93,7 +94,7 @@ const buildTimeline = (r) => {
           icon: XCircle, iconBg: "#F3F4F6", iconColor: "#6B7280",
           title: `Visit Skipped${suffix}`,
           description: `${viewType} visit on ${visitDateStr} was not pushed through`,
-          date: attempt.scheduledAt || r.createdAt,
+          date: attempt.scheduledAt,
           status: "Skipped", statusColor: "#6B7280", statusBg: "#F3F4F6",
         });
       }
@@ -106,8 +107,9 @@ const buildTimeline = (r) => {
       events.push({
         id: "visit-current", icon: Calendar, iconBg: "#DBEAFE", iconColor: "#2563EB",
         title: attemptNum > 1 ? `Visit Scheduled (Attempt ${attemptNum})` : "Visit Scheduled",
-        description: `${r.viewingType === "virtual" ? "Virtual" : "In-person"} visit booked for ${visitDateStr}`,
-        date: r.visitScheduledAt || r.updatedAt || r.createdAt,
+        description: `${r.viewingType === "virtual" ? "Virtual" : "In-person"} visit requested for ${visitDateStr}`,
+        // visitScheduledAt = when the tenant submitted this schedule (not updatedAt/createdAt)
+        date: r.visitScheduledAt,
         status: "Pending", statusColor: "#D97706", statusBg: "#FFFBEB",
       });
     }
@@ -117,6 +119,7 @@ const buildTimeline = (r) => {
         id: "visit-scheduled", icon: Calendar, iconBg: "#DBEAFE", iconColor: "#2563EB",
         title: "Visit Scheduled",
         description: `${r.viewingType === "virtual" ? "Virtual" : "In-person"} visit on ${fmtDate(r.visitDate)}${r.visitTime ? ` at ${r.visitTime}` : ""}`,
+        // visitScheduledAt = when the tenant submitted the schedule form
         date: r.visitScheduledAt || r.updatedAt || r.createdAt,
         status: r.scheduleRejected ? "Rejected" : r.scheduleApproved ? "Approved" : "Pending",
         statusColor: r.scheduleRejected ? "#DC2626" : r.scheduleApproved ? "#059669" : "#D97706",
@@ -128,36 +131,45 @@ const buildTimeline = (r) => {
         id: "schedule-rejected", icon: XCircle, iconBg: "#FEF2F2", iconColor: "#DC2626",
         title: "Visit Schedule Rejected",
         description: r.scheduleRejectionReason || "Admin requested reschedule",
-        date: r.scheduleRejectedAt, status: "Rejected", statusColor: "#DC2626", statusBg: "#FEF2F2",
+        date: r.scheduleRejectedAt,
+        status: "Rejected", statusColor: "#DC2626", statusBg: "#FEF2F2",
       });
     }
   }
 
-  if (r.scheduleApproved && r.scheduleApprovedAt) {
+  // Visit approved by admin (non-history path)
+  // Only show if visitHistory doesn't already contain an approved entry (avoids duplicate)
+  const hasApprovedInHistory = r.visitHistory?.some((a) => a.status === "approved");
+  if (r.scheduleApproved && r.scheduleApprovedAt && !hasApprovedInHistory) {
     events.push({
       id: "visit-approved", icon: CheckCircle, iconBg: "#F0FDF4", iconColor: "#059669",
       title: "Visit Approved",
       description: "Admin verified your visit. Proceed with application.",
-      date: r.scheduleApprovedAt, status: "Approved", statusColor: "#059669", statusBg: "#F0FDF4",
+      date: r.scheduleApprovedAt,
+      status: "Approved", statusColor: "#059669", statusBg: "#F0FDF4",
     });
   }
 
   if (r.firstName && r.lastName && r.agreedToCertification) {
+    // Fallback: scheduleApprovedAt is the closest prior event (visit approval happens right before application)
+    // Avoid updatedAt since it reflects the latest save (e.g. payment), not the application submission time
+    const appDate = r.applicationSubmittedAt || r.scheduleApprovedAt || r.createdAt;
     events.push({
       id: "application", icon: FileText, iconBg: "#FFF7ED", iconColor: "#EA580C",
       title: "Application Submitted",
       description: "Personal details and documents submitted.",
-      date: r.applicationSubmittedAt || r.updatedAt || r.createdAt,
+      date: appDate,
       status: "Submitted", statusColor: "#EA580C", statusBg: "#FFF7ED",
     });
   }
 
-  if (r.paymentStatus === "paid" || r.paymentDate) {
+  if (r.paymentStatus === "paid" || r.paymentDate || r.status === "reserved") {
     events.push({
       id: "payment", icon: CreditCard, iconBg: "#F0FDF4", iconColor: "#059669",
       title: "Payment Confirmed",
-      description: `₱2,000 deposit paid${r.paymentMethod ? ` via ${formatMethod(r.paymentMethod)}` : ""}`,
-      date: r.paymentDate || r.updatedAt, status: "Paid", statusColor: "#059669", statusBg: "#F0FDF4",
+      description: `₱2,000 reservation fee paid${r.paymentMethod ? ` via ${formatMethod(r.paymentMethod)}` : ""}`,
+      date: r.paymentDate || r.reservedAt || r.updatedAt,
+      status: "Paid", statusColor: "#059669", statusBg: "#F0FDF4",
     });
   }
 
@@ -196,11 +208,35 @@ const buildTimeline = (r) => {
       id: "cancelled", icon: XCircle, iconBg: "#FEF2F2", iconColor: "#DC2626",
       title: "Reservation Cancelled",
       description: "You cancelled your reservation",
-      date: r.updatedAt, status: "Cancelled", statusColor: "#DC2626", statusBg: "#FEF2F2",
+      date: r.cancelledAt || r.updatedAt,
+      status: "Cancelled", statusColor: "#DC2626", statusBg: "#FEF2F2",
     });
   }
 
-  events.sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Logical step order for tie-breaking when timestamps are identical
+  const stepOrder = {
+    created: 0,
+    "visit-scheduled": 1, "visit-current": 1,
+    "visit-approved": 2, "schedule-rejected": 2,
+    application: 3,
+    payment: 4,
+    reserved: 5,
+    checkin: 6,
+    checkout: 7,
+    cancelled: 8,
+  };
+  const getOrder = (id) => {
+    // Handle visit-history IDs like "visit-0-scheduled", "visit-1-approved"
+    if (id.startsWith("visit-") && id !== "visit-current") {
+      if (id.endsWith("-scheduled")) return 1;
+      if (id.endsWith("-approved") || id.endsWith("-rejected") || id.endsWith("-cancelled")) return 2;
+    }
+    return stepOrder[id] ?? 99;
+  };
+  events.sort((a, b) => {
+    const timeDiff = new Date(a.date) - new Date(b.date);
+    return timeDiff !== 0 ? timeDiff : getOrder(a.id) - getOrder(b.id);
+  });
   return events;
 };
 

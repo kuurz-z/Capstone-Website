@@ -27,7 +27,7 @@
 }
 .status-badge--success .status-badge__dot {
   background: var(--status-success);
-  box-shadow: 0 0 0 2px rgba(15, 157, 88, 0.15);
+  box-shadow: 0 0 0 2px rgba(13, 150, 104, 0.15);
 }
 
 /* ── Warning (Pending, Partial, Moving Out) ── */
@@ -47,7 +47,7 @@
 }
 .status-badge--error .status-badge__dot {
   background: var(--status-error);
-  box-shadow: 0 0 0 2px rgba(235, 87, 87, 0.15);
+  box-shadow: 0 0 0 2px rgba(225, 75, 75, 0.15);
 }
 
 /* ── Info (Reserved, Confirmed, New) ── */
@@ -57,7 +57,7 @@
 }
 .status-badge--info .status-badge__dot {
   background: var(--status-info);
-  box-shadow: 0 0 0 2px rgba(46, 170, 220, 0.15);
+  box-shadow: 0 0 0 2px rgba(46, 124, 246, 0.15);
 }
 
 /* ── Neutral (Unknown, Inactive, Suspended) ── */
@@ -67,5 +67,5 @@
 }
 .status-badge--neutral .status-badge__dot {
   background: var(--status-neutral);
-  box-shadow: 0 0 0 2px rgba(145, 146, 158, 0.15);
+  box-shadow: 0 0 0 2px rgba(140, 140, 140, 0.15);
 }

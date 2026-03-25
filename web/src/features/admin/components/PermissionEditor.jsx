@@ -63,14 +63,14 @@ const PERMISSIONS = [
  * @param {Object} props
  * @param {string[]} props.permissions - Current permissions array
  * @param {Function} props.onChange - Called with updated permissions array
- * @param {boolean} props.isSuperAdminTarget - If the target user is superAdmin (show read-only)
+ * @param {boolean} props.isOwnerTarget - If the target user is owner (show read-only)
  * @param {boolean} props.saving - Loading state for save button
  * @param {Function} props.onSave - Called when save is clicked
  */
 export default function PermissionEditor({
   permissions = [],
   onChange,
-  isSuperAdminTarget = false,
+  isOwnerTarget = false,
   saving = false,
   onSave,
 }) {
@@ -83,7 +83,7 @@ export default function PermissionEditor({
   }, [permissions]);
 
   const handleToggle = (key) => {
-    if (isSuperAdminTarget) return;
+    if (isOwnerTarget) return;
 
     const updated = localPermissions.includes(key)
       ? localPermissions.filter((p) => p !== key)
@@ -95,7 +95,7 @@ export default function PermissionEditor({
   };
 
   const handleSelectAll = () => {
-    if (isSuperAdminTarget) return;
+    if (isOwnerTarget) return;
     const all = PERMISSIONS.map((p) => p.key);
     setLocalPermissions(all);
     setHasChanges(true);
@@ -103,7 +103,7 @@ export default function PermissionEditor({
   };
 
   const handleClearAll = () => {
-    if (isSuperAdminTarget) return;
+    if (isOwnerTarget) return;
     setLocalPermissions([]);
     setHasChanges(true);
     if (onChange) onChange([]);
@@ -121,7 +121,7 @@ export default function PermissionEditor({
           <Shield size={18} />
           <h4>Permissions</h4>
         </div>
-        {isSuperAdminTarget ? (
+        {isOwnerTarget ? (
           <span className="pe-badge pe-badge-full">Full Access</span>
         ) : (
           <div className="pe-header-actions">
@@ -147,12 +147,12 @@ export default function PermissionEditor({
       <div className="pe-grid">
         {PERMISSIONS.map((perm) => {
           const isActive =
-            isSuperAdminTarget || localPermissions.includes(perm.key);
+            isOwnerTarget || localPermissions.includes(perm.key);
 
           return (
             <div
               key={perm.key}
-              className={`pe-item ${isActive ? "active" : ""} ${isSuperAdminTarget ? "readonly" : ""}`}
+              className={`pe-item ${isActive ? "active" : ""} ${isOwnerTarget ? "readonly" : ""}`}
               onClick={() => handleToggle(perm.key)}
               role="button"
               tabIndex={0}
@@ -174,7 +174,7 @@ export default function PermissionEditor({
         })}
       </div>
 
-      {!isSuperAdminTarget && onSave && (
+      {!isOwnerTarget && onSave && (
         <div className="pe-footer">
           <button
             className="pe-save-btn"

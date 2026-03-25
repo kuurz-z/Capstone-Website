@@ -1,12 +1,14 @@
-import React from "react";
-
-const UserManagementPage = () => {
-  return (
-    <div className="user-management-page">
-      <h1>User Management</h1>
-      <p>Manage all system users and administrators</p>
-    </div>
-  );
-};
-
-export default UserManagementPage;
+/**
+ * Super Admin User Management Page
+ *
+ * Re‑exports the Admin UserManagementPage which already has full super‑admin
+ * capabilities: cross‑branch filtering, add/edit/delete users,
+ * suspend/ban/reactivate actions, and role changes.
+ *
+ * The admin page detects `isOwner` via useAuth() and unlocks:
+ *   - Branch dropdown filter (all branches)
+ *   - "Add User" button with role selection
+ *   - Suspend / Ban / Reactivate controls
+ *   - Super Admin role option in filters
+ */
+export { default } from "../../admin/pages/UserManagementPage";

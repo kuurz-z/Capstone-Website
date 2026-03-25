@@ -13,10 +13,8 @@ import {
   ArrowRight,
   AlertCircle,
   MapPin,
-  Download,
 } from "lucide-react";
 import { useCurrentUser } from "../../../shared/hooks/queries/useUsers";
-import { generateDepositReceipt } from "../../../shared/utils/receiptGenerator";
 
 /**
  * ─── RESERVATION DASHBOARD ──────────────────────────────────────────────────
@@ -525,30 +523,41 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
         </div>
       )}
 
-      {/* ── Confirmed celebration ─────────────────────────────────────────── */}
-      {isConfirmed && (
-        <div style={styles.celebrationCard}>
-          <CheckCircle size={24} color="#059669" />
-          <div style={{ marginLeft: 12, flex: 1 }}>
-            <h4 style={styles.celebrationTitle}>Reservation Secured!</h4>
-            <p style={styles.celebrationDesc}>
-              Your reservation is secured. Please prepare for your move-in date.
-            </p>
-            {reservation.paymentDate && (
-              <div style={{ marginTop: 8, fontSize: 12, color: "#047857", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <CreditCard size={13} style={{ flexShrink: 0 }} />
-                    <span>Paid: ₱2,000 via {formatPaymentMethod(reservation.paymentMethod)}</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Calendar size={13} style={{ flexShrink: 0 }} />
-                    <span>Date: {formatDate(reservation.paymentDate)}</span>
+      {/* ── Post-Confirmation Dashboard ─────────────────────────────────── */}
+      {isConfirmed && (() => {
+        const moveIn = reservation.targetMoveInDate;
+        const daysLeft = moveIn
+          ? Math.ceil((new Date(moveIn) - new Date()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        return (
+          <div style={styles.confirmedDashboard}>
+            {/* ── Move-in Countdown ── */}
+            {daysLeft !== null && (
+              <div style={styles.countdownCard}>
+                <div style={styles.countdownLeft}>
+                  <Calendar size={18} color="#6366F1" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={styles.countdownLabel}>Move-in Date</div>
+                    <div style={styles.countdownDate}>{formatDate(moveIn)}</div>
                   </div>
                 </div>
+                <div style={styles.countdownBadge}>
+                  {daysLeft > 0 ? (
+                    <><span style={styles.countdownNumber}>{daysLeft}</span> day{daysLeft !== 1 ? "s" : ""} away</>
+                  ) : daysLeft === 0 ? (
+                    <span style={{ color: "#059669", fontWeight: 700 }}>Today!</span>
+                  ) : (
+                    <span style={{ color: "#94A3B8" }}>Passed</span>
+                  )}
+                </div>
+              </div>
             )}
+
+
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Footer — full width ───────────────────────────────────────────── */}
       {!isConfirmed && (
@@ -864,26 +873,53 @@ const styles = {
     whiteSpace: "nowrap",
   },
 
-  /* celebration */
-  celebrationCard: {
+  /* post-confirmation dashboard */
+  confirmedDashboard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  countdownCard: {
     display: "flex",
     alignItems: "center",
-    background: "rgba(16, 185, 129, 0.08)",
-    borderRadius: 8,
-    padding: "16px 20px",
-    border: "1px solid rgba(16, 185, 129, 0.2)",
+    justifyContent: "space-between",
+    background: "rgba(99, 102, 241, 0.06)",
+    borderRadius: 10,
+    padding: "14px 18px",
+    border: "1px solid rgba(99, 102, 241, 0.15)",
   },
-  celebrationTitle: {
-    fontSize: 15,
+  countdownLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  countdownLabel: {
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: 500,
+    marginBottom: 1,
+  },
+  countdownDate: {
+    fontSize: 14,
     fontWeight: 600,
-    color: "#065F46",
-    margin: "0 0 4px",
+    color: "var(--text-heading, #0F172A)",
   },
-  celebrationDesc: {
+  countdownBadge: {
     fontSize: 13,
-    color: "#047857",
-    margin: 0,
+    color: "#6366F1",
+    fontWeight: 600,
+    background: "rgba(99, 102, 241, 0.1)",
+    padding: "4px 12px",
+    borderRadius: 20,
+    whiteSpace: "nowrap",
   },
+  countdownNumber: {
+    fontSize: 18,
+    fontWeight: 700,
+    marginRight: 3,
+  },
+
+
 
   /* footer */
   footer: {

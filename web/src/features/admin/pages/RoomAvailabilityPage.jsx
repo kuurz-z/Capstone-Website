@@ -1,114 +1,157 @@
 import { useState, useMemo } from "react";
-import { LayoutGrid, Settings, BarChart3, BedDouble } from "lucide-react";
+import { LayoutGrid, Settings, Plus, Pencil, Trash2 } from "lucide-react";
 
-import RoomCard from "../components/RoomCard";
-import RoomConfigurationPage from "./RoomConfigurationPage";
-import OccupancyTrackingPage from "./OccupancyTrackingPage";
-import { useAuth } from "../../../shared/hooks/useAuth";
-import { usePermissions } from "../../../shared/hooks/usePermissions";
+// Components
+import { PageShell, SummaryBar, ActionBar, DataTable, StatusBadge } from "../components/shared";
+import RoomConfigModal from "../components/rooms/RoomConfigModal";
+import RoomFormModal from "../components/rooms/RoomFormModal";
+import DeleteRoomModal from "../components/rooms/DeleteRoomModal";
+
+
+// Hooks & API
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
-import { PageShell, SummaryBar, ActionBar, EmptyState } from "../components/shared";
-import "../styles/design-tokens.css";
+import { usePermissions } from "../../../shared/hooks/usePermissions";
+import { roomApi } from "../../../shared/api/apiClient";
+import { useQueryClient } from "@tanstack/react-query";
+import { showNotification } from "../../../shared/utils/notification";
+import { formatRoomType, formatBranch } from "../utils/formatters";
+
+// Styles
 import "../styles/admin-room-availability.css";
+import "../styles/admin-room-configuration.css";
 
 function RoomAvailabilityPage() {
-  const { user } = useAuth();
-  const isSuperAdmin = user?.role === "superAdmin";
   const { can } = usePermissions();
+  const queryClient = useQueryClient();
+
+  // State
+  const [activeTab, setActiveTab] = useState("rooms");
   const [searchTerm, setSearchTerm] = useState("");
-  const [branchFilter, setBranchFilter] = useState(
-    isSuperAdmin ? "all" : (user?.branch || "all")
-  );
+  const [branchFilter, setBranchFilter] = useState("all");
   const [floorFilter, setFloorFilter] = useState("all");
   const [roomTypeFilter, setRoomTypeFilter] = useState("all");
-  const [activeTab, setActiveTab] = useState("availability");
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingRoom, setEditingRoom] = useState(null);
+  const [deletingRoom, setDeletingRoom] = useState(null);
 
-  const { data: rawRooms = [], isLoading: roomsLoading, error: roomsQueryError } = useRooms();
-  const roomsError = roomsQueryError ? "Failed to load rooms. Please try again." : null;
+  // Data fetching
+  const { data: rooms = [], isLoading: loading } = useRooms();
 
-  const normalizeType = (type) => {
-    if (type === "private") return "Single";
-    if (type === "double-sharing") return "Double";
-    if (type === "quadruple-sharing") return "Quadruple";
-    return "Unknown";
-  };
+  // Processing
+  const filteredRooms = useMemo(() => {
+    return rooms.filter((room) => {
+      const matchesSearch =
+        room.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        room.roomNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesBranch = branchFilter === "all" || room.branch === branchFilter;
+      const matchesFloor = floorFilter === "all" || String(room.floor) === floorFilter;
+      const matchesType = roomTypeFilter === "all" || room.type === roomTypeFilter;
 
-  const rooms = useMemo(
-    () =>
-      rawRooms.map((room) => ({
-        id: room.roomNumber || room.name || "Unknown",
-        floor: room.floor || 1,
-        branch: room.branch || "unknown",
-        type: normalizeType(room.type),
-        beds: room.capacity || (room.beds ? room.beds.length : 0),
-        occupied: room.currentOccupancy || 0,
-        reserved: 0,
-      })),
-    [rawRooms],
-  );
-
-  const filteredRooms = rooms.filter((room) => {
-    const matchesSearch = (room.id || "")
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesBranch =
-      branchFilter === "all" || room.branch === branchFilter;
-    const matchesFloor =
-      floorFilter === "all" || room.floor === Number(floorFilter);
-    const matchesType =
-      roomTypeFilter === "all" ||
-      (room.type || "").toLowerCase() === roomTypeFilter;
-    return matchesSearch && matchesBranch && matchesFloor && matchesType;
-  });
+      return matchesSearch && matchesBranch && matchesFloor && matchesType;
+    });
+  }, [rooms, searchTerm, branchFilter, floorFilter, roomTypeFilter]);
 
   // Stats
-  const totalRooms = filteredRooms.length;
-  const fullyOccupied = filteredRooms.filter((r) => r.occupied === r.beds).length;
-  const fullyAvailable = filteredRooms.filter((r) => r.occupied === 0 && r.reserved === 0).length;
-  const partial = totalRooms - fullyOccupied - fullyAvailable;
-  const totalBeds = filteredRooms.reduce((sum, r) => sum + r.beds, 0);
-  const occupiedBeds = filteredRooms.reduce((sum, r) => sum + r.occupied, 0);
-  const availableBeds = totalBeds - occupiedBeds;
-  const occupancyRate = totalBeds ? ((occupiedBeds / totalBeds) * 100).toFixed(1) : "0.0";
+  const stats = useMemo(() => {
+    const total = rooms.length;
+    const occupied = rooms.reduce((sum, r) => sum + (r.currentOccupancy || 0), 0);
+    const capacity = rooms.reduce((sum, r) => sum + (r.capacity || 0), 0);
+    const full = rooms.filter((r) => r.currentOccupancy >= r.capacity).length;
+    const partial = rooms.filter((r) => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity).length;
+    const available = rooms.filter((r) => r.currentOccupancy === 0).length;
 
-  // Group by floor
-  const roomsByFloor = useMemo(() => {
-    const floors = {};
-    filteredRooms.forEach((r) => {
-      if (!floors[r.floor]) floors[r.floor] = [];
-      floors[r.floor].push(r);
+    return {
+      total,
+      full,
+      partial,
+      available,
+      rate: capacity > 0 ? ((occupied / capacity) * 100).toFixed(1) : "0.0",
+    };
+  }, [rooms]);
+
+  // Handlers
+  const handleConfigure = (room) => {
+    setSelectedRoom(room);
+  };
+
+  const handleToggleBed = (bedId) => {
+    if (!selectedRoom) return;
+    const updatedBeds = selectedRoom.beds.map((bed) => {
+      if (bed.id !== bedId) return bed;
+      const currentStatus = bed.status || (bed.available === false ? "occupied" : "available");
+      if (currentStatus === "occupied") return bed;
+      const newStatus = currentStatus === "available" ? "maintenance" : "available";
+      return { ...bed, status: newStatus };
     });
-    return Object.entries(floors).sort(([a], [b]) => Number(a) - Number(b));
-  }, [filteredRooms]);
+    setSelectedRoom({ ...selectedRoom, beds: updatedBeds });
+  };
 
-  // Tabs
+  const handleSaveConfig = async (updatedRoom) => {
+    try {
+      await roomApi.update(updatedRoom._id, { beds: updatedRoom.beds });
+      showNotification("Room configuration updated", "success");
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      setSelectedRoom(null);
+    } catch (err) {
+      showNotification(err.message || "Failed to update", "error");
+    }
+  };
+
+  // CRUD handlers
+  const handleSaveRoom = async (payload, roomId) => {
+    try {
+      if (roomId) {
+        await roomApi.update(roomId, payload);
+        showNotification("Room updated successfully", "success");
+      } else {
+        await roomApi.create(payload);
+        showNotification("Room created successfully", "success");
+      }
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      setShowCreateModal(false);
+      setEditingRoom(null);
+    } catch (err) {
+      showNotification(err.message || "Failed to save room", "error");
+      throw err;
+    }
+  };
+
+  const handleDeleteRoom = async (roomId) => {
+    try {
+      await roomApi.delete(roomId);
+      showNotification("Room deleted successfully", "success");
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      setDeletingRoom(null);
+    } catch (err) {
+      showNotification(err.message || "Failed to delete room", "error");
+    }
+  };
+
+  // Config — 2 tabs: Rooms (merged with Bed Config) + Occupancy
   const tabs = [
-    { key: "availability", label: "Availability", icon: LayoutGrid },
-    ...(can("manageRooms") ? [{ key: "setup", label: "Setup", icon: Settings }] : []),
-    { key: "occupancy", label: "Occupancy", icon: BarChart3 },
+    { key: "rooms", label: "Room Management", icon: LayoutGrid },
   ];
 
   const summaryItems = [
-    { label: "Total Rooms", value: totalRooms, color: "blue" },
-    { label: "Occupied", value: fullyOccupied, color: "red" },
-    { label: "Partial", value: partial, color: "orange" },
-    { label: "Available", value: fullyAvailable, color: "green" },
-    { label: "Occupancy Rate", value: `${occupancyRate}%`, color: "purple" },
+    { label: "Total Rooms", value: stats.total, color: "blue" },
+    { label: "Full", value: stats.full, color: "red" },
+    { label: "Partial", value: stats.partial, color: "orange" },
+    { label: "Available", value: stats.available, color: "green" },
+    { label: "Occupancy Rate", value: `${stats.rate}%`, color: "purple" },
   ];
 
   const filters = [
-    ...(isSuperAdmin
-      ? [{
-          key: "branch",
-          options: [
-            { value: "all", label: "All Branches" },
-            { value: "gil-puyat", label: "Gil Puyat" },
-            { value: "guadalupe", label: "Guadalupe" },
-          ],
-          value: branchFilter,
-          onChange: setBranchFilter,
-        }]
-      : []),
+    {
+      key: "branch",
+      options: [
+        { value: "all", label: "All Branches" },
+        { value: "gil-puyat", label: "Gil Puyat" },
+        { value: "guadalupe", label: "Guadalupe" },
+      ],
+      value: branchFilter,
+      onChange: setBranchFilter,
+    },
     {
       key: "floor",
       options: [
@@ -123,72 +166,186 @@ function RoomAvailabilityPage() {
       key: "type",
       options: [
         { value: "all", label: "All Types" },
-        { value: "single", label: "Single" },
-        { value: "double", label: "Double" },
-        { value: "quadruple", label: "Quadruple" },
+        { value: "private", label: "Private" },
+        { value: "double-sharing", label: "Double" },
+        { value: "quadruple-sharing", label: "Quadruple" },
       ],
       value: roomTypeFilter,
       onChange: setRoomTypeFilter,
     },
   ];
 
+  const columns = [
+    {
+      key: "room",
+      label: "Room",
+      render: (r) => (
+        <div className="room-name-cell">
+          <span className="room-name-primary">{r.name}</span>
+          <span className="room-name-sub">Floor {r.floor}</span>
+        </div>
+      ),
+    },
+    { key: "branch", label: "Branch", render: (r) => formatBranch(r.branch) },
+    { key: "type", label: "Type", render: (r) => formatRoomType(r.type) },
+    {
+      key: "beds",
+      label: "Beds",
+      render: (r) => `${r.currentOccupancy || 0}/${r.capacity}`,
+    },
+    {
+      key: "occupancyRate",
+      label: "Occupancy Rate",
+      render: (r) => {
+        const rate = Math.round(((r.currentOccupancy || 0) / r.capacity) * 100);
+        const color =
+          rate >= 100
+            ? "var(--status-error)"
+            : rate > 0
+              ? "var(--status-warning)"
+              : "var(--status-success)";
+        return (
+          <div className="room-occupancy-cell">
+            <div className="room-occupancy-bar">
+              <div
+                className="room-occupancy-fill"
+                style={{ width: `${rate}%`, background: color }}
+              />
+            </div>
+            <span>{rate}%</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (r) => {
+        if (r.currentOccupancy >= r.capacity) return <StatusBadge variant="error">Full</StatusBadge>;
+        if (r.currentOccupancy > 0) return <StatusBadge variant="warning">Partial</StatusBadge>;
+        return <StatusBadge variant="success">Available</StatusBadge>;
+      },
+    },
+    ...(can("manageRooms")
+      ? [
+          {
+            key: "action",
+            label: "Actions",
+            align: "right",
+            render: (r) => (
+              <div className="room-action-buttons">
+                <button
+                  className="btn-secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleConfigure(r);
+                  }}
+                  title="Configure beds"
+                  style={{ padding: "4px 10px", fontSize: "12px" }}
+                >
+                  <Settings size={12} />
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingRoom(r);
+                  }}
+                  title="Edit room"
+                  style={{ padding: "4px 10px", fontSize: "12px" }}
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  className="btn-secondary btn-icon-danger"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeletingRoom(r);
+                  }}
+                  title="Delete room"
+                  style={{ padding: "4px 10px", fontSize: "12px" }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <PageShell tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
+      {/* Only show SummaryBar + ActionBar for the Rooms tab */}
       <PageShell.Summary>
-        {activeTab === "availability" && <SummaryBar items={summaryItems} />}
+        {activeTab === "rooms" && <SummaryBar items={summaryItems} />}
       </PageShell.Summary>
 
       <PageShell.Actions>
-        {activeTab === "availability" && (
+        {activeTab === "rooms" && (
           <ActionBar
-            search={{ value: searchTerm, onChange: setSearchTerm, placeholder: "Search rooms..." }}
+            search={{
+              value: searchTerm,
+              onChange: setSearchTerm,
+              placeholder: "Search rooms...",
+            }}
             filters={filters}
+            actions={
+              can("manageRooms")
+                ? [
+                    {
+                      label: "Add Room",
+                      icon: Plus,
+                      variant: "primary",
+                      onClick: () => setShowCreateModal(true),
+                    },
+                  ]
+                : []
+            }
           />
         )}
       </PageShell.Actions>
 
       <PageShell.Content>
-        {activeTab === "availability" && (
-          <>
-            {/* Legend */}
-            <div className="rooms-legend">
-              <div className="rooms-legend__item">
-                <span className="rooms-legend__dot rooms-legend__dot--available" />
-                <span>Available</span>
-              </div>
-              <div className="rooms-legend__item">
-                <span className="rooms-legend__dot rooms-legend__dot--partial" />
-                <span>Partial</span>
-              </div>
-              <div className="rooms-legend__item">
-                <span className="rooms-legend__dot rooms-legend__dot--occupied" />
-                <span>Occupied</span>
-              </div>
-            </div>
+          <DataTable
+            columns={columns}
+            data={filteredRooms}
+            loading={loading}
+            onRowClick={can("manageRooms") ? handleConfigure : null}
+            emptyState={{
+              icon: LayoutGrid,
+              title: "No rooms found",
+              description: "Try adjusting your filters or adding new rooms.",
+            }}
+          />
 
-            {roomsLoading ? (
-              <div className="rooms-status">Loading rooms...</div>
-            ) : roomsError ? (
-              <div className="rooms-status rooms-status--error">{roomsError}</div>
-            ) : roomsByFloor.length === 0 ? (
-              <EmptyState icon={BedDouble} title="No rooms found" description="Try adjusting your filters." />
-            ) : (
-              roomsByFloor.map(([floor, floorRooms]) => (
-                <div key={floor} className="rooms-floor">
-                  <h3 className="rooms-floor__label">Floor {floor}</h3>
-                  <div className="rooms-floor__grid">
-                    {floorRooms.map((room) => (
-                      <RoomCard key={room.id} room={room} />
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </>
+        {selectedRoom && (
+          <RoomConfigModal
+            room={selectedRoom}
+            onToggleBed={handleToggleBed}
+            onClose={() => setSelectedRoom(null)}
+            onSave={handleSaveConfig}
+          />
         )}
 
-        {activeTab === "setup" && <RoomConfigurationPage isEmbedded={true} />}
-        {activeTab === "occupancy" && <OccupancyTrackingPage isEmbedded={true} />}
+        {(showCreateModal || editingRoom) && (
+          <RoomFormModal
+            room={editingRoom}
+            onClose={() => {
+              setShowCreateModal(false);
+              setEditingRoom(null);
+            }}
+            onSave={handleSaveRoom}
+          />
+        )}
+
+        {deletingRoom && (
+          <DeleteRoomModal
+            room={deletingRoom}
+            onClose={() => setDeletingRoom(null)}
+            onDelete={handleDeleteRoom}
+          />
+        )}
       </PageShell.Content>
     </PageShell>
   );

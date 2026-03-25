@@ -1,5 +1,5 @@
 /* =============================================================================
-   ACCOUNTS (USER MANAGEMENT) — Notion-style (polished)
+   ACCOUNTS (USER MANAGEMENT) — Refined light-mode design
    ============================================================================= */
 @import "design-tokens.css";
 
@@ -48,12 +48,12 @@
 
 /* ── Role badge ── */
 .user-role-badge {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: capitalize;
   color: var(--text-secondary);
   background: var(--bg-active);
-  padding: 3px 8px;
+  padding: 3px 10px;
   border-radius: 99px;
   letter-spacing: 0.02em;
 }
@@ -66,13 +66,13 @@
 }
 
 .user-action-btn {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 550;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
 }
@@ -84,24 +84,24 @@
 }
 
 .user-action-btn--warn {
-  border-color: rgba(199, 125, 10, 0.25);
+  border-color: rgba(199, 125, 10, 0.2);
   color: var(--status-warning);
   background: var(--status-warning-bg);
 }
 
 .user-action-btn--warn:hover {
-  background: rgba(199, 125, 10, 0.14);
-  border-color: rgba(199, 125, 10, 0.4);
+  background: rgba(199, 125, 10, 0.12);
+  border-color: rgba(199, 125, 10, 0.35);
 }
 
 .user-action-btn--danger {
-  border-color: rgba(235, 87, 87, 0.2);
+  border-color: rgba(225, 75, 75, 0.15);
   color: var(--status-error);
   background: var(--status-error-bg);
   font-weight: 600;
 }
 
 .user-action-btn--danger:hover {
-  background: rgba(235, 87, 87, 0.14);
-  border-color: rgba(235, 87, 87, 0.35);
+  background: rgba(225, 75, 75, 0.12);
+  border-color: rgba(225, 75, 75, 0.3);
 }

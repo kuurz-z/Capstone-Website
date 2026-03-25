@@ -1,12 +1,13 @@
 # 🏢 Lilycrest Dormitory Management System
 
-> A full-stack web-based dormitory management platform designed to handle multi-branch operations, tenant lifecycle management, room-based billing, and real-time occupancy tracking — all through a unified, role-based interface.
+> A full-stack web-based dormitory management platform designed to handle multi-branch operations, tenant lifecycle management, room-based billing, online payments, real-time notifications, and occupancy tracking — all through a unified, role-based interface.
 
 [![Node.js](https://img.shields.io/badge/Node.js-16%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
 [![Express.js](https://img.shields.io/badge/Express.js-4.x-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![Socket.io](https://img.shields.io/badge/Socket.io-Realtime-010101?logo=socket.io&logoColor=white)](https://socket.io/)
 
 ---
 
@@ -32,23 +33,28 @@ Lilycrest DMS is built for **Lilycrest Dormitory**, a multi-branch residential f
 
 - **Reservation lifecycle** — from inquiry to check-in via a guided multi-step workflow
 - **Room & occupancy management** — real-time bed-level tracking with automatic availability updates
-- **Billing** — room-based utility bill generation with pro-rata distribution
+- **Billing & online payments** — room-based utility bill generation with pro-rata distribution and PayMongo checkout
 - **Maintenance** — tenant-submitted requests with priority tracking and resolution stats
+- **Real-time notifications** — WebSocket-powered in-app notifications with unread counts
 - **Audit trail** — comprehensive logging of all administrative actions
+- **PDF receipts** — auto-generated payment receipts for tenants
 
-The platform serves four distinct user roles — public visitors, tenants, branch admins, and system administrators — each with a dedicated, access-controlled interface.
+The platform serves four distinct user roles — public visitors, applicants/tenants, branch admins, and system administrators — each with a dedicated, access-controlled interface.
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technologies                                                               |
-| ------------ | -------------------------------------------------------------------------- |
-| **Frontend** | React 19, Vite, React Router, Firebase Auth (Client SDK)                   |
-| **Backend**  | Express.js, MongoDB (Mongoose ODM), Firebase Admin SDK                     |
-| **Email**    | Nodemailer (Gmail SMTP)                                                    |
-| **Auth**     | Firebase Authentication (Email/Password, Google OAuth)                     |
-| **Security** | Input sanitization, CSRF protection, rate limiting, RBAC, branch isolation |
+| Layer          | Technologies                                                                      |
+| -------------- | --------------------------------------------------------------------------------- |
+| **Frontend**   | React 19, Vite, React Router, Zustand, React Query, Firebase Auth (Client SDK)    |
+| **Backend**    | Express.js, MongoDB (Mongoose ODM), Firebase Admin SDK, Socket.io                 |
+| **Payments**   | PayMongo (Checkout Sessions, Webhooks)                                            |
+| **Email**      | Nodemailer (Gmail SMTP)                                                           |
+| **Uploads**    | ImageKit (client-side uploads with server auth)                                   |
+| **Auth**       | Firebase Authentication (Email/Password, Google OAuth)                            |
+| **Scheduling** | node-cron (grace periods, bed lock cleanup, overdue billing)                      |
+| **Security**   | Helmet, input sanitization, CSRF protection, rate limiting, RBAC, branch isolation|
 
 ---
 
@@ -59,6 +65,7 @@ The platform serves four distinct user roles — public visitors, tenants, branc
 - [Node.js](https://nodejs.org/) v16 or higher
 - [MongoDB Atlas](https://www.mongodb.com/atlas) account
 - [Firebase](https://firebase.google.com/) project with Authentication enabled
+- [PayMongo](https://www.paymongo.com/) account (for online payments)
 
 ### Installation
 
@@ -87,6 +94,9 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASSWORD=your-app-specific-password
 FRONTEND_URL=http://localhost:3000
+PAYMONGO_SECRET_KEY=your-paymongo-secret-key
+PAYMONGO_WEBHOOK_SECRET=your-webhook-signing-key
+IMAGEKIT_PRIVATE_KEY=your-imagekit-private-key
 ```
 
 **Frontend** — create `web/.env`:
@@ -115,6 +125,7 @@ cd web && npm run dev
 | ----------- | --------------------- |
 | Frontend    | http://localhost:3000 |
 | Backend API | http://localhost:5000 |
+| Health Check| http://localhost:5000/api/health |
 
 ---
 
@@ -124,22 +135,22 @@ cd web && npm run dev
 Capstone-Website/
 │
 ├── server/                      # Express.js Backend
-│   ├── config/                 # Database, Firebase, Email configuration
-│   ├── controllers/            # Request handlers (10 controllers)
-│   ├── middleware/             # Auth, validation, CSRF, rate limiting
-│   ├── models/                # Mongoose schemas (10 models)
-│   ├── routes/                # API route definitions (9 route files)
-│   ├── utils/                 # Audit logger, occupancy manager
+│   ├── config/                 # Database, Firebase, Email, PayMongo, Constants
+│   ├── controllers/            # Request handlers (13 controllers)
+│   ├── middleware/             # Auth, validation, CSRF, rate limiting, permissions
+│   ├── models/                # Mongoose schemas (16 models)
+│   ├── routes/                # API route definitions (13 route files)
+│   ├── utils/                 # Audit logger, occupancy, scheduler, socket, notifications
 │   └── server.js              # Application entry point
 │
 ├── web/                         # React + Vite Frontend
 │   └── src/
 │       ├── features/           # Role-based UI modules
-│       │   ├── public/        # Landing page, room listings
-│       │   ├── tenant/        # Tenant dashboard & portal
+│       │   ├── public/        # Landing page, signup, legal pages
+│       │   ├── tenant/        # Applicant & tenant portal
 │       │   ├── admin/         # Branch admin dashboard
-│       │   └── super-admin/   # System administration
-│       ├── shared/            # Shared components, API layer, hooks
+│       │   └── super-admin/   # System administration (nested in admin layout)
+│       ├── shared/            # Shared components, API layer, hooks, stores, utils
 │       └── firebase/          # Firebase configuration
 │
 └── docs/                        # Technical documentation
@@ -156,14 +167,19 @@ Capstone-Website/
 - Responsive landing page with branch information
 - Room browsing with filters (type, price, capacity, availability)
 - Online inquiry submission with email notifications
+- Privacy policy and terms of service pages
+- Email verification flow
 
-### Tenant Portal
+### Applicant & Tenant Portal
 
-- Guided multi-step reservation workflow
-- Real-time billing dashboard with payment history
+- Guided multi-step reservation workflow with room & bed selection
+- Online payment via PayMongo (deposits & monthly bills)
+- Real-time billing dashboard with payment history & PDF receipts
 - Maintenance request submission and tracking
 - Announcements with read/acknowledgment tracking
-- Profile and contract management
+- Profile management with demographic details & document uploads
+- Contract management
+- In-app notifications with real-time updates (WebSocket)
 
 ### Admin Dashboard
 
@@ -171,14 +187,17 @@ Capstone-Website/
 - Room management with 3-tab interface (Availability, Setup, Occupancy)
 - Room-based billing with pro-rata utility distribution
 - Tenant lifecycle management (pending → confirmed → checked-in → checked-out)
+- Maintenance request management
 - Comprehensive audit trail for all actions
+- Vacancy date forecasting
 
-### System Administration
+### System Administration (Super Admin)
 
-- Cross-branch user management
-- Branch configuration
+- Cross-branch system dashboard with performance comparisons
+- Branch management & configuration
 - Role and permission management
-- System-wide activity logs
+- System-wide activity logs & user management
+- System settings
 
 ---
 
@@ -186,17 +205,22 @@ Capstone-Website/
 
 The backend exposes RESTful API endpoints organized by domain:
 
-| Domain         | Base Path            | Auth           |
-| -------------- | -------------------- | -------------- |
-| Authentication | `/api/auth`          | Firebase / JWT |
-| Rooms          | `/api/rooms`         | Public / Admin |
-| Reservations   | `/api/reservations`  | JWT / Admin    |
-| Inquiries      | `/api/inquiries`     | Public / Admin |
-| Billing        | `/api/billing`       | JWT / Admin    |
-| Announcements  | `/api/announcements` | JWT / Admin    |
-| Maintenance    | `/api/maintenance`   | JWT / Admin    |
-| Users          | `/api/users`         | Admin          |
-| Audit Logs     | `/api/audit-logs`    | Admin          |
+| Domain         | Base Path              | Auth           |
+| -------------- | ---------------------- | -------------- |
+| Authentication | `/api/auth`            | Firebase / JWT |
+| Rooms          | `/api/rooms`           | Public / Admin |
+| Reservations   | `/api/reservations`    | JWT / Admin    |
+| Inquiries      | `/api/inquiries`       | Public / Admin |
+| Billing        | `/api/billing`         | JWT / Admin    |
+| Payments       | `/api/payments`        | JWT / Admin    |
+| Announcements  | `/api/announcements`   | JWT / Admin    |
+| Maintenance    | `/api/maintenance`     | JWT / Admin    |
+| Notifications  | `/api/notifications`   | JWT            |
+| Users          | `/api/users`           | Admin          |
+| Audit Logs     | `/api/audit-logs`      | Admin          |
+| Uploads        | `/api/upload`          | JWT            |
+| Webhooks       | `/api/webhooks`        | HMAC Signature |
+| Health         | `/api/health`          | Public         |
 
 > For complete endpoint documentation with request/response examples, see [docs/API.md](docs/API.md).
 
@@ -206,15 +230,18 @@ The backend exposes RESTful API endpoints organized by domain:
 
 The application implements multiple layers of security:
 
-| Measure              | Implementation                                                       |
-| -------------------- | -------------------------------------------------------------------- |
-| **Authentication**   | Firebase Auth with JWT token verification on every request           |
-| **Authorization**    | Role-based access control (applicant, tenant, admin, superAdmin)     |
-| **Branch Isolation** | Automatic data filtering ensures users only access their branch      |
-| **Input Validation** | Server-side sanitization against XSS, injection, and malformed input |
-| **CSRF Protection**  | Cryptographic token validation on state-changing requests            |
-| **Rate Limiting**    | Throttling on authentication endpoints to prevent brute force        |
-| **Audit Logging**    | All administrative actions recorded with before/after snapshots      |
+| Measure                | Implementation                                                       |
+| ---------------------- | -------------------------------------------------------------------- |
+| **Authentication**     | Firebase Auth with JWT token verification on every request           |
+| **Authorization**      | Role-based access control (applicant, tenant, admin, superAdmin)     |
+| **Permissions**        | Granular permission checks via dedicated permissions middleware       |
+| **Branch Isolation**   | Automatic data filtering ensures users only access their branch      |
+| **Input Validation**   | Server-side sanitization against XSS, injection, and malformed input |
+| **CSRF Protection**    | Cryptographic token validation on state-changing requests            |
+| **Rate Limiting**      | Tiered throttling (global, auth, public) to prevent abuse            |
+| **Security Headers**   | Helmet middleware for CSP, HSTS, X-Frame-Options, etc.               |
+| **Webhook Verification** | HMAC signature validation on PayMongo webhook callbacks            |
+| **Audit Logging**      | All administrative actions recorded with before/after snapshots      |
 
 > For implementation details, see [docs/SECURITY.md](docs/SECURITY.md).
 
@@ -240,6 +267,8 @@ Deploy to **Railway**, **Render**, or any Node.js-compatible platform. Ensure al
 - [ ] Update `FRONTEND_URL` and `VITE_API_URL` to production domains
 - [ ] Use production MongoDB Atlas URI with IP whitelist
 - [ ] Use production Firebase credentials
+- [ ] Set production PayMongo keys and webhook secret
+- [ ] Configure ImageKit production credentials
 
 ---
 
@@ -278,5 +307,5 @@ This project was developed as a capstone project for academic purposes.
 
 <p align="center">
   <strong>Lilycrest Dormitory Management System</strong><br>
-  Built with React · Express · MongoDB · Firebase
+  Built with React · Express · MongoDB · Firebase · PayMongo · Socket.io
 </p>

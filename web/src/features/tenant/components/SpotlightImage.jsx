@@ -1,60 +1,41 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
-const SpotlightImage = ({
-  children,
-  className = "",
-  spotlightColor = "rgba(255, 255, 255, 0.25)",
-}) => {
-  const divRef = useRef(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [opacity, setOpacity] = useState(0);
+/**
+ * SpotlightImage — wraps children with a mouse-following radial gradient spotlight effect.
+ * Used by FacilitiesSection.jsx facility cards.
+ */
+function SpotlightImage({ children, spotlightColor = "rgba(255, 255, 255, 0.15)", className = "" }) {
+  const containerRef = useRef(null);
 
   const handleMouseMove = (e) => {
-    if (!divRef.current) return;
-
-    const rect = divRef.current.getBoundingClientRect();
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  const handleMouseEnter = () => {
-    setOpacity(1);
-  };
-
-  const handleMouseLeave = () => {
-    setOpacity(0);
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    el.style.setProperty("--spot-x", `${x}px`);
+    el.style.setProperty("--spot-y", `${y}px`);
   };
 
   return (
     <div
-      ref={divRef}
+      ref={containerRef}
+      className={className}
       onMouseMove={handleMouseMove}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      className={`relative overflow-hidden ${className}`}
+      style={{ position: "relative", overflow: "hidden" }}
     >
-      {/* Backlit glow background */}
-      <div
-        className="absolute inset-0 pointer-events-none transition-opacity duration-300 ease-in-out"
-        style={{
-          opacity,
-          background: `radial-gradient(circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 70%)`,
-          filter: "blur(20px)",
-          zIndex: -1,
-        }}
-      />
-
       {children}
-
-      {/* Surface spotlight effect */}
       <div
-        className="pointer-events-none absolute inset-0 transition-opacity duration-300 ease-in-out"
         style={{
-          opacity: opacity * 0.6,
-          background: `radial-gradient(circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 80%)`,
+          position: "absolute",
+          inset: 0,
+          background: `radial-gradient(circle 120px at var(--spot-x, 50%) var(--spot-y, 50%), ${spotlightColor}, transparent 70%)`,
+          pointerEvents: "none",
+          transition: "opacity 0.2s",
         }}
       />
     </div>
   );
-};
+}
 
 export default SpotlightImage;

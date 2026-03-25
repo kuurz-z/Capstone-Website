@@ -6,8 +6,8 @@
  * Middleware functions for enforcing branch-based data separation.
  *
  * Business Rules:
- * - Regular admins can only access data from their assigned branch
- * - Super admins can access data from ALL branches
+ * - Branch admins can only access data from their assigned branch
+ * - Owners can access data from ALL branches
  * - Users without a branch assignment cannot access branch-specific data
  *
  * Usage:
@@ -22,19 +22,19 @@ import { User, INQUIRY_BRANCHES } from "../models/index.js";
  * Helper function to retrieve the current user's branch assignment and role.
  *
  * @param {string} firebaseUid - Firebase UID of the user
- * @returns {Object} { branch, role, isSuperAdmin }
+ * @returns {Object} { branch, role, isOwner }
  */
 export const getUserBranchInfo = async (firebaseUid) => {
   const user = await User.findOne({ firebaseUid }).select("branch role");
 
   if (!user) {
-    return { branch: null, role: null, isSuperAdmin: false };
+    return { branch: null, role: null, isOwner: false };
   }
 
   return {
     branch: user.branch,
     role: user.role,
-    isSuperAdmin: user.role === "superAdmin",
+    isOwner: user.role === "owner",
   };
 };
 
@@ -42,8 +42,8 @@ export const getUserBranchInfo = async (firebaseUid) => {
  * Filter By Branch Middleware
  *
  * Attaches branch filtering information to the request.
- * - Super admins: req.branchFilter = null (access all)
- * - Regular admins: req.branchFilter = their assigned branch
+ * - Owners: req.branchFilter = null (access all)
+ * - Branch admins: req.branchFilter = their assigned branch
  *
  * Must be used AFTER verifyToken middleware.
  *
@@ -58,34 +58,36 @@ export const filterByBranch = async (req, res, next) => {
       });
     }
 
-    const { branch, role, isSuperAdmin } = await getUserBranchInfo(
+    const { branch, role, isOwner } = await getUserBranchInfo(
       req.user.uid,
     );
 
-    // Super admins can access all branches
-    if (isSuperAdmin) {
+    // Owners can access all branches
+    if (isOwner) {
       req.branchFilter = null; // No filter - access all
       req.userBranch = "all";
-      req.isSuperAdmin = true;
+      req.isOwner = true;
+      req.isSuperAdmin = true; // backward compat for controllers not yet migrated
       return next();
     }
 
-    // Regular admins must have a branch assigned
+    // Branch admins must have a branch assigned
     if (!branch) {
       return res.status(403).json({
-        error: "No branch assigned. Please contact a super admin.",
+        error: "No branch assigned. Please contact the owner.",
         code: "NO_BRANCH_ASSIGNED",
       });
     }
 
-    // Set branch filter for regular admins
+    // Set branch filter for branch admins
     req.branchFilter = branch;
     req.userBranch = branch;
-    req.isSuperAdmin = false;
+    req.isOwner = false;
+    req.isSuperAdmin = false; // backward compat
 
     next();
   } catch (error) {
-    console.error("❌ Branch filter error:", error.message);
+    console.error("\u274c Branch filter error:", error.message);
     res.status(500).json({
       error: "Failed to verify branch access",
       code: "BRANCH_ACCESS_ERROR",
@@ -113,7 +115,7 @@ export const validateBranchAccess = async (req, res, next) => {
       });
     }
 
-    const { branch, isSuperAdmin } = await getUserBranchInfo(req.user.uid);
+    const { branch, isOwner } = await getUserBranchInfo(req.user.uid);
 
     // Validate branch value using INQUIRY_BRANCHES constant
     if (requestedBranch && !INQUIRY_BRANCHES.includes(requestedBranch)) {
@@ -123,13 +125,14 @@ export const validateBranchAccess = async (req, res, next) => {
       });
     }
 
-    // Super admins can access any branch
-    if (isSuperAdmin) {
-      req.isSuperAdmin = true;
+    // Owners can access any branch
+    if (isOwner) {
+      req.isOwner = true;
+      req.isSuperAdmin = true; // backward compat
       return next();
     }
 
-    // Regular admins can only access their assigned branch
+    // Branch admins can only access their assigned branch
     if (
       requestedBranch &&
       requestedBranch !== branch &&
@@ -143,7 +146,7 @@ export const validateBranchAccess = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("❌ Branch validation error:", error.message);
+    console.error("\u274c Branch validation error:", error.message);
     res.status(500).json({
       error: "Failed to validate branch access",
       code: "BRANCH_VALIDATION_ERROR",

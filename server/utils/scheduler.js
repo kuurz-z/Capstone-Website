@@ -293,7 +293,7 @@ async function cleanupOrphanedAccounts() {
     //    Skip admin and superAdmin to prevent accidental deletion
     for (const [uid, mgUser] of mongoByUid) {
       if (!firebaseUids.has(uid)) {
-        if (mgUser.role === "admin" || mgUser.role === "superAdmin") {
+        if (mgUser.role === "branch_admin" || mgUser.role === "owner") {
           logger.warn({ email: mgUser.email }, "Sync: skipping orphaned admin record — manual review required");
           continue;
         }
@@ -472,7 +472,7 @@ async function warnStaleVisitPending() {
 
       // Find admins for this branch
       const branchAdmins = await User.find({
-        role: { $in: ["admin", "superAdmin"] },
+        role: { $in: ["branch_admin", "owner"] },
         branch: branch,
         isArchived: false,
       }).select("_id");

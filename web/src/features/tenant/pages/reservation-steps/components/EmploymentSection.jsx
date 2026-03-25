@@ -26,7 +26,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group" data-field="employerSchool">
-      <label className="form-label">Current Employer <span style={{ color: "#dc2626" }}>*</span></label>
+      <label className="form-label">Current Employer <span className="rf-required">*</span></label>
       <input
         type="text"
         className="form-input"
@@ -41,7 +41,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group" data-field="employerAddress">
-      <label className="form-label">Employer's Address <span style={{ color: "#dc2626" }}>*</span></label>
+      <label className="form-label">Employer's Address <span className="rf-required">*</span></label>
       <textarea
         className="form-textarea"
         placeholder="Full address"
@@ -55,7 +55,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group" data-field="employerContact">
-      <label className="form-label">Employer's Contact Number <span style={{ color: "#dc2626" }}>*</span></label>
+      <label className="form-label">Employer's Contact Number <span className="rf-required">*</span></label>
       <input
         type="tel"
         className="form-input"
@@ -80,7 +80,7 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group" data-field="occupation">
-      <label className="form-label">Occupation / Job Description <span style={{ color: "#dc2626" }}>*</span></label>
+      <label className="form-label">Occupation / Job Description <span className="rf-required">*</span></label>
       <textarea
         className="form-textarea"
         placeholder="e.g., Software Engineer, Nurse, Currently Job Hunting"
@@ -117,7 +117,7 @@ const EmploymentSection = ({
     <div className="form-group" data-field="companyIDReason">
       <label className="form-label">
         If not yet available, please indicate reason below{" "}
-        <span style={{ color: "#dc2626" }}>*</span>
+        <span className="rf-required">*</span>
       </label>
       <textarea
         className="form-textarea"
@@ -136,7 +136,7 @@ const EmploymentSection = ({
 const FieldError = ({ error }) => {
   if (!error) return null;
   return (
-    <div style={{ fontSize: "12px", color: "#dc2626", marginTop: "4px" }}>
+    <div className="rf-field-error">
       {error}
     </div>
   );

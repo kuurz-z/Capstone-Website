@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 
 /**
  * FloatingInput — Material-style floating label input.
@@ -39,15 +39,22 @@ const FloatingInput = ({
   const hasValue = value.length > 0;
   const showValid = valid && hasValue && !focused;
 
-  // Border color — always neutral; state indicated by label color only
-  const borderColor = "var(--fi-border)";
+  const wrapperClass = useMemo(() => [
+    "floating-field__wrapper",
+    hasValue || focused ? "active"    : "",
+    focused              ? "focused"   : "",
+    error                ? "has-error" : "",
+    showValid            ? "is-valid"  : "",
+  ].filter(Boolean).join(" "), [hasValue, focused, error, showValid]);
+
+  const handleBlur = useCallback(() => {
+    setFocused(false);
+    externalBlur?.();
+  }, [externalBlur]);
 
   return (
     <div className="floating-field">
-      <div
-        className={`floating-field__wrapper ${hasValue || focused ? "active" : ""} ${focused ? "focused" : ""} ${error ? "has-error" : ""} ${showValid ? "is-valid" : ""}`}
-        style={{ "--border-color": borderColor }}
-      >
+      <div className={wrapperClass}>
         <input
           id={name}
           name={name}
@@ -55,10 +62,7 @@ const FloatingInput = ({
           value={value}
           onChange={onChange}
           onFocus={() => setFocused(true)}
-          onBlur={() => {
-            setFocused(false);
-            if (externalBlur) externalBlur();
-          }}
+          onBlur={handleBlur}
           disabled={disabled}
           autoComplete={autoComplete}
           inputMode={inputMode}

@@ -67,6 +67,11 @@ export default function useSocketClient() {
       qc.invalidateQueries({ queryKey: ["rooms"] });
     });
 
+    // Listen for digital twin state changes — invalidate twin cache
+    socket.on("digital-twin:updated", () => {
+      qc.invalidateQueries({ queryKey: ["digital-twin"] });
+    });
+
     socketRef.current = socket;
 
     return () => {

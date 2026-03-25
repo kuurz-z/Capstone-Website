@@ -57,24 +57,24 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
 
   // Check role requirements using custom claims from ID token
   if (requiredRole) {
-    // For admin routes, check if user has admin or superAdmin custom claims
-    if (requiredRole === "admin") {
+    if (requiredRole === "branch_admin") {
+      // For admin routes, check if user has admin or owner role
       if (
         !user?.role ||
-        (user.role !== "admin" && user.role !== "superAdmin")
+        (user.role !== "branch_admin" && user.role !== "owner")
       ) {
         return <Navigate to="/signin" replace />;
       }
     }
     // For super admin routes, check for superAdmin role
-    else if (requiredRole === "superAdmin") {
-      if (!user?.role || user.role !== "superAdmin") {
+    else if (requiredRole === "owner") {
+      if (!user?.role || user.role !== "owner") {
         return <Navigate to="/admin/dashboard" replace />;
       }
     }
     // For applicant routes, BLOCK admin/super admin users (session lock)
     else if (requiredRole === "applicant") {
-      const isAdmin = user?.role === "admin" || user?.role === "superAdmin";
+      const isAdmin = user?.role === "branch_admin" || user?.role === "owner";
       if (isAdmin) {
         return <Navigate to="/admin/dashboard" replace />;
       }

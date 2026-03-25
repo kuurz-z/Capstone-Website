@@ -118,16 +118,17 @@ export const sanitizeUsername = (username) => {
 export const sanitizePhone = (phone) => {
   if (!phone || typeof phone !== "string") return null;
 
-  // Remove all non-digit characters except + and -
-  const sanitized = phone.replace(/[^\d+\-]/g, "").trim();
+  // Strip spaces and common formatting chars, keep + and digits
+  const cleaned = phone.replace(/[\s\-().]/g, "").trim();
 
-  // Phone: at least 7 digits
-  const digitsOnly = sanitized.replace(/[^\d]/g, "");
-  if (digitsOnly.length < 7) {
-    return null;
-  }
+  // Must be E.164: + followed by 7–15 digits
+  if (/^\+\d{7,15}$/.test(cleaned)) return cleaned;
 
-  return sanitized;
+  // Legacy fallback: plain digits only (7–15), no country code
+  const digitsOnly = cleaned.replace(/[^\d]/g, "");
+  if (digitsOnly.length >= 7 && digitsOnly.length <= 15) return digitsOnly;
+
+  return null;
 };
 
 /**
@@ -191,11 +192,11 @@ export const validateBranch = (
  */
 export const validateRole = (
   role,
-  validRoles = ["applicant", "tenant", "admin", "superAdmin"],
+  validRoles = ["applicant", "tenant", "branch_admin", "owner"],
 ) => {
   if (!role || typeof role !== "string") return null;
 
-  const sanitized = role.trim().toLowerCase();
+  const sanitized = role.trim();
 
   if (!validRoles.includes(sanitized)) {
     return null;

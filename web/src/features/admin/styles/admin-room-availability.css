@@ -1,129 +1,47 @@
 /* =============================================================================
-   ROOMS — Notion-style (polished)
+   ROOMS — Refined light-mode design
    ============================================================================= */
 @import "design-tokens.css";
 
-/* ── Legend ── */
-.rooms-legend {
+/* ── Room Table Styles ── */
+.room-occupancy-cell {
   display: flex;
   align-items: center;
-  gap: 18px;
-  margin-bottom: var(--spacing-lg);
-  padding: 10px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  box-shadow: var(--shadow-sm);
+  gap: 12px;
+  min-width: 140px;
 }
 
-.rooms-legend__item {
+.room-occupancy-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-inset);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.room-occupancy-fill {
+  height: 100%;
+  transition: width 0.4s var(--ease-out);
+  border-radius: 3px;
+}
+
+.room-name-cell {
   display: flex;
-  align-items: center;
-  gap: 7px;
-  font-weight: 500;
+  flex-direction: column;
 }
 
-.rooms-legend__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.rooms-legend__dot--available {
-  background: var(--status-success);
-  box-shadow: 0 0 0 3px rgba(15, 157, 88, 0.12);
-}
-
-.rooms-legend__dot--partial {
-  background: var(--status-warning);
-  box-shadow: 0 0 0 3px rgba(199, 125, 10, 0.12);
-}
-
-.rooms-legend__dot--occupied {
-  background: var(--status-error);
-  box-shadow: 0 0 0 3px rgba(235, 87, 87, 0.12);
-}
-
-/* ── Status messages ── */
-.rooms-status {
-  padding: 12px 16px;
-  background: var(--status-info-bg);
-  color: var(--status-info);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-base);
-  text-align: center;
-  font-weight: 500;
-}
-
-.rooms-status--error {
-  background: var(--status-error-bg);
-  color: var(--status-error);
-}
-
-/* ── Floor section ── */
-.rooms-floor {
-  margin-bottom: var(--spacing-xl);
-}
-
-.rooms-floor:last-child {
-  margin-bottom: 0;
-}
-
-.rooms-floor__label {
-  font-size: var(--font-size-base);
-  font-weight: 600;
+.room-name-primary {
+  font-weight: 550;
   color: var(--text-primary);
-  margin: 0 0 var(--spacing-md);
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-light);
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
-.rooms-floor__label::before {
-  content: "";
-  width: 4px;
-  height: 18px;
-  border-radius: 2px;
-  background: var(--accent-blue);
-  flex-shrink: 0;
+.room-name-sub {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
-.rooms-floor__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--spacing-md);
-}
-
-/* ── Room card restyle ── */
-.room-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
-  transition: all var(--duration-fast) var(--ease-out);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-}
-
-.room-card:hover {
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-}
-
-/* ── Responsive ── */
 @media (max-width: 768px) {
-  .rooms-floor__grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: var(--spacing-sm);
-  }
-
-  .rooms-legend {
-    flex-wrap: wrap;
-    gap: 12px;
+  .room-occupancy-cell span {
+    display: none;
   }
 }

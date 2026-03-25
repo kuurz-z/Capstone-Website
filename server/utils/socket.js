@@ -44,7 +44,7 @@ export function initSocket(httpServer, allowedOrigins = []) {
 
     // Join role-based rooms
     const role = socket.handshake.auth?.role;
-    if (role === "admin" || role === "superAdmin") {
+    if (role === "branch_admin" || role === "owner") {
       socket.join("admins");
     }
 
@@ -98,6 +98,23 @@ export function emitToAdmins(event, payload) {
 export function emitRoomUpdate(roomId, data = {}) {
   if (io) {
     io.emit("room:updated", { roomId: String(roomId), ...data });
+  }
+}
+
+/**
+ * Broadcast a digital-twin state change to all admins.
+ * Called when room occupancy, maintenance, or billing status changes.
+ *
+ * @param {string} branch - The branch that changed (optional)
+ * @param {string|ObjectId} roomId - The specific room that changed (optional)
+ */
+export function emitDigitalTwinUpdate(branch = null, roomId = null) {
+  if (io) {
+    io.to("admins").emit("digital-twin:updated", {
+      branch,
+      roomId: roomId ? String(roomId) : null,
+      timestamp: new Date().toISOString(),
+    });
   }
 }
 

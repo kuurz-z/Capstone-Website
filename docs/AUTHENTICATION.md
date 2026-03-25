@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Lilycrest Dormitory Management System uses **Firebase Authentication** for user authentication and **MongoDB** for storing user data. The backend verifies Firebase tokens and manages user roles.
+The Lilycrest Dormitory Management System uses **Firebase Authentication** for user authentication and **MongoDB** for storing user data. The backend verifies Firebase tokens and manages user roles. All roles (applicants, tenants, admins, super admins) use a unified sign-in page.
 
 ---
 
@@ -28,7 +28,7 @@ The Lilycrest Dormitory Management System uses **Firebase Authentication** for u
 ### Flow 1: Email/Password Registration
 
 ```
-User fills signup form
+User fills signup form (/signup)
     ↓
 Firebase creates account
     ↓
@@ -36,9 +36,9 @@ Verification email sent (Firebase handles this)
     ↓
 User signs out immediately
     ↓
-User clicks verification link in email
+User clicks verification link in email → /verify-email
     ↓
-User logs in with email/password
+User logs in with email/password (/signin)
     ↓
 Backend authenticates and grants access
 ```
@@ -46,7 +46,7 @@ Backend authenticates and grants access
 ### Flow 2: Google Sign-In (New User)
 
 ```
-User clicks "Continue with Google"
+User clicks "Continue with Google" (/signin)
     ↓
 Google OAuth popup appears
     ↓
@@ -54,17 +54,17 @@ Firebase creates account (emailVerified = true)
     ↓
 Backend creates user record (branch = "")
     ↓
-Redirect to branch selection page
+Redirect to branch selection
     ↓
 User selects branch
     ↓
-Redirect to branch homepage
+Redirect to appropriate dashboard based on role
 ```
 
 ### Flow 3: Google Sign-In (Existing User)
 
 ```
-User clicks "Sign in with Google"
+User clicks "Sign in with Google" (/signin)
     ↓
 Firebase authenticates user
     ↓
@@ -73,7 +73,21 @@ Backend validates and returns user data
 Check if branch is selected
     ↓
 If no branch → Redirect to branch selection
-If branch exists → Redirect to dashboard/homepage
+If branch exists → Redirect to dashboard/profile
+```
+
+### Flow 4: Unified Admin Login
+
+```
+Admin/SuperAdmin navigates to /signin
+    ↓
+Signs in with email/password or Google
+    ↓
+Backend validates and returns user with admin role
+    ↓
+RequireAdmin guard permits access to /admin/* routes
+    ↓
+Redirect to /admin/dashboard
 ```
 
 ---
@@ -82,23 +96,31 @@ If branch exists → Redirect to dashboard/homepage
 
 ### Frontend (React)
 
-| File                                                      | Purpose                    |
-| --------------------------------------------------------- | -------------------------- |
-| `web/src/features/tenant/pages/SignUp.jsx`                | User registration          |
-| `web/src/features/tenant/pages/SignIn.jsx`                | User login                 |
-| `web/src/features/tenant/pages/BranchSelection.jsx`       | Branch selection page      |
-| `web/src/features/tenant/modals/BranchSelectionModal.jsx` | Branch selection modal     |
-| `web/src/shared/hooks/FirebaseAuthContext.js`             | Auth context provider      |
-| `web/src/firebase/config.js`                              | Firebase SDK configuration |
+| File                                                      | Purpose                     |
+| --------------------------------------------------------- | --------------------------- |
+| `web/src/features/public/pages/SignUp.jsx`                | User registration           |
+| `web/src/features/tenant/pages/SignIn.jsx`                | Unified login (all roles)   |
+| `web/src/features/tenant/pages/ForgotPassword.jsx`        | Password reset              |
+| `web/src/features/public/pages/VerifyEmail.jsx`           | Email verification page     |
+| `web/src/shared/hooks/FirebaseAuthContext.js`             | Auth context provider       |
+| `web/src/shared/hooks/useAuth.js`                         | Auth state & methods        |
+| `web/src/shared/guards/RequireAdmin.jsx`                  | Admin route guard            |
+| `web/src/shared/guards/RequireNonAdmin.jsx`               | Block admins from auth pages |
+| `web/src/shared/guards/RequireSuperAdmin.jsx`             | Super admin route guard      |
+| `web/src/shared/components/ProtectedRoute.jsx`            | Role-based route protection  |
+| `web/src/firebase/config.js`                              | Firebase SDK configuration   |
 
 ### Backend (Express)
 
 | File                        | Purpose                       |
 | --------------------------- | ----------------------------- |
-| `server/routes/auth.js`     | Auth API endpoints            |
-| `server/middleware/auth.js` | Token verification middleware |
-| `server/config/firebase.js` | Firebase Admin SDK config     |
-| `server/models/User.js`     | User model with auth fields   |
+| `server/routes/authRoutes.js`     | Auth API endpoints      |
+| `server/middleware/auth.js`       | Token verification middleware |
+| `server/middleware/permissions.js` | Granular permission checks   |
+| `server/config/firebase.js`      | Firebase Admin SDK config     |
+| `server/models/User.js`          | User model with auth fields   |
+| `server/models/LoginLog.js`      | Login activity tracking       |
+| `server/models/UserSession.js`   | Active session tracking       |
 
 ---
 
@@ -145,6 +167,7 @@ Returns: { user }
 - Firebase handles all email sending
 - `emailVerified` status checked at login
 - Unverified users are blocked from accessing the system
+- Dedicated `/verify-email` page handles verification flow
 - Resend verification option available on login page
 
 ### Code Example: Check Verification Status
@@ -162,6 +185,26 @@ if (!userCredential.user.emailVerified) {
 
 ---
 
+## Route Guards
+
+### RequireNonAdmin
+
+Prevents admin/superAdmin users from accessing auth pages (`/signin`, `/signup`, `/forgot-password`). Redirects them to `/admin/dashboard` if already authenticated.
+
+### RequireAdmin
+
+Ensures only users with `admin` or `superAdmin` role can access `/admin/*` routes.
+
+### RequireSuperAdmin
+
+Additional layer on top of RequireAdmin — ensures only `superAdmin` users can access `/admin/branches`, `/admin/roles`, `/admin/settings`.
+
+### ProtectedRoute
+
+Generic role-based route wrapper that checks `requiredRole` and optionally `requireAuth`.
+
+---
+
 ## Branch Selection
 
 ### When Required
@@ -171,24 +214,26 @@ if (!userCredential.user.emailVerified) {
 
 ### Available Branches
 
-- **Gil Puyat** (`gil-puyat`) - Makati
-- **Guadalupe** (`guadalupe`) - Makati
+- **Gil Puyat** (`gil-puyat`) — Makati
+- **Guadalupe** (`guadalupe`) — Makati
 
 ---
 
 ## Security Considerations
 
-1. **Firebase as Source of Truth** - All password handling done by Firebase
-2. **Token Verification** - Backend verifies Firebase tokens on every request
-3. **Role-Based Access** - Different routes for tenant, admin, super-admin
-4. **Email Verification** - Required for email/password users before login
-5. **Rollback on Failure** - Firebase account deleted if backend registration fails
+1. **Firebase as Source of Truth** — All password handling done by Firebase
+2. **Token Verification** — Backend verifies Firebase tokens on every request
+3. **Role-Based Access** — Different routes for applicant, tenant, admin, super-admin
+4. **Email Verification** — Required for email/password users before login
+5. **Rollback on Failure** — Firebase account deleted if backend registration fails
+6. **Login Tracking** — Login activity recorded via `LoginLog` model
+7. **Session Tracking** — Active sessions tracked via `UserSession` model
 
 ## Reservation Access & Permissions
 
 ### Role-Based Access Control (RBAC)
 
-- **Tenant/User:**
+- **Applicant/Tenant:**
   - Can create, view, and cancel their own reservations.
 - **Admin:**
   - Can view, approve, or reject reservations for their branch.

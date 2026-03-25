@@ -1,53 +1,47 @@
 /**
- * ============================================================================
- * ZOD VALIDATE MIDDLEWARE
- * ============================================================================
+ * Simple schema-based validation middleware factory.
  *
- * Express middleware that validates req.body against a Zod schema.
- * Returns 400 with structured error details on validation failure.
+ * Usage:
+ *   router.patch("/update-branch", verifyToken, validate(updateBranchSchema), handler);
  *
- * Usage in route files:
- *   import { validate } from "../validation/validate.js";
- *   import { createInquirySchema } from "../validation/schemas.js";
- *   router.post("/", validate(createInquirySchema), createInquiry);
- *
- * ============================================================================
+ * Schema shape:
+ *   { fieldName: { type: "string", required: true, enum: [...] } }
  */
-
-import { ZodError } from "zod";
 
 /**
- * Returns an Express middleware that validates req.body against the given schema.
- * On success, replaces req.body with the parsed (coerced/defaulted) data.
- * On failure, responds with 400 and a structured error.
- *
- * @param {import("zod").ZodSchema} schema - The Zod schema to validate against
+ * @param {Object} schema - Field descriptor object
+ * @returns Express middleware that validates req.body against the schema
  */
-export function validate(schema) {
-  return (req, res, next) => {
-    try {
-      // Parse validates AND transforms (trim, default, coerce)
-      req.body = schema.parse(req.body);
-      next();
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const fieldErrors = error.errors.map((e) => ({
-          field: e.path.join("."),
-          message: e.message,
-        }));
+export const validate = (schema) => (req, res, next) => {
+  const errors = [];
 
-        return res.status(400).json({
-          error: "Validation failed",
-          code: "VALIDATION_ERROR",
-          details: fieldErrors
-            .map((e) => `${e.field}: ${e.message}`)
-            .join("; "),
-          fieldErrors,
-        });
-      }
+  for (const [field, rules] of Object.entries(schema)) {
+    const value = req.body[field];
 
-      // Non-Zod error — pass through
-      next(error);
+    if (rules.required && (value === undefined || value === null || value === "")) {
+      errors.push(`"${field}" is required`);
+      continue;
     }
-  };
-}
+
+    if (value === undefined || value === null) continue; // optional, not provided
+
+    if (rules.type === "string" && typeof value !== "string") {
+      errors.push(`"${field}" must be a string`);
+      continue;
+    }
+
+    if (rules.enum && !rules.enum.includes(value)) {
+      errors.push(`"${field}" must be one of: ${rules.enum.join(", ")}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      error: "Validation failed",
+      code: "VALIDATION_ERROR",
+      details: errors,
+    });
+  }
+
+  next();
+};

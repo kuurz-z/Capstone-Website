@@ -199,8 +199,8 @@ function SignIn() {
   const handlePostAuthFlow = (loginResponse) => {
     showNotification(`Welcome back, ${loginResponse.user.firstName}!`, "success", 4000);
     if (
-      loginResponse.user.role === "admin" ||
-      loginResponse.user.role === "superAdmin"
+      loginResponse.user.role === "branch_admin" ||
+      loginResponse.user.role === "owner"
     ) {
       setTimeout(() => navigate("/admin/dashboard"), 800);
     } else {
@@ -269,8 +269,8 @@ function SignIn() {
         // Show notification directly — it appends to document.body and survives route transitions
         showNotification(`Welcome back, ${welcomeName}!`, "success", 4000);
         if (
-          loginResponse.user.role === "admin" ||
-          loginResponse.user.role === "superAdmin"
+          loginResponse.user.role === "branch_admin" ||
+          loginResponse.user.role === "owner"
         ) {
           setTimeout(() => navigate("/admin/dashboard"), 800);
           setGlobalLoading(false);

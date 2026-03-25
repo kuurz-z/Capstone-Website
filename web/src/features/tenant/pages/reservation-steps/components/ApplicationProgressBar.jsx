@@ -18,7 +18,7 @@ const ApplicationProgressBar = ({
         marginBottom: "8px",
       }}
     >
-      <span style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+      <span className="rf-step-progress-label">
         {completedCount} of {totalSections} sections complete
       </span>
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>

@@ -16,8 +16,8 @@
  * ROLES:
  * - applicant: Default role, pre-tenant browsing & reserving (Web only)
  * - tenant: Active resident with signed contract (Web + Mobile)
- * - admin: Branch operations staff (Web only)
- * - superAdmin: System owner, multi-branch (Web only)
+ * - branch_admin: Branch operations staff (Web only)
+ * - owner: System owner, multi-branch (Web only)
  *
  * SOFT DELETE:
  * - Use isArchived=true to soft delete
@@ -87,12 +87,37 @@ const userSchema = new mongoose.Schema(
       enum: ["male", "female", "other", "prefer-not-to-say", ""],
       default: "",
     },
+    civilStatus: {
+      type: String,
+      enum: ["single", "married", "widowed", "separated", "divorced", ""],
+      default: "",
+    },
+    nationality: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    occupation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     address: {
       type: String,
       trim: true,
       default: "",
     },
     city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    province: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    zipCode: {
       type: String,
       trim: true,
       default: "",
@@ -111,6 +136,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    emergencyRelationship: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    // Legacy student fields — kept for backward compatibility
     studentId: {
       type: String,
       trim: true,
@@ -138,13 +169,13 @@ const userSchema = new mongoose.Schema(
     // --- Role & Reservation Status ---
     role: {
       type: String,
-      enum: ["applicant", "tenant", "admin", "superAdmin"],
+      enum: ["applicant", "tenant", "branch_admin", "owner"],
       default: "applicant",
       // Role lifecycle:
       // - "applicant" (registered, browsing, reserving — web only)
       // - "tenant" (signed contract, active resident — web + mobile)
-      // - "admin" (branch operations staff — web only)
-      // - "superAdmin" (system owner, multi-branch — web only)
+      // - "branch_admin" (branch operations staff — web only)
+      // - "owner" (system owner, multi-branch — web only)
     },
 
     tenantStatus: {
@@ -163,7 +194,7 @@ const userSchema = new mongoose.Schema(
     permissions: {
       type: [String],
       default: [],
-      // Populated based on role. SuperAdmin can customise per admin.
+      // Populated based on role. Owner can customise per branch_admin.
       // Available permissions:
       // - manageReservations: view/update/cancel reservations
       // - manageTenants: view/edit tenant profiles, account actions
