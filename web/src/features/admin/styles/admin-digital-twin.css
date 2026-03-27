@@ -800,6 +800,236 @@
   flex: 1;
 }
 
+/* ── Export Button ── */
+.dt-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-family);
+  transition: all var(--duration-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.dt-export-btn:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.dt-export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Data Freshness ── */
+.dt-freshness {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.dt-freshness__label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.dt-freshness__btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.dt-freshness__btn:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.dt-freshness__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dt-freshness__spin {
+  animation: dtSpin 0.8s linear infinite;
+}
+
+@keyframes dtSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Skeleton Loader ── */
+.dt-skeleton-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dt-skeleton-line {
+  border-radius: var(--radius-xs);
+  background: linear-gradient(
+    90deg,
+    var(--bg-inset) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-inset) 75%
+  );
+  background-size: 200% 100%;
+  animation: dtShimmer 1.5s infinite;
+}
+
+.dt-skeleton-line--title {
+  width: 60%;
+  height: 16px;
+}
+
+.dt-skeleton-line--bar {
+  width: 100%;
+  height: 8px;
+}
+
+.dt-skeleton-line--sm {
+  width: 40%;
+  height: 12px;
+}
+
+@keyframes dtShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Branch Comparison Card ── */
+.dt-comparison {
+  margin-bottom: var(--spacing-lg);
+}
+
+.dt-comparison__title {
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--spacing-md);
+}
+
+.dt-comparison__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.dt-comparison__card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  transition: box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.dt-comparison__card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+.dt-comparison__branch {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+
+.dt-comparison__bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.dt-comparison__bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-inset);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.dt-comparison__bar-fill {
+  height: 100%;
+  background: var(--accent-blue);
+  border-radius: 3px;
+  transition: width 0.4s var(--ease-out);
+  min-width: 2px;
+}
+
+.dt-comparison__bar-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.dt-comparison__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dt-comparison__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dt-comparison__metric-value {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dt-comparison__metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dt-comparison__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  padding-top: 10px;
+  border-top: 1px solid var(--border-light);
+}
+
+.dt-comparison__risk {
+  color: var(--status-error);
+  font-weight: 600;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .dt-room-grid {
@@ -820,5 +1050,9 @@
   .dt-drawer {
     width: 100vw;
     max-width: 100vw;
+  }
+
+  .dt-comparison__metrics {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

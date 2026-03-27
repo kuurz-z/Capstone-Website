@@ -44,9 +44,12 @@ const AuditLogsPage = () => {
   const { data: logsResponse, isLoading: loading } = useAuditLogs(queryParams);
   const { data: statsResponse } = useAuditStats();
 
-  const logs = logsResponse?.data || [];
-  const stats = statsResponse?.data || { total: 0, critical: 0, today: 0, deletions: 0 };
-  const serverTotal = logsResponse?.pagination?.total || 0;
+  // httpClient auto-unwraps { success, data, meta } → data only
+  // So logsResponse IS the logs array, statsResponse IS the stats object
+  const logs = Array.isArray(logsResponse) ? logsResponse : [];
+  const stats = statsResponse || { total: 0, critical: 0, today: 0, deletions: 0 };
+  // Pagination total is lost during unwrap — use stats.total as fallback
+  const serverTotal = stats.total || 0;
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -136,16 +139,16 @@ const AuditLogsPage = () => {
       ),
     },
     {
-      key: "message",
+      key: "action",
       label: "Event",
       render: (row) => (
-        <span className="audit-message">{row.message || "—"}</span>
+        <span className="audit-message">{row.action || "—"}</span>
       ),
     },
     {
-      key: "performedBy",
+      key: "user",
       label: "User",
-      render: (row) => row.performedBy?.email || row.performedBy?.username || "System",
+      render: (row) => row.user || "System",
     },
     {
       key: "severity",
@@ -157,11 +160,11 @@ const AuditLogsPage = () => {
       },
     },
     {
-      key: "createdAt",
+      key: "timestamp",
       label: "Time",
       width: "140px",
       render: (row) =>
-        row.createdAt ? new Date(row.createdAt).toLocaleString("en-US", {
+        row.timestamp ? new Date(row.timestamp).toLocaleString("en-US", {
           month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
         }) : "—",
     },

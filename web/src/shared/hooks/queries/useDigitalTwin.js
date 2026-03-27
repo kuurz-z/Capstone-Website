@@ -12,6 +12,7 @@ export function useDigitalTwinSnapshot(branch) {
     queryKey: queryKeys.digitalTwin.snapshot(branch),
     queryFn: () => digitalTwinApi.getSnapshot(branch),
     refetchOnWindowFocus: false,
+    staleTime: 30_000,
   });
 }
 

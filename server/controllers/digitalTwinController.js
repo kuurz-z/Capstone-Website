@@ -240,6 +240,34 @@ export const getSnapshot = async (req, res) => {
           )
         : 100;
 
+    // ── Branch comparison (only when viewing all branches) ──
+    let comparison = null;
+    if (!branch || branch === "all") {
+      const branchGroups = {};
+      for (const room of enrichedRooms) {
+        const b = room.branch;
+        if (!branchGroups[b]) branchGroups[b] = [];
+        branchGroups[b].push(room);
+      }
+      comparison = {};
+      for (const [b, bRooms] of Object.entries(branchGroups)) {
+        const bCapacity = bRooms.reduce((s, r) => s + r.capacity, 0);
+        const bOccupancy = bRooms.reduce((s, r) => s + r.currentOccupancy, 0);
+        comparison[b] = {
+          totalRooms: bRooms.length,
+          avgHealth: bRooms.length > 0
+            ? Math.round(bRooms.reduce((s, r) => s + r.health.score, 0) / bRooms.length)
+            : 100,
+          occupancyRate: bCapacity > 0
+            ? Math.round((bOccupancy / bCapacity) * 100)
+            : 0,
+          openMaintenance: bRooms.reduce((s, r) => s + r.maintenance.openCount, 0),
+          totalOwed: bRooms.reduce((s, r) => s + r.billing.totalOwed, 0),
+          atRiskRooms: bRooms.filter((r) => r.health.tier === "critical").length,
+        };
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -258,6 +286,7 @@ export const getSnapshot = async (req, res) => {
           totalOwed: totalOwedBranch,
         },
         rooms: enrichedRooms,
+        ...(comparison && { comparison }),
       },
     });
   } catch (error) {

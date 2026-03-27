@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react";
-import { Wrench, DollarSign, Activity, AlertTriangle, X, ChevronRight, ChevronDown, AlertCircle, ShieldAlert } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useAuth } from "../../../shared/hooks/useAuth";
+import { Wrench, DollarSign, Activity, AlertTriangle, X, ChevronRight, ChevronDown, AlertCircle, ShieldAlert, RefreshCw } from "lucide-react";
 import { useDigitalTwinSnapshot, useDigitalTwinRoomDetail } from "../../../shared/hooks/queries/useDigitalTwin";
 import { PageShell, SummaryBar, StatusBadge } from "../components/shared";
 import { formatBranch, formatRoomType } from "../utils/formatters";
 import OccupancyTrackingPage from "./OccupancyTrackingPage";
+import ExportReportButton from "../components/digital-twin/ExportReportButton";
 import "../styles/design-tokens.css";
 import "../styles/admin-digital-twin.css";
 
@@ -105,6 +107,13 @@ function RoomCard({ room, isSelected, onClick }) {
 /* ── Detail Drawer ── */
 function RoomDetailDrawer({ roomId, onClose }) {
   const { data: detail, isLoading } = useDigitalTwinRoomDetail(roomId);
+
+  // Escape key closes drawer
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
 
   if (!roomId) return null;
 
@@ -259,6 +268,9 @@ function RoomDetailDrawer({ roomId, onClose }) {
 
 /* ── Main Page ── */
 export default function DigitalTwinPage() {
+  const { user } = useAuth();
+  const isOwner = user?.role === "owner";
+  const gridRef = useRef(null);
   const [branchFilter, setBranchFilter] = useState("all");
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [activeTab, setActiveTab] = useState("map");
@@ -268,9 +280,15 @@ export default function DigitalTwinPage() {
   const [typeFilter, setTypeFilter] = useState("all");
 
   const branch = branchFilter === "all" ? null : branchFilter;
-  const { data: snapshot, isLoading, isError } = useDigitalTwinSnapshot(branch);
+  const { data: snapshot, isLoading, isError, dataUpdatedAt, refetch, isFetching } = useDigitalTwinSnapshot(branch);
   const rooms = snapshot?.rooms || [];
   const kpis = snapshot?.kpis || {};
+  const comparison = snapshot?.comparison || null;
+
+  // Format last-updated timestamp
+  const lastUpdated = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   // Filter rooms based on search + pill filters
   const filteredRooms = useMemo(() => {
@@ -467,6 +485,31 @@ export default function DigitalTwinPage() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+
+                {/* Data Freshness */}
+                {lastUpdated && (
+                  <div className="dt-freshness">
+                    <span className="dt-freshness__label">Updated {lastUpdated}</span>
+                    <button
+                      className="dt-freshness__btn"
+                      onClick={() => refetch()}
+                      disabled={isFetching}
+                      aria-label="Refresh data"
+                    >
+                      <RefreshCw size={13} className={isFetching ? "dt-freshness__spin" : ""} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Export PDF */}
+                {!isLoading && rooms.length > 0 && (
+                  <ExportReportButton
+                    kpis={kpis}
+                    rooms={rooms}
+                    branchLabel={branchFilter === "all" ? "All Branches" : formatBranch(branchFilter)}
+                    captureRef={gridRef}
+                  />
+                )}
               </div>
 
               {/* Pill filters */}
@@ -532,15 +575,74 @@ export default function DigitalTwinPage() {
                 )}
               </div>
 
+              {/* Multi-Branch Comparison (Owner + All Branches only) */}
+              {isOwner && branchFilter === "all" && comparison && !isLoading && (
+                <div className="dt-comparison">
+                  <h3 className="dt-comparison__title">Branch Comparison</h3>
+                  <div className="dt-comparison__grid">
+                    {Object.entries(comparison).map(([b, stats]) => (
+                      <div key={b} className="dt-comparison__card">
+                        <h4 className="dt-comparison__branch">{formatBranch(b)}</h4>
+
+                        {/* Occupancy progress bar */}
+                        <div className="dt-comparison__bar-wrap">
+                          <div className="dt-comparison__bar">
+                            <div
+                              className="dt-comparison__bar-fill"
+                              style={{ width: `${stats.occupancyRate}%` }}
+                            />
+                          </div>
+                          <span className="dt-comparison__bar-label">{stats.occupancyRate}% occupied</span>
+                        </div>
+
+                        <div className="dt-comparison__metrics">
+                          <div className="dt-comparison__metric">
+                            <span className="dt-comparison__metric-value">{stats.totalRooms}</span>
+                            <span className="dt-comparison__metric-label">Rooms</span>
+                          </div>
+                          <div className="dt-comparison__metric">
+                            <span className="dt-comparison__metric-value" style={{ color: stats.atRiskRooms > 0 ? 'var(--status-error)' : 'var(--text-primary)' }}>
+                              {stats.atRiskRooms}
+                            </span>
+                            <span className="dt-comparison__metric-label">At Risk</span>
+                          </div>
+                          <div className="dt-comparison__metric">
+                            <span className="dt-comparison__metric-value">{stats.openMaintenance}</span>
+                            <span className="dt-comparison__metric-label">Open Issues</span>
+                          </div>
+                        </div>
+
+                        <div className="dt-comparison__footer">
+                          <span style={{ color: stats.avgHealth >= 80 ? 'var(--status-success)' : stats.avgHealth >= 50 ? 'var(--status-warning)' : 'var(--status-error)' }}>
+                            Health: {stats.avgHealth}/100
+                          </span>
+                          {stats.totalOwed > 0 && (
+                            <span className="dt-comparison__risk">₱{stats.totalOwed.toLocaleString()} due</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {isLoading ? (
-                <div className="dt-loading">Loading digital twin data…</div>
+                <div className="dt-room-grid">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="dt-skeleton-card">
+                      <div className="dt-skeleton-line dt-skeleton-line--title" />
+                      <div className="dt-skeleton-line dt-skeleton-line--bar" />
+                      <div className="dt-skeleton-line dt-skeleton-line--sm" />
+                    </div>
+                  ))}
+                </div>
               ) : filteredRooms.length === 0 ? (
                 <div className="dt-empty">
                   <Activity size={36} strokeWidth={1.5} />
                   <p>{rooms.length > 0 ? "No rooms match your filters." : "No rooms found for this branch."}</p>
                 </div>
               ) : (
-                <>
+                <div ref={gridRef}>
                   {/* Legend */}
                   <div className="dt-legend">
                     <span className="dt-legend__title">Bed Status:</span>
@@ -574,7 +676,7 @@ export default function DigitalTwinPage() {
                       </div>
                     </div>
                   ))}
-                </>
+                </div>
               )}
             </>
           )}
