@@ -1,4 +1,5 @@
 import { useState } from "react";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function AddUserModal({
   addForm,
@@ -10,6 +11,7 @@ export default function AddUserModal({
   onClose,
 }) {
   const [showPassword, setShowPassword] = useState(false);
+  useEscapeClose(true, onClose);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

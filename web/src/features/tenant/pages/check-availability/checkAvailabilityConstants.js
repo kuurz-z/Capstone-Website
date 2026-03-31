@@ -14,15 +14,15 @@ export const BRANCH_CAPACITY = {
     totalRooms: 20,
     totalBeds: 60,
     roomTypes: {
-      Private: { maxRooms: 5, bedsPerRoom: 2 },
-      Shared: { maxRooms: 8, bedsPerRoom: 2 },
-      Quadruple: { maxRooms: 7, bedsPerRoom: 4 },
+      Private: { maxRooms: 40, bedsPerRoom: 2 },
+      Shared: { maxRooms: 10, bedsPerRoom: 2 },
+      Quadruple: { maxRooms: 45, bedsPerRoom: 4 },
     },
   },
   Guadalupe: {
-    totalRooms: 12,
-    totalBeds: 48,
-    roomTypes: { Quadruple: { maxRooms: 12, bedsPerRoom: 4 } },
+    totalRooms: 16,
+    totalBeds: 64,
+    roomTypes: { Quadruple: { maxRooms: 16, bedsPerRoom: 4 } },
   },
 };
 
@@ -31,7 +31,7 @@ export const UPCOMING_ROOM = {
   title: "Room GD-Q-004",
   branch: "Guadalupe",
   type: "Quadruple",
-  price: 4200,
+  price: 5400,
   availableFrom: "March 15, 2026",
 };
 
@@ -104,11 +104,9 @@ export const ROOM_IMAGES = { standardRoom, deluxeRoom, premiumRoom, gallery1 };
 
 export const buildBedsFromCapacity = (roomNumber, type, occupiedCount = 0) => {
   const positions =
-    type === "private"
-      ? ["single", "single"]
-      : type === "double-sharing"
-        ? ["upper", "lower"]
-        : ["upper", "lower", "upper", "lower"];
+    type === "private" || type === "double-sharing"
+      ? ["upper", "lower"]
+      : ["upper", "lower", "upper", "lower"];
   return positions.map((position, index) => ({
     id: `${roomNumber}-B${index + 1}`,
     position,

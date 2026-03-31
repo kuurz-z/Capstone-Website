@@ -439,6 +439,64 @@
   opacity: 0.9;
 }
 
+/* ── Pagination ─────────────────────────────────────────────────── */
+.ca-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding: 14px 20px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ca-pagination__info {
+  font-size: 13px;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.ca-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ca-pagination__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1.5px solid #E5E7EB;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ca-pagination__btn:hover:not(:disabled) {
+  background: #F3F4F6;
+  border-color: #9CA3AF;
+  color: #0A1628;
+}
+
+.ca-pagination__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.ca-pagination__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  min-width: 56px;
+  text-align: center;
+}
+
 /* ── Coming Soon ─────────────────────────────────────────────────── */
 .ca-coming-soon-card {
   border-radius: 16px;
@@ -687,4 +745,31 @@ html[data-theme="dark"] .ca-card-nav-btn {
 
 html[data-theme="dark"] .ca-card-nav-btn:hover {
   background: var(--surface-elevated);
+}
+
+/* Pagination */
+html[data-theme="dark"] .ca-pagination {
+  background: var(--surface-card);
+  border-color: var(--border-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme="dark"] .ca-pagination__info {
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] .ca-pagination__btn {
+  background: var(--surface-card);
+  border-color: var(--border-card);
+  color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .ca-pagination__btn:hover:not(:disabled) {
+  background: var(--surface-muted);
+  border-color: var(--text-muted);
+  color: var(--text-heading);
+}
+
+html[data-theme="dark"] .ca-pagination__label {
+  color: var(--text-secondary);
 }

@@ -7,8 +7,10 @@
  */
 
 import "./TermsModal.css";
+import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 
 function TermsModal({ isOpen, onClose }) {
+  useEscapeClose(isOpen, onClose);
   if (!isOpen) return null;
 
   return (

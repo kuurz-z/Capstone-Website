@@ -1,10 +1,12 @@
 import { BedDouble, Unlock, X } from "lucide-react";
 import { formatRoomType } from "../../utils/formatters";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
+  useEscapeClose(true, onClose);
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{room.name || room.roomName} - Bed Assignment Details</h2>
           <button className="close-btn" onClick={onClose}>

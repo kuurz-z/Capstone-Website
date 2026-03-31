@@ -435,7 +435,7 @@ export function InquiryForm() {
                 options={[
                   { value: 'private', label: 'Private Room' },
                   { value: 'double', label: 'Double Occupancy' },
-                  { value: 'quadruple', label: 'Quadruple Room' },
+                  { value: 'quadruple-sharing', label: 'Quadruple Sharing' },
                 ]}
               />
             </div>

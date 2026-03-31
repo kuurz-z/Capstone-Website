@@ -29,6 +29,16 @@ const ElectricityBillingTab = () => {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
 
+  /** Mask tenant name for privacy: "Leander Ponce" → "Leander *****" */
+  const maskName = (name) => {
+    if (!name) return "—";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length <= 1) return parts[0];
+    const first = parts[0];
+    const last = parts.slice(1).join(" ");
+    return `${first} ${"*".repeat(Math.max(last.length, 4))}`;
+  };
+
   // Selection
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [selectedPeriodId, setSelectedPeriodId] = useState(null);
@@ -60,9 +70,17 @@ const ElectricityBillingTab = () => {
   const [periodsPage, setPeriodsPage] = useState(1);
   const [readingsPage, setReadingsPage] = useState(1);
 
-  // Form state — default billing date = 15th of current month
+  // Form state — billing periods default to 15th-to-15th cycle
   const get15th = () => {
     const d = new Date();
+    d.setDate(15);
+    return d.toISOString().slice(0, 10);
+  };
+
+  /** 15th of the NEXT month relative to a given date string (or now). */
+  const getNext15th = (fromDateStr) => {
+    const d = fromDateStr ? new Date(fromDateStr) : new Date();
+    d.setMonth(d.getMonth() + 1);
     d.setDate(15);
     return d.toISOString().slice(0, 10);
   };
@@ -73,7 +91,7 @@ const ElectricityBillingTab = () => {
   });
   const [periodForm, setPeriodForm] = useState({
     startDate: get15th(), startReading: "", ratePerKwh: "",
-    endReading: "", endDate: get15th(),
+    endReading: "", endDate: getNext15th(),
   });
 
   // Queries
@@ -139,11 +157,12 @@ const ElectricityBillingTab = () => {
   const openPanel = (panel, extras = {}) => {
     setActivePanel(panel);
     if (panel === "newPeriod") {
+      const startDate = get15th();
       setPeriodForm(f => ({
         ...f,
         startReading: latestData?.reading ?? "",
-        startDate: get15th(),
-        endDate: new Date().toISOString().slice(0, 10),
+        startDate,
+        endDate: getNext15th(startDate),
         endReading: "",
         ...extras,
       }));
@@ -385,13 +404,12 @@ const ElectricityBillingTab = () => {
             <div className="eb-sidebar__empty">No rooms found</div>
           ) : (
             filteredRooms.map((room) => {
-              const isDisabled = !room.hasActiveTenants;
+              const isEmpty = !room.hasActiveTenants;
               return (
                 <button
                   key={room.id}
-                  className={`eb-room${selectedRoomId === room.id ? " eb-room--active" : ""}${isDisabled ? " eb-room--disabled" : ""}`}
+                  className={`eb-room${selectedRoomId === room.id ? " eb-room--active" : ""}`}
                   onClick={() => {
-                    if (isDisabled) return;
                     setSelectedRoomId(room.id);
                     setSelectedPeriodId(null);
                     setDraftPeriodId(null);
@@ -399,20 +417,12 @@ const ElectricityBillingTab = () => {
                     setReadingsPage(1);
                     closePanel();
                   }}
-                  disabled={isDisabled}
-                  title={isDisabled ? "No checked-in tenants — billing unavailable" : undefined}
                 >
                   <span className="eb-room__name">{room.name || room.roomNumber}</span>
-                  <span className={`eb-room__badge${room.hasOpenPeriod ? " eb-room__badge--open" : ""}${isDisabled ? " eb-room__badge--empty" : ""}`}>
-                    {isDisabled ? "No Tenants" : room.hasOpenPeriod ? "Active" : "No Period"}
+                  <span className={`eb-room__badge${room.hasOpenPeriod ? " eb-room__badge--open" : ""}${isEmpty ? " eb-room__badge--empty" : ""}`}>
+                    {isEmpty ? "No Tenants" : room.hasOpenPeriod ? "Active" : "No Period"}
                   </span>
-                  {/* Masked tenant names */}
-                  {!isDisabled && room.maskedTenants?.length > 0 && (
-                    <span className="eb-room__tenants">
-                      {room.maskedTenants.join(" · ")}
-                    </span>
-                  )}
-                  {room.latestReading != null && !isDisabled && (
+                  {room.latestReading != null && (
                     <span className="eb-room__kwh">{room.latestReading} kWh</span>
                   )}
                 </button>
@@ -664,7 +674,7 @@ const ElectricityBillingTab = () => {
                         return (
                           <tr key={billId} className={isEditing ? "eb-row--editing" : ""}>
                             <td>
-                              {bill.tenantName}
+                              {maskName(bill.tenantName)}
                               {bill.isManuallyAdjusted && (
                                 <span className="eb-revised-tag" title="Manually adjusted">edited</span>
                               )}
@@ -755,20 +765,20 @@ const ElectricityBillingTab = () => {
                 <div className="eb-table-wrap">
                   <table className="eb-table">
                     <colgroup>
-                      <col style={{ width: '14%' }} />
-                      <col style={{ width: '14%' }} />
-                      <col style={{ width: '9%' }} />
-                      <col style={{ width: '9%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '16%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '12%' }} />
                       <col style={{ width: '10%' }} />
                       <col style={{ width: '10%' }} />
                       <col />
                     </colgroup>
                     <thead>
                       <tr>
-                        <th>Start</th>
-                        <th>End</th>
-                        <th>From</th>
-                        <th>To</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Start kWh</th>
+                        <th>End kWh</th>
                         <th>Rate</th>
                         <th>Status</th>
                         <th>Actions</th>
@@ -785,8 +795,8 @@ const ElectricityBillingTab = () => {
                         >
                           <td><strong>{fmt(p.startDate)}</strong></td>
                           <td className="eb-cell--muted">{p.endDate ? fmt(p.endDate) : "—"}</td>
-                          <td className="eb-cell--num">{p.startReading}</td>
-                          <td className="eb-cell--num">{p.endReading ?? "—"}</td>
+                          <td>{p.startReading} <span style={{ color: "var(--text-secondary, #9ca3af)", fontSize: "0.75rem" }}>kWh</span></td>
+                          <td>{p.endReading != null ? <>{p.endReading} <span style={{ color: "var(--text-secondary, #9ca3af)", fontSize: "0.75rem" }}>kWh</span></> : <span className="eb-cell--muted">—</span>}</td>
                           <td>₱{p.ratePerKwh}</td>
                           <td>
                             <span className={`eb-status-pill eb-status-pill--${p.status}`}>{p.status}</span>
@@ -854,12 +864,12 @@ const ElectricityBillingTab = () => {
                 <div className="eb-table-wrap">
                   <table className="eb-table">
                     <colgroup>
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '20%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '16%' }} />
                       <col style={{ width: '25%' }} />
-                      <col style={{ width: '20%' }} />
-                      <col style={{ width: '50px' }} />
+                      <col />
+                      <col style={{ width: '36px' }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -867,7 +877,7 @@ const ElectricityBillingTab = () => {
                         <th>Reading</th>
                         <th>Event</th>
                         <th>Tenant</th>
-                        <th>By</th>
+                        <th>Recorded By</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -875,9 +885,15 @@ const ElectricityBillingTab = () => {
                       {pagedReadings.map((r) => (
                         <tr key={r.id}>
                           <td>{fmt(r.date)}</td>
-                          <td className="eb-cell--num">{r.reading} kWh</td>
-                          <td><span className={`eb-event-tag eb-event-tag--${r.eventType}`}>{r.eventType}</span></td>
-                          <td className="eb-cell--muted">{r.tenant || "—"}</td>
+                          <td>{r.reading} <span style={{ color: "var(--text-secondary, #9ca3af)", fontSize: "0.75rem" }}>kWh</span></td>
+                          <td>
+                            <span className={`eb-event-tag eb-event-tag--${r.eventType}`}>
+                              {r.eventType === "move-in" ? "Move-In"
+                                : r.eventType === "move-out" ? "Move-Out"
+                                : "Regular"}
+                            </span>
+                          </td>
+                          <td className="eb-cell--muted">{maskName(r.tenant)}</td>
                           <td className="eb-cell--muted">{r.recordedBy}</td>
                           <td>
                             <button

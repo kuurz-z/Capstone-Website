@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
-import { Search } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
 import { queryClient } from "../../../shared/lib/queryClient";
@@ -52,6 +52,8 @@ function CheckAvailabilityPage() {
   const [selectedBed, setSelectedBed] = useState(null);
   const [showLoginConfirmBeforeReserve, setShowLoginConfirmBeforeReserve] =
     useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROOMS_PER_PAGE = 6;
 
   // ── TanStack Query ─────────────────────────────────────────
   const { data: rawRooms = [], isLoading: roomsLoading, error: roomsQueryError } = useRooms();
@@ -150,6 +152,18 @@ function CheckAvailabilityPage() {
       room.price <= maxPrice
     );
   });
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedBranch, selectedRoomType, minPrice, maxPrice]);
+
+  // Paginated rooms
+  const totalPages = Math.max(1, Math.ceil(filteredRooms.length / ROOMS_PER_PAGE));
+  const paginatedRooms = filteredRooms.slice(
+    (currentPage - 1) * ROOMS_PER_PAGE,
+    currentPage * ROOMS_PER_PAGE,
+  );
 
   const handleBranchFilter = (branch) => {
     setSelectedBranch(branch);
@@ -401,7 +415,7 @@ function CheckAvailabilityPage() {
           ) : filteredRooms.length === 0 ? (
             <div className="text-gray-600">No rooms found.</div>
           ) : (
-            filteredRooms.map((room) => (
+            paginatedRooms.map((room) => (
               <RoomCard
                 key={room.id}
                 room={room}
@@ -410,6 +424,34 @@ function CheckAvailabilityPage() {
             ))
           )}
         </div>
+
+        {/* Pagination */}
+        {!roomsLoading && filteredRooms.length > ROOMS_PER_PAGE && (
+          <div className="ca-pagination">
+            <span className="ca-pagination__info">
+              Showing {(currentPage - 1) * ROOMS_PER_PAGE + 1}–{Math.min(currentPage * ROOMS_PER_PAGE, filteredRooms.length)} of {filteredRooms.length} rooms
+            </span>
+            <div className="ca-pagination__controls">
+              <button
+                className="ca-pagination__btn"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="ca-pagination__label">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                className="ca-pagination__btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {filteredRooms.length === 0 && !roomsLoading && !roomsError && (
           <div className="ca-empty">

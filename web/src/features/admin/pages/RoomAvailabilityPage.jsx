@@ -1,15 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { LayoutGrid, Settings, Plus, Pencil, Trash2 } from "lucide-react";
 
 // Components
-import { PageShell, SummaryBar, ActionBar, DataTable, StatusBadge } from "../components/shared";
+import { PageShell, SummaryBar, ActionBar, DataTable } from "../components/shared";
 import RoomConfigModal from "../components/rooms/RoomConfigModal";
 import RoomFormModal from "../components/rooms/RoomFormModal";
 import DeleteRoomModal from "../components/rooms/DeleteRoomModal";
 
 
 // Hooks & API
-import { useRooms } from "../../../shared/hooks/queries/useRooms";
+import { useDigitalTwinSnapshot } from "../../../shared/hooks/queries/useDigitalTwin";
+import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { roomApi } from "../../../shared/api/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,7 @@ import "../styles/admin-room-configuration.css";
 
 function RoomAvailabilityPage() {
   const { can } = usePermissions();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   // State
@@ -34,9 +36,14 @@ function RoomAvailabilityPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
   const [deletingRoom, setDeletingRoom] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROOMS_PER_PAGE = 10;
 
-  // Data fetching
-  const { data: rooms = [], isLoading: loading } = useRooms();
+  // Use Digital Twin snapshot so bed dots and occupancy bar are reservation-aware
+  // Admins are branch-scoped; super admins (owners) see all
+  const dtBranch = user?.branch && user.role !== "owner" ? user.branch : "all";
+  const { data: snapshot, isLoading: loading } = useDigitalTwinSnapshot(dtBranch);
+  const rooms = snapshot?.rooms ?? [];
 
   // Processing
   const filteredRooms = useMemo(() => {
@@ -51,6 +58,11 @@ function RoomAvailabilityPage() {
       return matchesSearch && matchesBranch && matchesFloor && matchesType;
     });
   }, [rooms, searchTerm, branchFilter, floorFilter, roomTypeFilter]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, branchFilter, floorFilter, roomTypeFilter]);
 
   // Stats
   const stats = useMemo(() => {
@@ -91,7 +103,7 @@ function RoomAvailabilityPage() {
     try {
       await roomApi.update(updatedRoom._id, { beds: updatedRoom.beds });
       showNotification("Room configuration updated", "success");
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["digital-twin", "snapshot"] });
       setSelectedRoom(null);
     } catch (err) {
       showNotification(err.message || "Failed to update", "error");
@@ -108,7 +120,7 @@ function RoomAvailabilityPage() {
         await roomApi.create(payload);
         showNotification("Room created successfully", "success");
       }
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["digital-twin", "snapshot"] });
       setShowCreateModal(false);
       setEditingRoom(null);
     } catch (err) {
@@ -121,7 +133,7 @@ function RoomAvailabilityPage() {
     try {
       await roomApi.delete(roomId);
       showNotification("Room deleted successfully", "success");
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["digital-twin", "snapshot"] });
       setDeletingRoom(null);
     } catch (err) {
       showNotification(err.message || "Failed to delete room", "error");
@@ -252,33 +264,31 @@ function RoomAvailabilityPage() {
       key: "occupancyRate",
       label: "Occupancy Rate",
       render: (r) => {
-        const rate = Math.round(((r.currentOccupancy || 0) / r.capacity) * 100);
-        const color =
-          rate >= 100
-            ? "var(--status-error)"
-            : rate > 0
-              ? "var(--status-warning)"
-              : "var(--status-success)";
+        const occupied = r.physicalOccupancy ?? 0;
+        const reserved = r.reservedCount ?? 0;
+        const capacity = r.capacity || 1;
+        const occupiedPct = Math.round((occupied / capacity) * 100);
+        const reservedPct = Math.round((reserved / capacity) * 100);
+        const totalPct = Math.round(((occupied + reserved) / capacity) * 100);
         return (
           <div className="room-occupancy-cell">
-            <div className="room-occupancy-bar">
-              <div
-                className="room-occupancy-fill"
-                style={{ width: `${rate}%`, background: color }}
-              />
+            <div className="room-occupancy-bar" style={{ display: "flex", gap: "1px", overflow: "hidden", borderRadius: 3 }}>
+              {occupiedPct > 0 && (
+                <div
+                  className="room-occupancy-fill"
+                  style={{ width: `${occupiedPct}%`, background: "var(--status-success)", flexShrink: 0 }}
+                />
+              )}
+              {reservedPct > 0 && (
+                <div
+                  className="room-occupancy-fill"
+                  style={{ width: `${reservedPct}%`, background: "var(--accent-blue)", opacity: 0.75, flexShrink: 0 }}
+                />
+              )}
             </div>
-            <span>{rate}%</span>
+            <span>{totalPct}%</span>
           </div>
         );
-      },
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => {
-        if (r.currentOccupancy >= r.capacity) return <StatusBadge variant="error">Full</StatusBadge>;
-        if (r.currentOccupancy > 0) return <StatusBadge variant="warning">Partial</StatusBadge>;
-        return <StatusBadge variant="success">Available</StatusBadge>;
       },
     },
     ...(can("manageRooms")
@@ -371,9 +381,9 @@ function RoomAvailabilityPage() {
           }}>
             <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 4 }}>Bed Status:</span>
             {[
-              { color: "var(--border-default)",  label: "Available" },
+              { color: "var(--status-success)",   label: "Occupied" },
               { color: "var(--accent-blue)",      label: "Reserved" },
-              { color: "var(--status-success)",   label: "Moved In" },
+              { color: "var(--border-default)",   label: "Available" },
               { color: "var(--status-error)",     label: "Maintenance" },
             ].map(({ color, label }) => (
               <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.75rem", color: "var(--text-secondary)" }}>
@@ -392,6 +402,12 @@ function RoomAvailabilityPage() {
             data={filteredRooms}
             loading={loading}
             onRowClick={can("manageRooms") ? handleConfigure : null}
+            pagination={{
+              page: currentPage,
+              pageSize: ROOMS_PER_PAGE,
+              total: filteredRooms.length,
+              onPageChange: setCurrentPage,
+            }}
             emptyState={{
               icon: LayoutGrid,
               title: "No rooms found",

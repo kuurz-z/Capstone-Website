@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, Eye, ClipboardList, CreditCard } from "lucide-react";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
+import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 import "../styles/reservation-details-modal.css";
 
 /* ─── constants ─────────────────────────────────── */
@@ -173,6 +175,7 @@ export default function ReservationDetailsModal({
   });
 
   useBodyScrollLock(!!reservation);
+  useEscapeClose(!!reservation, onClose);
 
   if (!reservation) return null;
 
@@ -231,7 +234,7 @@ export default function ReservationDetailsModal({
     }
   };
 
-  return (
+  return createPortal(
     <>
       <div className="rdm-overlay" onClick={onClose}>
         <div className="rdm" onClick={(e) => e.stopPropagation()}>
@@ -315,40 +318,6 @@ export default function ReservationDetailsModal({
                     {reservation.leaseDuration} months
                   </span>
                 </div>
-              )}
-            </div>
-
-            {/* Payment */}
-            <div className="rdm-payment-bar">
-              <div className="rdm-payment-amount">
-                <span className="rdm-info-label">Deposit Paid</span>
-                <span className="rdm-payment-price">
-                  {fmtCurrency(reservation.depositAmount ?? 2000)}
-                </span>
-              </div>
-              <div className="rdm-payment-status-wrap">
-                <span
-                  className={`rdm-chip rdm-chip-${(reservation.paymentStatus ?? "—").toLowerCase()}`}
-                >
-                  {reservation.paymentStatus ?? "—"}
-                </span>
-              </div>
-              <div className="rdm-payment-method">
-                <span className="rdm-info-label">Method</span>
-                <span className="rdm-info-value">
-                  {fmtMethod(reservation.paymentMethod)}
-                </span>
-              </div>
-              {reservation.proofOfPaymentUrl && (
-                <button
-                  type="button"
-                  className="rdm-proof-btn"
-                  onClick={() =>
-                    openImage(reservation.proofOfPaymentUrl, "Proof of Payment")
-                  }
-                >
-                  View Receipt
-                </button>
               )}
             </div>
 
@@ -688,6 +657,7 @@ export default function ReservationDetailsModal({
         variant={confirmModal.variant}
         confirmText={confirmModal.confirmText || "Confirm"}
       />
-    </>
+    </>,
+    document.body,
   );
 }

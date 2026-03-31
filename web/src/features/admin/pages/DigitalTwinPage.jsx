@@ -580,7 +580,7 @@ export default function DigitalTwinPage() {
                     { value: "all", label: "All" },
                     { value: "private", label: "Private" },
                     { value: "double-sharing", label: "Double" },
-                    { value: "quadruple-sharing", label: "Quad" },
+                    { value: "quadruple-sharing", label: "Quadruple" },
                   ].map((opt) => (
                     <button
                       key={opt.value}

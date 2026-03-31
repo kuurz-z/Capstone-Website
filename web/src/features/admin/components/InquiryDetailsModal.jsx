@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { inquiryApi } from "../../../shared/api/apiClient";
 import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
+import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 import "../styles/inquiry-details-modal.css";
 
 /* ── Module-level helpers (no closure deps — no reason to recreate per render) ── */
@@ -31,6 +33,7 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
   useBodyScrollLock(!!inquiry);
+  useEscapeClose(!!inquiry, onClose);
 
   if (!inquiry) return null;
 
@@ -57,7 +60,7 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="inquiry-details-modal-overlay" onClick={onClose}>
       <div
         className="inquiry-details-modal"
@@ -224,6 +227,7 @@ export default function InquiryDetailsModal({ inquiry, onClose, onUpdate }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

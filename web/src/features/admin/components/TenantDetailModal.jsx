@@ -1,5 +1,6 @@
 import '../styles/tenant-detail-modal.css';
 import { showNotification } from '../../../shared/utils/notification';
+import useEscapeClose from '../../../shared/hooks/useEscapeClose';
 
 const formatDate = (d) => {
   if (!d || d === '-') return 'N/A';
@@ -13,6 +14,7 @@ const formatMoney = (amount) => {
 };
 
 export default function TenantDetailModal({ tenant, onClose }) {
+  useEscapeClose(!!tenant, onClose);
   if (!tenant) return null;
 
   return (

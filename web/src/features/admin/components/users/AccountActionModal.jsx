@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 /**
  * AccountActionModal — Confirmation modal for suspend/ban/reactivate actions.
@@ -45,6 +46,8 @@ const ACTION_CONFIG = {
 export default function AccountActionModal({ action, user, onConfirm, onClose }) {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEscapeClose(!!(action && user), onClose);
 
   if (!action || !user) return null;
 

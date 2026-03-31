@@ -1,5 +1,6 @@
 import React from "react";
 import { formatPaymentMethod } from "../../../../shared/utils/formatPaymentMethod";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 /**
  * Full-page receipt modal showing detailed info per reservation step.
@@ -741,6 +742,7 @@ const STEP_CONTENT = {
 
 // ─── Main Modal Component ────────────────────────────────────
 const ReceiptModal = ({ isOpen, step, reservation, onClose }) => {
+  useEscapeClose(isOpen && !!step, onClose);
   if (!isOpen || !step) return null;
 
   const StepContent = STEP_CONTENT[step.step];

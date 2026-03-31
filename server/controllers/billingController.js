@@ -152,6 +152,19 @@ const computeWaterShare = (roomType, totalWater, tenantCount) => {
   }
 };
 
+/**
+ * Suggest rent amount based on lease duration.
+ * >= 6 months -> long-term (monthlyPrice), else -> regular (price)
+ */
+const suggestRent = (reservation, room, moveInDate) => {
+  if (reservation.monthlyRent) return reservation.monthlyRent;
+  if (reservation.totalPrice) return reservation.totalPrice;
+  // If not explicitly saved in reservation, infer from room pricing based on duration
+  const months = dayjs().diff(dayjs(moveInDate), "month", true);
+  const isLongTerm = months >= 6;
+  return isLongTerm ? (room.monthlyPrice ?? room.price ?? 0) : (room.price ?? 0);
+};
+
 /* ─── controllers ────────────────────────────────── */
 
 export const getCurrentBilling = async (req, res, next) => {
@@ -355,15 +368,10 @@ export const generateRoomBill = async (req, res, next) => {
       if (seenUserIds.has(String(reservation.userId._id))) continue;
       seenUserIds.add(String(reservation.userId._id));
 
-      const rent =
-        reservation.monthlyRent ||
-        reservation.totalPrice ||
-        room.monthlyPrice ||
-        room.price ||
-        0;
-      const customCharges = reservation.customCharges || [];
       const moveInDate =
         bed.occupiedBy.occupiedSince || reservation.checkInDate || monthStart;
+      const rent = suggestRent(reservation, room, moveInDate);
+      const customCharges = reservation.customCharges || [];
       const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
       const tenantEnd = dayjs(Math.min(Date.now(), dayjs(monthEnd).add(1, "day").valueOf()));
       const daysInRoom = Math.max(1, tenantEnd.diff(tenantStart, "day", true) | 0 || 1);
@@ -395,14 +403,9 @@ export const generateRoomBill = async (req, res, next) => {
         if (seenUserIds.has(String(reservation.userId._id))) continue;
         seenUserIds.add(String(reservation.userId._id));
 
-        const rent =
-          reservation.monthlyRent ||
-          reservation.totalPrice ||
-          room.monthlyPrice ||
-          room.price ||
-          0;
-        const customCharges = reservation.customCharges || [];
         const moveInDate = reservation.checkInDate || monthStart;
+        const rent = suggestRent(reservation, room, moveInDate);
+        const customCharges = reservation.customCharges || [];
         const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
         const tenantEnd = dayjs(Math.min(Date.now(), dayjs(monthEnd).add(1, "day").valueOf()));
         const daysInRoom = Math.max(1, tenantEnd.diff(tenantStart, "day", true) | 0 || 1);
@@ -631,12 +634,7 @@ export const getRoomsWithTenants = async (req, res, next) => {
                 "Tenant",
               email: r.userId.email || "",
               checkInDate: r.checkInDate,
-              monthlyRent:
-                r.monthlyRent ||
-                r.totalPrice ||
-                room.monthlyPrice ||
-                room.price ||
-                0,
+              monthlyRent: suggestRent(r, room, r.checkInDate),
               customCharges: r.customCharges || [],
               bedPosition: bed?.position || null,
             };
@@ -1089,14 +1087,9 @@ export const generateBulkBills = async (req, res, next) => {
         if (seenUserIds.has(String(reservation.userId._id))) continue;
         seenUserIds.add(String(reservation.userId._id));
 
-        const rent =
-          reservation.monthlyRent ||
-          reservation.totalPrice ||
-          room.monthlyPrice ||
-          room.price ||
-          0;
-        const customCharges = reservation.customCharges || [];
         const moveInDate = reservation.checkInDate || monthStart;
+        const rent = suggestRent(reservation, room, moveInDate);
+        const customCharges = reservation.customCharges || [];
         const tenantStart = dayjs(
           Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()),
         );

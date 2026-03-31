@@ -22,6 +22,11 @@ export const BUSINESS = {
   /** Late payment penalty per day in PHP (₱). Override via PENALTY_RATE env var. */
   PENALTY_RATE_PER_DAY: Number(process.env.PENALTY_RATE) || 50,
 
+  /** Default electricity rate (₱/kWh) used when auto-opening a billing period at
+   *  check-in and no prior period exists for the room. Admin can update via the
+   *  Electricity Billing UI. Override via DEFAULT_ELECTRICITY_RATE env var. */
+  DEFAULT_ELECTRICITY_RATE_PER_KWH: Number(process.env.DEFAULT_ELECTRICITY_RATE) || 16,
+
   /** Grace period in days before a no-show reserved reservation is auto-cancelled. */
   NOSHOW_GRACE_DAYS: 7,
 

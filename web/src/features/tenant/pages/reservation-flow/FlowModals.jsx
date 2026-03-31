@@ -1,5 +1,6 @@
 import React from "react";
 import { LogIn, AlertTriangle, Home, CheckCircle } from "lucide-react";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 /**
  * Inline confirmation modals for the reservation flow:
@@ -43,10 +44,11 @@ const btnLight = {
 
 // ── Login Confirm ────────────────────────────────────────────
 export const LoginConfirmModal = ({ show, onLogin, onDismiss }) => {
+  useEscapeClose(show, onDismiss);
   if (!show) return null;
   return (
-    <div style={overlayStyle}>
-      <div style={cardStyle}>
+    <div style={overlayStyle} onClick={onDismiss}>
+      <div style={cardStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ marginBottom: "16px", display: "flex", justifyContent: "center" }}><div style={{ width: 56, height: 56, borderRadius: "50%", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}><LogIn size={28} color="#2563EB" /></div></div>
         <h2
           style={{ marginBottom: "12px", fontSize: "20px", fontWeight: "600" }}
@@ -80,10 +82,11 @@ export const LoginConfirmModal = ({ show, onLogin, onDismiss }) => {
 
 // ── Cancel Confirm ───────────────────────────────────────────
 export const CancelConfirmModal = ({ show, onConfirm, onDismiss }) => {
+  useEscapeClose(show, onDismiss);
   if (!show) return null;
   return (
-    <div style={overlayStyle}>
-      <div style={cardStyle}>
+    <div style={overlayStyle} onClick={onDismiss}>
+      <div style={cardStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ marginBottom: "16px", display: "flex", justifyContent: "center" }}><div style={{ width: 52, height: 52, borderRadius: "50%", background: "#FEF3C7", display: "flex", alignItems: "center", justifyContent: "center" }}><AlertTriangle size={26} color="#D97706" /></div></div>
         <h2
           style={{ marginBottom: "12px", fontSize: "20px", fontWeight: "600" }}
@@ -122,6 +125,7 @@ export const StageConfirmModal = ({
   onConfirm,
   onCancel,
 }) => {
+  useEscapeClose(show, onCancel);
   if (!show) return null;
 
   const isStage1 = pendingAction === "stage1";
@@ -136,8 +140,9 @@ export const StageConfirmModal = ({
   const iconColor = isStage1 ? "#D97706" : "#059669";
 
   return (
-    <div style={overlayStyle}>
+    <div style={overlayStyle} onClick={onCancel}>
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           ...cardStyle,
           borderRadius: "16px",

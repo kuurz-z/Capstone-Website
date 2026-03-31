@@ -462,7 +462,6 @@ function VisitSchedulesTab() {
         data={displayData}
         loading={loading}
         emptyState={{ icon: CalendarDays, title: "No visit schedules", description: "Visit schedules will appear here." }}
-        onRowClick={handleRowClick}
       />
       <ConfirmModal
         isOpen={confirmModal.open}

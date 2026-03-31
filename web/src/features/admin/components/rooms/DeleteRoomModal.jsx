@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function DeleteRoomModal({ room, onDelete, onClose }) {
   const [deleting, setDeleting] = useState(false);
+  useEscapeClose(true, onClose);
   const hasOccupants = room?.currentOccupancy > 0;
 
   const handleDelete = async () => {

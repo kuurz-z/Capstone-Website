@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import SpotlightCard from "../components/SpotlightCard";
 import BedSelector from "../components/BedSelector";
+import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 
 function getAvailabilityLabel(room) {
   const beds = room.beds || [];
@@ -53,6 +54,7 @@ export default function RoomDetailsModal({
   proceedButtonText = "Proceed to Reservation",
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  useEscapeClose(isOpen && !!room, onClose);
 
   if (!isOpen || !room) return null;
 
@@ -93,8 +95,8 @@ export default function RoomDetailsModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between p-6 border-b border-gray-200">
           <div>
             <div className="flex items-center gap-3 mb-2">
@@ -307,6 +309,8 @@ export default function RoomDetailsModal({
                 />
               )}
 
+              {/* Appliance fees only apply to Guadalupe branch */}
+              {room.branch?.toLowerCase().includes("guadalupe") && (
               <div>
                 <h3 className="font-semibold mb-3" style={{ color: "var(--text-heading, #0A1628)" }}>
                   Appliance Fees (Optional)
@@ -411,6 +415,7 @@ export default function RoomDetailsModal({
                   </span>
                 </div>
               </div>
+              )}
 
               <div>
                 <h3 className="font-semibold mb-3" style={{ color: "var(--text-heading, #0A1628)" }}>

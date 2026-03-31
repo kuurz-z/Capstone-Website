@@ -69,7 +69,6 @@ const billingResultSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "BillingPeriod",
       required: true,
-      index: true,
     },
     roomId: {
       type: mongoose.Schema.Types.ObjectId,

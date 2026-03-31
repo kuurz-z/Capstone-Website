@@ -17,7 +17,7 @@ const normalizeRoomType = (rawType) => {
   if (value.includes("double") || value.includes("shared")) {
     return "double-sharing";
   }
-  if (value.includes("quad")) return "quadruple-sharing";
+  if (value.includes("quad") || value.includes("six") || value.includes("6-person")) return "quadruple-sharing";
   return null;
 };
 
@@ -91,6 +91,8 @@ export const createRoom = async (req, res, next) => {
       );
     }
 
+
+
     if (req.branchFilter && branch !== req.branchFilter) {
       throw new AppError(
         `Access denied. You can only create rooms for ${req.branchFilter} branch.`,
@@ -133,6 +135,8 @@ export const updateRoom = async (req, res, next) => {
     if (!existingRoom) {
       throw new AppError("Room not found or access denied", 404, "ROOM_NOT_FOUND");
     }
+
+
 
     const oldRoomData = existingRoom.toObject();
 

@@ -6,31 +6,34 @@ const roomListings = [
     id: 1,
     title: 'Private Room',
     subtitle: 'Gil Puyat Branch',
-    description: 'Your own space with complete privacy. Ideal for focused work and personal comfort.',
-    price: '₱8,500',
+    description: 'Your own space with complete privacy. Each room has its own toilet, shower, and kitchenette.',
+    price: '₱13,500',
+    priceNote: '/room',
     popular: false,
     image: 'https://images.unsplash.com/photo-1610307522657-8c0304960189?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYmVkcm9vbSUyMGRlc2lnbnxlbnwxfHx8fDE3NzAzMDM5ODB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    inclusions: ['Single Bed', 'Study Desk & Chair', 'Closet', 'Aircon', 'Wi-Fi', 'Utilities'],
+    inclusions: ['Max 2 Pax', 'Private Toilet & Shower', 'Kitchenette', 'Aircon', 'Wi-Fi', 'Fully Furnished'],
   },
   {
     id: 2,
-    title: 'Double Occupancy',
+    title: 'Double Sharing',
     subtitle: 'Gil Puyat Branch',
-    description: 'Share with a roommate while enjoying your own space. Great for making connections.',
-    price: '₱5,000',
+    description: 'Share with a roommate while enjoying your own space. Common areas per floor include lounge, toilet & shower.',
+    price: '₱7,200',
+    priceNote: '/pax',
     popular: true,
     image: 'https://images.unsplash.com/photo-1764760764956-fcb78be107a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBiZWRyb29tJTIwaW50ZXJpb3IlMjBuYXR1cmFsJTIwbGlnaHR8ZW58MXx8fHwxNzcwMjkwMzY5fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    inclusions: ['2 Single Beds', '2 Study Desks', 'Shared Closet', 'Aircon', 'Wi-Fi', 'Utilities'],
+    inclusions: ['2 Pax per Room', 'Double Decker Bed', 'Shared Floor Amenities', 'Aircon', 'Wi-Fi', 'Fully Furnished'],
   },
   {
     id: 3,
-    title: 'Quadruple Room',
+    title: 'Quadruple Sharing',
     subtitle: 'Gil Puyat & Guadalupe',
-    description: 'Budget-friendly option with a vibrant community atmosphere. All essentials included.',
-    price: '₱3,500',
+    description: 'Budget-friendly option with a vibrant community atmosphere. Common areas per floor include lounge, toilet & shower.',
+    price: '₱5,400',
+    priceNote: '/pax',
     popular: false,
     image: 'https://images.unsplash.com/photo-1758521540263-e15a58e64248?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb3p5JTIwc2hhcmVkJTIwYmVkcm9vbXxlbnwxfHx8fDE3NzAzNTI3MTB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    inclusions: ['4 Beds', '4 Study Desks', 'Shared Storage', 'Aircon', 'Wi-Fi', 'Utilities'],
+    inclusions: ['4 Pax per Room', 'Double Decker Beds', 'Shared Floor Amenities', 'Aircon', 'Wi-Fi', 'Fully Furnished'],
   },
 ];
 
@@ -99,7 +102,7 @@ export function RoomInventory() {
                   <span className="text-lg font-medium" style={{ color: 'var(--lp-text)' }}>
                     {room.price}
                   </span>
-                  <span className="text-xs ml-1" style={{ color: 'var(--lp-text-muted)' }}>/mo</span>
+                  <span className="text-xs ml-1" style={{ color: 'var(--lp-text-muted)' }}>{room.priceNote || '/mo'}</span>
                 </div>
 
                 {/* Corner Ribbon — replaces full-width bar */}

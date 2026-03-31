@@ -1,3 +1,5 @@
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
+
 export default function EditUserModal({
   editForm,
   isOwner,
@@ -5,6 +7,7 @@ export default function EditUserModal({
   onSubmit,
   onClose,
 }) {
+  useEscapeClose(true, onClose);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "680px" }}>

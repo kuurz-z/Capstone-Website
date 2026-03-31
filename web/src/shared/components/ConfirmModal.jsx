@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import useBodyScrollLock from "../../shared/hooks/useBodyScrollLock";
 
 /**
@@ -134,7 +135,7 @@ export default function ConfirmModal({
     ),
   };
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed",
@@ -285,6 +286,7 @@ export default function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

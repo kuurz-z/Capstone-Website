@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { formatBranch, formatRoomType } from "../../utils/formatters";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 /**
  * Generate default beds based on room type and capacity.
@@ -12,11 +13,11 @@ function generateBeds(type, capacity) {
   const beds = [];
 
   if (type === "private") {
-    for (let i = 1; i <= capacity; i++) {
-      beds.push({ id: `bed-${i}`, position: "single", status: "available" });
-    }
+    // Private = 1 tenant but 2 beds (1 bunk: upper + lower)
+    beds.push({ id: "bed-1", position: "upper", status: "available" });
+    beds.push({ id: "bed-2", position: "lower", status: "available" });
   } else {
-    // For shared rooms, alternate upper/lower
+    // For shared rooms: double=1 bunk, quad=2 bunks, six=3 bunks
     for (let i = 1; i <= capacity; i++) {
       const position = i % 2 === 1 ? "upper" : "lower";
       beds.push({ id: `bed-${i}`, position, status: "available" });
@@ -25,6 +26,13 @@ function generateBeds(type, capacity) {
 
   return beds;
 }
+
+/** Locked capacity values per room type */
+const CAPACITY_BY_TYPE = {
+  private: 1,
+  "double-sharing": 2,
+  "quadruple-sharing": 4,
+};
 
 const INITIAL_FORM = {
   name: "",
@@ -45,6 +53,8 @@ export default function RoomFormModal({ room, onClose, onSave }) {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
+  useEscapeClose(true, onClose);
+
   // Populate form when editing
   useEffect(() => {
     if (room) {
@@ -64,8 +74,14 @@ export default function RoomFormModal({ room, onClose, onSave }) {
   }, [room]);
 
   const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: null }));
+    if (field === "type") {
+      // When type changes, auto-lock capacity to the correct value
+      setForm((prev) => ({ ...prev, type: value, capacity: CAPACITY_BY_TYPE[value] ?? 1 }));
+      if (errors.type) setErrors((prev) => ({ ...prev, type: null }));
+    } else {
+      setForm((prev) => ({ ...prev, [field]: value }));
+      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: null }));
+    }
   };
 
   const validate = () => {
@@ -195,8 +211,15 @@ export default function RoomFormModal({ room, onClose, onSave }) {
                   type="number"
                   min="1"
                   value={form.capacity}
-                  onChange={(e) => handleChange("capacity", e.target.value)}
+                  readOnly
+                  disabled
+                  style={{ opacity: 0.65, cursor: "not-allowed" }}
                 />
+                {form.type === "private" && (
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 3, display: "block" }}>
+                    Private rooms are for 1 tenant (2 beds/bunk included) — capacity is fixed at 1.
+                  </span>
+                )}
                 {errors.capacity && <span className="field-error">{errors.capacity}</span>}
               </div>
               <div className={`room-form-group ${errors.price ? "has-error" : ""}`}>

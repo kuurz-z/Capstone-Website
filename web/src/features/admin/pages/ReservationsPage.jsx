@@ -139,6 +139,8 @@ function ReservationsPage() {
     });
   };
 
+  const IN_PROGRESS_STATUSES = ["pending", "visit_pending", "visit_approved", "payment_pending"];
+
   /* Filter + paginate */
   const filtered = reservations.filter((r) => {
     const q = searchTerm.toLowerCase();
@@ -162,7 +164,6 @@ function ReservationsPage() {
   const pageData = sorted.slice(startIdx, startIdx + itemsPerPage);
   if (currentPage > Math.ceil(totalFiltered / itemsPerPage) && totalFiltered > 0) setCurrentPage(1);
 
-  const IN_PROGRESS_STATUSES = ["pending", "visit_pending", "visit_approved", "payment_pending"];
 
   const counts = {
     total:      reservations.length,

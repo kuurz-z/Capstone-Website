@@ -9,6 +9,7 @@
 
 import { Reservation, User, Room, MeterReading, BillingPeriod, BillingResult } from "../models/index.js";
 import { computeBilling } from "../utils/billingEngine.js";
+import { BUSINESS } from "../config/constants.js";
 import logger from "../middleware/logger.js";
 import auditLogger from "../utils/auditLogger.js";
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
@@ -466,6 +467,10 @@ export const updateReservation = async (req, res, next) => {
     const updatedReservation = await reservation.save();
 
     // ── Auto-record move-in meter reading when checking in ────────────────
+    // Always runs when a meterReading is provided at check-in.
+    // If no open BillingPeriod exists for the room, one is auto-created so that
+    // the move-in reading (and all future move-out / regular readings) are
+    // properly linked and segmented for billing computation.
     if (
       req.body.status === "checked-in" &&
       oldData.status !== "checked-in" &&
@@ -476,32 +481,90 @@ export const updateReservation = async (req, res, next) => {
         const roomId = updatedReservation.roomId?._id || updatedReservation.roomId;
         const roomDoc = await Room.findById(roomId).lean();
         const adminUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-        const activePeriod = await BillingPeriod.findOne({
-          roomId: roomId,
-          status: "open",
-          isArchived: false,
-        }).lean();
+        const meterValue = Number(req.body.meterReading);
+        const checkinDate = new Date();
 
-        if (activePeriod && roomDoc) {
+        if (roomDoc) {
+          // ── 1. Ensure an open BillingPeriod exists ──────────────────────
+          let activePeriod = await BillingPeriod.findOne({
+            roomId: roomId,
+            status: "open",
+            isArchived: false,
+          }).lean();
+
+          if (!activePeriod) {
+            // Inherit rate from the most recent closed/revised period for this
+            // room, or fall back to the system default (₱16/kWh).
+            const lastPeriod = await BillingPeriod.findOne({
+              roomId: roomId,
+              isArchived: false,
+            })
+              .sort({ startDate: -1 })
+              .lean();
+
+            const inheritedRate =
+              lastPeriod?.ratePerKwh ||
+              BUSINESS.DEFAULT_ELECTRICITY_RATE_PER_KWH;
+
+            const newPeriod = new BillingPeriod({
+              roomId: roomId,
+              branch: roomDoc.branch,
+              startDate: checkinDate,
+              startReading: meterValue,
+              ratePerKwh: inheritedRate,
+              status: "open",
+            });
+            await newPeriod.save();
+            activePeriod = newPeriod.toObject();
+
+            logger.info(
+              {
+                roomId,
+                periodId: newPeriod._id,
+                startReading: meterValue,
+                ratePerKwh: inheritedRate,
+              },
+              "Auto-opened BillingPeriod at check-in (no prior period existed)",
+            );
+          }
+
+          // ── 2. Record the move-in meter reading ─────────────────────────
+          const tenantUserId =
+            updatedReservation.userId?._id || updatedReservation.userId;
+
+          // Snapshot all currently checked-in tenants for this room
+          const checkedInRes = await Reservation.find({
+            roomId: roomId,
+            status: "checked-in",
+            isArchived: { $ne: true },
+          })
+            .select("userId")
+            .lean();
+          const activeTenantIds = checkedInRes.map((r) => r.userId).filter(Boolean);
+
           const moveInReading = new MeterReading({
             roomId: roomId,
             branch: roomDoc.branch,
-            reading: Number(req.body.meterReading),
-            date: new Date(),
+            reading: meterValue,
+            date: checkinDate,
             eventType: "move-in",
-            tenantId: updatedReservation.userId?._id || updatedReservation.userId,
-            activeTenantIds: [],
+            tenantId: tenantUserId,
+            activeTenantIds,
             recordedBy: adminUser?._id || null,
             billingPeriodId: activePeriod._id,
           });
           await moveInReading.save();
+
           logger.info(
-            { reservationId, meterReading: req.body.meterReading },
+            { reservationId, meterReading: meterValue, periodId: activePeriod._id },
             "Auto-recorded move-in meter reading on check-in",
           );
         }
       } catch (elecErr) {
-        logger.warn({ err: elecErr, requestId: req.id }, "Auto move-in electricity record failed (non-fatal)");
+        logger.warn(
+          { err: elecErr, requestId: req.id },
+          "Auto move-in electricity record failed (non-fatal)",
+        );
       }
     }
 

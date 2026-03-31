@@ -1,8 +1,10 @@
 import { useState } from "react";
 
 import { inquiryApi } from "../../../shared/api/apiClient";
+import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 
 function InquiryModal({ isOpen, onClose, defaultBranch = "general" }) {
+  useEscapeClose(isOpen, onClose);
   const [inquiryType, setInquiryType] = useState("General Inquiry");
   const [formData, setFormData] = useState({
     name: "",

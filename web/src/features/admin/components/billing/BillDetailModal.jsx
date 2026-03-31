@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Check, XCircle, Eye, Clock, AlertTriangle } from "lucide-react";
 import { fmtCurrency, fmtDate, fmtMonth } from "../../utils/formatters";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function BillDetailModal({
   bill,
@@ -16,6 +17,7 @@ export default function BillDetailModal({
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [proofZoom, setProofZoom] = useState(false);
+  useEscapeClose(true, onClose);
 
   const hasProof =
     bill.paymentProof?.verificationStatus === "pending-verification";

@@ -1,4 +1,7 @@
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
+
 export default function DeleteUserModal({ user, onDelete, onClose }) {
+  useEscapeClose(true, onClose);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div

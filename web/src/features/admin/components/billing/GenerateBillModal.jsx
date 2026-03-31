@@ -10,6 +10,7 @@ import {
   User,
 } from "lucide-react";
 import { fmtCurrency } from "../../utils/formatters";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function GenerateBillModal({
   selectedRoom,
@@ -25,6 +26,7 @@ export default function GenerateBillModal({
 }) {
   // Custom charges inherited from each tenant's reservation
   // Admin can override for this specific bill
+  useEscapeClose(true, onClose);
   const [tenantOverrides, setTenantOverrides] = useState(() => {
     const overrides = {};
     (selectedRoom.tenants || []).forEach((t) => {

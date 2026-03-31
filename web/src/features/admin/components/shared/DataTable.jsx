@@ -49,13 +49,14 @@ export default function DataTable({
   }, [data, sortKey, sortDir]);
 
   // Pagination
-  const pageSize = pagination?.pageSize || data.length;
+  const pageSize = pagination?.pageSize || data.length || 1;
   const currentPage = pagination?.page || 1;
   const total = pagination?.total ?? data.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
+  // Slice data for the current page
   const pagedData = pagination
-    ? sortedData
+    ? sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize)
     : sortedData;
 
   if (!loading && data.length === 0 && emptyState) {

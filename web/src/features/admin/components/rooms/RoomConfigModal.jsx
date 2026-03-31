@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { formatRoomType, formatBranch } from "../../utils/formatters";
 import { X, Lock, CheckCircle, Info } from "lucide-react";
+import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) {
   const [saving, setSaving] = useState(false);
+  useEscapeClose(true, onClose);
 
   const getBedStatus = (bed) => 
     bed.status || (bed.available === false ? "occupied" : "available");
