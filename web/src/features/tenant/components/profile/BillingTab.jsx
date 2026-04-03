@@ -3,13 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { billingApi } from "../../../../shared/api/apiClient";
 import { formatPaymentMethod } from "../../../../shared/utils/formatPaymentMethod";
 import {
-  useMyElectricityBills,
-  useMyBillBreakdown,
-} from "../../../../shared/hooks/queries/useElectricity";
-import { 
-  useMyWaterBills, 
-  useMyWaterBreakdown 
-} from "../../../../shared/hooks/queries/useWaterBilling";
+  useMyUtilityBreakdown,
+} from "../../../../shared/hooks/queries/useUtility";
 import { showNotification } from "../../../../shared/utils/notification";
 import {
   Zap,
@@ -386,7 +381,12 @@ const ElectricitySegmentCard = ({ seg, ratePerKwh }) => {
 
 const ElectricityPeriodRow = ({ period }) => {
   const [open, setOpen] = useState(false);
-  const { data, isLoading } = useMyBillBreakdown(open ? period.billingPeriodId : null);
+  const { data, isLoading } = useMyUtilityBreakdown(
+    "electricity",
+    open ? (period.billingPeriodId || period.utilityPeriodId || period.id || period._id) : null,
+  );
+  const electricityAmount = period.billAmount ?? period.charges?.electricity ?? 0;
+  const electricityKwh = period.totalKwh ?? period.totalUsage ?? null;
 
   return (
     <div style={{ ...s.billCard, borderColor: open ? "#fcd34d" : "var(--border-card)" }}>
@@ -401,8 +401,10 @@ const ElectricityPeriodRow = ({ period }) => {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 13, color: "#64748b" }}>{fmtKwh(period.totalKwh)}</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-heading)" }}>{fmt(period.billAmount)}</span>
+          <span style={{ fontSize: 13, color: "#64748b" }}>
+            {electricityKwh != null ? fmtKwh(electricityKwh) : "Usage pending"}
+          </span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-heading)" }}>{fmt(electricityAmount)}</span>
         </div>
         {open ? <ChevronUp size={16} color="#94a3b8" style={{ marginLeft: 8 }} /> : <ChevronDown size={16} color="#94a3b8" style={{ marginLeft: 8 }} />}
       </button>
@@ -423,7 +425,11 @@ const ElectricityPeriodRow = ({ period }) => {
               ))}
             </div>
           ) : (
-            <div style={elecS.loadingRow}>Details not available.</div>
+            <div style={elecS.loadingRow}>
+              {electricityAmount > 0
+                ? `Electricity charge recorded: ${fmt(electricityAmount)}. Detailed segment data is not available for this statement.`
+                : "Details not available."}
+            </div>
           )}
         </div>
       )}
@@ -431,17 +437,14 @@ const ElectricityPeriodRow = ({ period }) => {
   );
 };
 
-const ElectricityTabContent = () => {
-  const { data, isLoading } = useMyElectricityBills();
-  const periods = data?.bills || [];
-
+const ElectricityTabContent = ({ bills = [], isLoading = false }) => {
   if (isLoading) return <div style={elecS.loadingRow}>Loading electricity history...</div>;
-  if (!periods.length) return <div style={s.emptyState}>No electricity history found.</div>;
+  if (!bills.length) return <div style={s.emptyState}>No electricity history found.</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {periods.map((p) => (
-        <ElectricityPeriodRow key={p.billingPeriodId || p.billingResultId} period={p} />
+      {bills.map((bill) => (
+        <ElectricityPeriodRow key={bill.id || bill._id} period={bill} />
       ))}
     </div>
   );
@@ -451,7 +454,7 @@ const ElectricityTabContent = () => {
 
 const WaterPeriodRow = ({ period }) => {
   const [open, setOpen] = useState(false);
-  const { data, isLoading } = useMyWaterBreakdown(open ? period.id || period._id : null);
+  const { data, isLoading } = useMyUtilityBreakdown("water", open ? period.id || period._id : null);
   const record = data?.record;
 
   return (
@@ -521,17 +524,14 @@ const WaterPeriodRow = ({ period }) => {
   );
 };
 
-const WaterTabContent = () => {
-  const { data, isLoading } = useMyWaterBills();
-  const periods = data?.bills || [];
-
+const WaterTabContent = ({ bills = [], isLoading = false }) => {
   if (isLoading) return <div style={elecS.loadingRow}>Loading water history...</div>;
-  if (!periods.length) return <div style={s.emptyState}>No water history found.</div>;
+  if (!bills.length) return <div style={s.emptyState}>No water history found.</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {periods.map((p) => (
-        <WaterPeriodRow key={p.id || p._id || p.billingPeriodId} period={p} />
+      {bills.map((bill) => (
+        <WaterPeriodRow key={bill.id || bill._id} period={bill} />
       ))}
     </div>
   );
@@ -625,6 +625,14 @@ const BillingTab = () => {
     0,
   );
 
+  const monthlyBills = bills.filter((bill) => {
+    const charges = bill.charges || {};
+    return (charges.rent || 0) > 0 || (charges.applianceFees || 0) > 0;
+  });
+
+  const electricityBills = bills.filter((bill) => (bill.charges?.electricity || 0) > 0);
+  const waterBills = bills.filter((bill) => (bill.charges?.water || 0) > 0);
+
   const handlePay = async (type = "all") => {
     try {
       setPayingOnline(type);
@@ -705,9 +713,9 @@ const BillingTab = () => {
 
       {/* 3. Content */}
       <div style={{ minHeight: 400 }}>
-        {subTab === "monthly" && <MonthlyPaymentView bills={bills} filter={filter} setFilter={setFilter} />}
-        {subTab === "electricity" && <ElectricityTabContent />}
-        {subTab === "water" && <WaterTabContent />}
+        {subTab === "monthly" && <MonthlyPaymentView bills={monthlyBills} filter={filter} setFilter={setFilter} />}
+        {subTab === "electricity" && <ElectricityTabContent bills={electricityBills} isLoading={loading} />}
+        {subTab === "water" && <WaterTabContent bills={waterBills} isLoading={loading} />}
       </div>
     </div>
   );

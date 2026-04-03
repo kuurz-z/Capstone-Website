@@ -85,9 +85,14 @@ export const authFetch = async (url, options = {}, _isRetry = false) => {
         }
       }
 
-      const apiError = new Error(
-        error.error || error.message || "API request failed",
-      );
+      let errorMessage = "API request failed";
+      if (error && error.error) {
+        errorMessage = typeof error.error === "string" ? error.error : error.error.message;
+      } else if (error && error.message) {
+        errorMessage = error.message;
+      }
+      
+      const apiError = new Error(errorMessage);
       apiError.response = { status: response.status, data: error };
       throw apiError;
     }

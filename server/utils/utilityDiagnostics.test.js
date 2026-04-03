@@ -1,94 +1,226 @@
-import { describe, expect, test } from "@jest/globals";
-import {
-  classifyWaterRecordSyncStatus,
-  detectMissingMoveInAnchors,
-} from "./utilityDiagnostics.js";
+import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
-describe("detectMissingMoveInAnchors", () => {
-  test("flags tenants without a move-in reading when they do not predate the period", () => {
-    const missing = detectMissingMoveInAnchors({
-      reservations: [
+const roomFind = jest.fn();
+const roomFindById = jest.fn();
+const reservationDistinct = jest.fn();
+const utilityReadingDistinct = jest.fn();
+const utilityPeriodFind = jest.fn();
+const utilityReadingFind = jest.fn();
+const reservationFind = jest.fn();
+
+await jest.unstable_mockModule("../models/index.js", () => ({
+  Room: {
+    find: roomFind,
+    findById: roomFindById,
+  },
+  Reservation: {
+    distinct: reservationDistinct,
+    find: reservationFind,
+  },
+  UtilityPeriod: {
+    find: utilityPeriodFind,
+  },
+  UtilityReading: {
+    distinct: utilityReadingDistinct,
+    find: utilityReadingFind,
+  },
+}));
+
+const { getUtilityDiagnostics } = await import("./utilityDiagnostics.js");
+
+function mockLeanResult(value) {
+  return {
+    lean: jest.fn().mockResolvedValue(value),
+  };
+}
+
+function mockSelectLeanResult(value) {
+  return {
+    select: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue(value),
+    }),
+  };
+}
+
+function mockSortedLeanResult(value) {
+  return {
+    sort: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue(value),
+    }),
+  };
+}
+
+describe("getUtilityDiagnostics", () => {
+  beforeEach(() => {
+    roomFind.mockReset();
+    roomFindById.mockReset();
+    reservationDistinct.mockReset();
+    utilityReadingDistinct.mockReset();
+    utilityPeriodFind.mockReset();
+    utilityReadingFind.mockReset();
+    reservationFind.mockReset();
+
+    utilityPeriodFind.mockReturnValue(mockSortedLeanResult([]));
+    utilityReadingFind.mockReturnValue(mockSortedLeanResult([]));
+    reservationFind.mockReturnValue({
+      populate: jest.fn().mockReturnValue(mockLeanResult([])),
+    });
+  });
+
+  test("includes branch rooms with active checked-in tenants even when no readings exist yet", async () => {
+    roomFind.mockReturnValueOnce(
+      mockSelectLeanResult([
         {
-          _id: "res-1",
-          status: "checked-in",
-          checkInDate: new Date("2026-04-20T00:00:00.000Z"),
-          userId: {
-            _id: "tenant-1",
-            firstName: "Ava",
-            lastName: "Tenant",
-          },
+          _id: "room-1",
+          name: "Room A",
+          roomNumber: "A-101",
+          branch: "gil-puyat",
+          type: "private",
+          capacity: 1,
         },
-      ],
-      readings: [],
-      periodStartDate: new Date("2026-04-15T00:00:00.000Z"),
-    });
+      ]),
+    );
+    roomFindById.mockReturnValue(
+      mockSelectLeanResult({
+        _id: "room-1",
+        name: "Room A",
+        roomNumber: "A-101",
+        branch: "gil-puyat",
+        type: "private",
+        capacity: 1,
+      }),
+    );
 
-    expect(missing).toHaveLength(1);
-    expect(String(missing[0].tenantId)).toBe("tenant-1");
+    reservationDistinct.mockResolvedValue(["room-1"]);
+    utilityReadingDistinct.mockResolvedValue([]);
+
+    const result = await getUtilityDiagnostics({ branch: "gil-puyat" });
+
+    expect(result.electricityRooms).toHaveLength(1);
+    expect(result.electricityRooms[0]).toMatchObject({
+      roomId: "room-1",
+      id: "room-1",
+      name: "Room A",
+      roomName: "Room A",
+      branch: "gil-puyat",
+      activeTenantCount: 0,
+      hasOpenPeriod: false,
+      latestReading: null,
+    });
+    expect(roomFind).toHaveBeenCalledWith({
+      isArchived: false,
+      branch: "gil-puyat",
+    });
   });
 
-  test("does not flag tenants who were already active before the anchored period", () => {
-    const missing = detectMissingMoveInAnchors({
-      reservations: [
+  test("returns all branch rooms when the branch has no reservations or readings yet", async () => {
+    roomFind.mockReturnValueOnce(
+      mockSelectLeanResult([
         {
-          _id: "res-1",
-          status: "checked-in",
-          checkInDate: new Date("2026-04-01T00:00:00.000Z"),
-          userId: {
-            _id: "tenant-1",
-            firstName: "Ava",
-            lastName: "Tenant",
-          },
+          _id: "room-2",
+          name: "Room B",
+          roomNumber: "B-201",
+          branch: "guadalupe",
+          type: "double-sharing",
+          capacity: 2,
         },
-      ],
-      readings: [],
-      periodStartDate: new Date("2026-04-15T00:00:00.000Z"),
-    });
-
-    expect(missing).toHaveLength(0);
-  });
-});
-
-describe("classifyWaterRecordSyncStatus", () => {
-  test("marks private/shared rooms with no overlaps as orphaned", () => {
-    expect(
-      classifyWaterRecordSyncStatus({
-        roomType: "private",
-        eligibleReservationCount: 0,
-        matchedElectricityPeriodId: null,
-        tenantShares: [],
+      ]),
+    );
+    roomFindById.mockReturnValue(
+      mockSelectLeanResult({
+        _id: "room-2",
+        name: "Room B",
+        roomNumber: "B-201",
+        branch: "guadalupe",
+        type: "double-sharing",
+        capacity: 2,
       }),
-    ).toEqual({
-      syncStatus: "no_overlapping_reservations",
-      syncReason: "no-overlapping-reservations",
-    });
-  });
+    );
 
-  test("marks quadruple rooms as not billable for water sync", () => {
-    expect(
-      classifyWaterRecordSyncStatus({
-        roomType: "quadruple-sharing",
-        eligibleReservationCount: 4,
-        matchedElectricityPeriodId: null,
-        tenantShares: [],
-      }),
-    ).toEqual({
-      syncStatus: "room_not_billable",
-      syncReason: "room-not-billable",
+    reservationDistinct.mockResolvedValue([]);
+    utilityReadingDistinct.mockResolvedValue([]);
+
+    const result = await getUtilityDiagnostics({ branch: "guadalupe" });
+
+    expect(result.electricityRooms).toHaveLength(1);
+    expect(result.waterRooms).toHaveLength(1);
+    expect(roomFind).toHaveBeenCalledWith({
+      isArchived: false,
+      branch: "guadalupe",
     });
   });
 
-  test("marks records with reservations but no linked bills as awaiting draft sync", () => {
-    expect(
-      classifyWaterRecordSyncStatus({
-        roomType: "double-sharing",
-        eligibleReservationCount: 2,
-        matchedElectricityPeriodId: null,
-        tenantShares: [],
+  test("limits water rooms to private and double-sharing types", async () => {
+    const rooms = [
+      {
+        _id: "room-private",
+        name: "Room Private",
+        roomNumber: "P-101",
+        branch: "gil-puyat",
+        type: "private",
+        capacity: 1,
+      },
+      {
+        _id: "room-double",
+        name: "Room Double",
+        roomNumber: "D-201",
+        branch: "gil-puyat",
+        type: "double-sharing",
+        capacity: 2,
+      },
+      {
+        _id: "room-quad",
+        name: "Room Quad",
+        roomNumber: "Q-301",
+        branch: "gil-puyat",
+        type: "quadruple-sharing",
+        capacity: 4,
+      },
+    ];
+
+    roomFind.mockReturnValueOnce(mockSelectLeanResult(rooms));
+    roomFindById.mockImplementation((roomId) =>
+      mockSelectLeanResult(rooms.find((room) => room._id === roomId) || null),
+    );
+
+    const result = await getUtilityDiagnostics({ branch: "gil-puyat" });
+
+    expect(result.electricityRooms).toHaveLength(3);
+    expect(result.waterRooms).toHaveLength(2);
+    expect(result.waterRooms.map((room) => room.type)).toEqual([
+      "private",
+      "double-sharing",
+    ]);
+  });
+
+  test("loads room type when building water room eligibility", async () => {
+    const selectedFields = [];
+    roomFind.mockReturnValueOnce({
+      select: jest.fn().mockImplementation((fields) => {
+        selectedFields.push(fields);
+        return {
+          lean: jest.fn().mockResolvedValue([
+            {
+              _id: "room-private",
+              type: "private",
+            },
+          ]),
+        };
       }),
-    ).toEqual({
-      syncStatus: "awaiting_bill_sync",
-      syncReason: "draft-bills-not-created",
     });
+    roomFindById.mockReturnValue(
+      mockSelectLeanResult({
+        _id: "room-private",
+        name: "Room Private",
+        roomNumber: "P-101",
+        branch: "gil-puyat",
+        type: "private",
+        capacity: 1,
+      }),
+    );
+
+    await getUtilityDiagnostics({ branch: "gil-puyat" });
+
+    expect(selectedFields).toContain("_id type");
   });
 });

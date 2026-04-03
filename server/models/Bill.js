@@ -178,7 +178,18 @@ const billSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["bank", "gcash", "card", "check", "cash", "paymongo", "paymaya", "grab_pay", "maya", "online"],
+      enum: [
+        "bank",
+        "gcash",
+        "card",
+        "check",
+        "cash",
+        "paymongo",
+        "paymaya",
+        "grab_pay",
+        "maya",
+        "online",
+      ],
       default: null,
     },
     paymongoSessionId: {
@@ -281,7 +292,10 @@ billSchema.methods.markAsPaid = function (amount = this.totalAmount) {
 };
 
 billSchema.methods.markAsOverdue = function () {
-  if (this.status !== "draft" && (this.remainingAmount ?? (this.totalAmount - this.paidAmount)) > 0) {
+  if (
+    this.status !== "draft" &&
+    (this.remainingAmount ?? this.totalAmount - this.paidAmount) > 0
+  ) {
     this.status = "overdue";
     return this.save();
   }

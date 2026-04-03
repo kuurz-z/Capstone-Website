@@ -2,26 +2,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Fragment } from "react";
 import {
   Zap, Plus, Check, AlertTriangle, RefreshCw,
-  ChevronDown, Trash2, X, Pencil, Save, Download
+  ChevronDown, Trash2, X, Pencil, Save, Download,
+  Activity, Wallet, TrendingUp, PieChart
 } from "lucide-react";
 import { useAuth } from "../../../../shared/hooks/useAuth";
 import ConfirmModal from "../../../../shared/components/ConfirmModal";
 import {
-  useElectricityRooms,
-  useMeterReadings,
-  useLatestReading,
-  useBillingPeriods,
-  useBillingResult,
-  useOpenPeriod,
-  useUpdatePeriod,
-  useClosePeriod,
-  useBatchClosePeriods,
-  useReviseResult,
-  useDeleteReading,
-  useUpdateReading,
-  useDeletePeriod,
-} from "../../../../shared/hooks/queries/useElectricity";
-import { electricityApi } from "../../../../shared/api/electricityApi.js";
+  useUtilityRooms,
+  useUtilityReadings,
+  useUtilityLatestReading,
+  useUtilityPeriods,
+  useUtilityResult,
+  useOpenUtilityPeriod,
+  useUpdateUtilityPeriod,
+  useCloseUtilityPeriod,
+  useReviseUtilityResult,
+  useDeleteUtilityReading,
+  useUpdateUtilityReading,
+  useDeleteUtilityPeriod,
+} from "../../../../shared/hooks/queries/useUtility";
+import { utilityApi } from "../../../../shared/api/utilityApi.js";
 import { useBusinessSettings } from "../../../../shared/hooks/queries/useSettings";
 import { exportToCSV } from "../../../../shared/utils/exportUtils.js";
 import { getRoomLabel } from "../../../../shared/utils/roomLabel.js";
@@ -32,9 +32,10 @@ import BillingRoomList from "./shared/BillingRoomList";
 import BillingStatusBadge from "./shared/BillingStatusBadge";
 import InlineRateEditor from "./shared/InlineRateEditor";
 import useBillingNotifier from "./shared/useBillingNotifier";
-import "./ElectricityBillingTab.css";
+import "./UtilityBillingTab.css";
 
 const EMPTY_VALUE = "-";
+const WATER_BILLABLE_ROOM_TYPES = new Set(["private", "double-sharing"]);
 const fmtCurrency = (val) =>
   val != null ? `PHP ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : EMPTY_VALUE;
 const fmtNumber = (val, digits = 2) =>
@@ -62,22 +63,19 @@ const getDisplayStatusLabel = (period) => {
   return status;
 };
 const getRoomBadgeLabel = (room) => {
-  if (!room) return "No Period";
-  if (!room.hasActiveTenants) return "No Tenants";
-  if (room.hasOpenPeriod) return "Active";
+  if (!room) return "Closed";
   if (room.latestPeriodDisplayStatus === "ready") return "Ready To Send";
-  if (room.latestPeriodDisplayStatus === "closed") return "Closed";
-  if (room.latestPeriodDisplayStatus === "revised") return "Revised";
-  return "No Period";
+  if (room.hasOpenPeriod) return "Active";
+  return "Closed";
 };
 const getCycleLabel = (period) =>
   period
     ? `${fmtShortDate(period.startDate)} - ${fmtShortDate(period.endDate || period.targetCloseDate) || "Ongoing"}`
     : EMPTY_VALUE;
-const getMeterRangeLabel = (period) =>
-  period
-    ? `${fmtNumber(period.startReading, 0)} kWh to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} kWh` : EMPTY_VALUE}`
-    : EMPTY_VALUE;
+const getMeterRangeLabel = (period, utilityType) =>
+    period
+      ? `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."}` : EMPTY_VALUE}`
+      : EMPTY_VALUE;
 const getExpectedPeriodEndDate = (period) => period?.endDate || period?.targetCloseDate || null;
 const getPeriodRangeText = (period) => {
   if (!period) return EMPTY_VALUE;
@@ -109,16 +107,16 @@ const ELECTRICITY_EXPORT_COLUMNS = [
   { key: "periodStart", label: "Period Start", formatter: (value) => (value ? fmtDate(value) : "") },
   { key: "periodEnd", label: "Period End", formatter: (value) => (value ? fmtDate(value) : "") },
   { key: "periodStatus", label: "Period Status" },
-  { key: "ratePerKwh", label: "Rate / kWh", formatter: (value) => (value !== "" && value != null ? Number(value).toFixed(2) : "") },
+  { key: "ratePerUnit", label: "Rate / Unit", formatter: (value) => (value !== "" && value != null ? Number(value).toFixed(2) : "") },
   { key: "tenantName", label: "Tenant" },
-  { key: "totalKwh", label: "Total kWh", formatter: (value) => (value !== "" && value != null ? Number(value).toFixed(2) : "") },
-  { key: "billAmount", label: "Electricity Charge", formatter: (value) => (value !== "" && value != null ? Number(value).toFixed(2) : "") },
+  { key: "totalUsage", label: "Total Usage", formatter: (value) => (value !== "" && value != null ? Number(value).toFixed(2) : "") },
+  { key: "billAmount", label: "Utility Charge", formatter: (value) => (value !== "" && value != null ? Number(value).toFixed(2) : "") },
   { key: "billStatus", label: "Bill Status" },
   { key: "dueDate", label: "Due Date", formatter: (value) => (value ? fmtDate(value) : "") },
   { key: "sentAt", label: "Sent At", formatter: (value) => (value ? fmtDate(value) : "") },
 ];
 
-const ElectricityBillingTab = () => {
+const UtilityBillingTab = ({ utilityType }) => {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
   const dropdownRef = useRef(null);
@@ -149,10 +147,6 @@ const ElectricityBillingTab = () => {
   const [editingRateId, setEditingRateId] = useState(null);
   const [editingRateValue, setEditingRateValue] = useState("");
 
-  const [batchCloseModalOpen, setBatchCloseModalOpen] = useState(false);
-  const [batchCloseDate, setBatchCloseDate] = useState(getTodayInput);
-  const [batchCloseRows, setBatchCloseRows] = useState([]);
-  const [batchCloseFeedback, setBatchCloseFeedback] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
   const [detailVisibility, setDetailVisibility] = useState({
     segments: true,
@@ -189,29 +183,32 @@ const ElectricityBillingTab = () => {
   };
 
   const [periodForm, setPeriodForm] = useState({
-    startDate: get15th(), startReading: "", ratePerKwh: "",
+    startDate: get15th(), startReading: "", ratePerUnit: "",
     endReading: "", endDate: getNext15th(),
   });
 
   // Queries
   const { data: businessSettings } = useBusinessSettings(Boolean(user));
-  const { data: roomsData, isLoading: roomsLoading } = useElectricityRooms(branchFilter);
-  const { data: readingsData } = useMeterReadings(selectedRoomId);
-  const { data: latestData } = useLatestReading(selectedRoomId);
-  const { data: periodsData } = useBillingPeriods(selectedRoomId);
-  const { data: resultData } = useBillingResult(selectedPeriodId);
+  const { data: roomsData, isLoading: roomsLoading } = useUtilityRooms(utilityType, branchFilter);
+  const { data: readingsData } = useUtilityReadings(utilityType, selectedRoomId);
+  const { data: latestData } = useUtilityLatestReading(utilityType, selectedRoomId);
+  const { data: periodsData } = useUtilityPeriods(utilityType, selectedRoomId);
+  const { data: resultData } = useUtilityResult(utilityType, selectedPeriodId);
 
   // Mutations
-  const openPeriod = useOpenPeriod();
-  const updatePeriod = useUpdatePeriod();
-  const closePeriod = useClosePeriod();
-  const batchClosePeriods = useBatchClosePeriods();
-  const reviseResult = useReviseResult();
-  const deleteReading = useDeleteReading();
-  const updateReading = useUpdateReading();
-  const deletePeriod = useDeletePeriod();
+  const openPeriod = useOpenUtilityPeriod(utilityType);
+  const updatePeriod = useUpdateUtilityPeriod(utilityType);
+  const closePeriod = useCloseUtilityPeriod(utilityType);
+  const reviseResult = useReviseUtilityResult(utilityType);
+  const deleteReading = useDeleteUtilityReading(utilityType);
+  const updateReading = useUpdateUtilityReading(utilityType);
+  const deletePeriod = useDeleteUtilityPeriod(utilityType);
 
-  const rooms = roomsData?.rooms || [];
+  const rooms = useMemo(() => {
+    const list = roomsData?.rooms || [];
+    if (utilityType !== "water") return list;
+    return list.filter((room) => WATER_BILLABLE_ROOM_TYPES.has(room.type));
+  }, [roomsData?.rooms, utilityType]);
   const readings = readingsData?.readings || [];
   const movementReadings = readings.filter((r) => r.eventType === "move-in" || r.eventType === "move-out");
   const periods = periodsData?.periods || [];
@@ -219,7 +216,7 @@ const ElectricityBillingTab = () => {
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
   const openPeriodForRoom = periods.find((p) => p.status === "open");
   const lastClosedPeriod = periods.find((p) => p.status === "closed" || p.status === "revised");
-  const defaultElectricityRatePerKwh = businessSettings?.defaultElectricityRatePerKwh ?? "";
+  const defaultRatePerUnit = utilityType === "electricity" ? (businessSettings?.defaultElectricityRatePerKwh ?? "") : (businessSettings?.defaultWaterRatePerUnit ?? "");
 
   const filteredRooms = useMemo(() => {
     let list = branchFilter ? rooms.filter((r) => r.branch === branchFilter) : rooms;
@@ -229,11 +226,6 @@ const ElectricityBillingTab = () => {
     }
     return list;
   }, [rooms, branchFilter, sidebarSearch]);
-
-  const batchClosableRooms = useMemo(
-    () => filteredRooms.filter((room) => room.hasOpenPeriod),
-    [filteredRooms],
-  );
 
   // Paginated slices
   const totalPeriodPages = Math.max(1, Math.ceil(periods.length / PERIODS_PER_PAGE));
@@ -293,7 +285,7 @@ const ElectricityBillingTab = () => {
     );
   };
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Handlers Ã¢â€â‚¬Ã¢â€â‚¬
+  // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Handlers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
   const selectAndFocusPeriod = (periodId) => {
     if (selectedPeriodId === periodId) {
@@ -309,7 +301,7 @@ const ElectricityBillingTab = () => {
 
   const beginRateEdit = (period) => {
     setEditingRateId(period.id);
-    setEditingRateValue(String(period.ratePerKwh ?? ""));
+    setEditingRateValue(String(period.ratePerUnit ?? ""));
   };
 
   const cancelRateEdit = () => {
@@ -330,13 +322,13 @@ const ElectricityBillingTab = () => {
       setPeriodForm(f => ({
         ...f,
         startReading: continuationReading ?? latestData?.reading ?? "",
-        ratePerKwh:
-          lastClosedPeriod?.ratePerKwh != null
-            ? String(lastClosedPeriod.ratePerKwh)
-            : defaultElectricityRatePerKwh !== undefined &&
-              defaultElectricityRatePerKwh !== null &&
-              defaultElectricityRatePerKwh !== ""
-              ? String(defaultElectricityRatePerKwh)
+        ratePerUnit:
+          lastClosedPeriod?.ratePerUnit != null
+            ? String(lastClosedPeriod.ratePerUnit)
+            : defaultRatePerUnit !== undefined &&
+              defaultRatePerUnit !== null &&
+              defaultRatePerUnit !== ""
+              ? String(defaultRatePerUnit)
               : "",
         startDate,
         endDate: getNext15th(startDate),
@@ -361,7 +353,7 @@ const ElectricityBillingTab = () => {
     try {
       await updatePeriod.mutateAsync({
         periodId,
-        ratePerKwh: Number(editingRateValue),
+        ratePerUnit: Number(editingRateValue),
       });
       notify.success("Billing period rate updated.");
       cancelRateEdit();
@@ -424,7 +416,7 @@ const ElectricityBillingTab = () => {
     const targetPeriod = periods.find((p) => p.id === periodId);
     const isOpenPeriod = targetPeriod?.status === "open";
     const message = isOpenPeriod
-      ? "This will delete the current open billing period (auto-created after the last close). You can re-create it with '+ New Billing Period' — the form will pre-fill from the last closed period."
+      ? "This will delete the current open billing period (auto-created after the last close). You can re-create it with '+ New Billing Period' Ã¢â‚¬â€ the form will pre-fill from the last closed period."
       : "This will permanently delete the billing period AND all its meter readings and generated tenant bills. This cannot be undone.";
     setConfirmModal({
       open: true,
@@ -448,7 +440,7 @@ const ElectricityBillingTab = () => {
   };
 
   const handleOpenPeriod = async () => {
-    if (!periodForm.startReading || !periodForm.ratePerKwh) {
+    if (!periodForm.startReading || !periodForm.ratePerUnit) {
       return notify.warn("Start reading and rate are required.");
     }
     try {
@@ -456,7 +448,7 @@ const ElectricityBillingTab = () => {
         roomId: selectedRoomId,
         startDate: periodForm.startDate,
         startReading: Number(periodForm.startReading),
-        ratePerKwh: Number(periodForm.ratePerKwh),
+        ratePerUnit: Number(periodForm.ratePerUnit),
       });
       notify.success("Billing period opened. Enter the final reading when the cycle ends.");
       closePanel();
@@ -500,84 +492,12 @@ const ElectricityBillingTab = () => {
     }
   };
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Draft bills handlers (expand-on-edit) Ã¢â€â‚¬Ã¢â€â‚¬
-
-  const openBatchCloseModal = () => {
-    setBatchCloseDate(getTodayInput());
-    setBatchCloseFeedback(null);
-    setBatchCloseRows(
-      batchClosableRooms.map((room) => ({
-        periodId: room.openPeriodId,
-        roomId: room.id,
-        roomName: getRoomLabel(room),
-        latestReading: room.latestReading,
-        enabled: true,
-        endReading:
-          room.latestReading !== undefined && room.latestReading !== null
-            ? String(room.latestReading)
-            : "",
-      })),
-    );
-    setBatchCloseModalOpen(true);
-  };
-
-  const closeBatchModal = () => {
-    setBatchCloseModalOpen(false);
-    setBatchCloseFeedback(null);
-  };
-
-  const updateBatchRow = (periodId, updates) => {
-    setBatchCloseRows((current) =>
-      current.map((row) => (row.periodId === periodId ? { ...row, ...updates } : row)),
-    );
-  };
-
-  const handleBatchCloseSubmit = async () => {
-    const selectedRows = batchCloseRows.filter((row) => row.enabled);
-    if (selectedRows.length === 0) {
-      notify.warn("Select at least one open period to close.");
-      return;
-    }
-
-    const invalidRow = selectedRows.find(
-      (row) => row.endReading === "" || Number.isNaN(Number(row.endReading)),
-    );
-    if (invalidRow) {
-      notify.warn(`Enter a valid end reading for ${invalidRow.roomName}.`);
-      return;
-    }
-
-    try {
-      const result = await batchClosePeriods.mutateAsync({
-        endDate: batchCloseDate,
-        closures: selectedRows.map((row) => ({
-          periodId: row.periodId,
-          roomLabel: row.roomName,
-          endReading: Number(row.endReading),
-        })),
-      });
-
-      setBatchCloseFeedback(result);
-
-      if (result?.summary?.failed) {
-        notify.warn(
-          `Closed ${result.summary.closed} period${result.summary.closed === 1 ? "" : "s"}. ${result.summary.failed} failed.`,
-        );
-      } else {
-        notify.success(
-          `Closed ${result?.summary?.closed || 0} billing period${result?.summary?.closed === 1 ? "" : "s"}.`,
-        );
-        closeBatchModal();
-      }
-    } catch (error) {
-      notify.error(error, "Failed to batch close billing periods.");
-    }
-  };
+  // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Draft bills handlers (expand-on-edit) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
   const handleExportRows = async () => {
     try {
       setIsExporting(true);
-      const response = await electricityApi.exportRows({
+      const response = await utilityApi.exportRows({
         branch: branchFilter || undefined,
       });
       const rows = response?.rows || [];
@@ -588,8 +508,8 @@ const ElectricityBillingTab = () => {
 
       exportToCSV(
         rows,
-        ELECTRICITY_EXPORT_COLUMNS,
-        `electricity_billing_${branchFilter || "all"}_${getTodayInput()}`,
+        getExportColumns(utilityType),
+        `${utilityType}_billing_${branchFilter || "all"}_${getTodayInput()}`,
       );
       notify.success(`Exported ${rows.length} electricity billing row${rows.length === 1 ? "" : "s"}.`);
     } catch (error) {
@@ -604,133 +524,132 @@ const ElectricityBillingTab = () => {
     const displayStatus = getDisplayStatus(period);
 
     return (
-      <div className="eb-period-detail eb-period-detail--inline">
-        <div className="eb-period-detail__header">
-          <div className="eb-period-detail__heading">
-            <span className="eb-period-detail__title">
-              {getPeriodLabel(period)}: {getPeriodRangeText(period)}
-            </span>
-            <span className="eb-period-detail__meta">
-              Meter range {getMeterRangeLabel(period)}
-            </span>
+      <div className="eb-period-detail eb-period-detail--minimal">
+        <div className="eb-minimal-header">
+          <div className="eb-minimal-header__info">
+             <span className={`eb-status-indicator eb-status-indicator--${displayStatus}`}>{getDisplayStatusLabel(period)}</span>
+             <span className="eb-minimal-header__date">Meter Reading: {getMeterRangeLabel(period, utilityType)}</span>
           </div>
-          <div className="eb-period-detail__actions">
-            <span className={`eb-status-pill eb-status-pill--${displayStatus}`}>{getDisplayStatusLabel(period)}</span>
+          <div className="eb-minimal-header__actions">
             <button
-              className="eb-btn eb-btn--xs eb-btn--outline"
+              className="eb-btn-text"
               onClick={() => setSelectedPeriodId(null)}
+              title="Close Details"
             >
-              Hide Details
+              Close
             </button>
           </div>
         </div>
 
-        <div className="eb-period-detail__body">
+        <div className="eb-period-detail__body eb-period-detail__body--minimal">
           {result ? (
             <>
-              <div className="eb-stats">
-                <div className="eb-stat">
-                  <span className="eb-stat__label">Total kWh</span>
-                  <span className="eb-stat__value">{fmtNumber(result.totalRoomKwh, 2)}</span>
+              <div className="eb-minimal-stats">
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">Total {utilityType === "electricity" ? "kWh" : "cu.m."}</span>
+                  <span className="eb-minimal-stat__value">{fmtNumber(result.computedTotalUsage, 2)}</span>
                 </div>
-                <div className="eb-stat">
-                  <span className="eb-stat__label">Room Cost</span>
-                  <span className="eb-stat__value">{fmtCurrency(result.totalRoomCost)}</span>
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">Room Cost</span>
+                  <span className="eb-minimal-stat__value eb-minimal-stat__value--highlight">{fmtCurrency(result.totalRoomCost || result.computedTotalCost)}</span>
                 </div>
-                <div className="eb-stat">
-                  <span className="eb-stat__label">Rate</span>
-                  <span className="eb-stat__value">{fmtCurrency(result.ratePerKwh)}/kWh</span>
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">Current Rate</span>
+                  <span className="eb-minimal-stat__value">{fmtCurrency(result.ratePerUnit)} <small>/{utilityType === "electricity" ? "kWh" : "cu.m."}</small></span>
                 </div>
-                <div className="eb-stat">
-                  <span className="eb-stat__label">Segments</span>
-                  <span className="eb-stat__value">{result.segments?.length || 0}</span>
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">Segments</span>
+                  <span className="eb-minimal-stat__value">{result.segments?.length || 0}</span>
                 </div>
               </div>
 
-              <div className="eb-result">
-                <div className="eb-result__header">
-                  <div className="eb-result__title">
-                    <Zap size={14} />
-                    <span>Segment Breakdown</span>
+              <div className="eb-result-flow">
+                <div className="eb-result-flow__header">
+                  <div className="eb-result-flow__title">
+                    <span className="eb-result-flow__text">Segment Breakdown</span>
                     {result.verified ? (
-                      <span className="eb-verified"><Check size={11} /> Verified</span>
+                      <span className="eb-verified-badge"><Check size={12} strokeWidth={2.5} /> Verified</span>
                     ) : (
-                      <span className="eb-unverified"><AlertTriangle size={11} /> Unverified</span>
+                      <span className="eb-unverified-badge"><AlertTriangle size={12} strokeWidth={2.5} /> Unverified</span>
                     )}
                   </div>
-                  <button
-                    className="eb-btn eb-btn--xs eb-btn--ghost"
-                    onClick={() => handleRevise(selectedPeriodId)}
-                    disabled={reviseResult.isPending}
-                  >
-                    <RefreshCw size={12} /> Re-run
-                  </button>
-                </div>
-
-                <div className="eb-result__toolbar">
-                  <button
-                    className="eb-btn eb-btn--xs eb-btn--outline"
-                    onClick={() => setDetailVisibility((current) => ({ ...current, segments: !current.segments }))}
-                  >
-                    {detailVisibility.segments ? "Hide segments" : "Show segments"}
-                  </button>
-                  <button
-                    className="eb-btn eb-btn--xs eb-btn--outline"
-                    onClick={() => setDetailVisibility((current) => ({ ...current, tenantSummary: !current.tenantSummary }))}
-                  >
-                    {detailVisibility.tenantSummary ? "Hide tenant summary" : "Show tenant summary"}
-                  </button>
-                </div>
-
-                <div className="eb-result__body">
-                  {detailVisibility.segments ? (
-                  <div className="eb-table-wrap">
-                    <table className="eb-table eb-table--detail">
-                      <colgroup>
-                        <col style={{ width: "16%" }} />
-                        <col style={{ width: "12%" }} />
-                        <col style={{ width: "12%" }} />
-                        <col style={{ width: "12%" }} />
-                        <col style={{ width: "14%" }} />
-                        <col style={{ width: "10%" }} />
-                        <col style={{ width: "12%" }} />
-                        <col style={{ width: "12%" }} />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>Period</th>
-                          <th>From kWh</th>
-                          <th>To kWh</th>
-                          <th>Consumed</th>
-                          <th>Cost</th>
-                          <th>Tenants</th>
-                          <th>Share kWh</th>
-                          <th>Share Cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(result.segments || []).map((seg, index) => (
-                          <tr key={`${period.id}-segment-${index}`}>
-                            <td>{getSegmentPeriodLabel(seg)}</td>
-                            <td className="eb-cell--num">{fmtNumber(seg.readingFrom, 0)}</td>
-                            <td className="eb-cell--num">{fmtNumber(seg.readingTo, 0)}</td>
-                            <td className="eb-cell--num">{fmtNumber(seg.kwhConsumed, 2)}</td>
-                            <td className="eb-cell--num">{fmtCurrency(seg.totalCost)}</td>
-                            <td className="eb-cell--center">{seg.activeTenantCount}</td>
-                            <td className="eb-cell--num">{fmtNumber(seg.sharePerTenantKwh, 4)}</td>
-                            <td className="eb-cell--num">{fmtCurrency(seg.sharePerTenantCost)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="eb-result-flow__actions">
+                    <button
+                      className="eb-btn-text eb-btn-text--subtle"
+                      onClick={() => setDetailVisibility((current) => ({ ...current, segments: !current.segments }))}
+                    >
+                      {detailVisibility.segments ? "Hide segments" : "View segments"}
+                    </button>
+                    <button
+                      className="eb-btn-text eb-btn-text--subtle"
+                      onClick={() => setDetailVisibility((current) => ({ ...current, tenantSummary: !current.tenantSummary }))}
+                    >
+                      {detailVisibility.tenantSummary ? "Hide tenants" : "View tenants"}
+                    </button>
+                    <button
+                      className="eb-btn-text eb-btn-text--primary"
+                      onClick={() => handleRevise(selectedPeriodId)}
+                      disabled={reviseResult.isPending}
+                    >
+                      <RefreshCw size={13} className={reviseResult.isPending ? "eb-spin" : ""} />
+                      <span>Sync</span>
+                    </button>
                   </div>
-                  ) : null}
+                </div>
 
-                  {detailVisibility.tenantSummary ? (
-                    <>
-                      <h4 className="eb-subsection-title">Tenant Summary</h4>
-                      <div className="eb-table-wrap">
-                        <table className="eb-table eb-table--detail">
+                <div className="eb-result-flow__content">
+                  {detailVisibility.segments && (
+                  <div className="eb-segment-grid">
+                    {(result.segments || []).map((seg, index) => (
+                      <div className="eb-table-fluid eb-segment-card" key={`${period.id}-segment-${index}`}>
+                        <table className="eb-table-minimal eb-table-minimal--bordered">
+                          <colgroup>
+                            <col style={{ width: "45%" }} />
+                            <col style={{ width: "25%" }} />
+                            <col style={{ width: "30%" }} />
+                          </colgroup>
+                          <thead>
+                            <tr style={{ background: "#fdecda" }}>
+                              <th colSpan="2" className="eb-text-strong" style={{ color: "#33261a", borderBottom: "1px solid #dcdcdc" }}>No. of occupants in the room:</th>
+                              <th className="eb-align-center eb-text-strong" style={{ color: "#33261a", fontSize: "0.85rem", borderBottom: "1px solid #dcdcdc" }}>{seg.activeTenantCount}</th>
+                            </tr>
+                            <tr>
+                              <th></th>
+                              <th className="eb-align-center" style={{ fontWeight: 600, color: "#111" }}>Date</th>
+                              <th className="eb-align-center" style={{ fontWeight: 600, color: "#111" }}>{utilityType === "electricity" ? "kwh" : "cu.m."}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={{ color: "#444" }}>1st reading</td>
+                              <td className="eb-align-center">{seg.startDate ? new Date(seg.startDate).toLocaleDateString() : (seg.periodLabel || "").split(/\s*[-–]\s*/)[0] || "-"}</td>
+                              <td className="eb-align-center">{fmtNumber(seg.readingFrom, 2)}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ color: "#444" }}>2nd reading</td>
+                              <td className="eb-align-center">{seg.endDate ? new Date(seg.endDate).toLocaleDateString() : (seg.periodLabel || "").split(/\s*[-–]\s*/)[1] || "-"}</td>
+                              <td className="eb-align-center">{fmtNumber(seg.readingTo, 2)}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ fontStyle: "italic", color: "#555" }}>Total consumption</td>
+                              <td className="eb-align-center" style={{ borderBottom: "none" }}></td>
+                              <td className="eb-align-center">{fmtNumber(seg.unitsConsumed, 2)}</td>
+                            </tr>
+                            <tr>
+                              <td colSpan="2" style={{ color: "#444" }}>Amount due (Php {fmtNumber(result.ratePerUnit, 2)} / {utilityType === "electricity" ? "kwh" : "cu.m."}) per person</td>
+                              <td className="eb-align-center eb-text-strong" style={{ fontSize: "0.85rem" }}>{fmtCurrency(seg.sharePerTenantCost)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                  )}
+
+                  {detailVisibility.tenantSummary && (
+                    <div className="eb-section-divider">
+                      <div className="eb-table-fluid">
+                        <table className="eb-table-minimal w-100">
                           <colgroup>
                             <col style={{ width: "46%" }} />
                             <col style={{ width: "22%" }} />
@@ -738,24 +657,24 @@ const ElectricityBillingTab = () => {
                           </colgroup>
                           <thead>
                             <tr>
-                              <th>Tenant</th>
-                              <th>Total kWh</th>
-                              <th>Bill Amount</th>
+                              <th>Tenant Name</th>
+                              <th className="eb-align-right">Total {utilityType === "electricity" ? "kWh" : "cu.m."}</th>
+                              <th className="eb-align-right">Bill Amount</th>
                             </tr>
                           </thead>
                           <tbody>
                             {(result.tenantSummaries || []).map((tenant, index) => (
                               <tr key={`${period.id}-tenant-${index}`}>
                                 <td>{tenant.tenantName}</td>
-                                <td className="eb-cell--num">{fmtNumber(tenant.totalKwh, 4)}</td>
-                                <td className="eb-cell--num eb-cell--bold">{fmtCurrency(tenant.billAmount)}</td>
+                                <td className="eb-align-right">{fmtNumber(tenant.totalUsage, 4)}</td>
+                                <td className="eb-align-right eb-text-strong">{fmtCurrency(tenant.billAmount)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
-                    </>
-                  ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -764,8 +683,6 @@ const ElectricityBillingTab = () => {
               Segment details are not available for this billing cycle yet.
             </div>
           )}
-
-          {/* Draft bills are managed in the Issue Invoices tab */}
         </div>
       </div>
     );
@@ -773,38 +690,24 @@ const ElectricityBillingTab = () => {
 
   return (
     <>
-    <div className="eb-toolbar">
-      <div className="eb-toolbar__meta">
-        <span className="eb-toolbar__title">Portfolio Actions</span>
-        <span className="eb-toolbar__subtitle">
-          {batchClosableRooms.length} open period{batchClosableRooms.length === 1 ? "" : "s"}
-          {branchFilter ? ` in ${branchFilter}` : " across all visible branches"}
-        </span>
+    <div className="bw-summary-bar">
+      <div className="bw-summary-bar__left">
+        <span className="bw-summary-bar__mode"><Zap size={13} /> {utilityType === "electricity" ? "Electricity" : "Water"}</span>
+        {branchFilter && <span className="bw-summary-bar__branch">{branchFilter}</span>}
       </div>
-      <div className="eb-toolbar__actions">
-        <button
-          type="button"
-          className="eb-btn eb-btn--outline"
-          onClick={handleExportRows}
-          disabled={isExporting}
-        >
-          <Download size={13} />
-          {isExporting ? "Exporting..." : "Export CSV"}
-        </button>
-        <button
-          type="button"
-          className="eb-btn eb-btn--primary"
-          onClick={openBatchCloseModal}
-          disabled={batchClosableRooms.length === 0 || batchClosePeriods.isPending}
-        >
-          <Check size={13} />
-          Batch Close Open Periods
-        </button>
+      <div className="bw-summary-bar__counts">
+        <span className="bw-count bw-count--open">{filteredRooms.filter(r => r.hasOpenPeriod).length} open</span>
+        <span className="bw-count bw-count--ready">{filteredRooms.filter(r => r.latestPeriodDisplayStatus === "ready").length} ready</span>
+        <span className="bw-count bw-count--neutral">{filteredRooms.length} rooms</span>
+      </div>
+      <div className="bw-summary-bar__actions">
+        <button type="button" className="eb-btn eb-btn--ghost" onClick={handleExportRows} disabled={isExporting}><Download size={13} /> {isExporting ? "Exporting..." : "Export"}</button>
       </div>
     </div>
+
     <div className="eb-layout">
 
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Sidebar Ã¢â€â‚¬Ã¢â€â‚¬ */}
+      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Sidebar ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
       <aside className="eb-sidebar">
         <div className="eb-sidebar__header">
           <span className="eb-sidebar__title"><Zap size={13} /> Rooms</span>
@@ -868,7 +771,7 @@ const ElectricityBillingTab = () => {
                       {getRoomBadgeLabel(room)}
                     </span>
                     {room.latestReading != null && (
-                      <span className="eb-room__kwh">{room.latestReading} kWh</span>
+                      <span className="eb-room__kwh">{room.latestReading} {utilityType === "electricity" ? "kWh" : "cu.m."}</span>
                     )}
                   </div>
                 </button>
@@ -878,7 +781,7 @@ const ElectricityBillingTab = () => {
         </div>
       </aside>
 
-      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Main Ã¢â€â‚¬Ã¢â€â‚¬ */}
+      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Main ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
       <main className="eb-main">
         {!selectedRoomId ? (
           <div className="eb-empty-state">
@@ -888,17 +791,41 @@ const ElectricityBillingTab = () => {
         ) : (
           <div className="eb-content">
 
-            {/* Ã¢â€â‚¬Ã¢â€â‚¬ Room Header Ã¢â€â‚¬Ã¢â€â‚¬ */}
+            {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Room Header ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
             <div className="eb-header">
               <div className="eb-header__left">
                 <h2 className="eb-header__title">{getRoomLabel(selectedRoom)}</h2>
                 <span className="eb-header__branch">{selectedRoom?.branch}</span>
+                {selectedRoom?.type && <span className="eb-header__room-type">{selectedRoom.type}</span>}
+              </div>
+            </div>
+            <div className="bw-overview-card">
+              <div className="bw-overview-metric">
+                <span className="bw-overview-metric__label">Latest Reading</span>
+                <span className="bw-overview-metric__value">
+                  {latestData?.reading != null ? fmtNumber(latestData.reading, 0) : "â€”"}
+                  <small> {utilityType === "electricity" ? "kWh" : "cu.m."}</small>
+                </span>
+              </div>
+              <div className="bw-overview-metric">
+                <span className="bw-overview-metric__label">Cycle Status</span>
+                <span className="bw-overview-metric__value">
+                  {openPeriodForRoom ? "Open" : lastClosedPeriod ? "Closed" : "No periods"}
+                </span>
+              </div>
+              <div className="bw-overview-metric">
+                <span className="bw-overview-metric__label">Total Periods</span>
+                <span className="bw-overview-metric__value">{periods.length}</span>
+              </div>
+              <div className="bw-overview-metric">
+                <span className="bw-overview-metric__label">Readings</span>
+                <span className="bw-overview-metric__value">{movementReadings.length}</span>
               </div>
             </div>
 
-            {/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-                SECTION 1 Ã¢â‚¬â€ Active Billing Cycle
-            Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */}
+            {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â
+                SECTION 1 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Active Billing Cycle
+            ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â */}
 
             {/* Status Banner */}
             <section className={`eb-status-banner ${openPeriodForRoom ? "eb-status-banner--open" : "eb-status-banner--empty"}`}>
@@ -906,7 +833,7 @@ const ElectricityBillingTab = () => {
                 <div className="eb-status-banner__eyebrow">{openPeriodForRoom ? "Active Billing Period" : "No Active Period"}</div>
                 <div className="eb-status-banner__title">
                   {openPeriodForRoom
-                    ? `Cycle ${getPeriodRangeText(openPeriodForRoom)} | Start: ${openPeriodForRoom.startReading} kWh | Rate: ${fmtCurrency(openPeriodForRoom.ratePerKwh)}/kWh`
+                    ? `Cycle ${getPeriodRangeText(openPeriodForRoom)} | Start: ${openPeriodForRoom.startReading} ${utilityType === "electricity" ? "kWh" : "cu.m."} | Rate: ${fmtCurrency(openPeriodForRoom.ratePerUnit)}/${utilityType === "electricity" ? "kWh" : "cu.m."}`
                     : lastClosedPeriod
                       ? `Last closed: ${fmtDate(lastClosedPeriod.endDate || lastClosedPeriod.startDate)}`
                       : "No billing period has been created for this room yet."}
@@ -941,7 +868,7 @@ const ElectricityBillingTab = () => {
                       <input type="date" value={periodForm.startDate} onChange={(e) => setPeriodForm({ ...periodForm, startDate: e.target.value })} />
                     </div>
                     <div className="eb-field">
-                      <label>Start Reading (kWh)</label>
+                      <label>Start Reading ({utilityType === "electricity" ? "kWh" : "cu.m."})</label>
                       <input
                         type="number"
                         value={periodForm.startReading}
@@ -951,8 +878,8 @@ const ElectricityBillingTab = () => {
                       />
                     </div>
                     <div className="eb-field">
-                      <label>Rate (PHP/kWh)</label>
-                      <input type="number" step="0.01" value={periodForm.ratePerKwh} onChange={(e) => setPeriodForm({ ...periodForm, ratePerKwh: e.target.value })} placeholder="e.g. 16.00" />
+                      <label>Rate (PHP/{utilityType === "electricity" ? "kWh" : "cu.m."})</label>
+                      <input type="number" step="0.01" value={periodForm.ratePerUnit} onChange={(e) => setPeriodForm({ ...periodForm, ratePerUnit: e.target.value })} placeholder="e.g. 16.00" />
                     </div>
                   </div>
                   <div className="eb-panel__footer">
@@ -977,11 +904,11 @@ const ElectricityBillingTab = () => {
                 </div>
                 <div className="eb-panel__body">
                   <p className="eb-panel__hint">
-                    Cycle {getPeriodRangeText(openPeriodForRoom)} | {openPeriodForRoom.startReading} kWh | {fmtCurrency(openPeriodForRoom.ratePerKwh)}/kWh
+                    Cycle {getPeriodRangeText(openPeriodForRoom)} | {openPeriodForRoom.startReading} {utilityType === "electricity" ? "kWh" : "cu.m."} | {fmtCurrency(openPeriodForRoom.ratePerUnit)}/{utilityType === "electricity" ? "kWh" : "cu.m."}
                   </p>
                   <div className="eb-form-row">
                     <div className="eb-field">
-                      <label>Final Meter Reading (kWh)</label>
+                      <label>Final Meter Reading ({utilityType === "electricity" ? "kWh" : "cu.m."})</label>
                       <input
                         type="number"
                         value={periodForm.endReading}
@@ -1046,7 +973,7 @@ const ElectricityBillingTab = () => {
                           {pagedReadings.map((r) => (
                             <tr key={r.id}>
                               <td>{fmtDate(r.date)}</td>
-                              <td>{r.reading} <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>kWh</span></td>
+                              <td>{r.reading} <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{utilityType === "electricity" ? "kWh" : "cu.m."}</span></td>
                               <td>
                                 <span className={`eb-event-tag eb-event-tag--${r.eventType}`}>
                                   {r.eventType === "move-in" ? "Move-In" : r.eventType === "move-out" ? "Move-Out" : "Regular"}
@@ -1089,16 +1016,16 @@ const ElectricityBillingTab = () => {
               </div>
             </section>
 
-            {/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-                SECTION 2 Ã¢â‚¬â€ Segment Breakdown & Draft Bills
+            {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â
+                SECTION 2 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Segment Breakdown & Draft Bills
                 Driven by selectedPeriodId (auto = most recent closed/revised)
-            Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */}
+            ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â */}
             
 
-            {/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-                SECTION 3 Ã¢â‚¬â€ Billing Cycle History
+            {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â
+                SECTION 3 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Billing Cycle History
                 Clicking a row updates Section 2 above
-            Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */}
+            ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â */}
             {periods.length > 0 && (
               <section className="eb-section eb-section--primary">
                 <div className="eb-section__header">
@@ -1150,11 +1077,11 @@ const ElectricityBillingTab = () => {
                             </td>
                             <td>
                               <div className="eb-period-summary">
-                                <span className="eb-period-summary__value">{getMeterRangeLabel(p)}</span>
+                                <span className="eb-period-summary__value">{getMeterRangeLabel(p, utilityType)}</span>
                               </div>
                             </td>
                             <td>
-                              <span className="eb-rate-display">{fmtCurrency(p.ratePerKwh)}</span>
+                              <span className="eb-rate-display">{fmtCurrency(p.ratePerUnit)}</span>
                             </td>
                             <td>
                               <span className={`eb-status-pill eb-status-pill--${getDisplayStatus(p)}`}>{getDisplayStatusLabel(p)}</span>
@@ -1247,7 +1174,7 @@ const ElectricityBillingTab = () => {
           <div className="eb-modal__body">
             <div className="eb-form-row">
               <div className="eb-field">
-                <label>Reading (kWh)</label>
+                <label>Reading ({utilityType === "electricity" ? "kWh" : "cu.m."})</label>
                 <input
                   type="number"
                   value={editReadingForm.reading}
@@ -1274,97 +1201,6 @@ const ElectricityBillingTab = () => {
               <Check size={13} /> {updateReading.isPending ? "Saving..." : "Save Changes"}
             </button>
             <button className="eb-btn eb-btn--ghost" onClick={() => setEditReadingModal({ open: false, reading: null })}>Cancel</button>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {batchCloseModalOpen && (
-      <div className="eb-modal-overlay" onClick={closeBatchModal}>
-        <div className="eb-modal eb-modal--wide" onClick={(event) => event.stopPropagation()}>
-          <div className="eb-modal__header">
-            <span>Batch Close Open Periods</span>
-            <button className="eb-panel__close" onClick={closeBatchModal}><X size={15} /></button>
-          </div>
-          <div className="eb-modal__body">
-            <div className="eb-batch-close__controls">
-              <div className="eb-field">
-                <label>Closing Date</label>
-                <input
-                  type="date"
-                  value={batchCloseDate}
-                  onChange={(event) => setBatchCloseDate(event.target.value)}
-                />
-              </div>
-              <p className="eb-panel__hint">
-                Review the closing reading for each room. This uses best-effort closing, so one failure will not stop the others.
-              </p>
-            </div>
-
-            <div className="eb-table-wrap">
-              <table className="eb-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: "10%" }}>Include</th>
-                    <th style={{ width: "34%" }}>Room</th>
-                    <th style={{ width: "22%" }}>Latest Reading</th>
-                    <th style={{ width: "34%" }}>Closing Reading</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batchCloseRows.map((row) => (
-                    <tr key={row.periodId}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={row.enabled}
-                          onChange={(event) =>
-                            updateBatchRow(row.periodId, { enabled: event.target.checked })
-                          }
-                        />
-                      </td>
-                      <td>{row.roomName}</td>
-                      <td className="eb-cell--muted">
-                        {row.latestReading !== undefined && row.latestReading !== null
-                          ? `${row.latestReading} kWh`
-                          : "No reading"}
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          className="eb-inline-input eb-inline-input--left"
-                          value={row.endReading}
-                          onChange={(event) =>
-                            updateBatchRow(row.periodId, { endReading: event.target.value })
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {batchCloseFeedback?.failed?.length > 0 && (
-              <div className="eb-batch-close__feedback">
-                <div className="eb-batch-close__feedback-title">Failed items</div>
-                <ul className="eb-batch-close__feedback-list">
-                  {batchCloseFeedback.failed.map((item, index) => (
-                    <li key={`${item.periodId || item.roomName || "failure"}-${index}`}>
-                      <strong>{item.roomName || item.periodId || "Unknown period"}:</strong> {item.error}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          <div className="eb-modal__footer">
-            <button className="eb-btn eb-btn--primary" onClick={handleBatchCloseSubmit} disabled={batchClosePeriods.isPending}>
-              <Check size={13} /> {batchClosePeriods.isPending ? "Closing..." : "Close Selected Periods"}
-            </button>
-            <button className="eb-btn eb-btn--ghost" onClick={closeBatchModal}>Cancel</button>
           </div>
         </div>
       </div>
@@ -1417,6 +1253,4 @@ const ElectricityBillingTab = () => {
   );
 };
 
-export default ElectricityBillingTab;
-
-
+export default UtilityBillingTab;

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { billingApi } from "../../../shared/api/apiClient";
-import { useMyBillBreakdownByBillId, useMyElectricityBills, useMyBillBreakdown } from "../../../shared/hooks/queries/useElectricity";
-import { useMyWaterBreakdownByBillId } from "../../../shared/hooks/queries/useWaterBilling";
+import { useMyUtilityBills, useMyUtilityBreakdownByBillId } from "../../../shared/hooks/queries/useUtility";
 import { showNotification } from "../../../shared/utils/notification";
 import { formatPaymentMethod } from "../../../shared/utils/formatPaymentMethod";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
@@ -385,7 +384,7 @@ function CurrentBillHero({
  */
 function ElectricityBreakdown({ billId, fmtCurrency }) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, isError } = useMyBillBreakdownByBillId(open ? billId : null);
+  const { data, isLoading, isError } = useMyUtilityBreakdownByBillId("electricity", open ? billId : null);
 
   const fmtKwh = (n) =>
     `${(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} kWh`;
@@ -492,7 +491,7 @@ function ElectricityBreakdown({ billId, fmtCurrency }) {
 
 function WaterBreakdown({ billId, fmtCurrency }) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, isError } = useMyWaterBreakdownByBillId(open ? billId : null);
+  const { data, isLoading, isError } = useMyUtilityBreakdownByBillId("water", open ? billId : null);
   const record = data?.record || null;
 
   const fmtShortDate = (value) =>
@@ -783,7 +782,7 @@ export default BillingPage;
  * Uses the existing tenant-scoped hooks: no new backend needed.
  */
 function ElectricityHistory({ fmtCurrency }) {
-  const { data, isLoading } = useMyElectricityBills();
+  const { data, isLoading } = useMyUtilityBills("electricity");
   const periods = data?.bills || [];
 
   const fmtDate = (d) =>

@@ -40,6 +40,7 @@ import logger from "../middleware/logger.js";
 import { BUSINESS } from "../config/constants.js";
 import { resolveBillStatus, syncBillAmounts } from "./billingPolicy.js";
 import { getPenaltyRatePerDay, resolvePenaltyRatePerDay } from "./businessSettings.js";
+import { generateAutomatedRentBills } from "./rentGenerator.js";
 
 // ─── Job 1: Overdue Move-In Detection (daily at 08:30) ──────────────────────────
 

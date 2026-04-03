@@ -11,17 +11,14 @@ import {
   Reservation,
   User,
   Room,
-  MeterReading,
-  BillingPeriod,
-  BillingResult,
+  UtilityReading,
   ROOM_BRANCHES,
 } from "../models/index.js";
-import { computeBilling } from "../utils/billingEngine.js";
 import { BUSINESS } from "../config/constants.js";
 import logger from "../middleware/logger.js";
 import auditLogger from "../utils/auditLogger.js";
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
-import { ensureOpenElectricityPeriodForRoom } from "../utils/electricityLifecycle.js";
+import { ensureOpenUtilityPeriodForRoom } from "../utils/utilityLifecycle.js";
 import {
   isValidObjectId,
   invalidIdResponse,
@@ -33,7 +30,10 @@ import {
   buildUserUpdatePayload,
   getCheckinBlockers,
 } from "../utils/reservationHelpers.js";
-import { sendReservationConfirmedEmail, sendVisitApprovedEmail } from "../config/email.js";
+import {
+  sendReservationConfirmedEmail,
+  sendVisitApprovedEmail,
+} from "../config/email.js";
 import {
   sendSuccess,
   sendError,
@@ -76,11 +76,13 @@ const mapCurrentResident = (reservation, now = new Date()) => {
 
 const buildResidentStats = (residents) => ({
   total: residents.length,
-  active: residents.filter((resident) => resident.statusLabel === "Active").length,
+  active: residents.filter((resident) => resident.statusLabel === "Active")
+    .length,
   overdue: residents.filter((resident) => resident.statusLabel === "Overdue")
     .length,
-  movingOut: residents.filter((resident) => resident.statusLabel === "Moving Out")
-    .length,
+  movingOut: residents.filter(
+    (resident) => resident.statusLabel === "Moving Out",
+  ).length,
 });
 
 /* ── Cached user lookup (saves ~50-100ms per API call) ──── */
@@ -482,7 +484,8 @@ export const updateReservation = async (req, res, next) => {
       const blockers = getCheckinBlockers(existingReservation);
       if (blockers.length > 0) {
         return res.status(400).json({
-          error: "Check-in prerequisites not met. Please resolve the following before checking in the tenant.",
+          error:
+            "Check-in prerequisites not met. Please resolve the following before checking in the tenant.",
           code: "CHECKIN_PREREQUISITES_NOT_MET",
           missing: blockers,
         });
@@ -506,11 +509,24 @@ export const updateReservation = async (req, res, next) => {
 
     // Whitelist admin-allowed fields to prevent mass-assignment
     const ADMIN_ALLOWED = [
-      "status", "paymentStatus", "paymentDate", "notes", "checkInDate", "checkOutDate",
-      "approvedDate", "reservedAt", "visitApproved", "scheduleApproved", "documentsApproved",
-      "documentRejectionReason", "nbiApproved", "nbiRejectionReason",
-      "companyIDApproved", "companyIDRejectionReason",
-      "scheduleRejected", "scheduleRejectionReason",
+      "status",
+      "paymentStatus",
+      "paymentDate",
+      "notes",
+      "checkInDate",
+      "checkOutDate",
+      "approvedDate",
+      "reservedAt",
+      "visitApproved",
+      "scheduleApproved",
+      "documentsApproved",
+      "documentRejectionReason",
+      "nbiApproved",
+      "nbiRejectionReason",
+      "companyIDApproved",
+      "companyIDRejectionReason",
+      "scheduleRejected",
+      "scheduleRejectionReason",
     ];
 
     // Remove a single visitHistory entry by index
@@ -525,7 +541,10 @@ export const updateReservation = async (req, res, next) => {
     }
 
     // Auto-set rejection metadata when admin rejects a visit schedule
-    if (req.body.scheduleRejected === true && !existingReservation.scheduleRejected) {
+    if (
+      req.body.scheduleRejected === true &&
+      !existingReservation.scheduleRejected
+    ) {
       reservation.scheduleRejectedAt = new Date();
       reservation.scheduleRejectedBy = req.adminId || null;
       // Clear visit approval so tenant can reschedule
@@ -544,7 +563,9 @@ export const updateReservation = async (req, res, next) => {
           status: "rejected",
           rejectionReason: req.body.scheduleRejectionReason || "",
           // Use visitScheduledAt (when tenant submitted the schedule), not createdAt
-          scheduledAt: existingReservation.visitScheduledAt || existingReservation.createdAt,
+          scheduledAt:
+            existingReservation.visitScheduledAt ||
+            existingReservation.createdAt,
           rejectedAt: new Date(),
           rejectedBy: req.adminId || null,
           attemptNumber,
@@ -570,7 +591,9 @@ export const updateReservation = async (req, res, next) => {
           viewingType: existingReservation.viewingType || "inperson",
           status: "approved",
           // Use visitScheduledAt (when tenant submitted the schedule), not createdAt
-          scheduledAt: existingReservation.visitScheduledAt || existingReservation.createdAt,
+          scheduledAt:
+            existingReservation.visitScheduledAt ||
+            existingReservation.createdAt,
           approvedAt: new Date(),
           attemptNumber,
         });
@@ -583,9 +606,9 @@ export const updateReservation = async (req, res, next) => {
     const updatedReservation = await reservation.save();
 
     // ── Auto-record move-in meter reading when checking in ────────────────
-      // Always runs when a meterReading is provided at check-in.
-      // The reading is captured immediately, but the billing period and monthly
-      // rate must be created explicitly from the billing module.
+    // Always runs when a meterReading is provided at check-in.
+    // The reading is captured immediately, but the billing period and monthly
+    // rate must be created explicitly from the billing module.
     if (
       req.body.status === "checked-in" &&
       oldData.status !== "checked-in" &&
@@ -593,14 +616,18 @@ export const updateReservation = async (req, res, next) => {
       !isNaN(Number(req.body.meterReading))
     ) {
       try {
-        const roomId = updatedReservation.roomId?._id || updatedReservation.roomId;
+        const roomId =
+          updatedReservation.roomId?._id || updatedReservation.roomId;
         const roomDoc = await Room.findById(roomId).lean();
-        const adminUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
+        const adminUser = await User.findOne({
+          firebaseUid: req.user.uid,
+        }).lean();
         const meterValue = Number(req.body.meterReading);
         const checkinDate = new Date();
 
         if (roomDoc) {
-          const bootstrap = await ensureOpenElectricityPeriodForRoom({
+          const bootstrap = await ensureOpenUtilityPeriodForRoom({
+            utilityType: "electricity",
             room: roomDoc,
             anchorDate: checkinDate,
             anchorReading: meterValue,
@@ -617,9 +644,12 @@ export const updateReservation = async (req, res, next) => {
           })
             .select("userId")
             .lean();
-          const activeTenantIds = checkedInRes.map((r) => r.userId).filter(Boolean);
+          const activeTenantIds = checkedInRes
+            .map((r) => r.userId)
+            .filter(Boolean);
 
-          const moveInReading = new MeterReading({
+          const moveInReading = new UtilityReading({
+            utilityType: "electricity",
             roomId: roomId,
             branch: roomDoc.branch,
             reading: meterValue,
@@ -628,7 +658,7 @@ export const updateReservation = async (req, res, next) => {
             tenantId: tenantUserId,
             activeTenantIds,
             recordedBy: adminUser?._id || null,
-            billingPeriodId: bootstrap.period?._id || null,
+            utilityPeriodId: bootstrap.period?._id || null,
           });
           await moveInReading.save();
 
@@ -655,7 +685,10 @@ export const updateReservation = async (req, res, next) => {
       try {
         await updateOccupancyOnReservationChange(updatedReservation, oldData);
       } catch (e) {
-        logger.warn({ err: e, requestId: req.id }, "Occupancy update failed (non-fatal)");
+        logger.warn(
+          { err: e, requestId: req.id },
+          "Occupancy update failed (non-fatal)",
+        );
       }
     }
 
@@ -696,7 +729,10 @@ export const updateReservation = async (req, res, next) => {
             : "TBD",
         });
       } catch (emailErr) {
-        logger.warn({ err: emailErr, requestId: req.id }, "Confirmation email failed (non-fatal)");
+        logger.warn(
+          { err: emailErr, requestId: req.id },
+          "Confirmation email failed (non-fatal)",
+        );
       }
       // In-app notification — reservation confirmed
       try {
@@ -707,7 +743,10 @@ export const updateReservation = async (req, res, next) => {
           updatedReservation.roomId?.name || "your room",
         );
       } catch (notifyErr) {
-        logger.warn({ err: notifyErr, requestId: req.id }, "Reservation confirmed notification failed (non-fatal)");
+        logger.warn(
+          { err: notifyErr, requestId: req.id },
+          "Reservation confirmed notification failed (non-fatal)",
+        );
       }
     }
 
@@ -726,7 +765,10 @@ export const updateReservation = async (req, res, next) => {
           branchName: updatedReservation.roomId?.branch || "Lilycrest",
         });
       } catch (emailErr) {
-        logger.warn({ err: emailErr, requestId: req.id }, "Visit approved email failed (non-fatal)");
+        logger.warn(
+          { err: emailErr, requestId: req.id },
+          "Visit approved email failed (non-fatal)",
+        );
       }
       // In-app notification — visit approved
       try {
@@ -736,7 +778,10 @@ export const updateReservation = async (req, res, next) => {
           updatedReservation.roomId?.branch || "the dormitory",
         );
       } catch (notifyErr) {
-        logger.warn({ err: notifyErr, requestId: req.id }, "Visit approved notification failed (non-fatal)");
+        logger.warn(
+          { err: notifyErr, requestId: req.id },
+          "Visit approved notification failed (non-fatal)",
+        );
       }
     }
 
@@ -750,10 +795,14 @@ export const updateReservation = async (req, res, next) => {
         const { notify } = await import("../utils/notificationService.js");
         await notify.visitRejected(
           updatedReservation.userId._id,
-          updatedReservation.scheduleRejectionReason || "Please reschedule your visit.",
+          updatedReservation.scheduleRejectionReason ||
+            "Please reschedule your visit.",
         );
       } catch (notifyErr) {
-        logger.warn({ err: notifyErr, requestId: req.id }, "Visit rejected notification failed (non-fatal)");
+        logger.warn(
+          { err: notifyErr, requestId: req.id },
+          "Visit rejected notification failed (non-fatal)",
+        );
       }
     }
   } catch (error) {
@@ -814,8 +863,9 @@ export const updateReservationByUser = async (req, res, next) => {
         reservationId,
         { $set: updates },
         { new: true, runValidators: true },
-      ).populate("userId", "firstName lastName email phone")
-       .populate("roomId", "roomNumber roomType floor branch priceMonthly");
+      )
+        .populate("userId", "firstName lastName email phone")
+        .populate("roomId", "roomNumber roomType floor branch priceMonthly");
 
       return res.json({
         message: "Reservation cancelled",
@@ -824,30 +874,49 @@ export const updateReservationByUser = async (req, res, next) => {
 
       // In-app notification — reservation cancelled (fire-and-forget after response)
       if (updated?.userId) {
-        const { notify } = await import("../utils/notificationService.js").catch(() => ({ notify: null }));
+        const { notify } =
+          await import("../utils/notificationService.js").catch(() => ({
+            notify: null,
+          }));
         if (notify) {
-          notify.reservationCancelled(
-            updated.userId,
-            updated.reservationCode || "N/A",
-            updates.cancellationReason || "",
-          ).catch((e) => logger.warn({ err: e, requestId: req.id }, "Cancel notification failed (non-fatal)"));
+          notify
+            .reservationCancelled(
+              updated.userId,
+              updated.reservationCode || "N/A",
+              updates.cancellationReason || "",
+            )
+            .catch((e) =>
+              logger.warn(
+                { err: e, requestId: req.id },
+                "Cancel notification failed (non-fatal)",
+              ),
+            );
         }
       }
     }
 
     // Generate visitCode when visitDate is first set (bypassed by findByIdAndUpdate)
     if (updates.visitDate) {
-      const existingForCode = await Reservation.findById(reservationId).select("visitCode visitScheduledAt").lean();
+      const existingForCode = await Reservation.findById(reservationId)
+        .select("visitCode visitScheduledAt")
+        .lean();
       if (!existingForCode?.visitCode) {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let visitCode = null;
         for (let attempt = 0; attempt < 5; attempt++) {
           let code = "VIS-";
-          for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-          const taken = await Reservation.findOne({ visitCode: code }).select("_id").lean();
-          if (!taken) { visitCode = code; break; }
+          for (let i = 0; i < 6; i++)
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+          const taken = await Reservation.findOne({ visitCode: code })
+            .select("_id")
+            .lean();
+          if (!taken) {
+            visitCode = code;
+            break;
+          }
         }
-        updates.visitCode = visitCode || ("VIS-" + Date.now().toString(36).toUpperCase().slice(-6));
+        updates.visitCode =
+          visitCode || "VIS-" + Date.now().toString(36).toUpperCase().slice(-6);
       }
       // Stamp the submission time — this is "when the tenant scheduled the visit",
       // NOT the visit appointment date. Always refresh on rescheduling too.
@@ -864,11 +933,14 @@ export const updateReservationByUser = async (req, res, next) => {
         visitTime: updates.visitTime || reservation.visitTime,
         status: { $in: ["visit_pending", "visit_approved"] },
         isArchived: { $ne: true },
-      }).select("_id visitDate visitTime").lean();
+      })
+        .select("_id visitDate visitTime")
+        .lean();
 
       if (conflicting) {
         return res.status(409).json({
-          error: "This time slot is already taken. Please choose a different date or time.",
+          error:
+            "This time slot is already taken. Please choose a different date or time.",
           code: "VISIT_SLOT_CONFLICT",
           conflict: {
             visitDate: conflicting.visitDate,
@@ -880,7 +952,11 @@ export const updateReservationByUser = async (req, res, next) => {
 
     // ── Status-driven auto-transitions ──────────────────────
     // Reset rejection state when tenant reschedules after a rejection
-    if (updates.visitDate && updates.agreedToPrivacy && reservation.scheduleRejected) {
+    if (
+      updates.visitDate &&
+      updates.agreedToPrivacy &&
+      reservation.scheduleRejected
+    ) {
       updates.scheduleRejected = false;
       updates.scheduleRejectionReason = null;
       updates.scheduleRejectedAt = null;
@@ -938,7 +1014,10 @@ export const updateReservationByUser = async (req, res, next) => {
       reservation: updatedReservation,
     });
   } catch (error) {
-    logger.error({ err: error, requestId: req.id }, "User reservation update error");
+    logger.error(
+      { err: error, requestId: req.id },
+      "User reservation update error",
+    );
     handleReservationError(res, error, "update");
   }
 };
@@ -968,7 +1047,10 @@ export const deleteReservation = async (req, res, next) => {
         error: "Access denied. You can only delete your own reservation.",
         code: "RESERVATION_ACCESS_DENIED",
       });
-    if (dbUser.role === "branch_admin" && reservation.roomId?.branch !== dbUser.branch)
+    if (
+      dbUser.role === "branch_admin" &&
+      reservation.roomId?.branch !== dbUser.branch
+    )
       return res.status(403).json({
         error: `Access denied. You can only manage reservations for ${dbUser.branch} branch.`,
         code: "BRANCH_ACCESS_DENIED",
@@ -978,17 +1060,22 @@ export const deleteReservation = async (req, res, next) => {
 
     // Release occupancy — use toObject() to avoid Mongoose getter issues with spread
     const hadOccupancy =
-      reservation.status === "reserved" ||
-      reservation.status === "checked-in";
+      reservation.status === "reserved" || reservation.status === "checked-in";
     if (hadOccupancy) {
       try {
         await updateOccupancyOnReservationChange(
           { ...reservationData, status: "cancelled" },
           reservationData,
         );
-        logger.info({ requestId: req.id, reservationId }, `Occupancy released (was ${reservation.status})`);
+        logger.info(
+          { requestId: req.id, reservationId },
+          `Occupancy released (was ${reservation.status})`,
+        );
       } catch (e) {
-        logger.warn({ err: e, requestId: req.id }, "Occupancy release during deletion failed");
+        logger.warn(
+          { err: e, requestId: req.id },
+          "Occupancy release during deletion failed",
+        );
       }
     }
 
@@ -999,11 +1086,18 @@ export const deleteReservation = async (req, res, next) => {
     // MUST run AFTER deletion — otherwise it recounts the deleted reservation
     if (reservation.roomId?._id) {
       try {
-        const { recalculateRoomOccupancy } = await import("../utils/occupancyManager.js");
+        const { recalculateRoomOccupancy } =
+          await import("../utils/occupancyManager.js");
         await recalculateRoomOccupancy(reservation.roomId._id);
-        logger.info({ requestId: req.id, roomId: reservation.roomId._id }, "Recalculated room occupancy after deletion");
+        logger.info(
+          { requestId: req.id, roomId: reservation.roomId._id },
+          "Recalculated room occupancy after deletion",
+        );
       } catch (e) {
-        logger.warn({ err: e, requestId: req.id }, "Occupancy recalculation failed");
+        logger.warn(
+          { err: e, requestId: req.id },
+          "Occupancy recalculation failed",
+        );
       }
     }
 
@@ -1195,7 +1289,10 @@ export const archiveReservation = async (req, res, next) => {
           status: prevStatus,
         });
       } catch (e) {
-        logger.warn({ err: e, requestId: req.id }, "Occupancy update during archive failed");
+        logger.warn(
+          { err: e, requestId: req.id },
+          "Occupancy update during archive failed",
+        );
       }
     }
 
@@ -1229,7 +1326,10 @@ export const archiveReservation = async (req, res, next) => {
       reservation,
     });
   } catch (error) {
-    logger.error({ err: error, requestId: req.id }, "Archive reservation error");
+    logger.error(
+      { err: error, requestId: req.id },
+      "Archive reservation error",
+    );
     await auditLogger.logError(req, error, "Failed to archive reservation");
     handleReservationError(res, error, "archive");
   }
@@ -1322,7 +1422,11 @@ export const renewContract = async (req, res, next) => {
 export const checkoutReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
-    const { notes: checkoutNotes = "", inspectionPassed = true, meterReading } = req.body;
+    const {
+      notes: checkoutNotes = "",
+      inspectionPassed = true,
+      meterReading,
+    } = req.body;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId)
@@ -1376,111 +1480,76 @@ export const checkoutReservation = async (req, res, next) => {
       reservationId: reservation._id,
     });
 
-    // 4. Auto-record move-out meter reading + recompute billing (if provided)
+    // 4. Auto-record move-out electricity reading (if provided)
     let electricityResult = null;
-    if (meterReading != null && !isNaN(Number(meterReading)) && reservation.roomId?._id) {
+    if (
+      meterReading != null &&
+      !isNaN(Number(meterReading)) &&
+      reservation.roomId?._id
+    ) {
       try {
-        // Find the admin's DB record for recordedBy
-        const adminUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-
-        // Find active billing period for the room
-        const activePeriod = await BillingPeriod.findOne({
-          roomId: reservation.roomId._id,
-          status: "open",
-          isArchived: false,
+        const adminUser = await User.findOne({
+          firebaseUid: req.user.uid,
         }).lean();
+        const roomDoc = await Room.findById(reservation.roomId._id).lean();
+        const checkoutReading = Number(meterReading);
+        const checkoutDate = new Date();
 
-        if (activePeriod) {
-          // Record the move-out reading
-          const moveOutReading = new MeterReading({
+        if (roomDoc) {
+          const bootstrap = await ensureOpenUtilityPeriodForRoom({
+            utilityType: "electricity",
+            room: roomDoc,
+            anchorDate: checkoutDate,
+            anchorReading: checkoutReading,
+          });
+
+          const checkedInRes = await Reservation.find({
             roomId: reservation.roomId._id,
-            branch: reservation.roomId.branch,
-            reading: Number(meterReading),
-            date: new Date(),
+            status: "checked-in",
+            isArchived: { $ne: true },
+          })
+            .select("userId")
+            .lean();
+          const activeTenantIds = checkedInRes
+            .map((entry) => entry.userId)
+            .filter(Boolean);
+
+          const moveOutReading = new UtilityReading({
+            utilityType: "electricity",
+            roomId: reservation.roomId._id,
+            branch: roomDoc.branch,
+            reading: checkoutReading,
+            date: checkoutDate,
             eventType: "move-out",
             tenantId: userId,
-            activeTenantIds: [],
+            activeTenantIds,
             recordedBy: adminUser?._id || null,
-            billingPeriodId: activePeriod._id,
+            utilityPeriodId: bootstrap.period?._id || null,
           });
           await moveOutReading.save();
 
-          // Fetch all readings for re-computation
-          const allReadings = await MeterReading.find({
-            roomId: reservation.roomId._id,
-            isArchived: false,
-            date: { $gte: activePeriod.startDate },
-          }).sort({ date: 1, createdAt: 1 }).lean();
-
-          // Build tenant events from reservations
-          const reservations = await Reservation.find({
-            roomId: reservation.roomId._id,
-            status: { $in: ["checked-in", "checked-out"] },
-            isArchived: { $ne: true },
-          }).populate("userId", "firstName lastName").lean();
-
-          const tenantMap = new Map();
-          for (const res of reservations) {
-            if (!res.userId) continue;
-            const key = String(res.userId._id);
-            if (!tenantMap.has(key)) {
-              tenantMap.set(key, {
-                tenantId: key,
-                tenantName: `${res.userId.firstName || ""} ${res.userId.lastName || ""}`.trim() || "Tenant",
-                moveInReading: 0,
-                moveOutReading: null,
-              });
-            }
-          }
-          for (const r of allReadings) {
-            if (!r.tenantId) continue;
-            const key = String(r.tenantId);
-            if (r.eventType === "move-in" && tenantMap.has(key)) tenantMap.get(key).moveInReading = r.reading;
-            if (r.eventType === "move-out" && tenantMap.has(key)) tenantMap.get(key).moveOutReading = r.reading;
-          }
-
-          // Use start reading as end for partial (open period) computation
-          const lastReading = allReadings[allReadings.length - 1]?.reading || activePeriod.startReading;
-
-          const computed = computeBilling({
-            meterReadings: allReadings.map((r) => ({ date: r.date, reading: r.reading, eventType: r.eventType })),
-            tenantEvents: Array.from(tenantMap.values()),
-            ratePerKwh: activePeriod.ratePerKwh,
-            startReading: activePeriod.startReading,
-            endReading: lastReading,
-          });
-
-          // Upsert the BillingResult (partial/preview)
-          await BillingResult.findOneAndUpdate(
-            { billingPeriodId: activePeriod._id },
-            {
-              roomId: reservation.roomId._id,
-              branch: reservation.roomId.branch,
-              computedBy: adminUser?._id || null,
-              computedAt: new Date(),
-              ratePerKwh: activePeriod.ratePerKwh,
-              totalRoomKwh: computed.totalRoomKwh,
-              totalRoomCost: computed.totalRoomCost,
-              verified: computed.verified,
-              segments: computed.segments,
-              tenantSummaries: computed.tenantSummaries,
-            },
-            { upsert: true, new: true },
-          );
-
           electricityResult = {
-            tenantName: `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim(),
-            meterReading: Number(meterReading),
-            partialKwh: computed.totalRoomKwh,
+            tenantName:
+              `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim(),
+            meterReading: checkoutReading,
+            utilityPeriodId: bootstrap.period?._id || null,
           };
 
-          logger.info({ requestId: req.id, reservationId, meterReading }, "Auto-recorded move-out reading and recomputed billing");
+          logger.info(
+            { requestId: req.id, reservationId, meterReading },
+            "Auto-recorded move-out electricity reading on checkout",
+          );
         } else {
-          logger.info({ requestId: req.id }, "No open billing period found for room — move-out reading skipped");
+          logger.info(
+            { requestId: req.id },
+            "No room found for checkout electricity reading",
+          );
         }
       } catch (elecErr) {
-        // Non-fatal — checkout still succeeds
-        logger.warn({ err: elecErr, requestId: req.id }, "Auto electricity record failed (non-fatal)");
+        logger.warn(
+          { err: elecErr, requestId: req.id },
+          "Auto move-out electricity record failed (non-fatal)",
+        );
       }
     }
 
@@ -1557,14 +1626,25 @@ export const transferTenant = async (req, res, next) => {
     // Validate new room
     const newRoom = await Room.findById(newRoomId);
     if (!newRoom)
-      return res.status(404).json({ error: "New room not found", code: "NEW_ROOM_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ error: "New room not found", code: "NEW_ROOM_NOT_FOUND" });
 
     // Check bed availability
-    const newBed = newRoom.beds?.find((b) => String(b._id) === String(newBedId));
+    const newBed = newRoom.beds?.find(
+      (b) => String(b._id) === String(newBedId),
+    );
     if (!newBed)
-      return res.status(404).json({ error: "Bed not found in new room", code: "BED_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ error: "Bed not found in new room", code: "BED_NOT_FOUND" });
     if (newBed.status !== "available")
-      return res.status(400).json({ error: "Selected bed is not available", code: "BED_NOT_AVAILABLE" });
+      return res
+        .status(400)
+        .json({
+          error: "Selected bed is not available",
+          code: "BED_NOT_AVAILABLE",
+        });
 
     const oldData = reservation.toObject();
     const oldRoomName = reservation.roomId?.name || "unknown";
@@ -1589,7 +1669,10 @@ export const transferTenant = async (req, res, next) => {
 
     // 3. Update reservation
     reservation.roomId = newRoom._id;
-    reservation.selectedBed = { id: newBedId, position: newBed.position || null };
+    reservation.selectedBed = {
+      id: newBedId,
+      position: newBed.position || null,
+    };
     reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Transferred from ${oldRoomName} to ${newRoom.name}. ${reason}`;
     await reservation.save();
 
@@ -1658,18 +1741,28 @@ export const getMyContract = async (req, res) => {
     const leaseStart = dayjs(reservation.checkInDate);
     const leaseDuration = reservation.leaseDuration || 12;
     const leaseEnd = leaseStart.add(leaseDuration, "month");
-    const monthsCompleted = Math.min(now.diff(leaseStart, "month"), leaseDuration);
+    const monthsCompleted = Math.min(
+      now.diff(leaseStart, "month"),
+      leaseDuration,
+    );
     const daysRemaining = Math.max(leaseEnd.diff(now, "day"), 0);
     const totalDays = leaseEnd.diff(leaseStart, "day");
     const daysElapsed = now.diff(leaseStart, "day");
-    const progressPercent = Math.min(Math.round((daysElapsed / totalDays) * 100), 100);
+    const progressPercent = Math.min(
+      Math.round((daysElapsed / totalDays) * 100),
+      100,
+    );
 
     // Determine contract status
     let contractStatus = "active";
     if (daysRemaining <= 0) contractStatus = "expired";
     else if (daysRemaining <= 30) contractStatus = "expiring";
 
-    const monthlyRent = reservation.monthlyRent || reservation.totalPrice || reservation.roomId?.price || 0;
+    const monthlyRent =
+      reservation.monthlyRent ||
+      reservation.totalPrice ||
+      reservation.roomId?.price ||
+      0;
 
     res.json({
       contractStatus,

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================================
  * ELECTRICITY BILLING CONTROLLER
  * ============================================================================
@@ -12,7 +12,7 @@
  * Handles all segment-based electricity billing operations.
  * Separate from billingController.js to avoid breaking existing payment flows.
  *
- * MIDDLEWARE CHAIN: verifyToken → verifyAdmin → filterByBranch → handler
+ * MIDDLEWARE CHAIN: verifyToken ΓåÆ verifyAdmin ΓåÆ filterByBranch ΓåÆ handler
  * (Tenant endpoints only need verifyToken)
  *
  * ============================================================================
@@ -60,7 +60,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/* ─── shared helpers ─────────────────────────────── */
+/* ΓöÇΓöÇΓöÇ shared helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 
 /** Get admin's role and branch from MongoDB */
 async function getAdminInfo(req) {
@@ -1245,8 +1245,8 @@ export const getMyElectricityBills = async (req, res, next) => {
       if (r.segments && r.segments.length > 0) {
           const firstLab = r.segments[0].periodLabel || "";
           const lastLab = r.segments[r.segments.length - 1].periodLabel || "";
-          const splitChar1 = firstLab.includes("–") ? "–" : "-";
-          const splitChar2 = lastLab.includes("–") ? "–" : "-";
+          const splitChar1 = firstLab.includes("ΓÇô") ? "ΓÇô" : "-";
+          const splitChar2 = lastLab.includes("ΓÇô") ? "ΓÇô" : "-";
           
           const sDateStr = firstLab.split(splitChar1)[0]?.trim();
           const eDateStr = lastLab.split(splitChar2)[1]?.trim();
@@ -1618,7 +1618,7 @@ async function buildTenantEventsFromReadings(roomId, readings, periodStartReadin
 
     if (reading.eventType === "move-in") {
       if (!tenantMap.has(key)) {
-        // New tenant — find their name
+        // New tenant ΓÇö find their name
         const user = await User.findById(reading.tenantId)
           .select("firstName lastName")
           .lean();
@@ -1769,7 +1769,7 @@ export const getDraftBills = async (req, res, next) => {
 
 /**
  * PATCH /api/electricity/periods/:periodId/send-bills
- * Send all draft bills for a period — flips to pending and emails tenants.
+ * Send all draft bills for a period ΓÇö flips to pending and emails tenants.
  */
 export const sendBills = async (req, res, next) => {
   try {
@@ -1839,9 +1839,9 @@ export const sendBills = async (req, res, next) => {
 
     for (const bill of draftBills) {
 
-      // ── PDF Generation (non-fatal) ───────────────────────────────────────
+      // ΓöÇΓöÇ PDF Generation (non-fatal) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       // Generate a PDF billing statement for this tenant.
-      // If PDF generation fails for any reason, we log it and continue —
+      // If PDF generation fails for any reason, we log it and continue ΓÇö
       // the bill has already been sent and the email will still go out.
       // Admin can regenerate via POST /api/electricity/bills/:billId/regenerate-pdf
       try {
@@ -1862,11 +1862,11 @@ export const sendBills = async (req, res, next) => {
       } catch (pdfErr) {
         logger.warn(
           { err: pdfErr, billId: bill._id },
-          "PDF generation failed (non-fatal) — bill sent without PDF",
+          "PDF generation failed (non-fatal) ΓÇö bill sent without PDF",
         );
       }
 
-      // ── Email notification ───────────────────────────────────────────────
+      // ΓöÇΓöÇ Email notification ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       try {
         const tenant = await User.findById(bill.userId).lean();
         if (tenant?.email) {
@@ -2124,7 +2124,7 @@ export const regenerateBillPdf = async (req, res, next) => {
 
     if (!billingResult) {
       return res.status(404).json({
-        error: "No billing result found for this bill — cannot generate PDF",
+        error: "No billing result found for this bill ΓÇö cannot generate PDF",
       });
     }
 

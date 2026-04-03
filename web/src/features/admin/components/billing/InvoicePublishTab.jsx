@@ -61,7 +61,6 @@ const InvoicePublishTab = () => {
   const [readinessData, setReadinessData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [publishing, setPublishing] = useState({}); // { [roomId]: true }
-  const [publishedRooms, setPublishedRooms] = useState(new Set());
   const [expandedRoomId, setExpandedRoomId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", onConfirm: null });
 
@@ -84,16 +83,16 @@ const InvoicePublishTab = () => {
   // Rooms split by readiness
   const rooms = readinessData?.rooms || [];
   const readyRooms = useMemo(
-    () => rooms.filter((r) => r.isReadyToPublish && !publishedRooms.has(String(r.roomId))),
-    [rooms, publishedRooms],
+    () => rooms.filter((r) => r.publishState === "ready"),
+    [rooms],
   );
   const blockedRooms = useMemo(
-    () => rooms.filter((r) => !r.isReadyToPublish && !publishedRooms.has(String(r.roomId))),
-    [rooms, publishedRooms],
+    () => rooms.filter((r) => r.publishState === "blocked"),
+    [rooms],
   );
   const sentRooms = useMemo(
-    () => rooms.filter((r) => publishedRooms.has(String(r.roomId))),
-    [rooms, publishedRooms],
+    () => rooms.filter((r) => r.publishState === "issued"),
+    [rooms],
   );
 
   const handlePublishRoom = (room) => {
@@ -109,10 +108,14 @@ const InvoicePublishTab = () => {
         try {
           const res = await invoiceApi.publishRoom(room.roomId);
           if (res.published > 0) {
-            setPublishedRooms((p) => new Set([...p, String(room.roomId)]));
             notify.success(`${res.published} invoice${res.published !== 1 ? "s" : ""} published for ${room.roomName}.`);
+            if (res.partialFailures?.length > 0) {
+              notify.warn(`${res.partialFailures.length} invoice${res.partialFailures.length !== 1 ? "s" : ""} had delivery issues. Check the server logs or bill metadata.`);
+            }
+            await loadReadiness();
           } else {
             notify.warn(`No draft bills found for ${room.roomName}. They may have already been published.`);
+            await loadReadiness();
           }
         } catch (err) {
           notify.error(err, `Failed to publish bills for ${room.roomName}.`);
@@ -141,8 +144,10 @@ const InvoicePublishTab = () => {
           try {
             const res = await invoiceApi.publishRoom(room.roomId);
             if (res.published > 0) {
-              setPublishedRooms((p) => new Set([...p, String(room.roomId)]));
               successCount++;
+              if (res.partialFailures?.length > 0) {
+                notify.warn(`${room.roomName} published with delivery issues on ${res.partialFailures.length} bill${res.partialFailures.length !== 1 ? "s" : ""}.`);
+              }
             }
           } catch (err) {
             notify.warn(`Failed for ${room.roomName}: ${err?.message || "Unknown error"}`);
@@ -153,6 +158,7 @@ const InvoicePublishTab = () => {
         if (successCount > 0) {
           notify.success(`Published invoices for ${successCount} room${successCount !== 1 ? "s" : ""}.`);
         }
+        await loadReadiness();
       },
     });
   };
@@ -186,7 +192,7 @@ const InvoicePublishTab = () => {
 
           <div className="ipt-row__badges">
             <UtilityBadge type="electricity" status={room.electricityStatus} />
-            {room.waterStatus !== "n/a" && (
+            {room.waterApplicable && room.waterStatus !== "n/a" && (
               <UtilityBadge type="water" status={room.waterStatus} />
             )}
           </div>
@@ -244,15 +250,21 @@ const InvoicePublishTab = () => {
                   {room.electricityStatus}
                 </span>
               </div>
-              <div className="ipt-detail-item">
-                <span className="ipt-detail-label">Water</span>
-                <span className={`ipt-detail-val ipt-detail-val--${room.waterStatus}`}>
-                  {room.waterStatus === "n/a" ? "Not billed" : room.waterStatus}
-                </span>
-              </div>
+              {room.waterApplicable && (
+                <div className="ipt-detail-item">
+                  <span className="ipt-detail-label">Water</span>
+                  <span className={`ipt-detail-val ipt-detail-val--${room.waterStatus}`}>
+                    {room.waterStatus}
+                  </span>
+                </div>
+              )}
               <div className="ipt-detail-item">
                 <span className="ipt-detail-label">Draft Bills</span>
                 <span className="ipt-detail-val">{room.draftBillCount}</span>
+              </div>
+              <div className="ipt-detail-item">
+                <span className="ipt-detail-label">Issued Bills</span>
+                <span className="ipt-detail-val">{room.issuedBillCount || 0}</span>
               </div>
               <div className="ipt-detail-item">
                 <span className="ipt-detail-label">Room Type</span>
@@ -282,6 +294,23 @@ const InvoicePublishTab = () => {
         onClose={() => setConfirmModal((p) => ({ ...p, open: false }))}
       />
 
+      {/* Summary strip */}
+      <div className="ipt-summary-strip">
+        <div className="ipt-summary-strip__counts">
+          <span className="ipt-summary-count ipt-summary-count--ready">{readyRooms.length} ready</span>
+          <span className="ipt-summary-count ipt-summary-count--blocked">{blockedRooms.length} blocked</span>
+          <span className="ipt-summary-count ipt-summary-count--sent">{sentRooms.length} sent</span>
+        </div>
+        {readyRooms.length > 0 && (
+          <button
+            className="ipt-btn ipt-btn--publish-all"
+            onClick={handlePublishAll}
+            disabled={Object.values(publishing).some(Boolean)}
+          >
+            <Send size={14} /> Publish All Ready ({readyRooms.length})
+          </button>
+        )}
+      </div>
       {/* Header toolbar */}
       <div className="ipt-toolbar">
         <div className="ipt-toolbar__meta">
@@ -293,7 +322,7 @@ const InvoicePublishTab = () => {
             <select
               className="ipt-select"
               value={branchFilter}
-              onChange={(e) => { setBranchFilter(e.target.value); setPublishedRooms(new Set()); setReadinessData(null); }}
+              onChange={(e) => { setBranchFilter(e.target.value); setReadinessData(null); }}
             >
               <option value="">All Branches</option>
               <option value="gil-puyat">Gil-Puyat</option>
@@ -302,22 +331,12 @@ const InvoicePublishTab = () => {
           )}
           <button
             className="ipt-btn ipt-btn--outline"
-            onClick={() => { setPublishedRooms(new Set()); loadReadiness(); }}
+            onClick={() => { loadReadiness(); }}
             disabled={loading}
           >
             <RefreshCw size={13} className={loading ? "ipt-spin" : ""} />
             {loading ? "Loading..." : "Refresh"}
           </button>
-          {readyRooms.length > 0 && (
-            <button
-              className="ipt-btn ipt-btn--primary ipt-btn--publish-all"
-              onClick={handlePublishAll}
-              disabled={Object.values(publishing).some(Boolean)}
-            >
-              <Send size={14} />
-              Publish All Ready ({readyRooms.length})
-            </button>
-          )}
         </div>
       </div>
 

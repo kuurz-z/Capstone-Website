@@ -53,9 +53,27 @@ const paymentSchema = new mongoose.Schema(
       enum: ["bank", "gcash", "card", "check", "cash", "paymongo"],
       required: true,
     },
+    source: {
+      type: String,
+      enum: ["admin-manual", "tenant-proof", "paymongo-polling", "paymongo-webhook"],
+      default: "admin-manual",
+      index: true,
+    },
     referenceNumber: {
       type: String,
       default: null,
+    },
+    externalPaymentId: {
+      type: String,
+      default: null,
+    },
+    processedAt: {
+      type: Date,
+      default: null,
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     proofImageUrl: {
       type: String,
@@ -111,6 +129,13 @@ const paymentSchema = new mongoose.Schema(
 paymentSchema.index({ tenantId: 1, createdAt: -1 });
 paymentSchema.index({ billId: 1, status: 1 });
 paymentSchema.index({ branch: 1, createdAt: -1 });
+paymentSchema.index(
+  { externalPaymentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { externalPaymentId: { $type: "string" } },
+  },
+);
 
 // ============================================================================
 // STATICS

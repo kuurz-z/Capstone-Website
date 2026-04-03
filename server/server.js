@@ -16,47 +16,7 @@
  * ============================================================================
  */
 
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import helmet from "helmet";
-import compression from "compression";
-import mongoose from "mongoose";
-
-// --- Config ---
-import connectDB from "./config/database.js";
-
-// --- Middleware ---
-import requestId from "./middleware/requestId.js";
-import { requestLogger } from "./middleware/logger.js";
-import logger from "./middleware/logger.js";
-import {
-  globalLimiter,
-  authLimiter,
-  publicLimiter,
-} from "./middleware/rateLimiter.js";
-import { globalErrorHandler } from "./middleware/errorHandler.js";
-
-// --- Routes ---
-/**
- * ============================================================================
- * LILYCREST DORMITORY MANAGEMENT SYSTEM — SERVER
- * ============================================================================
- *
- * Production-grade Express.js server with:
- * - Security headers (Helmet)
- * - Rate limiting (tiered)
- * - Request ID tracing
- * - Structured JSON logging (Pino)
- * - Response compression (gzip/brotli)
- * - Standardized error handling
- * - Deep health checks
- * - Graceful shutdown
- *
- * ============================================================================
- */
-
-import express from "express";
+import express from "express"; // trigger restart
 import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -85,7 +45,6 @@ import reservationRoutes from "./routes/reservationsRoutes.js";
 import inquiryRoutes from "./routes/inquiriesRoutes.js";
 import auditRoutes from "./routes/auditRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
-import billingPoliciesRoutes from "./routes/billingPoliciesRoutes.js";
 import forceRentRoute from "./routes/forceRentRoute.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import maintenanceRoutes from "./routes/maintenanceRoutes.js";
@@ -94,8 +53,7 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
 import digitalTwinRoutes from "./routes/digitalTwinRoutes.js";
-import electricityRoutes from "./routes/electricityRoutes.js";
-import waterRoutes from "./routes/waterRoutes.js";
+import utilityBillingRoutes from "./routes/utilityBillingRoutes.js";
 import financialRoutes from "./routes/financialRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 
@@ -248,7 +206,6 @@ app.use("/api/reservations", reservationRoutes);
 app.use("/api/inquiries", publicLimiter, inquiryRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/billing", billingRoutes);
-app.use("/api/billing-policies", billingPoliciesRoutes);
 app.use(forceRentRoute);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
@@ -256,8 +213,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/digital-twin", digitalTwinRoutes);
-app.use("/api/electricity", electricityRoutes);
-app.use("/api/water", waterRoutes);
+app.use("/api/utilities", utilityBillingRoutes);
 app.use("/api/financial", financialRoutes);
 app.use("/api/settings", settingsRoutes);
 
