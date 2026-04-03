@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Zap, Droplets, Send } from "lucide-react";
-import ElectricityBillingTab from "../components/billing/ElectricityBillingTab";
-import WaterBillingTab from "../components/billing/WaterBillingParityTab";
+import { Droplets, Send, Zap } from "lucide-react";
+import UtilityBillingTab from "../components/billing/UtilityBillingTab";
 import InvoicePublishTab from "../components/billing/InvoicePublishTab";
 import "./AdminBillingPage.css";
 
@@ -14,20 +13,24 @@ const tabs = [
 const AdminBillingPage = () => {
   const [activeTab, setActiveTab] = useState("electricity");
 
+  // Visual contract:
+  // hero shell + tablist + workspace panel
   return (
     <div className="admin-billing-page">
-      <div className="admin-billing-page__header">
-        <div>
-          <h1 className="admin-billing-page__heading">
-            <Zap size={18} />
-            Billing Management
-          </h1>
+      <header className="admin-billing-page__hero">
+        <div className="admin-billing-page__hero-copy">
+          <span className="admin-billing-page__eyebrow">Billing Workspace</span>
+          <h1 className="admin-billing-page__heading">Billing Management</h1>
           <p className="admin-billing-page__subtitle">
-            Manage electricity and water billing — then publish invoices to tenants
+            Manage utility cycles, review tenant splits, and publish invoices from one workspace.
           </p>
         </div>
 
-        <div className="admin-billing-tabs" role="tablist" aria-label="Billing type">
+        <div
+          className="admin-billing-page__hero-actions admin-billing-page__workspace-tabs"
+          role="tablist"
+          aria-label="Billing type"
+        >
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -47,11 +50,13 @@ const AdminBillingPage = () => {
             );
           })}
         </div>
-      </div>
+      </header>
 
-      {activeTab === "electricity" && <ElectricityBillingTab />}
-      {activeTab === "water" && <WaterBillingTab />}
-      {activeTab === "invoices" && <InvoicePublishTab />}
+      <section className="admin-billing-page__workspace-panel">
+        {activeTab === "electricity" && <UtilityBillingTab utilityType="electricity" />}
+        {activeTab === "water" && <UtilityBillingTab utilityType="water" />}
+        {activeTab === "invoices" && <InvoicePublishTab />}
+      </section>
     </div>
   );
 };
