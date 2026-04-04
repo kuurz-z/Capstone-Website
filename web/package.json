@@ -10,6 +10,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.13.4",
+    "capstone-website": "file:..",
     "dayjs": "^1.11.13",
     "firebase": "^12.8.0",
     "framer-motion": "^12.34.0",

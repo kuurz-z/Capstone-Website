@@ -29,14 +29,14 @@ export function StorytellingSection() {
               className="inline-block text-white px-8 py-4 rounded-full font-medium transition-all duration-300"
               style={{
                 backgroundColor: 'var(--lp-accent)',
-                boxShadow: '0 4px 16px rgba(255, 140, 66, 0.25)',
+                boxShadow: '0 4px 16px rgba(212, 175, 55, 0.25)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 8px 24px rgba(255, 140, 66, 0.35)';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(212, 175, 55, 0.35)';
                 e.currentTarget.style.transform = 'translateY(-2px)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(255, 140, 66, 0.25)';
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(212, 175, 55, 0.25)';
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >

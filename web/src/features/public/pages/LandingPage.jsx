@@ -56,7 +56,7 @@ function LandingPageContent() {
           Object.assign(e.currentTarget.style, {
             position: "fixed", left: "16px", top: "16px",
             width: "auto", height: "auto", overflow: "visible",
-            padding: "12px 24px", backgroundColor: "#FF8C42",
+            padding: "12px 24px", backgroundColor: "var(--lp-accent)",
             color: "white", borderRadius: "8px", fontWeight: "600",
             fontSize: "14px", textDecoration: "none",
             boxShadow: "0 4px 12px rgba(0,0,0,0.3)",

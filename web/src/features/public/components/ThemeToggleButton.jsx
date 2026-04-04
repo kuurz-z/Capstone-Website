@@ -66,17 +66,20 @@ export default function ThemeToggleButton({ variant = "hero" }) {
 
   /* ── Desktop variants: hero & scrolled ── */
   const isHero = variant === "hero";
+  const isLight = !isDark;
 
   const btnStyles = {
     position: "relative",
     width: "36px",
     height: "36px",
     borderRadius: "50%",
-    backgroundColor: isHero ? "rgba(255,255,255,0.1)" : "var(--lp-icon-bg)",
-    border: isHero
-      ? "1.5px solid rgba(255,255,255,0.2)"
-      : "1px solid var(--lp-border)",
-    color: isHero ? "white" : "var(--lp-text)",
+    backgroundColor: isHero
+      ? (isLight ? "rgba(212, 175, 55, 0.12)" : "rgba(255,255,255,0.1)")
+      : (isLight ? "rgba(212, 175, 55, 0.12)" : "var(--lp-icon-bg)"),
+    border: isLight
+      ? "1.5px solid var(--lp-accent)"
+      : (isHero ? "1.5px solid rgba(255,255,255,0.2)" : "1px solid var(--lp-border)"),
+    color: isLight ? "var(--lp-accent)" : (isHero ? "white" : "var(--lp-text)"),
     cursor: "pointer",
     padding: 0,
     display: "flex",
@@ -94,21 +97,24 @@ export default function ThemeToggleButton({ variant = "hero" }) {
       aria-label="Toggle theme"
       style={btnStyles}
       onMouseEnter={(e) => {
-        if (isHero) {
+        if (isLight) {
+          e.currentTarget.style.backgroundColor = "rgba(212, 175, 55, 0.18)";
+          e.currentTarget.style.borderColor = "var(--lp-accent)";
+        } else if (isHero) {
           e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.2)";
           e.currentTarget.style.borderColor = "rgba(255,255,255,0.4)";
         } else {
-          e.currentTarget.style.backgroundColor = "rgba(255, 140, 66, 0.15)";
+          e.currentTarget.style.backgroundColor = "rgba(212, 175, 55, 0.15)";
           e.currentTarget.style.borderColor = "var(--lp-accent)";
         }
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = isHero
-          ? "rgba(255,255,255,0.1)"
-          : "var(--lp-icon-bg)";
-        e.currentTarget.style.borderColor = isHero
-          ? "rgba(255,255,255,0.2)"
-          : "var(--lp-border)";
+          ? (isLight ? "rgba(212, 175, 55, 0.12)" : "rgba(255,255,255,0.1)")
+          : (isLight ? "rgba(212, 175, 55, 0.12)" : "var(--lp-icon-bg)");
+        e.currentTarget.style.borderColor = isLight
+          ? "var(--lp-accent)"
+          : (isHero ? "rgba(255,255,255,0.2)" : "var(--lp-border)");
       }}
     >
       <span className="theme-toggle-icon-wrapper">

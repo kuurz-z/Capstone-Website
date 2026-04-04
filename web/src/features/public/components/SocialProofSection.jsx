@@ -76,7 +76,7 @@ function TestimonialCard({ t }) {
           <Star
             key={j}
             className="w-4 h-4 fill-current"
-            style={{ color: "#FF8C42" }}
+            style={{ color: "var(--lp-accent)" }}
           />
         ))}
       </div>

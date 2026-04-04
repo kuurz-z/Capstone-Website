@@ -37,7 +37,7 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import { auth } from "../../firebase/config";
+import { auth, isFirebaseConfigured } from "../../firebase/config";
 import { onIdTokenChanged, signOut as firebaseSignOut } from "firebase/auth";
 
 // Default context value for TypeScript-like type safety
@@ -63,6 +63,13 @@ export function FirebaseAuthProvider({ children }) {
 
   // Listen for auth state and token changes
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setUser(null);
+      setIdToken(null);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
