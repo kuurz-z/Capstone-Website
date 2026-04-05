@@ -32,6 +32,14 @@ export function useUtilityReadings(utilityType, roomId) {
   });
 }
 
+export function useRoomHistory(utilityType, roomId) {
+  return useQuery({
+    queryKey: [...utilityKeys.all(utilityType), "roomHistory", roomId],
+    queryFn: () => utilityApi.getRoomHistory(utilityType, roomId),
+    enabled: !!utilityType && !!roomId,
+  });
+}
+
 export function useUtilityLatestReading(utilityType, roomId) {
   return useQuery({
     queryKey: utilityKeys.latestReading(utilityType, roomId),

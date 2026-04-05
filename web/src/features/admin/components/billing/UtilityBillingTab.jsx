@@ -20,6 +20,7 @@ import {
   useDeleteUtilityReading,
   useUpdateUtilityReading,
   useDeleteUtilityPeriod,
+  useRoomHistory,
 } from "../../../../shared/hooks/queries/useUtility";
 import { utilityApi } from "../../../../shared/api/utilityApi.js";
 import { useBusinessSettings } from "../../../../shared/hooks/queries/useSettings";
@@ -164,8 +165,10 @@ const UtilityBillingTab = ({ utilityType }) => {
   // Pagination
   const PERIODS_PER_PAGE = 5;
   const READINGS_PER_PAGE = 7;
+  const HISTORY_PER_PAGE = 5;
   const [periodsPage, setPeriodsPage] = useState(1);
   const [readingsPage, setReadingsPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const hasAutoSelectedPeriodRef = useRef(false);
 
   // Form state - billing periods default to 15th-to-15th cycle
@@ -194,6 +197,7 @@ const UtilityBillingTab = ({ utilityType }) => {
   const { data: latestData } = useUtilityLatestReading(utilityType, selectedRoomId);
   const { data: periodsData } = useUtilityPeriods(utilityType, selectedRoomId);
   const { data: resultData } = useUtilityResult(utilityType, selectedPeriodId);
+  const { data: roomHistoryData } = useRoomHistory(utilityType, selectedRoomId);
 
   // Mutations
   const openPeriod = useOpenUtilityPeriod(utilityType);
@@ -213,6 +217,7 @@ const UtilityBillingTab = ({ utilityType }) => {
   const movementReadings = readings.filter((r) => r.eventType === "move-in" || r.eventType === "move-out");
   const periods = periodsData?.periods || [];
   const result = resultData?.result || null;
+  const roomHistory = roomHistoryData?.history || [];
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
   const openPeriodForRoom = periods.find((p) => p.status === "open");
   const lastClosedPeriod = periods.find((p) => p.status === "closed" || p.status === "revised");
@@ -232,6 +237,8 @@ const UtilityBillingTab = ({ utilityType }) => {
   const pagedPeriods = periods.slice((periodsPage - 1) * PERIODS_PER_PAGE, periodsPage * PERIODS_PER_PAGE);
   const totalReadingPages = Math.max(1, Math.ceil(movementReadings.length / READINGS_PER_PAGE));
   const pagedReadings = movementReadings.slice((readingsPage - 1) * READINGS_PER_PAGE, readingsPage * READINGS_PER_PAGE);
+  const totalHistoryPages = Math.max(1, Math.ceil(roomHistory.length / HISTORY_PER_PAGE));
+  const pagedHistory = roomHistory.slice((historyPage - 1) * HISTORY_PER_PAGE, historyPage * HISTORY_PER_PAGE);
 
   useEffect(() => {
     if (filteredRooms.length === 0) { setSelectedRoomId(null); setSelectedPeriodId(null); return; }
@@ -439,40 +446,35 @@ const UtilityBillingTab = ({ utilityType }) => {
     });
   };
 
-  const handleOpenPeriod = async () => {
-    if (!periodForm.startReading || !periodForm.ratePerUnit) {
-      return notify.warn("Start reading and rate are required.");
+  const handleGenerateCycle = async () => {
+    if (!periodForm.startDate || !periodForm.endDate || !periodForm.startReading || !periodForm.endReading || !periodForm.ratePerUnit) {
+      return notify.warn("All fields (dates, readings, and rate) are required.");
     }
     try {
-      await openPeriod.mutateAsync({
+      const openedData = await openPeriod.mutateAsync({
         roomId: selectedRoomId,
         startDate: periodForm.startDate,
         startReading: Number(periodForm.startReading),
         ratePerUnit: Number(periodForm.ratePerUnit),
       });
-      notify.success("Billing period opened. Enter the final reading when the cycle ends.");
-      closePanel();
+      
+      const newPeriodId = openedData?.period?.id || openedData?.id;
+      
+      if (newPeriodId) {
+         await closePeriod.mutateAsync({
+           periodId: newPeriodId,
+           endReading: Number(periodForm.endReading),
+           endDate: periodForm.endDate,
+         });
+         notify.success("Billing cycle generated successfully.");
+         closePanel();
+         selectAndFocusPeriod(newPeriodId);
+      } else {
+         notify.success("Billing period opened, but could not finalize automatically.");
+         closePanel();
+      }
     } catch (err) {
-      notify.error(err, "Failed to create billing period.");
-    }
-  };
-
-  const handleClosePeriod = async () => {
-    if (!periodForm.endReading) {
-      return notify.warn("End reading is required.");
-    }
-    if (!openPeriodForRoom) return;
-    try {
-      await closePeriod.mutateAsync({
-        periodId: openPeriodForRoom.id,
-        endReading: Number(periodForm.endReading),
-        endDate: periodForm.endDate || new Date().toISOString().slice(0, 10),
-      });
-      notify.success("Period closed. Draft bills created.");
-      closePanel();
-      selectAndFocusPeriod(openPeriodForRoom.id);
-    } catch (err) {
-      notify.error(err, "Failed to close period.");
+      notify.error(err, "Failed to generate billing cycle.");
     }
   };
 
@@ -756,6 +758,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                     setSelectedRoomId(room.id);
                     setPeriodsPage(1);
                     setReadingsPage(1);
+                    setHistoryPage(1);
                     closePanel();
                   }}
                 >
@@ -792,81 +795,88 @@ const UtilityBillingTab = ({ utilityType }) => {
           <div className="eb-content">
 
             {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Room Header ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
-            <div className="eb-header">
+            <div className="eb-header" style={{ marginBottom: "1rem" }}>
               <div className="eb-header__left">
                 <h2 className="eb-header__title">{getRoomLabel(selectedRoom)}</h2>
                 <span className="eb-header__branch">{selectedRoom?.branch}</span>
                 {selectedRoom?.type && <span className="eb-header__room-type">{selectedRoom.type}</span>}
               </div>
-            </div>
-            <div className="bw-overview-card">
-              <div className="bw-overview-metric">
-                <span className="bw-overview-metric__label">Latest Reading</span>
-                <span className="bw-overview-metric__value">
-                  {latestData?.reading != null ? fmtNumber(latestData.reading, 0) : "â€”"}
-                  <small> {utilityType === "electricity" ? "kWh" : "cu.m."}</small>
-                </span>
-              </div>
-              <div className="bw-overview-metric">
-                <span className="bw-overview-metric__label">Cycle Status</span>
-                <span className="bw-overview-metric__value">
-                  {openPeriodForRoom ? "Open" : lastClosedPeriod ? "Closed" : "No periods"}
-                </span>
-              </div>
-              <div className="bw-overview-metric">
-                <span className="bw-overview-metric__label">Total Periods</span>
-                <span className="bw-overview-metric__value">{periods.length}</span>
-              </div>
-              <div className="bw-overview-metric">
-                <span className="bw-overview-metric__label">Readings</span>
-                <span className="bw-overview-metric__value">{movementReadings.length}</span>
+              <div className="eb-header__actions">
+                 {!openPeriodForRoom && (
+                   <button className="eb-btn eb-btn--primary" onClick={() => openPanel("newPeriod")}>
+                     <Plus size={13} /> + New Billing Period
+                   </button>
+                 )}
+                 {openPeriodForRoom && (
+                   <button className="eb-btn eb-btn--primary" onClick={() => openPanel("closePeriod")}>
+                     <Check size={13} /> Close Open Period
+                   </button>
+                 )}
               </div>
             </div>
 
-            {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â
-                SECTION 1 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Active Billing Cycle
-            ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â */}
-
-            {/* Status Banner */}
-            <section className={`eb-status-banner ${openPeriodForRoom ? "eb-status-banner--open" : "eb-status-banner--empty"}`}>
-              <div>
-                <div className="eb-status-banner__eyebrow">{openPeriodForRoom ? "Active Billing Period" : "No Active Period"}</div>
-                <div className="eb-status-banner__title">
-                  {openPeriodForRoom
-                    ? `Cycle ${getPeriodRangeText(openPeriodForRoom)} | Start: ${openPeriodForRoom.startReading} ${utilityType === "electricity" ? "kWh" : "cu.m."} | Rate: ${fmtCurrency(openPeriodForRoom.ratePerUnit)}/${utilityType === "electricity" ? "kWh" : "cu.m."}`
-                    : lastClosedPeriod
-                      ? `Last closed: ${fmtDate(lastClosedPeriod.endDate || lastClosedPeriod.startDate)}`
-                      : "No billing period has been created for this room yet."}
+            {/* Current Billing Snapshot Mini-Dashboard */}
+            <div className="eb-current-billing-dashboard" style={{
+              display: 'flex', gap: '1rem', background: '#fff', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-subtle, #e2e8f0)', marginBottom: '1.5rem', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+            }}>
+              {periods[0] ? (
+                <>
+                  <div style={{ flex: 1, borderRight: '1px solid var(--border-subtle, #e2e8f0)', paddingRight: '1.5rem' }}>
+                    <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Current Billing Snapshot</h3>
+                    <p style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      Cycle {fmtDate(periods[0].startDate)} - {fmtDate(periods[0].endDate || periods[0].targetCloseDate) || "Ongoing"}
+                    </p>
+                    <span className={`eb-badge eb-badge--${periods[0].displayStatus === "ready" ? "primary" : periods[0].displayStatus === "finalized" ? "success" : "warning"}`} style={{ display: 'inline-block', marginTop: '6px' }}>
+                      Status: {periods[0].displayStatus}
+                    </span>
+                  </div>
+                  <div style={{ flex: 1, paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Meter Consumption:</span>
+                      <span style={{ fontWeight: 500 }}>{periods[0].endReading != null ? (periods[0].endReading - periods[0].startReading).toFixed(2) : "—"} {utilityType === "electricity" ? "kWh" : "cu.m."}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Rate:</span>
+                      <span style={{ fontWeight: 500 }}>{fmtCurrency(periods[0].ratePerUnit)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed var(--border-subtle, #e2e8f0)' }}>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95rem' }}>Total Room Cost:</span>
+                      <span style={{ fontWeight: 700, color: 'var(--color-primary, #0f172a)', fontSize: '1.1rem' }}>
+                         {periods[0].computedTotalCost != null ? fmtCurrency(periods[0].computedTotalCost) : (periods[0].endReading != null ? fmtCurrency((periods[0].endReading - periods[0].startReading) * periods[0].ratePerUnit) : "—")}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ width: '100%', textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>
+                   No billing cycle. Click "+ New Billing Period" to generate the first period.
                 </div>
-              </div>
-              <div className="eb-status-banner__actions">
-                {openPeriodForRoom ? (
-                  <>
-                    <button className="eb-btn eb-btn--primary" onClick={() => openPanel("closePeriod")}>
-                      <Check size={13} /> Enter Final Reading
-                    </button>
-                  </>
-                ) : (
-                  <button className="eb-btn eb-btn--primary" onClick={() => openPanel("newPeriod")}>
-                    <Plus size={13} /> New Billing Period
-                  </button>
-                )}
-              </div>
-            </section>
+              )}
+            </div>
 
-                        {activePanel === "newPeriod" && (
+            {activePanel === "newPeriod" && (
               <div className="eb-panel">
                 <div className="eb-panel__header">
                   <span>New Billing Period</span>
                   <button className="eb-panel__close" onClick={closePanel}><X size={15} /></button>
                 </div>
                 <div className="eb-panel__body">
-                  <p className="eb-panel__hint">Start a new billing cycle. You'll enter the final reading when the cycle ends.</p>
+                  <p className="eb-panel__hint">Define the complete billing cycle (dates, readings, and rate) to generate drafts immediately.</p>
                   <div className="eb-form-row">
                     <div className="eb-field">
                       <label>Start Date</label>
                       <input type="date" value={periodForm.startDate} onChange={(e) => setPeriodForm({ ...periodForm, startDate: e.target.value })} />
                     </div>
+                    <div className="eb-field">
+                      <label>End Date</label>
+                      <input type="date" value={periodForm.endDate} onChange={(e) => setPeriodForm({ ...periodForm, endDate: e.target.value })} />
+                    </div>
+                    <div className="eb-field">
+                      <label>Rate (PHP/{utilityType === "electricity" ? "kWh" : "cu.m."})</label>
+                      <input type="number" step="0.01" value={periodForm.ratePerUnit} onChange={(e) => setPeriodForm({ ...periodForm, ratePerUnit: e.target.value })} placeholder="e.g. 16.00" />
+                    </div>
+                  </div>
+                  <div className="eb-form-row">
                     <div className="eb-field">
                       <label>Start Reading ({utilityType === "electricity" ? "kWh" : "cu.m."})</label>
                       <input
@@ -874,21 +884,25 @@ const UtilityBillingTab = ({ utilityType }) => {
                         value={periodForm.startReading}
                         onChange={(e) => setPeriodForm({ ...periodForm, startReading: e.target.value })}
                         placeholder={latestData?.reading != null ? `Last: ${latestData.reading}` : "e.g. 1200"}
-                        autoFocus
                       />
                     </div>
                     <div className="eb-field">
-                      <label>Rate (PHP/{utilityType === "electricity" ? "kWh" : "cu.m."})</label>
-                      <input type="number" step="0.01" value={periodForm.ratePerUnit} onChange={(e) => setPeriodForm({ ...periodForm, ratePerUnit: e.target.value })} placeholder="e.g. 16.00" />
+                      <label>End Reading ({utilityType === "electricity" ? "kWh" : "cu.m."})</label>
+                      <input
+                        type="number"
+                        value={periodForm.endReading}
+                        onChange={(e) => setPeriodForm({ ...periodForm, endReading: e.target.value })}
+                        placeholder="e.g. 1350"
+                      />
                     </div>
                   </div>
                   <div className="eb-panel__footer">
                     <button
                       className="eb-btn eb-btn--primary"
-                      onClick={handleOpenPeriod}
-                      disabled={openPeriod.isPending}
+                      onClick={handleGenerateCycle}
+                      disabled={openPeriod.isPending || closePeriod.isPending}
                     >
-                      {openPeriod.isPending ? "Processing..." : "Start Billing Period"}
+                      {openPeriod.isPending || closePeriod.isPending ? "Processing..." : "Generate Billing Cycle"}
                     </button>
                     <button className="eb-btn eb-btn--ghost" onClick={closePanel}>Cancel</button>
                   </div>
@@ -896,136 +910,72 @@ const UtilityBillingTab = ({ utilityType }) => {
               </div>
             )}
 
-            {activePanel === "closePeriod" && openPeriodForRoom && (
-              <div className="eb-panel eb-panel--warning">
-                <div className="eb-panel__header">
-                  <span>Enter Final Reading</span>
-                  <button className="eb-panel__close" onClick={closePanel}><X size={15} /></button>
-                </div>
-                <div className="eb-panel__body">
-                  <p className="eb-panel__hint">
-                    Cycle {getPeriodRangeText(openPeriodForRoom)} | {openPeriodForRoom.startReading} {utilityType === "electricity" ? "kWh" : "cu.m."} | {fmtCurrency(openPeriodForRoom.ratePerUnit)}/{utilityType === "electricity" ? "kWh" : "cu.m."}
-                  </p>
-                  <div className="eb-form-row">
-                    <div className="eb-field">
-                      <label>Final Meter Reading ({utilityType === "electricity" ? "kWh" : "cu.m."})</label>
-                      <input
-                        type="number"
-                        value={periodForm.endReading}
-                        onChange={(e) => setPeriodForm({ ...periodForm, endReading: e.target.value })}
-                        placeholder={latestData?.reading != null ? `Last: ${latestData.reading}` : "Enter final reading"}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="eb-field">
-                      <label>End Date</label>
-                      <input type="date" value={periodForm.endDate} onChange={(e) => setPeriodForm({ ...periodForm, endDate: e.target.value })} />
-                    </div>
-                  </div>
-                  <div className="eb-panel__footer">
-                    <button className="eb-btn eb-btn--primary" onClick={handleClosePeriod} disabled={closePeriod.isPending}>
-                      {closePeriod.isPending ? "Computing..." : "Close & Create Drafts"}
-                    </button>
-                    <button className="eb-btn eb-btn--ghost" onClick={closePanel}>Cancel</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Move-In / Move-Out Readings */}
+            {/* Room History List */}
             <section className="eb-section">
               <div className="eb-section__header">
                 <h3 className="eb-section__title eb-section__title--primary">
-                  Move-In / Move-Out Readings
+                  Room History
                   <span className="eb-section__count" style={{ marginLeft: 6, textTransform: "none", letterSpacing: 0, fontWeight: "normal" }}>
-                    {movementReadings.length}
+                    {roomHistory.length}
                   </span>
                 </h3>
               </div>
               <div className="eb-section-body" style={{ marginTop: "12px" }}>
-                {movementReadings.length === 0 ? (
-                  <p className="eb-empty-hint">No move-in or move-out readings recorded yet.</p>
+                {roomHistory.length === 0 ? (
+                  <p className="eb-empty-hint">No tenants have been checked into this room.</p>
                 ) : (
                   <>
                     <div className="eb-table-wrap">
                       <table className="eb-table">
                         <colgroup>
+                          <col style={{ width: "20%" }} />
+                          <col style={{ width: "15%" }} />
+                          <col style={{ width: "15%" }} />
+                          <col style={{ width: "18%" }} />
+                          <col style={{ width: "18%" }} />
                           <col style={{ width: "14%" }} />
-                          <col style={{ width: "13%" }} />
-                          <col style={{ width: "16%" }} />
-                          <col style={{ width: "25%" }} />
-                          <col />
-                          <col style={{ width: "36px" }} />
-                          <col style={{ width: "36px" }} />
                         </colgroup>
                         <thead>
                           <tr>
-                            <th>Date</th>
-                            <th>Reading</th>
-                            <th>Event</th>
-                            <th>Tenant</th>
-                            <th>Recorded By</th>
-                            <th></th>
-                          <th></th>
+                            <th>Tenant Name</th>
+                            <th>Room Number</th>
+                            <th>Bed Assignment</th>
+                            <th>Move-In Date</th>
+                            <th>Move-Out Date</th>
+                            <th>Duration of Stay</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {pagedReadings.map((r) => (
-                            <tr key={r.id}>
-                              <td>{fmtDate(r.date)}</td>
-                              <td>{r.reading} <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{utilityType === "electricity" ? "kWh" : "cu.m."}</span></td>
+                          {pagedHistory.map((h, i) => (
+                            <tr key={`${h.tenantId}-${i}`}>
                               <td>
-                                <span className={`eb-event-tag eb-event-tag--${r.eventType}`}>
-                                  {r.eventType === "move-in" ? "Move-In" : r.eventType === "move-out" ? "Move-Out" : "Regular"}
-                                </span>
+                                {maskName(h.tenantName)}{" "}
+                                {h.isActive && (
+                                  <span style={{ display: "inline-block", marginLeft: 4, padding: "2px 6px", fontSize: "0.65rem", fontWeight: 600, color: "#166534", backgroundColor: "#bbf7d0", borderRadius: 9999 }}>Active</span>
+                                )}
                               </td>
-                              <td className="eb-cell--muted">{maskName(r.tenant)}</td>
-                              <td className="eb-cell--muted">{r.recordedBy}</td>
-                              <td>
-                                <button
-                                  className="eb-icon-btn eb-icon-btn--muted"
-                                  title="Edit reading"
-                                  onClick={() => handleEditReading(r)}
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                              </td>
-                              <td>
-                                <button
-                                  className="eb-icon-btn eb-icon-btn--danger"
-                                  title="Delete reading"
-                                  onClick={() => handleDeleteReading(r.id)}
-                                  disabled={deleteReading.isPending}
-                                >
-                                  {deleteReading.isPending ? "..." : <Trash2 size={13} />}
-                                </button>
-                              </td>
+                              <td className="eb-cell--muted">{getRoomLabel(selectedRoom)}</td>
+                              <td>{h.bedName}</td>
+                              <td>{fmtDate(h.moveInDate)}</td>
+                              <td>{h.moveOutDate ? fmtDate(h.moveOutDate) : "—"}</td>
+                              <td>{h.durationDays} day{h.durationDays !== 1 && "s"}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                     <Pagination
-                      page={readingsPage}
-                      total={totalReadingPages}
-                      onChange={setReadingsPage}
-                      countLabel={`${movementReadings.length} reading${movementReadings.length !== 1 ? "s" : ""}`}
+                      page={historyPage}
+                      total={totalHistoryPages}
+                      onChange={setHistoryPage}
+                      countLabel={`${roomHistory.length} tenant${roomHistory.length !== 1 ? "s" : ""}`}
                     />
                   </>
                 )}
               </div>
             </section>
-
-            {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â
-                SECTION 2 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Segment Breakdown & Draft Bills
-                Driven by selectedPeriodId (auto = most recent closed/revised)
-            ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â */}
+            {/* End of Replaced Section */}
             
-
-            {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â
-                SECTION 3 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Billing Cycle History
-                Clicking a row updates Section 2 above
-            ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢Ãƒâ€šÃ‚Â */}
             {periods.length > 0 && (
               <section className="eb-section eb-section--primary">
                 <div className="eb-section__header">
