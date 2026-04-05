@@ -77,7 +77,7 @@ const STATUS_STYLES = {
 
 /* ── Dashboard Components ─────────────────────────── */
 
-const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, onPay, payingOnline }) => {
+const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, hasWaterBilling, onPay, payingOnline }) => {
   const unpaidUtilities = unpaidElec + unpaidWater;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "24px" }}>
@@ -120,7 +120,7 @@ const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, onPay, payingOnli
           </div>
         </div>
         
-        {unpaidUtilities > 0 && (
+        {(unpaidUtilities > 0 || hasWaterBilling) && (
           <div style={{...dash.breakdownRow, marginBottom: "16px"}}>
             <div style={dash.breakdownItem}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b" }}>
@@ -128,13 +128,17 @@ const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, onPay, payingOnli
               </div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)" }}>{fmt(unpaidElec)}</div>
             </div>
-            <div style={dash.divider} />
-            <div style={dash.breakdownItem}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b" }}>
-                <Droplets size={14} color="#3B82F6" /> <span style={{ fontSize: 12, fontWeight: 500 }}>Water</span>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)" }}>{fmt(unpaidWater)}</div>
-            </div>
+            {hasWaterBilling && (
+              <>
+                <div style={dash.divider} />
+                <div style={dash.breakdownItem}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b" }}>
+                    <Droplets size={14} color="#3B82F6" /> <span style={{ fontSize: 12, fontWeight: 500 }}>Water</span>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)" }}>{fmt(unpaidWater)}</div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -704,6 +708,9 @@ const BillingTab = () => {
 
   const electricityBills = bills.filter((bill) => (bill.charges?.electricity || 0) > 0);
   const waterBills = bills.filter((bill) => (bill.charges?.water || 0) > 0);
+  // Show water tab only if this tenant has ever been billed for water.
+  // If all water bills are paid, the tab still shows with ₱0 balance.
+  const hasWaterBilling = waterBills.length > 0;
 
   const handlePay = async (type = "all") => {
     try {
@@ -755,6 +762,7 @@ const BillingTab = () => {
         unpaidRent={unpaidRent}
         unpaidElec={unpaidElec}
         unpaidWater={unpaidWater}
+        hasWaterBilling={hasWaterBilling}
         onPay={handlePay}
         payingOnline={payingOnline}
       />
@@ -774,12 +782,14 @@ const BillingTab = () => {
           >
             Electricity
           </button>
-          <button
-            style={subTab === "water" ? nav.tabActive : nav.tab}
-            onClick={() => setSubTab("water")}
-          >
-            Water
-          </button>
+          {hasWaterBilling && (
+            <button
+              style={subTab === "water" ? nav.tabActive : nav.tab}
+              onClick={() => setSubTab("water")}
+            >
+              Water
+            </button>
+          )}
         </div>
       </div>
 
@@ -787,7 +797,7 @@ const BillingTab = () => {
       <div style={{ minHeight: 400 }}>
         {subTab === "monthly" && <MonthlyPaymentView bills={monthlyBills} filter={filter} setFilter={setFilter} />}
         {subTab === "electricity" && <ElectricityTabContent bills={electricityBills} isLoading={loading} />}
-        {subTab === "water" && <WaterTabContent bills={waterBills} isLoading={loading} />}
+        {subTab === "water" && hasWaterBilling && <WaterTabContent bills={waterBills} isLoading={loading} />}
       </div>
     </div>
   );

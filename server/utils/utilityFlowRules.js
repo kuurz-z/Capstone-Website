@@ -24,6 +24,20 @@ function fallsWithinCycle(dateValue, cycleStart, cycleEnd) {
   return date >= start && date <= end;
 }
 
+/**
+ * Strictly within cycle — date is AFTER start and ON or BEFORE end.
+ * Used for move-in checks: tenants who moved in ON the cycle start date
+ * are treated as "already present" and don't need a separate move-in reading.
+ */
+function fallsStrictlyAfterCycleStart(dateValue, cycleStart, cycleEnd) {
+  const date = startOfDay(dateValue);
+  const start = startOfDay(cycleStart);
+  const end = startOfDay(cycleEnd);
+
+  if (!date || !start || !end) return false;
+  return date > start && date <= end;
+}
+
 export function isWaterBillableRoom(roomOrType) {
   const roomType = typeof roomOrType === "string" ? roomOrType : roomOrType?.type;
   return WATER_BILLABLE_ROOM_TYPES.has(roomType);
@@ -95,7 +109,7 @@ export function findMissingElectricityLifecycleReadings({
       : "Tenant";
 
     if (
-      fallsWithinCycle(reservation.checkInDate, period?.startDate, period?.endDate) &&
+      fallsStrictlyAfterCycleStart(reservation.checkInDate, period?.startDate, period?.endDate) &&
       !moveInReadingsByTenant.has(tenantKey)
     ) {
       missingMoveInReadings.push({

@@ -47,6 +47,9 @@ export const utilityApi = {
   getRooms: (utilityType, branch) =>
     authFetch(`/utilities/${utilityType}/rooms${branch ? `?branch=${branch}` : ""}`),
 
+  getRoomHistory: (utilityType, roomId) =>
+    authFetch(`/utilities/${utilityType}/rooms/${roomId}/history`),
+
   exportRows: (utilityType, params = {}) => {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -59,3 +62,4 @@ export const utilityApi = {
   getDiagnostics: (branch) =>
     authFetch(`/utilities/diagnostics${branch ? `?branch=${branch}` : ""}`),
 };
+

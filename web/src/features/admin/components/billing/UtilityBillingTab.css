@@ -814,6 +814,12 @@
   font-weight: 700;
 }
 
+.eb-status-pill--finalized {
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 600;
+}
+
 .eb-revised-tag {
   font-size: 0.62rem;
   color: var(--color-warning-text, #92400e);
@@ -2221,6 +2227,13 @@
   font-weight: 700;
 }
 
+.eb-status-pill--finalized {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  font-weight: 600;
+}
+
 /* ── Billing history — period row ── */
 .eb-period-summary {
   gap: 2px;
@@ -2368,4 +2381,59 @@
   border: 1px solid #fed7aa;
   padding: 2px 7px;
   border-radius: 4px;
+}
+
+/* ── Room sidebar pager ── */
+.eb-sidebar__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-subtle, #f1f5f9);
+}
+
+.eb-sidebar__pager-count {
+  font-size: 0.72rem;
+  color: var(--text-muted, #9ca3af);
+}
+
+.eb-room-pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.eb-room-pager__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border-card, #e5e7eb);
+  background: var(--surface-card, #fff);
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.eb-room-pager__btn:hover:not(:disabled) {
+  background: var(--surface-muted, #f3f4f6);
+  color: var(--text-heading, #0a1628);
+}
+
+.eb-room-pager__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.eb-room-pager__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: center;
 }

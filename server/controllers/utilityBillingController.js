@@ -12,12 +12,11 @@
 import dayjs from "dayjs";
 import { Room, Reservation, User, UtilityPeriod, UtilityReading, Bill } from "../models/index.js";
 import { computeBilling } from "../utils/billingEngine.js";
-import { getUtilityTargetCloseDate, isSameUtilityCycleBoundary } from "../utils/billingPolicy.js";
 import { logBillingAudit } from "../utils/billingAudit.js";
 import { getRoomLabel } from "../utils/roomLabel.js";
 import { upsertDraftBillsForUtility } from "../utils/utilityBillFlow.js";
 import { getUtilityDiagnostics } from "../utils/utilityDiagnostics.js";
-import { ensureOpenUtilityPeriodForRoom } from "../utils/utilityLifecycle.js";
+
 import {
   buildTenantEventsForPeriod,
   filterBillableReservationsForPeriod,
@@ -76,14 +75,9 @@ async function closePeriodAndGenerateDrafts({
   utilityType,
   requestContext = null,
 }) {
-  const targetCloseDate = getUtilityTargetCloseDate(period.startDate);
-  const closingDate = dayjs(endDate ? new Date(endDate) : targetCloseDate).startOf("day").toDate();
+  const closingDate = dayjs(endDate ? new Date(endDate) : new Date()).startOf("day").toDate();
 
   assertUtilityRoomEligibility(room, utilityType);
-
-  if (!isSameUtilityCycleBoundary(closingDate, targetCloseDate)) {
-    throw new Error(`This period must close on ${dayjs(targetCloseDate).format("MMM D, YYYY")} to align cycles.`);
-  }
 
   const endUtilityReading = new UtilityReading({
     utilityType,
@@ -99,10 +93,8 @@ async function closePeriodAndGenerateDrafts({
   await endUtilityReading.save();
 
   const allReadings = await UtilityReading.find({
-    utilityType,
-    roomId: room._id,
+    utilityPeriodId: period._id,
     isArchived: false,
-    date: { $gte: period.startDate, $lte: closingDate },
   }).sort({ date: 1, createdAt: 1 }).lean();
 
   const reservations = await Reservation.find({
@@ -127,12 +119,39 @@ async function closePeriodAndGenerateDrafts({
     cycleEnd: closingDate,
   });
 
+  // Build a set of tenant IDs who actually moved in or out DURING this cycle.
+  // Tenants who were already present before the cycle should not create segments.
+  const cycleStartDay = dayjs(period.startDate).startOf("day");
+  const cycleEndDay = dayjs(closingDate).startOf("day");
+  const inCycleMoveTenantIds = new Set();
+  for (const res of billableReservations) {
+    const tenantKey = String(res.userId?._id || res.userId);
+    const checkIn = res.checkInDate ? dayjs(res.checkInDate).startOf("day") : null;
+    const checkOut = res.checkOutDate ? dayjs(res.checkOutDate).startOf("day") : null;
+    if (checkIn && checkIn.isAfter(cycleStartDay) && !checkIn.isAfter(cycleEndDay)) {
+      inCycleMoveTenantIds.add(tenantKey);
+    }
+    if (checkOut && !checkOut.isBefore(cycleStartDay) && !checkOut.isAfter(cycleEndDay)) {
+      inCycleMoveTenantIds.add(tenantKey);
+    }
+  }
+
+  // Filter readings: keep baseline (regular-billing) readings and only
+  // move-in/move-out readings for tenants who actually moved during this cycle.
+  const cycleReadings = allReadings.filter((r) => {
+    if (r.eventType === "regular-billing") return true;
+    if ((r.eventType === "move-in" || r.eventType === "move-out") && r.tenantId) {
+      return inCycleMoveTenantIds.has(String(r.tenantId));
+    }
+    return false;
+  });
+
   let mappedTenantEvents = [];
   if (utilityType === "electricity") {
     const missing = findMissingElectricityLifecycleReadings({
       period: cyclePeriod,
       reservations: billableReservations,
-      readings: allReadings,
+      readings: cycleReadings,
     });
     if (missing.hasMissingReadings) {
       throw buildElectricityValidationError(missing);
@@ -141,13 +160,13 @@ async function closePeriodAndGenerateDrafts({
     mappedTenantEvents = buildTenantEventsForPeriod({
       period: cyclePeriod,
       reservations: billableReservations,
-      readings: allReadings,
+      readings: cycleReadings,
     });
   }
 
   const computationResult = computeBilling({
     utilityPeriod: cyclePeriod,
-    readings: allReadings,
+    readings: cycleReadings,
     reservations: billableReservations,
     tenantEvents: mappedTenantEvents,
   });
@@ -187,25 +206,7 @@ async function closePeriodAndGenerateDrafts({
     },
   });
 
-  // Auto-open next period
-  let nextPeriodMeta = null;
-  try {
-    const nextPeriod = await ensureOpenUtilityPeriodForRoom({
-      utilityType,
-      room,
-      anchorDate: closingDate,
-      anchorReading: Number(endReading),
-    });
-    nextPeriodMeta = {
-      periodId: nextPeriod.period?._id || null,
-      created: !!nextPeriod.created,
-      targetCloseDate: nextPeriod.targetCloseDate || null,
-    };
-  } catch (err) {
-    logger.warn({ err }, "Auto-chain utility period failed");
-  }
-
-  return { closingDate, computationResult, periodId: period._id, nextPeriod: nextPeriodMeta };
+  return { closingDate, computationResult, periodId: period._id };
 }
 
 // ============================================================================
@@ -242,6 +243,20 @@ export const openUtilityPeriod = async (req, res, next) => {
       status: "open",
     });
     await period.save();
+
+    // Create the start baseline reading tied to this period
+    const startBaselineReading = new UtilityReading({
+      utilityType,
+      roomId: room._id,
+      branch: room.branch,
+      reading: Number(startReading),
+      date: dayjs(startDate).startOf("day").toDate(),
+      eventType: "regular-billing",
+      recordedBy: admin._id,
+      utilityPeriodId: period._id,
+      activeTenantIds: [],
+    });
+    await startBaselineReading.save();
 
     res.status(201).json({ success: true, period });
   } catch (err) {
@@ -650,14 +665,37 @@ export const getUtilityPeriods = async (req, res, next) => {
       .sort({ startDate: -1 })
       .lean();
 
+    // Bulk-fetch actual bill statuses so we know which are still drafts
+    const allBillIds = periods
+      .flatMap((p) => (p.tenantSummaries || []).map((s) => s.billId))
+      .filter(Boolean);
+    const billStatusMap = {};
+    if (allBillIds.length > 0) {
+      const bills = await Bill.find({ _id: { $in: allBillIds } })
+        .select("status")
+        .lean();
+      for (const b of bills) {
+        billStatusMap[String(b._id)] = b.status;
+      }
+    }
+
     res.json({
       periods: periods.map((p) => {
-        const hasDraftBills = (p.tenantSummaries || []).some(s => s.billId && true);
-        
+        const summaryBillIds = (p.tenantSummaries || [])
+          .map((s) => s.billId)
+          .filter(Boolean);
+        const hasDraftBills = summaryBillIds.some(
+          (id) => billStatusMap[String(id)] === "draft",
+        );
+        const hasSentBills = summaryBillIds.some(
+          (id) => billStatusMap[String(id)] && billStatusMap[String(id)] !== "draft",
+        );
+
         let displayStatus = "closed";
         if (p.status === "open") displayStatus = "open";
         else if (p.revised) displayStatus = "revised";
         else if (hasDraftBills) displayStatus = "ready";
+        else if (hasSentBills) displayStatus = "finalized";
 
         return {
           id: p._id,
@@ -665,14 +703,16 @@ export const getUtilityPeriods = async (req, res, next) => {
           endDate: p.endDate,
           startReading: p.startReading,
           endReading: p.endReading,
+          computedTotalUsage: p.computedTotalUsage,
+          computedTotalCost: p.computedTotalCost,
           ratePerUnit: p.ratePerUnit, 
           status: p.status,
           displayStatus,
           revised: p.revised,
           hasDraftBills,
-          hasSentBills: false, 
+          hasSentBills,
           closedAt: p.closedAt,
-          targetCloseDate: p.status === "open" ? getUtilityTargetCloseDate(p.startDate) : null,
+          targetCloseDate: null,
         };
       }),
     });
@@ -707,6 +747,104 @@ export const getUtilityResult = async (req, res, next) => {
          tenantSummaries: period.tenantSummaries || [] 
       } 
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* ─── ROOM HISTORY ───────────────────────────────────────────────────────────
+ * Returns a complete occupancy log for a room: tenant name, bed, dates,
+ * duration, and associated move-in/move-out meter readings.
+ * This is the "source of truth" view for billing — billing periods just
+ * filter from this log by date range.
+ * ──────────────────────────────────────────────────────────────────────── */
+export const getRoomHistory = async (req, res, next) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const { utilityType, roomId } = req.params;
+
+    const room = await Room.findById(roomId).lean();
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (!admin.isSuperAdmin && room.branch !== admin.branch) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // Get all check-in / check-out reservations for this room
+    const reservations = await Reservation.find({
+      roomId: room._id,
+      status: { $in: ["checked-in", "checked-out"] },
+      isArchived: { $ne: true },
+    })
+      .populate("userId", "firstName lastName email")
+      .sort({ checkInDate: -1 })
+      .lean();
+
+    // Get all move-in / move-out meter readings for this room
+    const readings = await UtilityReading.find({
+      roomId: room._id,
+      utilityType,
+      eventType: { $in: ["move-in", "move-out"] },
+      isArchived: false,
+    }).lean();
+
+    // Index readings by tenantId + eventType for fast lookup
+    const readingMap = {};
+    for (const r of readings) {
+      const key = `${r.tenantId}_${r.eventType}`;
+      // Keep the latest reading for each tenant+event combo
+      if (!readingMap[key] || new Date(r.date) > new Date(readingMap[key].date)) {
+        readingMap[key] = r;
+      }
+    }
+
+    // Build a bed-id → bed-name lookup from the room's beds array
+    const bedLabelMap = {};
+    if (room.beds && Array.isArray(room.beds)) {
+      for (const bed of room.beds) {
+        const id = bed._id?.toString() || bed.id;
+        if (id) bedLabelMap[id] = bed.label || bed.position || bed.name || "—";
+      }
+    }
+
+    const now = new Date();
+    const history = reservations.map((res) => {
+      const tenantId = res.userId?._id?.toString();
+      const moveInReading = tenantId ? readingMap[`${tenantId}_move-in`] : null;
+      const moveOutReading = tenantId ? readingMap[`${tenantId}_move-out`] : null;
+
+      const moveIn = res.checkInDate ? new Date(res.checkInDate) : null;
+      const moveOut = res.checkOutDate ? new Date(res.checkOutDate) : null;
+      const endDate = moveOut || now;
+      const durationDays = moveIn
+        ? Math.max(1, Math.ceil((endDate - moveIn) / 86_400_000))
+        : 0;
+
+      // Resolve bed name: try room.beds lookup first, fall back to reservation position
+      const bedId = res.selectedBed?.id;
+      const bedName = (bedId && bedLabelMap[bedId]) || res.selectedBed?.position || "—";
+
+      return {
+        id: res._id,
+        tenantName: res.userId
+          ? `${res.userId.firstName || ""} ${res.userId.lastName || ""}`.trim()
+          : "Unknown",
+        tenantId: tenantId || null,
+        bedName,
+        bedId: bedId || null,
+        moveInDate: res.checkInDate,
+        moveOutDate: res.checkOutDate || null,
+        isActive: res.status === "checked-in",
+        durationDays,
+        moveInReading: moveInReading
+          ? { id: moveInReading._id, reading: moveInReading.reading, date: moveInReading.date }
+          : null,
+        moveOutReading: moveOutReading
+          ? { id: moveOutReading._id, reading: moveOutReading.reading, date: moveOutReading.date }
+          : null,
+      };
+    });
+
+    res.json({ history, roomName: room.name || room.roomNumber });
   } catch (error) {
     next(error);
   }

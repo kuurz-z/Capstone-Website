@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "nodemon server.js",
     "kill-port": "node scripts/kill-port.js",
     "restart": "node scripts/kill-port.js && node server.js",
     "utility:diagnose": "node scripts/diagnose_utility_sync.mjs",

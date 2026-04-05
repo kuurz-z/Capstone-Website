@@ -15,6 +15,8 @@ const segmentSchema = new mongoose.Schema(
     endDate: { type: Date },
     activeTenantIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     coveredTenantNames: [{ type: String }],
+    startEventType: { type: String, enum: ["move-in", "move-out", "regular-billing"], default: "regular-billing" },
+    endEventType:   { type: String, enum: ["move-in", "move-out", "regular-billing"], default: "regular-billing" },
   },
   { _id: false },
 );

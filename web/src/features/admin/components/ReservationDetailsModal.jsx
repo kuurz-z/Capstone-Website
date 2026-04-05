@@ -72,10 +72,10 @@ const ACTION_MSGS = {
     variant: "info",
   },
   checkin: {
-    title: "Check In Tenant",
+    title: "Move In Tenant",
     message:
       "Mark this tenant as moved in? They'll be promoted to Tenant role with full system access.",
-    confirmText: "Yes, Check In",
+    confirmText: "Yes, Move In",
     variant: "info",
   },
   cancel: {
@@ -369,7 +369,7 @@ export default function ReservationDetailsModal({
                       disabled={isSubmitting}
                       title="Mark tenant as moved in — requires initial meter reading"
                     >
-                      ✓ Check In — Tenant Has Moved In
+                      ✓ Confirm Move-In
                     </button>
 
                     <button
@@ -546,9 +546,9 @@ export default function ReservationDetailsModal({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="rdm-extend-dialog-body">
-              <h3 className="rdm-extend-dialog-title">⚡ Initial Meter Reading</h3>
+              <h3 className="rdm-extend-dialog-title">⚡ Move-In Meter Reading</h3>
               <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 12px" }}>
-                Enter the starting kWh reading to record this tenant's electricity baseline.
+                Enter the starting kWh reading to record this tenant's move-in electricity baseline.
               </p>
               <div className="rdm-extend-dialog-input-row" style={{ width: "100%" }}>
                 <input
@@ -592,7 +592,7 @@ export default function ReservationDetailsModal({
                 }}
                 disabled={isSubmitting}
               >
-                Check In
+                Move In
               </button>
             </div>
           </div>

@@ -18,7 +18,7 @@ import { BUSINESS } from "../config/constants.js";
 import logger from "../middleware/logger.js";
 import auditLogger from "../utils/auditLogger.js";
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
-import { ensureOpenUtilityPeriodForRoom } from "../utils/utilityLifecycle.js";
+
 import {
   isValidObjectId,
   invalidIdResponse,
@@ -474,7 +474,7 @@ export const updateReservation = async (req, res, next) => {
       }
     }
 
-    // ── Check-in gate: enforce full prerequisite checklist ─────────────
+    // ── Move-in gate: enforce full prerequisite checklist ─────────────
     // Prevents admins from bypassing the proper flow (visit → payment →
     // reservation confirmed) and jumping straight to checked-in.
     if (
@@ -485,11 +485,24 @@ export const updateReservation = async (req, res, next) => {
       if (blockers.length > 0) {
         return res.status(400).json({
           error:
-            "Check-in prerequisites not met. Please resolve the following before checking in the tenant.",
+            "Move-in prerequisites not met. Please resolve the following before moving in the tenant.",
           code: "CHECKIN_PREREQUISITES_NOT_MET",
           missing: blockers,
         });
       }
+
+      // ── Meter reading is required at move-in ──────────────────────────
+      if (req.body.meterReading == null || isNaN(Number(req.body.meterReading))) {
+        return res.status(400).json({
+          error: "A meter reading (kWh) is required when moving in a tenant.",
+          code: "METER_READING_REQUIRED",
+        });
+      }
+
+      // ── Override checkInDate to actual move-in date (now) ──────────────
+      // The tenant's original checkInDate was just a preferred date.
+      // The real move-in date is when the admin confirms the move-in.
+      req.body.checkInDate = new Date();
     }
 
     await syncReservationUserLifecycle({
@@ -605,10 +618,9 @@ export const updateReservation = async (req, res, next) => {
     }
     const updatedReservation = await reservation.save();
 
-    // ── Auto-record move-in meter reading when checking in ────────────────
-    // Always runs when a meterReading is provided at check-in.
-    // The reading is captured immediately, but the billing period and monthly
-    // rate must be created explicitly from the billing module.
+    // ── Auto-record move-in meter reading when moving in ─────────────────
+    // The reading is saved immediately. The billing period must be created
+    // explicitly by the admin from the billing module.
     if (
       req.body.status === "checked-in" &&
       oldData.status !== "checked-in" &&
@@ -623,16 +635,9 @@ export const updateReservation = async (req, res, next) => {
           firebaseUid: req.user.uid,
         }).lean();
         const meterValue = Number(req.body.meterReading);
-        const checkinDate = new Date();
+        const moveInDate = new Date();
 
         if (roomDoc) {
-          const bootstrap = await ensureOpenUtilityPeriodForRoom({
-            utilityType: "electricity",
-            room: roomDoc,
-            anchorDate: checkinDate,
-            anchorReading: meterValue,
-          });
-          // Record the move-in meter reading.
           const tenantUserId =
             updatedReservation.userId?._id || updatedReservation.userId;
 
@@ -653,12 +658,12 @@ export const updateReservation = async (req, res, next) => {
             roomId: roomId,
             branch: roomDoc.branch,
             reading: meterValue,
-            date: checkinDate,
+            date: moveInDate,
             eventType: "move-in",
             tenantId: tenantUserId,
             activeTenantIds,
             recordedBy: adminUser?._id || null,
-            utilityPeriodId: bootstrap.period?._id || null,
+            utilityPeriodId: null,
           });
           await moveInReading.save();
 
@@ -666,10 +671,8 @@ export const updateReservation = async (req, res, next) => {
             {
               reservationId,
               meterReading: meterValue,
-              periodId: bootstrap.period?._id || null,
-              autoOpenedPeriod: bootstrap.created,
             },
-            "Auto-recorded move-in meter reading on check-in",
+            "Auto-recorded move-in meter reading",
           );
         }
       } catch (elecErr) {
@@ -1440,8 +1443,16 @@ export const checkoutReservation = async (req, res, next) => {
 
     if (reservation.status !== "checked-in") {
       return res.status(400).json({
-        error: "Only checked-in reservations can be checked out.",
+        error: "Only checked-in tenants can be moved out.",
         code: "INVALID_STATUS_FOR_CHECKOUT",
+      });
+    }
+
+    // Meter reading is required at move-out
+    if (meterReading == null || isNaN(Number(meterReading))) {
+      return res.status(400).json({
+        error: "A meter reading (kWh) is required when moving out a tenant.",
+        code: "METER_READING_REQUIRED",
       });
     }
 
@@ -1480,7 +1491,7 @@ export const checkoutReservation = async (req, res, next) => {
       reservationId: reservation._id,
     });
 
-    // 4. Auto-record move-out electricity reading (if provided)
+    // 4. Auto-record move-out electricity reading
     let electricityResult = null;
     if (
       meterReading != null &&
@@ -1496,13 +1507,6 @@ export const checkoutReservation = async (req, res, next) => {
         const checkoutDate = new Date();
 
         if (roomDoc) {
-          const bootstrap = await ensureOpenUtilityPeriodForRoom({
-            utilityType: "electricity",
-            room: roomDoc,
-            anchorDate: checkoutDate,
-            anchorReading: checkoutReading,
-          });
-
           const checkedInRes = await Reservation.find({
             roomId: reservation.roomId._id,
             status: "checked-in",
@@ -1524,7 +1528,7 @@ export const checkoutReservation = async (req, res, next) => {
             tenantId: userId,
             activeTenantIds,
             recordedBy: adminUser?._id || null,
-            utilityPeriodId: bootstrap.period?._id || null,
+            utilityPeriodId: null,
           });
           await moveOutReading.save();
 
@@ -1532,17 +1536,16 @@ export const checkoutReservation = async (req, res, next) => {
             tenantName:
               `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim(),
             meterReading: checkoutReading,
-            utilityPeriodId: bootstrap.period?._id || null,
           };
 
           logger.info(
             { requestId: req.id, reservationId, meterReading },
-            "Auto-recorded move-out electricity reading on checkout",
+            "Auto-recorded move-out electricity reading",
           );
         } else {
           logger.info(
             { requestId: req.id },
-            "No room found for checkout electricity reading",
+            "No room found for move-out electricity reading",
           );
         }
       } catch (elecErr) {
@@ -1558,8 +1561,8 @@ export const checkoutReservation = async (req, res, next) => {
     const roomName = reservation.roomId?.name || "your room";
     notify.general(
       userId,
-      "Check-Out Complete",
-      `You have been checked out from ${roomName}. Thank you for staying at Lilycrest!`,
+      "Move-Out Complete",
+      `You have been moved out from ${roomName}. Thank you for staying at Lilycrest!`,
       { entityType: "reservation" },
     );
 

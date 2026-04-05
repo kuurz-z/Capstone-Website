@@ -78,6 +78,8 @@ export function buildSegments(sortedReadings, tenantEvents) {
       activeTenantCount: activeTenants.length,
       startDate: new Date(startReading.date),
       endDate: new Date(endReading.date),
+      startEventType: startReading.eventType || "regular-billing",
+      endEventType:   endReading.eventType   || "regular-billing",
     });
   }
   return segments;

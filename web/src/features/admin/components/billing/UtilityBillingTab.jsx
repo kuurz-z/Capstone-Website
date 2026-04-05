@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Fragment } from "react";
 import {
   Zap, Plus, Check, AlertTriangle, RefreshCw,
-  ChevronDown, Trash2, X, Pencil, Save, Download,
+  ChevronDown, ChevronLeft, ChevronRight, Trash2, X, Pencil, Save, Download,
   Activity, Wallet, TrendingUp, PieChart
 } from "lucide-react";
 import { useAuth } from "../../../../shared/hooks/useAuth";
@@ -166,9 +166,11 @@ const UtilityBillingTab = ({ utilityType }) => {
   const PERIODS_PER_PAGE = 5;
   const READINGS_PER_PAGE = 7;
   const HISTORY_PER_PAGE = 5;
+  const ROOMS_PER_PAGE = 10;
   const [periodsPage, setPeriodsPage] = useState(1);
   const [readingsPage, setReadingsPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [roomsPage, setRoomsPage] = useState(1);
   const hasAutoSelectedPeriodRef = useRef(false);
 
   // Form state - billing periods default to 15th-to-15th cycle
@@ -233,6 +235,8 @@ const UtilityBillingTab = ({ utilityType }) => {
   }, [rooms, branchFilter, sidebarSearch]);
 
   // Paginated slices
+  const totalRoomPages = Math.max(1, Math.ceil(filteredRooms.length / ROOMS_PER_PAGE));
+  const pagedRooms = filteredRooms.slice((roomsPage - 1) * ROOMS_PER_PAGE, roomsPage * ROOMS_PER_PAGE);
   const totalPeriodPages = Math.max(1, Math.ceil(periods.length / PERIODS_PER_PAGE));
   const pagedPeriods = periods.slice((periodsPage - 1) * PERIODS_PER_PAGE, periodsPage * PERIODS_PER_PAGE);
   const totalReadingPages = Math.max(1, Math.ceil(movementReadings.length / READINGS_PER_PAGE));
@@ -328,7 +332,7 @@ const UtilityBillingTab = ({ utilityType }) => {
       const startDate = continuationDate || get15th();
       setPeriodForm(f => ({
         ...f,
-        startReading: continuationReading ?? latestData?.reading ?? "",
+        startReading: continuationReading ?? latestData?.reading?.reading ?? "",
         ratePerUnit:
           lastClosedPeriod?.ratePerUnit != null
             ? String(lastClosedPeriod.ratePerUnit)
@@ -451,15 +455,20 @@ const UtilityBillingTab = ({ utilityType }) => {
       return notify.warn("All fields (dates, readings, and rate) are required.");
     }
     try {
+      // Auto-clean any leftover open period before creating a new cycle
+      if (openPeriodForRoom) {
+        await deletePeriod.mutateAsync(openPeriodForRoom.id);
+      }
+
       const openedData = await openPeriod.mutateAsync({
         roomId: selectedRoomId,
         startDate: periodForm.startDate,
         startReading: Number(periodForm.startReading),
         ratePerUnit: Number(periodForm.ratePerUnit),
       });
-      
-      const newPeriodId = openedData?.period?.id || openedData?.id;
-      
+
+      const newPeriodId = openedData?.period?._id || openedData?.period?.id || openedData?.id;
+
       if (newPeriodId) {
          await closePeriod.mutateAsync({
            periodId: newPeriodId,
@@ -716,7 +725,7 @@ const UtilityBillingTab = ({ utilityType }) => {
           {isOwner && (
             <select
               value={branchFilter}
-              onChange={(e) => { setBranchFilter(e.target.value); setSelectedRoomId(null); setSelectedPeriodId(null); }}
+              onChange={(e) => { setBranchFilter(e.target.value); setSelectedRoomId(null); setSelectedPeriodId(null); setRoomsPage(1); }}
               className="eb-sidebar__filter"
             >
               <option value="">All</option>
@@ -733,7 +742,7 @@ const UtilityBillingTab = ({ utilityType }) => {
             className="eb-sidebar__search"
             placeholder="Search rooms..."
             value={sidebarSearch}
-            onChange={(e) => setSidebarSearch(e.target.value)}
+            onChange={(e) => { setSidebarSearch(e.target.value); setRoomsPage(1); }}
             aria-label="Search rooms"
           />
         </div>
@@ -748,7 +757,7 @@ const UtilityBillingTab = ({ utilityType }) => {
               {sidebarSearch ? "No rooms match your search" : "No rooms found"}
             </div>
           ) : (
-            filteredRooms.map((room) => {
+            pagedRooms.map((room) => {
               const isEmpty = !room.hasActiveTenants;
               return (
                 <button
@@ -782,6 +791,16 @@ const UtilityBillingTab = ({ utilityType }) => {
             })
           )}
         </div>
+        {filteredRooms.length > ROOMS_PER_PAGE && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderTop: "1px solid var(--border-subtle, #e2e8f0)", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+            <span>{filteredRooms.length} rooms</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button className="eb-icon-btn eb-icon-btn--muted" disabled={roomsPage <= 1} onClick={() => setRoomsPage(p => p - 1)} style={{ padding: 2 }}><ChevronLeft size={14} /></button>
+              <span>{roomsPage}/{totalRoomPages}</span>
+              <button className="eb-icon-btn eb-icon-btn--muted" disabled={roomsPage >= totalRoomPages} onClick={() => setRoomsPage(p => p + 1)} style={{ padding: 2 }}><ChevronRight size={14} /></button>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Main ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
@@ -802,16 +821,9 @@ const UtilityBillingTab = ({ utilityType }) => {
                 {selectedRoom?.type && <span className="eb-header__room-type">{selectedRoom.type}</span>}
               </div>
               <div className="eb-header__actions">
-                 {!openPeriodForRoom && (
-                   <button className="eb-btn eb-btn--primary" onClick={() => openPanel("newPeriod")}>
-                     <Plus size={13} /> + New Billing Period
-                   </button>
-                 )}
-                 {openPeriodForRoom && (
-                   <button className="eb-btn eb-btn--primary" onClick={() => openPanel("closePeriod")}>
-                     <Check size={13} /> Close Open Period
-                   </button>
-                 )}
+                 <button className="eb-btn eb-btn--primary" onClick={() => openPanel("newPeriod")}>
+                   <Plus size={13} /> New Billing Period
+                 </button>
               </div>
             </div>
 
@@ -883,7 +895,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                         type="number"
                         value={periodForm.startReading}
                         onChange={(e) => setPeriodForm({ ...periodForm, startReading: e.target.value })}
-                        placeholder={latestData?.reading != null ? `Last: ${latestData.reading}` : "e.g. 1200"}
+                        placeholder={latestData?.reading?.reading != null ? `Last: ${latestData.reading.reading}` : "e.g. 1200"}
                       />
                     </div>
                     <div className="eb-field">
@@ -928,17 +940,15 @@ const UtilityBillingTab = ({ utilityType }) => {
                     <div className="eb-table-wrap">
                       <table className="eb-table">
                         <colgroup>
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "18%" }} />
                           <col style={{ width: "20%" }} />
-                          <col style={{ width: "15%" }} />
-                          <col style={{ width: "15%" }} />
-                          <col style={{ width: "18%" }} />
-                          <col style={{ width: "18%" }} />
-                          <col style={{ width: "14%" }} />
+                          <col style={{ width: "20%" }} />
+                          <col style={{ width: "20%" }} />
                         </colgroup>
                         <thead>
                           <tr>
                             <th>Tenant Name</th>
-                            <th>Room Number</th>
                             <th>Bed Assignment</th>
                             <th>Move-In Date</th>
                             <th>Move-Out Date</th>
@@ -954,7 +964,6 @@ const UtilityBillingTab = ({ utilityType }) => {
                                   <span style={{ display: "inline-block", marginLeft: 4, padding: "2px 6px", fontSize: "0.65rem", fontWeight: 600, color: "#166534", backgroundColor: "#bbf7d0", borderRadius: 9999 }}>Active</span>
                                 )}
                               </td>
-                              <td className="eb-cell--muted">{getRoomLabel(selectedRoom)}</td>
                               <td>{h.bedName}</td>
                               <td>{fmtDate(h.moveInDate)}</td>
                               <td>{h.moveOutDate ? fmtDate(h.moveOutDate) : "—"}</td>
@@ -976,7 +985,7 @@ const UtilityBillingTab = ({ utilityType }) => {
             </section>
             {/* End of Replaced Section */}
             
-            {periods.length > 0 && (
+            {(
               <section className="eb-section eb-section--primary">
                 <div className="eb-section__header">
                   <h3 className="eb-section__title eb-section__title--primary">
@@ -985,6 +994,10 @@ const UtilityBillingTab = ({ utilityType }) => {
                   </h3>
                   <span className="eb-section__count">{periods.length} period{periods.length !== 1 ? "s" : ""}</span>
                 </div>
+                {periods.length === 0 ? (
+                  <p className="eb-empty-hint">No billing history for this room yet.</p>
+                ) : (
+                  <>
                 <div className="eb-table-wrap">
                   <table className="eb-table">
                     <colgroup>
@@ -1106,6 +1119,8 @@ const UtilityBillingTab = ({ utilityType }) => {
                   onChange={setPeriodsPage}
                   countLabel={`${periods.length} total period${periods.length !== 1 ? "s" : ""}`}
                 />
+                  </>
+                )}
               </section>
             )}
 

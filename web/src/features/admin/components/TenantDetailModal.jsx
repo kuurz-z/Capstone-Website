@@ -349,7 +349,7 @@ export default function TenantDetailModal({ tenant, onClose }) {
                     Renew Contract
                   </button>
 
-                  {/* Check Out */}
+                  {/* Move Out */}
                   <button
                     className="tenant-detail-modal-contract-download"
                     onClick={async () => {
@@ -361,27 +361,27 @@ export default function TenantDetailModal({ tenant, onClose }) {
                       if (kwhInput === null) return; // User cancelled
                       const meterReading = Number(kwhInput.trim());
                       if (!kwhInput.trim() || isNaN(meterReading) || meterReading < 0) {
-                        showNotification('A valid meter reading (kWh) is required to check out a tenant.', 'error', 4000);
+                        showNotification('A valid meter reading (kWh) is required to move out a tenant.', 'error', 4000);
                         return;
                       }
-                      if (!confirm(`Check out ${tenant.name} with meter reading ${meterReading} kWh? This will vacate their bed and mark them as inactive.`)) return;
+                      if (!confirm(`Move out ${tenant.name} with meter reading ${meterReading} kWh? This will vacate their bed and mark them as inactive.`)) return;
                       try {
                         const { reservationApi } = await import('../../../shared/api/apiClient');
                         const res = await reservationApi.checkout(tenant.reservationId, {
-                          notes: 'Admin checkout',
+                          notes: 'Admin move-out',
                           meterReading,
                         });
                         const extra = res.electricityResult
                           ? `\nMove-out reading recorded: ${res.electricityResult.meterReading} kWh`
                           : '';
-                        showNotification((res.message || 'Tenant checked out') + extra, 'success');
+                        showNotification((res.message || 'Tenant moved out') + extra, 'success');
                         onClose();
-                      } catch (err) { showNotification('Checkout failed. Please try again.', 'error'); }
+                      } catch (err) { showNotification('Move-out failed. Please try again.', 'error'); }
                     }}
                     style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 14H3.33A1.33 1.33 0 0 1 2 12.67V3.33A1.33 1.33 0 0 1 3.33 2H6M10.67 11.33 14 8l-3.33-3.33M14 8H6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    Check Out Tenant
+                    Move Out Tenant
                   </button>
 
                   {/* Transfer Room */}
