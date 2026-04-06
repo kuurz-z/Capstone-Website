@@ -9,6 +9,9 @@ const utilityReadingFind = jest.fn();
 const reservationFind = jest.fn();
 
 await jest.unstable_mockModule("../models/index.js", () => ({
+  Bill: {
+    find: jest.fn(),
+  },
   Room: {
     find: roomFind,
     findById: roomFindById,
@@ -150,7 +153,7 @@ describe("getUtilityDiagnostics", () => {
     });
   });
 
-  test("limits water rooms to private and double-sharing types", async () => {
+  test("limits water rooms to private, double-sharing, and quadruple-sharing types", async () => {
     const rooms = [
       {
         _id: "room-private",
@@ -186,10 +189,11 @@ describe("getUtilityDiagnostics", () => {
     const result = await getUtilityDiagnostics({ branch: "gil-puyat" });
 
     expect(result.electricityRooms).toHaveLength(3);
-    expect(result.waterRooms).toHaveLength(2);
+    expect(result.waterRooms).toHaveLength(3);
     expect(result.waterRooms.map((room) => room.type)).toEqual([
       "private",
       "double-sharing",
+      "quadruple-sharing",
     ]);
   });
 
@@ -221,6 +225,6 @@ describe("getUtilityDiagnostics", () => {
 
     await getUtilityDiagnostics({ branch: "gil-puyat" });
 
-    expect(selectedFields).toContain("_id type");
+    expect(selectedFields).toContain("_id name roomNumber branch type capacity");
   });
 });

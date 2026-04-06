@@ -18,6 +18,12 @@ import dayjs from "dayjs";
 export const truncate4 = (n) => Math.floor(n * 10000) / 10000;
 export const roundMoney = (n) => Math.round(n * 100) / 100;
 
+const WATER_SHARED_ROOM_TYPES = new Set(["double-sharing", "quadruple-sharing"]);
+
+function normalizeRoomType(roomType) {
+  return String(roomType || "").trim().toLowerCase();
+}
+
 function formatDurationRange(checkInDate, checkOutDate) {
   if (!checkInDate) return "Ongoing";
 
@@ -26,6 +32,146 @@ function formatDurationRange(checkInDate, checkOutDate) {
     ? dayjs(checkOutDate).format("MMM D, YYYY")
     : "Ongoing";
   return `${startLabel} - ${endLabel}`;
+}
+
+function getReservationOverlapDays(reservation, cycleStart, cycleEnd) {
+  if (!reservation?.checkInDate) return 0;
+
+  const cycleStartDay = dayjs(cycleStart).startOf("day");
+  const cycleEndDay = dayjs(cycleEnd).startOf("day");
+  const moveInDay = dayjs(reservation.checkInDate).startOf("day");
+  const moveOutDay = dayjs(reservation.checkOutDate || cycleEnd).startOf("day");
+
+  const effectiveStart = moveInDay.isAfter(cycleStartDay) ? moveInDay : cycleStartDay;
+  const effectiveEnd = moveOutDay.isBefore(cycleEndDay) ? moveOutDay : cycleEndDay;
+
+  if (!effectiveStart.isValid() || !effectiveEnd.isValid()) return 0;
+  if (!effectiveStart.isBefore(effectiveEnd)) return 0;
+  return effectiveEnd.diff(effectiveStart, "day");
+}
+
+function buildWaterOccupancyBilling({
+  utilityPeriod,
+  reservations = [],
+  roomType = null,
+}) {
+  const cycleStart = utilityPeriod?.startDate;
+  const cycleEnd = utilityPeriod?.endDate || utilityPeriod?.startDate;
+  const totalWaterCharge = truncate4(Number(utilityPeriod?.ratePerUnit || 0));
+  const normalizedRoomType = normalizeRoomType(roomType);
+  const sharedRoom = WATER_SHARED_ROOM_TYPES.has(normalizedRoomType);
+
+  const buckets = new Map();
+  for (const reservation of reservations) {
+    const coveredDays = getReservationOverlapDays(reservation, cycleStart, cycleEnd);
+    if (coveredDays <= 0) continue;
+
+    const tenantKey = String(reservation.userId?._id || reservation.userId || "");
+    if (!tenantKey) continue;
+
+    const bucket = buckets.get(tenantKey) || {
+      tenantId: tenantKey,
+      reservationId: reservation._id || null,
+      tenantName:
+        reservation.userId?.firstName
+          ? `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim()
+          : "Tenant",
+      tenantEmail: reservation.userId?.email || reservation.billingEmail || null,
+      coveredDays: 0,
+      firstCheckInDate: reservation.checkInDate || null,
+      lastCheckOutDate: reservation.checkOutDate || null,
+      overlapStart: reservation.checkInDate || null,
+      overlapEnd: reservation.checkOutDate || null,
+    };
+
+    bucket.coveredDays += coveredDays;
+    if (
+      bucket.overlapStart === null ||
+      (reservation.checkInDate && new Date(reservation.checkInDate) < new Date(bucket.overlapStart))
+    ) {
+      bucket.overlapStart = reservation.checkInDate || bucket.overlapStart;
+      bucket.firstCheckInDate = reservation.checkInDate || bucket.firstCheckInDate;
+    }
+    if (
+      !bucket.overlapEnd ||
+      (reservation.checkOutDate && new Date(reservation.checkOutDate) > new Date(bucket.overlapEnd))
+    ) {
+      bucket.overlapEnd = reservation.checkOutDate || bucket.overlapEnd;
+      bucket.lastCheckOutDate = reservation.checkOutDate || bucket.lastCheckOutDate;
+    }
+
+    buckets.set(tenantKey, bucket);
+  }
+
+  const tenantRows = [...buckets.values()].sort((left, right) => {
+    const leftDate = new Date(left.overlapStart || left.firstCheckInDate || 0).getTime();
+    const rightDate = new Date(right.overlapStart || right.firstCheckInDate || 0).getTime();
+    return leftDate - rightDate;
+  });
+
+  const totalCoveredDays = tenantRows.reduce((sum, row) => sum + row.coveredDays, 0);
+  const useFixedPrivateRule = !sharedRoom && tenantRows.length === 1;
+
+  const tenantSummaries = tenantRows.map((row) => {
+    const shareFactor = useFixedPrivateRule
+      ? 1
+      : totalCoveredDays > 0
+        ? row.coveredDays / totalCoveredDays
+        : 0;
+
+    return {
+      tenantId: row.tenantId,
+      reservationId: row.reservationId,
+      tenantName: row.tenantName,
+      tenantEmail: row.tenantEmail,
+      totalUsage: truncate4(row.coveredDays),
+      coveredDays: truncate4(row.coveredDays),
+      shareFactor: truncate4(shareFactor),
+      allocationRule: useFixedPrivateRule ? "private-fixed" : "shared-prorated-days",
+      billingBasis: "occupancy-overlap",
+      overlapStart: row.overlapStart,
+      overlapEnd: row.overlapEnd,
+      durationRange: formatDurationRange(row.firstCheckInDate, row.lastCheckOutDate),
+      billAmount: useFixedPrivateRule ? totalWaterCharge : truncate4(totalWaterCharge * shareFactor),
+    };
+  });
+
+  if (!useFixedPrivateRule && tenantSummaries.length > 0) {
+    const totalCents = Math.max(0, Math.round(totalWaterCharge * 100));
+    const rawShares = tenantRows.map((row) => {
+      const shareFactor = totalCoveredDays > 0 ? row.coveredDays / totalCoveredDays : 0;
+      return shareFactor * totalCents;
+    });
+    const baseShares = rawShares.map(Math.floor);
+    let remainder = totalCents - baseShares.reduce((sum, cents) => sum + cents, 0);
+    const fractionals = rawShares.map((raw, index) => ({
+      index,
+      frac: raw - baseShares[index],
+      days: tenantSummaries[index].coveredDays || 0,
+    }));
+    fractionals.sort((left, right) => {
+      if (right.frac !== left.frac) return right.frac - left.frac;
+      if (right.days !== left.days) return right.days - left.days;
+      return left.index - right.index;
+    });
+    for (let i = 0; i < remainder; i += 1) {
+      baseShares[fractionals[i].index] += 1;
+    }
+    tenantSummaries.forEach((summary, index) => {
+      summary.billAmount = baseShares[index] / 100;
+    });
+  }
+
+  const sumTenantCharges = tenantSummaries.reduce((sum, entry) => sum + Number(entry.billAmount || 0), 0);
+
+  return {
+    strategy: "occupancy-day-proration",
+    segments: [],
+    tenantSummaries,
+    computedTotalUsage: truncate4(totalCoveredDays),
+    computedTotalCost: totalWaterCharge,
+    verified: Math.abs(sumTenantCharges - totalWaterCharge) <= 0.01 || totalWaterCharge === 0,
+  };
 }
 
 // ============================================================================
@@ -237,9 +383,19 @@ export function computeBilling({
   reservations = [],
   tenantEvents = [], // extracted from readings if segment-based
   forceSegmented = false,
+  utilityType = "electricity",
+  roomType = null,
 }) {
   const { startDate, endDate, startReading, endReading, ratePerUnit } =
     utilityPeriod;
+  if (utilityType === "water") {
+    return buildWaterOccupancyBilling({
+      utilityPeriod,
+      reservations,
+      roomType,
+    });
+  }
+
   const totalUnits = endReading - startReading;
   const totalCost = truncate4(totalUnits * ratePerUnit);
 

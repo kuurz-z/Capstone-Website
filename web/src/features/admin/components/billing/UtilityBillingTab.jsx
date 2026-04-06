@@ -14,6 +14,7 @@ import {
   Pencil,
   Save,
   Download,
+  Send,
   Activity,
   Wallet,
   TrendingUp,
@@ -30,6 +31,7 @@ import {
   useOpenUtilityPeriod,
   useUpdateUtilityPeriod,
   useCloseUtilityPeriod,
+  useSendUtilityPeriod,
   useReviseUtilityResult,
   useDeleteUtilityReading,
   useUpdateUtilityReading,
@@ -50,7 +52,11 @@ import useBillingNotifier from "./shared/useBillingNotifier";
 import "./UtilityBillingTab.css";
 
 const EMPTY_VALUE = "-";
-const WATER_BILLABLE_ROOM_TYPES = new Set(["private", "double-sharing"]);
+const WATER_BILLABLE_ROOM_TYPES = new Set([
+  "private",
+  "double-sharing",
+  "quadruple-sharing",
+]);
 const fmtCurrency = (val) =>
   val != null
     ? `PHP ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -92,6 +98,7 @@ const getDisplayStatusLabel = (period) => {
 const getRoomBadgeLabel = (room) => {
   if (!room) return "Closed";
   if (room.latestPeriodDisplayStatus === "ready") return "Ready To Send";
+  if (room.latestPeriodDisplayStatus === "finalized") return "Sent";
   if (room.hasOpenPeriod) return "Active";
   return "Closed";
 };
@@ -101,7 +108,9 @@ const getCycleLabel = (period) =>
     : EMPTY_VALUE;
 const getMeterRangeLabel = (period, utilityType) =>
   period
-    ? `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."}` : EMPTY_VALUE}`
+    ? utilityType === "water"
+      ? `${fmtCurrency(period.ratePerUnit)} total water charge`
+      : `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."}` : EMPTY_VALUE}`
     : EMPTY_VALUE;
 const getExpectedPeriodEndDate = (period) =>
   period?.endDate || period?.targetCloseDate || null;
@@ -332,10 +341,13 @@ const UtilityBillingTab = ({ utilityType }) => {
   const openPeriod = useOpenUtilityPeriod(utilityType);
   const updatePeriod = useUpdateUtilityPeriod(utilityType);
   const closePeriod = useCloseUtilityPeriod(utilityType);
+  const sendPeriod = useSendUtilityPeriod(utilityType);
   const reviseResult = useReviseUtilityResult(utilityType);
   const deleteReading = useDeleteUtilityReading(utilityType);
   const updateReading = useUpdateUtilityReading(utilityType);
   const deletePeriod = useDeleteUtilityPeriod(utilityType);
+  const [sendingByPeriodId, setSendingByPeriodId] = useState({});
+  const [isSendingAllReady, setIsSendingAllReady] = useState(false);
 
   const rooms = useMemo(() => {
     const list = roomsData?.rooms || [];
@@ -537,6 +549,18 @@ const UtilityBillingTab = ({ utilityType }) => {
     }
     return list;
   }, [rooms, branchFilter, sidebarSearch]);
+  const readyRooms = useMemo(
+    () =>
+      filteredRooms.filter(
+        (room) =>
+          room.latestPeriodDisplayStatus === "ready" && room.latestPeriodId,
+      ),
+    [filteredRooms],
+  );
+  const selectedReadyPeriod =
+    selectedPeriodFromList && getDisplayStatus(selectedPeriodFromList) === "ready"
+      ? selectedPeriodFromList
+      : null;
 
   // Paginated slices
   const totalRoomPages = Math.max(
@@ -839,12 +863,12 @@ const UtilityBillingTab = ({ utilityType }) => {
   };
 
   const handleGenerateCycle = async () => {
+    const requiresReadings = utilityType === "electricity";
     if (
       !periodForm.startDate ||
       !periodForm.endDate ||
-      !periodForm.startReading ||
-      !periodForm.endReading ||
-      !periodForm.ratePerUnit
+      !periodForm.ratePerUnit ||
+      (requiresReadings && (!periodForm.startReading || !periodForm.endReading))
     ) {
       return notify.warn(
         "All fields (dates, readings, and rate) are required.",
@@ -864,7 +888,8 @@ const UtilityBillingTab = ({ utilityType }) => {
       const openedData = await openPeriod.mutateAsync({
         roomId: selectedRoomId,
         startDate: periodForm.startDate,
-        startReading: Number(periodForm.startReading),
+        startReading:
+          utilityType === "water" ? 0 : Number(periodForm.startReading),
         ratePerUnit: Number(periodForm.ratePerUnit),
       });
 
@@ -876,7 +901,8 @@ const UtilityBillingTab = ({ utilityType }) => {
         setSelectedPeriodId(newPeriodId);
         await closePeriod.mutateAsync({
           periodId: newPeriodId,
-          endReading: Number(periodForm.endReading),
+          endReading:
+            utilityType === "water" ? 0 : Number(periodForm.endReading),
           endDate: periodForm.endDate,
         });
         notify.success("Billing cycle generated successfully.");
@@ -926,15 +952,103 @@ const UtilityBillingTab = ({ utilityType }) => {
 
   // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Draft bills handlers (expand-on-edit) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
+  const sendSinglePeriod = async ({ periodId, roomName, cycleText }) => {
+    setSendingByPeriodId((prev) => ({ ...prev, [periodId]: true }));
+    try {
+      const response = await sendPeriod.mutateAsync({ periodId });
+      if (response?.published > 0) {
+        notify.success(
+          `${utilityType === "water" ? "Water" : "Electricity"} sent to ${response.published} tenant${response.published === 1 ? "" : "s"} for ${roomName}.`,
+        );
+      } else {
+        notify.warn(`No tenant charges were sent for ${roomName}.`);
+      }
+      if (response?.partialFailures?.length > 0) {
+        notify.warn(
+          `${response.partialFailures.length} delivery issue${response.partialFailures.length === 1 ? "" : "s"} occurred while sending ${cycleText}.`,
+        );
+      }
+      return response;
+    } catch (err) {
+      notify.error(
+        err,
+        `Failed to send ${utilityType === "water" ? "water" : "electricity"} for ${roomName}.`,
+      );
+      throw err;
+    } finally {
+      setSendingByPeriodId((prev) => ({ ...prev, [periodId]: false }));
+    }
+  };
+
+  const handleSendPeriod = (
+    period,
+    roomName = getRoomLabel(selectedRoom || {}, "Room"),
+  ) => {
+    if (!period) return;
+    const cycleText = getCycleLabel(period);
+    setConfirmModal({
+      open: true,
+      title: `Send ${utilityType === "water" ? "Water" : "Electricity"} To Tenant`,
+      message: `Send the ${utilityType} charge for ${roomName} (${cycleText}) to the tenant side now? This will make the charge visible in the tenant billing view and payment total.`,
+      variant: "primary",
+      confirmText: "Send Now",
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, open: false }));
+        await sendSinglePeriod({
+          periodId: period.id,
+          roomName,
+          cycleText,
+        });
+      },
+    });
+  };
+
+  const handleSendAllReady = () => {
+    if (readyRooms.length === 0) return;
+    setConfirmModal({
+      open: true,
+      title: `Send All Ready ${utilityType === "water" ? "Water" : "Electricity"} Charges`,
+      message: `Send ${utilityType} charges for ${readyRooms.length} ready room${readyRooms.length === 1 ? "" : "s"} to the tenant side? Each room will be processed one at a time.`,
+      variant: "primary",
+      confirmText: `Send ${readyRooms.length} Room${readyRooms.length === 1 ? "" : "s"}`,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, open: false }));
+        setIsSendingAllReady(true);
+        let successCount = 0;
+        try {
+          for (const room of readyRooms) {
+            try {
+              await sendSinglePeriod({
+                periodId: room.latestPeriodId,
+                roomName: getRoomLabel(room),
+                cycleText: room.latestPeriodDisplayStatus || "ready cycle",
+              });
+              successCount += 1;
+            } catch {
+              // Per-room errors are already surfaced.
+            }
+          }
+          if (successCount > 0) {
+            notify.success(
+              `Sent ${utilityType} charges for ${successCount} room${successCount === 1 ? "" : "s"}.`,
+            );
+          }
+        } finally {
+          setIsSendingAllReady(false);
+        }
+      },
+    });
+  };
+
   const handleExportRows = async () => {
     try {
       setIsExporting(true);
-      const response = await utilityApi.exportRows({
+      const response = await utilityApi.exportRows(utilityType, {
         branch: branchFilter || undefined,
       });
       const rows = response?.rows || [];
       if (!rows.length) {
-        notify.warn("No electricity billing rows available for export.");
+        notify.warn(`No ${utilityType} billing rows available for export.`);
         return;
       }
 
@@ -944,10 +1058,10 @@ const UtilityBillingTab = ({ utilityType }) => {
         `${utilityType}_billing_${branchFilter || "all"}_${getTodayInput()}`,
       );
       notify.success(
-        `Exported ${rows.length} electricity billing row${rows.length === 1 ? "" : "s"}.`,
+        `Exported ${rows.length} ${utilityType} billing row${rows.length === 1 ? "" : "s"}.`,
       );
     } catch (error) {
-      notify.error(error, "Failed to export electricity billing.");
+      notify.error(error, `Failed to export ${utilityType} billing.`);
     } finally {
       setIsExporting(false);
     }
@@ -967,7 +1081,8 @@ const UtilityBillingTab = ({ utilityType }) => {
               {getDisplayStatusLabel(period)}
             </span>
             <span className="eb-minimal-header__date">
-              Meter Reading: {getMeterRangeLabel(period, utilityType)}
+              {utilityType === "water" ? "Water Charge:" : "Meter Reading:"}{" "}
+              {getMeterRangeLabel(period, utilityType)}
             </span>
           </div>
           <div className="eb-minimal-header__actions">
@@ -987,7 +1102,9 @@ const UtilityBillingTab = ({ utilityType }) => {
               <div className="eb-minimal-stats">
                 <div className="eb-minimal-stat">
                   <span className="eb-minimal-stat__label">
-                    Total {utilityType === "electricity" ? "kWh" : "cu.m."}
+                    {utilityType === "water"
+                      ? "Total covered days"
+                      : `Total ${utilityType === "electricity" ? "kWh" : "cu.m."}`}
                   </span>
                   <span className="eb-minimal-stat__value">
                     {fmtNumber(result.computedTotalUsage, 2)}
@@ -1002,7 +1119,9 @@ const UtilityBillingTab = ({ utilityType }) => {
                   </span>
                 </div>
                 <div className="eb-minimal-stat">
-                  <span className="eb-minimal-stat__label">Current Rate</span>
+                  <span className="eb-minimal-stat__label">
+                    {utilityType === "water" ? "Water charge" : "Current Rate"}
+                  </span>
                   <span className="eb-minimal-stat__value">
                     {fmtCurrency(result.ratePerUnit)}{" "}
                     <small>
@@ -1330,6 +1449,40 @@ const UtilityBillingTab = ({ utilityType }) => {
           </span>
         </div>
         <div className="bw-summary-bar__actions">
+          {readyRooms.length > 0 && (
+            <button
+              type="button"
+              className="eb-btn eb-btn--primary"
+              onClick={handleSendAllReady}
+              disabled={isSendingAllReady || sendPeriod.isPending}
+            >
+              <Send size={13} />{" "}
+              {isSendingAllReady
+                ? "Sending..."
+                : `Send All Ready (${readyRooms.length})`}
+            </button>
+          )}
+          {selectedReadyPeriod && (
+            <button
+              type="button"
+              className="eb-btn eb-btn--outline"
+              onClick={() =>
+                handleSendPeriod(
+                  selectedReadyPeriod,
+                  getRoomLabel(selectedRoom || {}, "Room"),
+                )
+              }
+              disabled={
+                Boolean(sendingByPeriodId[selectedReadyPeriod.id]) ||
+                sendPeriod.isPending
+              }
+            >
+              <Send size={13} />{" "}
+              {sendingByPeriodId[selectedReadyPeriod.id]
+                ? "Sending..."
+                : "Send To Tenant"}
+            </button>
+          )}
           <button
             type="button"
             className="eb-btn eb-btn--ghost"
@@ -1482,7 +1635,10 @@ const UtilityBillingTab = ({ utilityType }) => {
           {!selectedRoomId ? (
             <div className="eb-empty-state">
               <Zap size={40} strokeWidth={1.5} />
-              <p>Select a room to manage electricity billing</p>
+              <p>
+                Select a room to manage{" "}
+                {utilityType === "water" ? "water" : "electricity"} billing
+              </p>
             </div>
           ) : (
             <div className="eb-content">
@@ -1587,7 +1743,9 @@ const UtilityBillingTab = ({ utilityType }) => {
                             fontSize: "0.9rem",
                           }}
                         >
-                          Meter Consumption:
+                          {utilityType === "water"
+                            ? "Covered Days:"
+                            : "Meter Consumption:"}
                         </span>
                         <span style={{ fontWeight: 500 }}>
                           {periods[0].endReading != null
@@ -1740,8 +1898,9 @@ const UtilityBillingTab = ({ utilityType }) => {
                       </div>
                       <div className="eb-field">
                         <label>
-                          Rate (PHP/
-                          {utilityType === "electricity" ? "kWh" : "cu.m."})
+                          {utilityType === "water"
+                            ? "Total Water Charge (PHP)"
+                            : `Rate (PHP/${utilityType === "electricity" ? "kWh" : "cu.m."})`}
                         </label>
                         <input
                           type="number"
@@ -1757,46 +1916,48 @@ const UtilityBillingTab = ({ utilityType }) => {
                         />
                       </div>
                     </div>
-                    <div className="eb-form-row">
-                      <div className="eb-field">
-                        <label>
-                          Opening Meter Reading (
-                          {utilityType === "electricity" ? "kWh" : "cu.m."})
-                        </label>
-                        <input
-                          type="number"
-                          value={periodForm.startReading}
-                          onChange={(e) =>
-                            setPeriodForm({
-                              ...periodForm,
-                              startReading: e.target.value,
-                            })
-                          }
-                          placeholder={
-                            latestData?.reading?.reading != null
-                              ? `Last: ${latestData.reading.reading}`
-                              : "e.g. 1200"
-                          }
-                        />
+                    {utilityType === "electricity" ? (
+                      <div className="eb-form-row">
+                        <div className="eb-field">
+                          <label>Opening Meter Reading (kWh)</label>
+                          <input
+                            type="number"
+                            value={periodForm.startReading}
+                            onChange={(e) =>
+                              setPeriodForm({
+                                ...periodForm,
+                                startReading: e.target.value,
+                              })
+                            }
+                            placeholder={
+                              latestData?.reading?.reading != null
+                                ? `Last: ${latestData.reading.reading}`
+                                : "e.g. 1200"
+                            }
+                          />
+                        </div>
+                        <div className="eb-field">
+                          <label>Final Reading (Monthly Cutoff) (kWh)</label>
+                          <input
+                            type="number"
+                            value={periodForm.endReading}
+                            onChange={(e) =>
+                              setPeriodForm({
+                                ...periodForm,
+                                endReading: e.target.value,
+                              })
+                            }
+                            placeholder="e.g. 1350"
+                          />
+                        </div>
                       </div>
-                      <div className="eb-field">
-                        <label>
-                          Final Reading (Monthly Cutoff) (
-                          {utilityType === "electricity" ? "kWh" : "cu.m."})
-                        </label>
-                        <input
-                          type="number"
-                          value={periodForm.endReading}
-                          onChange={(e) =>
-                            setPeriodForm({
-                              ...periodForm,
-                              endReading: e.target.value,
-                            })
-                          }
-                          placeholder="e.g. 1350"
-                        />
+                    ) : (
+                      <div className="eb-panel__hint">
+                        Water billing uses room occupancy overlap. Enter the total
+                        water charge above and the billing engine will split it by
+                        covered days.
                       </div>
-                    </div>
+                    )}
                     <div className="eb-panel__footer">
                       <button
                         className="eb-btn eb-btn--primary"
@@ -2013,7 +2174,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                         <thead>
                           <tr>
                             <th>Cycle</th>
-                            <th>Meter</th>
+                            <th>{utilityType === "water" ? "Basis" : "Meter"}</th>
                             <th>Rate</th>
                             <th>Status</th>
                             <th>Actions</th>
@@ -2101,6 +2262,26 @@ const UtilityBillingTab = ({ utilityType }) => {
                                       {selectedPeriodId === p.id
                                         ? "Hide Details"
                                         : "View Details"}
+                                    </button>
+                                  )}
+                                  {getDisplayStatus(p) === "ready" && (
+                                    <button
+                                      className="eb-btn eb-btn--xs eb-btn--primary"
+                                      onClick={() =>
+                                        handleSendPeriod(
+                                          p,
+                                          getRoomLabel(selectedRoom || {}, "Room"),
+                                        )
+                                      }
+                                      disabled={
+                                        Boolean(sendingByPeriodId[p.id]) ||
+                                        sendPeriod.isPending
+                                      }
+                                    >
+                                      <Send size={11} />{" "}
+                                      {sendingByPeriodId[p.id]
+                                        ? "Sending..."
+                                        : "Send"}
                                     </button>
                                   )}
                                   {p.status === "open" &&

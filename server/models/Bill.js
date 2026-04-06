@@ -25,6 +25,38 @@ import mongoose from "mongoose";
 // SCHEMA DEFINITION
 // ============================================================================
 
+const utilityDispatchEntrySchema = new mongoose.Schema(
+  {
+    state: {
+      type: String,
+      enum: ["draft", "sent"],
+      default: "draft",
+    },
+    periodId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UtilityPeriod",
+      default: null,
+    },
+    publishedAt: {
+      type: Date,
+      default: null,
+    },
+    issuedAt: {
+      type: Date,
+      default: null,
+    },
+    dueDate: {
+      type: Date,
+      default: null,
+    },
+    amount: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false },
+);
+
 const billSchema = new mongoose.Schema(
   {
     // --- Bill Identity ---
@@ -217,6 +249,22 @@ const billSchema = new mongoose.Schema(
     issuedAt: {
       type: Date,
       default: null,
+    },
+    utilityDispatch: {
+      type: new mongoose.Schema(
+        {
+          electricity: {
+            type: utilityDispatchEntrySchema,
+            default: () => ({}),
+          },
+          water: {
+            type: utilityDispatchEntrySchema,
+            default: () => ({}),
+          },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
     },
     isArchived: {
       type: Boolean,

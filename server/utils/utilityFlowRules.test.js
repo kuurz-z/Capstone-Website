@@ -17,7 +17,7 @@ describe("isWaterBillableRoom", () => {
   test("only allows private and double-sharing rooms", () => {
     expect(isWaterBillableRoom("private")).toBe(true);
     expect(isWaterBillableRoom("double-sharing")).toBe(true);
-    expect(isWaterBillableRoom("quadruple-sharing")).toBe(false);
+    expect(isWaterBillableRoom("quadruple-sharing")).toBe(true);
   });
 });
 

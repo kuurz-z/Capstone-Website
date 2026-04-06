@@ -144,6 +144,16 @@ export function useCloseUtilityPeriod(utilityType) {
   });
 }
 
+export function useSendUtilityPeriod(utilityType) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ periodId }) => utilityApi.sendPeriod(utilityType, periodId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
+    },
+  });
+}
+
 export function useBatchCloseUtilityPeriods(utilityType) {
   const qc = useQueryClient();
   return useMutation({

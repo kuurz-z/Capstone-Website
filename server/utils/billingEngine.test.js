@@ -92,3 +92,109 @@ describe("computeBilling - strict segmented mode", () => {
     ).toThrow(/no active tenants/i);
   });
 });
+
+describe("computeBilling - water occupancy mode", () => {
+  test("splits shared-room water charge by covered days", () => {
+    const utilityPeriod = {
+      startDate: new Date("2026-03-15T00:00:00.000Z"),
+      endDate: new Date("2026-04-15T00:00:00.000Z"),
+      startReading: 0,
+      endReading: 0,
+      ratePerUnit: 1200,
+    };
+
+    const reservations = [
+      {
+        _id: "res-1",
+        userId: {
+          _id: "tenant-1",
+          firstName: "Ana",
+          lastName: "Stay",
+          email: "ana@example.com",
+        },
+        checkInDate: new Date("2026-03-15T00:00:00.000Z"),
+        checkOutDate: null,
+      },
+      {
+        _id: "res-2",
+        userId: {
+          _id: "tenant-2",
+          firstName: "Ben",
+          lastName: "Leave",
+          email: "ben@example.com",
+        },
+        checkInDate: new Date("2026-03-20T00:00:00.000Z"),
+        checkOutDate: new Date("2026-04-05T00:00:00.000Z"),
+      },
+    ];
+
+    const result = computeBilling({
+      utilityPeriod,
+      reservations,
+      utilityType: "water",
+      roomType: "double-sharing",
+    });
+
+    expect(result.strategy).toBe("occupancy-day-proration");
+    expect(result.segments).toEqual([]);
+    expect(result.computedTotalCost).toBe(1200);
+    expect(result.tenantSummaries).toHaveLength(2);
+    expect(result.tenantSummaries[0]).toEqual(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        coveredDays: 31,
+        allocationRule: "shared-prorated-days",
+      }),
+    );
+    expect(result.tenantSummaries[1]).toEqual(
+      expect.objectContaining({
+        tenantId: "tenant-2",
+        coveredDays: 16,
+        allocationRule: "shared-prorated-days",
+      }),
+    );
+    expect(
+      result.tenantSummaries.reduce((sum, entry) => sum + entry.billAmount, 0),
+    ).toBeCloseTo(1200, 2);
+  });
+
+  test("charges a private room fixed amount for a single tenant", () => {
+    const utilityPeriod = {
+      startDate: new Date("2026-03-15T00:00:00.000Z"),
+      endDate: new Date("2026-04-15T00:00:00.000Z"),
+      startReading: 0,
+      endReading: 0,
+      ratePerUnit: 500,
+    };
+
+    const reservations = [
+      {
+        _id: "res-1",
+        userId: {
+          _id: "tenant-1",
+          firstName: "Pri",
+          lastName: "Vate",
+        },
+        checkInDate: new Date("2026-03-18T00:00:00.000Z"),
+        checkOutDate: null,
+      },
+    ];
+
+    const result = computeBilling({
+      utilityPeriod,
+      reservations,
+      utilityType: "water",
+      roomType: "private",
+    });
+
+    expect(result.tenantSummaries).toHaveLength(1);
+    expect(result.tenantSummaries[0]).toEqual(
+      expect.objectContaining({
+        coveredDays: 28,
+        shareFactor: 1,
+        billAmount: 500,
+        allocationRule: "private-fixed",
+      }),
+    );
+  });
+});

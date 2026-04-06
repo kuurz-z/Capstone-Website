@@ -24,6 +24,9 @@ export const utilityApi = {
   closePeriod: (utilityType, periodId, data) =>
     authFetch(`/utilities/${utilityType}/periods/${periodId}/close`, { method: "PATCH", body: JSON.stringify(data) }),
 
+  sendPeriod: (utilityType, periodId) =>
+    authFetch(`/utilities/${utilityType}/periods/${periodId}/send`, { method: "POST" }),
+
   batchClose: (utilityType, data) =>
     authFetch(`/utilities/${utilityType}/batch-close`, { method: "POST", body: JSON.stringify(data) }),
 

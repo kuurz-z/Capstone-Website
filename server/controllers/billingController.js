@@ -26,6 +26,9 @@ import {
 import {
   buildBillingCycle,
   getBillRemainingAmount,
+  getVisibleBillCharges,
+  getVisibleBillSnapshot,
+  isUtilityChargeVisible,
   getReservationCreditAvailable,
   resolveBillStatus,
   roundMoney,
@@ -62,36 +65,39 @@ async function markOverdueBills(bills) {
 }
 
 /** Map a Bill document to API response shape (shared by getBillsByBranch + getAllBills) */
-const formatBill = (bill) => ({
-  id: bill._id,
-  tenant: bill.userId
-    ? {
-        id: bill.userId._id,
-        name: `${bill.userId.firstName || ""} ${bill.userId.lastName || ""}`.trim(),
-        email: bill.userId.email,
-      }
-    : null,
-  room: bill.reservationId?.roomName || "N/A",
-  branch: bill.branch,
-  billingMonth: bill.billingMonth,
-  dueDate: bill.dueDate,
-  issuedAt: bill.issuedAt || bill.sentAt || null,
-  billingCycleStart: bill.billingCycleStart,
-  billingCycleEnd: bill.billingCycleEnd,
-  utilityCycleStart: bill.utilityCycleStart || null,
-  utilityCycleEnd: bill.utilityCycleEnd || null,
-  utilityReadingDate: bill.utilityReadingDate || null,
-  charges: bill.charges,
-  grossAmount: bill.grossAmount,
-  reservationCreditApplied: bill.reservationCreditApplied || 0,
-  totalAmount: bill.totalAmount,
-  paidAmount: bill.paidAmount,
-  remainingAmount: bill.remainingAmount ?? getBillRemainingAmount(bill),
-  isFirstCycleBill: !!bill.isFirstCycleBill,
-  status: bill.status,
-  notes: bill.notes,
-  createdAt: bill.createdAt,
-});
+const formatBill = (bill) => {
+  const visible = getVisibleBillSnapshot(bill);
+  return {
+    id: bill._id,
+    tenant: bill.userId
+      ? {
+          id: bill.userId._id,
+          name: `${bill.userId.firstName || ""} ${bill.userId.lastName || ""}`.trim(),
+          email: bill.userId.email,
+        }
+      : null,
+    room: bill.reservationId?.roomName || "N/A",
+    branch: bill.branch,
+    billingMonth: bill.billingMonth,
+    dueDate: visible.dueDate,
+    issuedAt: visible.issuedAt,
+    billingCycleStart: bill.billingCycleStart,
+    billingCycleEnd: bill.billingCycleEnd,
+    utilityCycleStart: bill.utilityCycleStart || null,
+    utilityCycleEnd: bill.utilityCycleEnd || null,
+    utilityReadingDate: bill.utilityReadingDate || null,
+    charges: visible.charges,
+    grossAmount: visible.grossAmount,
+    reservationCreditApplied: bill.reservationCreditApplied || 0,
+    totalAmount: visible.totalAmount,
+    paidAmount: bill.paidAmount || 0,
+    remainingAmount: visible.remainingAmount,
+    isFirstCycleBill: !!bill.isFirstCycleBill,
+    status: visible.status,
+    notes: bill.notes,
+    createdAt: bill.createdAt,
+  };
+};
 
 async function getReservationBillingContext(reservationId, currentBillId = null) {
   const reservation = await Reservation.findById(reservationId);
@@ -448,22 +454,23 @@ export const getCurrentBilling = async (req, res, next) => {
     if (!currentBill)
       return res.status(404).json({ error: "No current bill found" });
 
+    const visible = getVisibleBillSnapshot(currentBill);
     res.json({
-      currentBalance: currentBill.remainingAmount ?? (currentBill.totalAmount - currentBill.paidAmount),
-      totalAmount: currentBill.totalAmount,
-      grossAmount: currentBill.grossAmount ?? currentBill.totalAmount,
+      currentBalance: visible.remainingAmount,
+      totalAmount: visible.totalAmount,
+      grossAmount: visible.grossAmount,
       reservationCreditApplied: currentBill.reservationCreditApplied || 0,
-      paidAmount: currentBill.paidAmount,
-      remainingAmount: currentBill.remainingAmount ?? (currentBill.totalAmount - currentBill.paidAmount),
-      dueDate: currentBill.dueDate,
-      issuedAt: currentBill.issuedAt || currentBill.sentAt || null,
+      paidAmount: currentBill.paidAmount || 0,
+      remainingAmount: visible.remainingAmount,
+      dueDate: visible.dueDate,
+      issuedAt: visible.issuedAt,
       billingCycleStart: currentBill.billingCycleStart,
       billingCycleEnd: currentBill.billingCycleEnd,
       utilityCycleStart: currentBill.utilityCycleStart || null,
       utilityCycleEnd: currentBill.utilityCycleEnd || null,
       utilityReadingDate: currentBill.utilityReadingDate || null,
-      status: currentBill.status,
-      charges: currentBill.charges,
+      status: visible.status,
+      charges: visible.charges,
     });
   } catch (error) {
     next(error);
@@ -490,23 +497,26 @@ export const getBillingHistory = async (req, res, next) => {
       .limit(limit);
     res.json({
       count: bills.length,
-      bills: bills.map((b) => ({
-        id: b._id,
-        date: b.billingMonth,
-        dueDate: b.dueDate,
-        issuedAt: b.issuedAt || b.sentAt || null,
-        amount: b.totalAmount,
-        grossAmount: b.grossAmount ?? b.totalAmount,
-        reservationCreditApplied: b.reservationCreditApplied || 0,
-        paidAmount: b.paidAmount,
-        remainingAmount: b.remainingAmount ?? getBillRemainingAmount(b),
-        utilityCycleStart: b.utilityCycleStart || null,
-        utilityCycleEnd: b.utilityCycleEnd || null,
-        utilityReadingDate: b.utilityReadingDate || null,
-        status: b.status,
-        charges: b.charges,
-        paymentDate: b.paymentDate,
-      })),
+      bills: bills.map((b) => {
+        const visible = getVisibleBillSnapshot(b);
+        return {
+          id: b._id,
+          date: b.billingMonth,
+          dueDate: visible.dueDate,
+          issuedAt: visible.issuedAt,
+          amount: visible.totalAmount,
+          grossAmount: visible.grossAmount,
+          reservationCreditApplied: b.reservationCreditApplied || 0,
+          paidAmount: b.paidAmount || 0,
+          remainingAmount: visible.remainingAmount,
+          utilityCycleStart: b.utilityCycleStart || null,
+          utilityCycleEnd: b.utilityCycleEnd || null,
+          utilityReadingDate: b.utilityReadingDate || null,
+          status: visible.status,
+          charges: visible.charges,
+          paymentDate: b.paymentDate,
+        };
+      }),
     });
   } catch (error) {
     next(error);
@@ -541,8 +551,10 @@ export const markBillAsPaid = async (req, res, next) => {
     if (!bill) return res.status(404).json({ error: "Bill not found" });
     if (!admin.isSuperAdmin && bill.branch !== admin.branch)
       return res.status(403).json({ error: "Bill not found" });
-    const appliedAmount = Number(amount || bill.totalAmount);
-    bill.paidAmount = appliedAmount;
+    const appliedAmount = Number(
+      amount ?? bill.remainingAmount ?? bill.totalAmount,
+    );
+    bill.paidAmount = roundMoney(Number(bill.paidAmount || 0) + appliedAmount);
     syncBillAmounts(bill);
     if (bill.paidAmount > 0 && !bill.paymentDate) {
       bill.paymentDate = new Date();
@@ -985,33 +997,35 @@ export const getMyBills = async (req, res, next) => {
     const billResponses = await Promise.all(
       bills.map(async (b) => {
         const utilityBreakdowns = {};
-        if (Number(b.charges?.electricity || 0) > 0) {
+        const visibleCharges = getVisibleBillCharges(b);
+        if (Number(visibleCharges.electricity || 0) > 0) {
           utilityBreakdowns.electricity =
             await buildTenantUtilityBreakdown({ dbUser, bill: b, utilityType: "electricity" });
         }
-        if (Number(b.charges?.water || 0) > 0) {
+        if (Number(visibleCharges.water || 0) > 0) {
           utilityBreakdowns.water =
             await buildTenantUtilityBreakdown({ dbUser, bill: b, utilityType: "water" });
         }
 
+        const visible = getVisibleBillSnapshot(b);
         return {
           id: b._id,
           billingMonth: b.billingMonth,
           billingCycleStart: b.billingCycleStart,
           billingCycleEnd: b.billingCycleEnd,
-          dueDate: b.dueDate,
-          issuedAt: b.issuedAt || b.sentAt || null,
+          dueDate: visible.dueDate,
+          issuedAt: visible.issuedAt,
           utilityCycleStart: b.utilityCycleStart || null,
           utilityCycleEnd: b.utilityCycleEnd || null,
           utilityReadingDate: b.utilityReadingDate || null,
           utilityPeriodId: null,
-          charges: b.charges,
-          totalAmount: b.totalAmount,
-          grossAmount: b.grossAmount ?? b.totalAmount,
+          charges: visible.charges,
+          totalAmount: visible.totalAmount,
+          grossAmount: visible.grossAmount,
           reservationCreditApplied: b.reservationCreditApplied || 0,
-          paidAmount: b.paidAmount,
-          remainingAmount: b.remainingAmount ?? getBillRemainingAmount(b),
-          status: resolveBillStatus(b),
+          paidAmount: b.paidAmount || 0,
+          remainingAmount: visible.remainingAmount,
+          status: visible.status,
           proRataDays: b.proRataDays,
           isFirstCycleBill: !!b.isFirstCycleBill,
           room: b.roomId?.name || "N/A",
@@ -1057,7 +1071,7 @@ export const submitPaymentProof = async (req, res, next) => {
       return res
         .status(403)
         .json({ error: "You can only submit proof for your own bills" });
-    if (bill.status === "paid")
+    if (getVisibleBillSnapshot(bill).status === "paid")
       return res.status(400).json({ error: "Bill is already paid" });
     if (bill.paymentProof?.verificationStatus === "pending-verification")
       return res.status(400).json({
@@ -1112,10 +1126,14 @@ export const verifyPayment = async (req, res, next) => {
       bill.paymentProof.verificationStatus = "approved";
       bill.paymentProof.verifiedBy = admin._id;
       bill.paymentProof.verifiedAt = new Date();
-      bill.paidAmount = bill.paymentProof.submittedAmount || bill.totalAmount;
-      bill.status =
-        bill.paidAmount >= bill.totalAmount ? "paid" : "partially-paid";
-      bill.paymentDate = new Date();
+      bill.paidAmount = roundMoney(
+        Number(bill.paidAmount || 0) +
+          Number(bill.paymentProof.submittedAmount || bill.totalAmount || 0),
+      );
+      syncBillAmounts(bill);
+      if (bill.paidAmount > 0) {
+        bill.paymentDate = new Date();
+      }
     } else {
       bill.paymentProof.verificationStatus = "rejected";
       bill.paymentProof.rejectionReason =
@@ -1131,12 +1149,14 @@ export const verifyPayment = async (req, res, next) => {
       if (tenant?.email) {
         const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
         if (action === "approve") {
+          const approvedAmount =
+            bill.paymentProof?.submittedAmount || bill.totalAmount || 0;
           sendPaymentApprovedEmail({
             to: tenant.email,
             tenantName:
               `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
             billingMonth: monthStr,
-            paidAmount: bill.paidAmount,
+            paidAmount: approvedAmount,
             branchName: bill.branch,
           }).catch((e) => logger.warn({ err: e }, "Payment approved email failed"));
         } else {
@@ -1199,7 +1219,7 @@ export const getPendingVerifications = async (req, res, next) => {
         room: b.roomId?.name || "N/A",
         branch: b.branch,
         billingMonth: b.billingMonth,
-        totalAmount: b.totalAmount,
+        totalAmount: getVisibleBillSnapshot(b).totalAmount,
         paymentProof: b.paymentProof,
       })),
     });
@@ -1644,6 +1664,9 @@ export const getMyUtilityBreakdownByBillId = async (req, res, next) => {
     const { dbUser, bill } = await getTenantBillForRequest(req, billId);
     if (!dbUser) return res.status(404).json({ error: "User not found" });
     if (!bill) return res.status(404).json({ error: "Bill not found" });
+    if (!isUtilityChargeVisible(bill, utilityType)) {
+      return res.status(404).json({ error: `No ${utilityType} breakdown found for this bill` });
+    }
     const breakdown = await buildTenantUtilityBreakdown({ dbUser, bill, utilityType });
     if (!breakdown) {
       return res.status(404).json({ error: `No ${utilityType} breakdown found for this bill` });

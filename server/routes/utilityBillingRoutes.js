@@ -16,6 +16,7 @@ import {
   updateUtilityReading,
   reviseUtilityResult,
   getRoomHistory,
+  sendUtilityPeriod,
 } from "../controllers/utilityBillingController.js";
 import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 
@@ -45,6 +46,7 @@ router.patch("/:utilityType/readings/:id", updateUtilityReading);
 router.delete("/:utilityType/readings/:id", deleteUtilityReading);
 
 router.patch("/:utilityType/periods/:id/close", closeUtilityPeriod);
+router.post("/:utilityType/periods/:id/send", sendUtilityPeriod);
 router.post("/:utilityType/batch-close", batchCloseUtilityPeriods);
 router.post("/:utilityType/results/:periodId/revise", reviseUtilityResult);
 

@@ -5,10 +5,17 @@ import {
   UtilityPeriod,
   UtilityReading,
 } from "../models/index.js";
-import { getUtilityTargetCloseDate } from "./billingPolicy.js";
+import {
+  getUtilityDispatchEntry,
+  getUtilityTargetCloseDate,
+} from "./billingPolicy.js";
 import { getRoomLabel } from "./roomLabel.js";
 
-const WATER_BILLABLE_ROOM_TYPES = new Set(["private", "double-sharing"]);
+const WATER_BILLABLE_ROOM_TYPES = new Set([
+  "private",
+  "double-sharing",
+  "quadruple-sharing",
+]);
 
 function addIssue(issues, issueCode, status, recommendedAction, extra = {}) {
   issues.push({ issueCode, status, recommendedAction, ...extra });
@@ -77,18 +84,23 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
   let latestPeriodDisplayStatus = null;
   if (openPeriod) {
     latestPeriodDisplayStatus = "open";
-  } else if (latestPeriod?.revised) {
-    latestPeriodDisplayStatus = "revised";
   } else if (latestPeriod) {
     const summaryBillIds = (latestPeriod.tenantSummaries || []).map((s) => String(s.billId)).filter(Boolean);
     if (summaryBillIds.length === 0) {
-      latestPeriodDisplayStatus = latestPeriod.status || "closed";
+      latestPeriodDisplayStatus = latestPeriod.revised ? "revised" : (latestPeriod.status || "closed");
     } else {
-      const hasDraft = summaryBillIds.some((id) => billStatusMap.get(id) === "draft");
-      const hasSent  = summaryBillIds.some((id) => billStatusMap.has(id) && billStatusMap.get(id) !== "draft");
+      const linkedBills = summaryBillIds
+        .map((id) => billStatusMap.get(id))
+        .filter(Boolean);
+      const hasDraft = linkedBills.some(
+        (bill) => getUtilityDispatchEntry(bill, utilityType).state !== "sent",
+      );
+      const hasSent = linkedBills.some(
+        (bill) => getUtilityDispatchEntry(bill, utilityType).state === "sent",
+      );
       if (hasDraft) latestPeriodDisplayStatus = "ready";
       else if (hasSent) latestPeriodDisplayStatus = "finalized";
-      else latestPeriodDisplayStatus = latestPeriod.status || "closed";
+      else latestPeriodDisplayStatus = latestPeriod.revised ? "revised" : (latestPeriod.status || "closed");
     }
   }
 
@@ -111,6 +123,7 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     hasOpenPeriod: Boolean(openPeriod),
     orphanReadingIds: orphanReadings.map((r) => r._id),
     openPeriodId: openPeriod?._id || null,
+    latestPeriodId: latestPeriod?._id || null,
     latestPeriodDisplayStatus,
     targetCloseDate: openPeriod ? getUtilityTargetCloseDate(openPeriod.startDate) : null,
     issueCodes: issues.map((i) => i.issueCode),
@@ -136,8 +149,10 @@ export async function getUtilityRoomDiagnostics(roomId, utilityType) {
   const allBillIds = periods.flatMap((p) => (p.tenantSummaries || []).map((s) => s.billId)).filter(Boolean);
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
-    const bills = await Bill.find({ _id: { $in: allBillIds } }).select("status").lean();
-    for (const b of bills) billStatusMap.set(String(b._id), b.status);
+    const bills = await Bill.find({ _id: { $in: allBillIds } })
+      .select("status utilityDispatch sentAt issuedAt dueDate charges")
+      .lean();
+    for (const b of bills) billStatusMap.set(String(b._id), b);
   }
 
   return buildRoomDiagnostic({ room, utilityType, periods, readings, reservations, billStatusMap });
@@ -167,8 +182,10 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
   const allBillIds = allPeriods.flatMap((p) => (p.tenantSummaries || []).map((s) => s.billId)).filter(Boolean);
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
-    const bills = await Bill.find({ _id: { $in: allBillIds } }).select("status").lean();
-    for (const b of bills) billStatusMap.set(String(b._id), b.status);
+    const bills = await Bill.find({ _id: { $in: allBillIds } })
+      .select("status utilityDispatch sentAt issuedAt dueDate charges")
+      .lean();
+    for (const b of bills) billStatusMap.set(String(b._id), b);
   }
 
   // Group by roomId in memory

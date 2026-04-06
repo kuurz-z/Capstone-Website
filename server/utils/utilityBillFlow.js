@@ -1,12 +1,17 @@
 import dayjs from "dayjs";
 import { Bill, Reservation, Room, User } from "../models/index.js";
-import { sendBillGeneratedEmail } from "../config/email.js";
+import {
+  sendBillGeneratedEmail,
+  sendUtilityChargeAvailableEmail,
+} from "../config/email.js";
 import {
   buildBillingCycle,
+  getUtilityDispatchEntry,
   getReservationCreditAvailable,
   getUtilityCycleFromPeriod,
   getUtilityDueDate,
   getUtilityIssueDate,
+  getVisibleBillCharges,
   roundMoney,
   syncBillAmounts,
 } from "./billingPolicy.js";
@@ -15,6 +20,21 @@ import { generateBillPdf } from "./pdfGenerator.js";
 
 function getUtilityChargeField(utilityType) {
   return utilityType === "water" ? "water" : "electricity";
+}
+
+function setUtilityDispatchEntry(bill, utilityType, updates = {}) {
+  const current = getUtilityDispatchEntry(bill, utilityType);
+  bill.utilityDispatch = bill.utilityDispatch || {};
+  bill.utilityDispatch[utilityType] = {
+    state: "draft",
+    periodId: null,
+    publishedAt: null,
+    issuedAt: null,
+    dueDate: null,
+    amount: Number(current.amount || bill?.charges?.[utilityType] || 0),
+    ...current,
+    ...updates,
+  };
 }
 
 export async function getReservationBillingContextForUser(userId) {
@@ -83,7 +103,7 @@ export async function upsertDraftBillsForUtility({
       isArchived: false,
     });
 
-    if (bill && bill.status !== "draft") {
+    if (bill && getUtilityDispatchEntry(bill, utilityType).state === "sent") {
       const error = new Error(
         `Cannot sync ${utilityType} charges because one or more bills were already sent.`,
       );
@@ -123,6 +143,14 @@ export async function upsertDraftBillsForUtility({
     }
 
     bill.charges[chargeField] = roundMoney(summary.billAmount || 0);
+    setUtilityDispatchEntry(bill, utilityType, {
+      state: "draft",
+      periodId: period?._id || period?.id || null,
+      publishedAt: null,
+      issuedAt: null,
+      dueDate: null,
+      amount: roundMoney(summary.billAmount || 0),
+    });
     bill.utilityCycleStart = utilityCycle.utilityCycleStart;
     bill.utilityCycleEnd = utilityCycle.utilityCycleEnd;
     bill.utilityReadingDate = utilityCycle.utilityReadingDate;
@@ -297,4 +325,112 @@ export async function sendDraftUtilityBills({
   }
 
   return { sent, issuedAt, dueDate, sentAt, deliveries };
+}
+
+export async function sendUtilityPeriodBills({
+  bills,
+  period,
+  result,
+  utilityType,
+}) {
+  const chargeField = getUtilityChargeField(utilityType);
+  const publishedAt = new Date();
+  const utilityCycle = getUtilityCycleFromPeriod(period);
+  const issuedAt = getUtilityIssueDate({
+    readingDate: utilityCycle.utilityReadingDate,
+    finalizedAt: publishedAt,
+  });
+  const dueDate = getUtilityDueDate(issuedAt);
+  let sent = 0;
+  const deliveries = [];
+
+  const populatedBills = await Bill.populate(bills, [
+    { path: "userId", select: "firstName lastName email" },
+    { path: "roomId", select: "name roomNumber branch" },
+  ]);
+
+  for (const bill of populatedBills) {
+    const utilityAmount = roundMoney(bill?.charges?.[chargeField] || 0);
+    const currentDispatch = getUtilityDispatchEntry(bill, utilityType);
+    if (utilityAmount <= 0 || currentDispatch.state === "sent") {
+      continue;
+    }
+
+    setUtilityDispatchEntry(bill, utilityType, {
+      state: "sent",
+      periodId: period?._id || period?.id || currentDispatch.periodId || null,
+      publishedAt,
+      issuedAt,
+      dueDate,
+      amount: utilityAmount,
+    });
+
+    bill.utilityCycleStart = utilityCycle.utilityCycleStart;
+    bill.utilityCycleEnd = utilityCycle.utilityCycleEnd;
+    bill.utilityReadingDate = utilityCycle.utilityReadingDate;
+    bill.sentAt = publishedAt;
+    bill.issuedAt = issuedAt;
+    bill.dueDate = dueDate;
+    bill.paymongoSessionId = null;
+    syncBillAmounts(bill);
+    await bill.save();
+
+    const tenant = bill.userId
+      ? await User.findById(bill.userId._id || bill.userId).lean()
+      : null;
+    const tenantName =
+      [tenant?.firstName, tenant?.lastName].filter(Boolean).join(" ").trim() ||
+      "Tenant";
+    const billingMonthLabel = bill.utilityCycleEnd
+      ? dayjs(bill.utilityCycleEnd).format("MMMM YYYY")
+      : dayjs(bill.billingMonth || issuedAt).format("MMMM YYYY");
+    const dueDateLabel = dayjs(dueDate).format("MMMM D, YYYY");
+    const visibleCharges = getVisibleBillCharges(bill);
+    const visibleTotalAmount = bill.totalAmount;
+    let emailError = null;
+    let notificationError = null;
+
+    if (tenant?.email) {
+      const emailResult = await sendUtilityChargeAvailableEmail({
+        to: tenant.email,
+        tenantName,
+        utilityType,
+        billingMonth: billingMonthLabel,
+        utilityAmount,
+        totalAmount: visibleTotalAmount,
+        dueDate: dueDateLabel,
+        branchName: bill.roomId?.branch || bill.branch || "Lilycrest",
+      });
+      if (!emailResult?.success) {
+        emailError = emailResult?.error || emailResult?.message || "Email delivery failed";
+      }
+    }
+
+    try {
+      await notify.utilityChargeAvailable(
+        bill.userId?._id || bill.userId,
+        utilityType,
+        billingMonthLabel,
+        utilityAmount,
+        visibleTotalAmount,
+        dueDateLabel,
+      );
+    } catch (error) {
+      notificationError = error.message;
+    }
+
+    deliveries.push({
+      billId: bill._id,
+      tenantId: bill.userId?._id || bill.userId,
+      utilityType,
+      utilityAmount,
+      totalAmount: visibleTotalAmount,
+      visibleCharges,
+      emailError,
+      notificationError,
+    });
+    sent += 1;
+  }
+
+  return { sent, issuedAt, dueDate, publishedAt, deliveries };
 }

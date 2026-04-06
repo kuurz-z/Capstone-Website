@@ -22,7 +22,13 @@ import { sendPaymentApprovedEmail, sendPaymentReceiptEmail } from "../config/ema
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
 import { BUSINESS } from "../config/constants.js";
 import { getReservationFeeAmount } from "../utils/businessSettings.js";
-import { getBillRemainingAmount, resolveBillStatus } from "../utils/billingPolicy.js";
+import {
+  getBillRemainingAmount,
+  getVisibleBillSnapshot,
+  resolveBillStatus,
+  roundMoney,
+  syncBillAmounts,
+} from "../utils/billingPolicy.js";
 import {
   sendSuccess,
   AppError,
@@ -56,7 +62,7 @@ export const createBillCheckout = async (req, res, next) => {
       throw new AppError("You can only pay your own bills", 403, "FORBIDDEN");
     }
 
-    if (bill.status === "paid") {
+    if (getVisibleBillSnapshot(bill).status === "paid") {
       throw new AppError("Bill is already paid", 400, "ALREADY_PAID");
     }
 
@@ -80,7 +86,11 @@ export const createBillCheckout = async (req, res, next) => {
 
     bill.remainingAmount = getBillRemainingAmount(bill);
     bill.status = resolveBillStatus(bill);
-    const amountDue = bill.remainingAmount;
+    const visibleBill = getVisibleBillSnapshot(bill);
+    const amountDue = visibleBill.remainingAmount;
+    if (amountDue <= 0) {
+      throw new AppError("No visible balance is currently due", 400, "NO_BALANCE_DUE");
+    }
     const monthLabel = dayjs(bill.billingMonth).format("MMMM YYYY");
 
     const { checkoutUrl, sessionId } = await createCheckoutSession({
@@ -90,6 +100,7 @@ export const createBillCheckout = async (req, res, next) => {
         type: "bill",
         billId: String(bill._id),
         userId: String(dbUser._id),
+        amountDue: String(amountDue),
       },
       successUrl: `${FRONTEND_URL}/billing?payment=success&session_id={id}`,
       cancelUrl: `${FRONTEND_URL}/billing?payment=cancelled`,
@@ -225,23 +236,31 @@ export const checkSessionStatus = async (req, res, next) => {
       // Auto-mark the bill as paid
       if (metadata.type === "bill" && metadata.billId) {
         const bill = await Bill.findById(metadata.billId);
-        if (bill && bill.status !== "paid") {
-          logger.info({ billId: metadata.billId }, "Marking bill as paid");
-          bill.paidAmount = bill.totalAmount;
-          bill.remainingAmount = 0;
-          bill.status = "paid";
-          bill.paymentDate = new Date();
-          bill.paymentMethod = "paymongo";
-          bill.paymongoPaymentId = paidPayments[0]?.id || sessionId;
-          bill.paymentProof = {
+        if (bill) {
+          const paymentReference = paidPayments[0]?.id || sessionId;
+          if (bill.paymongoPaymentId === paymentReference) {
+            logger.info({ billId: metadata.billId, paymentReference }, "Bill payment already applied");
+          } else {
+            logger.info({ billId: metadata.billId }, "Marking bill as paid");
+          const settledAmount = roundMoney(
+            Number(metadata.amountDue || paidPayments[0]?.attributes?.amount || 0),
+          );
+            bill.paidAmount = roundMoney(
+            Number(bill.paidAmount || 0) + settledAmount,
+          );
+            syncBillAmounts(bill);
+            bill.paymentDate = new Date();
+            bill.paymentMethod = "paymongo";
+            bill.paymongoPaymentId = paymentReference;
+            bill.paymentProof = {
             verificationStatus: "approved",
             verifiedAt: new Date(),
-            submittedAmount: bill.totalAmount,
+            submittedAmount: settledAmount,
           };
-          await bill.save();
+            await bill.save();
 
-          // Send confirmation + receipt emails
-          try {
+            // Send confirmation + receipt emails
+            try {
             const tenant = await User.findById(bill.userId).lean();
             if (tenant?.email) {
               const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
@@ -251,21 +270,22 @@ export const checkSessionStatus = async (req, res, next) => {
                 to: tenant.email,
                 tenantName,
                 billingMonth: monthStr,
-                paidAmount: bill.totalAmount,
+                paidAmount: settledAmount,
                 branchName: bill.branch,
               });
               await sendPaymentReceiptEmail({
                 to: tenant.email,
                 tenantName,
-                amount: bill.totalAmount,
+                amount: settledAmount,
                 description: `Monthly Bill — ${monthStr}`,
                 paymentMethod: paymentMethod || "Online Payment (PayMongo)",
                 paymentDate: dayjs().format("MMMM D, YYYY"),
-                referenceId: paidPayments[0]?.id || sessionId,
+                referenceId: paymentReference,
               });
             }
-          } catch (emailErr) {
-            logger.warn({ err: emailErr }, "Bill email error");
+            } catch (emailErr) {
+              logger.warn({ err: emailErr }, "Bill email error");
+            }
           }
         } else {
           logger.info({ billId: metadata.billId }, "Bill already marked as paid — skipping");

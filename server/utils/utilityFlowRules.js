@@ -1,4 +1,8 @@
-const WATER_BILLABLE_ROOM_TYPES = new Set(["private", "double-sharing"]);
+const WATER_BILLABLE_ROOM_TYPES = new Set([
+  "private",
+  "double-sharing",
+  "quadruple-sharing",
+]);
 
 const BILLABLE_RESERVATION_STATUSES = new Set(["checked-in", "checked-out"]);
 

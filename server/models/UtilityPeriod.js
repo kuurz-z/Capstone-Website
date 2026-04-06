@@ -58,6 +58,12 @@ const tenantSummarySchema = new mongoose.Schema(
     tenantName: { type: String, required: true },
     totalUsage: { type: Number, required: true },
     billAmount: { type: Number, required: true },
+    coveredDays: { type: Number, default: null },
+    shareFactor: { type: Number, default: null },
+    allocationRule: { type: String, default: null },
+    billingBasis: { type: String, default: null },
+    overlapStart: { type: Date, default: null },
+    overlapEnd: { type: Date, default: null },
     billId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Bill",
