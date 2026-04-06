@@ -31,8 +31,20 @@ const utilityReadingSchema = new mongoose.Schema(
     },
     eventType: {
       type: String,
-      enum: ["move-in", "move-out", "regular-billing"],
+      enum: [
+        "move-in",
+        "move-out",
+        "regular-billing",
+        "period-start",
+        "period-end",
+        "manual-adjustment",
+      ],
       required: true,
+    },
+    readingStatus: {
+      type: String,
+      enum: ["recorded", "locked", "corrected", "voided"],
+      default: "recorded",
     },
 
     tenantId: {
@@ -72,5 +84,6 @@ const utilityReadingSchema = new mongoose.Schema(
 utilityReadingSchema.index({ utilityType: 1, roomId: 1, date: 1 });
 utilityReadingSchema.index({ utilityType: 1, roomId: 1, utilityPeriodId: 1 });
 utilityReadingSchema.index({ branch: 1, date: -1 });
+utilityReadingSchema.index({ utilityType: 1, roomId: 1, readingStatus: 1 });
 
 export default mongoose.model("UtilityReading", utilityReadingSchema);

@@ -45,6 +45,29 @@ const HEAVY_FIELDS =
   "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
 const POPULATE_USER = ["userId", "firstName lastName email phone"];
 const POPULATE_ROOM = ["roomId", "name branch type price capacity beds floor"];
+const TIME_24H_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const combineLifecycleDateTime = ({
+  dateInput,
+  timeInput,
+  fallbackDate = new Date(),
+}) => {
+  const base = dateInput ? new Date(dateInput) : new Date(fallbackDate);
+  if (Number.isNaN(base.getTime())) return null;
+
+  if (timeInput == null || timeInput === "") {
+    return base;
+  }
+
+  const text = String(timeInput).trim();
+  const match = TIME_24H_REGEX.exec(text);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  base.setHours(hours, minutes, 0, 0);
+  return base;
+};
 
 const getResidentStatus = (reservation, now = new Date()) => {
   let statusLabel = "Active";
@@ -492,17 +515,49 @@ export const updateReservation = async (req, res, next) => {
       }
 
       // ── Meter reading is required at move-in ──────────────────────────
-      if (req.body.meterReading == null || isNaN(Number(req.body.meterReading))) {
+      if (
+        req.body.meterReading == null ||
+        isNaN(Number(req.body.meterReading))
+      ) {
         return res.status(400).json({
           error: "A meter reading (kWh) is required when moving in a tenant.",
           code: "METER_READING_REQUIRED",
         });
       }
 
-      // ── Override checkInDate to actual move-in date (now) ──────────────
-      // The tenant's original checkInDate was just a preferred date.
-      // The real move-in date is when the admin confirms the move-in.
-      req.body.checkInDate = new Date();
+      // Use explicit lifecycle datetime when provided to avoid same-day ambiguity.
+      const moveInDate = combineLifecycleDateTime({
+        dateInput: req.body.checkInDate,
+        timeInput: req.body.checkInTime,
+        fallbackDate: new Date(),
+      });
+      if (!moveInDate) {
+        return res.status(400).json({
+          error:
+            "Invalid check-in date/time. Use a valid date and HH:mm format.",
+          code: "INVALID_CHECKIN_DATETIME",
+        });
+      }
+
+      const duplicateMoveIn = await UtilityReading.findOne({
+        utilityType: "electricity",
+        roomId: existingReservation.roomId?._id || existingReservation.roomId,
+        tenantId: existingReservation.userId?._id || existingReservation.userId,
+        eventType: "move-in",
+        date: moveInDate,
+        isArchived: false,
+      })
+        .select("_id")
+        .lean();
+      if (duplicateMoveIn) {
+        return res.status(409).json({
+          error:
+            "A move-in reading already exists for this tenant at the same date/time. Use a different time.",
+          code: "DUPLICATE_LIFECYCLE_READING",
+        });
+      }
+
+      req.body.checkInDate = moveInDate;
     }
 
     await syncReservationUserLifecycle({
@@ -635,7 +690,9 @@ export const updateReservation = async (req, res, next) => {
           firebaseUid: req.user.uid,
         }).lean();
         const meterValue = Number(req.body.meterReading);
-        const moveInDate = new Date();
+        const moveInDate = new Date(
+          updatedReservation.checkInDate || new Date(),
+        );
 
         if (roomDoc) {
           const tenantUserId =
@@ -1429,6 +1486,8 @@ export const checkoutReservation = async (req, res, next) => {
       notes: checkoutNotes = "",
       inspectionPassed = true,
       meterReading,
+      checkOutDate,
+      checkOutTime,
     } = req.body;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
@@ -1465,9 +1524,49 @@ export const checkoutReservation = async (req, res, next) => {
 
     const oldData = reservation.toObject();
 
+    const checkoutDate = combineLifecycleDateTime({
+      dateInput: checkOutDate,
+      timeInput: checkOutTime,
+      fallbackDate: new Date(),
+    });
+    if (!checkoutDate) {
+      return res.status(400).json({
+        error:
+          "Invalid check-out date/time. Use a valid date and HH:mm format.",
+        code: "INVALID_CHECKOUT_DATETIME",
+      });
+    }
+    if (
+      reservation.checkInDate &&
+      checkoutDate < new Date(reservation.checkInDate)
+    ) {
+      return res.status(400).json({
+        error: "Check-out date/time cannot be earlier than check-in date/time.",
+        code: "CHECKOUT_BEFORE_CHECKIN",
+      });
+    }
+
+    const duplicateMoveOut = await UtilityReading.findOne({
+      utilityType: "electricity",
+      roomId: reservation.roomId?._id || reservation.roomId,
+      tenantId: reservation.userId?._id || reservation.userId,
+      eventType: "move-out",
+      date: checkoutDate,
+      isArchived: false,
+    })
+      .select("_id")
+      .lean();
+    if (duplicateMoveOut) {
+      return res.status(409).json({
+        error:
+          "A move-out reading already exists for this tenant at the same date/time. Use a different time.",
+        code: "DUPLICATE_LIFECYCLE_READING",
+      });
+    }
+
     // 1. Update reservation status
     reservation.status = "checked-out";
-    reservation.checkOutDate = new Date();
+    reservation.checkOutDate = checkoutDate;
     reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Checked out${inspectionPassed ? " (inspection passed)" : " (inspection issues noted)"}. ${checkoutNotes}`;
     await reservation.save();
 
@@ -1504,7 +1603,6 @@ export const checkoutReservation = async (req, res, next) => {
         }).lean();
         const roomDoc = await Room.findById(reservation.roomId._id).lean();
         const checkoutReading = Number(meterReading);
-        const checkoutDate = new Date();
 
         if (roomDoc) {
           const checkedInRes = await Reservation.find({
@@ -1642,12 +1740,10 @@ export const transferTenant = async (req, res, next) => {
         .status(404)
         .json({ error: "Bed not found in new room", code: "BED_NOT_FOUND" });
     if (newBed.status !== "available")
-      return res
-        .status(400)
-        .json({
-          error: "Selected bed is not available",
-          code: "BED_NOT_AVAILABLE",
-        });
+      return res.status(400).json({
+        error: "Selected bed is not available",
+        code: "BED_NOT_AVAILABLE",
+      });
 
     const oldData = reservation.toObject();
     const oldRoomName = reservation.roomId?.name || "unknown";

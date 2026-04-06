@@ -163,6 +163,18 @@ export const globalErrorHandler = (err, req, res, _next) => {
     return sendError(res, err.message, err.statusCode, err.code, err.details);
   }
 
+  // Legacy operational errors thrown as plain Error with statusCode/details
+  if (err.statusCode && Number.isInteger(err.statusCode)) {
+    logger.warn({ ...logContext, err }, err.message || "Request failed");
+    return sendError(
+      res,
+      err.message || "Request failed",
+      err.statusCode,
+      err.code || "REQUEST_FAILED",
+      err.details || null,
+    );
+  }
+
   // Unknown errors — hide details in production
   const isDev = process.env.NODE_ENV === "development";
   sendError(

@@ -2,6 +2,7 @@ import { describe, expect, test } from "@jest/globals";
 import {
   buildTenantEventsForPeriod,
   filterBillableReservationsForPeriod,
+  findBedOccupancyOverlaps,
   findMissingElectricityLifecycleReadings,
   isWaterBillableRoom,
 } from "./utilityFlowRules.js";
@@ -90,8 +91,47 @@ describe("findMissingElectricityLifecycleReadings", () => {
     });
 
     expect(result.hasMissingReadings).toBe(true);
-    expect(result.missingMoveInReadings.map((entry) => entry.tenantId)).toEqual(["tenant-1"]);
-    expect(result.missingMoveOutReadings.map((entry) => entry.tenantId)).toEqual(["tenant-2"]);
+    expect(result.missingMoveInReadings.map((entry) => entry.tenantId)).toEqual(
+      ["tenant-1"],
+    );
+    expect(
+      result.missingMoveOutReadings.map((entry) => entry.tenantId),
+    ).toEqual(["tenant-2"]);
+  });
+
+  test("requires lifecycle readings to match the exact move event date", () => {
+    const reservations = [
+      {
+        _id: "res-1",
+        userId: { _id: "tenant-1", firstName: "Mina", lastName: "Exact" },
+        status: "checked-in",
+        checkInDate: new Date("2026-03-22T00:00:00.000Z"),
+        checkOutDate: null,
+      },
+    ];
+
+    const readings = [
+      {
+        tenantId: "tenant-1",
+        eventType: "move-in",
+        reading: 140,
+        date: new Date("2026-03-21T00:00:00.000Z"),
+      },
+    ];
+
+    const result = findMissingElectricityLifecycleReadings({
+      period: basePeriod,
+      reservations,
+      readings,
+    });
+
+    expect(result.hasMissingReadings).toBe(true);
+    expect(result.missingMoveInReadings).toEqual([
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        reason: "missing exact-date move-in reading",
+      }),
+    ]);
   });
 });
 
@@ -146,5 +186,73 @@ describe("buildTenantEventsForPeriod", () => {
         moveOutReading: 165,
       }),
     ]);
+  });
+
+  test("anchors check-ins on cycle start date to period start reading", () => {
+    const reservations = [
+      {
+        _id: "res-start",
+        userId: {
+          _id: "tenant-start",
+          firstName: "Start",
+          lastName: "Day",
+        },
+        status: "checked-in",
+        checkInDate: new Date("2026-03-15T00:00:00.000Z"),
+        checkOutDate: null,
+      },
+    ];
+
+    const result = buildTenantEventsForPeriod({
+      period: basePeriod,
+      reservations,
+      readings: [],
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        tenantId: "tenant-start",
+        moveInReading: 100,
+        moveOutReading: null,
+      }),
+    ]);
+  });
+});
+
+describe("findBedOccupancyOverlaps", () => {
+  test("flags overlaps for the same bed during the billing scope", () => {
+    const reservations = [
+      {
+        _id: "res-1",
+        userId: { _id: "tenant-1", firstName: "Alex", lastName: "One" },
+        status: "checked-in",
+        selectedBed: { id: "bed-a" },
+        checkInDate: new Date("2026-03-18T00:00:00.000Z"),
+        checkOutDate: new Date("2026-04-05T00:00:00.000Z"),
+      },
+      {
+        _id: "res-2",
+        userId: { _id: "tenant-2", firstName: "Bea", lastName: "Two" },
+        status: "checked-in",
+        selectedBed: { id: "bed-a" },
+        checkInDate: new Date("2026-04-01T00:00:00.000Z"),
+        checkOutDate: null,
+      },
+    ];
+
+    const result = findBedOccupancyOverlaps({
+      reservations,
+      cycleStart: basePeriod.startDate,
+      cycleEnd: basePeriod.endDate,
+    });
+
+    expect(result.hasOverlaps).toBe(true);
+    expect(result.overlaps[0]).toEqual(
+      expect.objectContaining({
+        bedKey: "bed-a",
+        firstTenantName: "Alex One",
+        secondTenantName: "Bea Two",
+      }),
+    );
   });
 });
