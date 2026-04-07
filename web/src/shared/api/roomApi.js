@@ -55,4 +55,15 @@ export const roomApi = {
       : "/reservations/stats/occupancy";
     return authFetch(url);
   },
+
+  /**
+   * Get vacancy forecast for a branch or a single room
+   */
+  getVacancyForecast: ({ branch = null, roomId = null } = {}) => {
+    const params = new URLSearchParams();
+    if (branch) params.set("branch", branch);
+    if (roomId) params.set("roomId", roomId);
+    const query = params.toString();
+    return authFetch(`/reservations/vacancy-forecast${query ? `?${query}` : ""}`);
+  },
 };

@@ -20,6 +20,7 @@ import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
   getRooms,
+  getRoomById,
   createRoom,
   updateRoom,
   deleteRoom,
@@ -43,6 +44,7 @@ const router = express.Router();
  * @returns {Array} List of rooms matching the filters
  */
 router.get("/", getRooms);
+router.get("/:roomId", getRoomById);
 
 /**
  * POST /api/rooms

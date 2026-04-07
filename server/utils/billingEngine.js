@@ -18,10 +18,15 @@ import dayjs from "dayjs";
 export const truncate4 = (n) => Math.floor(n * 10000) / 10000;
 export const roundMoney = (n) => Math.round(n * 100) / 100;
 
-const WATER_SHARED_ROOM_TYPES = new Set(["double-sharing", "quadruple-sharing"]);
+const WATER_SHARED_ROOM_TYPES = new Set([
+  "double-sharing",
+  "quadruple-sharing",
+]);
 
 function normalizeRoomType(roomType) {
-  return String(roomType || "").trim().toLowerCase();
+  return String(roomType || "")
+    .trim()
+    .toLowerCase();
 }
 
 function formatDurationRange(checkInDate, checkOutDate) {
@@ -42,8 +47,12 @@ function getReservationOverlapDays(reservation, cycleStart, cycleEnd) {
   const moveInDay = dayjs(reservation.checkInDate).startOf("day");
   const moveOutDay = dayjs(reservation.checkOutDate || cycleEnd).startOf("day");
 
-  const effectiveStart = moveInDay.isAfter(cycleStartDay) ? moveInDay : cycleStartDay;
-  const effectiveEnd = moveOutDay.isBefore(cycleEndDay) ? moveOutDay : cycleEndDay;
+  const effectiveStart = moveInDay.isAfter(cycleStartDay)
+    ? moveInDay
+    : cycleStartDay;
+  const effectiveEnd = moveOutDay.isBefore(cycleEndDay)
+    ? moveOutDay
+    : cycleEndDay;
 
   if (!effectiveStart.isValid() || !effectiveEnd.isValid()) return 0;
   if (!effectiveStart.isBefore(effectiveEnd)) return 0;
@@ -63,20 +72,26 @@ function buildWaterOccupancyBilling({
 
   const buckets = new Map();
   for (const reservation of reservations) {
-    const coveredDays = getReservationOverlapDays(reservation, cycleStart, cycleEnd);
+    const coveredDays = getReservationOverlapDays(
+      reservation,
+      cycleStart,
+      cycleEnd,
+    );
     if (coveredDays <= 0) continue;
 
-    const tenantKey = String(reservation.userId?._id || reservation.userId || "");
+    const tenantKey = String(
+      reservation.userId?._id || reservation.userId || "",
+    );
     if (!tenantKey) continue;
 
     const bucket = buckets.get(tenantKey) || {
       tenantId: tenantKey,
       reservationId: reservation._id || null,
-      tenantName:
-        reservation.userId?.firstName
-          ? `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim()
-          : "Tenant",
-      tenantEmail: reservation.userId?.email || reservation.billingEmail || null,
+      tenantName: reservation.userId?.firstName
+        ? `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim()
+        : "Tenant",
+      tenantEmail:
+        reservation.userId?.email || reservation.billingEmail || null,
       coveredDays: 0,
       firstCheckInDate: reservation.checkInDate || null,
       lastCheckOutDate: reservation.checkOutDate || null,
@@ -87,29 +102,40 @@ function buildWaterOccupancyBilling({
     bucket.coveredDays += coveredDays;
     if (
       bucket.overlapStart === null ||
-      (reservation.checkInDate && new Date(reservation.checkInDate) < new Date(bucket.overlapStart))
+      (reservation.checkInDate &&
+        new Date(reservation.checkInDate) < new Date(bucket.overlapStart))
     ) {
       bucket.overlapStart = reservation.checkInDate || bucket.overlapStart;
-      bucket.firstCheckInDate = reservation.checkInDate || bucket.firstCheckInDate;
+      bucket.firstCheckInDate =
+        reservation.checkInDate || bucket.firstCheckInDate;
     }
     if (
       !bucket.overlapEnd ||
-      (reservation.checkOutDate && new Date(reservation.checkOutDate) > new Date(bucket.overlapEnd))
+      (reservation.checkOutDate &&
+        new Date(reservation.checkOutDate) > new Date(bucket.overlapEnd))
     ) {
       bucket.overlapEnd = reservation.checkOutDate || bucket.overlapEnd;
-      bucket.lastCheckOutDate = reservation.checkOutDate || bucket.lastCheckOutDate;
+      bucket.lastCheckOutDate =
+        reservation.checkOutDate || bucket.lastCheckOutDate;
     }
 
     buckets.set(tenantKey, bucket);
   }
 
   const tenantRows = [...buckets.values()].sort((left, right) => {
-    const leftDate = new Date(left.overlapStart || left.firstCheckInDate || 0).getTime();
-    const rightDate = new Date(right.overlapStart || right.firstCheckInDate || 0).getTime();
+    const leftDate = new Date(
+      left.overlapStart || left.firstCheckInDate || 0,
+    ).getTime();
+    const rightDate = new Date(
+      right.overlapStart || right.firstCheckInDate || 0,
+    ).getTime();
     return leftDate - rightDate;
   });
 
-  const totalCoveredDays = tenantRows.reduce((sum, row) => sum + row.coveredDays, 0);
+  const totalCoveredDays = tenantRows.reduce(
+    (sum, row) => sum + row.coveredDays,
+    0,
+  );
   const useFixedPrivateRule = !sharedRoom && tenantRows.length === 1;
 
   const tenantSummaries = tenantRows.map((row) => {
@@ -127,23 +153,32 @@ function buildWaterOccupancyBilling({
       totalUsage: truncate4(row.coveredDays),
       coveredDays: truncate4(row.coveredDays),
       shareFactor: truncate4(shareFactor),
-      allocationRule: useFixedPrivateRule ? "private-fixed" : "shared-prorated-days",
+      allocationRule: useFixedPrivateRule
+        ? "private-fixed"
+        : "shared-prorated-days",
       billingBasis: "occupancy-overlap",
       overlapStart: row.overlapStart,
       overlapEnd: row.overlapEnd,
-      durationRange: formatDurationRange(row.firstCheckInDate, row.lastCheckOutDate),
-      billAmount: useFixedPrivateRule ? totalWaterCharge : truncate4(totalWaterCharge * shareFactor),
+      durationRange: formatDurationRange(
+        row.firstCheckInDate,
+        row.lastCheckOutDate,
+      ),
+      billAmount: useFixedPrivateRule
+        ? totalWaterCharge
+        : truncate4(totalWaterCharge * shareFactor),
     };
   });
 
   if (!useFixedPrivateRule && tenantSummaries.length > 0) {
     const totalCents = Math.max(0, Math.round(totalWaterCharge * 100));
     const rawShares = tenantRows.map((row) => {
-      const shareFactor = totalCoveredDays > 0 ? row.coveredDays / totalCoveredDays : 0;
+      const shareFactor =
+        totalCoveredDays > 0 ? row.coveredDays / totalCoveredDays : 0;
       return shareFactor * totalCents;
     });
     const baseShares = rawShares.map(Math.floor);
-    let remainder = totalCents - baseShares.reduce((sum, cents) => sum + cents, 0);
+    let remainder =
+      totalCents - baseShares.reduce((sum, cents) => sum + cents, 0);
     const fractionals = rawShares.map((raw, index) => ({
       index,
       frac: raw - baseShares[index],
@@ -162,7 +197,10 @@ function buildWaterOccupancyBilling({
     });
   }
 
-  const sumTenantCharges = tenantSummaries.reduce((sum, entry) => sum + Number(entry.billAmount || 0), 0);
+  const sumTenantCharges = tenantSummaries.reduce(
+    (sum, entry) => sum + Number(entry.billAmount || 0),
+    0,
+  );
 
   return {
     strategy: "occupancy-day-proration",
@@ -170,7 +208,9 @@ function buildWaterOccupancyBilling({
     tenantSummaries,
     computedTotalUsage: truncate4(totalCoveredDays),
     computedTotalCost: totalWaterCharge,
-    verified: Math.abs(sumTenantCharges - totalWaterCharge) <= 0.01 || totalWaterCharge === 0,
+    verified:
+      Math.abs(sumTenantCharges - totalWaterCharge) <= 0.01 ||
+      totalWaterCharge === 0,
   };
 }
 
@@ -415,7 +455,7 @@ export function computeBilling({
       );
     }
 
-    const segments = rawSegments.map((seg) => {
+    const computedSegments = rawSegments.map((seg) => {
       if (
         forceSegmented &&
         seg.unitsConsumed > 0 &&
@@ -428,6 +468,13 @@ export function computeBilling({
       const shares = computeSegmentShares(seg, ratePerUnit);
       return { ...seg, ...shares, ratePerUnit };
     });
+
+    const segments = computedSegments
+      .filter((segment) => segment.unitsConsumed > 0)
+      .map((segment, segmentIndex) => ({
+        ...segment,
+        segmentIndex,
+      }));
 
     const tenantKwhMap = new Map();
     for (const segment of segments) {

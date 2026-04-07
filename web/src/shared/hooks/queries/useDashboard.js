@@ -33,7 +33,7 @@ export function useDashboardData() {
   });
 
   const reservations = useQuery({
-    queryKey: queryKeys.reservations.all,
+    queryKey: queryKeys.reservations.all(),
     queryFn: () => reservationApi.getAll(),
     ...queryDefaults,
   });

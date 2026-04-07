@@ -19,13 +19,27 @@ export default function DataTable({
   data = [],
   pagination,
   onRowClick,
+  onRowHover,
+  onRowFocus,
   emptyState,
   loading = false,
+  sorting = "client",
+  sortKey: externalSortKey = null,
+  sortDir: externalSortDir = "asc",
+  onSortChange,
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
+  const activeSortKey = sorting === "external" ? externalSortKey : sortKey;
+  const activeSortDir = sorting === "external" ? externalSortDir : sortDir;
 
   const handleSort = (key) => {
+    if (sorting === "external") {
+      const nextDir =
+        activeSortKey === key && activeSortDir === "asc" ? "desc" : "asc";
+      onSortChange?.(key, nextDir);
+      return;
+    }
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -35,7 +49,7 @@ export default function DataTable({
   };
 
   const sortedData = useMemo(() => {
-    if (!sortKey) return data;
+    if (sorting === "external" || !sortKey) return data;
     return [...data].sort((a, b) => {
       const aVal = a[sortKey];
       const bVal = b[sortKey];
@@ -46,7 +60,7 @@ export default function DataTable({
         : aVal - bVal;
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [data, sortKey, sortDir]);
+  }, [data, sortKey, sortDir, sorting]);
 
   // Pagination
   const pageSize = pagination?.pageSize || data.length || 1;
@@ -69,23 +83,26 @@ export default function DataTable({
         <table className="data-table">
           <thead>
             <tr>
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={`data-table__th ${col.sortable ? "data-table__th--sortable" : ""} ${col.align ? `data-table__th--${col.align}` : ""}`}
-                  style={col.width ? { width: col.width } : undefined}
-                  onClick={() => col.sortable && handleSort(col.key)}
-                >
-                  <span className="data-table__th-content">
-                    {col.label}
-                    {col.sortable && sortKey === col.key && (
-                      sortDir === "asc"
-                        ? <ChevronUp size={13} />
-                        : <ChevronDown size={13} />
-                    )}
-                  </span>
-                </th>
-              ))}
+              {columns.map((col) => {
+                const sortField = col.sortKey || col.key;
+                return (
+                  <th
+                    key={col.key}
+                    className={`data-table__th ${col.sortable ? "data-table__th--sortable" : ""} ${col.align ? `data-table__th--${col.align}` : ""}`}
+                    style={col.width ? { width: col.width } : undefined}
+                    onClick={() => col.sortable && handleSort(sortField)}
+                  >
+                    <span className="data-table__th-content">
+                      {col.label}
+                      {col.sortable && activeSortKey === sortField && (
+                        activeSortDir === "asc"
+                          ? <ChevronUp size={13} />
+                          : <ChevronDown size={13} />
+                      )}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -104,6 +121,8 @@ export default function DataTable({
                 <tr
                   key={row.id || row._id || i}
                   className={`data-table__row ${onRowClick ? "data-table__row--clickable" : ""}`}
+                  onMouseEnter={() => onRowHover?.(row)}
+                  onFocus={() => onRowFocus?.(row)}
                   onClick={(e) => {
                     // Don't fire row click if the event came from an action cell
                     if (e.target.closest("[data-action-cell]")) return;

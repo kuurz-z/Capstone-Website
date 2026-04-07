@@ -20,12 +20,17 @@ const AdminBillingPage = () => {
           <span className="admin-billing-page__eyebrow">Billing Workspace</span>
           <h1 className="admin-billing-page__heading">Billing Management</h1>
           <p className="admin-billing-page__subtitle">
-            Manage utility cycles, review tenant splits, and send electricity or water charges directly to tenants.
+            Create billing cycles, review results, and send charges in a few
+            clear steps.
           </p>
         </div>
 
         <div className="admin-billing-page__hero-actions">
-          <div className="admin-billing-page__workspace-tabs" role="tablist" aria-label="Billing type">
+          <div
+            className="admin-billing-page__workspace-tabs"
+            role="tablist"
+            aria-label="Billing type"
+          >
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -49,7 +54,9 @@ const AdminBillingPage = () => {
       </header>
 
       <section className="admin-billing-page__workspace-panel">
-        {activeTab === "electricity" && <UtilityBillingTab utilityType="electricity" />}
+        {activeTab === "electricity" && (
+          <UtilityBillingTab utilityType="electricity" />
+        )}
         {activeTab === "water" && <UtilityBillingTab utilityType="water" />}
       </section>
     </div>

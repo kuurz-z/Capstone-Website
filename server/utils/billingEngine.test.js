@@ -91,6 +91,61 @@ describe("computeBilling - strict segmented mode", () => {
       }),
     ).toThrow(/no active tenants/i);
   });
+
+  test("removes zero-consumption boundary segments and keeps consuming segments", () => {
+    const utilityPeriod = {
+      startDate: new Date("2026-03-15T00:00:00.000Z"),
+      endDate: new Date("2026-04-15T00:00:00.000Z"),
+      startReading: 1000,
+      endReading: 1204,
+      ratePerUnit: 16,
+    };
+
+    const readings = [
+      {
+        reading: 1000,
+        date: new Date("2026-03-15T00:00:00.000Z"),
+        eventType: "period-start",
+      },
+      {
+        reading: 1000,
+        date: new Date("2026-03-15T00:00:00.000Z"),
+        eventType: "move-in",
+      },
+      {
+        reading: 1204,
+        date: new Date("2026-04-15T00:00:00.000Z"),
+        eventType: "period-end",
+      },
+    ];
+
+    const tenantEvents = [
+      {
+        tenantId: "tenant-1",
+        tenantName: "Tenant One",
+        moveInReading: 1000,
+        moveOutReading: null,
+      },
+    ];
+
+    const result = computeBilling({
+      utilityPeriod,
+      readings,
+      reservations: [],
+      tenantEvents,
+      forceSegmented: true,
+    });
+
+    expect(result.segments).toHaveLength(1);
+    expect(result.segments[0]).toEqual(
+      expect.objectContaining({
+        segmentIndex: 0,
+        readingFrom: 1000,
+        readingTo: 1204,
+        unitsConsumed: 204,
+      }),
+    );
+  });
 });
 
 describe("computeBilling - water occupancy mode", () => {

@@ -11,6 +11,8 @@
     "restart": "node scripts/kill-port.js && node server.js",
     "utility:diagnose": "node scripts/diagnose_utility_sync.mjs",
     "utility:repair": "node scripts/repair_utility_sync.mjs",
+    "utility:cleanup-zero-segments": "node scripts/cleanup_zero_consumption_segments.mjs",
+    "utility:cleanup-zero-segments:write": "node scripts/cleanup_zero_consumption_segments.mjs --write",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [

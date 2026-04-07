@@ -9,7 +9,6 @@ import {
   CalendarCheck,
   Users,
   BedDouble,
-  Activity,
   Receipt,
   UserCog,
   FileText,
@@ -20,7 +19,6 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
-  BarChart2,
 } from "lucide-react";
 import "../styles/admin-sidebar.css";
 
@@ -30,10 +28,8 @@ const NAV_ITEMS = [
   { to: "/admin/dashboard",          icon: LayoutDashboard, text: "Dashboard",       group: "workspace" },
   { to: "/admin/reservations",       icon: CalendarCheck,   text: "Reservations",    group: "workspace" },
   { to: "/admin/room-availability",  icon: BedDouble,       text: "Room Management", group: "workspace" },
-  { to: "/admin/digital-twin",       icon: Activity,        text: "Digital Twin",    group: "workspace" },
   { to: "/admin/tenants",            icon: Users,           text: "Tenants",         group: "workspace" },
   { to: "/admin/billing",            icon: Receipt,         text: "Billing",         group: "workspace" },
-  { to: "/admin/financial",          icon: BarChart2,        text: "Financial",       group: "workspace", saOnly: true },
   // SYSTEM group
   { to: "/admin/users",              icon: UserCog,         text: "Accounts",     group: "system" },
   { to: "/admin/audit-logs",         icon: FileText,        text: "Activity Log", group: "system" },

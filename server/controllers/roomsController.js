@@ -2,12 +2,11 @@
  * Room Controllers
  */
 
-import { Room } from "../models/index.js";
+import { Room, Reservation, BillingPeriod, UtilityPeriod } from "../models/index.js";
 import auditLogger from "../utils/auditLogger.js";
-import { getBranchSettingsForBranch } from "../utils/businessSettings.js";
+import { getBusinessSettings, getBranchSettings } from "../utils/businessSettings.js";
 import {
   sendSuccess,
-  sendError,
   AppError,
 } from "../middleware/errorHandler.js";
 
@@ -62,33 +61,96 @@ const normalizeRoom = (room) => {
   };
 };
 
+const parsePositiveInt = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const buildRoomQueryFilter = (query = {}) => {
+  const filter = { isArchived: false };
+
+  if (query.branch) filter.branch = query.branch;
+  if (query.type) filter.type = query.type;
+  if (query.available !== undefined) filter.available = query.available === "true";
+
+  const floor = parsePositiveInt(query.floor);
+  if (floor !== null) filter.floor = floor;
+
+  const search = String(query.search || "").trim();
+  if (search) {
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [
+      { name: { $regex: escaped, $options: "i" } },
+      { roomNumber: { $regex: escaped, $options: "i" } },
+    ];
+  }
+
+  return filter;
+};
+
+const attachBranchSettings = (rooms, settings) =>
+  rooms.map((room) => {
+    const normalizedRoom = normalizeRoom(room);
+    const branchSettings = getBranchSettings(normalizedRoom.branch, settings);
+    return {
+      ...normalizedRoom,
+      applianceFeeEnabled: !!branchSettings?.isApplianceFeeEnabled,
+      applianceFeeAmountPerUnit: branchSettings?.applianceFeeAmountPerUnit ?? 0,
+    };
+  });
+
 export const getRooms = async (req, res, next) => {
   try {
-    const { branch, type, available } = req.query;
-    const filter = { isArchived: false };
+    const filter = buildRoomQueryFilter(req.query);
+    const page = parsePositiveInt(req.query.page);
+    const pageSize = Math.min(parsePositiveInt(req.query.pageSize) || 20, 100);
+    const hasPagination = page !== null;
+    const settings = await getBusinessSettings();
 
-    if (branch) filter.branch = branch;
-    if (type) filter.type = type;
-    if (available !== undefined) filter.available = available === "true";
+    if (!hasPagination) {
+      const rooms = await Room.find(filter).select("-__v").sort({ branch: 1, floor: 1, roomNumber: 1 }).lean();
+      sendSuccess(res, attachBranchSettings(rooms, settings));
+      return;
+    }
 
-    const rooms = await Room.find(filter).select("-__v").lean();
-    const branches = [...new Set(rooms.map((room) => room.branch).filter(Boolean))];
-    const branchSettingsEntries = await Promise.all(
-      branches.map(async (branchName) => [branchName, await getBranchSettingsForBranch(branchName)]),
-    );
-    const branchSettingsMap = new Map(branchSettingsEntries);
+    const total = await Room.countDocuments(filter);
+    const rooms = await Room.find(filter)
+      .select("-__v")
+      .sort({ branch: 1, floor: 1, roomNumber: 1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .lean();
 
-    const normalizedRooms = rooms.map((room) => {
-      const normalizedRoom = normalizeRoom(room);
-      const branchSettings = branchSettingsMap.get(normalizedRoom.branch) || null;
-      return {
-        ...normalizedRoom,
-        applianceFeeEnabled: !!branchSettings?.isApplianceFeeEnabled,
-        applianceFeeAmountPerUnit: branchSettings?.applianceFeeAmountPerUnit ?? 0,
-      };
+    sendSuccess(res, {
+      items: attachBranchSettings(rooms, settings),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
     });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    sendSuccess(res, normalizedRooms);
+export const getRoomById = async (req, res, next) => {
+  try {
+    const { roomId } = req.params;
+
+    if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
+      throw new AppError("Invalid room ID format", 400, "INVALID_ROOM_ID");
+    }
+
+    const room = await Room.findOne({ _id: roomId, isArchived: false }).select("-__v").lean();
+    if (!room) {
+      throw new AppError("Room not found", 404, "ROOM_NOT_FOUND");
+    }
+
+    const settings = await getBusinessSettings();
+    const [normalizedRoom] = attachBranchSettings([room], settings);
+    sendSuccess(res, normalizedRoom);
   } catch (error) {
     next(error);
   }
@@ -188,25 +250,60 @@ export const deleteRoom = async (req, res, next) => {
     const query = { _id: roomId };
     if (req.branchFilter) query.branch = req.branchFilter;
 
-    const room = await Room.findOneAndDelete(query);
+    const room = await Room.findOne(query);
     if (!room) {
       throw new AppError("Room not found or access denied", 404, "ROOM_NOT_FOUND");
     }
 
-    await auditLogger.logDeletion(
+    const [activeReservationCount, openBillingPeriodCount, openUtilityPeriodCount] = await Promise.all([
+      Reservation.countDocuments({
+        roomId,
+        isArchived: false,
+        status: { $nin: ["checked-out", "cancelled", "archived"] },
+      }),
+      BillingPeriod.countDocuments({
+        roomId,
+        isArchived: false,
+        status: "open",
+      }),
+      UtilityPeriod.countDocuments({
+        roomId,
+        isArchived: false,
+        status: "open",
+      }),
+    ]);
+
+    if (activeReservationCount > 0 || openBillingPeriodCount > 0 || openUtilityPeriodCount > 0) {
+      throw new AppError(
+        "Room cannot be archived while it has active reservations or open billing periods.",
+        409,
+        "ROOM_ARCHIVE_BLOCKED",
+        {
+          activeReservationCount,
+          openBillingPeriodCount,
+          openUtilityPeriodCount,
+        },
+      );
+    }
+
+    const before = room.toObject();
+    await room.archive(req.user?._id || null);
+
+    await auditLogger.logModification(
       req,
       "room",
       roomId,
+      before,
       room.toObject(),
-      `Deleted room: ${room.name}`,
+      `Archived room: ${room.name}`,
     );
 
     sendSuccess(res, {
-      message: "Room deleted successfully",
-      deletedRoom: { id: room._id, name: room.name, branch: room.branch },
+      message: "Room archived successfully",
+      archivedRoom: { id: room._id, name: room.name, branch: room.branch },
     });
   } catch (error) {
-    await auditLogger.logError(req, error, "Failed to delete room");
+    await auditLogger.logError(req, error, "Failed to archive room");
     next(error);
   }
 };

@@ -30,10 +30,15 @@ function PageShell({ children, tabs, activeTab, onTabChange }) {
     <div className="page-shell">
       {/* Tabs — always at top */}
       {tabs && tabs.length > 0 && (
-        <div className="page-shell__tabs">
+        <div className="page-shell__tabs" role="tablist" aria-label="Workspace sections">
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              id={`page-shell-tab-${tab.key}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              aria-controls={`page-shell-panel-${tab.key}`}
               className={`page-shell__tab ${activeTab === tab.key ? "page-shell__tab--active" : ""}`}
               onClick={() => onTabChange?.(tab.key)}
             >

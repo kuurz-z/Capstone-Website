@@ -15,10 +15,6 @@ import {
   Save,
   Download,
   Send,
-  Activity,
-  Wallet,
-  TrendingUp,
-  PieChart,
 } from "lucide-react";
 import { useAuth } from "../../../../shared/hooks/useAuth";
 import ConfirmModal from "../../../../shared/components/ConfirmModal";
@@ -92,7 +88,7 @@ const getDisplayStatus = (period) =>
   period?.displayStatus || period?.status || "closed";
 const getDisplayStatusLabel = (period) => {
   const status = getDisplayStatus(period);
-  if (status === "ready") return "ready to send";
+  if (status === "ready") return "Ready";
   return status;
 };
 const getRoomBadgeLabel = (room) => {
@@ -132,12 +128,12 @@ const getEventDayKey = (value) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 const EVENT_TYPE_LABELS = {
-  "move-in": "Move-In",
-  "move-out": "Move-Out",
-  "regular-billing": "Mid-Period Reading",
-  "period-start": "Opening Reading",
-  "period-end": "Final Reading (Monthly Cutoff)",
-  "manual-adjustment": "Manual Adjustment",
+  "move-in": "Move In",
+  "move-out": "Move Out",
+  "regular-billing": "Regular Reading",
+  "period-start": "Start Reading",
+  "period-end": "End Reading",
+  "manual-adjustment": "Adjustment",
 };
 const EVENT_TYPE_ORDER = {
   "move-out": 0,
@@ -151,10 +147,28 @@ const isSystemBoundaryEvent = (eventType) =>
   eventType === "period-start" || eventType === "period-end";
 const getReadingStatusLabel = (reading) => {
   if (!reading) return "Recorded";
-  if (reading.readingStatus === "voided") return "Voided";
-  if (reading.readingStatus === "corrected") return "Adjusted";
-  if (reading.readingStatus === "locked" || reading.isLocked) return "Final";
-  return "Recorded";
+  if (reading.readingStatus === "voided") return "Canceled";
+  if (reading.readingStatus === "corrected") return "Corrected";
+  if (reading.readingStatus === "locked" || reading.isLocked) return "Locked";
+  return "Saved";
+};
+const getTimelineRecordLabel = (row) => {
+  if (!row) return EMPTY_VALUE;
+  if (row.source === "merged") return "Verified Event";
+  if (row.source === "occupancy") return "Occupancy Event";
+  if (row.source === "meter") return "Meter Reading";
+  return row.source || EMPTY_VALUE;
+};
+const getTimelineStatusLabel = (row) => {
+  if (!row) return EMPTY_VALUE;
+  if (row.source === "occupancy") {
+    if (row.eventType === "move-in") {
+      return row.isActive ? "Current" : "Past";
+    }
+    if (row.eventType === "move-out") return "Moved Out";
+  }
+  if (row.rawReading) return getReadingStatusLabel(row.rawReading);
+  return EMPTY_VALUE;
 };
 const toInputDate = (value) => {
   if (!value) return "";
@@ -258,6 +272,8 @@ const UtilityBillingTab = ({ utilityType }) => {
     segments: true,
     tenantSummary: true,
   });
+  const [showSnapshotDetails, setShowSnapshotDetails] = useState(false);
+  const [advancedPeriodActions, setAdvancedPeriodActions] = useState({});
 
   // Revision note modal
   const [reviseModal, setReviseModal] = useState({
@@ -384,10 +400,6 @@ const UtilityBillingTab = ({ utilityType }) => {
 
       merged.source =
         hasOccupancySource && hasMeterSource ? "merged" : next.source;
-      merged.sourceLabel =
-        hasOccupancySource && hasMeterSource
-          ? "Verified Event"
-          : next.sourceLabel;
       merged.hasMeterRecord = Boolean(
         current.hasMeterRecord || next.hasMeterRecord,
       );
@@ -421,17 +433,6 @@ const UtilityBillingTab = ({ utilityType }) => {
         merged.reading = current.reading;
       }
 
-      if (hasMeterSource) {
-        const meterStatus = getReadingStatusLabel(merged.rawReading || merged);
-        if (
-          merged.eventType === "period-start" ||
-          merged.eventType === "period-end" ||
-          merged.eventType === "regular-billing"
-        ) {
-          merged.statusLabel = meterStatus;
-        }
-      }
-
       return merged;
     };
 
@@ -452,14 +453,13 @@ const UtilityBillingTab = ({ utilityType }) => {
           id: `occ-in-${entry.id || entry.tenantId}-${entry.moveInDate}`,
           mergeKey: moveInKey,
           source: "occupancy",
-          sourceLabel: "Occupancy Record",
           date: entry.moveInDate,
           eventType: "move-in",
           tenantName: entry.tenantName || EMPTY_VALUE,
           tenantEmail: entry.tenantEmail || null,
           bedName: entry.bedName || EMPTY_VALUE,
           reading: entry.moveInReading?.reading ?? null,
-          statusLabel: entry.isActive ? "Active" : "Historical",
+          isActive: entry.isActive,
           hasMeterRecord: Boolean(entry.moveInReading),
           rawReading: entry.moveInReading || null,
         });
@@ -471,14 +471,12 @@ const UtilityBillingTab = ({ utilityType }) => {
           id: `occ-out-${entry.id || entry.tenantId}-${entry.moveOutDate}`,
           mergeKey: moveOutKey,
           source: "occupancy",
-          sourceLabel: "Occupancy Record",
           date: entry.moveOutDate,
           eventType: "move-out",
           tenantName: entry.tenantName || EMPTY_VALUE,
           tenantEmail: entry.tenantEmail || null,
           bedName: entry.bedName || EMPTY_VALUE,
           reading: entry.moveOutReading?.reading ?? null,
-          statusLabel: "Ended Stay",
           hasMeterRecord: Boolean(entry.moveOutReading),
           rawReading: entry.moveOutReading || null,
         });
@@ -501,14 +499,12 @@ const UtilityBillingTab = ({ utilityType }) => {
         id: `meter-${reading.id}`,
         mergeKey: meterKey,
         source: "meter",
-        sourceLabel: "Meter Record",
         date: reading.date,
         eventType: reading.eventType,
         tenantName: reading.tenant || EMPTY_VALUE,
         tenantEmail: reading.tenantEmail || null,
         bedName: EMPTY_VALUE,
         reading: reading.reading,
-        statusLabel: getReadingStatusLabel(reading),
         hasMeterRecord: true,
         rawReading: reading,
       });
@@ -530,6 +526,7 @@ const UtilityBillingTab = ({ utilityType }) => {
     return combined;
   }, [roomHistory, meterTimelineEvents]);
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
+  const currentPeriod = periods[0] || null;
   const openPeriodForRoom = periods.find((p) => p.status === "open");
   const lastClosedPeriod = periods.find(
     (p) => p.status === "closed" || p.status === "revised",
@@ -558,9 +555,22 @@ const UtilityBillingTab = ({ utilityType }) => {
     [filteredRooms],
   );
   const selectedReadyPeriod =
-    selectedPeriodFromList && getDisplayStatus(selectedPeriodFromList) === "ready"
+    selectedPeriodFromList &&
+    getDisplayStatus(selectedPeriodFromList) === "ready"
       ? selectedPeriodFromList
       : null;
+  const currentPeriodUsage =
+    currentPeriod &&
+    currentPeriod.endReading != null &&
+    currentPeriod.startReading != null
+      ? currentPeriod.endReading - currentPeriod.startReading
+      : null;
+  const currentPeriodCost =
+    currentPeriod?.computedTotalCost != null
+      ? currentPeriod.computedTotalCost
+      : currentPeriodUsage != null && currentPeriod?.ratePerUnit != null
+        ? currentPeriodUsage * currentPeriod.ratePerUnit
+        : null;
 
   // Paginated slices
   const totalRoomPages = Math.max(
@@ -717,6 +727,13 @@ const UtilityBillingTab = ({ utilityType }) => {
         ...extras,
       }));
     }
+  };
+
+  const toggleAdvancedPeriodActions = (periodId) => {
+    setAdvancedPeriodActions((current) => ({
+      ...current,
+      [periodId]: !current[periodId],
+    }));
   };
 
   const closePanel = () => setActivePanel(null);
@@ -1209,40 +1226,23 @@ const UtilityBillingTab = ({ utilityType }) => {
                               <col style={{ width: "30%" }} />
                             </colgroup>
                             <thead>
-                              <tr style={{ background: "#fdecda" }}>
+                              <tr className="eb-segment-table__head-row">
                                 <th
                                   colSpan="2"
-                                  className="eb-text-strong"
-                                  style={{
-                                    color: "#33261a",
-                                    borderBottom: "1px solid #dcdcdc",
-                                  }}
+                                  className="eb-segment-table__head-label"
                                 >
                                   No. of occupants in the room:
                                 </th>
-                                <th
-                                  className="eb-align-center eb-text-strong"
-                                  style={{
-                                    color: "#33261a",
-                                    fontSize: "0.85rem",
-                                    borderBottom: "1px solid #dcdcdc",
-                                  }}
-                                >
+                                <th className="eb-align-center eb-segment-table__head-count">
                                   {seg.activeTenantCount}
                                 </th>
                               </tr>
                               <tr>
                                 <th></th>
-                                <th
-                                  className="eb-align-center"
-                                  style={{ fontWeight: 600, color: "#111" }}
-                                >
+                                <th className="eb-align-center eb-segment-table__subhead">
                                   Date
                                 </th>
-                                <th
-                                  className="eb-align-center"
-                                  style={{ fontWeight: 600, color: "#111" }}
-                                >
+                                <th className="eb-align-center eb-segment-table__subhead">
                                   {utilityType === "electricity"
                                     ? "kwh"
                                     : "cu.m."}
@@ -1251,7 +1251,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                             </thead>
                             <tbody>
                               <tr>
-                                <td style={{ color: "#444" }}>1st reading</td>
+                                <td className="eb-text-muted">1st reading</td>
                                 <td className="eb-align-center">
                                   {seg.startDate
                                     ? new Date(
@@ -1266,7 +1266,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 </td>
                               </tr>
                               <tr>
-                                <td style={{ color: "#444" }}>2nd reading</td>
+                                <td className="eb-text-muted">2nd reading</td>
                                 <td className="eb-align-center">
                                   {seg.endDate
                                     ? new Date(seg.endDate).toLocaleDateString()
@@ -1279,7 +1279,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 </td>
                               </tr>
                               <tr>
-                                <td style={{ color: "#444" }}>
+                                <td className="eb-text-muted">
                                   Segment period
                                 </td>
                                 <td className="eb-align-center" colSpan={2}>
@@ -1287,7 +1287,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 </td>
                               </tr>
                               <tr>
-                                <td style={{ color: "#444" }}>
+                                <td className="eb-text-muted">
                                   Boundary events
                                 </td>
                                 <td className="eb-align-center" colSpan={2}>
@@ -1301,9 +1301,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 </td>
                               </tr>
                               <tr>
-                                <td
-                                  style={{ fontStyle: "italic", color: "#555" }}
-                                >
+                                <td className="eb-text-muted eb-text-italic">
                                   Total consumption
                                 </td>
                                 <td
@@ -1315,7 +1313,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 </td>
                               </tr>
                               <tr>
-                                <td colSpan="2" style={{ color: "#444" }}>
+                                <td colSpan="2" className="eb-text-muted">
                                   Segment total cost
                                 </td>
                                 <td className="eb-align-center eb-text-strong">
@@ -1323,7 +1321,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 </td>
                               </tr>
                               <tr>
-                                <td colSpan="2" style={{ color: "#444" }}>
+                                <td colSpan="2" className="eb-text-muted">
                                   Amount due (Php{" "}
                                   {fmtNumber(result.ratePerUnit, 2)} /{" "}
                                   {utilityType === "electricity"
@@ -1331,15 +1329,12 @@ const UtilityBillingTab = ({ utilityType }) => {
                                     : "cu.m."}
                                   ) per person
                                 </td>
-                                <td
-                                  className="eb-align-center eb-text-strong"
-                                  style={{ fontSize: "0.85rem" }}
-                                >
+                                <td className="eb-align-center eb-text-strong eb-segment-table__amount">
                                   {fmtCurrency(seg.sharePerTenantCost)}
                                 </td>
                               </tr>
                               <tr>
-                                <td style={{ color: "#444" }}>
+                                <td className="eb-text-muted">
                                   Covered tenants
                                 </td>
                                 <td className="eb-align-center" colSpan={2}>
@@ -1667,163 +1662,89 @@ const UtilityBillingTab = ({ utilityType }) => {
                 </div>
               </div>
 
-              {/* Current Billing Snapshot Mini-Dashboard */}
-              <div
-                className="eb-current-billing-dashboard"
-                style={{
-                  display: "flex",
-                  gap: "1rem",
-                  background: "#fff",
-                  padding: "1.5rem",
-                  borderRadius: "12px",
-                  border: "1px solid var(--border-subtle, #e2e8f0)",
-                  marginBottom: "1.5rem",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                }}
-              >
-                {periods[0] ? (
+              <div className="eb-snapshot-card">
+                {currentPeriod ? (
                   <>
-                    <div
-                      style={{
-                        flex: 1,
-                        borderRight: "1px solid var(--border-subtle, #e2e8f0)",
-                        paddingRight: "1.5rem",
-                      }}
-                    >
-                      <h3
-                        style={{
-                          fontSize: "0.85rem",
-                          color: "var(--text-secondary)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px",
-                          marginBottom: "8px",
-                        }}
-                      >
-                        Current Billing Snapshot
-                      </h3>
-                      <p
-                        style={{
-                          margin: "0 0 4px",
-                          fontSize: "1.1rem",
-                          fontWeight: 600,
-                          color: "var(--text-primary)",
-                        }}
-                      >
-                        Cycle {fmtDate(periods[0].startDate)} -{" "}
-                        {fmtDate(
-                          periods[0].endDate || periods[0].targetCloseDate,
-                        ) || "Ongoing"}
-                      </p>
+                    <div className="eb-snapshot-card__header">
+                      <div>
+                        <h3 className="eb-snapshot-card__title">
+                          Current Cycle
+                        </h3>
+                        <p className="eb-snapshot-card__cycle">
+                          {fmtDate(currentPeriod.startDate)} -{" "}
+                          {fmtDate(
+                            currentPeriod.endDate ||
+                              currentPeriod.targetCloseDate,
+                          ) || "Ongoing"}
+                        </p>
+                      </div>
                       <span
-                        className={`eb-badge eb-badge--${periods[0].displayStatus === "ready" ? "primary" : periods[0].displayStatus === "finalized" ? "success" : "warning"}`}
-                        style={{ display: "inline-block", marginTop: "6px" }}
+                        className={`eb-status-pill eb-status-pill--${getDisplayStatus(currentPeriod)}`}
                       >
-                        Status: {periods[0].displayStatus}
+                        {getDisplayStatusLabel(currentPeriod)}
                       </span>
                     </div>
-                    <div
-                      style={{
-                        flex: 1,
-                        paddingLeft: "0.5rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            color: "var(--text-secondary)",
-                            fontSize: "0.9rem",
-                          }}
-                        >
-                          {utilityType === "water"
-                            ? "Covered Days:"
-                            : "Meter Consumption:"}
+
+                    <div className="eb-snapshot-card__metrics">
+                      <div className="eb-snapshot-metric">
+                        <span className="eb-snapshot-metric__label">
+                          Total Cost
                         </span>
-                        <span style={{ fontWeight: 500 }}>
-                          {periods[0].endReading != null
-                            ? (
-                                periods[0].endReading - periods[0].startReading
-                              ).toFixed(2)
-                            : "—"}{" "}
+                        <span className="eb-snapshot-metric__value eb-snapshot-metric__value--strong">
+                          {currentPeriodCost != null
+                            ? fmtCurrency(currentPeriodCost)
+                            : EMPTY_VALUE}
+                        </span>
+                      </div>
+                      <div className="eb-snapshot-metric">
+                        <span className="eb-snapshot-metric__label">
+                          {utilityType === "water"
+                            ? "Covered Usage"
+                            : "Consumption"}
+                        </span>
+                        <span className="eb-snapshot-metric__value">
+                          {currentPeriodUsage != null
+                            ? fmtNumber(currentPeriodUsage, 2)
+                            : EMPTY_VALUE}{" "}
                           {utilityType === "electricity" ? "kWh" : "cu.m."}
                         </span>
                       </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: "6px",
-                        }}
+                      <button
+                        type="button"
+                        className="eb-btn eb-btn--ghost eb-btn--xs"
+                        onClick={() =>
+                          setShowSnapshotDetails((current) => !current)
+                        }
                       >
-                        <span
-                          style={{
-                            color: "var(--text-secondary)",
-                            fontSize: "0.9rem",
-                          }}
-                        >
-                          Rate:
-                        </span>
-                        <span style={{ fontWeight: 500 }}>
-                          {fmtCurrency(periods[0].ratePerUnit)}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginTop: "4px",
-                          paddingTop: "8px",
-                          borderTop: "1px dashed var(--border-subtle, #e2e8f0)",
-                        }}
-                      >
-                        <span
-                          style={{
-                            color: "var(--text-primary)",
-                            fontWeight: 600,
-                            fontSize: "0.95rem",
-                          }}
-                        >
-                          Total Room Cost:
-                        </span>
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            color: "var(--color-primary, #0f172a)",
-                            fontSize: "1.1rem",
-                          }}
-                        >
-                          {periods[0].computedTotalCost != null
-                            ? fmtCurrency(periods[0].computedTotalCost)
-                            : periods[0].endReading != null
-                              ? fmtCurrency(
-                                  (periods[0].endReading -
-                                    periods[0].startReading) *
-                                    periods[0].ratePerUnit,
-                                )
-                              : "—"}
-                        </span>
-                      </div>
+                        {showSnapshotDetails ? "Hide details" : "Show details"}
+                      </button>
                     </div>
+
+                    {showSnapshotDetails && (
+                      <div className="eb-snapshot-card__details">
+                        <span>
+                          Rate: {fmtCurrency(currentPeriod.ratePerUnit)} /
+                          {utilityType === "electricity" ? "kWh" : "cu.m."}
+                        </span>
+                        <span>
+                          Start:{" "}
+                          {currentPeriod.startReading != null
+                            ? fmtNumber(currentPeriod.startReading, 2)
+                            : EMPTY_VALUE}
+                        </span>
+                        <span>
+                          End:{" "}
+                          {currentPeriod.endReading != null
+                            ? fmtNumber(currentPeriod.endReading, 2)
+                            : EMPTY_VALUE}
+                        </span>
+                      </div>
+                    )}
                   </>
                 ) : (
-                  <div
-                    style={{
-                      width: "100%",
-                      textAlign: "center",
-                      padding: "1rem",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    No billing cycle. Click "+ New Billing Period" to generate
-                    the first period.
+                  <div className="eb-snapshot-card__empty">
+                    No billing cycle yet. Use New Billing Period to create your
+                    first cycle.
                   </div>
                 )}
               </div>
@@ -1953,9 +1874,9 @@ const UtilityBillingTab = ({ utilityType }) => {
                       </div>
                     ) : (
                       <div className="eb-panel__hint">
-                        Water billing uses room occupancy overlap. Enter the total
-                        water charge above and the billing engine will split it by
-                        covered days.
+                        Water billing uses room occupancy overlap. Enter the
+                        total water charge above and the billing engine will
+                        split it by covered days.
                       </div>
                     )}
                     <div className="eb-panel__footer">
@@ -2002,22 +1923,19 @@ const UtilityBillingTab = ({ utilityType }) => {
                       <table className="eb-table">
                         <colgroup>
                           <col style={{ width: "14%" }} />
-                          <col style={{ width: "14%" }} />
-                          <col style={{ width: "15%" }} />
                           <col style={{ width: "18%" }} />
-                          <col style={{ width: "12%" }} />
-                          <col style={{ width: "13%" }} />
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "16%" }} />
+                          <col style={{ width: "16%" }} />
                           <col style={{ width: "14%" }} />
                         </colgroup>
                         <thead>
                           <tr>
                             <th>Date</th>
-                            <th>Record</th>
                             <th>Event</th>
                             <th>Tenant</th>
                             <th>Bed</th>
                             <th>Reading</th>
-                            <th>Status</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
@@ -2025,7 +1943,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                           {pagedTimelineRows.length === 0 ? (
                             <tr>
                               <td
-                                colSpan={8}
+                                colSpan={6}
                                 className="eb-cell--muted"
                                 style={{ textAlign: "center", padding: "1rem" }}
                               >
@@ -2038,25 +1956,25 @@ const UtilityBillingTab = ({ utilityType }) => {
                               <tr key={row.id}>
                                 <td>{fmtDate(row.date)}</td>
                                 <td>
-                                  <span
-                                    className="eb-status-pill"
-                                    style={{
-                                      textTransform: "capitalize",
-                                      fontSize: "0.66rem",
-                                      padding: "0.12rem 0.4rem",
-                                    }}
-                                  >
-                                    {row.sourceLabel || row.source}
-                                  </span>
-                                </td>
-                                <td>
-                                  {EVENT_TYPE_LABELS[row.eventType] ||
-                                    row.eventType}
+                                  <div className="eb-timeline-event">
+                                    <div className="eb-timeline-event__title">
+                                      {EVENT_TYPE_LABELS[row.eventType] ||
+                                        row.eventType}
+                                    </div>
+                                    <div className="eb-timeline-event__meta">
+                                      <span className="eb-timeline-badge">
+                                        {getTimelineRecordLabel(row)}
+                                      </span>
+                                      <span className="eb-timeline-badge eb-timeline-badge--status">
+                                        {getTimelineStatusLabel(row)}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </td>
                                 <td>
                                   {row.eventType !== "move-in" &&
                                   row.eventType !== "move-out" ? (
-                                    "N/A (Room-level)"
+                                    "Room Level"
                                   ) : (
                                     <div className="eb-tenant-identity">
                                       <div className="eb-tenant-identity__name">
@@ -2071,7 +1989,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 <td>
                                   {row.eventType !== "move-in" &&
                                   row.eventType !== "move-out"
-                                    ? "N/A (Room-level)"
+                                    ? "Room Level"
                                     : row.bedName || EMPTY_VALUE}
                                 </td>
                                 <td>
@@ -2083,7 +2001,6 @@ const UtilityBillingTab = ({ utilityType }) => {
                                       }`
                                     : EMPTY_VALUE}
                                 </td>
-                                <td>{row.statusLabel || EMPTY_VALUE}</td>
                                 <td
                                   className="eb-cell--actions"
                                   style={{ whiteSpace: "nowrap" }}
@@ -2101,26 +2018,10 @@ const UtilityBillingTab = ({ utilityType }) => {
                                         title={
                                           isSystemBoundaryEvent(row.eventType)
                                             ? "Boundary events are locked to preserve billing integrity."
-                                            : "Edit reading"
+                                            : "Manage reading"
                                         }
                                       >
-                                        <Pencil size={11} /> Edit
-                                      </button>
-                                      <button
-                                        className="eb-btn eb-btn--xs eb-btn--danger"
-                                        onClick={() =>
-                                          handleDeleteReading(row.rawReading.id)
-                                        }
-                                        disabled={isSystemBoundaryEvent(
-                                          row.eventType,
-                                        )}
-                                        title={
-                                          isSystemBoundaryEvent(row.eventType)
-                                            ? "Boundary events are locked to preserve billing integrity."
-                                            : "Delete reading"
-                                        }
-                                      >
-                                        <Trash2 size={11} /> Delete
+                                        <Pencil size={11} /> Manage
                                       </button>
                                     </>
                                   ) : (
@@ -2174,7 +2075,9 @@ const UtilityBillingTab = ({ utilityType }) => {
                         <thead>
                           <tr>
                             <th>Cycle</th>
-                            <th>{utilityType === "water" ? "Basis" : "Meter"}</th>
+                            <th>
+                              {utilityType === "water" ? "Basis" : "Meter"}
+                            </th>
                             <th>Rate</th>
                             <th>Status</th>
                             <th>Actions</th>
@@ -2270,7 +2173,10 @@ const UtilityBillingTab = ({ utilityType }) => {
                                       onClick={() =>
                                         handleSendPeriod(
                                           p,
-                                          getRoomLabel(selectedRoom || {}, "Room"),
+                                          getRoomLabel(
+                                            selectedRoom || {},
+                                            "Room",
+                                          ),
                                         )
                                       }
                                       disabled={
@@ -2284,63 +2190,82 @@ const UtilityBillingTab = ({ utilityType }) => {
                                         : "Send"}
                                     </button>
                                   )}
-                                  {p.status === "open" &&
-                                    (editingRateId === p.id ? (
-                                      <div
-                                        className="eb-rate-editor"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <input
-                                          type="number"
-                                          step="0.01"
-                                          className="eb-inline-input eb-inline-input--rate"
-                                          value={editingRateValue}
-                                          onChange={(e) =>
-                                            setEditingRateValue(e.target.value)
-                                          }
-                                        />
-                                        <button
-                                          className="eb-btn eb-btn--xs eb-btn--primary"
-                                          onClick={() => handleSaveRate(p.id)}
-                                          disabled={updatePeriod.isPending}
-                                        >
-                                          <Save size={10} /> Save
-                                        </button>
+                                  <button
+                                    className="eb-btn eb-btn--xs eb-btn--ghost"
+                                    onClick={() =>
+                                      toggleAdvancedPeriodActions(p.id)
+                                    }
+                                  >
+                                    {advancedPeriodActions[p.id]
+                                      ? "Hide Advanced"
+                                      : "Advanced"}
+                                  </button>
+
+                                  {advancedPeriodActions[p.id] && (
+                                    <>
+                                      {p.status === "open" &&
+                                        (editingRateId === p.id ? (
+                                          <div
+                                            className="eb-rate-editor"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              className="eb-inline-input eb-inline-input--rate"
+                                              value={editingRateValue}
+                                              onChange={(e) =>
+                                                setEditingRateValue(
+                                                  e.target.value,
+                                                )
+                                              }
+                                            />
+                                            <button
+                                              className="eb-btn eb-btn--xs eb-btn--primary"
+                                              onClick={() =>
+                                                handleSaveRate(p.id)
+                                              }
+                                              disabled={updatePeriod.isPending}
+                                            >
+                                              <Save size={10} /> Save
+                                            </button>
+                                            <button
+                                              className="eb-btn eb-btn--xs eb-btn--ghost"
+                                              onClick={cancelRateEdit}
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            className="eb-btn eb-btn--xs eb-btn--outline"
+                                            onClick={() => beginRateEdit(p)}
+                                          >
+                                            <Pencil size={11} /> Edit Rate
+                                          </button>
+                                        ))}
+                                      {(p.status === "closed" ||
+                                        p.status === "revised") && (
                                         <button
                                           className="eb-btn eb-btn--xs eb-btn--ghost"
-                                          onClick={cancelRateEdit}
+                                          onClick={() => handleRevise(p.id)}
+                                          disabled={reviseResult.isPending}
                                         >
-                                          Cancel
+                                          <RefreshCw size={11} /> Re-run
                                         </button>
-                                      </div>
-                                    ) : (
+                                      )}
                                       <button
-                                        className="eb-btn eb-btn--xs eb-btn--outline"
-                                        onClick={() => beginRateEdit(p)}
+                                        className="eb-btn eb-btn--xs eb-btn--danger"
+                                        onClick={() => handleDeletePeriod(p.id)}
+                                        disabled={deletePeriod.isPending}
                                       >
-                                        <Pencil size={11} /> Edit Rate
+                                        <Trash2 size={11} />{" "}
+                                        {deletePeriod.isPending
+                                          ? "Deleting..."
+                                          : "Delete"}
                                       </button>
-                                    ))}
-                                  {(p.status === "closed" ||
-                                    p.status === "revised") && (
-                                    <button
-                                      className="eb-btn eb-btn--xs eb-btn--ghost"
-                                      onClick={() => handleRevise(p.id)}
-                                      disabled={reviseResult.isPending}
-                                    >
-                                      <RefreshCw size={11} /> Re-run
-                                    </button>
+                                    </>
                                   )}
-                                  <button
-                                    className="eb-btn eb-btn--xs eb-btn--danger"
-                                    onClick={() => handleDeletePeriod(p.id)}
-                                    disabled={deletePeriod.isPending}
-                                  >
-                                    <Trash2 size={11} />{" "}
-                                    {deletePeriod.isPending
-                                      ? "Deleting..."
-                                      : "Delete"}
-                                  </button>
                                 </td>
                               </tr>
                               {selectedPeriodId === p.id &&
@@ -2381,7 +2306,7 @@ const UtilityBillingTab = ({ utilityType }) => {
         >
           <div className="eb-modal" onClick={(e) => e.stopPropagation()}>
             <div className="eb-modal__header">
-              <span>Edit Meter Reading</span>
+              <span>Manage Meter Reading</span>
               <button
                 className="eb-panel__close"
                 onClick={() =>
@@ -2448,6 +2373,17 @@ const UtilityBillingTab = ({ utilityType }) => {
               >
                 <Check size={13} />{" "}
                 {updateReading.isPending ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                className="eb-btn eb-btn--danger"
+                onClick={() => {
+                  if (!editReadingModal.reading?.id) return;
+                  setEditReadingModal({ open: false, reading: null });
+                  handleDeleteReading(editReadingModal.reading.id);
+                }}
+                disabled={updateReading.isPending}
+              >
+                <Trash2 size={13} /> Delete Reading
               </button>
               <button
                 className="eb-btn eb-btn--ghost"

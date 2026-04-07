@@ -1,5 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
-import { LayoutGrid, Settings, Plus, Pencil, Trash2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import {
+  Activity,
+  Clock3,
+  LayoutGrid,
+  Settings,
+  Plus,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 
 // Components
 import { PageShell, SummaryBar, ActionBar, DataTable } from "../components/shared";
@@ -10,28 +19,114 @@ import DeleteRoomModal from "../components/rooms/DeleteRoomModal";
 
 // Hooks & API
 import { useDigitalTwinSnapshot } from "../../../shared/hooks/queries/useDigitalTwin";
+import { useVacancyForecast } from "../../../shared/hooks/queries/useRooms";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { roomApi } from "../../../shared/api/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { showNotification } from "../../../shared/utils/notification";
 import { formatRoomType, formatBranch } from "../utils/formatters";
+import OccupancyTrackingPage from "./OccupancyTrackingPage";
 
 // Styles
 import "../styles/admin-room-availability.css";
 import "../styles/admin-room-configuration.css";
 
+const TAB_KEYS = new Set(["rooms", "occupancy", "forecast"]);
+
+const getDotColor = (status) => {
+  switch (status) {
+    case "occupied": return "var(--status-success)";
+    case "reserved": return "var(--accent-blue)";
+    case "locked": return "var(--accent-orange)";
+    case "maintenance": return "var(--status-error)";
+    default: return "var(--border-default)";
+  }
+};
+
+const getDotLabel = (status) => {
+  switch (status) {
+    case "occupied": return "Moved In";
+    case "reserved": return "Reserved";
+    case "locked": return "Locked";
+    case "maintenance": return "Maintenance";
+    default: return "Available";
+  }
+};
+
+const getSoonestVacancy = (forecastItem) => {
+  if (!forecastItem?.beds?.length) return null;
+  const datedBeds = forecastItem.beds.filter((bed) => bed.expectedVacancy);
+  if (datedBeds.length === 0) return null;
+  return datedBeds.sort((a, b) => new Date(a.expectedVacancy) - new Date(b.expectedVacancy))[0];
+};
+
+const getDaysUntilVacancy = (value) => {
+  if (!value) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(value);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+};
+
+const formatForecastDate = (value) => {
+  if (!value) return "No forecast";
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const getForecastTone = (daysUntil) => {
+  if (daysUntil == null) {
+    return {
+      label: "No date",
+      className: "forecast-card--neutral",
+      accent: "var(--text-muted)",
+    };
+  }
+  if (daysUntil < 0) {
+    return {
+      label: "Overdue",
+      className: "forecast-card--overdue",
+      accent: "var(--status-error)",
+    };
+  }
+  if (daysUntil <= 7) {
+    return {
+      label: "This week",
+      className: "forecast-card--soon",
+      accent: "var(--accent-orange)",
+    };
+  }
+  if (daysUntil <= 30) {
+    return {
+      label: "This month",
+      className: "forecast-card--upcoming",
+      accent: "var(--status-success)",
+    };
+  }
+  return {
+    label: "Later",
+    className: "forecast-card--neutral",
+    accent: "var(--accent-blue)",
+  };
+};
+
 function RoomAvailabilityPage() {
   const { can } = usePermissions();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // State
-  const [activeTab, setActiveTab] = useState("rooms");
   const [searchTerm, setSearchTerm] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   const [floorFilter, setFloorFilter] = useState("all");
   const [roomTypeFilter, setRoomTypeFilter] = useState("all");
+  const [forecastStatusFilter, setForecastStatusFilter] = useState("all");
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
@@ -39,11 +134,23 @@ function RoomAvailabilityPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ROOMS_PER_PAGE = 10;
 
+  const requestedTab = searchParams.get("tab") || "rooms";
+  const activeTab = TAB_KEYS.has(requestedTab) ? requestedTab : "rooms";
+
   // Use Digital Twin snapshot so bed dots and occupancy bar are reservation-aware
   // Admins are branch-scoped; super admins (owners) see all
-  const dtBranch = user?.branch && user.role !== "owner" ? user.branch : "all";
+  const defaultBranch = user?.branch && user.role !== "owner" ? user.branch : "all";
+  const snapshotBranch = user?.role === "owner" ? branchFilter : defaultBranch;
+  const dtBranch = snapshotBranch === "all" ? "all" : snapshotBranch;
   const { data: snapshot, isLoading: loading } = useDigitalTwinSnapshot(dtBranch);
   const rooms = snapshot?.rooms ?? [];
+  const forecastBranch = user?.role === "owner"
+    ? (branchFilter === "all" ? null : branchFilter)
+    : defaultBranch;
+  const { data: forecastResponse, isLoading: forecastLoading } = useVacancyForecast({
+    branch: forecastBranch,
+  });
+  const forecastItems = forecastResponse?.forecast ?? [];
 
   // Processing
   const filteredRooms = useMemo(() => {
@@ -59,10 +166,47 @@ function RoomAvailabilityPage() {
     });
   }, [rooms, searchTerm, branchFilter, floorFilter, roomTypeFilter]);
 
+  const filteredForecast = useMemo(() => {
+    return forecastItems.filter((item) => {
+      const daysUntil = getDaysUntilVacancy(item.nextExpectedVacancy);
+      const tone = getForecastTone(daysUntil);
+      const matchesSearch =
+        !searchTerm ||
+        item.roomName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.roomNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesBranch = branchFilter === "all" || item.branch === branchFilter;
+      const matchesType = roomTypeFilter === "all" || item.type === roomTypeFilter;
+      const matchesStatus =
+        forecastStatusFilter === "all" ||
+        (forecastStatusFilter === "overdue" && tone.label === "Overdue") ||
+        (forecastStatusFilter === "this-week" && tone.label === "This week") ||
+        (forecastStatusFilter === "this-month" && tone.label === "This month") ||
+        (forecastStatusFilter === "later" && tone.label === "Later") ||
+        (forecastStatusFilter === "no-date" && tone.label === "No date");
+      return matchesSearch && matchesBranch && matchesType && matchesStatus;
+    });
+  }, [forecastItems, searchTerm, branchFilter, roomTypeFilter, forecastStatusFilter]);
+
+  const featuredForecast = filteredForecast
+    .filter((item) => item.nextExpectedVacancy)
+    .sort((a, b) => new Date(a.nextExpectedVacancy) - new Date(b.nextExpectedVacancy))[0] || null;
+  const forecastPageCount = Math.max(1, Math.ceil(filteredForecast.length / ROOMS_PER_PAGE));
+  const paginatedForecast = useMemo(() => {
+    const start = (currentPage - 1) * ROOMS_PER_PAGE;
+    return filteredForecast.slice(start, start + ROOMS_PER_PAGE);
+  }, [filteredForecast, currentPage]);
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, branchFilter, floorFilter, roomTypeFilter]);
+  }, [searchTerm, branchFilter, floorFilter, roomTypeFilter, forecastStatusFilter, activeTab]);
+
+  useEffect(() => {
+    if (TAB_KEYS.has(requestedTab)) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", "rooms");
+    setSearchParams(next, { replace: true });
+  }, [requestedTab, searchParams, setSearchParams]);
 
   // Stats
   const stats = useMemo(() => {
@@ -81,6 +225,25 @@ function RoomAvailabilityPage() {
       rate: capacity > 0 ? ((occupied / capacity) * 100).toFixed(1) : "0.0",
     };
   }, [rooms]);
+
+  const forecastSummary = useMemo(() => {
+    const withDate = filteredForecast.filter((item) => item.nextExpectedVacancy);
+    const expiringSoon = withDate.filter((item) => {
+      const soonest = getSoonestVacancy(item);
+      return soonest?.daysRemaining > 0 && soonest.daysRemaining <= 30;
+    }).length;
+    const overdue = withDate.filter((item) => {
+      const soonest = getSoonestVacancy(item);
+      return soonest?.isOverdue;
+    }).length;
+
+    return {
+      total: filteredForecast.length,
+      withDate: withDate.length,
+      expiringSoon,
+      overdue,
+    };
+  }, [filteredForecast]);
 
   // Handlers
   const handleConfigure = (room) => {
@@ -132,20 +295,28 @@ function RoomAvailabilityPage() {
   const handleDeleteRoom = async (roomId) => {
     try {
       await roomApi.delete(roomId);
-      showNotification("Room deleted successfully", "success");
+      showNotification("Room archived successfully", "success");
       queryClient.invalidateQueries({ queryKey: ["digital-twin", "snapshot"] });
       setDeletingRoom(null);
     } catch (err) {
-      showNotification(err.message || "Failed to delete room", "error");
+      showNotification(err.message || "Failed to archive room", "error");
     }
+  };
+
+  const handleTabChange = (nextTab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", nextTab);
+    setSearchParams(next);
   };
 
   // Config — 2 tabs: Rooms (merged with Bed Config) + Occupancy
   const tabs = [
-    { key: "rooms", label: "Room Management", icon: LayoutGrid },
+    { key: "rooms", label: "Rooms", icon: LayoutGrid },
+    { key: "occupancy", label: "Occupancy", icon: Activity },
+    { key: "forecast", label: "Vacancy Forecast", icon: Clock3 },
   ];
 
-  const summaryItems = [
+  const roomSummaryItems = [
     { label: "Total Rooms", value: stats.total, color: "blue" },
     { label: "Full", value: stats.full, color: "red" },
     { label: "Partial", value: stats.partial, color: "orange" },
@@ -153,7 +324,14 @@ function RoomAvailabilityPage() {
     { label: "Occupancy Rate", value: `${stats.rate}%`, color: "purple" },
   ];
 
-  const filters = [
+  const forecastSummaryItems = [
+    { label: "Forecast Rooms", value: forecastSummary.total, color: "blue" },
+    { label: "With Dates", value: forecastSummary.withDate, color: "green" },
+    { label: "Expiring Soon", value: forecastSummary.expiringSoon, color: "orange" },
+    { label: "Overdue", value: forecastSummary.overdue, color: "red" },
+  ];
+
+  const roomFilters = [
     {
       key: "branch",
       options: [
@@ -184,6 +362,24 @@ function RoomAvailabilityPage() {
       ],
       value: roomTypeFilter,
       onChange: setRoomTypeFilter,
+    },
+  ];
+
+  const forecastFilters = [
+    roomFilters[0],
+    roomFilters[2],
+    {
+      key: "forecast-status",
+      options: [
+        { value: "all", label: "All Timelines" },
+        { value: "overdue", label: "Overdue" },
+        { value: "this-week", label: "This Week" },
+        { value: "this-month", label: "This Month" },
+        { value: "later", label: "Later" },
+        { value: "no-date", label: "No Date" },
+      ],
+      value: forecastStatusFilter,
+      onChange: setForecastStatusFilter,
     },
   ];
 
@@ -340,10 +536,10 @@ function RoomAvailabilityPage() {
   ];
 
   return (
-    <PageShell tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
-      {/* Only show SummaryBar + ActionBar for the Rooms tab */}
+    <PageShell tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange}>
       <PageShell.Summary>
-        {activeTab === "rooms" && <SummaryBar items={summaryItems} />}
+        {activeTab === "rooms" && <SummaryBar items={roomSummaryItems} />}
+        {activeTab === "forecast" && <SummaryBar items={forecastSummaryItems} />}
       </PageShell.Summary>
 
       <PageShell.Actions>
@@ -354,7 +550,7 @@ function RoomAvailabilityPage() {
               onChange: setSearchTerm,
               placeholder: "Search rooms...",
             }}
-            filters={filters}
+            filters={roomFilters}
             actions={
               can("manageRooms")
                 ? [
@@ -369,9 +565,23 @@ function RoomAvailabilityPage() {
             }
           />
         )}
+        {activeTab === "forecast" && (
+          <>
+            <ActionBar
+              search={{
+                value: searchTerm,
+                onChange: setSearchTerm,
+                placeholder: "Search forecast rooms...",
+              }}
+              filters={forecastFilters}
+            />
+          </>
+        )}
       </PageShell.Actions>
 
       <PageShell.Content>
+        {activeTab === "rooms" && (
+          <>
           {/* Color legend — matches Digital Twin bedStatusColor() exactly */}
           <div style={{
             display: "flex", alignItems: "center", gap: 16,
@@ -383,6 +593,7 @@ function RoomAvailabilityPage() {
             {[
               { color: "var(--status-success)",   label: "Occupied" },
               { color: "var(--accent-blue)",      label: "Reserved" },
+              { color: "var(--accent-orange)",    label: "Locked" },
               { color: "var(--border-default)",   label: "Available" },
               { color: "var(--status-error)",     label: "Maintenance" },
             ].map(({ color, label }) => (
@@ -414,6 +625,141 @@ function RoomAvailabilityPage() {
               description: "Try adjusting your filters or adding new rooms.",
             }}
           />
+          </>
+        )}
+
+        {activeTab === "occupancy" && <OccupancyTrackingPage isEmbedded={true} />}
+
+        {activeTab === "forecast" && (
+          <>
+            {forecastLoading ? (
+              <div className="forecast-empty-state">
+                <Clock3 size={28} />
+                <strong>Loading forecast data...</strong>
+              </div>
+            ) : filteredForecast.length === 0 ? (
+              <div className="forecast-empty-state">
+                <Clock3 size={28} />
+                <strong>No forecast data found</strong>
+                <span>Forecasts will appear here for rooms with active bed timelines.</span>
+              </div>
+            ) : (
+              <div className="forecast-panel">
+                {featuredForecast && (
+                  <div className="forecast-highlight">
+                    <div>
+                      <span className="forecast-highlight__eyebrow">Soonest opening</span>
+                      <h3>{featuredForecast.roomName || featuredForecast.roomNumber}</h3>
+                      <p>
+                        {formatBranch(featuredForecast.branch)} · {formatRoomType(featuredForecast.type)}
+                      </p>
+                    </div>
+                    <div className="forecast-highlight__meta">
+                      <span className="forecast-highlight__date">
+                        {formatForecastDate(featuredForecast.nextExpectedVacancy)}
+                      </span>
+                      <span className="forecast-highlight__count">
+                        {getDaysUntilVacancy(featuredForecast.nextExpectedVacancy)} days away
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="forecast-grid">
+                  {paginatedForecast.map((item) => {
+                    const daysUntil = getDaysUntilVacancy(item.nextExpectedVacancy);
+                    const tone = getForecastTone(daysUntil);
+                    const occupancyPct = Math.round(((item.currentOccupancy || 0) / (item.capacity || 1)) * 100);
+
+                    return (
+                      <article key={item.roomId || item.roomNumber} className={`forecast-card ${tone.className}`}>
+                        <div className="forecast-card__header">
+                          <div>
+                            <span className="forecast-card__branch">{formatBranch(item.branch)}</span>
+                            <h3>{item.roomName || item.roomNumber}</h3>
+                          </div>
+                          <span className="forecast-card__status" style={{ color: tone.accent }}>
+                            {tone.label}
+                          </span>
+                        </div>
+
+                        <div className="forecast-card__metrics">
+                          <div>
+                            <span className="forecast-card__label">Next vacancy</span>
+                            <strong>{formatForecastDate(item.nextExpectedVacancy)}</strong>
+                          </div>
+                          <div>
+                            <span className="forecast-card__label">Committed</span>
+                            <strong>{item.currentOccupancy || 0}/{item.capacity || 0}</strong>
+                          </div>
+                          <div>
+                            <span className="forecast-card__label">Room type</span>
+                            <strong>{formatRoomType(item.type)}</strong>
+                          </div>
+                        </div>
+
+                        <div className="forecast-card__occupancy">
+                          <div className="forecast-card__occupancy-bar">
+                            <div
+                              className="forecast-card__occupancy-fill"
+                              style={{ width: `${occupancyPct}%` }}
+                            />
+                          </div>
+                          <span>{occupancyPct}% occupied</span>
+                        </div>
+
+                        <div className="forecast-card__beds">
+                          {(item.beds || []).map((bed) => {
+                            const bedDays = getDaysUntilVacancy(bed.expectedVacancy);
+                            const bedTone = getForecastTone(bedDays);
+                            return (
+                              <div key={bed.bedId} className="forecast-bed-row">
+                                <div>
+                                  <span className="forecast-bed-row__name">{bed.position}</span>
+                                  <span className="forecast-bed-row__date">
+                                    {formatForecastDate(bed.expectedVacancy)}
+                                  </span>
+                                </div>
+                                <span
+                                  className="forecast-bed-row__badge"
+                                  style={{ color: bedTone.accent, borderColor: `${bedTone.accent}33` }}
+                                >
+                                  {bedDays == null ? "Held" : `${bedDays}d`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                {forecastPageCount > 1 && (
+                  <div className="forecast-pagination">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span>Page {currentPage} of {forecastPageCount}</span>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setCurrentPage((page) => Math.min(forecastPageCount, page + 1))}
+                      disabled={currentPage === forecastPageCount}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
         {selectedRoom && (
           <RoomConfigModal

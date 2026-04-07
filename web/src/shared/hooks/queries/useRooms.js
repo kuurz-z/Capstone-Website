@@ -29,6 +29,14 @@ export function useBranchOccupancy(branch) {
   });
 }
 
+/** Fetch vacancy forecast for a branch or room */
+export function useVacancyForecast({ branch, roomId } = {}) {
+  return useQuery({
+    queryKey: ["rooms", "vacancyForecast", branch || "all", roomId || "all"],
+    queryFn: () => roomApi.getVacancyForecast({ branch, roomId }),
+  });
+}
+
 /** Create a new room */
 export function useCreateRoom() {
   const qc = useQueryClient();

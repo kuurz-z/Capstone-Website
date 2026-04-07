@@ -2,11 +2,15 @@
   "name": "capstone-website",
   "private": true,
   "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix web run dev\"",
     "start:server": "npm --prefix server start",
     "start:web": "npm --prefix web run serve",
     "start:local": "powershell -ExecutionPolicy Bypass -File .\\start-local.ps1",
     "dev:web": "npm --prefix web run dev",
     "kill:server-port": "npm --prefix server run kill-port",
     "kill:web-port": "npm --prefix server run kill-port -- 3000"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

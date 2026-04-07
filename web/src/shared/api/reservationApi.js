@@ -8,7 +8,11 @@ export const reservationApi = {
   /**
    * Get all reservations
    */
-  getAll: () => authFetch("/reservations"),
+  getAll: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const url = queryString ? `/reservations?${queryString}` : "/reservations";
+    return authFetch(url);
+  },
 
   /**
    * Get current checked-in residents for admin tenants page

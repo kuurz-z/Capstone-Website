@@ -322,6 +322,12 @@ const billSchema = new mongoose.Schema(
 billSchema.index({ branch: 1, billingMonth: -1 });
 billSchema.index({ branch: 1, status: 1 });
 billSchema.index({ branch: 1, userId: 1, billingMonth: -1 });
+billSchema.index({
+  userId: 1,
+  reservationId: 1,
+  billingMonth: 1,
+  isArchived: 1,
+});
 
 // For forecasting and trend analysis
 billSchema.index({ billingMonth: -1, totalAmount: 1 });

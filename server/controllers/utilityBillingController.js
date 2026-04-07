@@ -804,6 +804,7 @@ export const reviseUtilityResult = async (req, res, next) => {
 
 export const sendUtilityPeriod = async (req, res, next) => {
   try {
+    const startedAt = Date.now();
     const admin = await getAdminInfo(req);
     const { utilityType, id } = req.params;
 
@@ -814,7 +815,9 @@ export const sendUtilityPeriod = async (req, res, next) => {
     }).lean();
 
     if (!period || period.status === "open") {
-      return res.status(400).json({ error: "Only finalized periods can be sent." });
+      return res
+        .status(400)
+        .json({ error: "Only finalized periods can be sent." });
     }
 
     const room = await Room.findById(period.roomId).lean();
@@ -828,7 +831,9 @@ export const sendUtilityPeriod = async (req, res, next) => {
 
     const billIds = getUtilitySummaryBillIds(period);
     if (billIds.length === 0) {
-      return res.status(409).json({ error: "No tenant bills found for this period." });
+      return res
+        .status(409)
+        .json({ error: "No tenant bills found for this period." });
     }
 
     const bills = await Bill.find({
@@ -864,6 +869,17 @@ export const sendUtilityPeriod = async (req, res, next) => {
       result,
       utilityType,
     });
+
+    logger.info(
+      {
+        utilityType,
+        periodId: period._id,
+        billCount: sendableBills.length,
+        sentCount: sendResult.sent,
+        durationMs: Date.now() - startedAt,
+      },
+      "Utility period send completed",
+    );
 
     await logBillingAudit(req, {
       admin,

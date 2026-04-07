@@ -43,8 +43,52 @@ import {
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
   "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
+const ADMIN_LIST_FIELDS = [
+  "_id",
+  "reservationCode",
+  "status",
+  "paymentStatus",
+  "createdAt",
+  "checkInDate",
+  "visitDate",
+  "visitTime",
+  "visitApproved",
+  "visitScheduledAt",
+  "scheduleApproved",
+  "scheduleRejected",
+  "scheduleRejectionReason",
+  "mobileNumber",
+  "billingEmail",
+  "viewingType",
+  "isOutOfTown",
+  "currentLocation",
+  "visitHistory",
+].join(" ");
 const POPULATE_USER = ["userId", "firstName lastName email phone"];
 const POPULATE_ROOM = ["roomId", "name branch type price capacity beds floor"];
+const CURRENT_RESIDENT_FIELDS = [
+  "_id",
+  "reservationCode",
+  "status",
+  "paymentStatus",
+  "checkInDate",
+  "checkOutDate",
+  "leaseDuration",
+  "monthlyRent",
+  "mobileNumber",
+  "firstName",
+  "lastName",
+  "email",
+  "nationality",
+  "maritalStatus",
+  "employment",
+  "emergencyContact",
+  "selectedBed",
+  "userId",
+  "roomId",
+].join(" ");
+const CURRENT_RESIDENT_USER = ["userId", "firstName lastName email phone"];
+const CURRENT_RESIDENT_ROOM = ["roomId", "name roomNumber branch type price floor"];
 const TIME_24H_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const combineLifecycleDateTime = ({
@@ -92,7 +136,9 @@ const getResidentStatus = (reservation, now = new Date()) => {
 
 const mapCurrentResident = (reservation, now = new Date()) => {
   return {
-    ...reservation.toObject(),
+    ...(typeof reservation.toObject === "function"
+      ? reservation.toObject()
+      : reservation),
     statusLabel: getResidentStatus(reservation, now),
   };
 };
@@ -131,6 +177,7 @@ export const invalidateUserCache = (uid) => userCache.delete(uid);
 /* ─── GET all reservations ───────────────────────── */
 export const getReservations = async (req, res, next) => {
   try {
+    const isAdminListView = req.query.view === "admin-list";
     const dbUser = await findDbUser(req.user.uid);
     if (!dbUser)
       return res
@@ -150,11 +197,22 @@ export const getReservations = async (req, res, next) => {
       query = { userId: dbUser._id, isArchived: { $ne: true } };
     }
 
-    const reservations = await Reservation.find(query)
-      .populate(...POPULATE_USER)
-      .populate(...POPULATE_ROOM)
-      .select(HEAVY_FIELDS)
+    let reservationsQuery = Reservation.find(query)
+      .populate(
+        ...(isAdminListView ? ["userId", "firstName lastName email phone"] : POPULATE_USER),
+      )
+      .populate(
+        ...(isAdminListView ? ["roomId", "name branch type"] : POPULATE_ROOM),
+      )
       .sort({ createdAt: -1 });
+
+    if (isAdminListView) {
+      reservationsQuery = reservationsQuery.select(ADMIN_LIST_FIELDS).lean();
+    } else {
+      reservationsQuery = reservationsQuery.select(HEAVY_FIELDS);
+    }
+
+    const reservations = await reservationsQuery;
 
     res.json(reservations);
   } catch (error) {
@@ -204,24 +262,21 @@ export const getCurrentResidents = async (req, res) => {
       roomId: { $in: roomIds },
       isArchived: { $ne: true },
     })
-      .populate(...POPULATE_USER)
-      .populate(...POPULATE_ROOM)
-      .select(HEAVY_FIELDS)
-      .sort({ createdAt: -1 });
+      .select(CURRENT_RESIDENT_FIELDS)
+      .populate(...CURRENT_RESIDENT_USER)
+      .populate(...CURRENT_RESIDENT_ROOM)
+      .sort({ checkInDate: -1 })
+      .lean();
 
     const now = new Date();
     const residents = reservations.map((reservation) =>
       mapCurrentResident(reservation, now),
     );
 
-    return sendSuccess(
-      res,
-      {
-        residents,
-        stats: buildResidentStats(residents),
-      },
-      "Current residents fetched successfully",
-    );
+    return sendSuccess(res, {
+      residents,
+      stats: buildResidentStats(residents),
+    });
   } catch (error) {
     logger.error(
       { err: error, requestId: req.id },

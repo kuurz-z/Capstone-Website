@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import { BarChart3 } from "lucide-react";
-import { roomApi } from "../../../shared/api/apiClient";
+import { digitalTwinApi } from "../../../shared/api/digitalTwinApi";
 import { formatRoomType, formatBranch } from "../utils/formatters";
-import { useBranchOccupancy } from "../../../shared/hooks/queries/useRooms";
+import { useVacancyForecast } from "../../../shared/hooks/queries/useRooms";
+import { useDigitalTwinSnapshot } from "../../../shared/hooks/queries/useDigitalTwin";
 import { SummaryBar, ActionBar, DataTable, StatusBadge } from "../components/shared";
 
 import OccupancyRoomModal from "../components/occupancy/OccupancyRoomModal";
@@ -18,11 +19,20 @@ function getOccupancyColor(occupied, capacity) {
   return "var(--status-error)";
 }
 
-function getStatusLabel(rate) {
-  if (rate === 0) return { label: "Empty", variant: "success" };
-  if (rate < 50) return { label: "Low", variant: "info" };
-  if (rate < 100) return { label: "High", variant: "warning" };
-  return { label: "Full", variant: "error" };
+function getStatusLabel(room) {
+  const status = room.readinessStatus || (room.available ? "available" : "occupied");
+  switch (status) {
+    case "maintenance":
+      return { label: "Maintenance", variant: "error" };
+    case "reserved":
+      return { label: "Reserved", variant: "info" };
+    case "occupied":
+      return { label: "Occupied", variant: "warning" };
+    case "mixed":
+      return { label: "Mixed", variant: "warning" };
+    default:
+      return { label: "Available", variant: "success" };
+  }
 }
 
 /* ── Component ──────────────────────────────────── */
@@ -32,19 +42,21 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
   const [showRoomDetails, setShowRoomDetails] = useState(false);
   const [loadingRoomDetails, setLoadingRoomDetails] = useState(false);
 
-  const branch = branchFilter === "all" ? null : branchFilter;
-  const { data: occupancyResponse, isLoading: loading, error: queryError } = useBranchOccupancy(branch);
+  const branch = branchFilter === "all" ? "all" : branchFilter;
+  const { data: snapshot, isLoading: loading, error: queryError } = useDigitalTwinSnapshot(branch);
+  const { data: vacancyResponse } = useVacancyForecast({
+    branch: branchFilter === "all" ? null : branchFilter,
+  });
   const error = queryError ? "Failed to load occupancy data" : null;
-
-  const occupancyStats = occupancyResponse?.statistics || occupancyResponse;
-  const rooms = occupancyStats?.rooms || [];
+  const rooms = snapshot?.rooms || [];
+  const vacancyForecast = vacancyResponse?.forecast || [];
 
   const handleViewRoomDetails = async (room) => {
     setLoadingRoomDetails(true);
     setShowRoomDetails(true);
-    setSelectedRoom(room);
+    setSelectedRoom({ room, beds: room.beds || [] });
     try {
-      const detailedData = await roomApi.getOccupancy(room._id);
+      const detailedData = await digitalTwinApi.getRoomDetail(room._id);
       setSelectedRoom(detailedData);
     } catch (err) {
       console.error("Failed to fetch room details:", err);
@@ -58,7 +70,12 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     const totalRooms = rooms.length;
     const totalCapacity = rooms.reduce((sum, r) => sum + (r.capacity || 0), 0);
     const totalOccupancy = rooms.reduce((sum, r) => sum + (r.currentOccupancy || 0), 0);
-    const availableBeds = totalCapacity - totalOccupancy;
+    const availableBeds = rooms.reduce((sum, room) => {
+      const available = Array.isArray(room.beds)
+        ? room.beds.filter((bed) => bed.status === "available").length
+        : Math.max((room.capacity || 0) - (room.currentOccupancy || 0), 0);
+      return sum + available;
+    }, 0);
     const rate = totalCapacity > 0 ? Math.round((totalOccupancy / totalCapacity) * 100) : 0;
     return { totalRooms, totalCapacity, totalOccupancy, availableBeds, rate };
   }, [rooms]);
@@ -67,7 +84,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
   const roomsByType = useMemo(() => {
     const types = ["private", "double-sharing", "quadruple-sharing"];
     return types.map((type) => {
-      const typeRooms = rooms.filter((r) => (r.type || r.roomType) === type);
+      const typeRooms = rooms.filter((r) => r.type === type);
       const capacity = typeRooms.reduce((sum, r) => sum + (r.capacity || 0), 0);
       const occupied = typeRooms.reduce((sum, r) => sum + (r.currentOccupancy || 0), 0);
       const rate = capacity > 0 ? Math.round((occupied / capacity) * 100) : 0;
@@ -75,12 +92,17 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     });
   }, [rooms]);
 
+  const forecastByRoomId = useMemo(
+    () => new Map(vacancyForecast.map((item) => [String(item.roomId), item])),
+    [vacancyForecast],
+  );
+
   // Summary items
   const summaryItems = [
     { label: "Total Rooms", value: stats.totalRooms, color: "blue" },
     { label: "Total Beds", value: stats.totalCapacity, color: "purple" },
-    { label: "Occupied", value: stats.totalOccupancy, color: "orange" },
-    { label: "Available", value: stats.availableBeds, color: "green" },
+    { label: "Committed", value: stats.totalOccupancy, color: "orange" },
+    { label: "Available Beds", value: stats.availableBeds, color: "green" },
     { label: "Occupancy Rate", value: `${stats.rate}%`, color: "red" },
   ];
 
@@ -114,16 +136,18 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     { key: "capacity", label: "Capacity", render: (r) => r.capacity || 0 },
     {
       key: "occupied",
-      label: "Occupied",
+      label: "Committed",
       render: (r) => (
         <span className="occupancy-occupied-count">{r.currentOccupancy || r.occupancy || 0}</span>
       ),
     },
     {
       key: "available",
-      label: "Available",
+      label: "Available Beds",
       render: (r) => {
-        const avail = (r.capacity || 0) - (r.currentOccupancy || r.occupancy || 0);
+        const avail = Array.isArray(r.beds)
+          ? r.beds.filter((bed) => bed.status === "available").length
+          : (r.capacity || 0) - (r.currentOccupancy || r.occupancy || 0);
         return <span className="occupancy-available-count">{avail}</span>;
       },
     },
@@ -147,11 +171,19 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     },
     {
       key: "status",
-      label: "Status",
+      label: "Readiness",
       render: (r) => {
-        const rate = Math.round(((r.currentOccupancy || 0) / (r.capacity || 1)) * 100);
-        const { label, variant } = getStatusLabel(rate);
+        const { label, variant } = getStatusLabel(r);
         return <StatusBadge variant={variant}>{label}</StatusBadge>;
+      },
+    },
+    {
+      key: "forecast",
+      label: "Next Vacancy",
+      render: (r) => {
+        const forecast = forecastByRoomId.get(String(r._id));
+        if (!forecast?.nextExpectedVacancy) return "No forecast";
+        return new Date(forecast.nextExpectedVacancy).toLocaleDateString();
       },
     },
     {
@@ -187,7 +219,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         <div className="admin-section-header">
           <h1>Occupancy Tracking</h1>
           <p className="admin-section-subtitle">
-            Monitor real-time room occupancy across branches
+            Monitor committed occupancy, bed status, and upcoming vacancies.
           </p>
         </div>
       )}
@@ -245,6 +277,31 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         </div>
       </div>
 
+      {vacancyForecast.length > 0 && (
+        <div className="occupancy-type-breakdown">
+          <h3 className="occupancy-section-heading">Upcoming Vacancies</h3>
+          <div className="occupancy-type-cards">
+            {vacancyForecast
+              .filter((item) => item.nextExpectedVacancy)
+              .slice(0, 4)
+              .map((item) => (
+                <div key={item.roomId} className="occupancy-type-card">
+                  <div className="occupancy-type-card-header">
+                    <span className="occupancy-type-name">{item.roomName || item.roomNumber}</span>
+                    <span className="occupancy-type-count">{formatBranch(item.branch)}</span>
+                  </div>
+                  <span className="occupancy-type-stat">
+                    Next vacancy: {new Date(item.nextExpectedVacancy).toLocaleDateString()}
+                  </span>
+                  <span className="occupancy-type-stat">
+                    {item.currentOccupancy} / {item.capacity} committed
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Room Table — using shared DataTable */}
       <DataTable
         columns={columns}
@@ -263,7 +320,10 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         <OccupancyRoomModal
           room={selectedRoom}
           loadingDetails={loadingRoomDetails}
-          onClose={() => setShowRoomDetails(false)}
+          onClose={() => {
+            setShowRoomDetails(false);
+            setSelectedRoom(null);
+          }}
         />
       )}
     </section>

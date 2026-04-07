@@ -18,6 +18,7 @@ import Reservation from "../models/Reservation.js";
 import Bill from "../models/Bill.js";
 import MaintenanceRequest from "../models/MaintenanceRequest.js";
 import BillingPeriod from "../models/BillingPeriod.js";
+import { deriveRoomOccupancyState } from "../utils/occupancyManager.js";
 
 // ============================================================================
 // HEALTH SCORE CALCULATION
@@ -161,11 +162,12 @@ export const getSnapshot = async (req, res) => {
       const roomId = String(room._id);
       const roomReservations = reservationsByRoom[roomId] || [];
       const roomBills = billsByRoom[roomId] || [];
+      const occupancy = deriveRoomOccupancyState(room, roomReservations);
 
       // Separate physical occupancy (checked-in = moved in) from reservations
       // "reserved" = paid deposit, confirmed, but NOT yet physically present
-      const physicalOccupancy = roomReservations.filter((r) => r.status === "checked-in").length;
-      const reservedCount = roomReservations.filter((r) => r.status === "reserved").length;
+      const physicalOccupancy = occupancy.physicalOccupancy;
+      const reservedCount = occupancy.reservedCount;
       const roomMaintenance = maintenanceByRoom[roomId] || [];
 
       const overdueBills = roomBills.filter((b) => b.status === "overdue");
@@ -188,10 +190,11 @@ export const getSnapshot = async (req, res) => {
         floor: room.floor,
         type: room.type,
         capacity: room.capacity,
-        currentOccupancy: physicalOccupancy + reservedCount,  // total committed (reserved + checked-in)
-        reservedCount,     // broken down for the two-color bar
-        physicalOccupancy, // actually moved in
-        available: room.available,
+        currentOccupancy: occupancy.currentOccupancy,
+        reservedCount,
+        physicalOccupancy,
+        available: occupancy.available,
+        readinessStatus: occupancy.readinessStatus,
         beds: (() => {
           // Build enriched beds array with display status inferred from live reservations
           const enrichedBeds = room.beds.map((bed) => {
@@ -239,6 +242,20 @@ export const getSnapshot = async (req, res) => {
           // Strip internal helper field
           return enrichedBeds.map(({ _matchedResId, ...bed }) => bed);
         })(),
+        beds: occupancy.beds.map((bed) => ({
+          id: bed.id,
+          position: bed.position,
+          status: bed.status,
+          lockExpiresAt: bed.lockExpiresAt,
+          occupant: bed.occupant
+            ? {
+                name: bed.occupant.name,
+                since: bed.occupant.occupiedSince ?? null,
+                reservationStatus: bed.occupant.reservationStatus,
+                reservationId: bed.occupant.reservationId,
+              }
+            : null,
+        })),
         electricity: {
           hasStaleOpenPeriod: !!stalePeriodsByRoom[roomId],
           staleOpenDays: stalePeriodsByRoom[roomId] ?? null,
@@ -413,6 +430,7 @@ export const getRoomDetail = async (req, res) => {
     );
     const healthScore = computeHealthScore(openMaintenance, bills);
     const healthTier = getHealthTier(healthScore);
+    const occupancy = deriveRoomOccupancyState(room, reservations);
 
     // Enrich beds with tenant info
     // Match priority: (1) bed.id matches reservation.selectedBed.id,
@@ -498,8 +516,8 @@ export const getRoomDetail = async (req, res) => {
       });
     }
 
-    const physicalOccupancy = reservations.filter((r) => r.status === "checked-in").length;
-    const reservedCount = reservations.filter((r) => r.status === "reserved").length;
+    const physicalOccupancy = occupancy.physicalOccupancy;
+    const reservedCount = occupancy.reservedCount;
 
     res.json({
       success: true,
@@ -512,13 +530,15 @@ export const getRoomDetail = async (req, res) => {
           floor: room.floor,
           type: room.type,
           capacity: room.capacity,
-          currentOccupancy: physicalOccupancy + reservedCount,  // total committed
-          reservedCount,     // for two-color bar
-          physicalOccupancy, // actually moved in
+          currentOccupancy: occupancy.currentOccupancy,
+          reservedCount,
+          physicalOccupancy,
+          available: occupancy.available,
+          readinessStatus: occupancy.readinessStatus,
           amenities: room.amenities,
           images: room.images,
         },
-        beds: enrichedBeds,
+        beds: occupancy.beds,
         maintenance: maintenance.map((m) => ({
           _id: m._id,
           title: m.title,

@@ -19,7 +19,187 @@ import mongoose from "mongoose";
 import Room from "../models/Room.js";
 import Reservation from "../models/Reservation.js";
 import logger from "../middleware/logger.js";
-import { emitRoomUpdate } from "./socket.js";
+import { emitRoomUpdate, emitDigitalTwinUpdate } from "./socket.js";
+
+const ACTIVE_OCCUPANCY_STATUSES = ["reserved", "checked-in"];
+
+const getDisplayStatusForReservation = (status) =>
+  status === "checked-in" ? "occupied" : "reserved";
+
+const getRoomAvailabilityFromBeds = (room, beds, currentOccupancy) => {
+  if (Array.isArray(beds) && beds.length > 0) {
+    return beds.some((bed) => bed.status === "available");
+  }
+
+  return currentOccupancy < (room.capacity || 0) && !room.isArchived;
+};
+
+const getRoomReadinessStatus = (beds, isAvailable) => {
+  if (!Array.isArray(beds) || beds.length === 0) {
+    return isAvailable ? "available" : "occupied";
+  }
+
+  const statuses = new Set(beds.map((bed) => bed.status));
+  if (statuses.size === 1) return beds[0]?.status || "available";
+  if (statuses.has("available")) return "available";
+  if (statuses.has("reserved")) return "reserved";
+  if (statuses.has("occupied")) return "occupied";
+  if (statuses.has("maintenance")) return "maintenance";
+  return "mixed";
+};
+
+export const deriveRoomOccupancyState = (room, reservations = []) => {
+  const reservationsByBedId = new Map();
+  const reservationsByReservationId = new Map();
+  const reservationsByUserId = new Map();
+
+  for (const reservation of reservations) {
+    reservationsByReservationId.set(String(reservation._id), reservation);
+
+    if (reservation.selectedBed?.id) {
+      reservationsByBedId.set(reservation.selectedBed.id, reservation);
+    }
+
+    const userId = reservation.userId?._id || reservation.userId;
+    if (userId) {
+      reservationsByUserId.set(String(userId), reservation);
+    }
+  }
+
+  const beds = (room.beds || []).map((bed) => {
+    const matchedReservation =
+      reservationsByBedId.get(bed.id) ||
+      (bed.occupiedBy?.reservationId
+        ? reservationsByReservationId.get(String(bed.occupiedBy.reservationId))
+        : null) ||
+      (bed.occupiedBy?.userId
+        ? reservationsByUserId.get(String(bed.occupiedBy.userId))
+        : null) ||
+      null;
+
+    let status = bed.status || "available";
+    if (matchedReservation && status !== "maintenance" && status !== "locked") {
+      status = getDisplayStatusForReservation(matchedReservation.status);
+    }
+
+    return {
+      id: bed.id,
+      position: bed.position,
+      status,
+      lockExpiresAt: bed.lockExpiresAt || null,
+      lockedBy: bed.lockedBy || null,
+      occupant: matchedReservation?.userId
+        ? {
+            _id: matchedReservation.userId?._id || matchedReservation.userId,
+            name: `${matchedReservation.userId?.firstName || ""} ${matchedReservation.userId?.lastName || ""}`.trim(),
+            email: matchedReservation.userId?.email || null,
+            phone: matchedReservation.userId?.phone || null,
+            reservationId: matchedReservation._id,
+            reservationStatus: matchedReservation.status,
+            occupiedSince: bed.occupiedBy?.occupiedSince || null,
+          }
+        : null,
+    };
+  });
+
+  const matchedReservationIds = new Set(
+    beds
+      .map((bed) => bed.occupant?.reservationId)
+      .filter(Boolean)
+      .map((reservationId) => String(reservationId)),
+  );
+
+  const unmatchedReservations = reservations.filter(
+    (reservation) => !matchedReservationIds.has(String(reservation._id)),
+  );
+
+  for (const reservation of unmatchedReservations) {
+    const freeBed = beds.find((bed) => bed.status === "available");
+    if (!freeBed) break;
+
+    freeBed.status = getDisplayStatusForReservation(reservation.status);
+    freeBed.occupant = reservation.userId
+      ? {
+          _id: reservation.userId?._id || reservation.userId,
+          name: `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim(),
+          email: reservation.userId?.email || null,
+          phone: reservation.userId?.phone || null,
+          reservationId: reservation._id,
+          reservationStatus: reservation.status,
+          occupiedSince: null,
+        }
+      : null;
+  }
+
+  const occupiedBeds = beds.filter((bed) => bed.status === "occupied");
+  const reservedBeds = beds.filter((bed) => bed.status === "reserved");
+  const availableBeds = beds.filter((bed) => bed.status === "available");
+  const lockedBeds = beds.filter((bed) => bed.status === "locked");
+  const maintenanceBeds = beds.filter((bed) => bed.status === "maintenance");
+  const currentOccupancy = reservations.length;
+  const isAvailable = getRoomAvailabilityFromBeds(room, beds, currentOccupancy);
+  const readinessStatus = getRoomReadinessStatus(beds, isAvailable);
+
+  return {
+    roomId: room._id,
+    roomName: room.name,
+    roomNumber: room.roomNumber,
+    branch: room.branch,
+    floor: room.floor,
+    roomType: room.type,
+    type: room.type,
+    capacity: room.capacity,
+    currentOccupancy,
+    physicalOccupancy: occupiedBeds.length,
+    reservedCount: reservedBeds.length,
+    occupancyRate:
+      room.capacity > 0
+        ? `${Math.round((currentOccupancy / room.capacity) * 100)}%`
+        : "0%",
+    isAvailable,
+    available: isAvailable,
+    readinessStatus,
+    totalBeds: beds.length,
+    beds,
+    occupiedBeds: occupiedBeds.map((bed) => ({
+      bedId: bed.id,
+      position: bed.position,
+      occupiedBy: {
+        userId: bed.occupant?._id || null,
+        userName: bed.occupant?.name || "Unknown",
+        email: bed.occupant?.email || null,
+        occupiedSince: bed.occupant?.occupiedSince || null,
+        reservationId: bed.occupant?.reservationId || null,
+        reservationStatus: bed.occupant?.reservationStatus || null,
+      },
+    })),
+    reservedBeds: reservedBeds.map((bed) => ({
+      bedId: bed.id,
+      position: bed.position,
+      reservedBy: {
+        userId: bed.occupant?._id || null,
+        userName: bed.occupant?.name || "Unknown",
+        email: bed.occupant?.email || null,
+        reservationId: bed.occupant?.reservationId || null,
+      },
+    })),
+    availableBeds: availableBeds.map((bed) => ({
+      bedId: bed.id,
+      position: bed.position,
+      lockExpiresAt: bed.lockExpiresAt || null,
+    })),
+    lockedBeds: lockedBeds.map((bed) => ({
+      bedId: bed.id,
+      position: bed.position,
+      lockExpiresAt: bed.lockExpiresAt || null,
+      lockedBy: bed.lockedBy || null,
+    })),
+    maintenanceBeds: maintenanceBeds.map((bed) => ({
+      bedId: bed.id,
+      position: bed.position,
+    })),
+  };
+};
 
 /**
  * Update occupancy when reservation status changes
@@ -49,6 +229,34 @@ export const updateOccupancyOnReservationChange = async (
       const room = await Room.findById(reservation.roomId).session(session);
       if (!room) return;
 
+      let roomChanged = false;
+
+      const increaseOccupancy = async () => {
+        const updated = await Room.atomicIncreaseOccupancy(room._id, session);
+        if (!updated) {
+          logger.warn({ roomId: String(room._id) }, "Occupancy increase: no room matched atomic update");
+          return false;
+        }
+
+        room.currentOccupancy = Math.min((room.currentOccupancy || 0) + 1, room.capacity || 0);
+        room.updateAvailability();
+        roomChanged = true;
+        return true;
+      };
+
+      const decreaseOccupancy = async () => {
+        const updated = await Room.atomicDecreaseOccupancy(room._id, session);
+        if (!updated) {
+          logger.warn({ roomId: String(room._id) }, "Occupancy decrease: no room matched atomic update");
+          return false;
+        }
+
+        room.currentOccupancy = Math.max((room.currentOccupancy || 0) - 1, 0);
+        room.updateAvailability();
+        roomChanged = true;
+        return true;
+      };
+
       // === INCREASE OCCUPANCY ===
       // Transition to reserved (from any state that isn't already reserved/checked-in)
       if (
@@ -56,25 +264,21 @@ export const updateOccupancyOnReservationChange = async (
         oldStatus !== "reserved" &&
         oldStatus !== "checked-in"
       ) {
-        const updated = await Room.atomicIncreaseOccupancy(room._id, session);
-        if (!updated) {
-          logger.warn({ roomId: String(room._id) }, "Occupancy increase: no room matched atomic update");
-        }
+        await increaseOccupancy();
 
         // Mark the bed as "reserved" (not yet occupied — tenant hasn't moved in)
         if (reservation.selectedBed?.id) {
-          const freshRoom = await Room.findById(room._id).session(session);
-          if (freshRoom) {
-            const bed = freshRoom.beds.find((b) => b.id === reservation.selectedBed.id);
-            if (bed) {
-              bed.status = "reserved";
-              bed.occupiedBy = {
-                userId: reservation.userId,
-                reservationId: reservation._id,
-                occupiedSince: null, // not physically moved in yet
-              };
-              await freshRoom.save({ session });
-            }
+          const bed = room.beds.find((b) => b.id === reservation.selectedBed.id);
+          if (bed) {
+            bed.status = "reserved";
+            bed.lockExpiresAt = null;
+            bed.lockedBy = null;
+            bed.occupiedBy = {
+              userId: reservation.userId,
+              reservationId: reservation._id,
+              occupiedSince: null,
+            };
+            roomChanged = true;
           }
         }
       }
@@ -86,59 +290,52 @@ export const updateOccupancyOnReservationChange = async (
         if (oldStatus === "reserved") {
           // Occupancy counter was already increased at reservation time — just upgrade bed status
           if (reservation.selectedBed?.id) {
-            const freshRoom = await Room.findById(room._id).session(session);
-            if (freshRoom) {
-              const assigned = freshRoom.occupyBed(
-                reservation.selectedBed.id,
-                reservation.userId,
-                reservation._id,
-              );
-              if (assigned) await freshRoom.save({ session });
-            }
+            const assigned = room.occupyBed(
+              reservation.selectedBed.id,
+              reservation.userId,
+              reservation._id,
+            );
+            if (assigned) roomChanged = true;
           }
         } else {
           // Skipped "reserved" stage — increase occupancy now
-          await Room.atomicIncreaseOccupancy(room._id, session);
+          await increaseOccupancy();
 
           if (reservation.selectedBed?.id) {
-            const freshRoom = await Room.findById(room._id).session(session);
-            if (freshRoom) {
-              const assigned = freshRoom.occupyBed(
-                reservation.selectedBed.id,
-                reservation.userId,
-                reservation._id,
-              );
-              if (assigned) await freshRoom.save({ session });
-            }
+            const assigned = room.occupyBed(
+              reservation.selectedBed.id,
+              reservation.userId,
+              reservation._id,
+            );
+            if (assigned) roomChanged = true;
           }
         }
       }
 
       // === DECREASE OCCUPANCY ===
       if (newStatus === "cancelled" && oldStatus !== "cancelled") {
-        await Room.atomicDecreaseOccupancy(room._id, session);
+        await decreaseOccupancy();
 
         if (reservation.selectedBed?.id) {
-          const freshRoom = await Room.findById(room._id).session(session);
-          if (freshRoom) {
-            const vacated = freshRoom.vacateBed(reservation.selectedBed.id);
-            if (vacated) await freshRoom.save({ session });
-          }
+          const vacated = room.vacateBed(reservation.selectedBed.id);
+          if (vacated) roomChanged = true;
         }
       }
 
       if (newStatus === "checked-out" && oldStatus !== "checked-out") {
         if (oldStatus === "reserved" || oldStatus === "checked-in") {
-          await Room.atomicDecreaseOccupancy(room._id, session);
+          await decreaseOccupancy();
 
           if (reservation.selectedBed?.id) {
-            const freshRoom = await Room.findById(room._id).session(session);
-            if (freshRoom) {
-              const vacated = freshRoom.vacateBed(reservation.selectedBed.id);
-              if (vacated) await freshRoom.save({ session });
-            }
+            const vacated = room.vacateBed(reservation.selectedBed.id);
+            if (vacated) roomChanged = true;
           }
         }
+      }
+
+      if (roomChanged) {
+        room.updateAvailability();
+        await room.save({ session });
       }
 
       // Fetch final state within the same session so the return value is consistent
@@ -153,6 +350,7 @@ export const updateOccupancyOnReservationChange = async (
         available: finalRoom.available,
         capacity: finalRoom.capacity,
       });
+      emitDigitalTwinUpdate(finalRoom.branch || null, finalRoom._id);
     }
 
     return finalRoom;
@@ -235,52 +433,21 @@ export const recalculateRoomOccupancy = async (roomId) => {
  */
 export const getRoomOccupancyStatus = async (roomId) => {
   try {
-    const room = await Room.findById(roomId).populate(
-      "beds.occupiedBy.userId",
-      "firstName lastName email",
-    );
+    const room = await Room.findById(roomId).lean();
 
     if (!room) {
       throw new Error(`Room ${roomId} not found`);
     }
 
-    const occupiedBeds = room.beds.filter((bed) => bed.status === "occupied");
-    const maintenanceBeds = room.beds.filter((bed) => bed.status === "maintenance");
-    const availableBeds = room.beds.filter((bed) => bed.status === "available");
+    const reservations = await Reservation.find({
+      roomId,
+      isArchived: false,
+      status: { $in: ACTIVE_OCCUPANCY_STATUSES },
+    })
+      .populate("userId", "firstName lastName email phone")
+      .lean();
 
-    return {
-      roomName: room.name,
-      roomType: room.type,
-      capacity: room.capacity,
-      currentOccupancy: room.currentOccupancy,
-      occupancyRate:
-        room.capacity > 0
-          ? `${Math.round((room.currentOccupancy / room.capacity) * 100)}%`
-          : "0%",
-      isAvailable: room.available,
-      totalBeds: room.beds.length,
-      occupiedBeds: occupiedBeds.map((bed) => ({
-        bedId: bed.id,
-        position: bed.position,
-        occupiedBy: {
-          userId: bed.occupiedBy?.userId?._id,
-          userName:
-            bed.occupiedBy?.userId?.firstName +
-            " " +
-            bed.occupiedBy?.userId?.lastName,
-          email: bed.occupiedBy?.userId?.email,
-          occupiedSince: bed.occupiedBy?.occupiedSince,
-        },
-      })),
-      availableBeds: availableBeds.map((bed) => ({
-        bedId: bed.id,
-        position: bed.position,
-      })),
-      maintenanceBeds: maintenanceBeds.map((bed) => ({
-        bedId: bed.id,
-        position: bed.position,
-      })),
-    };
+    return deriveRoomOccupancyState(room, reservations);
   } catch (error) {
     logger.error({ err: error, roomId: String(roomId) }, "Get occupancy status failed");
     throw error;
@@ -297,13 +464,27 @@ export const getBranchOccupancyStats = async (branch = null) => {
     const filter = { isArchived: false };
     if (branch) filter.branch = branch;
 
-    const rooms = await Room.find(filter);
+    const rooms = await Room.find(filter).lean();
+    const roomIds = rooms.map((room) => room._id);
+    const reservations = roomIds.length > 0
+      ? await Reservation.find({
+          roomId: { $in: roomIds },
+          isArchived: false,
+          status: { $in: ACTIVE_OCCUPANCY_STATUSES },
+        })
+          .populate("userId", "firstName lastName email phone")
+          .lean()
+      : [];
 
-    const stats = await Promise.all(
-      rooms.map(async (room) => {
-        const occupancyStatus = await getRoomOccupancyStatus(room._id);
-        return occupancyStatus;
-      }),
+    const reservationsByRoom = new Map();
+    for (const reservation of reservations) {
+      const key = String(reservation.roomId);
+      if (!reservationsByRoom.has(key)) reservationsByRoom.set(key, []);
+      reservationsByRoom.get(key).push(reservation);
+    }
+
+    const stats = rooms.map((room) =>
+      deriveRoomOccupancyState(room, reservationsByRoom.get(String(room._id)) || []),
     );
 
     const totalCapacity = stats.reduce((sum, room) => sum + room.capacity, 0);
@@ -333,6 +514,7 @@ export const getBranchOccupancyStats = async (branch = null) => {
 };
 
 export default {
+  deriveRoomOccupancyState,
   updateOccupancyOnReservationChange,
   recalculateRoomOccupancy,
   getRoomOccupancyStatus,

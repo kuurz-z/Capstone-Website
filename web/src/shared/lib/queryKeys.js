@@ -28,7 +28,7 @@ export const queryKeys = {
 
   // ── Reservations ──
   reservations: {
-    all: ["reservations", "list"],
+    all: (params) => ["reservations", "list", params || {}],
     detail: (id) => ["reservations", "detail", id],
     currentResidents: (params) => ["reservations", "currentResidents", params || {}],
   },

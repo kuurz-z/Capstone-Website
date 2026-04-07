@@ -68,9 +68,6 @@ export const InquiriesPage = React.lazy(
 export const DigitalTwinPage = React.lazy(
   () => import("../features/admin/pages/DigitalTwinPage"),
 );
-export const FinancialPage = React.lazy(
-  () => import("../features/admin/pages/FinancialPage"),
-);
 export const MaintenancePage = React.lazy(
   () => import("../features/tenant/pages/MaintenancePage"),
 );
