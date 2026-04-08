@@ -60,7 +60,8 @@ export const AuthProvider = ({ children }) => {
   const logoutExecutedRef = useRef(false);
   // Ref to prevent redirect from executing multiple times
   const redirectExecutedRef = useRef(false);
-  const { user: firebaseUser, loading: firebaseLoading } = useFirebaseAuth();
+  const { user: firebaseUser, loading: firebaseLoading, getFreshIdToken } =
+    useFirebaseAuth();
 
   /**
    * Check if user is authenticated by fetching profile from backend
@@ -97,6 +98,7 @@ export const AuthProvider = ({ children }) => {
 
       setUser(userData);
       setIsAuthenticated(true);
+      localStorage.setItem("user", JSON.stringify(userData));
 
       // Log current user info to console
       const displayName =
@@ -119,6 +121,30 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, []);
+
+  const refreshUser = useCallback(async () => {
+    if (!auth.currentUser) return null;
+
+    try {
+      const userData = await authApi.getCurrentUser();
+      setUser((prev) => {
+        if (
+          prev?.role &&
+          prev.role !== userData.role &&
+          typeof getFreshIdToken === "function"
+        ) {
+          getFreshIdToken().catch(() => {});
+        }
+        return userData;
+      });
+      setIsAuthenticated(true);
+      localStorage.setItem("user", JSON.stringify(userData));
+      return userData;
+    } catch (error) {
+      console.error("Failed to refresh user:", error);
+      return null;
+    }
+  }, [getFreshIdToken]);
 
   // Sync with Firebase auth state
   // CRITICAL: This effect syncs React state with Firebase auth state
@@ -253,14 +279,23 @@ export const AuthProvider = ({ children }) => {
   /**
    * Refresh user data from backend
    */
-  const refreshUser = async () => {
-    try {
-      const userData = await authApi.getCurrentUser();
-      setUser(userData);
-    } catch (error) {
-      console.error("Failed to refresh user:", error);
-    }
-  };
+  useEffect(() => {
+    if (firebaseLoading || !firebaseUser) return undefined;
+
+    const syncAuthProfile = () => {
+      refreshUser().catch(() => {});
+    };
+
+    const intervalId = window.setInterval(syncAuthProfile, 30000);
+    window.addEventListener("focus", syncAuthProfile);
+    document.addEventListener("visibilitychange", syncAuthProfile);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", syncAuthProfile);
+      document.removeEventListener("visibilitychange", syncAuthProfile);
+    };
+  }, [firebaseLoading, firebaseUser, refreshUser]);
 
   /**
    * Update user data in state (used after profile updates)

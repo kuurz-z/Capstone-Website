@@ -67,6 +67,18 @@ const LIST_USER_FIELDS = [
 const escapeRegex = (value = "") =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const VALID_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
+
+const buildFirebaseClaimsForRole = (role) => {
+  if (role === "owner") {
+    return { owner: true, branch_admin: true };
+  }
+  if (role === "branch_admin") {
+    return { branch_admin: true };
+  }
+  return {};
+};
+
 const canTransitionTenantStatus = (fromStatus, toStatus) => {
   if (fromStatus === toStatus) return true;
   return (TENANT_STATUS_TRANSITIONS[fromStatus] || []).includes(toStatus);
@@ -555,6 +567,31 @@ export const updateUser = async (req, res, next) => {
       delete updateData.branch;
     }
 
+    if (updateData.role !== undefined) {
+      const nextRole = String(updateData.role).trim();
+      if (!VALID_ROLES.includes(nextRole)) {
+        return res.status(400).json({
+          error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}`,
+          code: "INVALID_ROLE",
+        });
+      }
+      updateData.role = nextRole;
+
+      if (["branch_admin", "owner"].includes(nextRole)) {
+        updateData.permissions = DEFAULT_PERMISSIONS[nextRole] || [];
+      } else {
+        updateData.permissions = [];
+      }
+
+      if (updateData.tenantStatus === undefined) {
+        if (nextRole === "tenant") {
+          updateData.tenantStatus = "active";
+        } else if (nextRole === "applicant") {
+          updateData.tenantStatus = "applicant";
+        }
+      }
+    }
+
     if (updateData.tenantStatus !== undefined) {
       const nextStatus = String(updateData.tenantStatus).trim();
       if (!VALID_TENANT_STATUSES.includes(nextStatus)) {
@@ -596,6 +633,23 @@ export const updateUser = async (req, res, next) => {
       new: true,
       runValidators: true,
     }).select("-__v");
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    if (existingUser.firebaseUid) {
+      const auth = getAuth();
+      if (auth) {
+        await auth.setCustomUserClaims(
+          existingUser.firebaseUid,
+          buildFirebaseClaimsForRole(user.role),
+        );
+      }
+    }
 
     // Log user modification
     await auditLogger.logModification(

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Users } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useCurrentResidents } from "../../../shared/hooks/queries/useReservations";
+import { useUsers } from "../../../shared/hooks/queries/useUsers";
 import {
   PageShell,
   SummaryBar,
@@ -80,13 +81,25 @@ export default function TenantsPage() {
   } = useCurrentResidents(currentResidentsParams, {
     enabled: !authLoading && !!user,
   });
+  const {
+    data: tenantUsersData,
+    isLoading: tenantUsersLoading,
+    isFetching: tenantUsersFetching,
+  } = useUsers({
+    role: "tenant",
+    ...(branchFilter && branchFilter !== "all" ? { branch: branchFilter } : {}),
+    limit: 50,
+    sort: "firstName",
+    order: "asc",
+  });
   const reservationsData = currentResidentsData?.residents || [];
-  const residentsLoading = authLoading || isLoading || isFetching;
+  const tenantUsers = tenantUsersData?.users || [];
+  const residentsLoading =
+    authLoading || isLoading || isFetching || tenantUsersLoading || tenantUsersFetching;
 
   const tenants = useMemo(() => {
     const reservations = Array.isArray(reservationsData) ? reservationsData : [];
-
-    return reservations.map((reservation) => {
+    const reservationTenants = reservations.map((reservation) => {
       const profile = reservation.userId || {};
       const room = reservation.roomId;
       const firstName = profile.firstName || reservation.firstName || "";
@@ -129,7 +142,56 @@ export default function TenantsPage() {
         occupation: reservation.employment?.occupation || "-",
       };
     });
-  }, [reservationsData]);
+
+    const reservationUserIds = new Set(
+      reservationTenants
+        .map((tenant) => tenant.userId?._id || tenant.userId)
+        .filter(Boolean)
+        .map(String),
+    );
+
+    const manualTenants = (Array.isArray(tenantUsers) ? tenantUsers : [])
+      .filter((tenantUser) => !reservationUserIds.has(String(tenantUser._id)))
+      .map((tenantUser) => {
+        const fullName =
+          `${tenantUser.firstName || ""} ${tenantUser.lastName || ""}`.trim() ||
+          tenantUser.email ||
+          "Unknown";
+
+        return {
+          id: tenantUser._id,
+          reservationId: null,
+          reservationCode: "-",
+          userId: tenantUser._id,
+          name: fullName,
+          initials: getInitials(fullName),
+          email: tenantUser.email || "N/A",
+          phone: tenantUser.phone || "N/A",
+          statusKey: tenantUser.accountStatus === "active" ? "active" : "overdue",
+          status: tenantUser.accountStatus === "active" ? "Active" : "Overdue",
+          room: "Not Assigned",
+          roomId: null,
+          branch: formatBranch(tenantUser.branch) || "N/A",
+          branchRaw: tenantUser.branch || "",
+          floor: "-",
+          roomType: "-",
+          monthlyRent: null,
+          moveIn: "-",
+          moveOut: "-",
+          bed: "-",
+          leaseDuration: "-",
+          emergencyContact: tenantUser.emergencyContact || "-",
+          emergencyPhone: tenantUser.emergencyPhone || "-",
+          emergencyRelation: "-",
+          nationality: tenantUser.nationality || "-",
+          maritalStatus: tenantUser.civilStatus || "-",
+          school: tenantUser.school || "-",
+          occupation: tenantUser.occupation || "-",
+        };
+      });
+
+    return [...reservationTenants, ...manualTenants];
+  }, [reservationsData, tenantUsers]);
 
   const stats = useMemo(
     () => ({

@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { LayoutGrid, MessageSquare, CalendarCheck, Clock } from "lucide-react";
-import { useAuth } from "../../../shared/hooks/useAuth";
+import { MessageSquare, CalendarCheck, Clock } from "lucide-react";
 import {
   hasReservationStatus,
   readMoveInDate,
@@ -21,8 +20,6 @@ import "../styles/design-tokens.css";
 import "../styles/admin-dashboard.css";
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const isOwner = user?.role === "owner";
   const {
     occupancy,
     inquiryStats,
@@ -53,10 +50,11 @@ export default function Dashboard() {
       (occupancyStats?.totalCapacity || 0) -
       (occupancyStats?.totalOccupancy || 0);
     const registeredUsers = userStatsData?.total || 0;
-    const activeBookings = (reservations || []).filter((r) =>
-      r.status === "confirmed" ||
-      r.status === "reserved" ||
-      hasReservationStatus(r.status, "moveIn"),
+    const activeBookings = (reservations || []).filter(
+      (r) =>
+        r.status === "confirmed" ||
+        r.status === "reserved" ||
+        hasReservationStatus(r.status, "moveIn"),
     ).length;
     const revenue = billingStats?.totalCollected
       ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
@@ -75,7 +73,7 @@ export default function Dashboard() {
         label: "Available Beds",
         value: Math.max(availableBeds, 0),
         trend: occupancyStats?.overallOccupancyRate
-          ? `${String(occupancyStats.overallOccupancyRate).replace('%', '')}% occ.`
+          ? `${String(occupancyStats.overallOccupancyRate).replace("%", "")}% occ.`
           : null,
         color: "green",
       },
@@ -101,7 +99,13 @@ export default function Dashboard() {
         color: "blue",
       },
     ];
-  }, [occupancyStats, inquiryStatsData, userStatsData, reservations, billingStats]);
+  }, [
+    occupancyStats,
+    inquiryStatsData,
+    userStatsData,
+    reservations,
+    billingStats,
+  ]);
 
   // ── Recent items ──
   const recentInquiries = useMemo(
@@ -129,9 +133,7 @@ export default function Dashboard() {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     return sorted.slice(0, 4).map((item) => ({
       id: item._id,
-      roomType: formatRoomType(
-        item.roomId?.type || item.preferredRoomType,
-      ),
+      roomType: formatRoomType(item.roomId?.type || item.preferredRoomType),
       guestName:
         `${item.userId?.firstName || ""} ${item.userId?.lastName || ""}`.trim() ||
         item.guestName ||
@@ -143,10 +145,11 @@ export default function Dashboard() {
   }, [reservations]);
 
   const reservationStatus = useMemo(() => {
-    const approved = (reservations || []).filter((r) =>
-      r.status === "confirmed" ||
-      r.status === "reserved" ||
-      hasReservationStatus(r.status, "moveIn"),
+    const approved = (reservations || []).filter(
+      (r) =>
+        r.status === "confirmed" ||
+        r.status === "reserved" ||
+        hasReservationStatus(r.status, "moveIn"),
     ).length;
     const pending = (reservations || []).filter(
       (r) => r.status === "pending",
@@ -167,26 +170,6 @@ export default function Dashboard() {
         {error && <div className="dash-error">{error}</div>}
         {isLoading && <div className="dash-loading">Loading dashboard...</div>}
 
-        {/* Owner callout */}
-        {isOwner && (
-          <div className="dash-callout">
-            <div className="dash-callout__left">
-              <div className="dash-callout__icon">
-                <LayoutGrid size={15} strokeWidth={2} />
-              </div>
-              <div>
-                <p className="dash-callout__title">System Overview</p>
-                <p className="dash-callout__desc">
-                  View aggregated metrics and branch comparison across all locations.
-                </p>
-              </div>
-            </div>
-            <Link to="/admin/dashboard/super" className="dash-callout__btn">
-              Open →
-            </Link>
-          </div>
-        )}
-
         <SummaryBar items={summaryItems} />
       </PageShell.Summary>
 
@@ -196,7 +179,9 @@ export default function Dashboard() {
           <div className="dash-card">
             <div className="dash-card__header">
               <h2 className="dash-card__title">Recent Inquiries</h2>
-              <Link to="/admin/reservations" className="dash-card__link">View All</Link>
+              <Link to="/admin/reservations" className="dash-card__link">
+                View All
+              </Link>
             </div>
             <div className="dash-card__list">
               {recentInquiries.length > 0 ? (
@@ -233,7 +218,9 @@ export default function Dashboard() {
         <div className="dash-card dash-card--full">
           <div className="dash-card__header">
             <h2 className="dash-card__title">Recent Reservations</h2>
-            <Link to="/admin/reservations" className="dash-card__link">View All</Link>
+            <Link to="/admin/reservations" className="dash-card__link">
+              View All
+            </Link>
           </div>
           <div className="dash-card__list">
             {recentReservations.length > 0 ? (

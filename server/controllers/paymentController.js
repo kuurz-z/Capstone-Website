@@ -47,6 +47,10 @@ const PAYMENT_METHOD_LABELS = Object.freeze({
   online: "Online Payment (PayMongo)",
 });
 
+function canAutoReserveReservation(status) {
+  return status === "pending" || status === "payment_pending";
+}
+
 async function getDbUser(firebaseUid) {
   return User.findOne({ firebaseUid }).lean();
 }
@@ -380,7 +384,7 @@ export const checkSessionStatus = async (req, res, next) => {
 
           const oldStatus = reservation.status;
           const paymentReference = paidPayments[0]?.id || sessionId;
-          const canAutoReserve = reservation.status === "pending";
+          const canAutoReserve = canAutoReserveReservation(reservation.status);
 
           reservation.paymentStatus = "paid";
           reservation.paymentDate = new Date();

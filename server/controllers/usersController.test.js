@@ -20,6 +20,8 @@ const userModel = {
   findById: jest.fn(),
   findByIdAndUpdate: jest.fn(),
 };
+const setCustomUserClaims = jest.fn();
+const getAuth = jest.fn(() => ({ setCustomUserClaims }));
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   User: userModel,
@@ -29,7 +31,7 @@ await jest.unstable_mockModule("../models/index.js", () => ({
 
 await jest.unstable_mockModule("dayjs", () => ({ default: jest.fn() }));
 await jest.unstable_mockModule("../config/firebase.js", () => ({
-  getAuth: jest.fn(),
+  getAuth,
 }));
 await jest.unstable_mockModule("../middleware/logger.js", () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -83,6 +85,8 @@ describe("usersController", () => {
     userModel.findOne.mockReset();
     userModel.findById.mockReset();
     userModel.findByIdAndUpdate.mockReset();
+    setCustomUserClaims.mockReset();
+    getAuth.mockClear();
   });
 
   test("getUsers applies server search, lean projection, and pagination metadata", async () => {
@@ -223,6 +227,52 @@ describe("usersController", () => {
     expect(res.statusCode).toBe(200);
     expect(targetUser.permissions).toEqual(["manageBilling", "manageRooms"]);
     expect(save).toHaveBeenCalledTimes(1);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("updateUser syncs manual tenant role changes into tenant status and Firebase claims", async () => {
+    userModel.findOne.mockResolvedValue({
+      _id: "507f1f77bcf86cd799439011",
+      firebaseUid: "firebase-tenant-1",
+      role: "applicant",
+      tenantStatus: "applicant",
+      toObject: () => ({ role: "applicant", tenantStatus: "applicant" }),
+    });
+
+    userModel.findByIdAndUpdate.mockReturnValue({
+      select: jest.fn().mockResolvedValue({
+        _id: "507f1f77bcf86cd799439011",
+        firebaseUid: "firebase-tenant-1",
+        role: "tenant",
+        tenantStatus: "active",
+        permissions: [],
+        toObject: () => ({ role: "tenant", tenantStatus: "active", permissions: [] }),
+      }),
+    });
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      body: { role: "tenant" },
+      branchFilter: null,
+      isOwner: true,
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await updateUser(req, res, next);
+
+    expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      "507f1f77bcf86cd799439011",
+      expect.objectContaining({
+        role: "tenant",
+        tenantStatus: "active",
+        permissions: [],
+      }),
+      expect.any(Object),
+    );
+    expect(setCustomUserClaims).toHaveBeenCalledWith("firebase-tenant-1", {});
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.role).toBe("tenant");
     expect(next).not.toHaveBeenCalled();
   });
 });

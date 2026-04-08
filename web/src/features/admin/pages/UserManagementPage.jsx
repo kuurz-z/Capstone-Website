@@ -6,6 +6,7 @@ import { useApiClient } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUsers, useUserStats } from "../../../shared/hooks/queries/useUsers";
+import { queryKeys } from "../../../shared/lib/queryKeys";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
 import DeleteUserModal from "../components/users/DeleteUserModal";
@@ -22,7 +23,7 @@ import "../styles/design-tokens.css";
 import "../styles/admin-users.css";
 
 function UserManagementPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { can, isOwner: permissionOwner } = usePermissions();
   const isOwner = permissionOwner || user?.role === "owner";
   const canManageUsers = isOwner || can("manageUsers");
@@ -152,7 +153,11 @@ function UserManagementPage() {
     users.length;
 
   const refetchAll = () =>
-    queryClient.invalidateQueries({ queryKey: ["users"] });
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["users"] }),
+      queryClient.invalidateQueries({ queryKey: ["reservations", "currentResidents"] }),
+      queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+    ]);
 
   const formatUserLabel = (userData) => {
     if (!userData) return "User";
@@ -194,9 +199,12 @@ function UserManagementPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
       });
+      if (selectedUser?._id && String(selectedUser._id) === String(user?.id || user?._id || "")) {
+        await refreshUser();
+      }
       showNotification("User updated successfully", "success", 3000);
       setIsEditModalOpen(false);
-      refetchAll();
+      await refetchAll();
     } catch (error) {
       showNotification(error.message || "Failed to update user", "error", 3000);
     }

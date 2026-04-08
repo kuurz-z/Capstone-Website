@@ -14,7 +14,6 @@ import {
   AdminBillingPage,
   MaintenancePage,
   InquiriesPage,
-  OwnerDashboardPage,
   BranchManagementPage,
   RolePermissionsPage,
   SystemSettingsPage,
@@ -39,16 +38,6 @@ export function AdminRoutes() {
           <RouteShell name="AdminDashboard">
             <AdminDashboardPage />
           </RouteShell>
-        }
-      />
-      <Route
-        path="dashboard/super"
-        element={
-          <RequireOwner>
-            <RouteShell name="OwnerDashboard">
-              <OwnerDashboardPage />
-            </RouteShell>
-          </RequireOwner>
         }
       />
       <Route
@@ -121,11 +110,15 @@ export function AdminRoutes() {
       />
       <Route
         path="occupancy"
-        element={<Navigate to="/admin/room-availability?tab=occupancy" replace />}
+        element={
+          <Navigate to="/admin/room-availability?tab=occupancy" replace />
+        }
       />
       <Route
         path="digital-twin"
-        element={<Navigate to="/admin/room-availability?tab=occupancy" replace />}
+        element={
+          <Navigate to="/admin/room-availability?tab=occupancy" replace />
+        }
       />
       <Route
         path="financial"

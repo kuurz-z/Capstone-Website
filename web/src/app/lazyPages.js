@@ -71,10 +71,6 @@ export const DigitalTwinPage = React.lazy(
 export const MaintenancePage = React.lazy(
   () => import("../features/tenant/pages/MaintenancePage"),
 );
-
-export const OwnerDashboardPage = React.lazy(
-  () => import("../features/super-admin/pages/SuperAdminDashboard"),
-);
 export const BranchManagementPage = React.lazy(
   () => import("../features/super-admin/pages/BranchManagementPage"),
 );
