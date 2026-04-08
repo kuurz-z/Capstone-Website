@@ -10,9 +10,9 @@
  */
 
 import { auth } from "../../firebase/config";
+import { API_BASE_URL } from "./baseUrl";
 
-export const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+export const API_URL = API_BASE_URL;
 
 // =============================================================================
 // HELPER: Get Fresh Firebase ID Token

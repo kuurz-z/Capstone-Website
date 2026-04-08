@@ -61,20 +61,57 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 let server = null;
 
+const resolveTrustProxy = () => {
+  const configured = String(process.env.TRUST_PROXY || "").trim().toLowerCase();
+  if (!configured) {
+    return process.env.NODE_ENV === "production" ? 1 : false;
+  }
+
+  if (configured === "true") return true;
+  if (configured === "false") return false;
+
+  const asNumber = Number(configured);
+  return Number.isNaN(asNumber) ? configured : asNumber;
+};
+
+app.set("trust proxy", resolveTrustProxy());
 app.use(requestId);
 
-const allowedOrigins = (
+const normalizeOrigin = (origin = "") => String(origin || "").trim().replace(/\/+$/, "");
+
+const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const wildcardToRegex = (pattern = "") =>
+  new RegExp(`^${escapeRegex(pattern).replace(/\\\*/g, ".*")}$`, "i");
+
+const allowedOriginRules = (
   process.env.CORS_ORIGINS ||
   process.env.FRONTEND_URL ||
   "http://localhost:3000,http://localhost:3001"
 )
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
+
+const allowedOriginMatchers = allowedOriginRules.map((rule) =>
+  rule.includes("*") ? wildcardToRegex(rule) : rule,
+);
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  return allowedOriginMatchers.some((matcher) => {
+    if (matcher instanceof RegExp) {
+      return matcher.test(normalizedOrigin);
+    }
+    return matcher === normalizedOrigin;
+  });
+};
 
 app.options("*", (req, res) => {
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && isOriginAllowed(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader(
       "Access-Control-Allow-Methods",
@@ -91,7 +128,14 @@ app.options("*", (req, res) => {
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
     exposedHeaders: ["X-Request-Id"],
   }),
@@ -253,7 +297,10 @@ const bootstrap = async () => {
     logger.info(`API available at http://localhost:${PORT}/api`);
     logger.info(`Health check: http://localhost:${PORT}/api/health`);
 
-    initSocket(server, allowedOrigins);
+    const socketAllowedOrigins = allowedOriginRules.filter(
+      (origin) => !origin.includes("*"),
+    );
+    initSocket(server, socketAllowedOrigins);
     startScheduler();
   });
 
