@@ -141,9 +141,17 @@ export default function DataTable({
                     onMouseEnter={() => onRowHover?.(row)}
                     onFocus={() => onRowFocus?.(row)}
                     onClick={(e) => {
+                      if (!onRowClick) return;
+
+                      const target = e.target;
+                      if (!(target instanceof Element)) {
+                        onRowClick(row);
+                        return;
+                      }
+
                       // Don't fire row click if the event came from an action cell
-                      if (e.target.closest("[data-action-cell]")) return;
-                      onRowClick?.(row);
+                      if (target.closest("[data-action-cell]")) return;
+                      onRowClick(row);
                     }}
                   >
                     {columns.map((col) => (

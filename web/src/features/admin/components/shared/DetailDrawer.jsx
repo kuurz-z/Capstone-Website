@@ -1,21 +1,28 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import "./DetailDrawer.css";
 
 /**
- * DetailDrawer — Slide-in side panel from the right.
+ * DetailDrawer — Overlay detail panel rendered as a modal dialog.
  *
  * Props:
  *   open:     boolean
  *   onClose:  () => void
  *   title:    string
- *   width:    number (default 420)
+ *   width:    number (default 760)
  *   children: content
  *   footer:   ReactNode (optional sticky footer with action buttons)
  */
-export default function DetailDrawer({ open, onClose, title, width = 420, children, footer }) {
+export default function DetailDrawer({ open, onClose, title, width = 760, children, footer }) {
   const drawerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open || !drawerRef.current) return;
+    const bodyEl = drawerRef.current.querySelector(".detail-drawer__body");
+    if (bodyEl) bodyEl.scrollTop = 0;
+  }, [open, children]);
 
   // Close on Escape
   useEffect(() => {
@@ -30,9 +37,9 @@ export default function DetailDrawer({ open, onClose, title, width = 420, childr
   // Prevent body scroll when open — compensate for scrollbar width
   useBodyScrollLock(open);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div className="detail-drawer__backdrop" onClick={onClose} />
@@ -41,6 +48,9 @@ export default function DetailDrawer({ open, onClose, title, width = 420, childr
       <div
         ref={drawerRef}
         className="detail-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || "Details"}
         style={{ width: `${width}px` }}
       >
         {/* Header */}
@@ -63,7 +73,8 @@ export default function DetailDrawer({ open, onClose, title, width = 420, childr
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 

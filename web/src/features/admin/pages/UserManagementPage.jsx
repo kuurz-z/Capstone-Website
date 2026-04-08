@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Users, UserPlus } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { useApiClient } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,6 +10,7 @@ import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
 import DeleteUserModal from "../components/users/DeleteUserModal";
 import AccountActionModal from "../components/users/AccountActionModal";
+import AccountRowActions from "../components/users/AccountRowActions";
 import {
   PageShell,
   SummaryBar,
@@ -21,7 +23,9 @@ import "../styles/admin-users.css";
 
 function UserManagementPage() {
   const { user } = useAuth();
-  const isOwner = user?.role === "owner";
+  const { can, isOwner: permissionOwner } = usePermissions();
+  const isOwner = permissionOwner || user?.role === "owner";
+  const canManageUsers = isOwner || can("manageUsers");
   const { authFetch } = useApiClient();
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState(null);
@@ -33,7 +37,6 @@ function UserManagementPage() {
     user: null,
   });
 
-  // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -50,7 +53,6 @@ function UserManagementPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Edit form state
   const [editForm, setEditForm] = useState({
     username: "",
     firstName: "",
@@ -71,7 +73,6 @@ function UserManagementPage() {
     yearLevel: "",
   });
 
-  // Add form state
   const [addForm, setAddForm] = useState({
     username: "",
     firstName: "",
@@ -84,7 +85,6 @@ function UserManagementPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [addFormErrors, setAddFormErrors] = useState({});
 
-  // Validation
   const validateAddField = (name, value) => {
     switch (name) {
       case "username":
@@ -122,7 +122,6 @@ function UserManagementPage() {
     }));
   };
 
-  // Data fetching
   const userFilters = useMemo(() => {
     const params = { page: currentPage, limit: ITEMS_PER_PAGE };
     if (debouncedSearchQuery) params.search = debouncedSearchQuery;
@@ -155,7 +154,12 @@ function UserManagementPage() {
   const refetchAll = () =>
     queryClient.invalidateQueries({ queryKey: ["users"] });
 
-  // Handlers
+  const formatUserLabel = (userData) => {
+    if (!userData) return "User";
+    const fullName = `${userData.firstName || ""} ${userData.lastName || ""}`.trim();
+    return fullName || userData.username || userData.email || "User";
+  };
+
   const handleEditClick = (userData) => {
     setSelectedUser(userData);
     setEditForm({
@@ -206,7 +210,11 @@ function UserManagementPage() {
   const handleDeleteUser = async () => {
     try {
       await authFetch(`/users/${selectedUser._id}`, { method: "DELETE" });
-      showNotification("User deleted successfully", "success", 3000);
+      showNotification(
+        `${formatUserLabel(selectedUser)} was deleted successfully.`,
+        "success",
+        3000,
+      );
       setIsDeleteModalOpen(false);
       refetchAll();
     } catch (error) {
@@ -229,6 +237,7 @@ function UserManagementPage() {
 
     setIsCreating(true);
     try {
+      const createdUserLabel = formatUserLabel(addForm);
       await authFetch("/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -242,25 +251,34 @@ function UserManagementPage() {
           password: addForm.password,
         }),
       });
-      showNotification("User created successfully!", "success", 3000);
+      showNotification(
+        `${createdUserLabel} was added successfully.`,
+        "success",
+        3000,
+      );
       setIsAddModalOpen(false);
       refetchAll();
     } catch (error) {
       const msg = error.message || "";
-      if (msg.includes("Email already") || error.code === "EMAIL_TAKEN")
+      if (msg.includes("Email already") || error.code === "EMAIL_TAKEN") {
         showNotification("This email is already registered.", "error", 4000);
-      else if (
+      } else if (
         msg.includes("Username already") ||
         error.code === "USERNAME_TAKEN"
-      )
+      ) {
         showNotification("This username is taken.", "error", 4000);
-      else if (msg.toLowerCase().includes("owner") || error.code === "ROLE_FORBIDDEN")
+      } else if (
+        msg.toLowerCase().includes("owner") ||
+        error.code === "ROLE_FORBIDDEN"
+      ) {
         showNotification(
           "You don't have permission for this role.",
           "error",
           4000,
         );
-      else showNotification("Something went wrong.", "error", 4000);
+      } else {
+        showNotification("Something went wrong.", "error", 4000);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -268,23 +286,41 @@ function UserManagementPage() {
 
   const handleAccountAction = async (action, userId, reason) => {
     try {
+      const actionUser =
+        users.find((userData) => userData._id === userId) ||
+        accountAction.user ||
+        selectedUser;
+      const actionUserLabel = formatUserLabel(actionUser);
+
       if (action === "suspend") {
         await authFetch(`/users/${userId}/suspend`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason }),
         });
-        showNotification("User suspended", "success", 3000);
+        showNotification(
+          `${actionUserLabel} was suspended successfully.`,
+          "success",
+          3000,
+        );
       } else if (action === "ban") {
         await authFetch(`/users/${userId}/ban`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason }),
         });
-        showNotification("User banned", "success", 3000);
+        showNotification(
+          `${actionUserLabel} was banned successfully.`,
+          "success",
+          3000,
+        );
       } else if (action === "reactivate") {
         await authFetch(`/users/${userId}/reactivate`, { method: "PATCH" });
-        showNotification("User reactivated", "success", 3000);
+        showNotification(
+          `${actionUserLabel} was reactivated successfully.`,
+          "success",
+          3000,
+        );
       }
       refetchAll();
     } catch (error) {
@@ -293,10 +329,10 @@ function UserManagementPage() {
         "error",
         3000,
       );
+      throw error;
     }
   };
 
-  // Filter client-side by search
   const filteredUsers = users.filter((u) => {
     const q = searchQuery.toLowerCase();
     return (
@@ -423,49 +459,36 @@ function UserManagementPage() {
     {
       key: "actions",
       label: "",
-      width: "120px",
+      width: "280px",
       align: "right",
       render: (row) => {
         const isCurrentUser = row._id === (user?._id || user?.uid);
+        const status =
+          row.accountStatus || (row.isActive ? "active" : "suspended");
+        const canSuspend =
+          canManageUsers && !isCurrentUser && status === "active";
+        const canReactivate =
+          canManageUsers &&
+          !isCurrentUser &&
+          ["suspended", "banned"].includes(status);
+        const canBan = isOwner && !isCurrentUser && status !== "banned";
+        const canDelete = isOwner && !isCurrentUser;
+
         return (
-          <div className="user-actions" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="user-action-btn"
-              onClick={() => handleEditClick(row)}
-            >
-              Edit
-            </button>
-            {isOwner && !isCurrentUser && (
-              <>
-                {row.accountStatus !== "suspended" && (
-                  <button
-                    className="user-action-btn user-action-btn--warn"
-                    onClick={() =>
-                      setAccountAction({ type: "suspend", user: row })
-                    }
-                  >
-                    Suspend
-                  </button>
-                )}
-                {row.accountStatus === "suspended" && (
-                  <button
-                    className="user-action-btn"
-                    onClick={() =>
-                      setAccountAction({ type: "reactivate", user: row })
-                    }
-                  >
-                    Activate
-                  </button>
-                )}
-                <button
-                  className="user-action-btn user-action-btn--danger"
-                  onClick={() => handleDeleteClick(row)}
-                >
-                  ×
-                </button>
-              </>
-            )}
-          </div>
+          <AccountRowActions
+            canEdit={canManageUsers}
+            canSuspend={canSuspend}
+            canReactivate={canReactivate}
+            canBan={canBan}
+            canDelete={canDelete}
+            onEdit={() => handleEditClick(row)}
+            onSuspend={() => setAccountAction({ type: "suspend", user: row })}
+            onReactivate={() =>
+              setAccountAction({ type: "reactivate", user: row })
+            }
+            onBan={() => setAccountAction({ type: "ban", user: row })}
+            onDelete={() => handleDeleteClick(row)}
+          />
         );
       },
     },
@@ -535,7 +558,6 @@ function UserManagementPage() {
         />
       </PageShell.Content>
 
-      {/* Modals (kept — creation/destruction needs distinct UI) */}
       {isEditModalOpen && (
         <EditUserModal
           editForm={editForm}
@@ -576,3 +598,4 @@ function UserManagementPage() {
 }
 
 export default UserManagementPage;
+

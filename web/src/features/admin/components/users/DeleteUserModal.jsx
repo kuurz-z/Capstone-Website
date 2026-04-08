@@ -1,16 +1,30 @@
+import { createPortal } from "react-dom";
+import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function DeleteUserModal({ user, onDelete, onClose }) {
+  useBodyScrollLock(true);
   useEscapeClose(true, onClose);
-  return (
-    <div className="modal-overlay" onClick={onClose}>
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         className="modal-content modal-small"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Delete user"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
           <h2>Delete User</h2>
-          <button onClick={onClose} className="modal-close">
+          <button onClick={onClose} className="modal-close" aria-label="Close">
             ×
           </button>
         </div>
@@ -32,6 +46,7 @@ export default function DeleteUserModal({ user, onDelete, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
