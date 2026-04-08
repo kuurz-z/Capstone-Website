@@ -10,6 +10,14 @@ export function useAnnouncements(limit, category) {
   });
 }
 
+/** Fetch recent admin announcements */
+export function useAdminAnnouncements(limit = 20, branch = null) {
+  return useQuery({
+    queryKey: ["announcements", "admin", limit, branch],
+    queryFn: () => announcementApi.getAdminList(limit, branch),
+  });
+}
+
 /** Fetch unacknowledged announcements */
 export function useUnacknowledgedAnnouncements() {
   return useQuery({

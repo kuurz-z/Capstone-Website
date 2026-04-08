@@ -44,10 +44,13 @@ const ProfilePage = () => {
   const { user: authUser, updateUser, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const canViewAnnouncements = authUser?.role === "tenant";
 
   // ── UI state ───────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(
-    location.state?.tab || "dashboard"
+    location.state?.tab === "announcements" && !canViewAnnouncements
+      ? "dashboard"
+      : location.state?.tab || "dashboard"
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -66,6 +69,12 @@ const ProfilePage = () => {
     window.addEventListener("resize", h);
     return () => window.removeEventListener("resize", h);
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "announcements" && !canViewAnnouncements) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab, canViewAnnouncements]);
 
   const [profileData, setProfileData] = useState({
     firstName: "",
@@ -420,6 +429,7 @@ const ProfilePage = () => {
           profileData={profileData}
           fullName={fullName}
           hasActiveReservation={Boolean(activeReservation)}
+          canViewAnnouncements={canViewAnnouncements}
           onLogout={handleLogout}
         />
 
@@ -468,7 +478,7 @@ const ProfilePage = () => {
               )}
 
               {activeTab === "maintenance" && <MaintenanceTab />}
-              {activeTab === "announcements" && <AnnouncementsTab />}
+              {activeTab === "announcements" && canViewAnnouncements && <AnnouncementsTab />}
               {activeTab === "notifications" && <NotificationsTab />}
               {activeTab === "settings" && <SettingsTab />}
             </div>

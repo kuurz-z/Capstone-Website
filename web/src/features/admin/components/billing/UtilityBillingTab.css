@@ -3,6 +3,11 @@
    ============================================================ */
 
 /* ── Layout ── */
+.eb-shell {
+  display: grid;
+  gap: 12px;
+}
+
 .eb-layout {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -156,6 +161,11 @@
 
 .eb-room:active {
   transform: scale(0.985);
+}
+
+.eb-room:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .eb-room--active {
@@ -2915,4 +2925,154 @@
   .eb-snapshot-card__metrics {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+   Phase 2 - Action Hierarchy and Header Grouping
+   ============================================================ */
+
+.eb-shell .bw-summary-bar__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.eb-shell .bw-summary-bar__action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eb-shell .bw-summary-bar__action-group--primary {
+  padding-right: 8px;
+  border-right: 1px solid var(--border-card, #e5e7eb);
+}
+
+.eb-shell .eb-header {
+  margin-bottom: 1rem;
+}
+
+.eb-shell .eb-header__left {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.eb-shell .eb-header__meta {
+  display: grid;
+  gap: 3px;
+}
+
+.eb-shell .eb-header__subtitle {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .eb-shell .bw-summary-bar__actions {
+    justify-content: flex-start;
+  }
+
+  .eb-shell .bw-summary-bar__action-group--primary {
+    padding-right: 0;
+    border-right: none;
+  }
+}
+
+/* ============================================================
+   Phase 4 - Responsive Density and Table Behavior
+   ============================================================ */
+
+.eb-shell .eb-table-wrap--timeline,
+.eb-shell .eb-table-wrap--history {
+  overflow-x: auto;
+}
+
+.eb-shell .eb-table--timeline {
+  min-width: 780px;
+}
+
+.eb-shell .eb-table--history {
+  min-width: 700px;
+}
+
+@media (max-width: 1100px) {
+  .eb-shell .eb-layout {
+    grid-template-columns: 200px 1fr;
+  }
+
+  .eb-shell .eb-content {
+    padding: 16px 18px;
+  }
+}
+
+@media (max-width: 900px) {
+  .eb-shell .eb-header {
+    align-items: flex-start;
+  }
+
+  .eb-shell .eb-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .eb-shell .eb-content {
+    padding: 14px;
+  }
+
+  .eb-shell .eb-header__actions .eb-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .eb-shell .eb-section__hint {
+    font-size: 0.73rem;
+  }
+}
+
+/* ============================================================
+   Phase 3 - Timeline and History Readability
+   ============================================================ */
+
+.eb-shell .eb-section__count--inline {
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.eb-shell .eb-section__hint {
+  margin: 6px 0 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.eb-shell .eb-section-body--spaced {
+  margin-top: 12px;
+}
+
+.eb-shell .eb-cell--empty {
+  text-align: center;
+  padding: 1rem;
+}
+
+.eb-shell .eb-cell--actions-nowrap {
+  white-space: nowrap;
+}
+
+.eb-shell .eb-btn:focus-visible,
+.eb-shell .eb-room-pager__btn:focus-visible,
+.eb-shell .eb-sidebar__filter:focus-visible,
+.eb-shell .eb-sidebar__search:focus-visible,
+.eb-shell input:focus-visible,
+.eb-shell select:focus-visible,
+.eb-shell button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }

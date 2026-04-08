@@ -12,6 +12,7 @@ import {
   AuditLogsPage,
   UserManagementPage,
   AdminBillingPage,
+  AdminAnnouncementsPage,
   MaintenancePage,
   InquiriesPage,
   BranchManagementPage,
@@ -85,6 +86,14 @@ export function AdminRoutes() {
         element={
           <RouteShell name="AdminBilling">
             <AdminBillingPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="announcements"
+        element={
+          <RouteShell name="AdminAnnouncements">
+            <AdminAnnouncementsPage />
           </RouteShell>
         }
       />

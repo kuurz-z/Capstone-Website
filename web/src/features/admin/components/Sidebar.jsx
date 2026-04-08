@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { showNotification } from "../../../shared/utils/notification";
 import LilycrestLogo from "../../../shared/components/LilycrestLogo";
 import {
@@ -10,10 +11,10 @@ import {
   Users,
   BedDouble,
   Receipt,
+  Megaphone,
   UserCog,
   FileText,
   Building2,
-  Shield,
   Settings,
   LogOut,
   X,
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { to: "/admin/room-availability",  icon: BedDouble,       text: "Room Management", group: "workspace" },
   { to: "/admin/tenants",            icon: Users,           text: "Tenants",         group: "workspace" },
   { to: "/admin/billing",            icon: Receipt,         text: "Billing",         group: "workspace" },
+  { to: "/admin/announcements",      icon: Megaphone,       text: "Announcements",   group: "workspace", permission: "manageAnnouncements" },
   // SYSTEM group
   { to: "/admin/users",              icon: UserCog,         text: "Accounts",     group: "system" },
   { to: "/admin/audit-logs",         icon: FileText,        text: "Activity Log", group: "system" },
@@ -41,6 +43,7 @@ const STORAGE_KEY = "sidebar-collapsed";
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout, globalLoading } = useAuth();
+  const { can } = usePermissions();
   const isOwner = user?.role === "owner";
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutInProgress, setLogoutInProgress] = useState(false);
@@ -48,7 +51,11 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
   const [hoveredItem, setHoveredItem] = useState(null);
 
   // Filter items based on role
-  const visibleItems = NAV_ITEMS.filter((item) => !item.saOnly || isOwner);
+  const visibleItems = NAV_ITEMS.filter(
+    (item) =>
+      (!item.saOnly || isOwner) &&
+      (!item.permission || can(item.permission)),
+  );
 
   // Group items
   const workspaceItems = visibleItems.filter((i) => i.group === "workspace");

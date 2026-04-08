@@ -1433,7 +1433,7 @@ const UtilityBillingTab = ({ utilityType }) => {
   };
 
   return (
-    <>
+    <section className="eb-shell" aria-label={`${utilityType} billing workspace`}>
       <div className="bw-summary-bar">
         <div className="bw-summary-bar__left">
           <span className="bw-summary-bar__mode">
@@ -1444,7 +1444,7 @@ const UtilityBillingTab = ({ utilityType }) => {
             <span className="bw-summary-bar__branch">{branchFilter}</span>
           )}
         </div>
-        <div className="bw-summary-bar__counts">
+        <div className="bw-summary-bar__counts" aria-live="polite">
           <span className="bw-count bw-count--open">
             {filteredRooms.filter((r) => r.hasOpenPeriod).length} open
           </span>
@@ -1461,53 +1461,57 @@ const UtilityBillingTab = ({ utilityType }) => {
           </span>
         </div>
         <div className="bw-summary-bar__actions">
-          {readyRooms.length > 0 && (
+          <div className="bw-summary-bar__action-group bw-summary-bar__action-group--primary">
+            {selectedReadyPeriod && (
+              <button
+                type="button"
+                className="eb-btn eb-btn--primary"
+                onClick={() =>
+                  handleSendPeriod(
+                    selectedReadyPeriod,
+                    getRoomLabel(selectedRoom || {}, "Room"),
+                  )
+                }
+                disabled={
+                  Boolean(sendingByPeriodId[selectedReadyPeriod.id]) ||
+                  sendPeriod.isPending
+                }
+              >
+                <Send size={13} />{" "}
+                {sendingByPeriodId[selectedReadyPeriod.id]
+                  ? "Sending..."
+                  : "Send Selected Room"}
+              </button>
+            )}
+            {readyRooms.length > 0 && (
+              <button
+                type="button"
+                className="eb-btn eb-btn--outline"
+                onClick={handleSendAllReady}
+                disabled={isSendingAllReady || sendPeriod.isPending}
+              >
+                <Send size={13} />{" "}
+                {isSendingAllReady
+                  ? "Sending..."
+                  : `Send All Ready (${readyRooms.length})`}
+              </button>
+            )}
+          </div>
+
+          <div className="bw-summary-bar__action-group bw-summary-bar__action-group--secondary">
             <button
               type="button"
-              className="eb-btn eb-btn--primary"
-              onClick={handleSendAllReady}
-              disabled={isSendingAllReady || sendPeriod.isPending}
+              className="eb-btn eb-btn--ghost"
+              onClick={handleExportRows}
+              disabled={isExporting}
             >
-              <Send size={13} />{" "}
-              {isSendingAllReady
-                ? "Sending..."
-                : `Send All Ready (${readyRooms.length})`}
+              <Download size={13} /> {isExporting ? "Exporting..." : "Export"}
             </button>
-          )}
-          {selectedReadyPeriod && (
-            <button
-              type="button"
-              className="eb-btn eb-btn--outline"
-              onClick={() =>
-                handleSendPeriod(
-                  selectedReadyPeriod,
-                  getRoomLabel(selectedRoom || {}, "Room"),
-                )
-              }
-              disabled={
-                Boolean(sendingByPeriodId[selectedReadyPeriod.id]) ||
-                sendPeriod.isPending
-              }
-            >
-              <Send size={13} />{" "}
-              {sendingByPeriodId[selectedReadyPeriod.id]
-                ? "Sending..."
-                : "Send To Tenant"}
-            </button>
-          )}
-          <button
-            type="button"
-            className="eb-btn eb-btn--ghost"
-            onClick={handleExportRows}
-            disabled={isExporting}
-          >
-            <Download size={13} /> {isExporting ? "Exporting..." : "Export"}
-          </button>
+          </div>
         </div>
       </div>
 
       <div className="eb-layout">
-        {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Sidebar ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
         <aside className="eb-sidebar">
           <div className="eb-sidebar__header">
             <span className="eb-sidebar__title">
@@ -1566,6 +1570,8 @@ const UtilityBillingTab = ({ utilityType }) => {
                   <button
                     key={room.id}
                     className={`eb-room${selectedRoomId === room.id ? " eb-room--active" : ""}`}
+                    aria-pressed={selectedRoomId === room.id}
+                    aria-label={`Select ${getRoomLabel(room)} room`}
                     onClick={() => {
                       setSelectedRoomId(room.id);
                       setPeriodsPage(1);
@@ -1605,35 +1611,27 @@ const UtilityBillingTab = ({ utilityType }) => {
             )}
           </div>
           {filteredRooms.length > ROOMS_PER_PAGE && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "6px 12px",
-                borderTop: "1px solid var(--border-subtle, #e2e8f0)",
-                fontSize: "0.75rem",
-                color: "var(--text-secondary)",
-              }}
-            >
-              <span>{filteredRooms.length} rooms</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div className="eb-sidebar__pager">
+              <span className="eb-sidebar__pager-count">
+                {filteredRooms.length} rooms
+              </span>
+              <div className="eb-room-pager">
                 <button
-                  className="eb-icon-btn eb-icon-btn--muted"
+                  className="eb-room-pager__btn"
                   disabled={roomsPage <= 1}
                   onClick={() => setRoomsPage((p) => p - 1)}
-                  style={{ padding: 2 }}
+                  aria-label="Previous room page"
                 >
                   <ChevronLeft size={14} />
                 </button>
-                <span>
+                <span className="eb-sidebar__pager-count">
                   {roomsPage}/{totalRoomPages}
                 </span>
                 <button
-                  className="eb-icon-btn eb-icon-btn--muted"
+                  className="eb-room-pager__btn"
                   disabled={roomsPage >= totalRoomPages}
                   onClick={() => setRoomsPage((p) => p + 1)}
-                  style={{ padding: 2 }}
+                  aria-label="Next room page"
                 >
                   <ChevronRight size={14} />
                 </button>
@@ -1642,31 +1640,32 @@ const UtilityBillingTab = ({ utilityType }) => {
           )}
         </aside>
 
-        {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Main ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
         <main className="eb-main">
           {!selectedRoomId ? (
             <div className="eb-empty-state">
               <Zap size={40} strokeWidth={1.5} />
-              <p>
-                Select a room to manage{" "}
-                {utilityType === "water" ? "water" : "electricity"} billing
+              <p className="eb-empty-state__title">Select a room to continue</p>
+              <p className="eb-empty-state__hint">
+                Pick a room from the left panel to manage{" "}
+                {utilityType === "water" ? "water" : "electricity"} cycles,
+                readings, and sending.
               </p>
             </div>
           ) : (
             <div className="eb-content">
-              {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Room Header ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
-              <div className="eb-header" style={{ marginBottom: "1rem" }}>
+              <div className="eb-header">
                 <div className="eb-header__left">
-                  <h2 className="eb-header__title">
-                    {getRoomLabel(selectedRoom)}
-                  </h2>
-                  <span className="eb-header__branch">
-                    {selectedRoom?.branch}
-                  </span>
+                  <div className="eb-header__meta">
+                    <h2 className="eb-header__title">
+                      {getRoomLabel(selectedRoom)}
+                    </h2>
+                    <p className="eb-header__subtitle">
+                      Manage cycle setup, readings, and publishing for this room.
+                    </p>
+                  </div>
+                  <span className="eb-header__branch">{selectedRoom?.branch}</span>
                   {selectedRoom?.type && (
-                    <span className="eb-header__room-type">
-                      {selectedRoom.type}
-                    </span>
+                    <span className="eb-header__room-type">{selectedRoom.type}</span>
                   )}
                 </div>
                 <div className="eb-header__actions">
@@ -1921,23 +1920,19 @@ const UtilityBillingTab = ({ utilityType }) => {
                 <div className="eb-section__header">
                   <h3 className="eb-section__title eb-section__title--primary">
                     Billing Timeline
-                    <span
-                      className="eb-section__count"
-                      style={{
-                        marginLeft: 6,
-                        textTransform: "none",
-                        letterSpacing: 0,
-                        fontWeight: "normal",
-                      }}
-                    >
+                    <span className="eb-section__count eb-section__count--inline">
                       {billingTimelineRows.length}
                     </span>
                   </h3>
                 </div>
-                <div className="eb-section-body" style={{ marginTop: "12px" }}>
+                <p className="eb-section__hint">
+                  Latest meter and occupancy events for the selected billing
+                  period.
+                </p>
+                <div className="eb-section-body eb-section-body--spaced">
                   <>
-                    <div className="eb-table-wrap">
-                      <table className="eb-table">
+                    <div className="eb-table-wrap eb-table-wrap--timeline">
+                      <table className="eb-table eb-table--timeline">
                         <colgroup>
                           <col style={{ width: "14%" }} />
                           <col style={{ width: "18%" }} />
@@ -1961,8 +1956,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                             <tr>
                               <td
                                 colSpan={6}
-                                className="eb-cell--muted"
-                                style={{ textAlign: "center", padding: "1rem" }}
+                                className="eb-cell--muted eb-cell--empty"
                               >
                                 No timeline events found for this billing
                                 period.
@@ -2015,10 +2009,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                       }`
                                     : EMPTY_VALUE}
                                 </td>
-                                <td
-                                  className="eb-cell--actions"
-                                  style={{ whiteSpace: "nowrap" }}
-                                >
+                                <td className="eb-cell--actions eb-cell--actions-nowrap">
                                   {row.hasMeterRecord && row.rawReading ? (
                                     <>
                                       <button
@@ -2071,14 +2062,18 @@ const UtilityBillingTab = ({ utilityType }) => {
                     {periods.length} period{periods.length !== 1 ? "s" : ""}
                   </span>
                 </div>
+                <p className="eb-section__hint">
+                  Closed and revised periods remain available for review,
+                  sending, and revision actions.
+                </p>
                 {periods.length === 0 ? (
                   <p className="eb-empty-hint">
                     No billing history for this room yet.
                   </p>
                 ) : (
                   <>
-                    <div className="eb-table-wrap">
-                      <table className="eb-table">
+                    <div className="eb-table-wrap eb-table-wrap--history">
+                      <table className="eb-table eb-table--history">
                         <colgroup>
                           <col style={{ width: "30%" }} />
                           <col style={{ width: "18%" }} />
@@ -2166,8 +2161,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                   ) : null}
                                 </td>
                                 <td
-                                  className="eb-cell--actions"
-                                  style={{ whiteSpace: "nowrap" }}
+                                  className="eb-cell--actions eb-cell--actions-nowrap"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   {(p.status === "closed" ||
@@ -2482,7 +2476,7 @@ const UtilityBillingTab = ({ utilityType }) => {
           </div>
         </div>
       )}
-    </>
+    </section>
   );
 };
 

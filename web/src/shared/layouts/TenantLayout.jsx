@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import useSocketClient from "../hooks/useSocketClient";
 import Sidebar from "../components/Sidebar";
 import NotificationBell from "../components/NotificationBell";
 import AccountBlockedBanner from "../components/AccountBlockedBanner";
@@ -12,6 +13,7 @@ import "./TenantLayout.css";
  */
 const TenantLayout = ({ children }) => {
   const { user } = useAuth();
+  useSocketClient();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 

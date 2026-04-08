@@ -117,6 +117,7 @@ await jest.unstable_mockModule("../controllers/billingController.js", () => ({
 }));
 await jest.unstable_mockModule("../controllers/announcementsController.js", () => ({
   getAnnouncements: noop,
+  getAdminAnnouncements: noop,
   getUnacknowledged: noop,
   markAsRead: noop,
   acknowledgeAnnouncement: noop,

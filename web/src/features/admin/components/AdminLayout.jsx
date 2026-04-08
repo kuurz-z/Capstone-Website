@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
 import NotificationBell from "../../../shared/components/NotificationBell";
+import useSocketClient from "../../../shared/hooks/useSocketClient";
 import "../styles/admin-layout.css";
 import "../styles/admin-common.css";
 
@@ -14,6 +15,7 @@ const PAGE_TITLES = {
   "/admin/room-availability": "Room Management",
   "/admin/audit-logs": "Activity Log",
   "/admin/billing": "Billing",
+  "/admin/announcements": "Announcements",
   "/admin/branches": "Branches",
   "/admin/roles": "Permissions",
   "/admin/settings": "Settings",
@@ -34,6 +36,7 @@ function getPageTitle(location) {
 const COLLAPSE_STORAGE_KEY = "sidebar-collapsed";
 
 export default function AdminLayout() {
+  useSocketClient();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {

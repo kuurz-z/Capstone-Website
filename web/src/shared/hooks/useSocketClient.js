@@ -18,13 +18,13 @@ import { useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 import { useQueryClient } from "@tanstack/react-query";
 import useNotificationStore from "../stores/notificationStore";
-import useAuth from "./useAuth";
+import { useAuth } from "./useAuth";
 import { API_ORIGIN } from "../api/baseUrl";
 
 const SOCKET_URL = API_ORIGIN;
 
 export default function useSocketClient() {
-  const { user, dbUser } = useAuth();
+  const { user } = useAuth();
   const socketRef = useRef(null);
   const qc = useQueryClient();
   const addNotification = useNotificationStore((s) => s.addNotification);
@@ -32,7 +32,7 @@ export default function useSocketClient() {
 
   useEffect(() => {
     // Only connect if user is authenticated
-    if (!user?.uid || !dbUser?._id) {
+    if (!user?.id || !user?.role) {
       return;
     }
 
@@ -41,8 +41,8 @@ export default function useSocketClient() {
 
     const socket = io(SOCKET_URL, {
       auth: {
-        userId: dbUser._id,
-        role: dbUser.role,
+        userId: user.id,
+        role: user.role,
       },
       transports: ["websocket", "polling"],
       reconnectionAttempts: 5,
@@ -60,6 +60,15 @@ export default function useSocketClient() {
     // Listen for real-time notifications
     socket.on("notification:new", (notification) => {
       addNotification(notification);
+      if (!notification?.isRead) {
+        qc.setQueryData(["notifications", "unread-count"], (current) => ({
+          unreadCount: (current?.unreadCount ?? 0) + 1,
+        }));
+      }
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      if (notification?.type === "announcement") {
+        qc.invalidateQueries({ queryKey: ["announcements"] });
+      }
     });
 
     // Listen for room availability changes — invalidate rooms cache
@@ -80,7 +89,7 @@ export default function useSocketClient() {
       socketRef.current = null;
       setConnected(false);
     };
-  }, [user?.uid, dbUser?._id, dbUser?.role, addNotification, setConnected]);
+  }, [user?.id, user?.role, addNotification, qc, setConnected]);
 
   return socketRef.current;
 }

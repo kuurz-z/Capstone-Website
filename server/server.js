@@ -51,15 +51,14 @@ import digitalTwinRoutes from "./routes/digitalTwinRoutes.js";
 import utilityBillingRoutes from "./routes/utilityBillingRoutes.js";
 import financialRoutes from "./routes/financialRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
-import { startScheduler, stopScheduler } from "./utils/scheduler.js";
 import { initSocket } from "./utils/socket.js";
-import { backfillBranchAdminPermissions } from "./utils/backfillAdminPermissions.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 let server = null;
+let stopBackgroundJobs = () => {};
 
 const resolveTrustProxy = () => {
   const configured = String(process.env.TRUST_PROXY || "").trim().toLowerCase();
@@ -106,6 +105,67 @@ const isOriginAllowed = (origin) => {
       return matcher.test(normalizedOrigin);
     }
     return matcher === normalizedOrigin;
+  });
+};
+
+const isTruthyEnv = (value, fallback = false) => {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return fallback;
+  }
+
+  return !["0", "false", "no", "off"].includes(
+    String(value).trim().toLowerCase(),
+  );
+};
+
+const shouldStartScheduler = () => isTruthyEnv(process.env.ENABLE_SCHEDULER, true);
+
+const runPermissionBackfill = async () => {
+  try {
+    const { backfillBranchAdminPermissions } = await import(
+      "./utils/backfillAdminPermissions.js"
+    );
+    const updatedCount = await backfillBranchAdminPermissions();
+
+    if (updatedCount > 0) {
+      logger.info(
+        { count: updatedCount },
+        "Startup permission backfill completed",
+      );
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Startup permission backfill failed");
+  }
+};
+
+const runSchedulerStartup = async () => {
+  if (!shouldStartScheduler()) {
+    logger.info("Scheduler startup skipped because ENABLE_SCHEDULER is disabled");
+    return;
+  }
+
+  try {
+    const { startScheduler, stopScheduler } = await import("./utils/scheduler.js");
+    stopBackgroundJobs = stopScheduler;
+    startScheduler({
+      runWarmup: isTruthyEnv(process.env.RUN_SCHEDULER_WARMUP, false),
+    });
+    logger.info("Scheduler started");
+  } catch (error) {
+    logger.error({ err: error }, "Scheduler startup failed");
+  }
+};
+
+const startBackgroundServices = (mongoConnected) => {
+  if (!mongoConnected) {
+    logger.warn(
+      "Skipping background startup tasks because MongoDB is unavailable",
+    );
+    return;
+  }
+
+  setImmediate(() => {
+    void Promise.allSettled([runPermissionBackfill(), runSchedulerStartup()]);
   });
 };
 
@@ -237,7 +297,7 @@ const gracefulShutdown = (signal) => {
   logger.info({ signal }, "Shutting down gracefully");
 
   const finalizeShutdown = () => {
-    stopScheduler();
+    stopBackgroundJobs();
     mongoose.connection.close(false).then(() => {
       logger.info("MongoDB connection closed");
       process.exit(0);
@@ -277,13 +337,6 @@ const bootstrap = async () => {
   validateStartupConfig();
 
   const mongoConnected = await connectDB();
-  if (mongoConnected) {
-    await backfillBranchAdminPermissions();
-  } else {
-    logger.warn(
-      "Skipping branch-admin permission backfill because MongoDB is unavailable",
-    );
-  }
 
   server = app.listen(PORT, () => {
     logger.info(
@@ -301,7 +354,7 @@ const bootstrap = async () => {
       (origin) => !origin.includes("*"),
     );
     initSocket(server, socketAllowedOrigins);
-    startScheduler();
+    startBackgroundServices(mongoConnected);
   });
 
   server.on("error", (error) => {

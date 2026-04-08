@@ -25,11 +25,13 @@ function AppContent() {
   return (
     <>
       <ScrollToTop />
-      {globalLoading && <GlobalLoading />}
-
-      <Suspense fallback={<GlobalLoading />}>
-        <AppRoutes />
-      </Suspense>
+      {globalLoading ? (
+        <GlobalLoading />
+      ) : (
+        <Suspense fallback={<GlobalLoading />}>
+          <AppRoutes />
+        </Suspense>
+      )}
     </>
   );
 }

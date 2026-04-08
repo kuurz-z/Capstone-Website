@@ -575,11 +575,34 @@ async function archiveStaleCancelled() {
 
 const scheduledJobs = [];
 
-export function startScheduler() {
+const shouldRunWarmupJobs = (override) => {
+  if (typeof override === "boolean") {
+    return override;
+  }
 
-  // Run cleanup jobs once immediately on startup
-  cleanupExpiredBedLocks();
-  markOverdueBills();
+  const configured = String(process.env.RUN_SCHEDULER_WARMUP || "").trim().toLowerCase();
+  if (!configured) {
+    return false;
+  }
+
+  return !["0", "false", "no", "off"].includes(configured);
+};
+
+export function startScheduler(options = {}) {
+  if (scheduledJobs.length > 0) {
+    logger.warn(
+      { count: scheduledJobs.length },
+      "Scheduler already started; skipping duplicate startup",
+    );
+    return scheduledJobs.length;
+  }
+
+  if (shouldRunWarmupJobs(options.runWarmup)) {
+    setImmediate(() => {
+      void cleanupExpiredBedLocks();
+      void markOverdueBills();
+    });
+  }
 
   // Job 0: Automated Rent Bills — daily at midnight
   scheduledJobs.push(
@@ -676,7 +699,7 @@ export function startScheduler() {
       name: "archive-stale-cancelled",
     }),
   );
-
+  return scheduledJobs.length;
 }
 
 /** Stop all cron jobs (for graceful shutdown) */

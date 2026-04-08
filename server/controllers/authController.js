@@ -148,6 +148,7 @@ export const register = async (req, res, next) => {
         phone: user.phone,
         branch: user.branch,
         role: user.role,
+        permissions: user.permissions,
         isEmailVerified: user.isEmailVerified,
       },
     });
@@ -236,8 +237,10 @@ export const login = async (req, res, next) => {
         phone: user.phone,
         branch: user.branch,
         role: user.role,
+        permissions: user.permissions,
         isActive: user.isActive,
         isEmailVerified: user.isEmailVerified,
+        accountStatus: user.accountStatus,
       },
     });
   } catch (error) {
@@ -296,7 +299,9 @@ export const getProfile = async (req, res, next) => {
       profileImage: user.profileImage,
       branch: user.branch,
       role: user.role,
+      permissions: user.permissions,
       tenantStatus: user.tenantStatus,
+      accountStatus: user.accountStatus,
       isActive: user.isActive,
       isEmailVerified: user.isEmailVerified,
       // Extended profile fields

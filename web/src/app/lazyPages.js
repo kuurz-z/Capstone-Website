@@ -62,6 +62,9 @@ export const UserManagementPage = React.lazy(
 export const AdminBillingPage = React.lazy(
   () => import("../features/admin/pages/AdminBillingPage"),
 );
+export const AdminAnnouncementsPage = React.lazy(
+  () => import("../features/admin/pages/AdminAnnouncementsPage"),
+);
 export const InquiriesPage = React.lazy(
   () => import("../features/admin/pages/InquiriesPage"),
 );

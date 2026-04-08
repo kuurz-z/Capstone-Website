@@ -1,83 +1,154 @@
-import React, { useState } from "react";
-import { announcementApi } from "../../../../shared/api/apiClient";
-import { useAnnouncements } from "../../../../shared/hooks/queries/useAnnouncements";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  Megaphone,
-  Check,
-  Clock,
-  Wrench,
-  Zap,
-  FileText,
   Bell,
+  Check,
+  FileText,
+  Megaphone,
+  ShieldAlert,
+  TriangleAlert,
+  Wrench,
 } from "lucide-react";
+import { announcementApi } from "../../../../shared/api/apiClient";
+import {
+  useAcknowledgeAnnouncement,
+  useAnnouncements,
+} from "../../../../shared/hooks/queries/useAnnouncements";
+import {
+  formatAnnouncementCategory,
+  getAnnouncementCategoryMeta,
+} from "../../../../shared/utils/announcementConfig";
 
-/* ── Helpers ───────────────────────────────────────── */
-
-const CATEGORY_MAP = {
-  Reminder: { color: "#0A1628", bg: "#F1F5F9", icon: Bell },
-  Maintenance: { color: "#D97706", bg: "#FFFBEB", icon: Wrench },
-  Utilities: { color: "#F59E0B", bg: "#FFF7ED", icon: Zap },
-  Policy: { color: "#7C3AED", bg: "#F5F3FF", icon: FileText },
+const CATEGORY_ICONS = {
+  general: Megaphone,
+  reminder: Bell,
+  maintenance: Wrench,
+  policy: FileText,
+  alert: TriangleAlert,
+  event: Megaphone,
 };
 
-const FILTERS = ["all", "maintenance", "utilities", "policy", "reminder"];
+const CATEGORY_COLORS = {
+  neutral: { color: "#0A1628", bg: "#F1F5F9" },
+  info: { color: "#2563EB", bg: "#EFF6FF" },
+  warning: { color: "#D97706", bg: "#FFFBEB" },
+  accent: { color: "#7C3AED", bg: "#F5F3FF" },
+  success: { color: "#059669", bg: "#ECFDF5" },
+  danger: { color: "#DC2626", bg: "#FEF2F2" },
+};
 
-const fmtDate = (d) =>
-  new Date(d).toLocaleDateString("en-PH", {
+const fmtDate = (value) =>
+  new Date(value).toLocaleDateString("en-PH", {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
 
-/* ── Main Component ────────────────────────────────── */
+const getAnnouncementId = (announcement) => announcement.id || announcement._id;
 
-const AnnouncementsTab = () => {
+const LoadingState = () => (
+  <div style={{ width: "100%" }}>
+    <div style={s.heading}>
+      <h1 style={s.title}>Announcements</h1>
+      <p style={s.subtitle}>Loading announcements...</p>
+    </div>
+    {[1, 2, 3].map((item) => (
+      <div
+        key={item}
+        style={{
+          ...s.card,
+          height: 88,
+          background: "#F3F4F6",
+          animation: "pulse 1.5s ease-in-out infinite",
+          marginBottom: 10,
+        }}
+      />
+    ))}
+  </div>
+);
+
+export default function AnnouncementsTab() {
   const [filter, setFilter] = useState("all");
-  const [acknowledged, setAcknowledged] = useState(new Set());
+  const queryClient = useQueryClient();
+  const acknowledgeAnnouncement = useAcknowledgeAnnouncement();
+  const markReadAttemptsRef = useRef(new Set());
 
   const { data: announcementData, isLoading } = useAnnouncements(50);
   const announcements = announcementData?.announcements || [];
 
-  const filtered = announcements.filter(
-    (a) => filter === "all" || a.category.toLowerCase() === filter
+  const filters = useMemo(() => {
+    const values = [
+      "all",
+      ...new Set(
+        announcements
+          .map((announcement) => announcement.category)
+          .filter(Boolean),
+      ),
+    ];
+
+    return values.map((value) => ({
+      value,
+      label: value === "all" ? "All" : formatAnnouncementCategory(value),
+    }));
+  }, [announcements]);
+
+  const filtered = useMemo(
+    () =>
+      announcements.filter(
+        (announcement) =>
+          filter === "all" || announcement.category === filter,
+      ),
+    [announcements, filter],
   );
 
-  const handleAcknowledge = async (id) => {
+  useEffect(() => {
+    const unreadIds = announcements
+      .map((announcement) => getAnnouncementId(announcement))
+      .filter(
+        (announcementId, index) =>
+          announcements[index].unread &&
+          !markReadAttemptsRef.current.has(announcementId),
+      );
+
+    if (unreadIds.length === 0) return undefined;
+
+    unreadIds.forEach((announcementId) =>
+      markReadAttemptsRef.current.add(announcementId),
+    );
+
+    let cancelled = false;
+    Promise.allSettled(
+      unreadIds.map((announcementId) => announcementApi.markAsRead(announcementId)),
+    ).then((results) => {
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          markReadAttemptsRef.current.delete(unreadIds[index]);
+        }
+      });
+      if (!cancelled) {
+        queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [announcements, queryClient]);
+
+  const handleAcknowledge = async (announcementId) => {
     try {
-      await announcementApi.acknowledge(id);
-      setAcknowledged((prev) => new Set(prev).add(id));
+      await acknowledgeAnnouncement.mutateAsync(announcementId);
     } catch (error) {
       console.error("Failed to acknowledge announcement:", error);
     }
   };
 
-  /* ── Loading ── */
   if (isLoading) {
-    return (
-      <div style={{ width: "100%" }}>
-        <div style={s.heading}>
-          <h1 style={s.title}>Announcements</h1>
-          <p style={s.subtitle}>Loading announcements...</p>
-        </div>
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            style={{
-              ...s.card,
-              height: 80,
-              background: "#F3F4F6",
-              animation: "pulse 1.5s ease-in-out infinite",
-              marginBottom: 10,
-            }}
-          />
-        ))}
-      </div>
-    );
+    return <LoadingState />;
   }
 
   return (
     <div style={{ width: "100%" }}>
-      {/* Header */}
       <div style={s.heading}>
         <h1 style={s.title}>Announcements</h1>
         <p style={s.subtitle}>
@@ -85,184 +156,89 @@ const AnnouncementsTab = () => {
         </p>
       </div>
 
-      {/* Filter chips */}
       <div style={s.filterRow}>
-        {FILTERS.map((f) => (
+        {filters.map((item) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
+            key={item.value}
+            onClick={() => setFilter(item.value)}
             style={{
               ...s.chip,
-              ...(filter === f ? s.chipActive : {}),
+              ...(filter === item.value ? s.chipActive : {}),
             }}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1)}
+            {item.label}
           </button>
         ))}
       </div>
 
-      {/* List */}
       {filtered.length === 0 ? (
         <div style={s.emptyState}>
           <Megaphone size={48} color="#D1D5DB" />
-          <h3
-            style={{
-              fontSize: 16,
-              fontWeight: 600,
-              color: "#374151",
-              margin: "16px 0 8px",
-            }}
-          >
-            No announcements
-          </h3>
-          <p style={{ fontSize: 13, color: "#9CA3AF", maxWidth: 280 }}>
+          <h3 style={s.emptyTitle}>No announcements</h3>
+          <p style={s.emptyBody}>
             {filter === "all"
               ? "There are no announcements yet."
-              : `No ${filter} announcements to show.`}
+              : `No ${formatAnnouncementCategory(filter).toLowerCase()} announcements to show.`}
           </p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map((ann) => {
-            const cat = CATEGORY_MAP[ann.category] || CATEGORY_MAP.Reminder;
-            const CatIcon = cat.icon;
-            const isAcked =
-              ann.acknowledged || acknowledged.has(ann.id || ann._id);
+          {filtered.map((announcement) => {
+            const categoryMeta = getAnnouncementCategoryMeta(announcement.category);
+            const tone =
+              CATEGORY_COLORS[categoryMeta.tone] || CATEGORY_COLORS.neutral;
+            const CategoryIcon =
+              CATEGORY_ICONS[announcement.category] || Megaphone;
 
             return (
               <div
-                key={ann.id || ann._id}
+                key={getAnnouncementId(announcement)}
                 style={{
                   ...s.card,
-                  borderLeft: `3px solid ${cat.color}`,
-                  ...(ann.unread
-                    ? { background: "var(--surface-page)" }
-                    : {}),
+                  borderLeft: `3px solid ${tone.color}`,
+                  ...(announcement.unread ? { background: "var(--surface-page)" } : {}),
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: 12,
-                    marginBottom: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      flex: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    {ann.unread && (
-                      <div
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: "50%",
-                          background: "#FF8C42",
-                          flexShrink: 0,
-                        }}
-                      />
-                    )}
-                    <h3
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: "var(--text-heading)",
-                        margin: 0,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {ann.title}
-                    </h3>
+                <div style={s.cardTop}>
+                  <div style={s.cardHeading}>
+                    {announcement.unread ? <div style={s.unreadDot} /> : null}
+                    <h3 style={s.cardTitle}>{announcement.title}</h3>
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      flexShrink: 0,
-                    }}
-                  >
+
+                  <div style={s.cardMeta}>
                     <span
                       style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "3px 10px",
-                        borderRadius: 20,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: cat.bg,
-                        color: cat.color,
+                        ...s.categoryBadge,
+                        background: tone.bg,
+                        color: tone.color,
                       }}
                     >
-                      <CatIcon size={11} />
-                      {ann.category}
+                      <CategoryIcon size={11} />
+                      {categoryMeta.label}
                     </span>
-                    <span style={{ fontSize: 11, color: "#9CA3AF" }}>
-                      {fmtDate(ann.date || ann.createdAt)}
-                    </span>
+                    <span style={s.dateText}>{fmtDate(announcement.date)}</span>
                   </div>
                 </div>
 
-                <p
-                  style={{
-                    fontSize: 13,
-                    color: "var(--text-secondary)",
-                    margin: 0,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {ann.content}
-                </p>
+                <p style={s.cardBody}>{announcement.content}</p>
 
-                {ann.requiresAck && (
-                  <div style={{ marginTop: 12 }}>
-                    {isAcked ? (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "#059669",
-                        }}
-                      >
+                {announcement.requiresAck ? (
+                  <div style={s.actionRow}>
+                    {announcement.acknowledged ? (
+                      <span style={s.ackBadge}>
                         <Check size={13} /> Acknowledged
                       </span>
                     ) : (
                       <button
-                        onClick={() =>
-                          handleAcknowledge(ann.id || ann._id)
-                        }
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          padding: "6px 14px",
-                          background: "#FF8C42",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 6,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
+                        onClick={() => handleAcknowledge(getAnnouncementId(announcement))}
+                        style={s.ackButton}
+                        disabled={acknowledgeAnnouncement.isPending}
                       >
-                        <Check size={12} /> Acknowledge
+                        <ShieldAlert size={12} /> Acknowledge
                       </button>
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
             );
           })}
@@ -270,9 +246,8 @@ const AnnouncementsTab = () => {
       )}
     </div>
   );
-};
+}
 
-/* ── Styles ─────────────────────────────────────────── */
 const s = {
   heading: { marginBottom: 24 },
   title: {
@@ -282,7 +257,6 @@ const s = {
     margin: 0,
   },
   subtitle: { fontSize: 13, color: "var(--text-muted)", marginTop: 4 },
-
   filterRow: {
     display: "flex",
     gap: 8,
@@ -308,14 +282,91 @@ const s = {
     color: "#fff",
     border: "1px solid #0A1628",
   },
-
   card: {
     padding: "16px 18px",
     background: "var(--surface-card)",
     border: "1px solid var(--border-card)",
     borderRadius: 10,
   },
-
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 8,
+  },
+  cardHeading: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    background: "#FF8C42",
+    flexShrink: 0,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--text-heading)",
+    margin: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  cardMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  categoryBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "3px 10px",
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 600,
+  },
+  dateText: {
+    fontSize: 11,
+    color: "#9CA3AF",
+  },
+  cardBody: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    margin: 0,
+    lineHeight: 1.5,
+  },
+  actionRow: {
+    marginTop: 12,
+  },
+  ackBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#059669",
+  },
+  ackButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "6px 14px",
+    background: "#FF8C42",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   emptyState: {
     display: "flex",
     flexDirection: "column",
@@ -327,6 +378,15 @@ const s = {
     borderRadius: 10,
     border: "1px solid var(--border-card)",
   },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: "#374151",
+    margin: "16px 0 8px",
+  },
+  emptyBody: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    maxWidth: 280,
+  },
 };
-
-export default AnnouncementsTab;

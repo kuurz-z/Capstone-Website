@@ -109,6 +109,11 @@
   opacity: 1;
 }
 
+.admin-billing-tab:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .admin-billing-tab--publish.is-active {
   color: #7c3aed;
   border-color: #ddd6fe;
@@ -120,10 +125,66 @@
 }
 
 .admin-billing-page__workspace-panel {
+  display: grid;
+  gap: 12px;
   min-height: 680px;
 }
 
+.admin-billing-page__workflow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-billing-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.admin-billing-stage__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.admin-billing-stage__content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-billing-stage__title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.admin-billing-stage__caption {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #64748b;
+}
+
 @media (max-width: 900px) {
+  .admin-billing-page__workflow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .admin-billing-page__hero {
     flex-direction: column;
     align-items: stretch;
@@ -140,6 +201,12 @@
   .admin-billing-tab {
     flex: 1 1 140px;
     justify-content: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-billing-page__workflow {
+    grid-template-columns: 1fr;
   }
 }
 

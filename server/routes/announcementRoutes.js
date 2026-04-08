@@ -32,6 +32,17 @@ router.use(verifyToken);
 router.get("/", announcementsController.getAnnouncements);
 
 /**
+ * GET /api/announcements/admin
+ * Get recent announcements in the admin's scope
+ */
+router.get(
+  "/admin",
+  verifyAdmin,
+  requirePermission("manageAnnouncements"),
+  announcementsController.getAdminAnnouncements,
+);
+
+/**
  * GET /api/announcements/unacknowledged
  * Get unacknowledged announcements for current user
  */

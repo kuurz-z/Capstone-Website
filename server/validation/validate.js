@@ -30,6 +30,11 @@ export const validate = (schema) => (req, res, next) => {
       continue;
     }
 
+    if (rules.type === "boolean" && typeof value !== "boolean") {
+      errors.push(`"${field}" must be a boolean`);
+      continue;
+    }
+
     if (rules.enum && !rules.enum.includes(value)) {
       errors.push(`"${field}" must be one of: ${rules.enum.join(", ")}`);
     }

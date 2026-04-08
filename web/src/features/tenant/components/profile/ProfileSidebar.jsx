@@ -103,6 +103,7 @@ const ProfileSidebar = ({
   profileData,
   fullName,
   hasActiveReservation,
+  canViewAnnouncements = false,
   onLogout,
   onUpdateImage,
 }) => {
@@ -402,6 +403,16 @@ const ProfileSidebar = ({
         }}
       >
         {NAV_SECTIONS.map((section) => (
+          (() => {
+            const visibleItems = section.items.filter(
+              (item) => item.id !== "announcements" || canViewAnnouncements,
+            );
+
+            if (visibleItems.length === 0) {
+              return null;
+            }
+
+            return (
           <div key={section.label}>
             {/* Section label — fades out */}
             <p
@@ -433,7 +444,7 @@ const ProfileSidebar = ({
               }}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {section.items.map((item) => (
+              {visibleItems.map((item) => (
                 <NavButton
                   key={item.id}
                   item={item}
@@ -444,6 +455,8 @@ const ProfileSidebar = ({
               ))}
             </div>
           </div>
+            );
+          })()
         ))}
       </nav>
 
