@@ -10,6 +10,7 @@ export {
   mapRoomType,
   mapBranchLabel,
   getPrimaryImage,
+  getRoomImages,
   buildBedsFromCapacity,
   ROOM_IMAGES,
 } from "./checkAvailabilityConstants";

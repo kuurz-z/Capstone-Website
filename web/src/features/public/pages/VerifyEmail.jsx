@@ -15,9 +15,18 @@ import { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { applyActionCode } from "firebase/auth";
 import { auth } from "../../../firebase/config";
-import { Home, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { useTheme } from "../context/ThemeContext";
+import logo from "../../../assets/images/LOGO.svg";
 
 function VerifyEmail() {
+  const { theme } = useTheme();
+  const resolvedTheme =
+    theme === "system"
+      ? (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme;
+  const isDark = resolvedTheme === "dark";
+
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState("verifying"); // verifying | success | error
   const [errorMessage, setErrorMessage] = useState("");
@@ -69,6 +78,24 @@ function VerifyEmail() {
     return () => clearTimeout(timer);
   }, [status, countdown]);
 
+  const pageBackground = isDark ? "#0B1120" : "#F9FAFB";
+  const brandTextColor = isDark ? "#FFFFFF" : "#0A1628";
+  const cardBackground = isDark ? "#111827" : "#FFFFFF";
+  const cardBorder = isDark ? "1px solid rgba(212, 175, 55, 0.24)" : "1px solid #F0F0F0";
+  const cardShadow =
+    isDark
+      ? "0 1px 3px rgba(0,0,0,0.28), 0 8px 24px rgba(0,0,0,0.2)"
+      : "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)";
+  const headingColor = isDark ? "#F9FAFB" : "#111827";
+  const bodyColor = isDark ? "#D1D5DB" : "#6B7280";
+  const mutedColor = isDark ? "#9CA3AF" : "#9CA3AF";
+  const primaryButtonBg = "#D4AF37";
+  const primaryButtonText = isDark ? "#0A1628" : "#FFFFFF";
+  const secondaryButtonBg = isDark ? "rgba(255,255,255,0.08)" : "#F3F4F6";
+  const secondaryButtonHoverBg = isDark ? "rgba(255,255,255,0.14)" : "#E5E7EB";
+  const secondaryButtonText = isDark ? "#E5E7EB" : "#374151";
+  const darkActionButtonBg = isDark ? "#0A1628" : "#0A1628";
+
   return (
     <div
       style={{
@@ -76,7 +103,7 @@ function VerifyEmail() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#F9FAFB",
+        backgroundColor: pageBackground,
         padding: "24px",
         fontFamily: "'Inter', 'Segoe UI', sans-serif",
       }}
@@ -94,30 +121,33 @@ function VerifyEmail() {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: "10px",
+            gap: "6px",
             textDecoration: "none",
             marginBottom: "40px",
           }}
         >
           <div
             style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "10px",
-              backgroundColor: "#0A1628",
+              width: "56px",
+              height: "56px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Home style={{ width: "20px", height: "20px", color: "white" }} />
+            <img
+              src={logo}
+              alt="Lilycrest logo"
+              style={{ width: "40px", height: "40px", objectFit: "contain" }}
+            />
           </div>
           <span
             style={{
-              fontSize: "20px",
+              fontSize: "32px",
               fontWeight: "600",
-              color: "#0A1628",
+              color: brandTextColor,
               letterSpacing: "0.3px",
+              lineHeight: 1,
             }}
           >
             Lilycrest
@@ -127,12 +157,11 @@ function VerifyEmail() {
         {/* Card */}
         <div
           style={{
-            backgroundColor: "white",
+            backgroundColor: cardBackground,
             borderRadius: "16px",
             padding: "48px 36px",
-            boxShadow:
-              "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)",
-            border: "1px solid #F0F0F0",
+            boxShadow: cardShadow,
+            border: cardBorder,
           }}
         >
           {/* Verifying State */}
@@ -143,7 +172,7 @@ function VerifyEmail() {
                   width: "64px",
                   height: "64px",
                   borderRadius: "50%",
-                  backgroundColor: "#EFF6FF",
+                  backgroundColor: isDark ? "rgba(212, 175, 55, 0.16)" : "#FEF6E0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -154,7 +183,7 @@ function VerifyEmail() {
                   style={{
                     width: "28px",
                     height: "28px",
-                    color: "#3B82F6",
+                    color: "#D4AF37",
                     animation: "spin 1s linear infinite",
                   }}
                 />
@@ -163,7 +192,7 @@ function VerifyEmail() {
                 style={{
                   fontSize: "22px",
                   fontWeight: "500",
-                  color: "#111827",
+                  color: headingColor,
                   margin: "0 0 8px",
                 }}
               >
@@ -172,7 +201,7 @@ function VerifyEmail() {
               <p
                 style={{
                   fontSize: "14px",
-                  color: "#6B7280",
+                  color: bodyColor,
                   margin: 0,
                   fontWeight: "400",
                   lineHeight: "1.5",
@@ -191,7 +220,7 @@ function VerifyEmail() {
                   width: "64px",
                   height: "64px",
                   borderRadius: "50%",
-                  backgroundColor: "#ECFDF5",
+                  backgroundColor: isDark ? "rgba(16, 185, 129, 0.18)" : "#ECFDF5",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -206,7 +235,7 @@ function VerifyEmail() {
                 style={{
                   fontSize: "22px",
                   fontWeight: "500",
-                  color: "#111827",
+                  color: headingColor,
                   margin: "0 0 8px",
                 }}
               >
@@ -215,7 +244,7 @@ function VerifyEmail() {
               <p
                 style={{
                   fontSize: "14px",
-                  color: "#6B7280",
+                  color: bodyColor,
                   margin: "0 0 28px",
                   fontWeight: "400",
                   lineHeight: "1.5",
@@ -230,8 +259,8 @@ function VerifyEmail() {
                 style={{
                   display: "inline-block",
                   padding: "12px 36px",
-                  backgroundColor: "#FF8C42",
-                  color: "white",
+                  backgroundColor: primaryButtonBg,
+                  color: primaryButtonText,
                   borderRadius: "10px",
                   textDecoration: "none",
                   fontSize: "14px",
@@ -246,7 +275,7 @@ function VerifyEmail() {
               <p
                 style={{
                   fontSize: "12px",
-                  color: "#9CA3AF",
+                  color: mutedColor,
                   marginTop: "16px",
                   fontWeight: "400",
                 }}
@@ -264,7 +293,7 @@ function VerifyEmail() {
                   width: "64px",
                   height: "64px",
                   borderRadius: "50%",
-                  backgroundColor: "#FEF2F2",
+                  backgroundColor: isDark ? "rgba(239, 68, 68, 0.2)" : "#FEF2F2",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -279,7 +308,7 @@ function VerifyEmail() {
                 style={{
                   fontSize: "22px",
                   fontWeight: "500",
-                  color: "#111827",
+                  color: headingColor,
                   margin: "0 0 8px",
                 }}
               >
@@ -288,7 +317,7 @@ function VerifyEmail() {
               <p
                 style={{
                   fontSize: "14px",
-                  color: "#6B7280",
+                  color: bodyColor,
                   margin: "0 0 28px",
                   fontWeight: "400",
                   lineHeight: "1.5",
@@ -308,8 +337,8 @@ function VerifyEmail() {
                   style={{
                     display: "inline-block",
                     padding: "12px 28px",
-                    backgroundColor: "#F3F4F6",
-                    color: "#374151",
+                    backgroundColor: secondaryButtonBg,
+                    color: secondaryButtonText,
                     borderRadius: "10px",
                     textDecoration: "none",
                     fontSize: "14px",
@@ -317,10 +346,10 @@ function VerifyEmail() {
                     transition: "background-color 0.2s ease",
                   }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#E5E7EB")
+                    (e.currentTarget.style.backgroundColor = secondaryButtonHoverBg)
                   }
                   onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = "#F3F4F6")
+                    (e.currentTarget.style.backgroundColor = secondaryButtonBg)
                   }
                 >
                   Sign up again
@@ -330,7 +359,7 @@ function VerifyEmail() {
                   style={{
                     display: "inline-block",
                     padding: "12px 28px",
-                    backgroundColor: "#0A1628",
+                    backgroundColor: darkActionButtonBg,
                     color: "white",
                     borderRadius: "10px",
                     textDecoration: "none",
@@ -352,7 +381,7 @@ function VerifyEmail() {
         <p
           style={{
             fontSize: "12px",
-            color: "#9CA3AF",
+            color: mutedColor,
             marginTop: "32px",
             fontWeight: "400",
           }}

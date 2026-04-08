@@ -44,6 +44,18 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+const isFirebaseConfigured = Boolean(
+  firebaseConfig.apiKey &&
+    firebaseConfig.authDomain &&
+    firebaseConfig.projectId &&
+    firebaseConfig.appId,
+);
+
+const createFallbackAuth = () => ({
+  currentUser: null,
+  signOut: async () => {},
+});
+
 /**
  * Initialize Firebase App
  *
@@ -51,8 +63,17 @@ const firebaseConfig = {
  * Firebase services will use.
  */
 let app;
+let auth;
 try {
-  app = initializeApp(firebaseConfig);
+  if (isFirebaseConfigured) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+  } else {
+    console.warn(
+      "Firebase is not configured. Public pages will still render, but auth features are disabled.",
+    );
+    auth = createFallbackAuth();
+  }
 } catch (error) {
   console.error("Firebase initialization error:", error);
   throw error;
@@ -73,7 +94,7 @@ try {
  *   import { auth } from './firebase/config';
  *   await signInWithEmailAndPassword(auth, email, password);
  */
-export const auth = getAuth(app);
+export { auth, isFirebaseConfigured };
 
 /**
  * Export Firebase app instance

@@ -427,8 +427,8 @@
   padding: 10px 24px;
   border-radius: 10px;
   border: none;
-  background: #FF8C42;
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-primary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -554,7 +554,7 @@
 .ca-signin-prompt button {
   background: none;
   border: none;
-  color: #FF8C42;
+  color: var(--color-accent);
   font-weight: 600;
   cursor: pointer;
   padding: 0;
@@ -642,13 +642,13 @@ html[data-theme="dark"] .ca-price-slider {
 }
 
 html[data-theme="dark"] .ca-price-slider::-webkit-slider-thumb {
-  background: #FF8C42;
-  box-shadow: 0 1px 6px rgba(255, 140, 66, 0.4);
+  background: var(--color-accent);
+  box-shadow: 0 1px 6px rgba(212, 175, 55, 0.42);
 }
 
 html[data-theme="dark"] .ca-price-slider::-moz-range-thumb {
-  background: #FF8C42;
-  box-shadow: 0 1px 6px rgba(255, 140, 66, 0.4);
+  background: var(--color-accent);
+  box-shadow: 0 1px 6px rgba(212, 175, 55, 0.42);
 }
 
 html[data-theme="dark"] .ca-price-slider::-moz-range-track {

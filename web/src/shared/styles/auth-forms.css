@@ -5,7 +5,7 @@
 :root {
   --fi-border: #e2e8f0;
   --fi-border-focus: #b0bec5;
-  --fi-focus: #FF8C42;
+  --fi-focus: #D4AF37;
   --fi-valid: #10b981;
   --fi-error: #ef4444;
   --fi-label: #94a3b8;
@@ -206,7 +206,7 @@
    ============================================ */
 .landing-page[data-theme="dark"] {
   --fi-border: #1E293B;
-  --fi-focus: #FF8C42;
+  --fi-focus: #D4AF37;
   --fi-valid: #10b981;
   --fi-error: #ef4444;
   --fi-label: #64748b;
@@ -218,7 +218,7 @@
 /* Light mode for landing page (explicit, in case auth-forms sets different global) */
 .landing-page[data-theme="light"] {
   --fi-border: #e2e8f0;
-  --fi-focus: #FF8C42;
+  --fi-focus: #D4AF37;
   --fi-valid: #10b981;
   --fi-error: #ef4444;
   --fi-label: #94a3b8;
@@ -267,7 +267,7 @@
 
 .auth-header__subtitle a,
 .auth-header__subtitle button {
-  color: #FF8C42;
+  color: #D4AF37;
   font-weight: 500;
   text-decoration: none;
   background: none;
@@ -288,7 +288,7 @@
   padding: 16px 24px;
   border: none;
   border-radius: 12px;
-  background: #FF8C42;
+  background: #D4AF37;
   color: #ffffff;
   font-size: 15px;
   font-weight: 600;
@@ -304,14 +304,14 @@
 }
 
 .auth-btn-primary:hover:not(:disabled) {
-  background: #E0752E;
+  background: #B9921F;
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(255, 140, 66, 0.3);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
 }
 
 .auth-btn-primary:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(255, 140, 66, 0.2);
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
 }
 
 .auth-btn-primary:disabled {
@@ -405,7 +405,7 @@
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  border: 2px solid #FF8C42;
+  border: 2px solid #D4AF37;
   background: transparent;
   position: relative;
   transition: background 0.15s ease, border-color 0.15s ease;
@@ -413,8 +413,8 @@
 }
 
 .auth-remember input[type="checkbox"]:checked {
-  background: #FF8C42;
-  border-color: #FF8C42;
+  background: #D4AF37;
+  border-color: #D4AF37;
 }
 
 .auth-remember input[type="checkbox"]:checked::after {
@@ -438,7 +438,7 @@
 
 .auth-forgot-link {
   font-size: 14px;
-  color: #FF8C42;
+  color: #D4AF37;
   font-weight: 500;
   background: none;
   border: none;
@@ -467,15 +467,15 @@
   flex-shrink: 0;
   appearance: none;
   -webkit-appearance: none;
-  border: 2px solid #FF8C42;
+  border: 2px solid #D4AF37;
   background: transparent;
   position: relative;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .auth-terms input[type="checkbox"]:checked {
-  background: #FF8C42;
-  border-color: #FF8C42;
+  background: #D4AF37;
+  border-color: #D4AF37;
 }
 
 .auth-terms input[type="checkbox"]:checked::after {
@@ -499,7 +499,7 @@
 }
 
 .auth-terms button {
-  color: #FF8C42;
+  color: #D4AF37;
   font-weight: 500;
   background: none;
   border: none;
@@ -675,13 +675,13 @@ html[data-theme="dark"] .auth-remember span {
   color: #94a3b8 !important;
 }
 html[data-theme="dark"] .auth-remember input[type="checkbox"] {
-  border-color: #FF8C42 !important;
+  border-color: #D4AF37 !important;
 }
 html[data-theme="dark"] .auth-terms span {
   color: #94a3b8 !important;
 }
 html[data-theme="dark"] .auth-terms input[type="checkbox"] {
-  border-color: #FF8C42 !important;
+  border-color: #D4AF37 !important;
 }
 
 /* Password strength box */

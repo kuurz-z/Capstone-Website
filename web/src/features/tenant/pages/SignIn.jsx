@@ -36,10 +36,10 @@ import { Loader2 } from "lucide-react";
 import "../../../shared/styles/auth-forms.css";
 import "../../public/styles/tenant-signin.css";
 import "../../../shared/styles/notification.css";
+import hero3 from "../../../assets/images/hero3.jpg";
 
-const SIGNIN_IMAGE =
-  "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBkb3JtJTIwcm9vbXxlbnwwfHx8fDE3NzAyNjI4Nzh8MA&ixlib=rb-4.1.0&q=80&w=1080";
-
+const SIGNIN_IMAGE = hero3;
+  
 function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -417,12 +417,12 @@ function SignIn() {
   return (
     <div
       className="min-h-screen grid lg:grid-cols-2"
-      style={{ backgroundColor: "#0A1628" }}
+      style={{ backgroundColor: "#FFFFFF" }}
     >
       <AuthBrandingPanel
         imageUrl={SIGNIN_IMAGE}
         headline="Your Home Away<br/>From Home"
-        subtitle="Premium student living in the heart of Manila"
+        subtitle="Premium living in the heart of Manila"
       />
 
       <div className="flex items-center justify-center p-8 lg:p-12 bg-white">

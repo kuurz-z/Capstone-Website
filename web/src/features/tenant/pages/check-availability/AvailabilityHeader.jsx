@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  Bed,
   Search,
   User,
   ChevronDown,
   LogOut,
 } from "lucide-react";
+import logo from "../../../../assets/images/LOGO.svg";
 
 /**
  * Redesigned header — single row: Logo | Filter Bar | Sign In
@@ -88,7 +88,7 @@ const AvailabilityHeader = ({
     searchQuery.trim() !== "";
 
   return (
-    <header className="sticky top-0 z-50 bg-white" style={{ borderBottom: "1px solid #F0F0F0" }}>
+    <header className="sticky top-0 z-50" style={{ backgroundColor: "var(--surface-card)", borderBottom: "1px solid var(--border-divider)" }}>
       <div className="max-w-screen-2xl mx-auto px-8 lg:px-12">
         {/* Single row: Logo | Filter Bar | Sign In */}
         <div className="ca-header-row">
@@ -97,12 +97,11 @@ const AvailabilityHeader = ({
             to="/"
             className="ca-logo"
           >
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: "#0A1628" }}
-            >
-              <Bed className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src={logo}
+              alt="Lilycrest logo"
+              className="w-8 h- object-contain"
+            />
             <span
               className="text-lg font-semibold"
               style={{ color: "var(--text-heading)" }}
@@ -185,9 +184,9 @@ const AvailabilityHeader = ({
                   style={{
                     width: "260px",
                     border: showUserMenu
-                      ? "1.5px solid #FF8C42"
+                      ? "1.5px solid var(--color-accent)"
                       : "1.5px solid var(--border-card, transparent)",
-                    backgroundColor: showUserMenu ? "rgba(255,140,66,0.1)" : "rgba(255,255,255,0.04)",
+                    backgroundColor: showUserMenu ? "rgba(212,175,55,0.14)" : "var(--surface-card)",
                     boxShadow: showUserMenu ? "none" : "0 1px 4px rgba(0,0,0,0.15)",
                   }}
                   onMouseEnter={(e) => {
@@ -198,7 +197,7 @@ const AvailabilityHeader = ({
                   }}
                   onMouseLeave={(e) => {
                     if (!showUserMenu) {
-                      e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)";
+                      e.currentTarget.style.backgroundColor = "var(--surface-card)";
                       e.currentTarget.style.borderColor = "var(--border-card, transparent)";
                     }
                   }}
@@ -209,8 +208,8 @@ const AvailabilityHeader = ({
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                     style={{
                       background:
-                        "linear-gradient(135deg, #FF8C42 0%, #D35400 100%)",
-                      boxShadow: "0 1px 3px rgba(255, 140, 66, 0.3)",
+                        "linear-gradient(135deg, #D4AF37 0%, #B88A1A 100%)",
+                      boxShadow: "0 1px 3px rgba(212, 175, 55, 0.34)",
                     }}
                   >
                     {userInitials}
@@ -246,8 +245,8 @@ const AvailabilityHeader = ({
                           className="w-10 h-10 rounded-[10px] flex items-center justify-center text-white text-sm font-bold shrink-0"
                           style={{
                             background:
-                              "linear-gradient(135deg, #FF8C42 0%, #D35400 100%)",
-                            boxShadow: "0 2px 6px rgba(255, 140, 66, 0.25)",
+                              "linear-gradient(135deg, #D4AF37 0%, #B88A1A 100%)",
+                            boxShadow: "0 2px 6px rgba(212, 175, 55, 0.3)",
                           }}
                         >
                           {userInitials}

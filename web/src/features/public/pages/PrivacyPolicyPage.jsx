@@ -1,13 +1,21 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import SEOHead from "../../../shared/components/SEOHead";
+import { useTheme } from "../context/ThemeContext";
 
 export function PrivacyPolicyPage() {
+  const { theme } = useTheme();
+  const resolvedTheme =
+    theme === "system"
+      ? (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme;
+  const headerBackgroundColor = resolvedTheme === "dark" ? "#0A1628" : "#D4AF37";
+
   return (
     <div className="min-h-screen bg-gray-50">
       <SEOHead title="Privacy Policy" description="Read Lilycrest Dormitory's privacy policy — how we collect, use, and protect your personal information." />
       {/* Header */}
-      <div style={{ backgroundColor: "#0A1628" }} className="py-16 lg:py-20">
+      <div style={{ backgroundColor: headerBackgroundColor }} className="py-16 lg:py-20">
         <div className="max-w-screen-2xl mx-auto px-8 lg:px-12">
           <Link
             to="/"

@@ -17,10 +17,9 @@ import { showNotification } from "../../../shared/utils/notification";
 import { validateEmail } from "../../../shared/utils/authValidation";
 import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import "../../../shared/styles/notification.css";
+import Lounge from "../../../assets/images/facilities/RD Lounge Area.jpg"; 
 
-const RESET_IMAGE =
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBhcGFydG1lbnQlMjBpbnRlcmlvcnxlbnwwfHx8fDE3NzAyNjI4Nzh8MA&ixlib=rb-4.1.0&q=80&w=1080";
-
+const RESET_IMAGE = Lounge; 
 function ForgotPassword() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -175,7 +174,7 @@ function ForgotPassword() {
                 <button
                   type="submit"
                   className="w-full py-4 rounded-xl text-white font-light hover:opacity-90 transition-opacity text-base flex items-center justify-center gap-2"
-                  style={{ backgroundColor: "#FF8C42" }}
+                  style={{ backgroundColor: "#D4AF37" }}
                   disabled={!fieldValid || loading}
                 >
                   {loading ? (

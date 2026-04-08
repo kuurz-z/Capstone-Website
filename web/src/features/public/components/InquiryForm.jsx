@@ -460,7 +460,7 @@ export function InquiryForm() {
               className="w-full text-white py-4 px-6 rounded-full font-medium text-base flex items-center justify-center gap-3 transition-all duration-300 cursor-pointer"
               style={{
                 backgroundColor: submitting ? '#c4c4c4' : 'var(--lp-accent)',
-                boxShadow: submitting ? 'none' : '0 4px 16px rgba(255, 140, 66, 0.25)',
+                boxShadow: submitting ? 'none' : '0 4px 16px rgba(212, 175, 55, 0.25)',
                 opacity: submitting ? 0.7 : 1,
               }}
             >

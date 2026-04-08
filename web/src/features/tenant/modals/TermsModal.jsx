@@ -169,7 +169,7 @@ function TermsModal({ isOpen, onClose }) {
 
           <div className="terms-acceptance">
             <p>
-              <strong>
+              <strong className="terms-condition-statement">
                 By clicking "I Agree" or by continuing to use our services, you
                 acknowledge that you have read, understood, and agree to be
                 bound by these Terms and Conditions.

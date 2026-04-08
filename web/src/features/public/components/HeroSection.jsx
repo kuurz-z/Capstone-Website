@@ -2,6 +2,11 @@ import { Sparkles, Users, MapPin, ThumbsUp, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion, useInView } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
+import { useTheme } from "../context/ThemeContext";
+import hero1 from "../../../assets/images/hero1.jpg";
+import hero2 from "../../../assets/images/hero2.jpg";
+import hero3 from "../../../assets/images/hero3.jpg";
+
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 30 },
@@ -44,12 +49,13 @@ const stats = [
 ];
 
 const heroImages = [
-  "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBhcGFydG1lbnQlMjBidWlsZGluZyUyMGludGVyaW9yfGVufDF8fHx8MTc3MDI2MDY1N3ww&ixlib=rb-4.1.0&q=80&w=1920",
-  "https://images.unsplash.com/photo-1610307522657-8c0304960189?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYmVkcm9vbSUyMGRlc2lnbnxlbnwxfHx8fDE3NzAzMDM5ODB8MA&ixlib=rb-4.1.0&q=80&w=1920",
-  "https://images.unsplash.com/photo-1764760764956-fcb78be107a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBiZWRyb29tJTIwaW50ZXJpb3IlMjBuYXR1cmFsJTIwbGlnaHR8ZW58MXx8fHwxNzcwMjkwMzY5fDA&ixlib=rb-4.1.0&q=80&w=1920",
+  hero1,
+  hero2,
+  hero3,
 ];
 
 export function HeroSection() {
+  const { theme } = useTheme();
   const statRef = useRef(null);
   const isInView = useInView(statRef, { margin: "-50px" });
   const [currentImage, setCurrentImage] = useState(0);
@@ -87,6 +93,20 @@ export function HeroSection() {
     return () => clearTimeout(timeout);
   }, [currentImage]);
 
+  const resolvedTheme =
+    theme === "system"
+      ? (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme;
+  const isDark = resolvedTheme === "dark";
+
+  const heroOverlay = isDark
+    ? "linear-gradient(to right, rgba(8, 17, 31, 0.93) 0%, rgba(8, 17, 31, 0.82) 45%, rgba(8, 17, 31, 0.58) 75%, rgba(8, 17, 31, 0.45) 100%)"
+    : "linear-gradient(to right, rgba(255, 255, 255, 0.9) 0%, rgba(243, 230, 184, 0.82) 45%, rgba(232, 211, 146, 0.52) 75%, rgba(212, 175, 55, 0.28) 100%)";
+
+  const heroTextPrimary = isDark ? "white" : "var(--lp-navy)";
+  const heroTextSecondary = isDark ? "rgba(255,255,255,0.8)" : "#111111";
+  const heroTextMuted = isDark ? "rgba(255,255,255,0.6)" : "#1f2937";
+
   return (
     <>
       {/* Full-bleed Hero */}
@@ -106,6 +126,7 @@ export function HeroSection() {
               alt={`Lilycrest Dormitory ${i + 1}`}
               className="w-full h-full object-cover"
               style={{
+                objectPosition: "center 68%",
                 transform: readyToZoom[i] ? "scale(1.08)" : "scale(1)",
                 transition: readyToZoom[i] ? "none" : "transform 7s ease-out",
               }}
@@ -117,21 +138,23 @@ export function HeroSection() {
         <div
           className="absolute inset-0"
           style={{
-            background:
-              "linear-gradient(to right, rgba(10, 22, 40, 0.93) 0%, rgba(10, 22, 40, 0.82) 45%, rgba(10, 22, 40, 0.58) 75%, rgba(10, 22, 40, 0.45) 100%)",
+            background: heroOverlay,
           }}
         />
 
         {/* Content */}
         <div className="relative z-10 max-w-screen-2xl mx-auto px-8 lg:px-12 w-full">
-          <div className="max-w-2xl">
+          <div className="max-w-2xl pt-12 lg:pt-15">
             {/* Badge */}
             <motion.div
               {...fadeUp(0.2)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm mb-6"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-sm mb-6"
+              style={{
+                backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(10,22,40,0.06)",
+              }}
             >
-              <Sparkles className="w-4 h-4 text-white/90" />
-              <span className="text-white/80 text-xs font-light tracking-wider uppercase">
+              <Sparkles className="w-4 h-4" style={{ color: isDark ? "rgba(255,255,255,0.9)" : "var(--lp-accent)" }} />
+              <span className="text-xs font-light tracking-wider uppercase" style={{ color: heroTextSecondary }}>
                 Quality Urban Living
               </span>
             </motion.div>
@@ -139,17 +162,19 @@ export function HeroSection() {
             {/* Headline */}
             <motion.h1
               {...fadeUp(0.4)}
-              className="text-5xl lg:text-7xl font-medium text-white leading-[1.08] mb-6 tracking-tight"
+              className="text-5xl lg:text-7xl font-medium leading-[1.08] mb-6 tracking-tight"
+              style={{ color: heroTextPrimary }}
             >
               Affordable, Safe,{" "}
               <span className="block">and Comfortable</span>
-              <span style={{ color: "#FF8C42" }}>Dormitory</span>
+              <span style={{ color: "var(--lp-accent)" }}>Dormitory</span>
             </motion.h1>
 
             {/* Subheadline */}
             <motion.p
               {...fadeUp(0.6)}
-              className="text-white/80 text-lg mb-10 leading-relaxed font-light max-w-lg"
+              className="text-lg mb-10 leading-relaxed font-light max-w-lg"
+              style={{ color: heroTextSecondary }}
             >
               Browse available rooms, create your account, and find your perfect
               home away from home.
@@ -159,20 +184,21 @@ export function HeroSection() {
             <motion.div {...fadeUp(0.8)} className="flex flex-wrap gap-4 mb-6">
               <Link to="/applicant/check-availability">
                 <button
-                  className="inline-flex items-center gap-2 text-white px-8 py-4 rounded-full font-medium text-base transition-all duration-300"
+                  className="inline-flex items-center gap-2 px-8 py-4 rounded-full font-medium text-base transition-all duration-300"
                   style={{
-                    backgroundColor: "#FF8C42",
-                    boxShadow: "0 4px 20px rgba(255, 140, 66, 0.25)",
+                    color: isDark ? "white" : "var(--lp-navy)",
+                    backgroundColor: "var(--lp-accent)",
+                    boxShadow: "0 4px 20px rgba(212, 175, 55, 0.25)",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow =
-                      "0 6px 30px rgba(255, 140, 66, 0.4)";
+                      "0 6px 30px rgba(212, 175, 55, 0.4)";
                     e.currentTarget.style.transform =
                       "translateY(-2px) scale(1.02)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.boxShadow =
-                      "0 4px 20px rgba(255, 140, 66, 0.25)";
+                      "0 4px 20px rgba(212, 175, 55, 0.25)";
                     e.currentTarget.style.transform = "translateY(0) scale(1)";
                   }}
                 >
@@ -182,7 +208,18 @@ export function HeroSection() {
               </Link>
               <a
                 href="#inquiry"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/25 text-white font-medium text-base hover:bg-white/10 transition-all duration-300"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-full font-medium text-base transition-all duration-300"
+                style={{
+                  border: isDark ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(10,22,40,0.2)",
+                  color: heroTextPrimary,
+                  backgroundColor: "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = isDark ? "rgba(255,255,255,0.1)" : "rgba(10,22,40,0.06)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
               >
                 Contact Us
               </a>
@@ -191,7 +228,8 @@ export function HeroSection() {
             {/* Reassurance */}
             <motion.p
               {...fadeUp(0.95)}
-              className="text-white/60 text-sm font-normal mb-6"
+              className="text-sm font-normal mb-6"
+              style={{ color: heroTextMuted }}
             >
               ✓ No hidden fees · ✓ Flexible terms · ✓ Visit first, decide later
             </motion.p>
@@ -202,9 +240,9 @@ export function HeroSection() {
               ref={statRef}
               className="inline-flex items-center gap-0 flex-wrap"
               style={{
-                background: "rgba(255,255,255,0.06)",
+                background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.55)",
                 backdropFilter: "blur(12px)",
-                border: "1px solid rgba(255,255,255,0.1)",
+                border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(10,22,40,0.12)",
                 borderRadius: "50px",
                 padding: "10px 20px",
               }}
@@ -219,7 +257,7 @@ export function HeroSection() {
                         style={{
                           width: '1px',
                           height: '24px',
-                          backgroundColor: 'rgba(255,255,255,0.2)',
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(10,22,40,0.18)',
                         }}
                       />
                     )}
@@ -252,7 +290,9 @@ export function HeroSection() {
                 width: "2px",
                 height: currentImage === i ? "32px" : "20px",
                 borderRadius: "1px",
-                backgroundColor: currentImage === i ? "white" : "rgba(255,255,255,0.35)",
+                backgroundColor: currentImage === i
+                  ? (isDark ? "white" : "var(--lp-navy)")
+                  : (isDark ? "rgba(255,255,255,0.35)" : "rgba(10,22,40,0.35)"),
                 border: "none",
                 cursor: "pointer",
                 transition: "all 0.4s ease",
@@ -267,7 +307,14 @@ export function HeroSection() {
 }
 
 function StatItem({ icon: Icon, target, suffix, label, isInView, delay }) {
+  const { theme } = useTheme();
   const { count, done } = useCounter(target, 2, isInView);
+
+  const resolvedTheme =
+    theme === "system"
+      ? (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme;
+  const isDark = resolvedTheme === "dark";
 
   return (
     <motion.div
@@ -276,16 +323,16 @@ function StatItem({ icon: Icon, target, suffix, label, isInView, delay }) {
       transition={{ duration: 0.5, delay, ease: "easeOut" }}
       className="flex items-center gap-2"
     >
-      <Icon className="w-4 h-4" style={{ color: "#FF8C42" }} />
+      <Icon className="w-4 h-4" style={{ color: "var(--lp-accent)" }} />
       <motion.span
         animate={done ? { scale: [1, 1.15, 1] } : {}}
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="text-lg font-medium inline-block"
-        style={{ color: done ? '#FF8C42' : 'white', transition: 'color 0.5s ease' }}
+        style={{ color: done ? 'var(--lp-accent)' : (isDark ? 'white' : 'var(--lp-navy)'), transition: 'color 0.5s ease' }}
       >
         {count}{suffix}
       </motion.span>
-      <span className="text-white/60 text-sm font-light">{label}</span>
+      <span className="text-sm font-light" style={{ color: isDark ? 'rgba(255,255,255,0.6)' : '#1f2937' }}>{label}</span>
     </motion.div>
   );
 }

@@ -23,7 +23,7 @@ const SocialAuthButtons = ({
       {loading ? (
         <svg className="w-5 h-5 auth-spinner" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="#E5E7EB" strokeWidth="3" />
-          <path d="M12 2a10 10 0 019.95 9" stroke="#FF8C42" strokeWidth="3" strokeLinecap="round" />
+          <path d="M12 2a10 10 0 019.95 9" stroke="#D4AF37" strokeWidth="3" strokeLinecap="round" />
         </svg>
       ) : (
         <svg className="w-5 h-5" viewBox="0 0 24 24">

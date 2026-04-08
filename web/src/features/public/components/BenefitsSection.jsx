@@ -1,35 +1,35 @@
-import { Wifi, Shield, Zap, Users, Clock, Home } from 'lucide-react';
+import { ShieldCheck, Sparkles, DollarSign, Leaf, MapPin, Sofa } from 'lucide-react';
 
 const benefits = [
   {
-    icon: Wifi,
-    title: 'High-Speed Internet',
-    description: 'Unlimited fiber internet connection perfect for work and streaming.',
+    icon: ShieldCheck,
+    title: 'Safe and Secure Living',
+    description: '24/7 security with RFID access ensures your safety at all times.',
   },
   {
-    icon: Shield,
-    title: '24/7 Security',
-    description: 'Round-the-clock security with CCTV monitoring for your peace of mind.',
+    icon: Sparkles,
+    title: 'Clean and Well-Maintained Spaces',
+    description: 'We prioritize cleanliness and regular maintenance for a comfortable stay.',
   },
   {
-    icon: Zap,
-    title: 'All Utilities Included',
-    description: 'Electricity, water, and maintenance fees included in your monthly rent.',
+    icon: DollarSign,
+    title: 'Affordable and Transparent Pricing',
+    description: 'No hidden fees with clear billing and fair utility sharing.',
   },
   {
-    icon: Users,
-    title: 'Community Spaces',
-    description: 'Shared lounge and common areas to connect with fellow residents.',
+    icon: Leaf,
+    title: 'Peaceful and Organized Environment',
+    description: 'Strict policies help maintain a quiet and respectful community.',
   },
   {
-    icon: Clock,
-    title: 'Flexible Terms',
-    description: 'Monthly or long-term contracts with no hidden fees.',
+    icon: MapPin,
+    title: 'Convenient Location and Services',
+    description: 'Easy access to essentials with organized delivery and parcel systems.',
   },
   {
-    icon: Home,
-    title: 'Fully Furnished',
-    description: 'Move-in ready rooms with bed, desk, closet, and air conditioning.',
+    icon: Sofa,
+    title: 'Flexible and Comfortable Accommodation',
+    description: 'Choose from shared or private rooms that fit your lifestyle.',
   },
 ];
 
@@ -49,14 +49,14 @@ export function BenefitsSection() {
             className="text-3xl lg:text-4xl font-medium mb-5 tracking-tight"
             style={{ color: 'var(--lp-text)' }}
           >
-            Everything You Need
+            Your Perfect Living Solution
           </h2>
           <p
             className="max-w-2xl mx-auto font-light leading-relaxed text-sm"
             style={{ color: 'var(--lp-text-secondary)' }}
           >
-            More than just a place to sleep. Lilycrest provides a complete
-            living experience designed for your comfort.
+            Discover why thousands of residents choose Lilycrest for their
+            dormitory living experience.
           </p>
         </div>
 

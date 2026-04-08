@@ -1,8 +1,25 @@
 import { Link } from "react-router-dom";
-import { Home, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import SEOHead from "../../../shared/components/SEOHead";
+import { useTheme } from "../context/ThemeContext";
+import logo from "../../../assets/images/LOGO.svg";
 
 export default function NotFoundPage() {
+  const { theme } = useTheme();
+  const resolvedTheme =
+    theme === "system"
+      ? (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme;
+  const isDark = resolvedTheme === "dark";
+
+  const pageBackground = isDark ? "#0B1120" : "#F9FAFB";
+  const headingColor = isDark ? "#FFFFFF" : "#0A1628";
+  const descriptionColor = isDark ? "rgba(255,255,255,0.5)" : "#4B5563";
+  const brandColor = isDark ? "rgba(255,255,255,0.2)" : "#9CA3AF";
+  const accentColor = "#D4AF37";
+  const ctaShadow = isDark ? "0 4px 20px rgba(212, 175, 55, 0.35)" : "0 4px 20px rgba(184, 138, 26, 0.28)";
+  const ctaHoverShadow = isDark ? "0 8px 28px rgba(212, 175, 55, 0.5)" : "0 8px 28px rgba(184, 138, 26, 0.42)";
+
   return (
     <div
       style={{
@@ -11,7 +28,7 @@ export default function NotFoundPage() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#0B1120",
+        backgroundColor: pageBackground,
         padding: "2rem",
         textAlign: "center",
         fontFamily: "'Plus Jakarta Sans', sans-serif",
@@ -24,7 +41,7 @@ export default function NotFoundPage() {
           fontSize: "clamp(80px, 15vw, 160px)",
           fontWeight: "700",
           lineHeight: 1,
-          color: "#FF8C42",
+          color: accentColor,
           opacity: 0.15,
           margin: 0,
           letterSpacing: "-4px",
@@ -41,15 +58,16 @@ export default function NotFoundPage() {
           marginBottom: "1.5rem",
           width: "64px",
           height: "64px",
-          borderRadius: "16px",
-          backgroundColor: "rgba(255, 140, 66, 0.1)",
-          border: "1px solid rgba(255, 140, 66, 0.25)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Home style={{ width: "28px", height: "28px", color: "#FF8C42" }} />
+        <img
+          src={logo}
+          alt="Lilycrest logo"
+          style={{ width: "52px", height: "52px", objectFit: "contain" }}
+        />
       </div>
 
       {/* Heading */}
@@ -57,7 +75,7 @@ export default function NotFoundPage() {
         style={{
           fontSize: "clamp(22px, 4vw, 32px)",
           fontWeight: "600",
-          color: "white",
+          color: headingColor,
           marginBottom: "0.75rem",
           letterSpacing: "-0.5px",
         }}
@@ -69,7 +87,7 @@ export default function NotFoundPage() {
       <p
         style={{
           fontSize: "15px",
-          color: "rgba(255,255,255,0.5)",
+          color: descriptionColor,
           maxWidth: "380px",
           lineHeight: 1.7,
           fontWeight: "300",
@@ -86,23 +104,23 @@ export default function NotFoundPage() {
           display: "inline-flex",
           alignItems: "center",
           gap: "8px",
-          backgroundColor: "#FF8C42",
+          backgroundColor: accentColor,
           color: "white",
           padding: "14px 32px",
           borderRadius: "50px",
           fontWeight: "500",
           fontSize: "15px",
           textDecoration: "none",
-          boxShadow: "0 4px 20px rgba(255, 140, 66, 0.3)",
+          boxShadow: ctaShadow,
           transition: "all 0.3s ease",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "translateY(-2px)";
-          e.currentTarget.style.boxShadow = "0 8px 28px rgba(255, 140, 66, 0.45)";
+          e.currentTarget.style.boxShadow = ctaHoverShadow;
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = "translateY(0)";
-          e.currentTarget.style.boxShadow = "0 4px 20px rgba(255, 140, 66, 0.3)";
+          e.currentTarget.style.boxShadow = ctaShadow;
         }}
       >
         Back to Home
@@ -114,7 +132,7 @@ export default function NotFoundPage() {
         style={{
           marginTop: "3rem",
           fontSize: "13px",
-          color: "rgba(255,255,255,0.2)",
+          color: brandColor,
           fontWeight: "300",
           letterSpacing: "0.5px",
         }}

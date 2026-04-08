@@ -1,7 +1,11 @@
-import standardRoom from "../../../../assets/images/branches/gil-puyat/standard-room.jpg";
-import deluxeRoom from "../../../../assets/images/branches/gil-puyat/deluxe-room.jpg";
-import premiumRoom from "../../../../assets/images/branches/gil-puyat/premium-room.jpg";
-import gallery1 from "../../../../assets/images/branches/gil-puyat/gallery1.jpg";
+import gpQuadRoom from "../../../../assets/images/branches/gil-puyat/Quadruple - GP/Pic quad.jpg";
+import gpQuadCommonCr1 from "../../../../assets/images/branches/gil-puyat/Quadruple - GP/Quad & double Common CR.jpg";
+import gpQuadCommonCr2 from "../../../../assets/images/branches/gil-puyat/Quadruple - GP/Quad & double Common CR2.jpg";
+import gpDoubleRoom from "../../../../assets/images/branches/gil-puyat/Double - GP/Double sharing room1.jpg";
+import gpDoubleCommonCr1 from "../../../../assets/images/branches/gil-puyat/Double - GP/Quad & double Common CR.jpg";
+import gpDoubleCommonCr2 from "../../../../assets/images/branches/gil-puyat/Double - GP/Quad & double Common CR2.jpg";
+import gpPrivateRoom from "../../../../assets/images/branches/gil-puyat/Private - GP/private room copy.jpg";
+import gpPrivateTnb from "../../../../assets/images/branches/gil-puyat/Private - GP/Private Rm T&B.JPG";
 
 export const AVAILABLE_APPLIANCES = [
   { id: "fan", name: "Electric Fan", price: 200 },
@@ -95,12 +99,50 @@ export const mapBranchLabel = (branch) => {
 };
 
 export const getPrimaryImage = (type) => {
-  if (type === "private") return standardRoom;
-  if (type === "double-sharing") return premiumRoom;
-  return gallery1;
+  if (type === "private") return gpPrivateRoom;
+  if (type === "double-sharing") return gpDoubleRoom;
+  return gpQuadRoom;
 };
 
-export const ROOM_IMAGES = { standardRoom, deluxeRoom, premiumRoom, gallery1 };
+export const getRoomImages = (type, branch) => {
+  const normalizedType = typeof type === "string" ? type.toLowerCase() : "";
+  const normalizedBranch =
+    typeof branch === "string" ? branch.toLowerCase() : "";
+
+  if (
+    normalizedType === "quadruple-sharing" &&
+    (normalizedBranch === "gil-puyat" || normalizedBranch === "gil puyat")
+  ) {
+    return [gpQuadRoom, gpQuadCommonCr1, gpQuadCommonCr2];
+  }
+
+  if (
+    normalizedType === "double-sharing" &&
+    (normalizedBranch === "gil-puyat" || normalizedBranch === "gil puyat")
+  ) {
+    return [gpDoubleRoom, gpDoubleCommonCr1, gpDoubleCommonCr2];
+  }
+
+  if (
+    normalizedType === "private" &&
+    (normalizedBranch === "gil-puyat" || normalizedBranch === "gil puyat")
+  ) {
+    return [gpPrivateRoom, gpPrivateTnb, gpDoubleRoom];
+  }
+
+  return [getPrimaryImage(type), gpDoubleRoom, gpQuadRoom];
+};
+
+export const ROOM_IMAGES = {
+  gpQuadRoom,
+  gpQuadCommonCr1,
+  gpQuadCommonCr2,
+  gpDoubleRoom,
+  gpDoubleCommonCr1,
+  gpDoubleCommonCr2,
+  gpPrivateRoom,
+  gpPrivateTnb,
+};
 
 export const buildBedsFromCapacity = (roomNumber, type, occupiedCount = 0) => {
   const positions =

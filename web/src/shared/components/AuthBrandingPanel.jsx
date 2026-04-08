@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Home } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import logo from "../../assets/images/LOGO.svg";
 
 /**
  * Left-side branding panel shared by SignUp and SignIn pages.
@@ -11,7 +12,13 @@ const AuthBrandingPanel = ({ imageUrl, headline, subtitle }) => (
     className="hidden lg:flex flex-col justify-between p-12 relative overflow-hidden"
     style={{ position: "sticky", top: 0, height: "100vh" }}
   >
-    <div className="absolute inset-0 bg-gradient-to-br from-black/40 to-black/60 z-10"></div>
+    <div
+      className="absolute inset-0 z-10"
+      style={{
+        background:
+          "linear-gradient(135deg, rgba(30, 30, 30, 0.7) 0%, rgba(45, 45, 45, 0.65) 50%, rgba(60, 60, 60, 0.6) 100%)",
+      }}
+    ></div>
     <img
       src={imageUrl}
       alt="Lilycrest Dormitory"
@@ -21,7 +28,8 @@ const AuthBrandingPanel = ({ imageUrl, headline, subtitle }) => (
     <div className="relative z-20">
       <Link
         to="/"
-        className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors"
+        className="inline-flex items-center gap-2 transition-colors"
+        style={{ color: "rgba(255, 255, 255, 0.82)" }}
       >
         <ArrowLeft className="w-5 h-5" />
         <span className="text-sm font-light">Back to website</span>
@@ -30,18 +38,23 @@ const AuthBrandingPanel = ({ imageUrl, headline, subtitle }) => (
 
     <div className="relative z-20">
       <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center">
-          <Home className="w-6 h-6" style={{ color: "#0A1628" }} />
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+          <img src={logo} alt="Lilycrest logo" className="w-8 h-8" />
         </div>
-        <span className="font-semibold text-2xl text-white tracking-wide">
+        <span className="font-semibold text-2xl tracking-wide" style={{ color: "#FFFFFF" }}>
           Lilycrest
         </span>
       </div>
-      <h2
-        className="text-5xl font-light text-white mb-4 leading-tight"
-        dangerouslySetInnerHTML={{ __html: headline }}
-      />
-      <p className="text-white/70 font-light text-lg">{subtitle}</p>
+      <h2 className="text-5xl font-light mb-4 leading-tight" style={{ color: "#FFFFFF" }}>
+        {headline.split(/<br\s*\/?>/i)[0]}
+        {headline.split(/<br\s*\/?>/i)[1] && (
+          <>
+            <br />
+            <span style={{ color: "#D4AF37" }}>{headline.split(/<br\s*\/?>/i)[1]}</span>
+          </>
+        )}
+      </h2>
+      <p className="font-light text-lg" style={{ color: "rgba(255, 255, 255, 0.82)" }}>{subtitle}</p>
     </div>
 
     <div className="relative z-20 flex gap-2"></div>

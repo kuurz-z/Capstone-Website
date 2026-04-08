@@ -4,21 +4,33 @@ import { MapPin, Bus, ShoppingBag, GraduationCap, Building2 } from 'lucide-react
 const locations = [
   {
     branch: 'Gil Puyat',
-    address: '1234 Gil Puyat Avenue, Makati City, Metro Manila',
-    coordinates: '14.5547° N, 121.0244° E',
-    mapEmbed: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.6509!2d121.0!3d14.555!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTTCsDMzJzE2LjkiTiAxMjHCsDAxJzI3LjgiRQ!5e0!3m2!1sen!2sph!4v1234567890',
-    nearbySchools: ['De La Salle University (2.5 km)', 'Mapua University (3 km)', 'Lyceum of the Philippines (2 km)'],
-    transportation: ['Gil Puyat LRT Station (5 min walk)', 'Jeepney routes to Guadalupe, Buendia', 'Bus terminal nearby'],
-    landmarks: ['SM Makati (10 min walk)', '7-Eleven (2 min walk)', 'Mercury Drug (5 min walk)'],
+    address: 'Lilycrest Gil Puyat, Sen. Gil J. Puyat Ave, Makati City, Metro Manila',
+    coordinates: '14.5552° N, 121.0003° E',
+    mapEmbed: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.769459999064!2d120.99770221068401!3d14.555171985867126!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397c94bcde61457%3A0xff20ed97a7872fbc!2sLilycrest%20Gil%20Puyat!5e0!3m2!1sen!2sph!4v1775296600671!5m2!1sen!2sph" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade',
+    nearbySchools: ['FEU Makati – Gil Puyat Campus (~0.3 km)',
+      'Centro Escolar University (CEU) – Gil Puyat Campus (~0.3 km)',
+      'De La Salle University – Makati Extension Campus (RCBC Plaza) (~1.0 km)'],
+    transportation: ['Gil Puyat (Buendia) LRT Station – main LRT stop for LRT Line 1 (~5 min walk)',
+      'Jeepney routes along Gil Puyat Ave (to Guadalupe, Buendia)',
+      'Bus stop along Gil Puyat Ave or nearby streets (local routes available)'],
+    landmarks: ['RCBC Plaza (major office and commercial complex)',
+      'Petron Megaplaza (office building)',
+      'Makati Medical Center (hospital and healthcare services)'],
   },
   {
     branch: 'Guadalupe',
-    address: '5678 Guadalupe Street, Guadalupe Nuevo, Makati City',
-    coordinates: '14.5667° N, 121.0456° E',
-    mapEmbed: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.5509!2d121.045!3d14.5667!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTTCsDM0JzAwLjEiTiAxMjHCsDAyJzQ0LjIiRQ!5e0!3m2!1sen!2sph!4v1234567890',
-    nearbySchools: ['University of Santo Tomas (4 km)', 'PUP Manila (3.5 km)', 'Adamson University (4 km)'],
-    transportation: ['Guadalupe MRT Station (3 min walk)', 'Multiple jeepney routes', 'EDSA Carousel Bus Stop'],
-    landmarks: ['Guadalupe Commercial Center (5 min)', 'Landmark Makati (15 min)', 'Mini Stop (1 min walk)'],
+    address: 'Lilycrest Guadalupe, EDSA, Brgy. Guadalupe Nuevo, Makati City',
+    coordinates: '14.5618° N, 121.0446° E',
+    mapEmbed: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.6532149739655!2d121.04459131068413!3d14.561812985861252!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397c8585182eb27%3A0xd31f8e47d977544!2sLilycrest%20Guadalupe!5e0!3m2!1sen!2sph!4v1775298417299!5m2!1sen!2sph" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade',
+    nearbySchools: ['University of Makati (~1.5–2 km)',
+    'Rizal Technological University (~2–3 km)',
+    'De La Salle University – Makati Extension Campus (~2–3 km)'],
+    transportation: ['Guadalupe MRT Station (3–5 min walk)',
+    'EDSA Carousel Bus Stop (Guadalupe)',
+    'Jeepney Terminal (routes to Makati, BGC, Pasay)'],
+    landmarks: ['Guadalupe Commercial Complex (3–5 min walk)',
+    'Our Lady of Guadalupe Church (5–7 min walk)',
+    'Bonifacio Global City (~2–3 km)'],
   },
 ];
 
@@ -59,7 +71,7 @@ export function LocationSection() {
                 style={{
                   backgroundColor: activeTab === i ? 'var(--lp-accent)' : 'transparent',
                   color: activeTab === i ? '#ffffff' : 'var(--lp-text-secondary)',
-                  boxShadow: activeTab === i ? '0 4px 14px rgba(255, 140, 66, 0.3)' : 'none',
+                  boxShadow: activeTab === i ? '0 4px 14px rgba(212, 175, 55, 0.3)' : 'none',
                 }}
               >
                 <MapPin

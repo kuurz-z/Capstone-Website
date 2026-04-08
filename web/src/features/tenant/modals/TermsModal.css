@@ -123,14 +123,14 @@
 .terms-acceptance {
   margin-top: 32px;
   padding: 20px;
-  background-color: #fef3c7;
-  border-left: 4px solid #f59e0b;
+  background-color: #e0e7ff;
+  border-left: 4px solid #1e3a8a;
   border-radius: 6px;
 }
 
 .terms-acceptance p {
   margin: 0;
-  color: #92400e;
+  color: #000000;
   font-weight: 500;
 }
 
@@ -142,7 +142,7 @@
 }
 
 .terms-accept-btn {
-  background-color: #FF8C42;
+  background-color: #D4AF37;
   color: white;
   border: none;
   padding: 12px 32px;
@@ -154,7 +154,7 @@
 }
 
 .terms-accept-btn:hover {
-  background-color: #e55d00;
+  background-color: #bfa135;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 105, 0, 0.3);
 }

@@ -29,7 +29,7 @@ function getAvailabilityLabel(room) {
 function getAvailabilityColor(room) {
   const label = getAvailabilityLabel(room);
   if (label === "Full") return "#EF4444";
-  if (label === "Limited") return "#EDB938";
+  if (label === "Limited") return "#D4AF37";
   return "#10B981";
 }
 
@@ -97,7 +97,7 @@ export default function RoomDetailsModal({
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between p-6 border-b border-gray-200">
+        <div className="sticky top-0 z-20 flex items-start justify-between p-6 border-b border-gray-200 bg-white">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-3xl font-light" style={{ color: "var(--text-heading, #0A1628)" }}>
@@ -133,7 +133,7 @@ export default function RoomDetailsModal({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-4">
               <SpotlightCard
-                spotlightColor="rgba(255, 140, 66, 0.3)"
+                spotlightColor="rgba(212, 175, 55, 0.26)"
                 className="p-0"
               >
                 <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100">
@@ -172,7 +172,7 @@ export default function RoomDetailsModal({
 
               {images.length > 1 && (
                 <SpotlightCard
-                  spotlightColor="rgba(255, 140, 66, 0.2)"
+                  spotlightColor="rgba(212, 175, 55, 0.2)"
                   className="p-0"
                 >
                   <div className="grid grid-cols-4 gap-2 p-2">
@@ -180,11 +180,17 @@ export default function RoomDetailsModal({
                       <button
                         key={index}
                         onClick={() => setCurrentImageIndex(index)}
-                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                          currentImageIndex === index
-                            ? "border-orange-500 scale-95"
-                            : "border-transparent hover:border-gray-300"
-                        }`}
+                        className="aspect-square rounded-lg overflow-hidden border-2 transition-all hover:border-gray-300"
+                        style={{
+                          borderColor:
+                            currentImageIndex === index
+                              ? "var(--color-accent)"
+                              : "transparent",
+                          transform:
+                            currentImageIndex === index
+                              ? "scale(0.95)"
+                              : "scale(1)",
+                        }}
                       >
                         <img
                           src={image}
@@ -207,14 +213,14 @@ export default function RoomDetailsModal({
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Capacity</p>
                     <p className="text-2xl font-semibold flex items-center gap-2">
-                      <Users className="w-5 h-5" style={{ color: "#FF8C42" }} />
+                      <Users className="w-5 h-5" style={{ color: "var(--color-accent)" }} />
                       {totalBeds} {totalBeds === 1 ? "Bed" : "Beds"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Beds Available</p>
                     <p className="text-2xl font-semibold flex items-center gap-2">
-                      <Bed className="w-5 h-5" style={{ color: "#FF8C42" }} />
+                      <Bed className="w-5 h-5" style={{ color: "var(--color-accent)" }} />
                       {availableBeds} / {totalBeds}
                     </p>
                   </div>
@@ -233,7 +239,7 @@ export default function RoomDetailsModal({
                       style={{
                         width: `${occupancyPercentage}%`,
                         backgroundColor:
-                          occupancyPercentage >= 75 ? "#EDB938" : "#10B981",
+                          occupancyPercentage >= 75 ? "var(--color-accent)" : "#10B981",
                       }}
                     ></div>
                   </div>
@@ -247,7 +253,7 @@ export default function RoomDetailsModal({
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                      <Bed className="w-4 h-4" style={{ color: "#FF8C42" }} />
+                      <Bed className="w-4 h-4" style={{ color: "var(--color-accent)" }} />
                     </div>
                     <div>
                       <p className="text-gray-500">Type</p>
@@ -258,7 +264,7 @@ export default function RoomDetailsModal({
                     <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                       <svg
                         className="w-4 h-4"
-                        style={{ color: "#FF8C42" }}
+                        style={{ color: "var(--color-accent)" }}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -409,7 +415,7 @@ export default function RoomDetailsModal({
                 ))}
                 <div className="mt-3 text-sm text-gray-600">
                   Total Appliance Fees:{" "}
-                  <span className="font-semibold text-orange-600">
+                  <span className="font-semibold" style={{ color: "var(--color-accent)" }}>
                     ₱{calculateApplianceFees().toLocaleString()}
                   </span>
                 </div>
@@ -423,7 +429,7 @@ export default function RoomDetailsModal({
                 <div className="space-y-2">
                   {room.policies.map((policy, index) => (
                     <div key={index} className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-500" />
+                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "var(--color-accent)" }} />
                       <span className="text-sm text-gray-700">{policy}</span>
                     </div>
                   ))}
@@ -445,8 +451,11 @@ export default function RoomDetailsModal({
             </div>
             <button
               onClick={onProceed}
-              className="px-8 py-4 rounded-xl text-white font-medium hover:opacity-90 transition-opacity"
-              style={{ backgroundColor: "#FF8C42" }}
+              className="px-8 py-4 rounded-xl font-medium hover:opacity-90 transition-opacity"
+              style={{
+                backgroundColor: "var(--color-accent)",
+                color: "var(--color-primary)",
+              }}
               disabled={proceedDisabled}
             >
               {requiresBedSelection && !selectedBed

@@ -37,14 +37,17 @@ import {
 import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import SocialAuthButtons from "../../../shared/components/SocialAuthButtons";
 import FloatingInput from "../../../shared/components/FloatingInput";
-import PhoneInput, { isValidPhoneNumber } from "../../../shared/components/PhoneInput";
+import PhoneInput, {
+  isValidPhoneNumber,
+} from "../../../shared/components/PhoneInput";
 import TermsModal from "../../tenant/modals/TermsModal";
+import PrivacyModal from "../../tenant/modals/PrivacyModal";
 import "../../../shared/styles/auth-forms.css";
 import "../styles/tenant-signup.css";
 import "../../../shared/styles/notification.css";
+import hero1 from "../../../assets/images/hero1.jpg";
 
-const SIGNUP_IMAGE =
-  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBkb3JtJTIwcm9vbXxlbnwwfHx8fDE3NzAyNjI4Nzh8MA&ixlib=rb-4.1.0&q=80&w=1080";
+const SIGNUP_IMAGE = hero1;
 
 function SignUp() {
   const navigate = useNavigate();
@@ -68,6 +71,7 @@ function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -139,7 +143,10 @@ function SignUp() {
       case "phone":
         if (!value || !value.trim()) {
           error = "Phone number is required";
-        } else if (!value.startsWith("+") || !isValidPhoneNumber(value.trim())) {
+        } else if (
+          !value.startsWith("+") ||
+          !isValidPhoneNumber(value.trim())
+        ) {
           error = "Enter a valid phone number";
         }
         break;
@@ -214,7 +221,10 @@ function SignUp() {
       return scrollToField("phone", "Phone number is required");
     }
     if (!/^\+\d{7,15}$/.test(formData.phone.trim())) {
-      return scrollToField("phone", "Enter a valid phone number with country code");
+      return scrollToField(
+        "phone",
+        "Enter a valid phone number with country code",
+      );
     }
     const passwordError = validatePassword(formData.password);
     if (passwordError) {
@@ -322,8 +332,14 @@ function SignUp() {
       const result = await signInWithPopup(auth, provider);
       const firebaseUser = result.user;
       if (!firebaseUser.email) {
-        try { await firebaseUser.delete(); } catch (_) {
-          try { await auth.signOut(); } catch (_2) { /* ignore */ }
+        try {
+          await firebaseUser.delete();
+        } catch (_) {
+          try {
+            await auth.signOut();
+          } catch (_2) {
+            /* ignore */
+          }
         }
         socialAuthRef.current = false;
         showNotification(
@@ -340,7 +356,10 @@ function SignUp() {
         await auth.signOut();
         socialAuthRef.current = false;
         navigate("/signin", {
-          state: { notification: "This email is already registered. Please sign in instead." },
+          state: {
+            notification:
+              "This email is already registered. Please sign in instead.",
+          },
           replace: true,
         });
         setLoading(false);
@@ -374,16 +393,24 @@ function SignUp() {
             showNotification(`Welcome to Lilycrest, ${firstName}!`, "success");
             setTimeout(() => navigate("/applicant/check-availability"), 2000);
           } catch (regError) {
-            const errMsg = regError.response?.data?.error || regError.message || "";
+            const errMsg =
+              regError.response?.data?.error || regError.message || "";
             const errCode = regError.response?.data?.code || "";
 
             // If the error is about duplicate email/username, redirect to sign-in
-            if (errCode === "USERNAME_TAKEN" || errCode === "EMAIL_TAKEN" ||
-                errMsg.includes("already") || errMsg.includes("duplicate")) {
+            if (
+              errCode === "USERNAME_TAKEN" ||
+              errCode === "EMAIL_TAKEN" ||
+              errMsg.includes("already") ||
+              errMsg.includes("duplicate")
+            ) {
               await auth.signOut();
               socialAuthRef.current = false;
               navigate("/signin", {
-                state: { notification: "This email is already registered. Please sign in instead." },
+                state: {
+                  notification:
+                    "This email is already registered. Please sign in instead.",
+                },
                 replace: true,
               });
               setLoading(false);
@@ -401,7 +428,10 @@ function SignUp() {
                 /* ignore */
               }
             }
-            showNotification(errMsg || "An unexpected error occurred.", "error");
+            showNotification(
+              errMsg || "An unexpected error occurred.",
+              "error",
+            );
             setLoading(false);
           }
         } else {
@@ -410,7 +440,11 @@ function SignUp() {
             const u = auth.currentUser;
             if (u) await u.delete();
           } catch (delErr) {
-            try { await auth.signOut(); } catch (_) { /* ignore */ }
+            try {
+              await auth.signOut();
+            } catch (_) {
+              /* ignore */
+            }
           }
           showNotification(
             "An error occurred while checking your account. Please try again.",
@@ -424,7 +458,11 @@ function SignUp() {
         try {
           await auth.currentUser.delete();
         } catch (delErr) {
-          try { await auth.signOut(); } catch (_) { /* ignore */ }
+          try {
+            await auth.signOut();
+          } catch (_) {
+            /* ignore */
+          }
         }
       }
       if (error.code !== "auth/cancelled-popup-request")
@@ -457,7 +495,7 @@ function SignUp() {
         <AuthBrandingPanel
           imageUrl={SIGNUP_IMAGE}
           headline="Start Your Journey<br/>With Us"
-          subtitle="Join hundreds of students living their best life"
+          subtitle="Join a vibrant community and discover your perfect space today."
         />
 
         <div className="flex items-center justify-center p-8 lg:p-12 bg-white overflow-y-auto">
@@ -472,8 +510,7 @@ function SignUp() {
             <div className="auth-header">
               <h1 className="auth-header__title">Create an account</h1>
               <p className="auth-header__subtitle">
-                Already have an account?{" "}
-                <Link to="/signin">Log in</Link>
+                Already have an account? <Link to="/signin">Log in</Link>
               </p>
             </div>
 
@@ -600,7 +637,9 @@ function SignUp() {
                           <span
                             className="password-strength__dot"
                             style={{
-                              backgroundColor: passwordStrength.requirements[key]
+                              backgroundColor: passwordStrength.requirements[
+                                key
+                              ]
                                 ? "#10B981"
                                 : "transparent",
                               color: passwordStrength.requirements[key]
@@ -628,7 +667,11 @@ function SignUp() {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 disabled={loading}
-                error={touched.confirmPassword ? validationErrors.confirmPassword : null}
+                error={
+                  touched.confirmPassword
+                    ? validationErrors.confirmPassword
+                    : null
+                }
                 valid={touched.confirmPassword && fieldValid.confirmPassword}
                 endAdornment={
                   <button
@@ -658,7 +701,7 @@ function SignUp() {
                     type="button"
                     onClick={(e) => {
                       e.preventDefault();
-                      setShowTermsModal(true);
+                      setShowTermsModal(true); // opens T&C modal
                     }}
                   >
                     Terms & Conditions
@@ -668,7 +711,7 @@ function SignUp() {
                     type="button"
                     onClick={(e) => {
                       e.preventDefault();
-                      setShowTermsModal(true);
+                      setShowPrivacy(true); // opens Privacy Policy modal
                     }}
                   >
                     Privacy Policy
@@ -698,6 +741,12 @@ function SignUp() {
         isOpen={showTermsModal}
         onClose={() => setShowTermsModal(false)}
       />
+
+      <PrivacyModal
+        isOpen={showPrivacy}
+        onClose={() => setShowPrivacy(false)}
+      />
+
     </>
   );
 }

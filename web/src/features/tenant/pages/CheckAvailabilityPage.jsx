@@ -25,6 +25,7 @@ import {
   mapRoomType,
   mapBranchLabel,
   getPrimaryImage,
+  getRoomImages,
   buildBedsFromCapacity,
 } from "./check-availability";
 
@@ -73,7 +74,8 @@ function CheckAvailabilityPage() {
         const normalizedType = room.type || room.room_type;
         const mappedType = mapRoomType(normalizedType);
         const branchLabel = mapBranchLabel(room.branch);
-        const primaryImage = getPrimaryImage(normalizedType);
+        const images = getRoomImages(normalizedType, room.branch);
+        const primaryImage = images[0] || getPrimaryImage(normalizedType);
         const roomNumber = room.roomNumber || room.room_number || displayName;
         const beds = room.beds?.length
           ? room.beds
@@ -113,11 +115,7 @@ function CheckAvailabilityPage() {
           intendedTenant: room.intendedTenant || "",
           beds,
           amenities: room.amenities || [],
-          images: [
-            primaryImage,
-            ROOM_IMAGES.deluxeRoom,
-            ROOM_IMAGES.gallery1,
-          ],
+          images,
           policies: room.policies || [],
           applianceFeeEnabled: !!room.applianceFeeEnabled,
           applianceFeeAmountPerUnit: Number(room.applianceFeeAmountPerUnit || 0),
@@ -322,14 +320,14 @@ function CheckAvailabilityPage() {
           <div className="text-center">
             <div
               className="w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center"
-              style={{ backgroundColor: "#FFF4E6" }}
+              style={{ backgroundColor: "var(--color-accent-subtle)" }}
             >
               <svg
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#FF8C42"
+                stroke="var(--color-accent)"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -341,7 +339,7 @@ function CheckAvailabilityPage() {
             </div>
             <h3
               className="text-xl font-semibold mb-2"
-              style={{ color: "#0A1628" }}
+              style={{ color: "var(--text-heading)" }}
             >
               Sign in to continue
             </h3>
@@ -362,8 +360,11 @@ function CheckAvailabilityPage() {
                   showNotification("Please sign in to reserve a room", "info", 4000);
                   setTimeout(() => navigate("/signin"), 300);
                 }}
-                className="flex-1 py-3 px-4 rounded-full text-white text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer"
-                style={{ backgroundColor: "#FF8C42" }}
+                className="flex-1 py-3 px-4 rounded-full text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer"
+                style={{
+                  backgroundColor: "var(--color-accent)",
+                  color: "var(--color-primary)",
+                }}
               >
                 Sign In
               </button>
@@ -481,7 +482,7 @@ function CheckAvailabilityPage() {
             >
               <div className="ca-card-image-wrap">
                 <img
-                  src={ROOM_IMAGES.standardRoom}
+                  src={ROOM_IMAGES.gpQuadRoom}
                   alt={UPCOMING_ROOM.title}
                   loading="lazy"
                 />

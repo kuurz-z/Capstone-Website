@@ -1,36 +1,36 @@
 import { useState } from 'react';
-import { Clock, Users, Volume2, Sparkles, Shield, AlertCircle, ChevronDown } from 'lucide-react';
+import { Ban, Users, Sparkles, HeartHandshake, ShieldCheck, ReceiptText, AlertCircle, ChevronDown } from 'lucide-react';
 
 const rules = [
   {
-    icon: Clock,
-    title: 'Curfew Hours',
-    description: 'Gate closes at 11:00 PM on weekdays, 12:00 AM on weekends. Late entry requires advance notice.',
+    icon: Ban,
+    title: 'No Smoking Policy',
+    description: 'Smoking is strictly prohibited inside rooms and throughout the premises to ensure a clean and healthy environment.',
   },
   {
     icon: Users,
     title: 'Visitor Policy',
-    description: 'Visitors allowed in common areas only from 9:00 AM to 9:00 PM. Register at reception desk.',
-  },
-  {
-    icon: Volume2,
-    title: 'Quiet Hours',
-    description: 'Maintain low noise levels from 10:00 PM to 7:00 AM to respect fellow residents.',
+    description: 'Visitors are only allowed in designated areas, with room access restrictions depending on accommodation type.',
   },
   {
     icon: Sparkles,
-    title: 'Cleanliness',
-    description: 'Keep your room and shared spaces clean. Weekly room inspection by management.',
+    title: 'Cleanliness Responsibility',
+    description: 'All tenants are expected to maintain cleanliness in their rooms and shared spaces at all times.',
   },
   {
-    icon: Shield,
-    title: 'Security',
-    description: 'Do not share access codes. Report suspicious activity immediately to staff.',
+    icon: HeartHandshake,
+    title: 'Respect and Proper Conduct',
+    description: 'Residents must show respect to others and avoid any disruptive or inappropriate behavior.',
   },
   {
-    icon: AlertCircle,
-    title: 'Prohibited Items',
-    description: 'No illegal substances, weapons, or pets allowed. Cooking in rooms is strictly prohibited.',
+    icon: ShieldCheck,
+    title: 'Security & RFID Usage',
+    description: 'RFID access cards must be kept secure and not shared to maintain safety within the premises.',
+  },
+  {
+    icon: ReceiptText,
+    title: 'Payment & Compliance Policy',
+    description: 'Timely rental payments and adherence to house rules are required to avoid penalties or contract termination.',
   }
 ];
 
@@ -47,13 +47,13 @@ export function RulesSection() {
         {/* Header */}
         <div className="text-center mb-12">
           <p className="text-xs mb-3 tracking-widest uppercase font-medium" style={{ color: 'var(--lp-accent)' }}>
-            House Guidelines
+            Resident Rules
           </p>
           <h2 className="text-3xl lg:text-4xl font-medium mb-5 tracking-tight" style={{ color: 'var(--lp-text)' }}>
             Rules & Policies
           </h2>
           <p className="max-w-2xl mx-auto font-normal leading-relaxed" style={{ color: 'var(--lp-text-secondary)' }}>
-            Clear expectations for a safe, respectful, and harmonious living environment for everyone.
+            Clear expectations for a safe, respectful, and well-managed living environment for everyone.
           </p>
         </div>
 

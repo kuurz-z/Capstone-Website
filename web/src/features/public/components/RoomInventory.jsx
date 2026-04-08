@@ -1,5 +1,8 @@
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import hero1 from "../../../assets/images/hero1.jpg";
+import hero2 from "../../../assets/images/hero2.jpg";
+import hero3 from "../../../assets/images/hero3.jpg";
 
 const roomListings = [
   {
@@ -10,8 +13,8 @@ const roomListings = [
     price: '₱13,500',
     priceNote: '/room',
     popular: false,
-    image: 'https://images.unsplash.com/photo-1610307522657-8c0304960189?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYmVkcm9vbSUyMGRlc2lnbnxlbnwxfHx8fDE3NzAzMDM5ODB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    inclusions: ['Max 2 Pax', 'Private Toilet & Shower', 'Kitchenette', 'Aircon', 'Wi-Fi', 'Fully Furnished'],
+    image: hero1,
+    inclusions: ['Max 2 Pax', 'Private Restroom', 'Kitchenette', 'Lounge Area Access', 'Fully Furnished'],
   },
   {
     id: 2,
@@ -21,19 +24,19 @@ const roomListings = [
     price: '₱7,200',
     priceNote: '/pax',
     popular: true,
-    image: 'https://images.unsplash.com/photo-1764760764956-fcb78be107a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBiZWRyb29tJTIwaW50ZXJpb3IlMjBuYXR1cmFsJTIwbGlnaHR8ZW58MXx8fHwxNzcwMjkwMzY5fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    inclusions: ['2 Pax per Room', 'Double Decker Bed', 'Shared Floor Amenities', 'Aircon', 'Wi-Fi', 'Fully Furnished'],
+    image: hero3,
+    inclusions: ['Max 2 Pax', 'Double Decker Bed', 'Shared Floor Amenities', 'Common Bathroom', 'Fully Furnished'],
   },
   {
     id: 3,
     title: 'Quadruple Sharing',
     subtitle: 'Gil Puyat & Guadalupe',
-    description: 'Budget-friendly option with a vibrant community atmosphere. Common areas per floor include lounge, toilet & shower.',
+    description: 'Budget-friendly with a vibrant community atmosphere. Common areas per floor include lounge, toilet & shower.',
     price: '₱5,400',
     priceNote: '/pax',
     popular: false,
-    image: 'https://images.unsplash.com/photo-1758521540263-e15a58e64248?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb3p5JTIwc2hhcmVkJTIwYmVkcm9vbXxlbnwxfHx8fDE3NzAzNTI3MTB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    inclusions: ['4 Pax per Room', 'Double Decker Beds', 'Shared Floor Amenities', 'Aircon', 'Wi-Fi', 'Fully Furnished'],
+    image: hero2,
+    inclusions: ['Max 4 Pax', 'Double Decker Beds', 'Shared Floor Amenities', 'Common Bathroom', 'Aircon'],
   },
 ];
 
@@ -164,7 +167,7 @@ export function RoomInventory() {
                       ? {
                           backgroundColor: 'var(--lp-accent)',
                           color: '#ffffff',
-                          boxShadow: '0 4px 12px rgba(255, 140, 66, 0.25)',
+                          boxShadow: '0 4px 12px rgba(212, 175, 55, 0.25)',
                         }
                       : {
                           border: '1.5px solid var(--lp-accent)',
