@@ -16,6 +16,9 @@ const userModel = {
   find: jest.fn(),
   countDocuments: jest.fn(),
   aggregate: jest.fn(),
+  findOne: jest.fn(),
+  findById: jest.fn(),
+  findByIdAndUpdate: jest.fn(),
 };
 
 await jest.unstable_mockModule("../models/index.js", () => ({
@@ -41,10 +44,19 @@ await jest.unstable_mockModule("../middleware/errorHandler.js", () => ({
 }));
 await jest.unstable_mockModule("../middleware/permissions.js", () => ({
   DEFAULT_PERMISSIONS: {},
-  ALL_PERMISSIONS: [],
+  ALL_PERMISSIONS: [
+    "manageReservations",
+    "manageTenants",
+    "manageBilling",
+    "manageRooms",
+    "manageMaintenance",
+    "manageAnnouncements",
+    "viewReports",
+    "manageUsers",
+  ],
 }));
 
-const { getUsers, getUserStats } = await import("./usersController.js");
+const { getUsers, getUserStats, updateUser, updatePermissions } = await import("./usersController.js");
 
 const createResponse = () => {
   const res = {
@@ -68,6 +80,9 @@ describe("usersController", () => {
     userModel.find.mockReset();
     userModel.countDocuments.mockReset();
     userModel.aggregate.mockReset();
+    userModel.findOne.mockReset();
+    userModel.findById.mockReset();
+    userModel.findByIdAndUpdate.mockReset();
   });
 
   test("getUsers applies server search, lean projection, and pagination metadata", async () => {
@@ -137,7 +152,7 @@ describe("usersController", () => {
       },
     ]);
 
-    const req = { branchFilter: "gil-puyat", isSuperAdmin: true };
+    const req = { branchFilter: "gil-puyat", isOwner: true };
     const res = createResponse();
     const next = jest.fn();
 
@@ -158,6 +173,56 @@ describe("usersController", () => {
       },
       byBranch: { "gil-puyat": 8 },
     });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("updateUser rejects invalid tenant status transition", async () => {
+    userModel.findOne.mockResolvedValue({
+      _id: "507f1f77bcf86cd799439011",
+      role: "applicant",
+      tenantStatus: "applicant",
+      toObject: () => ({ role: "applicant", tenantStatus: "applicant" }),
+    });
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      body: { tenantStatus: "evicted" },
+      branchFilter: null,
+      isOwner: true,
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await updateUser(req, res, next);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe("INVALID_TENANT_STATUS_TRANSITION");
+    expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("updatePermissions normalizes duplicates and order", async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    const targetUser = {
+      role: "branch_admin",
+      permissions: [],
+      save,
+      toObject: () => ({ role: "branch_admin", permissions: ["manageBilling", "manageRooms"] }),
+    };
+    userModel.findById.mockResolvedValue(targetUser);
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      body: { permissions: ["manageRooms", "manageBilling", "manageRooms", " "] },
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await updatePermissions(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(targetUser.permissions).toEqual(["manageBilling", "manageRooms"]);
+    expect(save).toHaveBeenCalledTimes(1);
     expect(next).not.toHaveBeenCalled();
   });
 });

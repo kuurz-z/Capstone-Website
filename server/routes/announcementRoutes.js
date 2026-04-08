@@ -10,9 +10,10 @@
  */
 
 import express from "express";
-import { verifyToken } from "../middleware/auth.js";
+import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 import { validate } from "../validation/validate.js";
 import { createAnnouncementSchema } from "../validation/schemas.js";
+import { requirePermission } from "../middleware/permissions.js";
 import * as announcementsController from "../controllers/announcementsController.js";
 
 const router = express.Router();
@@ -68,7 +69,13 @@ router.get(
  * POST /api/announcements
  * Create new announcement (Admin only)
  */
-router.post("/", validate(createAnnouncementSchema), announcementsController.createAnnouncement);
+router.post(
+  "/",
+  verifyAdmin,
+  requirePermission("manageAnnouncements"),
+  validate(createAnnouncementSchema),
+  announcementsController.createAnnouncement,
+);
 
 // ============================================================================
 // EXPORT

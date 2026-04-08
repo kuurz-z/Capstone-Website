@@ -67,7 +67,6 @@ export const filterByBranch = async (req, res, next) => {
       req.branchFilter = null; // No filter - access all
       req.userBranch = "all";
       req.isOwner = true;
-      req.isSuperAdmin = true; // backward compat for controllers not yet migrated
       return next();
     }
 
@@ -83,7 +82,6 @@ export const filterByBranch = async (req, res, next) => {
     req.branchFilter = branch;
     req.userBranch = branch;
     req.isOwner = false;
-    req.isSuperAdmin = false; // backward compat
 
     next();
   } catch (error) {
@@ -128,7 +126,6 @@ export const validateBranchAccess = async (req, res, next) => {
     // Owners can access any branch
     if (isOwner) {
       req.isOwner = true;
-      req.isSuperAdmin = true; // backward compat
       return next();
     }
 

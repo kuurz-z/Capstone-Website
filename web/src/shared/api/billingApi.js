@@ -56,15 +56,6 @@ export const billingApi = {
     authFetch(`/billing/rooms${branch ? `?branch=${branch}` : ""}`),
 
   /**
-   * Generate room-based bills (admin only)
-   */
-  generateRoomBill: (billData) =>
-    authFetch("/billing/generate-room", {
-      method: "POST",
-      body: JSON.stringify(billData),
-    }),
-
-  /**
    * Apply penalties to overdue bills (admin only)
    */
   applyPenalties: () =>

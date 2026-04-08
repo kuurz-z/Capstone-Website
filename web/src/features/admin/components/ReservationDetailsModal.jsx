@@ -5,6 +5,8 @@ import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
 import {
+  getAllowedReservationActions,
+  getReservationStatusAppearance,
   hasReservationStatus,
   readMoveInDate,
 } from "../../../shared/utils/lifecycleNaming";
@@ -16,57 +18,6 @@ import "../styles/reservation-details-modal.css";
 const WATER_BILLABLE_TYPES = ["private", "double-sharing"];
 
 /* ─── constants ─────────────────────────────────── */
-const STATUS_MAP = {
-  pending: {
-    label: "Pending Review",
-    color: "#b45309",
-    bg: "#fffbeb",
-    dot: "#f59e0b",
-  },
-  visit_pending: {
-    label: "Visit Pending",
-    color: "#1d4ed8",
-    bg: "#eff6ff",
-    dot: "#3b82f6",
-  },
-  visit_approved: {
-    label: "Visit Approved",
-    color: "#7c3aed",
-    bg: "#f5f3ff",
-    dot: "#8b5cf6",
-  },
-  payment_pending: {
-    label: "Payment Pending",
-    color: "#b45309",
-    bg: "#fffbeb",
-    dot: "#f59e0b",
-  },
-  reserved: {
-    label: "Reserved",
-    color: "#047857",
-    bg: "#ecfdf5",
-    dot: "#10b981",
-  },
-  moveIn: {
-    label: "Moved In",
-    color: "#1d4ed8",
-    bg: "#eff6ff",
-    dot: "#3b82f6",
-  },
-  moveOut: {
-    label: "Moved Out",
-    color: "#64748b",
-    bg: "#f8fafc",
-    dot: "#94a3b8",
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "#dc2626",
-    bg: "#fef2f2",
-    dot: "#ef4444",
-  },
-};
-
 const ACTION_MSGS = {
   confirm: {
     title: "Confirm Reservation",
@@ -189,7 +140,8 @@ export default function ReservationDetailsModal({
   if (!reservation) return null;
 
   const status = reservation.status || "pending";
-  const sc = STATUS_MAP[status] || STATUS_MAP.pending;
+  const sc = getReservationStatusAppearance(status);
+  const allowedActions = getAllowedReservationActions(status);
   const moveIn = readMoveInDate(reservation);
   const isMovedIn = hasReservationStatus(status, "moveIn");
   const isMovedOut = hasReservationStatus(status, "moveOut");
@@ -363,7 +315,7 @@ export default function ReservationDetailsModal({
                 })()}
 
                 {/* ── Check In (reserved stage only, already gated via status) ─── */}
-                {status === "reserved" && (
+                {allowedActions.includes("moveIn") && (
                   <>
                     <button
                       className="rdm-action rdm-action-primary"
@@ -378,19 +330,21 @@ export default function ReservationDetailsModal({
                       ✓ Confirm Move-In
                     </button>
 
-                    <button
-                      className="rdm-action rdm-action-extend"
-                      onClick={() => setShowExtendPrompt(true)}
-                      disabled={isSubmitting}
-                    >
-                      Extend Move-in
-                    </button>
+                    {allowedActions.includes("extend") && (
+                      <button
+                        className="rdm-action rdm-action-extend"
+                        onClick={() => setShowExtendPrompt(true)}
+                        disabled={isSubmitting}
+                      >
+                        Extend Move-in
+                      </button>
+                    )}
                   </>
                 )}
 
                 {/* ── Cancel (all pre-check-in stages) ─────────────── */}
                 <div className="rdm-action-divider" />
-                {!isMovedIn && (
+                {allowedActions.includes("cancelled") && (
                   <button
                     className="rdm-action rdm-action-cancel"
                     onClick={() =>

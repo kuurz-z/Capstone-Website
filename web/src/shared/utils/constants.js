@@ -41,19 +41,33 @@ export const BRANCHES = {
 
 // Branch display names for UI
 export const BRANCH_DISPLAY_NAMES = {
-  "gil-puyat": "Gil Puyat • Makati",
-  guadalupe: "Guadalupe • Makati",
+  "gil-puyat": "Gil Puyat",
+  guadalupe: "Guadalupe",
 };
+
+export const BRANCH_OPTIONS = [
+  { value: BRANCHES.GIL_PUYAT, label: "Gil Puyat" },
+  { value: BRANCHES.GUADALUPE, label: "Guadalupe" },
+];
+
+export const OWNER_BRANCH_FILTER_OPTIONS = [
+  { value: "all", label: "All Branches" },
+  ...BRANCH_OPTIONS,
+];
 
 // -----------------------------------------------------------------------------
 // Reservation Status (matches server/models/Reservation.js)
 // -----------------------------------------------------------------------------
 export const RESERVATION_STATUS = {
   PENDING: "pending",
+  VISIT_PENDING: "visit_pending",
+  VISIT_APPROVED: "visit_approved",
+  PAYMENT_PENDING: "payment_pending",
   RESERVED: "reserved",
   MOVE_IN: "moveIn",
   MOVE_OUT: "moveOut",
   CANCELLED: "cancelled",
+  ARCHIVED: "archived",
 };
 
 // -----------------------------------------------------------------------------

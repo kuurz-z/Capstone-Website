@@ -100,7 +100,7 @@ async function getAdminUser(branch) {
   if (fallback) {
     fallback.role = "owner";
     fallback.branch = branch;
-    fallback.tenantStatus = "none";
+    fallback.tenantStatus = "applicant";
     fallback.isEmailVerified = true;
     await fallback.save();
     return fallback;
@@ -114,7 +114,7 @@ async function getAdminUser(branch) {
     lastName: "Admin",
     branch,
     role: "owner",
-    tenantStatus: "none",
+    tenantStatus: "applicant",
     isEmailVerified: true,
   });
   return fallback;

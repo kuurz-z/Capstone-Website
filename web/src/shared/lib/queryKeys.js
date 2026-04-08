@@ -84,6 +84,10 @@ export const queryKeys = {
     business: ["settings", "business"],
   },
 
+  financial: {
+    overview: (branch) => ["financial", "overview", branch || "all"],
+  },
+
   // ── Digital Twin ──
   digitalTwin: {
     snapshot: (branch) => ["digital-twin", "snapshot", branch || "all"],

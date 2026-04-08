@@ -37,9 +37,27 @@ export const roomApi = {
     }),
 
   /**
+   * Update a single bed maintenance status through the dedicated room route.
+   */
+  updateBedStatus: (roomId, bedId, status) =>
+    authFetch(`/rooms/${roomId}/beds/${bedId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  /**
    * Delete room (admin only)
    */
   delete: (roomId) => authFetch(`/rooms/${roomId}`, { method: "DELETE" }),
+
+  /**
+   * Get read-only occupancy consistency diagnostics for rooms.
+   */
+  getOccupancyConsistency: (filters = {}) => {
+    const params = new URLSearchParams(filters);
+    const query = params.toString();
+    return authFetch(`/rooms/occupancy-consistency${query ? `?${query}` : ""}`);
+  },
 
   /**
    * Get occupancy status for a specific room

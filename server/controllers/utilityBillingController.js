@@ -53,21 +53,9 @@ import {
   utilityEventTypesForQuery,
 } from "../utils/lifecycleNaming.js";
 import logger from "../middleware/logger.js";
+import { resolveAdminAccessContext } from "../utils/adminAccess.js";
 
-async function getAdminInfo(req) {
-  const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-  return {
-    role: dbUser?.role || "user",
-    branch: dbUser?.branch || null,
-    isSuperAdmin: dbUser?.role === "owner",
-    _id: dbUser?._id || null,
-    email: dbUser?.email || req.user?.email || "",
-    displayName:
-      `${dbUser?.firstName || ""} ${dbUser?.lastName || ""}`.trim() ||
-      dbUser?.email ||
-      "Admin",
-  };
-}
+const getAdminInfo = resolveAdminAccessContext;
 
 function assertUtilityRoomEligibility(room, utilityType) {
   if (utilityType === "water" && !isWaterBillableRoom(room)) {
@@ -851,7 +839,7 @@ export const sendUtilityPeriod = async (req, res, next) => {
     if (!room) {
       return res.status(404).json({ error: "Room not found" });
     }
-    if (!admin.isSuperAdmin && room.branch !== admin.branch) {
+    if (!admin.isOwner && room.branch !== admin.branch) {
       return res.status(403).json({ error: "Access denied" });
     }
     assertUtilityRoomEligibility(room, utilityType);
@@ -946,7 +934,7 @@ export const sendUtilityPeriod = async (req, res, next) => {
 export const getUtilityDiagnosticsApi = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
-    const branch = admin.isSuperAdmin ? req.query.branch || null : admin.branch;
+    const branch = admin.isOwner ? req.query.branch || null : admin.branch;
     res.json(await getUtilityDiagnostics({ branch }));
   } catch (err) {
     next(err);
@@ -960,7 +948,7 @@ export const getUtilityDiagnosticsApi = async (req, res, next) => {
 export const getUtilityRooms = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
-    const branch = admin.isSuperAdmin ? req.query.branch || null : admin.branch;
+    const branch = admin.isOwner ? req.query.branch || null : admin.branch;
     const utilityType = req.params.utilityType;
 
     // Fallback to Utility Diagnostics for fetching the robust mapped room objects
@@ -994,7 +982,7 @@ export const getUtilityReadings = async (req, res, next) => {
 
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: "Room not found" });
-    if (!admin.isSuperAdmin && room.branch !== admin.branch) {
+    if (!admin.isOwner && room.branch !== admin.branch) {
       return res.status(403).json({ error: "Access denied" });
     }
 
@@ -1069,7 +1057,7 @@ export const getUtilityLatestReading = async (req, res, next) => {
 
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: "Room not found" });
-    if (!admin.isSuperAdmin && room.branch !== admin.branch) {
+    if (!admin.isOwner && room.branch !== admin.branch) {
       return res.status(403).json({ error: "Access denied" });
     }
 
@@ -1103,7 +1091,7 @@ export const getUtilityPeriods = async (req, res, next) => {
 
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: "Room not found" });
-    if (!admin.isSuperAdmin && room.branch !== admin.branch) {
+    if (!admin.isOwner && room.branch !== admin.branch) {
       return res.status(403).json({ error: "Access denied" });
     }
 
@@ -1308,7 +1296,7 @@ export const getRoomHistory = async (req, res, next) => {
 
     const room = await Room.findById(roomId).lean();
     if (!room) return res.status(404).json({ error: "Room not found" });
-    if (!admin.isSuperAdmin && room.branch !== admin.branch) {
+    if (!admin.isOwner && room.branch !== admin.branch) {
       return res.status(403).json({ error: "Access denied" });
     }
 

@@ -93,7 +93,7 @@ async function deriveExpectedState(user) {
 
   return fallback || {
     role: "applicant",
-    tenantStatus: "none",
+    tenantStatus: "applicant",
     branch: null,
   };
 }

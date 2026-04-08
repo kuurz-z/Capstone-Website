@@ -5,6 +5,7 @@
 
 import dayjs from "dayjs";
 import { User, Reservation, Room } from "../models/index.js";
+import { ROOM_BRANCHES } from "../config/branches.js";
 import { getAuth } from "../config/firebase.js";
 import logger from "../middleware/logger.js";
 import auditLogger from "../utils/auditLogger.js";
@@ -25,7 +26,21 @@ import {
   readMoveOutDate,
 } from "../utils/lifecycleNaming.js";
 
-const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
+const VALID_BRANCHES = ROOM_BRANCHES;
+const VALID_TENANT_STATUSES = [
+  "applicant",
+  "active",
+  "inactive",
+  "evicted",
+  "blacklisted",
+];
+const TENANT_STATUS_TRANSITIONS = {
+  applicant: ["active", "blacklisted"],
+  active: ["inactive", "evicted", "blacklisted"],
+  inactive: ["active", "blacklisted"],
+  evicted: ["blacklisted"],
+  blacklisted: [],
+};
 const LIST_SEARCH_FIELDS = ["username", "firstName", "lastName", "email"];
 const LIST_USER_FIELDS = [
   "username",
@@ -51,6 +66,11 @@ const LIST_USER_FIELDS = [
 
 const escapeRegex = (value = "") =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const canTransitionTenantStatus = (fromStatus, toStatus) => {
+  if (fromStatus === toStatus) return true;
+  return (TENANT_STATUS_TRANSITIONS[fromStatus] || []).includes(toStatus);
+};
 
 /**
  * POST /api/users
@@ -93,7 +113,7 @@ export const createUser = async (req, res, next) => {
         code: "ROLE_FORBIDDEN",
       });
     }
-    if (allowedRole === "branch_admin" && !req.isSuperAdmin) {
+    if (allowedRole === "branch_admin" && !req.isOwner) {
       return res.status(403).json({
         error: "Only owners can create branch admin accounts",
         code: "ROLE_FORBIDDEN",
@@ -157,7 +177,7 @@ export const createUser = async (req, res, next) => {
       role: allowedRole,
       isEmailVerified: false,
       isActive: true,
-      tenantStatus: "none",
+      tenantStatus: "applicant",
       permissions: DEFAULT_PERMISSIONS[allowedRole] || [],
     });
 
@@ -235,7 +255,7 @@ export const getUserStats = async (req, res, next) => {
           byAccountStatus: [
             { $group: { _id: "$accountStatus", count: { $sum: 1 } } },
           ],
-          byBranch: req.isSuperAdmin
+          byBranch: req.isOwner
             ? [{ $group: { _id: "$branch", count: { $sum: 1 } } }]
             : [],
         },
@@ -498,6 +518,7 @@ export const updateUser = async (req, res, next) => {
       "profileImage",
       "role",
       "branch",
+      "tenantStatus",
       "isActive",
       // Extended profile fields
       "address",
@@ -525,13 +546,50 @@ export const updateUser = async (req, res, next) => {
     delete updateData.createdAt;
 
     // Only owners can change roles
-    if (updateData.role && !req.isSuperAdmin) {
+    if (updateData.role && !req.isOwner) {
       delete updateData.role;
     }
 
     // Only owners can change branch assignment
-    if (updateData.branch !== undefined && !req.isSuperAdmin) {
+    if (updateData.branch !== undefined && !req.isOwner) {
       delete updateData.branch;
+    }
+
+    if (updateData.tenantStatus !== undefined) {
+      const nextStatus = String(updateData.tenantStatus).trim();
+      if (!VALID_TENANT_STATUSES.includes(nextStatus)) {
+        return res.status(400).json({
+          error: `Invalid tenant status. Must be one of: ${VALID_TENANT_STATUSES.join(", ")}`,
+          code: "INVALID_TENANT_STATUS",
+        });
+      }
+
+      const currentRole = existingUser.role;
+      const nextRole = updateData.role || currentRole;
+      if (["branch_admin", "owner"].includes(nextRole)) {
+        return res.status(400).json({
+          error: "Admin accounts cannot use tenant status transitions",
+          code: "ROLE_TENANT_STATUS_CONFLICT",
+        });
+      }
+
+      if (!canTransitionTenantStatus(existingUser.tenantStatus, nextStatus)) {
+        return res.status(400).json({
+          error: `Invalid tenant status transition: ${existingUser.tenantStatus} -> ${nextStatus}`,
+          code: "INVALID_TENANT_STATUS_TRANSITION",
+        });
+      }
+
+      updateData.tenantStatus = nextStatus;
+
+      // Keep role in sync for non-admin lifecycle changes.
+      if (updateData.role === undefined) {
+        if (nextStatus === "active") {
+          updateData.role = "tenant";
+        } else if (existingUser.role === "tenant") {
+          updateData.role = "applicant";
+        }
+      }
     }
 
     const user = await User.findByIdAndUpdate(userId, updateData, {
@@ -618,7 +676,7 @@ export const deleteUser = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/suspend
  * Suspend a user account.
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  */
 export const suspendUser = async (req, res, next) => {
   try {
@@ -639,7 +697,7 @@ export const suspendUser = async (req, res, next) => {
     // Prevent suspending admins unless you're the owner
     if (
       (targetUser.role === "branch_admin" || targetUser.role === "owner") &&
-      !req.isSuperAdmin
+      !req.isOwner
     )
       return res
         .status(403)
@@ -672,7 +730,7 @@ export const suspendUser = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/reactivate
  * Reactivate a suspended or banned user account.
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  */
 export const reactivateUser = async (req, res, next) => {
   try {
@@ -695,7 +753,7 @@ export const reactivateUser = async (req, res, next) => {
         .json({ error: "User is already active", code: "ALREADY_ACTIVE" });
 
     // Only owner can reactivate banned users
-    if (targetUser.accountStatus === "banned" && !req.isSuperAdmin)
+    if (targetUser.accountStatus === "banned" && !req.isOwner)
       return res
         .status(403)
         .json({
@@ -727,7 +785,7 @@ export const reactivateUser = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/ban
  * Ban a user account permanently.
- * Access: Super Admin only
+ * Access: Owner only
  */
 export const banUser = async (req, res, next) => {
   try {
@@ -851,7 +909,7 @@ export const getMyStays = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/permissions
  * Update an admin user's permissions array.
- * Access: Super Admin only
+ * Access: Owner only
  */
 export const updatePermissions = async (req, res, next) => {
   try {
@@ -871,8 +929,19 @@ export const updatePermissions = async (req, res, next) => {
           code: "INVALID_PERMISSIONS",
         });
 
+    const normalizedPermissions = Array.from(
+      new Set(
+        permissions
+          .filter((p) => typeof p === "string")
+          .map((p) => p.trim())
+          .filter(Boolean),
+      ),
+    );
+
     // Validate each permission key
-    const invalid = permissions.filter((p) => !ALL_PERMISSIONS.includes(p));
+    const invalid = normalizedPermissions.filter(
+      (p) => !ALL_PERMISSIONS.includes(p),
+    );
     if (invalid.length > 0)
       return res.status(400).json({
         error: `Invalid permissions: ${invalid.join(", ")}`,
@@ -893,7 +962,9 @@ export const updatePermissions = async (req, res, next) => {
       });
 
     const oldData = targetUser.toObject();
-    targetUser.permissions = permissions;
+    targetUser.permissions = ALL_PERMISSIONS.filter((p) =>
+      normalizedPermissions.includes(p),
+    );
     await targetUser.save();
 
     await auditLogger.logModification(
@@ -902,7 +973,7 @@ export const updatePermissions = async (req, res, next) => {
       userId,
       oldData,
       targetUser.toObject(),
-      `Permissions updated: ${permissions.join(", ") || "(none)"}`,
+      `Permissions updated: ${targetUser.permissions.join(", ") || "(none)"}`,
     );
 
     res.json({ message: "Permissions updated successfully", user: targetUser });

@@ -27,6 +27,7 @@
  */
 
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -39,12 +40,10 @@ const roomSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true,
     },
     roomNumber: {
       type: String,
       required: true,
-      unique: true,
       index: true,
     },
     description: {
@@ -63,7 +62,7 @@ const roomSchema = new mongoose.Schema(
     branch: {
       type: String,
       required: true,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       index: true,
     },
 
@@ -194,6 +193,13 @@ const roomSchema = new mongoose.Schema(
 roomSchema.index({ branch: 1, type: 1 });
 roomSchema.index({ branch: 1, available: 1 });
 roomSchema.index({ isArchived: 1, available: 1 });
+roomSchema.index(
+  { branch: 1, roomNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isArchived: false },
+  },
+);
 
 // ============================================================================
 // VIRTUALS

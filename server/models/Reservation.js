@@ -477,6 +477,14 @@ reservationSchema.index({ status: 1, isArchived: 1 });
 reservationSchema.index({ roomId: 1, status: 1 });
 // Overdue move-in cron: finds reserved + non-archived by move-in date
 reservationSchema.index({ status: 1, targetMoveInDate: 1 });
+reservationSchema.index(
+  { paymongoSessionId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
+);
+reservationSchema.index(
+  { paymongoPaymentId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
+);
 // REMOVED: { branch: 1, status: 1, isArchived: 1 } — phantom index.
 // Reservation has no 'branch' field; branch lives on the Room document.
 // Use roomId → Room.branch for any branch-level billing queries.

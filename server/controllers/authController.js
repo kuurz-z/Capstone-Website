@@ -5,8 +5,10 @@
 
 import { getAuth } from "../config/firebase.js";
 import { User, LoginLog } from "../models/index.js";
+import { ROOM_BRANCHES } from "../config/branches.js";
 import logger from "../middleware/logger.js";
 import auditLogger from "../utils/auditLogger.js";
+import { getDefaultPermissionsForRole } from "../config/accessControl.js";
 import {
   sendSuccess,
   sendError,
@@ -19,7 +21,7 @@ import {
 } from "../middleware/validation.js";
 
 
-const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
+const VALID_BRANCHES = ROOM_BRANCHES;
 const VALID_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
 
 export const register = async (req, res, next) => {
@@ -120,7 +122,7 @@ export const register = async (req, res, next) => {
       branch,
       role: "applicant",
       isEmailVerified: req.user.email_verified || false, // Synced from Firebase
-      tenantStatus: "none",
+      tenantStatus: "applicant",
     });
 
     await user.save();
@@ -572,6 +574,10 @@ export const setRole = async (req, res, next) => {
 
     // Update role in MongoDB database
     user.role = role;
+    user.permissions =
+      role === "branch_admin" || role === "owner"
+        ? getDefaultPermissionsForRole(role)
+        : [];
     await user.save();
 
     res.json({

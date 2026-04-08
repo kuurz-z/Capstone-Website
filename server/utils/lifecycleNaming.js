@@ -19,6 +19,18 @@ export const CANONICAL_RESERVATION_STATUSES = Object.freeze([
 
 export const LEGACY_RESERVATION_STATUS_MAP = Object.freeze({});
 
+export const ALLOWED_RESERVATION_STATUS_TRANSITIONS = Object.freeze({
+  pending: ["visit_pending", "cancelled", "archived"],
+  visit_pending: ["visit_approved", "cancelled", "archived"],
+  visit_approved: ["payment_pending", "cancelled", "archived"],
+  payment_pending: ["reserved", "cancelled", "archived"],
+  reserved: ["moveIn", "cancelled", "archived"],
+  moveIn: ["moveOut", "archived"],
+  moveOut: ["archived"],
+  cancelled: ["archived"],
+  archived: [],
+});
+
 const RESERVATION_STATUS_QUERY_MAP = Object.freeze({
   pending: ["pending"],
   visit_pending: ["visit_pending"],
@@ -103,6 +115,19 @@ export const hasReservationStatus = (status, ...expectedStatuses) => {
     .map((entry) => normalizeReservationStatus(entry))
     .filter(Boolean)
     .includes(normalized);
+};
+
+export const canTransitionReservationStatus = (
+  currentStatus,
+  nextStatus,
+) => {
+  const current = normalizeReservationStatus(currentStatus);
+  const next = normalizeReservationStatus(nextStatus);
+
+  if (!current || !next) return false;
+  if (current === next) return true;
+
+  return (ALLOWED_RESERVATION_STATUS_TRANSITIONS[current] || []).includes(next);
 };
 
 export const normalizeUtilityEventType = (eventType) => {

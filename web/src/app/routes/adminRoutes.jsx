@@ -14,7 +14,7 @@ import {
   AdminBillingPage,
   MaintenancePage,
   InquiriesPage,
-  SuperAdminDashboard,
+  OwnerDashboardPage,
   BranchManagementPage,
   RolePermissionsPage,
   SystemSettingsPage,
@@ -45,8 +45,8 @@ export function AdminRoutes() {
         path="dashboard/super"
         element={
           <RequireOwner>
-            <RouteShell name="SuperAdminDashboard">
-              <SuperAdminDashboard />
+            <RouteShell name="OwnerDashboard">
+              <OwnerDashboardPage />
             </RouteShell>
           </RequireOwner>
         }

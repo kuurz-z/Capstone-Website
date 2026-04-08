@@ -16,6 +16,7 @@
  */
 
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
 import {
   CANONICAL_UTILITY_EVENT_TYPES,
   normalizeUtilityEventType,
@@ -32,7 +33,7 @@ const meterReadingSchema = new mongoose.Schema(
     },
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       required: true,
       index: true,
     },

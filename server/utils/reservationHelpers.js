@@ -157,7 +157,7 @@ export const handleStatusTransition = async (
     const room = await Room.findById(roomId);
     if (room) user.branch = room.branch;
     await user.save();
-    await syncFirebaseClaims({ role: "applicant", tenantStatus: "none" });
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: "applicant" });
   }
 
   if (normalizedNewStatus === "moveIn" && normalizedOldStatus !== "moveIn") {
@@ -172,10 +172,10 @@ export const handleStatusTransition = async (
     normalizedOldStatus !== "cancelled" &&
     user.role === "applicant"
   ) {
-    user.tenantStatus = "none";
+    user.tenantStatus = "applicant";
     user.branch = null;
     await user.save();
-    await syncFirebaseClaims({ role: "applicant", tenantStatus: "none" });
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: "applicant" });
   }
 };
 
@@ -221,7 +221,7 @@ const getFallbackLifecycleState = async (userId, excludedReservationId) => {
   if (reservedReservation) {
     return {
       role: "applicant",
-      tenantStatus: "none",
+      tenantStatus: "applicant",
       branch: reservedReservation.roomId?.branch || null,
     };
   }
@@ -237,7 +237,7 @@ const getFallbackLifecycleState = async (userId, excludedReservationId) => {
 
   return {
     role: "applicant",
-    tenantStatus: "none",
+    tenantStatus: "applicant",
     branch: null,
   };
 };
@@ -252,7 +252,7 @@ export const resolveReservationLifecycleState = async ({
     case "reserved":
       return {
         role: "applicant",
-        tenantStatus: "none",
+        tenantStatus: "applicant",
         branch: await getRoomBranch(roomId),
       };
     case "moveIn":

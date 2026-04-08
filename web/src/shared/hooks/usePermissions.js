@@ -4,7 +4,7 @@
  * =============================================================================
  *
  * Provides a `can(permission)` function that checks if the current user
- * has a specific permission. SuperAdmins bypass all checks.
+ * has a specific permission. Owners bypass all checks.
  *
  * Available permissions (from server/middleware/permissions.js):
  * - manageReservations
@@ -33,7 +33,7 @@ export function usePermissions() {
   const permissions = user?.permissions || [];
 
   const can = useMemo(() => {
-    // SuperAdmins bypass all checks — they have full access
+    // Owners bypass all checks — they have full access
     if (isOwner) {
       return () => true;
     }

@@ -19,11 +19,15 @@ import {
   sendUtilityPeriod,
 } from "../controllers/utilityBillingController.js";
 import { verifyToken, verifyAdmin } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.js";
 
 const router = express.Router();
 
+// Module 4 utility billing route group:
+// periods, readings, results, revisions, and send/close workflows.
 router.use(verifyToken);
 router.use(verifyAdmin);
+router.use(requirePermission("manageBilling"));
 
 // Diagnostics (Shared)
 router.get("/diagnostics", getUtilityDiagnosticsApi);

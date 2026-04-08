@@ -1,3 +1,9 @@
+import { BRANCH_DISPLAY_NAMES } from "../../../shared/utils/constants";
+import {
+  RESERVATION_STAGE_MAP,
+  hasReservationStatus,
+} from "../../../shared/utils/lifecycleNaming";
+
 export const IN_PROGRESS_STATUSES = [
   "pending",
   "visit_pending",
@@ -5,22 +11,15 @@ export const IN_PROGRESS_STATUSES = [
   "payment_pending",
 ];
 
-export const RESERVATION_STAGE_MAP = {
-  pending: { step: 1, label: "Room Selected" },
-  visit_pending: { step: 2, label: "Visit Scheduled" },
-  visit_approved: { step: 3, label: "Filling Application" },
-  payment_pending: { step: 4, label: "Payment Submitted" },
-  reserved: { step: 5, label: "Confirmed" },
-  moveIn: { step: 5, label: "Moved In" },
-  moveOut: { step: 5, label: "Completed" },
-  cancelled: { step: 0, label: "Cancelled" },
-};
+export { RESERVATION_STAGE_MAP };
 
 export function getBranchLabel(branch) {
-  return branch === "gil-puyat" ? "Gil Puyat" : "Guadalupe";
+  return BRANCH_DISPLAY_NAMES[branch] || branch || "Unknown";
 }
 
 export function mapReservationAdminRow(reservation) {
+  const branchCode = reservation.roomId?.branch || "";
+
   return {
     id: reservation._id,
     reservationCode: reservation.reservationCode || "-",
@@ -28,9 +27,10 @@ export function mapReservationAdminRow(reservation) {
       `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
       "Unknown",
     email: reservation.userId?.email || "-",
-    room: reservation.roomId?.name || "-",
+    room: reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
     roomType: reservation.roomId?.type || "",
-    branch: getBranchLabel(reservation.roomId?.branch),
+    branchCode,
+    branch: getBranchLabel(branchCode),
     moveInDate: reservation.moveInDate,
     status: reservation.status || "pending",
     totalPrice: reservation.totalPrice,
@@ -41,7 +41,7 @@ export function mapReservationAdminRow(reservation) {
 }
 
 export function checkOverdueReservation(reservation, now = new Date()) {
-  if (!["pending", "reserved", "payment_pending"].includes(reservation.status)) {
+  if (!hasReservationStatus(reservation.status, "pending", "payment_pending", "reserved")) {
     return false;
   }
   const moveIn = new Date(reservation.moveInDate);

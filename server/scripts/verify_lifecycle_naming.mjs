@@ -2,6 +2,10 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  CANONICAL_RESERVATION_STATUSES,
+  CANONICAL_UTILITY_EVENT_TYPES,
+} from "../utils/lifecycleNaming.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +27,9 @@ async function main() {
     reservations: {
       checkedIn: await db.collection("reservations").countDocuments({ status: "checked-in" }),
       checkedOut: await db.collection("reservations").countDocuments({ status: "checked-out" }),
+      nonCanonicalStatuses: await db.collection("reservations").countDocuments({
+        status: { $nin: CANONICAL_RESERVATION_STATUSES },
+      }),
       missingMoveInDate: await db.collection("reservations").countDocuments({
         checkInDate: { $exists: true, $ne: null },
         $or: [{ moveInDate: { $exists: false } }, { moveInDate: null }],
@@ -39,6 +46,9 @@ async function main() {
       periodStart: await db.collection("utilityreadings").countDocuments({ eventType: "period-start" }),
       periodEnd: await db.collection("utilityreadings").countDocuments({ eventType: "period-end" }),
       manualAdjustment: await db.collection("utilityreadings").countDocuments({ eventType: "manual-adjustment" }),
+      nonCanonicalEventTypes: await db.collection("utilityreadings").countDocuments({
+        eventType: { $nin: CANONICAL_UTILITY_EVENT_TYPES },
+      }),
     },
     utilityPeriods: {
       legacySegments: await db.collection("utilityperiods").countDocuments({
@@ -58,6 +68,11 @@ async function main() {
         $or: [{ moveOutDate: { $exists: false } }, { moveOutDate: null }],
       }),
     },
+    users: {
+      legacyTenantStatusNone: await db.collection("users").countDocuments({
+        tenantStatus: "none",
+      }),
+    },
   };
 
   console.log(JSON.stringify(summary, null, 2));
@@ -65,7 +80,8 @@ async function main() {
   const failures = Object.values(summary.reservations).some(Boolean)
     || Object.values(summary.utilityReadings).some(Boolean)
     || Object.values(summary.utilityPeriods).some(Boolean)
-    || Object.values(summary.bedHistories).some(Boolean);
+    || Object.values(summary.bedHistories).some(Boolean)
+    || Object.values(summary.users).some(Boolean);
 
   await mongoose.disconnect();
   if (failures) {

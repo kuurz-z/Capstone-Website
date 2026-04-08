@@ -24,9 +24,9 @@ export const getInquiryStats = async (req, res, next) => {
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
-    // Get counts by branch (for super admin)
+    // Owners can request branch-wide counts across all branches.
     let branchCounts = [];
-    if (req.isSuperAdmin) {
+    if (req.isOwner) {
       branchCounts = await Inquiry.aggregate([
         { $match: { isArchived: { $ne: true } } },
         { $group: { _id: "$branch", count: { $sum: 1 } } },

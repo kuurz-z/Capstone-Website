@@ -3,14 +3,15 @@
  * PAYMENT ROUTES — PAYMONGO INTEGRATION + PAYMENT HISTORY
  * ============================================================================
  *
- * API endpoints for online payment processing via PayMongo
- * and payment history/ledger queries.
+ * Module 4 payment route group.
+ * Owns checkout sessions and payment history only.
  *
  * ============================================================================
  */
 
 import express from "express";
 import { verifyToken, verifyAdmin } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.js";
 import * as paymentController from "../controllers/paymentController.js";
 import Payment from "../models/Payment.js";
 import User from "../models/User.js";
@@ -88,7 +89,12 @@ router.get("/bill/:billId/payments", verifyToken, async (req, res) => {
  * Get expected vacancy dates for all occupied beds (admin only).
  * Computes from checkInDate + leaseDuration for checked-in reservations.
  */
-router.get("/vacancy-dates", verifyToken, verifyAdmin, async (req, res) => {
+router.get(
+  "/vacancy-dates",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  async (req, res) => {
   try {
     const reservations = await Reservation.find({
       status: { $in: CURRENT_RESIDENT_STATUS_QUERY },

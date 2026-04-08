@@ -25,6 +25,7 @@ import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { roomApi } from "../../../shared/api/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { showNotification } from "../../../shared/utils/notification";
+import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import { formatRoomType, formatBranch } from "../utils/formatters";
 import OccupancyTrackingPage from "./OccupancyTrackingPage";
 
@@ -137,8 +138,8 @@ function RoomAvailabilityPage() {
   const requestedTab = searchParams.get("tab") || "rooms";
   const activeTab = TAB_KEYS.has(requestedTab) ? requestedTab : "rooms";
 
-  // Use Digital Twin snapshot so bed dots and occupancy bar are reservation-aware
-  // Admins are branch-scoped; super admins (owners) see all
+  // Use the Digital Twin snapshot as a read model so bed dots and occupancy stay reservation-aware.
+  // Branch admins are branch-scoped; owners can view all branches.
   const defaultBranch = user?.branch && user.role !== "owner" ? user.branch : "all";
   const snapshotBranch = user?.role === "owner" ? branchFilter : defaultBranch;
   const dtBranch = snapshotBranch === "all" ? "all" : snapshotBranch;
@@ -264,7 +265,17 @@ function RoomAvailabilityPage() {
 
   const handleSaveConfig = async (updatedRoom) => {
     try {
-      await roomApi.update(updatedRoom._id, { beds: updatedRoom.beds });
+      const originalRoom = rooms.find((room) => room._id === updatedRoom._id);
+      const changedBeds = (updatedRoom.beds || []).filter((bed) => {
+        const previousBed = originalRoom?.beds?.find((entry) => entry.id === bed.id);
+        return previousBed && previousBed.status !== bed.status;
+      });
+
+      await Promise.all(
+        changedBeds.map((bed) =>
+          roomApi.updateBedStatus(updatedRoom._id, bed.id, bed.status),
+        ),
+      );
       showNotification("Room configuration updated", "success");
       queryClient.invalidateQueries({ queryKey: ["digital-twin", "snapshot"] });
       setSelectedRoom(null);
@@ -334,11 +345,7 @@ function RoomAvailabilityPage() {
   const roomFilters = [
     {
       key: "branch",
-      options: [
-        { value: "all", label: "All Branches" },
-        { value: "gil-puyat", label: "Gil Puyat" },
-        { value: "guadalupe", label: "Guadalupe" },
-      ],
+      options: OWNER_BRANCH_FILTER_OPTIONS,
       value: branchFilter,
       onChange: setBranchFilter,
     },

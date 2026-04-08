@@ -13,11 +13,12 @@
 
 import { Router } from "express";
 import { verifyToken, verifyAdmin } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.js";
 import { getSnapshot, getRoomDetail } from "../controllers/digitalTwinController.js";
 
 const router = Router();
 
-router.get("/snapshot", verifyToken, verifyAdmin, getSnapshot);
-router.get("/room/:roomId", verifyToken, verifyAdmin, getRoomDetail);
+router.get("/snapshot", verifyToken, verifyAdmin, requirePermission("viewReports"), getSnapshot);
+router.get("/room/:roomId", verifyToken, verifyAdmin, requirePermission("viewReports"), getRoomDetail);
 
 export default router;

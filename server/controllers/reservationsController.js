@@ -33,6 +33,7 @@ import {
 import {
   ACTIVE_OCCUPANCY_STATUS_QUERY,
   ACTIVE_STAY_STATUS_QUERY,
+  canTransitionReservationStatus,
   CURRENT_RESIDENT_STATUS_QUERY,
   hasReservationStatus,
   normalizeReservationPayload,
@@ -369,11 +370,11 @@ export const createReservation = async (req, res, next) => {
         existingStatus: existingActive.status,
       });
 
-    const { roomId, roomName, moveInDate, totalPrice } = payload;
-    if ((!roomId && !roomName) || !moveInDate || !totalPrice)
+    const { roomId, roomName, roomNumber, moveInDate, totalPrice } = payload;
+    if ((!roomId && !roomNumber && !roomName) || !moveInDate || !totalPrice)
       return res.status(400).json({
         error:
-          "Missing required fields: roomId or roomName, moveInDate, and totalPrice are required",
+          "Missing required fields: roomId, roomNumber, or roomName plus moveInDate and totalPrice are required",
         code: "MISSING_REQUIRED_FIELDS",
       });
 
@@ -385,9 +386,27 @@ export const createReservation = async (req, res, next) => {
       });
 
     // Verify room
-    const room = roomId
-      ? await Room.findById(roomId)
-      : await Room.findOne({ name: roomName });
+    let room = null;
+    if (roomId) {
+      room = await Room.findById(roomId);
+    } else {
+      const legacyRoomFilter = { isArchived: false };
+      if (roomNumber) {
+        legacyRoomFilter.roomNumber = roomNumber;
+      } else {
+        legacyRoomFilter.name = roomName;
+      }
+
+      const matchedRooms = await Room.find(legacyRoomFilter).limit(2);
+      if (matchedRooms.length > 1) {
+        return res.status(400).json({
+          error:
+            "Room reference is ambiguous. Please retry using the room ID or branch-scoped room number.",
+          code: "AMBIGUOUS_ROOM_REFERENCE",
+        });
+      }
+      [room] = matchedRooms;
+    }
     if (!room)
       return res
         .status(404)
@@ -558,6 +577,19 @@ export const updateReservation = async (req, res, next) => {
       });
     }
 
+    if (
+      req.body.status !== undefined &&
+      !canTransitionReservationStatus(
+        existingReservation.status,
+        req.body.status,
+      )
+    ) {
+      return res.status(400).json({
+        error: `Invalid reservation status transition from "${normalizeReservationStatus(existingReservation.status)}" to "${normalizeReservationStatus(req.body.status)}".`,
+        code: "INVALID_RESERVATION_STATUS_TRANSITION",
+      });
+    }
+
     // Status transition side-effects
     if (
       req.body.status === "reserved" &&
@@ -717,7 +749,7 @@ export const updateReservation = async (req, res, next) => {
 
     // Auto-transition: visit_pending → visit_approved when admin approves visit
     if (req.body.visitApproved === true && !existingReservation.visitApproved) {
-      if (["pending", "visit_pending"].includes(existingReservation.status)) {
+      if (hasReservationStatus(existingReservation.status, ["pending", "visit_pending"])) {
         reservation.status = "visit_approved";
       }
       // Stamp the approval time so the activity timeline can show it
@@ -843,7 +875,7 @@ export const updateReservation = async (req, res, next) => {
     // Send confirmation email if status just changed to "reserved"
     if (
       req.body.status === "reserved" &&
-      oldData.status !== "reserved" &&
+      !hasReservationStatus(oldData.status, "reserved") &&
       updatedReservation.userId?.email
     ) {
       try {
@@ -1065,7 +1097,9 @@ export const updateReservationByUser = async (req, res, next) => {
         roomId: reservation.roomId,
         visitDate: updates.visitDate,
         visitTime: updates.visitTime || reservation.visitTime,
-        status: { $in: ["visit_pending", "visit_approved"] },
+        status: {
+          $in: reservationStatusesForQuery("visit_pending", "visit_approved"),
+        },
         isArchived: { $ne: true },
       })
         .select("_id visitDate visitTime")
@@ -1100,7 +1134,7 @@ export const updateReservationByUser = async (req, res, next) => {
     }
     // pending → visit_pending: when tenant first schedules a visit
     if (updates.visitDate && updates.agreedToPrivacy) {
-      if (reservation.status === "pending") {
+      if (hasReservationStatus(reservation.status, "pending")) {
         updates.status = "visit_pending";
         // Don't push "pending" to visitHistory here — the active visit row shows current state.
         // History only records terminal outcomes (rejected, approved, cancelled).
@@ -1108,7 +1142,7 @@ export const updateReservationByUser = async (req, res, next) => {
     }
     // visit_approved → payment_pending: when tenant submits full application
     if (updates.firstName && updates.lastName && updates.mobileNumber) {
-      if (reservation.status === "visit_approved") {
+      if (hasReservationStatus(reservation.status, "visit_approved")) {
         updates.status = "payment_pending";
       }
       // Stamp submission time if not already set (first-time application)
@@ -1122,7 +1156,7 @@ export const updateReservationByUser = async (req, res, next) => {
       updates.paymentStatus = "pending";
       updates.paymentDate = new Date();
       // Ensure status reflects payment stage
-      if (["visit_approved", "payment_pending"].includes(reservation.status)) {
+      if (hasReservationStatus(reservation.status, ["visit_approved", "payment_pending"])) {
         updates.status = "payment_pending";
       }
       const existing = await Reservation.findById(reservationId);
@@ -1133,6 +1167,16 @@ export const updateReservationByUser = async (req, res, next) => {
           ref += chars.charAt(Math.floor(Math.random() * chars.length));
         updates.paymentReference = ref;
       }
+    }
+
+    if (
+      updates.status !== undefined &&
+      !canTransitionReservationStatus(reservation.status, updates.status)
+    ) {
+      return res.status(400).json({
+        error: `Invalid reservation status transition from "${normalizeReservationStatus(reservation.status)}" to "${normalizeReservationStatus(updates.status)}".`,
+        code: "INVALID_RESERVATION_STATUS_TRANSITION",
+      });
     }
 
     const updatedReservation = await Reservation.findByIdAndUpdate(

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { BRANCH_OPTIONS } from "../../../../shared/utils/constants";
 import { formatBranch, formatRoomType } from "../../utils/formatters";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
@@ -177,8 +178,11 @@ export default function RoomFormModal({ room, onClose, onSave }) {
                   value={form.branch}
                   onChange={(e) => handleChange("branch", e.target.value)}
                 >
-                  <option value="gil-puyat">Gil Puyat</option>
-                  <option value="guadalupe">Guadalupe</option>
+                  {BRANCH_OPTIONS.map((branch) => (
+                    <option key={branch.value} value={branch.value}>
+                      {branch.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="room-form-group">

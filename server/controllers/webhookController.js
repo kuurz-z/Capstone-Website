@@ -34,7 +34,6 @@ import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js
 import { notify } from "../utils/notificationService.js";
 import logger from "../middleware/logger.js";
 import { BUSINESS } from "../config/constants.js";
-import { getBillRemainingAmount } from "../utils/billingPolicy.js";
 import { getReservationFeeAmount } from "../utils/businessSettings.js";
 
 /* ─── helpers ───────────────────────────────────── */
@@ -45,6 +44,12 @@ import { getReservationFeeAmount } from "../utils/businessSettings.js";
 function extractPaymentId(eventData) {
   const payments = eventData?.attributes?.payments || [];
   return payments[0]?.id || eventData?.id || "unknown";
+}
+
+function extractPaidAmount(eventData) {
+  const payments = eventData?.attributes?.payments || [];
+  const amountCents = payments[0]?.attributes?.amount;
+  return amountCents ? amountCents / 100 : null;
 }
 
 /* ─── handlers ───────────────────────────────────── */
@@ -60,7 +65,7 @@ function extractPaymentId(eventData) {
  *   5. Notify tenant + send confirmation email
  */
 async function handleDepositPayment(metadata, eventData) {
-  const { reservationId, userId } = metadata;
+  const { reservationId } = metadata;
 
   const reservation = await Reservation.findById(reservationId).populate(
     "roomId",
@@ -71,9 +76,17 @@ async function handleDepositPayment(metadata, eventData) {
     return;
   }
 
-  // Idempotent — skip if already paid
-  if (reservation.paymentStatus === "paid") {
-    logger.info({ reservationId }, "Webhook: Deposit already paid, skipping");
+  const paymentId = extractPaymentId(eventData);
+
+  // Idempotent — skip if already paid OR same PayMongo payment was processed.
+  if (
+    reservation.paymentStatus === "paid" ||
+    (reservation.paymongoPaymentId && reservation.paymongoPaymentId === paymentId)
+  ) {
+    logger.info(
+      { reservationId, paymentId },
+      "Webhook: Deposit already processed, skipping",
+    );
     return;
   }
 
@@ -82,7 +95,6 @@ async function handleDepositPayment(metadata, eventData) {
   const oldData = { status: oldStatus };
 
   // Update payment fields
-  const paymentId = extractPaymentId(eventData);
   if (!reservation.reservationFeeAmount) {
     reservation.reservationFeeAmount = await getReservationFeeAmount();
   }
@@ -91,17 +103,28 @@ async function handleDepositPayment(metadata, eventData) {
   reservation.paymentMethod = "paymongo";
   reservation.paymongoPaymentId = paymentId;
 
-  // Auto-reserve: set status to "reserved" (triggers reservation code generation in pre-save hook)
-  reservation.status = "reserved";
+  const canAutoReserve = reservation.status === "pending";
+  if (canAutoReserve) {
+    // Auto-reserve from pending only.
+    reservation.status = "reserved";
+  }
 
   await reservation.save();
 
-  // Update room occupancy — lock the bed
-  await updateOccupancyOnReservationChange(reservation, oldData);
+  // Update room occupancy only if status actually moved to reserved.
+  if (canAutoReserve) {
+    await updateOccupancyOnReservationChange(reservation, oldData);
+  }
 
   logger.info(
-    { reservationId, oldStatus, newStatus: "reserved", paymentId },
-    "Webhook: Deposit paid → reservation auto-reserved",
+    {
+      reservationId,
+      oldStatus,
+      newStatus: reservation.status,
+      paymentId,
+      autoReserved: canAutoReserve,
+    },
+    "Webhook: Deposit payment processed",
   );
 
   // Notify tenant
@@ -121,12 +144,8 @@ async function handleDepositPayment(metadata, eventData) {
     if (tenant?.email) {
       // Use the actual amount charged through PayMongo (in centavos ÷ 100),
       // NOT reservation.totalPrice which is the full stay cost, not the deposit.
-      const paidAmountCents =
-        eventData?.attributes?.payments?.[0]?.attributes?.amount ||
-        checkoutData?.attributes?.amount ||
-        null;
-      const actualPaidAmount = paidAmountCents
-        ? paidAmountCents / 100
+      const actualPaidAmount = extractPaidAmount(eventData)
+        ? extractPaidAmount(eventData)
         : reservation.reservationFeeAmount || BUSINESS.DEPOSIT_AMOUNT;
 
       const paymentId = extractPaymentId(eventData);
@@ -161,7 +180,7 @@ async function handleDepositPayment(metadata, eventData) {
  *   4. Notify tenant + send confirmation email
  */
 async function handleBillPayment(metadata, eventData) {
-  const { billId, userId } = metadata;
+  const { billId } = metadata;
 
   const bill = await Bill.findById(billId);
   if (!bill) {
@@ -169,14 +188,15 @@ async function handleBillPayment(metadata, eventData) {
     return;
   }
 
-  // Idempotent — skip if already paid
-  if (bill.status === "paid") {
-    logger.info({ billId }, "Webhook: Bill already paid, skipping");
+  const paymentId = extractPaymentId(eventData);
+
+  // Idempotent — skip if already paid OR same PayMongo payment was processed.
+  if (bill.status === "paid" || (bill.paymongoPaymentId && bill.paymongoPaymentId === paymentId)) {
+    logger.info({ billId, paymentId }, "Webhook: Bill payment already processed, skipping");
     return;
   }
 
   // Update payment fields
-  const paymentId = extractPaymentId(eventData);
   bill.paidAmount = bill.totalAmount;
   bill.remainingAmount = 0;
   bill.status = "paid";

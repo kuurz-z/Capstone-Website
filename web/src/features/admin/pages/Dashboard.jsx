@@ -167,7 +167,7 @@ export default function Dashboard() {
         {error && <div className="dash-error">{error}</div>}
         {isLoading && <div className="dash-loading">Loading dashboard...</div>}
 
-        {/* Super Admin callout */}
+        {/* Owner callout */}
         {isOwner && (
           <div className="dash-callout">
             <div className="dash-callout__left">

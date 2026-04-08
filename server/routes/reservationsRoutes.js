@@ -24,6 +24,10 @@ import {
 } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
+  requireAnyPermission,
+  requirePermission,
+} from "../middleware/permissions.js";
+import {
   getReservations,
   getCurrentResidents,
   getReservationById,
@@ -52,7 +56,7 @@ const router = express.Router();
  *
  * Retrieve reservations based on user role:
  * - Admin: Get all reservations for their branch
- * - Super Admin: Get all reservations
+ * - Owner: Get all reservations
  * - Tenant: Get only their own reservations
  *
  * Access: Authenticated users only
@@ -65,6 +69,7 @@ router.get(
   "/current-residents",
   verifyToken,
   verifyAdmin,
+  requireAnyPermission(["manageReservations", "manageTenants"]),
   getCurrentResidents,
 );
 
@@ -107,7 +112,7 @@ router.post("/", verifyToken, verifyApplicant, createReservation);
  *
  * Update an existing reservation (status, payment, notes, etc.).
  *
- * Access: Admin (must be from room's branch) | Super Admin (any reservation)
+ * Access: Admin (must be from room's branch) | Owner (any reservation)
  *
  * @param {string} reservationId - MongoDB ObjectId of the reservation
  * @body {Object} Updated reservation data
@@ -118,6 +123,7 @@ router.put(
   verifyToken,
   verifyAdmin,
   filterByBranch,
+  requirePermission("manageReservations"),
   updateReservation,
 );
 
@@ -144,7 +150,7 @@ router.put(
  *
  * Delete an existing reservation.
  *
- * Access: User (own reservation) | Admin (any reservation in their branch) | Super Admin (any reservation)
+ * Access: User (own reservation) | Admin (any reservation in their branch) | Owner (any reservation)
  *
  * @param {string} reservationId - MongoDB ObjectId of the reservation
  * @returns {Object} Success message with deleted reservation ID
@@ -156,7 +162,7 @@ router.delete("/:reservationId", verifyToken, deleteReservation);
  *
  * Extend a reservation's move-in date (admin action for at-risk reservations).
  *
- * Access: Admin (must be from room's branch) | Super Admin (any reservation)
+ * Access: Admin (must be from room's branch) | Owner (any reservation)
  *
  * @param {string} reservationId - MongoDB ObjectId of the reservation
  * @body {number} extensionDays - Number of days to extend (default: 3)
@@ -167,6 +173,7 @@ router.put(
   verifyToken,
   verifyAdmin,
   filterByBranch,
+  requirePermission("manageReservations"),
   extendReservation,
 );
 
@@ -175,7 +182,7 @@ router.put(
  *
  * Release a reservation slot (admin action to cancel and free up room).
  *
- * Access: Admin (must be from room's branch) | Super Admin (any reservation)
+ * Access: Admin (must be from room's branch) | Owner (any reservation)
  *
  * @param {string} reservationId - MongoDB ObjectId of the reservation
  * @body {string} reason - Reason for releasing the slot
@@ -186,6 +193,7 @@ router.put(
   verifyToken,
   verifyAdmin,
   filterByBranch,
+  requirePermission("manageReservations"),
   releaseSlot,
 );
 
@@ -194,7 +202,7 @@ router.put(
  *
  * Soft delete (archive) a reservation.
  *
- * Access: Admin (must be from room's branch) | Super Admin (any reservation)
+ * Access: Admin (must be from room's branch) | Owner (any reservation)
  *
  * @param {string} reservationId - MongoDB ObjectId of the reservation
  * @body {string} reason - Reason for archiving
@@ -205,6 +213,7 @@ router.put(
   verifyToken,
   verifyAdmin,
   filterByBranch,
+  requirePermission("manageReservations"),
   archiveReservation,
 );
 
@@ -213,7 +222,7 @@ router.put(
  *
  * Renew a tenant's contract (extend lease duration).
  *
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  *
  * @param {string} reservationId - MongoDB ObjectId
  * @body {number} additionalMonths - Months to add (1-24, default 12)
@@ -225,6 +234,7 @@ router.put(
   verifyToken,
   verifyAdmin,
   filterByBranch,
+  requirePermission("manageReservations"),
   renewContract,
 );
 
@@ -233,7 +243,7 @@ router.put(
  *
  * Check out a tenant (end stay, vacate bed, update user status).
  *
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  *
  * @param {string} reservationId - MongoDB ObjectId
  * @body {string} notes - Checkout notes
@@ -245,6 +255,7 @@ router.put(
   verifyToken,
   verifyAdmin,
   filterByBranch,
+  requirePermission("manageReservations"),
   checkoutReservation,
 );
 
@@ -253,7 +264,7 @@ router.put(
  *
  * Transfer a tenant to a different room/bed.
  *
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  *
  * @param {string} reservationId - MongoDB ObjectId
  * @body {string} newRoomId - Target room ObjectId
@@ -266,6 +277,7 @@ router.put(
   verifyToken,
   verifyAdmin,
   filterByBranch,
+  requirePermission("manageReservations"),
   transferTenant,
 );
 
@@ -304,10 +316,16 @@ router.get("/stats/occupancy", verifyToken, getBranchOccupancyStatistics);
  * Get expected vacancy dates per occupied bed.
  * Query: ?branch=gil-puyat or ?roomId=<id>
  *
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  *
  * @returns {Object} Vacancy forecast per room/bed
  */
-router.get("/vacancy-forecast", verifyToken, verifyAdmin, getVacancyForecast);
+router.get(
+  "/vacancy-forecast",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageReservations"),
+  getVacancyForecast,
+);
 
 export default router;

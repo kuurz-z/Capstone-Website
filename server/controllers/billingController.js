@@ -19,7 +19,6 @@ import {
   AppError,
 } from "../middleware/errorHandler.js";
 import {
-  sendBillGeneratedEmail,
   sendPaymentApprovedEmail,
   sendPaymentRejectedEmail,
 } from "../config/email.js";
@@ -39,22 +38,13 @@ import { sendDraftUtilityBills } from "../utils/utilityBillFlow.js";
 import { isWaterBillableRoom } from "../utils/utilityFlowRules.js";
 import {
   CURRENT_RESIDENT_STATUS_QUERY,
-  hasReservationStatus,
   readMoveInDate,
 } from "../utils/lifecycleNaming.js";
+import { resolveAdminAccessContext } from "../utils/adminAccess.js";
+
+const getAdminInfo = resolveAdminAccessContext;
 
 /* ─── shared helpers ─────────────────────────────── */
-
-/** Get admin's role and branch from MongoDB */
-async function getAdminInfo(req) {
-  const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
-  return {
-    role: dbUser?.role || "user",
-    branch: dbUser?.branch || null,
-    isSuperAdmin: dbUser?.role === "owner",
-    _id: dbUser?._id || null,
-  };
-}
 
 /** Auto-mark overdue bills (shared by getBillsByBranch + getAllBills) */
 async function markOverdueBills(bills) {
@@ -532,11 +522,11 @@ export const getBillingHistory = async (req, res, next) => {
 export const getBillingStats = async (req, res, next) => {
   try {
     // req.branchFilter is set by filterByBranch middleware:
-    //   null → superAdmin (cross-branch), string → regular admin's branch
-    const isSuperAdmin = req.isSuperAdmin;
-    const branch = req.branchFilter;   // null for SA, branch string for admin
+    //   null → owner scope (cross-branch), string → regular admin's branch
+    const isOwner = req.isOwner;
+    const branch = req.branchFilter;
     if (
-      !isSuperAdmin &&
+      !isOwner &&
       (!branch || !["gil-puyat", "guadalupe"].includes(branch))
     )
       return res.status(403).json({ error: "Invalid branch" });
@@ -555,7 +545,7 @@ export const markBillAsPaid = async (req, res, next) => {
     const admin = await getAdminInfo(req);
     const bill = await Bill.findById(billId);
     if (!bill) return res.status(404).json({ error: "Bill not found" });
-    if (!admin.isSuperAdmin && bill.branch !== admin.branch)
+    if (!admin.isOwner && bill.branch !== admin.branch)
       return res.status(403).json({ error: "Bill not found" });
     const appliedAmount = Number(
       amount ?? bill.remainingAmount ?? bill.totalAmount,
@@ -578,15 +568,15 @@ export const markBillAsPaid = async (req, res, next) => {
 
 export const getBillsByBranch = async (req, res, next) => {
   try {
-    const isSuperAdmin = req.isSuperAdmin;
+    const isOwner = req.isOwner;
     // Regular admin: req.branchFilter is their branch (enforced by middleware)
-    // Super admin: req.branchFilter is null, can pass branch via query
+    // Owner: req.branchFilter is null, can pass branch via query
     const branch = req.branchFilter ||
-      (isSuperAdmin && req.query.branch ? req.query.branch : null);
+      (isOwner && req.query.branch ? req.query.branch : null);
 
     if (!branch) {
-      if (isSuperAdmin) {
-        // Super admin without branch filter — get all
+      if (isOwner) {
+        // Owner without branch filter — get all
         const result = await fetchBills({ isArchived: false }, req.query);
         return res.json(result);
       }
@@ -602,312 +592,11 @@ export const getBillsByBranch = async (req, res, next) => {
   }
 };
 
-export const generateRoomBill = async (req, res, next) => {
-  try {
-    return res.status(410).json({
-      error: "Legacy room billing is disabled. Use the utility billing flow to generate drafts, then publish from Issue Invoices.",
-    });
-    const admin = await getAdminInfo(req);
-    const { roomId, billingMonth, dueDate, charges = {} } = req.body;
-    if (!roomId) return res.status(400).json({ error: "Room is required" });
-
-    const room = await Room.findById(roomId);
-    if (!room) return res.status(404).json({ error: "Room not found" });
-    if (!admin.isSuperAdmin && room.branch !== admin.branch)
-      return res
-        .status(403)
-        .json({ error: "Cannot create bills for another branch" });
-
-    const monthDate = dayjs(billingMonth || undefined);
-    const monthStart = monthDate.startOf("month").toDate();
-    const monthEnd = monthDate.endOf("month").toDate();
-
-    // Check duplicate room bill
-    if (
-      await RoomBill.findOne({
-        roomId: room._id,
-        billingMonth: monthStart,
-        isArchived: false,
-      })
-    ) {
-      return res
-        .status(409)
-        .json({ error: "A bill already exists for this room and month" });
-    }
-
-    // Find checked-in tenants via occupied beds
-    const occupiedBeds = room.beds.filter(
-      (b) => !b.available && b.occupiedBy?.userId,
-    );
-
-    const tenantInfos = [];
-    const seenUserIds = new Set();
-
-    // Source 1: Bed occupancy data — batch fetch all reservations in one query (N+1 fix)
-    const bedReservationIds = occupiedBeds
-      .map((b) => b.occupiedBy?.reservationId)
-      .filter(Boolean);
-
-    const bedReservations = bedReservationIds.length > 0
-      ? await Reservation.find({
-          _id: { $in: bedReservationIds },
-          status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
-          isArchived: { $ne: true },
-        }).populate("userId", "firstName lastName email")
-      : [];
-
-    // O(1) lookup by reservation ID
-    const bedReservationMap = new Map(
-      bedReservations.map((r) => [String(r._id), r]),
-    );
-
-    for (const bed of occupiedBeds) {
-      if (!bed.occupiedBy.reservationId) continue;
-      const reservation = bedReservationMap.get(String(bed.occupiedBy.reservationId));
-      if (!reservation?.userId || !hasReservationStatus(reservation.status, "moveIn")) continue;
-      if (seenUserIds.has(String(reservation.userId._id))) continue;
-      seenUserIds.add(String(reservation.userId._id));
-
-      const moveInDate =
-        bed.occupiedBy.occupiedSince || readMoveInDate(reservation) || monthStart;
-      const rent = suggestRent(reservation, room, moveInDate);
-      const customCharges = reservation.customCharges || [];
-      const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
-      const tenantEnd = dayjs(Math.min(Date.now(), dayjs(monthEnd).add(1, "day").valueOf()));
-      const daysInRoom = Math.max(1, tenantEnd.diff(tenantStart, "day", true) | 0 || 1);
-
-      tenantInfos.push({
-        userId: reservation.userId._id,
-        reservationId: reservation._id,
-        userName:
-          `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim() ||
-          "Tenant",
-        email: reservation.userId.email || "",
-        rent,
-        customCharges,
-        daysInRoom,
-        moveInDate,
-      });
-    }
-
-    // Source 2: Direct reservation query fallback (if bed data is stale)
-    if (tenantInfos.length === 0) {
-      const checkedInReservations = await Reservation.find({
-        roomId: room._id,
-        status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
-        isArchived: { $ne: true },
-      }).populate("userId", "firstName lastName email");
-
-      for (const reservation of checkedInReservations) {
-        if (!reservation?.userId) continue;
-        if (seenUserIds.has(String(reservation.userId._id))) continue;
-        seenUserIds.add(String(reservation.userId._id));
-
-        const moveInDate = readMoveInDate(reservation) || monthStart;
-        const rent = suggestRent(reservation, room, moveInDate);
-        const customCharges = reservation.customCharges || [];
-        const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
-        const tenantEnd = dayjs(Math.min(Date.now(), dayjs(monthEnd).add(1, "day").valueOf()));
-        const daysInRoom = Math.max(1, tenantEnd.diff(tenantStart, "day", true) | 0 || 1);
-
-        tenantInfos.push({
-          userId: reservation.userId._id,
-          reservationId: reservation._id,
-          userName:
-            `${reservation.userId.firstName || ""} ${reservation.userId.lastName || ""}`.trim() ||
-            "Tenant",
-          email: reservation.userId.email || "",
-          rent,
-          customCharges,
-          daysInRoom,
-          moveInDate,
-        });
-      }
-    }
-
-    if (tenantInfos.length === 0)
-      return res.status(400).json({
-        error:
-          "No moved-in tenants found in this room. Only tenants with 'moveIn' status can be billed.",
-      });
-
-    // Pro-rata calculation
-    const totalOccupantDays = tenantInfos.reduce((s, t) => s + t.daysInRoom, 0);
-    const roomCharges = {
-      electricity: Number(charges.electricity) || 0,
-      water: Number(charges.water) || 0,
-    };
-    const totalUtilities = roomCharges.electricity + roomCharges.water;
-    const adminUser = await User.findOne({ firebaseUid: req.user.uid });
-
-    const generatedBills = [];
-    const tenantBreakdown = [];
-
-    for (const tenant of tenantInfos) {
-      const share = tenant.daysInRoom / totalOccupantDays;
-      const dupeFilter = {
-        userId: tenant.userId,
-        billingMonth: monthStart,
-        isArchived: false,
-      };
-      if (tenant.reservationId) dupeFilter.reservationId = tenant.reservationId;
-      if (await Bill.findOne(dupeFilter)) continue;
-
-      const te = r2(roomCharges.electricity * share);
-      const tw = computeWaterShare(room.type, roomCharges.water, tenantInfos.length);
-      const utilityShare = te + tw;
-
-      // Custom charges from reservation (appliance fees, etc.)
-      const tenantCustomCharges = tenant.customCharges || [];
-      const customChargesTotal = tenantCustomCharges.reduce(
-        (sum, c) => sum + (Number(c.amount) || 0),
-        0,
-      );
-
-      const utilityCustomCharges = room.branch === "guadalupe" ? 0 : customChargesTotal;
-      const grossAmount = roundMoney(utilityShare + utilityCustomCharges);
-      const billingContext = tenant.reservationId
-        ? await getReservationBillingContext(tenant.reservationId)
-        : null;
-      const reservationCreditApplied = Math.min(
-        grossAmount,
-        billingContext?.creditAvailable || 0,
-      );
-      const cycleDueDate = dueDate
-        ? dayjs(dueDate).toDate()
-        : billingContext?.cycle?.dueDate || monthDate.add(1, "month").date(15).toDate();
-
-      const bill = new Bill({
-        reservationId: tenant.reservationId,
-        userId: tenant.userId,
-        branch: room.branch,
-        roomId: room._id,
-        billingMonth: billingContext?.cycle?.billingMonth || monthStart,
-        billingCycleStart: billingContext?.cycle?.billingCycleStart || monthStart,
-        billingCycleEnd: billingContext?.cycle?.billingCycleEnd || cycleDueDate,
-        dueDate: cycleDueDate,
-        isFirstCycleBill: !!billingContext?.isFirstCycleBill,
-        proRataDays: tenant.daysInRoom,
-        charges: {
-          rent: 0,
-          electricity: te,
-          water: tw,
-          applianceFees: utilityCustomCharges,
-          corkageFees: 0,
-          penalty: 0,
-          discount: 0,
-        },
-        additionalCharges: room.branch === "guadalupe" ? [] : tenantCustomCharges.map((c) => ({
-          name: c.name,
-          amount: c.amount,
-        })),
-        grossAmount,
-        reservationCreditApplied,
-        totalAmount: grossAmount,
-        remainingAmount: grossAmount,
-        status: "draft",
-      });
-      syncBillAmounts(bill);
-      await bill.save();
-      if (billingContext?.reservation && reservationCreditApplied > 0) {
-        billingContext.reservation.reservationCreditConsumedAt = new Date();
-        billingContext.reservation.reservationCreditAppliedBillId = bill._id;
-        await billingContext.reservation.save();
-      }
-      generatedBills.push(bill._id);
-      tenantBreakdown.push({
-        userId: tenant.userId,
-        reservationId: tenant.reservationId,
-        daysInRoom: tenant.daysInRoom,
-        proRataShare: Math.round(share * 10000) / 10000,
-        rent: 0,
-        customCharges: room.branch === "guadalupe" ? [] : tenantCustomCharges,
-        utilityShare,
-        grossAmount,
-        reservationCreditApplied,
-        totalAmount: bill.totalAmount,
-        billId: bill._id,
-      });
-    }
-
-    if (generatedBills.length === 0)
-      return res.status(409).json({
-        error:
-          "Bills already exist for all tenants in this room for the selected month",
-      });
-
-    const roomBill = new RoomBill({
-      roomId: room._id,
-      branch: room.branch,
-      billingMonth: monthStart,
-      dueDate: dueDate ? dayjs(dueDate).toDate() : null,
-      charges: roomCharges,
-      totalCharges: totalUtilities,
-      generatedBills,
-      status: "generated",
-      generatedBy: adminUser?._id || null,
-      tenantBreakdown,
-    });
-    await roomBill.save();
-    await Bill.updateMany(
-      { _id: { $in: generatedBills } },
-      { $set: { roomBillId: roomBill._id } },
-    );
-
-    res.status(201).json({
-      success: true,
-      roomBill: {
-        id: roomBill._id,
-        room: room.name,
-        billingMonth: monthStart,
-        totalUtilities,
-        tenantsCount: tenantBreakdown.length,
-        tenantBreakdown: tenantBreakdown.map((t) => ({
-          rent: 0,
-          utilityShare: t.utilityShare,
-          totalAmount: t.totalAmount,
-          daysInRoom: t.daysInRoom,
-          proRataPercent: Math.round(t.proRataShare * 100),
-        })),
-      },
-    });
-
-    // Send bill notification emails to all billed tenants
-    return;
-    const monthLabel = dayjs(monthStart).format("MMMM YYYY");
-    const dueDateLabel = dayjs(billDueDate).format("MMMM D, YYYY");
-    for (const tenant of tenantInfos) {
-      if (!tenant.email) continue;
-      try {
-        // Use the pre-computed total from tenantBreakdown to avoid NaN
-        const breakdown = tenantBreakdown.find(
-          (t) => String(t.userId) === String(tenant.userId),
-        );
-        await sendBillGeneratedEmail({
-          to: tenant.email,
-          tenantName: tenant.userName,
-          billingMonth: monthLabel,
-          totalAmount: breakdown?.totalAmount || 0,
-          dueDate: dueDateLabel,
-          branchName: room.branch || "Lilycrest",
-        });
-      } catch (emailErr) {
-        logger.warn(
-          { err: emailErr, email: tenant.email },
-          "Bill notification email failed",
-        );
-      }
-    }
-  } catch (error) {
-    next(error);
-  }
-};
-
 export const getRoomsWithTenants = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const branch =
-      admin.isSuperAdmin && req.query.branch ? req.query.branch : admin.branch;
+      admin.isOwner && req.query.branch ? req.query.branch : admin.branch;
     const filter = { isArchived: false };
     if (branch) filter.branch = branch;
 
@@ -1121,8 +810,28 @@ export const verifyPayment = async (req, res, next) => {
     const admin = await getAdminInfo(req);
     const bill = await Bill.findById(billId);
     if (!bill) return res.status(404).json({ error: "Bill not found" });
-    if (!admin.isSuperAdmin && bill.branch !== admin.branch)
+    if (!admin.isOwner && bill.branch !== admin.branch)
       return res.status(403).json({ error: "Access denied" });
+    if (
+      action === "approve" &&
+      bill.paymentProof?.verificationStatus === "approved"
+    ) {
+      return res.json({
+        success: true,
+        message: "Payment proof already approved",
+        bill,
+      });
+    }
+    if (
+      action === "reject" &&
+      bill.paymentProof?.verificationStatus === "rejected"
+    ) {
+      return res.json({
+        success: true,
+        message: "Payment proof already rejected",
+        bill,
+      });
+    }
     if (bill.paymentProof?.verificationStatus !== "pending-verification")
       return res
         .status(400)
@@ -1204,7 +913,7 @@ export const getPendingVerifications = async (req, res, next) => {
       "paymentProof.verificationStatus": "pending-verification",
       isArchived: false,
     };
-    if (!admin.isSuperAdmin && admin.branch) filter.branch = admin.branch;
+    if (!admin.isOwner && admin.branch) filter.branch = admin.branch;
 
     const bills = await Bill.find(filter)
       .populate("userId", "firstName lastName email")
@@ -1248,7 +957,7 @@ export const applyPenalties = async (req, res, next) => {
       dueDate: { $lt: now.toDate() },
       isArchived: false,
     };
-    if (!admin.isSuperAdmin && admin.branch) filter.branch = admin.branch;
+    if (!admin.isOwner && admin.branch) filter.branch = admin.branch;
 
     const overdueBills = await Bill.find(filter);
     let updated = 0;
@@ -1284,7 +993,7 @@ export const getBillingReport = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const filter = { isArchived: false };
-    if (!admin.isSuperAdmin && admin.branch) filter.branch = admin.branch;
+    if (!admin.isOwner && admin.branch) filter.branch = admin.branch;
 
     const [totalBills, paidBills, overdueBills, pendingVerifications] =
       await Promise.all([
@@ -1347,7 +1056,7 @@ export const deleteBill = async (req, res, next) => {
     if (!bill) return res.status(404).json({ error: "Bill not found" });
 
     // Branch isolation — admins can only delete bills from their branch
-    if (!admin.isSuperAdmin && bill.branch !== admin.branch)
+    if (!admin.isOwner && bill.branch !== admin.branch)
       return res.status(403).json({ error: "Access denied" });
 
     // Guard: don't delete paid bills (audit trail matters)
@@ -1383,7 +1092,7 @@ export const generateBulkBills = async (req, res, next) => {
     } = req.body;
 
     const branch =
-      admin.isSuperAdmin && req.body.branch ? req.body.branch : admin.branch;
+      admin.isOwner && req.body.branch ? req.body.branch : admin.branch;
     if (!branch)
       return res.status(400).json({ error: "Branch is required" });
 
@@ -1619,7 +1328,7 @@ export const getRoomReadiness = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);
     const branch =
-      admin.isSuperAdmin && req.query.branch ? req.query.branch : (req.branchFilter || admin.branch);
+      admin.isOwner && req.query.branch ? req.query.branch : (req.branchFilter || admin.branch);
     const roomFilter = { isArchived: false };
     if (branch) roomFilter.branch = branch;
 
@@ -1691,12 +1400,22 @@ export const publishRoomBills = async (req, res, next) => {
     if (!room || room.isArchived) {
       return res.status(404).json({ error: "Room not found" });
     }
-    if (!admin.isSuperAdmin && room.branch !== (req.branchFilter || admin.branch)) {
+    if (!admin.isOwner && room.branch !== (req.branchFilter || admin.branch)) {
       return res.status(403).json({ error: "Access denied" });
     }
 
     const readiness = await getRoomPublishState(room);
     if (readiness.draftBillCount === 0) {
+      if (readiness.publishState === "issued" && readiness.issuedBillCount > 0) {
+        return res.json({
+          success: true,
+          roomId: room._id,
+          roomName: readiness.roomName,
+          published: 0,
+          deliveries: [],
+          message: "Invoices for this cycle were already published.",
+        });
+      }
       return res.status(409).json({ error: "No draft bills found for this room." });
     }
     if (!readiness.isReadyToPublish) {

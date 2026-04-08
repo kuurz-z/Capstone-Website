@@ -52,6 +52,13 @@ import {
   CANONICAL_RESERVATION_STATUSES,
   USER_ROLE_NAMES,
 } from "../utils/lifecycleNaming.js";
+import {
+  INQUIRY_BRANCHES,
+  ROOM_BRANCHES,
+  ROOM_BRANCH_LABELS,
+  isValidInquiryBranch,
+  isValidRoomBranch,
+} from "../config/branches.js";
 
 // ============================================================================
 // NAMED EXPORTS
@@ -83,15 +90,13 @@ export {
 // CONSTANTS
 // ============================================================================
 
-/**
- * Valid branch values for rooms and users
- */
-export const ROOM_BRANCHES = ["gil-puyat", "guadalupe"];
-
-/**
- * Valid branch values for inquiries (includes "general")
- */
-export const INQUIRY_BRANCHES = ["gil-puyat", "guadalupe", "general"];
+export {
+  ROOM_BRANCHES,
+  INQUIRY_BRANCHES,
+  ROOM_BRANCH_LABELS,
+  isValidRoomBranch,
+  isValidInquiryBranch,
+};
 
 /**
  * Valid user roles
@@ -147,21 +152,6 @@ export const INQUIRY_TAGS = [
 // ============================================================================
 
 /**
- * Check if a branch is valid for rooms/users
- * @param {string} branch
- * @returns {boolean}
- */
-export const isValidRoomBranch = (branch) => ROOM_BRANCHES.includes(branch);
-
-/**
- * Check if a branch is valid for inquiries
- * @param {string} branch
- * @returns {boolean}
- */
-export const isValidInquiryBranch = (branch) =>
-  INQUIRY_BRANCHES.includes(branch);
-
-/**
  * Check if a role is valid
  * @param {string} role
  * @returns {boolean}
@@ -194,6 +184,7 @@ export default {
   LoginLog,
   ROOM_BRANCHES,
   INQUIRY_BRANCHES,
+  ROOM_BRANCH_LABELS,
   USER_ROLES,
   TENANT_STATUSES,
   INQUIRY_STATUSES,

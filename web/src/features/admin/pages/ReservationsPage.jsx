@@ -17,9 +17,12 @@ import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import {
+  CANONICAL_RESERVATION_STATUSES,
+  RESERVATION_STATUS_LABELS,
   hasReservationStatus,
   readMoveInDate,
 } from "../../../shared/utils/lifecycleNaming";
+import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import ReservationDetailsModal from "../components/ReservationDetailsModal";
 import VisitSchedulesTab from "../components/VisitSchedulesTab";
 import InquiriesPage from "./InquiriesPage";
@@ -34,6 +37,7 @@ import {
   IN_PROGRESS_STATUSES,
   RESERVATION_STAGE_MAP,
   checkOverdueReservation,
+  getBranchLabel,
   mapReservationAdminRow,
 } from "../utils/reservationRows";
 import "../styles/design-tokens.css";
@@ -144,7 +148,7 @@ function ReservationsPage() {
               : hasReservationStatus(reservation.status, statusFilter);
       const matchBranch =
         branchFilter === "all" ||
-        reservation.branch.toLowerCase() === branchFilter.toLowerCase();
+        reservation.branchCode === branchFilter;
       return matchSearch && matchStatus && matchBranch;
     });
   }, [branchFilter, reservations, searchTerm, statusFilter]);
@@ -211,11 +215,7 @@ function ReservationsPage() {
         ? [
             {
               key: "branch",
-              options: [
-                { value: "all", label: "All Branches" },
-                { value: "gil puyat", label: "Gil Puyat" },
-                { value: "guadalupe", label: "Guadalupe" },
-              ],
+              options: OWNER_BRANCH_FILTER_OPTIONS,
               value: branchFilter,
               onChange: (value) => {
                 setBranchFilter(value);
@@ -229,10 +229,11 @@ function ReservationsPage() {
         options: [
           { value: "all", label: "All Status" },
           { value: "in_progress", label: "In Progress" },
-          { value: "reserved", label: "Reserved" },
-          { value: "moveIn", label: "Moved In" },
           { value: "overdue", label: "Overdue" },
-          { value: "cancelled", label: "Cancelled" },
+          ...CANONICAL_RESERVATION_STATUSES.map((status) => ({
+            value: status,
+            label: RESERVATION_STATUS_LABELS[status] || status,
+          })),
         ],
         value: statusFilter,
         onChange: (value) => {
@@ -262,8 +263,9 @@ function ReservationsPage() {
           `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
           "Unknown",
         email: reservation.userId?.email || "-",
-        room: reservation.roomId?.name || "-",
-        branch: reservation.roomId?.branch === "gil-puyat" ? "Gil Puyat" : "Guadalupe",
+        room: reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
+        branch: getBranchLabel(reservation.roomId?.branch),
+        branchCode: reservation.roomId?.branch || "",
         roomType: reservation.roomId?.type || "",
         status: reservation.status || "pending",
         totalPrice: reservation.totalPrice,

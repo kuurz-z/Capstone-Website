@@ -28,7 +28,7 @@ const { syncReservationUserLifecycle } = await import("./reservationHelpers.js")
 const createUser = (overrides = {}) => ({
   firebaseUid: "firebase-user-1",
   role: "applicant",
-  tenantStatus: "none",
+  tenantStatus: "applicant",
   branch: null,
   save: jest.fn().mockResolvedValue(undefined),
   ...overrides,
@@ -151,7 +151,7 @@ describe("syncReservationUserLifecycle", () => {
     });
 
     expect(user.role).toBe("applicant");
-    expect(user.tenantStatus).toBe("none");
+    expect(user.tenantStatus).toBe("applicant");
     expect(user.branch).toBeNull();
   });
 });

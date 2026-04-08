@@ -42,6 +42,7 @@ import {
   CURRENT_RESIDENT_STATUS_QUERY,
   readMoveInDate,
 } from "./lifecycleNaming.js";
+import { syncReservationUserLifecycle } from "./reservationHelpers.js";
 import { resolveBillStatus, syncBillAmounts } from "./billingPolicy.js";
 import { getPenaltyRatePerDay, resolvePenaltyRatePerDay } from "./businessSettings.js";
 import { generateAutomatedRentBills } from "./rentGenerator.js";
@@ -120,7 +121,7 @@ async function markOverdueBills() {
     const result = await Bill.updateMany(
       {
         status: { $in: ["pending", "partially-paid"] },
-        dueDate: { $lt: now },
+        dueDate: { $ne: null, $lt: now },
         isArchived: false,
       },
       { $set: { status: "overdue" } },
@@ -148,8 +149,10 @@ async function computeOverduePenalties() {
     let updated = 0;
 
     for (const bill of overdueBills) {
+      if (!bill?.dueDate) continue;
+
       const daysLate = now.diff(dayjs(bill.dueDate), "day");
-      if (daysLate <= 0) continue;
+      if (!Number.isFinite(daysLate) || daysLate <= 0) continue;
 
       const ratePerDay = resolvePenaltyRatePerDay(
         bill.penaltyDetails?.ratePerDay,
@@ -198,7 +201,7 @@ async function sendPaymentReminders() {
       const nextDay = targetDate.add(1, "day");
 
       const bills = await Bill.find({
-        status: "pending",
+        status: { $in: ["pending", "partially-paid"] },
         dueDate: { $gte: targetDate.toDate(), $lt: nextDay.toDate() },
         isArchived: false,
       });
@@ -385,6 +388,19 @@ async function expireStaleReservations() {
           logger.error({ err, reservationId: String(reservation._id) }, "Stale expiry: bed release failed");
         }
 
+        try {
+          await syncReservationUserLifecycle({
+            status: reservation.status,
+            previousStatus: oldStatus,
+            userId: reservation.userId?._id || reservation.userId,
+            roomId: reservation.roomId?._id || reservation.roomId,
+            reservationId: reservation._id,
+            force: true,
+          });
+        } catch (err) {
+          logger.error({ err, reservationId: String(reservation._id) }, "Stale expiry: user lifecycle sync failed");
+        }
+
         // Notify tenant
         const code = reservation.reservationCode || reservation._id.toString().slice(-6);
         const roomName = reservation.roomId?.name || "your room";
@@ -436,6 +452,19 @@ async function cancelNoShowReservations() {
         await updateOccupancyOnReservationChange(reservation, { status: "reserved" });
       } catch (err) {
         logger.error({ err, reservationId: String(reservation._id) }, "No-show cancel: bed release failed");
+      }
+
+      try {
+        await syncReservationUserLifecycle({
+          status: reservation.status,
+          previousStatus: "reserved",
+          userId: reservation.userId?._id || reservation.userId,
+          roomId: reservation.roomId?._id || reservation.roomId,
+          reservationId: reservation._id,
+          force: true,
+        });
+      } catch (err) {
+        logger.error({ err, reservationId: String(reservation._id) }, "No-show cancel: user lifecycle sync failed");
       }
 
       // Notify tenant
@@ -657,5 +686,19 @@ export function stopScheduler() {
   }
   scheduledJobs.length = 0;
 }
+
+export {
+  detectOverdueMoveIns,
+  cleanupExpiredBedLocks,
+  markOverdueBills,
+  computeOverduePenalties,
+  sendPaymentReminders,
+  checkContractExpirations,
+  cleanupOrphanedAccounts,
+  expireStaleReservations,
+  cancelNoShowReservations,
+  warnStaleVisitPending,
+  archiveStaleCancelled,
+};
 
 export default { startScheduler, stopScheduler };

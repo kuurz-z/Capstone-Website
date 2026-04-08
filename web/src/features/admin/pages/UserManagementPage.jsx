@@ -254,7 +254,7 @@ function UserManagementPage() {
         error.code === "USERNAME_TAKEN"
       )
         showNotification("This username is taken.", "error", 4000);
-      else if (msg.includes("Super Admin") || error.code === "ROLE_FORBIDDEN")
+      else if (msg.toLowerCase().includes("owner") || error.code === "ROLE_FORBIDDEN")
         showNotification(
           "You don't have permission for this role.",
           "error",

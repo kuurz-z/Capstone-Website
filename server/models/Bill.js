@@ -20,6 +20,7 @@
  */
 
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -74,7 +75,7 @@ const billSchema = new mongoose.Schema(
     },
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       required: true,
       index: true,
     },
@@ -332,6 +333,14 @@ billSchema.index({
 // For forecasting and trend analysis
 billSchema.index({ billingMonth: -1, totalAmount: 1 });
 billSchema.index({ branch: 1, billingMonth: -1, status: 1 });
+billSchema.index(
+  { paymongoSessionId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
+);
+billSchema.index(
+  { paymongoPaymentId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
+);
 
 // ============================================================================
 // INSTANCE METHODS

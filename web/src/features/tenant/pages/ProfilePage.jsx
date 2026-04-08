@@ -76,7 +76,7 @@ const ProfilePage = () => {
     profileImage: "",
     branch: "",
     role: "",
-    tenantStatus: "none",
+    tenantStatus: "applicant",
     createdAt: "",
     gender: "",
     civilStatus: "",

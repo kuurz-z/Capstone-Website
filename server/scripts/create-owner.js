@@ -71,7 +71,7 @@ async function run() {
       const fbUser = await auth.createUser({
         email: EMAIL,
         password: PASSWORD,
-        displayName: "Super Admin",
+        displayName: "Owner",
         emailVerified: true,
       });
       firebaseUid = fbUser.uid;
