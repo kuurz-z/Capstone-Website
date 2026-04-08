@@ -19,8 +19,9 @@ import { io } from "socket.io-client";
 import { useQueryClient } from "@tanstack/react-query";
 import useNotificationStore from "../stores/notificationStore";
 import useAuth from "./useAuth";
+import { API_ORIGIN } from "../api/baseUrl";
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+const SOCKET_URL = API_ORIGIN;
 
 export default function useSocketClient() {
   const { user, dbUser } = useAuth();

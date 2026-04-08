@@ -16,9 +16,7 @@
  */
 
 import { auth } from "../../firebase/config";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import { API_BASE_URL } from "./baseUrl";
 
 /**
  * Get fresh Firebase ID token for API requests.
@@ -27,11 +25,11 @@ const API_BASE_URL =
  * @returns {Promise<string|null>} Fresh ID token or null if not authenticated
  * @private
  */
-const getFreshToken = async () => {
+const getFreshToken = async (forceRefresh = false) => {
   const user = auth.currentUser;
   if (!user) return null;
   try {
-    return await user.getIdToken(true);
+    return await user.getIdToken(forceRefresh);
   } catch (error) {
     console.error("Failed to get token:", error);
     return null;
@@ -47,7 +45,7 @@ const getFreshToken = async () => {
  * @throws {Error} API error with message
  * @private
  */
-const authRequest = async (url, options = {}) => {
+const authRequest = async (url, options = {}, _isRetry = false) => {
   const token = await getFreshToken();
   const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
@@ -59,6 +57,13 @@ const authRequest = async (url, options = {}) => {
   });
 
   if (!response.ok) {
+    if (response.status === 401 && !_isRetry) {
+      const refreshedToken = await getFreshToken(true);
+      if (refreshedToken) {
+        return authRequest(url, options, true);
+      }
+    }
+
     const errorData = await response.json().catch(() => ({}));
     // Create error with .response property so callers can check status codes
     // (e.g., Google sign-up flow checks error.response?.status === 404)
