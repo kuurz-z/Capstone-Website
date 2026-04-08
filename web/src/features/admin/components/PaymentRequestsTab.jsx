@@ -5,6 +5,7 @@ import ConfirmModal from "../../../shared/components/ConfirmModal";
 import PaymentTable from "./PaymentTable";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import { useQueryClient } from "@tanstack/react-query";
+import { readMoveInDate } from "../../../shared/utils/lifecycleNaming";
 
 function PaymentRequestsTab() {
   const queryClient = useQueryClient();
@@ -39,7 +40,7 @@ function PaymentRequestsTab() {
           proofOfPaymentUrl: res.proofOfPaymentUrl,
           status: res.status,
           submittedDate: res.updatedAt,
-          checkInDate: res.checkInDate,
+          moveInDate: readMoveInDate(res),
         })),
     [rawReservations],
   );
@@ -62,7 +63,7 @@ function PaymentRequestsTab() {
           setActionLoading(paymentId);
           await reservationApi.update(paymentId, {
             paymentStatus: "paid",
-            status: "confirmed",
+            status: "reserved",
           });
           showNotification(
             "Payment verified! Reservation confirmed.",
@@ -95,7 +96,7 @@ function PaymentRequestsTab() {
         "warning",
         3000,
       );
-      fetchPayments();
+      refetchAll();
     } catch (error) {
       console.error("Error rejecting payment:", error);
       showNotification("Failed to reject payment", "error", 3000);

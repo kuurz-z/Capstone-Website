@@ -24,6 +24,10 @@ import {
 import dayjs from "dayjs";
 import { generateDepositReceipt, viewDepositReceipt } from "../../../../shared/utils/receiptGenerator";
 import { useCurrentUser } from "../../../../shared/hooks/queries/useUsers";
+import {
+  hasReservationStatus,
+  readMoveInDate,
+} from "../../../../shared/utils/lifecycleNaming";
 
 /* ── Ordinal suffix helper ────────────────────────── */
 function ordinal(n) {
@@ -106,8 +110,9 @@ const ReservationAgreementPage = ({ reservation, onBack }) => {
   const heroImage = images[selectedImage] || images[0] || null;
   const code = reservation.reservationCode || "—";
   const bookedOn = dayjs(reservation.createdAt).format("MMMM D, YYYY");
-  const moveInDate = reservation.targetMoveInDate
-    ? dayjs(reservation.targetMoveInDate).format("MMMM D, YYYY")
+  const moveInDate = readMoveInDate(reservation) || reservation.targetMoveInDate;
+  const moveInDateLabel = moveInDate
+    ? dayjs(moveInDate).format("MMMM D, YYYY")
     : "TBD";
   const tenantName =
     `${profile?.firstName || reservation.firstName || ""} ${profile?.lastName || reservation.lastName || ""}`.trim() ||
@@ -116,8 +121,8 @@ const ReservationAgreementPage = ({ reservation, onBack }) => {
   const statusDisplay = (() => {
     const s = reservationStatus;
     if (s === "cancelled")    return { label: "Cancelled",         bg: "#EF4444" };
-    if (s === "checked-out")  return { label: "Completed",         bg: "#6B7280" };
-    if (s === "checked-in")   return { label: "Checked In",        bg: "#6366F1" };
+    if (hasReservationStatus(s, "moveOut")) return { label: "Completed", bg: "#6B7280" };
+    if (hasReservationStatus(s, "moveIn"))  return { label: "Moved In",  bg: "#6366F1" };
     if (s === "reserved" || reservation.paymentStatus === "paid")
                               return { label: "Reserved",          bg: "#059669" };
     if (s === "payment_pending")
@@ -452,7 +457,7 @@ const ReservationAgreementPage = ({ reservation, onBack }) => {
             {[
               { label: "Tenant", value: tenantName },
               { label: "Booked On", value: bookedOn },
-              { label: "Move-in Date", value: moveInDate },
+              { label: "Move-in Date", value: moveInDateLabel },
               { label: "Lease Duration", value: `${reservation.leaseDuration || 12} months` },
               {
                 label: "Monthly Rent",

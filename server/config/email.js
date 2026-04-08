@@ -163,7 +163,6 @@ export const sendInquiryResponseEmail = async ({
     );
     return { success: false, message: "Email service not configured" };
   }
-
   const mailOptions = {
     from: {
       name: "Lilycrest Dormitory",
@@ -214,7 +213,7 @@ const generateReservationConfirmedEmail = (
   reservationCode,
   roomName,
   branchName,
-  checkInDate,
+  moveInDate,
 ) => {
   return `
 <!DOCTYPE html>
@@ -250,10 +249,10 @@ const generateReservationConfirmedEmail = (
                   <tr><td style="padding: 6px 0; color: #6B7280;">Reservation Code</td><td style="padding: 6px 0; font-weight: 600;">${reservationCode}</td></tr>
                   <tr><td style="padding: 6px 0; color: #6B7280;">Room</td><td style="padding: 6px 0; font-weight: 600;">${roomName}</td></tr>
                   <tr><td style="padding: 6px 0; color: #6B7280;">Branch</td><td style="padding: 6px 0; font-weight: 600;">${branchName}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #6B7280;">Check-in Date</td><td style="padding: 6px 0; font-weight: 600;">${checkInDate}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #6B7280;">Move-in Date</td><td style="padding: 6px 0; font-weight: 600;">${moveInDate}</td></tr>
                 </table>
               </div>
-              <p style="color: #555555; font-size: 14px; line-height: 1.6;">Please arrive on your check-in date with your valid ID. If you have questions, contact us through the dormitory portal.</p>
+              <p style="color: #555555; font-size: 14px; line-height: 1.6;">Please arrive on your move-in date with your valid ID. If you have questions, contact us through the dormitory portal.</p>
             </td>
           </tr>
           <tr>
@@ -277,8 +276,10 @@ export const sendReservationConfirmedEmail = async ({
   reservationCode,
   roomName,
   branchName,
+  moveInDate,
   checkInDate,
 }) => {
+  const moveInDateLabel = moveInDate || checkInDate || "TBD";
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     console.log("⚠️ Email not sent — not configured");
     return { success: false, message: "Email service not configured" };
@@ -292,9 +293,9 @@ export const sendReservationConfirmedEmail = async ({
       reservationCode,
       roomName,
       branchName,
-      checkInDate,
+      moveInDateLabel,
     ),
-    text: `Hello ${tenantName}, your reservation (${reservationCode}) for ${roomName} at ${branchName} has been confirmed. Check-in: ${checkInDate}. — Lilycrest Dormitory`,
+    text: `Hello ${tenantName}, your reservation (${reservationCode}) for ${roomName} at ${branchName} has been confirmed. Move-in: ${moveInDateLabel}. — Lilycrest Dormitory`,
   };
   try {
     const info = await transporter.sendMail(mailOptions);
@@ -498,6 +499,69 @@ export const sendBillGeneratedEmail = async ({
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`❌ Failed to send bill email:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+export const sendUtilityChargeAvailableEmail = async ({
+  to,
+  tenantName,
+  utilityType,
+  billingMonth,
+  utilityAmount,
+  totalAmount,
+  dueDate,
+  branchName = "Lilycrest",
+}) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    return { success: false, message: "Email service not configured" };
+  }
+
+  const utilityLabel = utilityType === "water" ? "Water" : "Electricity";
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr><td style="padding: 40px 20px;">
+      <table role="presentation" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <tr><td style="background: linear-gradient(135deg, #0C375F 0%, #1a4a7a 100%); padding: 30px 40px; text-align: center;">
+          <h1 style="color: #fff; margin: 0; font-size: 28px;">Lilycrest Dormitory</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 14px;">${branchName} Branch</p>
+        </td></tr>
+        <tr><td style="padding: 40px;">
+          <h2 style="color: #111827; margin: 0 0 20px; font-size: 22px; text-align: center;">${utilityLabel} Charge Available</h2>
+          <p style="color: #555; font-size: 16px; line-height: 1.6;">Hello <strong>${tenantName}</strong>,</p>
+          <p style="color: #555; font-size: 16px; line-height: 1.6;">Your ${utilityLabel.toLowerCase()} charge for ${billingMonth} is now available in the tenant portal.</p>
+          <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+            <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">${utilityLabel} Charge</p>
+            <p style="color: #111827; font-size: 18px; font-weight: 600; margin: 0 0 16px;">₱${Number(utilityAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+            <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Current Bill Total</p>
+            <p style="color: #E7710F; font-size: 28px; font-weight: 700; margin: 0 0 16px;">₱${Number(totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+            <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Due Date</p>
+            <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 0;">${dueDate}</p>
+          </div>
+          <p style="color: #555; font-size: 14px; line-height: 1.6;">Please log in to the dormitory portal to review the updated breakdown and complete payment.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>
+  `;
+
+  try {
+    const info = await transporter.sendMail({
+      from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+      to,
+      subject: `${utilityLabel} charge for ${billingMonth} | Lilycrest Dormitory`,
+      html,
+      text: `Hello ${tenantName}, your ${utilityLabel.toLowerCase()} charge for ${billingMonth} is now available. Current bill total: ₱${totalAmount}. Due: ${dueDate}.`,
+    });
+    console.log(`✅ Utility charge email sent to ${to}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("❌ Failed to send utility charge email:", error.message);
     return { success: false, error: error.message };
   }
 };

@@ -10,9 +10,10 @@
  */
 
 import express from "express";
-import { verifyToken } from "../middleware/auth.js";
+import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 import { validate } from "../validation/validate.js";
 import { createMaintenanceSchema } from "../validation/schemas.js";
+import { requirePermission } from "../middleware/permissions.js";
 import * as maintenanceController from "../controllers/maintenanceController.js";
 
 const router = express.Router();
@@ -50,32 +51,56 @@ router.get("/requests/:requestId", maintenanceController.getRequest);
  * GET /api/maintenance/branch
  * Get all maintenance requests for branch (Admin only)
  */
-router.get("/branch", maintenanceController.getByBranch);
+router.get(
+  "/branch",
+  verifyAdmin,
+  requirePermission("manageMaintenance"),
+  maintenanceController.getByBranch,
+);
 
 /**
  * PATCH /api/maintenance/requests/:requestId
  * Update maintenance request status (Admin only)
  */
-router.patch("/requests/:requestId", maintenanceController.updateRequest);
+router.patch(
+  "/requests/:requestId",
+  verifyAdmin,
+  requirePermission("manageMaintenance"),
+  maintenanceController.updateRequest,
+);
 
 /**
  * GET /api/maintenance/stats/completion
  * Get completion statistics by branch (Admin only)
  */
-router.get("/stats/completion", maintenanceController.getCompletionStats);
+router.get(
+  "/stats/completion",
+  verifyAdmin,
+  requirePermission("manageMaintenance"),
+  maintenanceController.getCompletionStats,
+);
 
 /**
  * GET /api/maintenance/stats/issue-frequency
  * Get issue frequency for predictive maintenance (Admin only)
  */
-router.get("/stats/issue-frequency", maintenanceController.getIssueFrequency);
+router.get(
+  "/stats/issue-frequency",
+  verifyAdmin,
+  requirePermission("manageMaintenance"),
+  maintenanceController.getIssueFrequency,
+);
 
 /**
  * GET /api/maintenance/scheduled
  * Get upcoming scheduled maintenance (Admin only)
  * Returns maintenance requests with scheduledDate in the future
  */
-router.get("/scheduled", verifyToken, async (req, res) => {
+router.get(
+  "/scheduled",
+  verifyAdmin,
+  requirePermission("manageMaintenance"),
+  async (req, res) => {
   try {
     const MaintenanceRequest = (await import("../models/MaintenanceRequest.js")).default;
     const { User } = await import("../models/index.js");
@@ -109,7 +134,11 @@ router.get("/scheduled", verifyToken, async (req, res) => {
  * GET /api/maintenance/costs
  * Get maintenance cost summary by room (Admin only)
  */
-router.get("/costs", verifyToken, async (req, res) => {
+router.get(
+  "/costs",
+  verifyAdmin,
+  requirePermission("manageMaintenance"),
+  async (req, res) => {
   try {
     const MaintenanceRequest = (await import("../models/MaintenanceRequest.js")).default;
     const { User } = await import("../models/index.js");

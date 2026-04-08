@@ -5,6 +5,7 @@
 
 import dayjs from "dayjs";
 import { User, Reservation, Room } from "../models/index.js";
+import { ROOM_BRANCHES } from "../config/branches.js";
 import { getAuth } from "../config/firebase.js";
 import logger from "../middleware/logger.js";
 import auditLogger from "../utils/auditLogger.js";
@@ -13,9 +14,63 @@ import {
   sendError,
   AppError,
 } from "../middleware/errorHandler.js";
-import { DEFAULT_PERMISSIONS, ALL_PERMISSIONS } from "../middleware/permissions.js";
+import {
+  DEFAULT_PERMISSIONS,
+  ALL_PERMISSIONS,
+} from "../middleware/permissions.js";
+import {
+  ACTIVE_STAY_STATUS_QUERY,
+  PAST_STAY_STATUS_QUERY,
+  hasReservationStatus,
+  readMoveInDate,
+  readMoveOutDate,
+} from "../utils/lifecycleNaming.js";
 
-const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
+const VALID_BRANCHES = ROOM_BRANCHES;
+const VALID_TENANT_STATUSES = [
+  "applicant",
+  "active",
+  "inactive",
+  "evicted",
+  "blacklisted",
+];
+const TENANT_STATUS_TRANSITIONS = {
+  applicant: ["active", "blacklisted"],
+  active: ["inactive", "evicted", "blacklisted"],
+  inactive: ["active", "blacklisted"],
+  evicted: ["blacklisted"],
+  blacklisted: [],
+};
+const LIST_SEARCH_FIELDS = ["username", "firstName", "lastName", "email"];
+const LIST_USER_FIELDS = [
+  "username",
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "role",
+  "branch",
+  "accountStatus",
+  "isActive",
+  "gender",
+  "dateOfBirth",
+  "address",
+  "city",
+  "emergencyContact",
+  "emergencyPhone",
+  "studentId",
+  "school",
+  "yearLevel",
+  "createdAt",
+];
+
+const escapeRegex = (value = "") =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const canTransitionTenantStatus = (fromStatus, toStatus) => {
+  if (fromStatus === toStatus) return true;
+  return (TENANT_STATUS_TRANSITIONS[fromStatus] || []).includes(toStatus);
+};
 
 /**
  * POST /api/users
@@ -58,7 +113,7 @@ export const createUser = async (req, res, next) => {
         code: "ROLE_FORBIDDEN",
       });
     }
-    if (allowedRole === "branch_admin" && !req.isSuperAdmin) {
+    if (allowedRole === "branch_admin" && !req.isOwner) {
       return res.status(403).json({
         error: "Only owners can create branch admin accounts",
         code: "ROLE_FORBIDDEN",
@@ -122,7 +177,7 @@ export const createUser = async (req, res, next) => {
       role: allowedRole,
       isEmailVerified: false,
       isActive: true,
-      tenantStatus: "none",
+      tenantStatus: "applicant",
       permissions: DEFAULT_PERMISSIONS[allowedRole] || [],
     });
 
@@ -174,44 +229,67 @@ export const getUserStats = async (req, res, next) => {
   try {
     const matchQuery = req.branchFilter ? { branch: req.branchFilter } : {};
 
-    // Get counts by role
-    const roleCounts = await User.aggregate([
+    const [statsResult = {}] = await User.aggregate([
       { $match: matchQuery },
-      { $group: { _id: "$role", count: { $sum: 1 } } },
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                activeCount: {
+                  $sum: {
+                    $cond: [{ $eq: ["$accountStatus", "active"] }, 1, 0],
+                  },
+                },
+                verifiedCount: {
+                  $sum: {
+                    $cond: [{ $eq: ["$isEmailVerified", true] }, 1, 0],
+                  },
+                },
+              },
+            },
+          ],
+          byRole: [{ $group: { _id: "$role", count: { $sum: 1 } } }],
+          byAccountStatus: [
+            { $group: { _id: "$accountStatus", count: { $sum: 1 } } },
+          ],
+          byBranch: req.isOwner
+            ? [{ $group: { _id: "$branch", count: { $sum: 1 } } }]
+            : [],
+        },
+      },
     ]);
 
-    // Get counts by branch (for owner)
-    let branchCounts = [];
-    if (req.isSuperAdmin) {
-      branchCounts = await User.aggregate([
-        { $group: { _id: "$branch", count: { $sum: 1 } } },
-      ]);
-    }
-
-    // Get total and active counts
-    const total = await User.countDocuments(matchQuery);
-    const activeCount = await User.countDocuments({
-      ...matchQuery,
-      isActive: true,
-    });
-    const verifiedCount = await User.countDocuments({
-      ...matchQuery,
-      isEmailVerified: true,
-    });
+    const totals = statsResult.totals?.[0] || {
+      total: 0,
+      activeCount: 0,
+      verifiedCount: 0,
+    };
 
     // Format response
     const stats = {
-      total,
-      activeCount,
-      verifiedCount,
+      total: totals.total,
+      activeCount: totals.activeCount,
+      verifiedCount: totals.verifiedCount,
       byRole: { applicant: 0, tenant: 0, branch_admin: 0, owner: 0 },
+      byAccountStatus: {
+        active: 0,
+        suspended: 0,
+        banned: 0,
+        pending_verification: 0,
+      },
       byBranch: {},
     };
 
-    roleCounts.forEach((item) => {
+    (statsResult.byRole || []).forEach((item) => {
       if (item._id) stats.byRole[item._id] = item.count;
     });
-    branchCounts.forEach((item) => {
+    (statsResult.byAccountStatus || []).forEach((item) => {
+      if (item._id) stats.byAccountStatus[item._id] = item.count;
+    });
+    (statsResult.byBranch || []).forEach((item) => {
       if (item._id) stats.byBranch[item._id] = item.count;
     });
 
@@ -235,7 +313,8 @@ export const getUsersByBranch = async (req, res, next) => {
 
     const users = await User.find({ branch })
       .sort({ createdAt: -1 })
-      .select("-__v");
+      .select("-__v")
+      .lean();
 
     res.json(users);
   } catch (error) {
@@ -257,7 +336,12 @@ export const getEmailByUsername = async (req, res, next) => {
     const trimmedUsername = username.trim();
 
     const user = await User.findOne({
-      username: { $regex: new RegExp(`^${trimmedUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+      username: {
+        $regex: new RegExp(
+          `^${trimmedUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+          "i",
+        ),
+      },
     }).select("email username");
 
     if (!user) {
@@ -281,6 +365,7 @@ export const getUsers = async (req, res, next) => {
       isActive,
       tenantStatus,
       accountStatus,
+      search,
       page = 1,
       limit = 20,
       sort = "createdAt",
@@ -288,7 +373,7 @@ export const getUsers = async (req, res, next) => {
     } = req.query;
 
     // Build query with branch filter (exclude archived/soft-deleted users)
-    const query = { isArchived: { $ne: true } };
+    const query = { isArchived: false };
 
     if (req.branchFilter) {
       query.branch = req.branchFilter;
@@ -312,24 +397,42 @@ export const getUsers = async (req, res, next) => {
       query.accountStatus = accountStatus;
     }
 
+    if (search?.trim()) {
+      const searchRegex = new RegExp(escapeRegex(search.trim()), "i");
+      query.$or = LIST_SEARCH_FIELDS.map((field) => ({ [field]: searchRegex }));
+    }
+
     // Pagination
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 50);
     const skip = (pageNum - 1) * limitNum;
 
     // Sorting
+    const allowedSortFields = new Set([
+      "createdAt",
+      "firstName",
+      "lastName",
+      "email",
+      "username",
+      "role",
+      "branch",
+      "accountStatus",
+      "isActive",
+      "tenantStatus",
+    ]);
+    const sortField = allowedSortFields.has(sort) ? sort : "createdAt";
     const sortOrder = order === "asc" ? 1 : -1;
-    const sortOptions = { [sort]: sortOrder };
+    const sortOptions = { [sortField]: sortOrder };
 
     const [users, total] = await Promise.all([
       User.find(query)
         .sort(sortOptions)
         .skip(skip)
         .limit(limitNum)
-        .select("-__v"),
+        .select(LIST_USER_FIELDS.join(" "))
+        .lean(),
       User.countDocuments(query),
     ]);
-
 
     res.json({
       users,
@@ -337,6 +440,7 @@ export const getUsers = async (req, res, next) => {
         currentPage: pageNum,
         totalPages: Math.ceil(total / limitNum),
         totalItems: total,
+        total,
         itemsPerPage: limitNum,
         hasNextPage: pageNum * limitNum < total,
         hasPrevPage: pageNum > 1,
@@ -406,12 +510,26 @@ export const updateUser = async (req, res, next) => {
     const oldUserData = existingUser.toObject();
 
     const ALLOWED_ADMIN_UPDATE_FIELDS = [
-      "username", "firstName", "lastName", "email", "phone", "profileImage",
-      "role", "branch", "isActive",
+      "username",
+      "firstName",
+      "lastName",
+      "email",
+      "phone",
+      "profileImage",
+      "role",
+      "branch",
+      "tenantStatus",
+      "isActive",
       // Extended profile fields
-      "address", "city", "gender", "dateOfBirth",
-      "emergencyContact", "emergencyPhone",
-      "studentId", "school", "yearLevel",
+      "address",
+      "city",
+      "gender",
+      "dateOfBirth",
+      "emergencyContact",
+      "emergencyPhone",
+      "studentId",
+      "school",
+      "yearLevel",
     ];
 
     // Build update object from whitelist only
@@ -428,13 +546,50 @@ export const updateUser = async (req, res, next) => {
     delete updateData.createdAt;
 
     // Only owners can change roles
-    if (updateData.role && !req.isSuperAdmin) {
+    if (updateData.role && !req.isOwner) {
       delete updateData.role;
     }
 
     // Only owners can change branch assignment
-    if (updateData.branch !== undefined && !req.isSuperAdmin) {
+    if (updateData.branch !== undefined && !req.isOwner) {
       delete updateData.branch;
+    }
+
+    if (updateData.tenantStatus !== undefined) {
+      const nextStatus = String(updateData.tenantStatus).trim();
+      if (!VALID_TENANT_STATUSES.includes(nextStatus)) {
+        return res.status(400).json({
+          error: `Invalid tenant status. Must be one of: ${VALID_TENANT_STATUSES.join(", ")}`,
+          code: "INVALID_TENANT_STATUS",
+        });
+      }
+
+      const currentRole = existingUser.role;
+      const nextRole = updateData.role || currentRole;
+      if (["branch_admin", "owner"].includes(nextRole)) {
+        return res.status(400).json({
+          error: "Admin accounts cannot use tenant status transitions",
+          code: "ROLE_TENANT_STATUS_CONFLICT",
+        });
+      }
+
+      if (!canTransitionTenantStatus(existingUser.tenantStatus, nextStatus)) {
+        return res.status(400).json({
+          error: `Invalid tenant status transition: ${existingUser.tenantStatus} -> ${nextStatus}`,
+          code: "INVALID_TENANT_STATUS_TRANSITION",
+        });
+      }
+
+      updateData.tenantStatus = nextStatus;
+
+      // Keep role in sync for non-admin lifecycle changes.
+      if (updateData.role === undefined) {
+        if (nextStatus === "active") {
+          updateData.role = "tenant";
+        } else if (existingUser.role === "tenant") {
+          updateData.role = "applicant";
+        }
+      }
     }
 
     const user = await User.findByIdAndUpdate(userId, updateData, {
@@ -486,7 +641,10 @@ export const deleteUser = async (req, res, next) => {
       const auth = getAuth();
       if (auth && user.firebaseUid) await auth.deleteUser(user.firebaseUid);
     } catch (fbErr) {
-      logger.warn({ err: fbErr, requestId: req.id }, "Firebase deletion failed");
+      logger.warn(
+        { err: fbErr, requestId: req.id },
+        "Firebase deletion failed",
+      );
     }
 
     // Hard delete from MongoDB
@@ -518,7 +676,7 @@ export const deleteUser = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/suspend
  * Suspend a user account.
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  */
 export const suspendUser = async (req, res, next) => {
   try {
@@ -526,23 +684,41 @@ export const suspendUser = async (req, res, next) => {
     const { reason } = req.body;
 
     if (!userId.match(/^[0-9a-fA-F]{24}$/))
-      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+      return res
+        .status(400)
+        .json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
 
     const targetUser = await User.findById(userId);
     if (!targetUser)
-      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ error: "User not found", code: "USER_NOT_FOUND" });
 
     // Prevent suspending admins unless you're the owner
-    if ((targetUser.role === "branch_admin" || targetUser.role === "owner") && !req.isSuperAdmin)
-      return res.status(403).json({ error: "Only the owner can suspend admin accounts", code: "ROLE_FORBIDDEN" });
+    if (
+      (targetUser.role === "branch_admin" || targetUser.role === "owner") &&
+      !req.isOwner
+    )
+      return res
+        .status(403)
+        .json({
+          error: "Only the owner can suspend admin accounts",
+          code: "ROLE_FORBIDDEN",
+        });
 
     const adminUser = await User.findOne({ firebaseUid: req.user.uid });
     const oldData = targetUser.toObject();
 
     await targetUser.suspend(adminUser?._id, reason || "Suspended by admin");
 
-    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
-      `Account suspended: ${reason || "No reason provided"}`);
+    await auditLogger.logModification(
+      req,
+      "user",
+      userId,
+      oldData,
+      targetUser.toObject(),
+      `Account suspended: ${reason || "No reason provided"}`,
+    );
 
     res.json({ message: "User suspended successfully", user: targetUser });
   } catch (error) {
@@ -554,33 +730,50 @@ export const suspendUser = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/reactivate
  * Reactivate a suspended or banned user account.
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  */
 export const reactivateUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
     if (!userId.match(/^[0-9a-fA-F]{24}$/))
-      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+      return res
+        .status(400)
+        .json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
 
     const targetUser = await User.findById(userId);
     if (!targetUser)
-      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ error: "User not found", code: "USER_NOT_FOUND" });
 
     if (targetUser.accountStatus === "active")
-      return res.status(400).json({ error: "User is already active", code: "ALREADY_ACTIVE" });
+      return res
+        .status(400)
+        .json({ error: "User is already active", code: "ALREADY_ACTIVE" });
 
     // Only owner can reactivate banned users
-    if (targetUser.accountStatus === "banned" && !req.isSuperAdmin)
-      return res.status(403).json({ error: "Only the owner can reactivate banned accounts", code: "ROLE_FORBIDDEN" });
+    if (targetUser.accountStatus === "banned" && !req.isOwner)
+      return res
+        .status(403)
+        .json({
+          error: "Only the owner can reactivate banned accounts",
+          code: "ROLE_FORBIDDEN",
+        });
 
     const adminUser = await User.findOne({ firebaseUid: req.user.uid });
     const oldData = targetUser.toObject();
 
     await targetUser.reactivate(adminUser?._id);
 
-    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
-      `Account reactivated from ${oldData.accountStatus}`);
+    await auditLogger.logModification(
+      req,
+      "user",
+      userId,
+      oldData,
+      targetUser.toObject(),
+      `Account reactivated from ${oldData.accountStatus}`,
+    );
 
     res.json({ message: "User reactivated successfully", user: targetUser });
   } catch (error) {
@@ -592,7 +785,7 @@ export const reactivateUser = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/ban
  * Ban a user account permanently.
- * Access: Super Admin only
+ * Access: Owner only
  */
 export const banUser = async (req, res, next) => {
   try {
@@ -600,23 +793,35 @@ export const banUser = async (req, res, next) => {
     const { reason } = req.body;
 
     if (!userId.match(/^[0-9a-fA-F]{24}$/))
-      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+      return res
+        .status(400)
+        .json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
 
     const targetUser = await User.findById(userId);
     if (!targetUser)
-      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ error: "User not found", code: "USER_NOT_FOUND" });
 
     // Cannot ban owners
     if (targetUser.role === "owner")
-      return res.status(403).json({ error: "Cannot ban owner accounts", code: "ROLE_FORBIDDEN" });
+      return res
+        .status(403)
+        .json({ error: "Cannot ban owner accounts", code: "ROLE_FORBIDDEN" });
 
     const adminUser = await User.findOne({ firebaseUid: req.user.uid });
     const oldData = targetUser.toObject();
 
     await targetUser.ban(adminUser?._id, reason || "Banned by admin");
 
-    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
-      `Account banned: ${reason || "No reason provided"}`);
+    await auditLogger.logModification(
+      req,
+      "user",
+      userId,
+      oldData,
+      targetUser.toObject(),
+      `Account banned: ${reason || "No reason provided"}`,
+    );
 
     res.json({ message: "User banned successfully", user: targetUser });
   } catch (error) {
@@ -652,25 +857,30 @@ export const getMyStays = async (req, res, next) => {
     // Find active/current stays
     const currentStays = allReservations.filter((reservation) => {
       const status = reservation.status;
-      return status === "reserved" || status === "checked-in";
+      return hasReservationStatus(status, ACTIVE_STAY_STATUS_QUERY);
     });
 
     // Past stays (completed or cancelled)
     const pastStays = allReservations.filter((reservation) => {
       const status = reservation.status;
-      return status === "checked-out" || status === "cancelled";
+      return hasReservationStatus(status, PAST_STAY_STATUS_QUERY);
     });
 
     // Calculate stay statistics
     const totalStays = allReservations.length;
-    const completedStays = pastStays.filter(
-      (r) => r.reservationStatus === "checked-out",
+    const completedStays = pastStays.filter((reservation) =>
+      hasReservationStatus(
+        reservation.reservationStatus || reservation.status,
+        "moveOut",
+      ),
     ).length;
     const totalNights = pastStays.reduce((sum, reservation) => {
-      if (reservation.checkInDate && reservation.checkOutDate) {
-        const nights = dayjs(reservation.checkOutDate).diff(
-          dayjs(reservation.checkInDate),
-          "day"
+      const moveInDate = readMoveInDate(reservation);
+      const moveOutDate = readMoveOutDate(reservation);
+      if (moveInDate && moveOutDate) {
+        const nights = dayjs(moveOutDate).diff(
+          dayjs(moveInDate),
+          "day",
         );
         return sum + Math.max(0, nights);
       }
@@ -699,7 +909,7 @@ export const getMyStays = async (req, res, next) => {
 /**
  * PATCH /api/users/:userId/permissions
  * Update an admin user's permissions array.
- * Access: Super Admin only
+ * Access: Owner only
  */
 export const updatePermissions = async (req, res, next) => {
   try {
@@ -707,13 +917,31 @@ export const updatePermissions = async (req, res, next) => {
     const { permissions } = req.body;
 
     if (!userId.match(/^[0-9a-fA-F]{24}$/))
-      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+      return res
+        .status(400)
+        .json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
 
     if (!Array.isArray(permissions))
-      return res.status(400).json({ error: "Permissions must be an array", code: "INVALID_PERMISSIONS" });
+      return res
+        .status(400)
+        .json({
+          error: "Permissions must be an array",
+          code: "INVALID_PERMISSIONS",
+        });
+
+    const normalizedPermissions = Array.from(
+      new Set(
+        permissions
+          .filter((p) => typeof p === "string")
+          .map((p) => p.trim())
+          .filter(Boolean),
+      ),
+    );
 
     // Validate each permission key
-    const invalid = permissions.filter((p) => !ALL_PERMISSIONS.includes(p));
+    const invalid = normalizedPermissions.filter(
+      (p) => !ALL_PERMISSIONS.includes(p),
+    );
     if (invalid.length > 0)
       return res.status(400).json({
         error: `Invalid permissions: ${invalid.join(", ")}`,
@@ -722,7 +950,9 @@ export const updatePermissions = async (req, res, next) => {
 
     const targetUser = await User.findById(userId);
     if (!targetUser)
-      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ error: "User not found", code: "USER_NOT_FOUND" });
 
     // Only allow modifying branch_admin permissions (not owner or applicant/tenant)
     if (targetUser.role !== "branch_admin")
@@ -732,11 +962,19 @@ export const updatePermissions = async (req, res, next) => {
       });
 
     const oldData = targetUser.toObject();
-    targetUser.permissions = permissions;
+    targetUser.permissions = ALL_PERMISSIONS.filter((p) =>
+      normalizedPermissions.includes(p),
+    );
     await targetUser.save();
 
-    await auditLogger.logModification(req, "user", userId, oldData, targetUser.toObject(),
-      `Permissions updated: ${permissions.join(", ") || "(none)"}`);
+    await auditLogger.logModification(
+      req,
+      "user",
+      userId,
+      oldData,
+      targetUser.toObject(),
+      `Permissions updated: ${targetUser.permissions.join(", ") || "(none)"}`,
+    );
 
     res.json({ message: "Permissions updated successfully", user: targetUser });
   } catch (error) {

@@ -55,15 +55,6 @@ export function useBillingReport() {
   });
 }
 
-/** Generate room-based bill */
-export function useGenerateRoomBill() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (billData) => billingApi.generateRoomBill(billData),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["billing"] }),
-  });
-}
-
 /** Mark bill as paid */
 export function useMarkAsPaid() {
   const qc = useQueryClient();

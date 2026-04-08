@@ -1,100 +1,27 @@
 /**
  * ============================================================================
- * GRACE PERIOD JOB
+ * GRACE PERIOD JOB (LEGACY COMPATIBILITY WRAPPER)
  * ============================================================================
  *
- * Background job that periodically checks for reservations that have
- * entered or exceeded their grace period.
- *
- * Runs every 15 minutes by default.
- *
- * LOGIC:
- * 1. Confirmed reservations where today > checkInDate → status = "grace_period"
- * 2. Grace period reservations where today > graceDeadline → status = "cancelled",
- *    release bed, decrease occupancy
+ * The canonical reservation expiry / no-show flow now lives in scheduler.js.
+ * This module remains as a backward-compatible wrapper for older bootstrap
+ * paths that may still import it.
  *
  * ============================================================================
  */
 
-import dayjs from "dayjs";
-import { Reservation, Room } from "../models/index.js";
-import notify from "./notificationService.js";
-
-const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+import logger from "../middleware/logger.js";
+import { expireStaleReservations, cancelNoShowReservations } from "./scheduler.js";
 
 /**
- * Process grace period transitions
+ * Process grace-period compatible transitions using the canonical scheduler jobs.
  */
 async function processGracePeriods() {
-  const now = dayjs();
-  let transitioned = 0;
-  let cancelled = 0;
-
   try {
-    // ── Step 1: Confirmed → grace_period ──────────────────────────
-    const confirmedPastMoveIn = await Reservation.find({
-      status: "confirmed",
-      checkInDate: { $lt: now.toDate() },
-      isArchived: false,
-    });
-
-    for (const reservation of confirmedPastMoveIn) {
-      reservation.status = "grace_period";
-
-      // Compute graceDeadline if not set
-      if (!reservation.graceDeadline) {
-        const moveIn = dayjs(reservation.checkInDate);
-        const days = reservation.gracePeriodDays || 3;
-        reservation.graceDeadline = moveIn.add(days, "day").toDate();
-      }
-
-      await reservation.save();
-      transitioned++;
-
-      // Notify tenant
-      const code = reservation.reservationCode || reservation._id.toString().slice(-6);
-      const deadline = dayjs(reservation.graceDeadline).format("MMMM D, YYYY");
-      notify.gracePeriodWarning(reservation.userId, code, deadline);
-    }
-
-    // ── Step 2: grace_period past deadline → cancelled ────────────
-    const expiredGrace = await Reservation.find({
-      status: "grace_period",
-      graceDeadline: { $lt: now.toDate() },
-      isArchived: false,
-    });
-
-    for (const reservation of expiredGrace) {
-      reservation.status = "cancelled";
-      reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-cancelled: grace period expired`;
-      await reservation.save();
-
-      // Release bed and decrease occupancy
-      if (reservation.roomId && reservation.selectedBed?.id) {
-        try {
-          const room = await Room.findById(reservation.roomId);
-          if (room) {
-            room.vacateBed(reservation.selectedBed.id);
-            room.decreaseOccupancy();
-            room.updateAvailability();
-            await room.save();
-          }
-        } catch (e) {
-          console.error(`⚠️ Failed to release bed for reservation ${reservation._id}:`, e.message);
-        }
-      }
-
-      cancelled++;
-
-      // Notify tenant
-      const code = reservation.reservationCode || reservation._id.toString().slice(-6);
-      notify.reservationCancelled(reservation.userId, code, "Grace period expired — no check-in");
-    }
-
-    if (transitioned > 0 || cancelled > 0) {
-    }
+    await expireStaleReservations();
+    await cancelNoShowReservations();
   } catch (error) {
-    console.error("❌ Grace period job error:", error);
+    console.error("❌ Grace period compatibility job error:", error);
   }
 }
 
@@ -102,15 +29,16 @@ async function processGracePeriods() {
  * Start the grace period background job
  */
 export function startGracePeriodJob() {
+  logger.warn(
+    "startGracePeriodJob is deprecated. The canonical scheduler owns grace-period processing.",
+  );
 
-  // Run once immediately on startup
+  if (process.env.NODE_ENV === "production") {
+    return () => {};
+  }
+
   processGracePeriods();
-
-  // Then run on interval
-  const intervalId = setInterval(processGracePeriods, INTERVAL_MS);
-
-  // Return cleanup function
-  return () => clearInterval(intervalId);
+  return () => {};
 }
 
 export default startGracePeriodJob;

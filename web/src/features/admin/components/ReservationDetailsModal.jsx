@@ -4,6 +4,12 @@ import { Calendar, Eye, ClipboardList, CreditCard } from "lucide-react";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
+import {
+  getAllowedReservationActions,
+  getReservationStatusAppearance,
+  hasReservationStatus,
+  readMoveInDate,
+} from "../../../shared/utils/lifecycleNaming";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../shared/hooks/useEscapeClose";
@@ -12,57 +18,6 @@ import "../styles/reservation-details-modal.css";
 const WATER_BILLABLE_TYPES = ["private", "double-sharing"];
 
 /* ─── constants ─────────────────────────────────── */
-const STATUS_MAP = {
-  pending: {
-    label: "Pending Review",
-    color: "#b45309",
-    bg: "#fffbeb",
-    dot: "#f59e0b",
-  },
-  visit_pending: {
-    label: "Visit Pending",
-    color: "#1d4ed8",
-    bg: "#eff6ff",
-    dot: "#3b82f6",
-  },
-  visit_approved: {
-    label: "Visit Approved",
-    color: "#7c3aed",
-    bg: "#f5f3ff",
-    dot: "#8b5cf6",
-  },
-  payment_pending: {
-    label: "Payment Pending",
-    color: "#b45309",
-    bg: "#fffbeb",
-    dot: "#f59e0b",
-  },
-  reserved: {
-    label: "Reserved",
-    color: "#047857",
-    bg: "#ecfdf5",
-    dot: "#10b981",
-  },
-  "checked-in": {
-    label: "Checked In",
-    color: "#1d4ed8",
-    bg: "#eff6ff",
-    dot: "#3b82f6",
-  },
-  "checked-out": {
-    label: "Checked Out",
-    color: "#64748b",
-    bg: "#f8fafc",
-    dot: "#94a3b8",
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "#dc2626",
-    bg: "#fef2f2",
-    dot: "#ef4444",
-  },
-};
-
 const ACTION_MSGS = {
   confirm: {
     title: "Confirm Reservation",
@@ -71,11 +26,11 @@ const ACTION_MSGS = {
     confirmText: "Yes, Confirm",
     variant: "info",
   },
-  checkin: {
-    title: "Check In Tenant",
+  moveIn: {
+    title: "Move In Tenant",
     message:
       "Mark this tenant as moved in? They'll be promoted to Tenant role with full system access.",
-    confirmText: "Yes, Check In",
+    confirmText: "Yes, Move In",
     variant: "info",
   },
   cancel: {
@@ -184,9 +139,12 @@ export default function ReservationDetailsModal({
 
   if (!reservation) return null;
 
-  const status = (reservation.status || "").toLowerCase();
-  const sc = STATUS_MAP[status] || STATUS_MAP.pending;
-  const moveIn = reservation.moveInDate ?? reservation.checkInDate ?? null;
+  const status = reservation.status || "pending";
+  const sc = getReservationStatusAppearance(status);
+  const allowedActions = getAllowedReservationActions(status);
+  const moveIn = readMoveInDate(reservation);
+  const isMovedIn = hasReservationStatus(status, "moveIn");
+  const isMovedOut = hasReservationStatus(status, "moveOut");
   const isOverdue =
     status === "reserved" && moveIn && new Date(moveIn) < new Date();
   const daysOverdue = isOverdue
@@ -332,7 +290,7 @@ export default function ReservationDetailsModal({
             </div>
 
             {/* Actions */}
-            {status !== "cancelled" && status !== "checked-out" && (
+            {status !== "cancelled" && !isMovedOut && (
               <div className="rdm-actions-card">
 
                 {/* ── Stage guidance cards (read-only stages) ─────────── */}
@@ -357,7 +315,7 @@ export default function ReservationDetailsModal({
                 })()}
 
                 {/* ── Check In (reserved stage only, already gated via status) ─── */}
-                {status === "reserved" && (
+                {allowedActions.includes("moveIn") && (
                   <>
                     <button
                       className="rdm-action rdm-action-primary"
@@ -369,22 +327,24 @@ export default function ReservationDetailsModal({
                       disabled={isSubmitting}
                       title="Mark tenant as moved in — requires initial meter reading"
                     >
-                      ✓ Check In — Tenant Has Moved In
+                      ✓ Confirm Move-In
                     </button>
 
-                    <button
-                      className="rdm-action rdm-action-extend"
-                      onClick={() => setShowExtendPrompt(true)}
-                      disabled={isSubmitting}
-                    >
-                      Extend Move-in
-                    </button>
+                    {allowedActions.includes("extend") && (
+                      <button
+                        className="rdm-action rdm-action-extend"
+                        onClick={() => setShowExtendPrompt(true)}
+                        disabled={isSubmitting}
+                      >
+                        Extend Move-in
+                      </button>
+                    )}
                   </>
                 )}
 
                 {/* ── Cancel (all pre-check-in stages) ─────────────── */}
                 <div className="rdm-action-divider" />
-                {status !== "checked-in" && (
+                {allowedActions.includes("cancelled") && (
                   <button
                     className="rdm-action rdm-action-cancel"
                     onClick={() =>
@@ -546,9 +506,9 @@ export default function ReservationDetailsModal({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="rdm-extend-dialog-body">
-              <h3 className="rdm-extend-dialog-title">⚡ Initial Meter Reading</h3>
+              <h3 className="rdm-extend-dialog-title">⚡ Move-In Meter Reading</h3>
               <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 12px" }}>
-                Enter the starting kWh reading to record this tenant's electricity baseline.
+                Enter the starting kWh reading to record this tenant's move-in electricity baseline.
               </p>
               <div className="rdm-extend-dialog-input-row" style={{ width: "100%" }}>
                 <input
@@ -582,17 +542,17 @@ export default function ReservationDetailsModal({
                   }
                   setShowMeterPrompt(false);
                   doAction(
-                    "checkin",
+                    "moveIn",
                     () => reservationApi.update(reservation.id, {
-                      status: "checked-in",
+                      status: "moveIn",
                       meterReading: reading,
                     }),
-                    "Tenant checked in successfully",
+                    "Tenant moved in successfully",
                   );
                 }}
                 disabled={isSubmitting}
               >
-                Check In
+                Move In
               </button>
             </div>
           </div>

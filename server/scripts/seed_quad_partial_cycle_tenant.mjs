@@ -106,7 +106,7 @@ async function getAdminUser() {
     lastName: "Admin",
     branch: SEED_ADMIN_BRANCH,
     role: "owner",
-    tenantStatus: "none",
+    tenantStatus: "applicant",
     isEmailVerified: true,
   });
 

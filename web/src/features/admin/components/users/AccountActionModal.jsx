@@ -24,7 +24,7 @@ const ACTION_CONFIG = {
   },
   ban: {
     title: "Ban Account",
-    description: "This will permanently disable the user's access. This is a severe action — only a super admin can reverse it.",
+    description: "This will permanently disable the user's access. This is a severe action and only an owner can reverse it.",
     confirmLabel: "Ban Account",
     icon: "⛔",
     iconBg: "#fef2f2",

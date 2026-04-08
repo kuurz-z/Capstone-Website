@@ -27,6 +27,11 @@
  */
 
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
+import {
+  getDefaultPermissionsForRole,
+  normalizePermissions,
+} from "../config/accessControl.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -161,7 +166,7 @@ const userSchema = new mongoose.Schema(
     // --- Branch & Role ---
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe", ""],
+      enum: [...ROOM_BRANCHES, ""],
       default: null,
       index: true,
     },
@@ -180,10 +185,10 @@ const userSchema = new mongoose.Schema(
 
     tenantStatus: {
       type: String,
-      enum: ["none", "active", "inactive", "evicted", "blacklisted"],
-      default: "none",
+      enum: ["applicant", "active", "inactive", "evicted", "blacklisted"],
+      default: "applicant",
       // Usage:
-      // - "none": not a tenant yet (applicant / pre-tenant)
+      // - "applicant": not a tenant yet (applicant / pre-tenant)
       // - "active": checked in, physically moved in
       // - "inactive": moved out / contract ended
       // - "evicted": forcefully removed by admin
@@ -268,6 +273,23 @@ const userSchema = new mongoose.Schema(
 // ============================================================================
 
 userSchema.pre("save", function (next) {
+  // Backward compatibility for legacy records/scripts that still send "none".
+  if (this.tenantStatus === "none") {
+    this.tenantStatus = "applicant";
+  }
+
+  if (this.role === "branch_admin") {
+    const normalized = normalizePermissions(this.permissions);
+    this.permissions =
+      normalized.length > 0
+        ? normalized
+        : getDefaultPermissionsForRole("branch_admin");
+  } else if (this.role === "owner") {
+    this.permissions = getDefaultPermissionsForRole("owner");
+  } else {
+    this.permissions = [];
+  }
+
   if (this.isModified("accountStatus")) {
     this.isActive = this.accountStatus === "active";
   }
@@ -280,6 +302,14 @@ userSchema.pre("save", function (next) {
 
 userSchema.index({ branch: 1, role: 1 });
 userSchema.index({ isArchived: 1, isActive: 1 });
+userSchema.index({
+  isArchived: 1,
+  branch: 1,
+  accountStatus: 1,
+  role: 1,
+  createdAt: -1,
+});
+userSchema.index({ isArchived: 1, accountStatus: 1, createdAt: -1 });
 
 // ============================================================================
 // VIRTUALS

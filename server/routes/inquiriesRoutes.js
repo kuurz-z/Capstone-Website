@@ -9,7 +9,7 @@
  * Available Endpoints:
  * - GET    /api/inquiries              - Get all inquiries (filtered by branch)
  * - GET    /api/inquiries/stats        - Get inquiry statistics
- * - GET    /api/inquiries/branch/:branch - Get inquiries for specific branch (super admin)
+ * - GET    /api/inquiries/branch/:branch - Get inquiries for specific branch (owner)
  * - GET    /api/inquiries/:id          - Get single inquiry by ID
  * - POST   /api/inquiries              - Submit new inquiry (public)
  * - PUT    /api/inquiries/:id          - Update inquiry (admin only)
@@ -17,7 +17,7 @@
  *
  * Branch Access Rules:
  * - Regular admins: Can only access inquiries from their assigned branch
- * - Super admins: Can access inquiries from ALL branches
+ * - Owners: Can access inquiries from all branches
  * - Public: Can only submit new inquiries (POST)
  */
 
@@ -48,12 +48,12 @@ const router = express.Router();
  *
  * Get inquiry statistics for dashboard.
  *
- * Access: Admin (filtered by branch) | Super Admin (all branches)
+ * Access: Admin (filtered by branch) | Owner (all branches)
  */
 router.get("/stats", verifyToken, verifyAdmin, filterByBranch, getInquiryStats);
 
 // ============================================================================
-// GET INQUIRIES BY BRANCH (Super Admin only)
+// GET INQUIRIES BY BRANCH (Owner only)
 // ============================================================================
 
 /**
@@ -61,7 +61,7 @@ router.get("/stats", verifyToken, verifyAdmin, filterByBranch, getInquiryStats);
  *
  * Get all inquiries for a specific branch.
  *
- * Access: Super Admin only
+ * Access: Owner only
  */
 router.get("/branch/:branch", verifyToken, verifyOwner, getInquiriesByBranch);
 
@@ -75,11 +75,11 @@ router.get("/branch/:branch", verifyToken, verifyOwner, getInquiriesByBranch);
  * Retrieve all inquiries with respondent information.
  * Results are filtered by the admin's assigned branch.
  *
- * Access: Admin (filtered by branch) | Super Admin (all branches)
+ * Access: Admin (filtered by branch) | Owner (all branches)
  *
  * Query Parameters:
  * - status: Filter by status (pending, in-progress, resolved, closed)
- * - branch: Filter by branch (super admin only)
+ * - branch: Filter by branch (owner only)
  * - page: Page number for pagination (default: 1)
  * - limit: Items per page (default: 20)
  * - sort: Sort field (default: createdAt)
@@ -96,7 +96,7 @@ router.get("/", verifyToken, verifyAdmin, filterByBranch, getInquiries);
  *
  * Retrieve a single inquiry by ID.
  *
- * Access: Admin (must be from their branch) | Super Admin (any inquiry)
+ * Access: Admin (must be from their branch) | Owner (any inquiry)
  */
 router.get("/:id", verifyToken, verifyAdmin, filterByBranch, getInquiryById);
 
@@ -122,7 +122,7 @@ router.post("/", inquiryLimiter, validate(createInquirySchema), createInquiry);
  *
  * Update an inquiry's status, response, or other details.
  *
- * Access: Admin (must be from their branch) | Super Admin (any inquiry)
+ * Access: Admin (must be from their branch) | Owner (any inquiry)
  */
 router.put("/:id", verifyToken, verifyAdmin, filterByBranch, updateInquiry);
 
@@ -135,7 +135,7 @@ router.put("/:id", verifyToken, verifyAdmin, filterByBranch, updateInquiry);
  *
  * Archive an inquiry (soft delete).
  *
- * Access: Admin (must be from their branch) | Super Admin (any inquiry)
+ * Access: Admin (must be from their branch) | Owner (any inquiry)
  */
 router.delete("/:id", verifyToken, verifyAdmin, filterByBranch, deleteInquiry);
 

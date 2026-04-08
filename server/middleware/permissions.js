@@ -11,7 +11,12 @@
  * HOW IT WORKS:
  * 1. Owners bypass all permission checks (full access)
  * 2. Branch admins must have the specific permission in their `permissions` array
- * 3. If the admin has no permissions array, they are denied by default
+ * 3. Branch admins must already have explicit persisted permissions
+ *
+ * NOTE:
+ * Persisted permissions are authoritative during live permission checks.
+ * Branch-admin defaults are backfilled at startup and on role assignment so
+ * the middleware no longer falls back to broad role defaults at runtime.
  *
  * AVAILABLE PERMISSIONS:
  * - manageReservations
@@ -27,51 +32,13 @@
  */
 
 import { User } from "../models/index.js";
-
-/**
- * All available permissions in the system
- */
-export const ALL_PERMISSIONS = [
-  "manageReservations",
-  "manageTenants",
-  "manageBilling",
-  "manageRooms",
-  "manageMaintenance",
-  "manageAnnouncements",
-  "viewReports",
-  "manageUsers",
-];
-
-/**
- * Default permissions assigned by role
- */
-export const DEFAULT_PERMISSIONS = {
-  applicant: [],
-  tenant: [],
-  branch_admin: [
-    "manageReservations",
-    "manageTenants",
-    "manageBilling",
-    "manageRooms",
-    "manageMaintenance",
-    "manageAnnouncements",
-  ],
-  owner: [...ALL_PERMISSIONS],
-};
-
-/**
- * Human-readable labels for permissions
- */
-export const PERMISSION_LABELS = {
-  manageReservations: "Manage Reservations",
-  manageTenants: "Manage Tenants",
-  manageBilling: "Manage Billing",
-  manageRooms: "Manage Rooms",
-  manageMaintenance: "Manage Maintenance",
-  manageAnnouncements: "Manage Announcements",
-  viewReports: "View Reports",
-  manageUsers: "Manage Users",
-};
+import {
+  ALL_PERMISSIONS,
+  DEFAULT_PERMISSIONS,
+  PERMISSION_LABELS,
+  normalizePermissions,
+} from "../config/accessControl.js";
+export { ALL_PERMISSIONS, DEFAULT_PERMISSIONS, PERMISSION_LABELS };
 
 /**
  * Middleware factory: checks if the user has the required permission.
@@ -84,7 +51,7 @@ export const requirePermission = (permission) => {
   return async (req, res, next) => {
     try {
       // Owners bypass all permission checks
-      if (req.isOwner || req.isSuperAdmin) {
+      if (req.isOwner || req.user?.owner) {
         return next();
       }
 
@@ -103,12 +70,18 @@ export const requirePermission = (permission) => {
       // Owners always pass (fallback check)
       if (dbUser.role === "owner") {
         req.isOwner = true;
-        req.isSuperAdmin = true; // backward compat
         return next();
       }
 
-      // Check the user's permissions array
-      const userPermissions = dbUser.permissions || [];
+      const userPermissions = normalizePermissions(dbUser.permissions);
+
+      if (dbUser.role === "branch_admin" && userPermissions.length === 0) {
+        return res.status(403).json({
+          error: "Admin permissions are not configured for this account",
+          code: "PERMISSIONS_NOT_CONFIGURED",
+        });
+      }
+
       if (userPermissions.includes(permission)) {
         return next();
       }
@@ -137,7 +110,7 @@ export const requirePermission = (permission) => {
 export const requireAnyPermission = (permissions) => {
   return async (req, res, next) => {
     try {
-      if (req.isSuperAdmin) return next();
+      if (req.isOwner || req.user?.owner) return next();
 
       const dbUser = await User.findOne({ firebaseUid: req.user.uid })
         .select("permissions role")
@@ -152,11 +125,16 @@ export const requireAnyPermission = (permissions) => {
 
       if (dbUser.role === "owner") {
         req.isOwner = true;
-        req.isSuperAdmin = true; // backward compat
         return next();
       }
 
-      const userPermissions = dbUser.permissions || [];
+      const userPermissions = normalizePermissions(dbUser.permissions);
+      if (dbUser.role === "branch_admin" && userPermissions.length === 0) {
+        return res.status(403).json({
+          error: "Admin permissions are not configured for this account",
+          code: "PERMISSIONS_NOT_CONFIGURED",
+        });
+      }
       const hasAny = permissions.some((p) => userPermissions.includes(p));
 
       if (hasAny) return next();

@@ -14,6 +14,10 @@ import {
   sendSuccess,
   AppError,
 } from "../middleware/errorHandler.js";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  readMoveInDate,
+} from "../utils/lifecycleNaming.js";
 
 /**
  * Get occupancy status of a specific room
@@ -86,10 +90,10 @@ export const getVacancyForecast = async (req, res, next) => {
     const rooms = await Room.find(roomFilter).lean();
     const roomIds = rooms.map((r) => r._id);
 
-    // Find all checked-in reservations for these rooms
+    // Find all moved-in reservations for these rooms
     const reservations = await Reservation.find({
       roomId: { $in: roomIds },
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: { $ne: true },
     })
       .populate("userId", "firstName lastName email")
@@ -127,7 +131,7 @@ export const getVacancyForecast = async (req, res, next) => {
           );
           const totalMonths = baseDuration + extensions;
 
-          const checkIn = dayjs(reservation.checkInDate);
+          const checkIn = dayjs(readMoveInDate(reservation));
           const expectedEnd = checkIn.add(totalMonths, "month");
           const daysRemaining = expectedEnd.diff(dayjs(), "day");
 
@@ -140,7 +144,7 @@ export const getVacancyForecast = async (req, res, next) => {
                   email: reservation.userId.email,
                 }
               : null,
-            checkInDate: reservation.checkInDate,
+            moveInDate: readMoveInDate(reservation),
             leaseDuration: `${totalMonths} months`,
             expectedVacancy: expectedEnd.toDate(),
             daysRemaining: Math.max(0, daysRemaining),

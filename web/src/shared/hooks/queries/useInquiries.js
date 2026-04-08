@@ -11,10 +11,11 @@ export function useInquiries(params) {
 }
 
 /** Fetch inquiry statistics */
-export function useInquiryStats() {
+export function useInquiryStats(options = {}) {
   return useQuery({
     queryKey: queryKeys.inquiries.stats,
     queryFn: () => inquiryApi.getStats(),
+    ...options,
   });
 }
 

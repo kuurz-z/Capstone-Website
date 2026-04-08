@@ -10,8 +10,7 @@
  */
 
 import { Room } from "../models/index.js";
-
-const INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+import logger from "../middleware/logger.js";
 
 async function cleanupExpiredBedLocks() {
   try {
@@ -42,12 +41,16 @@ async function cleanupExpiredBedLocks() {
  * Start the bed lock cleanup job
  */
 export function startBedLockCleanupJob() {
+  logger.warn(
+    "startBedLockCleanupJob is deprecated. The canonical scheduler owns bed lock cleanup.",
+  );
 
-  // Run once immediately
+  if (process.env.NODE_ENV === "production") {
+    return () => {};
+  }
+
   cleanupExpiredBedLocks();
-
-  const intervalId = setInterval(cleanupExpiredBedLocks, INTERVAL_MS);
-  return () => clearInterval(intervalId);
+  return () => {};
 }
 
 export default startBedLockCleanupJob;

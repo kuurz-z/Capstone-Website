@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 
 export const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 export const UTILITY_CYCLE_DAY = 15;
+export const UTILITY_CHARGE_FIELDS = ["electricity", "water"];
 
 export function sumBillCharges(charges = {}) {
   return roundMoney(
@@ -13,6 +14,154 @@ export function sumBillCharges(charges = {}) {
     (charges.penalty || 0) -
     (charges.discount || 0),
   );
+}
+
+export function getUtilityDispatchEntry(billLike = {}, utilityType) {
+  const charges = billLike?.charges || {};
+  const amount = Number(charges?.[utilityType] || 0);
+  const entry = billLike?.utilityDispatch?.[utilityType];
+  const hasExplicitState = entry?.state === "draft" || entry?.state === "sent";
+
+  if (hasExplicitState) {
+    return {
+      state: entry.state,
+      periodId: entry.periodId || null,
+      publishedAt: entry.publishedAt || null,
+      issuedAt: entry.issuedAt || null,
+      dueDate: entry.dueDate || null,
+      amount: Number(entry.amount ?? amount ?? 0),
+    };
+  }
+
+  const legacySent =
+    amount > 0 &&
+    billLike?.status &&
+    billLike.status !== "draft" &&
+    (billLike.sentAt || billLike.issuedAt || billLike.dueDate);
+
+  return {
+    state: legacySent ? "sent" : "draft",
+    periodId: null,
+    publishedAt: legacySent ? billLike.sentAt || billLike.issuedAt || null : null,
+    issuedAt: legacySent ? billLike.issuedAt || billLike.sentAt || null : null,
+    dueDate: legacySent ? billLike.dueDate || null : null,
+    amount,
+  };
+}
+
+export function isUtilityChargeVisible(billLike = {}, utilityType) {
+  const amount = Number(billLike?.charges?.[utilityType] || 0);
+  if (amount <= 0) return false;
+  return getUtilityDispatchEntry(billLike, utilityType).state === "sent";
+}
+
+export function getVisibleBillCharges(billLike = {}) {
+  const charges = {
+    rent: Number(billLike?.charges?.rent || 0),
+    electricity: Number(billLike?.charges?.electricity || 0),
+    water: Number(billLike?.charges?.water || 0),
+    applianceFees: Number(billLike?.charges?.applianceFees || 0),
+    corkageFees: Number(billLike?.charges?.corkageFees || 0),
+    penalty: Number(billLike?.charges?.penalty || 0),
+    discount: Number(billLike?.charges?.discount || 0),
+  };
+
+  for (const utilityType of UTILITY_CHARGE_FIELDS) {
+    if (!isUtilityChargeVisible(billLike, utilityType)) {
+      charges[utilityType] = 0;
+    }
+  }
+
+  return charges;
+}
+
+export function getVisibleBillIssuedAt(billLike = {}) {
+  const baseVisibleAmount = roundMoney(
+    (billLike?.charges?.rent || 0) +
+      (billLike?.charges?.applianceFees || 0) +
+      (billLike?.charges?.corkageFees || 0) +
+      (billLike?.charges?.penalty || 0) -
+      (billLike?.charges?.discount || 0),
+  );
+
+  if (baseVisibleAmount > 0 && (billLike?.issuedAt || billLike?.sentAt)) {
+    return billLike.issuedAt || billLike.sentAt || null;
+  }
+
+  const visibleDispatches = UTILITY_CHARGE_FIELDS.map((utilityType) =>
+    getUtilityDispatchEntry(billLike, utilityType),
+  ).filter((entry) => entry.state === "sent" && entry.amount > 0);
+
+  if (visibleDispatches.length === 0) {
+    return billLike?.issuedAt || billLike?.sentAt || null;
+  }
+
+  return visibleDispatches
+    .map((entry) => entry.issuedAt || entry.publishedAt)
+    .filter(Boolean)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null;
+}
+
+export function getVisibleBillDueDate(billLike = {}) {
+  const baseVisibleAmount = roundMoney(
+    (billLike?.charges?.rent || 0) +
+      (billLike?.charges?.applianceFees || 0) +
+      (billLike?.charges?.corkageFees || 0) +
+      (billLike?.charges?.penalty || 0) -
+      (billLike?.charges?.discount || 0),
+  );
+
+  if (baseVisibleAmount > 0 && billLike?.dueDate) {
+    return billLike.dueDate;
+  }
+
+  const visibleDispatches = UTILITY_CHARGE_FIELDS.map((utilityType) =>
+    getUtilityDispatchEntry(billLike, utilityType),
+  ).filter((entry) => entry.state === "sent" && entry.amount > 0 && entry.dueDate);
+
+  if (visibleDispatches.length === 0) {
+    return billLike?.dueDate || null;
+  }
+
+  return visibleDispatches
+    .map((entry) => entry.dueDate)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null;
+}
+
+export function getVisibleBillSnapshot(billLike = {}, now = new Date()) {
+  const charges = getVisibleBillCharges(billLike);
+  const grossAmount = sumBillCharges(charges);
+  const totalAmount = roundMoney(
+    Math.max(grossAmount - (billLike?.reservationCreditApplied || 0), 0),
+  );
+  const paidAmount = Number(billLike?.paidAmount || 0);
+  const remainingAmount = roundMoney(Math.max(totalAmount - paidAmount, 0));
+  const dueDate = getVisibleBillDueDate(billLike);
+  const issuedAt = getVisibleBillIssuedAt(billLike);
+  const statusSeed =
+    billLike?.status === "draft" && grossAmount > 0 ? "pending" : billLike?.status;
+  const status = resolveBillStatus(
+    {
+      ...billLike,
+      status: statusSeed,
+      charges,
+      totalAmount,
+      paidAmount,
+      dueDate,
+    },
+    now,
+  );
+
+  return {
+    charges,
+    grossAmount,
+    totalAmount,
+    paidAmount,
+    remainingAmount,
+    dueDate,
+    issuedAt,
+    status,
+  };
 }
 
 export function getBillRemainingAmount(billLike = {}) {
@@ -42,14 +191,14 @@ export function resolveBillStatus(billLike, now = new Date()) {
 }
 
 export function syncBillAmounts(bill, { preserveStatus = false } = {}) {
-  bill.grossAmount = sumBillCharges(bill.charges);
-  bill.totalAmount = roundMoney(
-    Math.max((bill.grossAmount || 0) - (bill.reservationCreditApplied || 0), 0),
-  );
-  bill.remainingAmount = getBillRemainingAmount(bill);
+  const snapshot = getVisibleBillSnapshot(bill);
+
+  bill.grossAmount = snapshot.grossAmount;
+  bill.totalAmount = snapshot.totalAmount;
+  bill.remainingAmount = snapshot.remainingAmount;
 
   if (!preserveStatus) {
-    bill.status = resolveBillStatus(bill);
+    bill.status = snapshot.status;
   }
 
   if (bill.status === "paid" && !bill.paymentDate) {

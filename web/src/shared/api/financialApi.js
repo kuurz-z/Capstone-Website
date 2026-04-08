@@ -1,9 +1,14 @@
-import { authFetch } from "./apiClient.js";
+/**
+ * Financial API - Owner financial overview operations
+ */
 
-const financialApi = {
-  /** Owner: get financial overview for a branch or all branches */
-  getOverview: (branch) =>
-    authFetch(`/financial/overview${branch && branch !== "all" ? `?branch=${branch}` : ""}`),
+import { authFetch } from "./httpClient.js";
+
+export const financialApi = {
+  /**
+   * Get owner financial overview snapshot.
+   * Optional branch query: gil-puyat | guadalupe | all
+   */
+  getOverview: (branch = "all") =>
+    authFetch(`/financial/overview?branch=${encodeURIComponent(branch)}`),
 };
-
-export default financialApi;

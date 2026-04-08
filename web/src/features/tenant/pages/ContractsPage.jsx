@@ -4,6 +4,10 @@ import TenantLayout from "../../../shared/layouts/TenantLayout";
 import ContractsPageSkeleton from "../components/contracts/ContractsPageSkeleton";
 import "../styles/tenant-common.css";
 import "../styles/contracts.css";
+import {
+  hasReservationStatus,
+  readMoveInDate,
+} from "../../../shared/utils/lifecycleNaming";
 
 const ContractsPage = () => {
   const { data: rawReservations, isLoading: loading, error: queryError } = useReservations();
@@ -12,7 +16,7 @@ const ContractsPage = () => {
 
   // Active contract = checked-in reservations
   const activeContract = useMemo(
-    () => reservations.find((r) => r.status === "checked-in"),
+    () => reservations.find((r) => hasReservationStatus(r.status, "moveIn")),
     [reservations],
   );
 
@@ -23,7 +27,7 @@ const ContractsPage = () => {
         (r) =>
           r.status === "completed" ||
           r.status === "cancelled" ||
-          r.status === "checked-out",
+          hasReservationStatus(r.status, "moveOut"),
       ),
     [reservations],
   );
@@ -48,13 +52,18 @@ const ContractsPage = () => {
 
   const getStatusBadge = (status) => {
     const map = {
-      "checked-in": { label: "Active", className: "badge-active" },
+      moveIn: { label: "Active", className: "badge-active" },
       reserved: { label: "Upcoming", className: "badge-upcoming" },
       completed: { label: "Completed", className: "badge-completed" },
-      "checked-out": { label: "Completed", className: "badge-completed" },
+      moveOut: { label: "Completed", className: "badge-completed" },
       cancelled: { label: "Cancelled", className: "badge-cancelled" },
     };
-    const info = map[status] || { label: status, className: "badge-default" };
+    const normalizedStatus = hasReservationStatus(status, "moveIn")
+      ? "moveIn"
+      : hasReservationStatus(status, "moveOut")
+        ? "moveOut"
+        : status;
+    const info = map[normalizedStatus] || { label: normalizedStatus, className: "badge-default" };
     return (
       <span className={`contract-badge ${info.className}`}>{info.label}</span>
     );
@@ -80,7 +89,7 @@ const ContractsPage = () => {
 
   const renderContractCard = (reservation, isActive = false) => {
     const room = reservation.roomId;
-    const startDate = reservation.checkInDate || reservation.approvedDate;
+    const startDate = readMoveInDate(reservation) || reservation.approvedDate;
     const endDate = computeEndDate(startDate, reservation.leaseDuration || 12);
     const progress = isActive
       ? computeProgress(startDate, reservation.leaseDuration || 12)

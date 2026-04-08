@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { billingApi } from "../../../../shared/api/apiClient";
 import { formatPaymentMethod } from "../../../../shared/utils/formatPaymentMethod";
+import SkeletonPulse from "../../../../shared/components/SkeletonPulse";
 import {
   useMyUtilityBreakdownByBillId,
 } from "../../../../shared/hooks/queries/useUtility";
@@ -75,9 +76,102 @@ const STATUS_STYLES = {
   "partially-paid": { bg: "#EFF6FF", color: "#2563EB", label: "Partial" },
 };
 
+const DASHBOARD_SKELETON_CARDS = [1, 2];
+const BILL_SKELETON_ROWS = [1, 2, 3];
+const UTILITY_SKELETON_ROWS = [1, 2, 3, 4];
+
+const BillingTabSkeleton = () => (
+  <div style={{ width: "100%" }} aria-busy="true" aria-live="polite">
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+        gap: "20px",
+        marginBottom: "24px",
+      }}
+    >
+      {DASHBOARD_SKELETON_CARDS.map((card) => (
+        <div key={card} style={dash.wrapper}>
+          <div style={{ marginBottom: 16 }}>
+            <SkeletonPulse width="45%" height="14px" style={{ marginBottom: 12 }} />
+            <SkeletonPulse width="55%" height="34px" />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <SkeletonPulse width="100%" height="54px" borderRadius="10px" />
+          </div>
+          <SkeletonPulse width="100%" height="44px" borderRadius="8px" />
+        </div>
+      ))}
+    </div>
+
+    <div style={nav.container}>
+      <div style={nav.pillBg}>
+        <SkeletonPulse width="130px" height="36px" borderRadius="24px" />
+        <SkeletonPulse width="110px" height="36px" borderRadius="24px" />
+        <SkeletonPulse width="80px" height="36px" borderRadius="24px" />
+      </div>
+    </div>
+
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {BILL_SKELETON_ROWS.map((row) => (
+        <div key={row} style={s.billCard}>
+          <div style={{ padding: "16px 20px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <SkeletonPulse width="170px" height="14px" style={{ marginBottom: 8 }} />
+                <SkeletonPulse width="min(220px, 65vw)" height="12px" />
+              </div>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <SkeletonPulse width="70px" height="12px" />
+                <SkeletonPulse width="95px" height="14px" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const UtilityListSkeleton = () => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 10 }} aria-busy="true" aria-live="polite">
+    {UTILITY_SKELETON_ROWS.map((row) => (
+      <div key={row} style={s.billCard}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "16px 20px",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <SkeletonPulse width="160px" height="14px" style={{ marginBottom: 8 }} />
+            <SkeletonPulse width="min(200px, 60vw)" height="12px" />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <SkeletonPulse width="74px" height="12px" />
+            <SkeletonPulse width="88px" height="14px" />
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 /* ── Dashboard Components ─────────────────────────── */
 
-const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, onPay, payingOnline }) => {
+const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, hasWaterBilling, onPay, payingOnline }) => {
   const unpaidUtilities = unpaidElec + unpaidWater;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "24px" }}>
@@ -120,7 +214,7 @@ const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, onPay, payingOnli
           </div>
         </div>
         
-        {unpaidUtilities > 0 && (
+        {(unpaidUtilities > 0 || hasWaterBilling) && (
           <div style={{...dash.breakdownRow, marginBottom: "16px"}}>
             <div style={dash.breakdownItem}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b" }}>
@@ -128,13 +222,17 @@ const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, onPay, payingOnli
               </div>
               <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)" }}>{fmt(unpaidElec)}</div>
             </div>
-            <div style={dash.divider} />
-            <div style={dash.breakdownItem}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b" }}>
-                <Droplets size={14} color="#3B82F6" /> <span style={{ fontSize: 12, fontWeight: 500 }}>Water</span>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)" }}>{fmt(unpaidWater)}</div>
-            </div>
+            {hasWaterBilling && (
+              <>
+                <div style={dash.divider} />
+                <div style={dash.breakdownItem}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#64748b" }}>
+                    <Droplets size={14} color="#3B82F6" /> <span style={{ fontSize: 12, fontWeight: 500 }}>Water</span>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)" }}>{fmt(unpaidWater)}</div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -383,10 +481,15 @@ const ElectricityReferenceSegmentCard = ({ seg, ratePerKwh }) => {
   const totalConsumption = Number(
     seg.segmentTotalKwh ?? seg.kwhConsumed ?? ((seg.readingTo || 0) - (seg.readingFrom || 0)),
   );
+  const tenantsSharing = Number(seg.activeTenantCount || 0);
+  const segmentRoomTotal = totalConsumption * Number(ratePerKwh || 0);
+  const segmentShare = Number(
+    seg.sharePerTenantCost ?? (tenantsSharing > 0 ? segmentRoomTotal / tenantsSharing : 0),
+  );
 
   return (
     <div style={elecS.referenceCard}>
-      <div style={elecS.referenceIntro}>Here are the details for your reference.</div>
+      <div style={elecS.referenceIntro}>Segment billing details</div>
       <table style={elecS.referenceTable}>
         <tbody>
           <tr>
@@ -434,17 +537,86 @@ const ElectricityReferenceSegmentCard = ({ seg, ratePerKwh }) => {
           </tr>
           <tr>
             <td style={elecS.referenceLabelCell} colSpan={2}>
-              Amount due (Php {Number(ratePerKwh || 0).toLocaleString("en-PH", {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 2,
-              })} / kwh) per person
+              Room total (kWh x rate)
+            </td>
+            <td style={elecS.referenceValueCell}>{fmt(segmentRoomTotal)}</td>
+          </tr>
+          <tr>
+            <td style={elecS.referenceLabelCell} colSpan={2}>
+              Your share for this segment (room total / {tenantsSharing || 0})
             </td>
             <td style={{ ...elecS.referenceValueCell, fontWeight: 700 }}>
-              {fmt(seg.sharePerTenantCost)}
+              {fmt(segmentShare)}
             </td>
           </tr>
         </tbody>
       </table>
+    </div>
+  );
+};
+
+const ElectricityFinalBreakdownCard = ({ data, period, electricityAmount }) => {
+  const segments = data?.segments || [];
+  const segmentTotals = segments.map((seg, idx) => {
+    const totalConsumption = Number(
+      seg.segmentTotalKwh ?? seg.kwhConsumed ?? ((seg.readingTo || 0) - (seg.readingFrom || 0)),
+    );
+    const tenantsSharing = Number(seg.activeTenantCount || 0);
+    const segmentRoomTotal = totalConsumption * Number(data?.ratePerKwh || 0);
+    const share = Number(seg.sharePerTenantCost ?? (tenantsSharing > 0 ? segmentRoomTotal / tenantsSharing : 0));
+    return {
+      key: `${seg.startDate || "seg"}-${idx}`,
+      label: `Segment ${idx + 1} (${fmtDateOnly(seg.startDate)} - ${fmtDateOnly(seg.endDate)})`,
+      value: share,
+    };
+  });
+  const totalSegmentKwh = segments.reduce(
+    (sum, seg) => sum + Number(seg.segmentTotalKwh ?? seg.kwhConsumed ?? ((seg.readingTo || 0) - (seg.readingFrom || 0)) ?? 0),
+    0,
+  );
+  const totalFromSegments = segmentTotals.reduce((sum, seg) => sum + Number(seg.value || 0), 0);
+
+  const finalUsage = Number(data?.myTotalKwh ?? period?.totalKwh ?? period?.totalUsage ?? totalSegmentKwh ?? 0);
+  const finalRate = Number(data?.ratePerKwh || 0);
+  const finalDue = Number(data?.myBillAmount ?? electricityAmount ?? totalFromSegments ?? 0);
+  const adjustment = finalDue - totalFromSegments;
+
+  return (
+    <div style={elecS.finalBreakdownCard}>
+      <div style={elecS.finalBreakdownHeader}>Final breakdown</div>
+      <div style={elecS.finalBreakdownBody}>
+        <div style={elecS.finalBreakdownRow}>
+          <span style={elecS.finalBreakdownLabel}>Total usage (your share)</span>
+          <span style={elecS.finalBreakdownValue}>{fmtKwh(finalUsage)}</span>
+        </div>
+        <div style={elecS.finalBreakdownRow}>
+          <span style={elecS.finalBreakdownLabel}>Rate applied</span>
+          <span style={elecS.finalBreakdownValue}>₱{finalRate.toLocaleString("en-PH", { maximumFractionDigits: 2 })}/kWh</span>
+        </div>
+        {segmentTotals.length > 0 && <div style={elecS.finalBreakdownSectionTitle}>Segment totals</div>}
+        {segmentTotals.map((segmentTotal) => (
+          <div style={elecS.finalBreakdownRow} key={segmentTotal.key}>
+            <span style={elecS.finalBreakdownLabel}>{segmentTotal.label}</span>
+            <span style={elecS.finalBreakdownValue}>{fmt(segmentTotal.value)}</span>
+          </div>
+        ))}
+        <div style={{ ...elecS.finalBreakdownRow, borderTop: "1px dashed #ead7bc", paddingTop: 8, marginTop: 2 }}>
+          <span style={elecS.finalBreakdownLabel}>Subtotal of segment totals</span>
+          <span style={elecS.finalBreakdownValue}>{fmt(totalFromSegments)}</span>
+        </div>
+        {Math.abs(adjustment) >= 0.01 && (
+          <div style={elecS.finalBreakdownRow}>
+            <span style={elecS.finalBreakdownLabel}>Adjustment</span>
+            <span style={{ ...elecS.finalBreakdownValue, color: adjustment > 0 ? "#b45309" : "#047857" }}>
+              {adjustment > 0 ? "+" : "-"}{fmt(Math.abs(adjustment))}
+            </span>
+          </div>
+        )}
+      </div>
+      <div style={elecS.finalBreakdownFooter}>
+        <span>Final amount due</span>
+        <span style={elecS.finalBreakdownTotal}>{fmt(finalDue)}</span>
+      </div>
     </div>
   );
 };
@@ -494,6 +666,11 @@ const ElectricityPeriodRow = ({ period }) => {
               {(data.segments || []).map((seg, i) => (
                 <ElectricityReferenceSegmentCard key={i} seg={seg} ratePerKwh={data.ratePerKwh} />
               ))}
+              <ElectricityFinalBreakdownCard
+                data={data}
+                period={period}
+                electricityAmount={electricityAmount}
+              />
             </div>
           ) : (
             <div style={elecS.loadingRow}>
@@ -509,7 +686,7 @@ const ElectricityPeriodRow = ({ period }) => {
 };
 
 const ElectricityTabContent = ({ bills = [], isLoading = false }) => {
-  if (isLoading) return <div style={elecS.loadingRow}>Loading electricity history...</div>;
+  if (isLoading) return <UtilityListSkeleton />;
   if (!bills.length) return <div style={s.emptyState}>No electricity history found.</div>;
 
   return (
@@ -597,7 +774,7 @@ const WaterPeriodRow = ({ period }) => {
 };
 
 const WaterTabContent = ({ bills = [], isLoading = false }) => {
-  if (isLoading) return <div style={elecS.loadingRow}>Loading water history...</div>;
+  if (isLoading) return <UtilityListSkeleton />;
   if (!bills.length) return <div style={s.emptyState}>No water history found.</div>;
 
   return (
@@ -704,6 +881,9 @@ const BillingTab = () => {
 
   const electricityBills = bills.filter((bill) => (bill.charges?.electricity || 0) > 0);
   const waterBills = bills.filter((bill) => (bill.charges?.water || 0) > 0);
+  // Show water tab only if this tenant has ever been billed for water.
+  // If all water bills are paid, the tab still shows with ₱0 balance.
+  const hasWaterBilling = waterBills.length > 0;
 
   const handlePay = async (type = "all") => {
     try {
@@ -741,11 +921,7 @@ const BillingTab = () => {
   };
 
   if (loading) {
-    return (
-      <div style={{ width: "100%" }}>
-         <div style={dash.wrapper}><Activity size={24} style={{ animation: "spin 2s linear infinite" }} /></div>
-      </div>
-    );
+    return <BillingTabSkeleton />;
   }
 
   return (
@@ -755,6 +931,7 @@ const BillingTab = () => {
         unpaidRent={unpaidRent}
         unpaidElec={unpaidElec}
         unpaidWater={unpaidWater}
+        hasWaterBilling={hasWaterBilling}
         onPay={handlePay}
         payingOnline={payingOnline}
       />
@@ -774,12 +951,14 @@ const BillingTab = () => {
           >
             Electricity
           </button>
-          <button
-            style={subTab === "water" ? nav.tabActive : nav.tab}
-            onClick={() => setSubTab("water")}
-          >
-            Water
-          </button>
+          {hasWaterBilling && (
+            <button
+              style={subTab === "water" ? nav.tabActive : nav.tab}
+              onClick={() => setSubTab("water")}
+            >
+              Water
+            </button>
+          )}
         </div>
       </div>
 
@@ -787,7 +966,7 @@ const BillingTab = () => {
       <div style={{ minHeight: 400 }}>
         {subTab === "monthly" && <MonthlyPaymentView bills={monthlyBills} filter={filter} setFilter={setFilter} />}
         {subTab === "electricity" && <ElectricityTabContent bills={electricityBills} isLoading={loading} />}
-        {subTab === "water" && <WaterTabContent bills={waterBills} isLoading={loading} />}
+        {subTab === "water" && hasWaterBilling && <WaterTabContent bills={waterBills} isLoading={loading} />}
       </div>
     </div>
   );
@@ -1122,6 +1301,67 @@ const elecS = {
   },
   statLabel: { display: "block", fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginBottom: 2 },
   statValue: { display: "block", fontSize: 13, fontWeight: 600, color: "#1e293b" },
+  finalBreakdownCard: {
+    border: "1px solid #f1e2c8",
+    borderRadius: 10,
+    background: "#fffaf0",
+    overflow: "hidden",
+  },
+  finalBreakdownHeader: {
+    padding: "10px 12px",
+    background: "#f7e3c8",
+    color: "#7c2d12",
+    fontSize: 13,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  finalBreakdownBody: {
+    padding: "10px 12px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  finalBreakdownSectionTitle: {
+    color: "#7c2d12",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    marginTop: 2,
+  },
+  finalBreakdownRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  finalBreakdownLabel: {
+    color: "#475569",
+    fontSize: 13,
+  },
+  finalBreakdownValue: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
+  },
+  finalBreakdownFooter: {
+    borderTop: "1px solid #f1e2c8",
+    padding: "10px 12px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    color: "#7c2d12",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  finalBreakdownTotal: {
+    color: "#9a3412",
+    fontSize: 16,
+    fontWeight: 800,
+    fontVariantNumeric: "tabular-nums",
+  },
 };
 
 export default BillingTab;

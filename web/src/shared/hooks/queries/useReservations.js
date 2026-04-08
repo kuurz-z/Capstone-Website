@@ -3,22 +3,23 @@ import { reservationApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
 /** Fetch all reservations — 30s freshness, mutations trigger instant refresh */
-export function useReservations() {
+export function useReservations(params = {}) {
   return useQuery({
-    queryKey: queryKeys.reservations.all,
-    queryFn: () => reservationApi.getAll(),
+    queryKey: queryKeys.reservations.all(params),
+    queryFn: () => reservationApi.getAll(params),
     staleTime: 30 * 1000,        // data stays fresh 30s — prevents rapid refetches
     refetchOnMount: true,         // refetch if stale, but NOT if fresh
   });
 }
 
 /** Fetch current checked-in residents for admin tenants page */
-export function useCurrentResidents(params = {}) {
+export function useCurrentResidents(params = {}, options = {}) {
   return useQuery({
     queryKey: queryKeys.reservations.currentResidents(params),
     queryFn: () => reservationApi.getCurrentResidents(params),
     staleTime: 30 * 1000,
     refetchOnMount: true,
+    ...options,
   });
 }
 

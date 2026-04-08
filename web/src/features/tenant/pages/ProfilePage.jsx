@@ -18,6 +18,7 @@ import { useCurrentUser } from "../../../shared/hooks/queries/useUsers";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import { billingApi } from "../../../shared/api/billingApi";
 import { ThemeProvider } from "../../../features/public/context/ThemeContext";
+import { hasReservationStatus } from "../../../shared/utils/lifecycleNaming";
 
 // Sub-components
 import {
@@ -75,7 +76,7 @@ const ProfilePage = () => {
     profileImage: "",
     branch: "",
     role: "",
-    tenantStatus: "none",
+    tenantStatus: "applicant",
     createdAt: "",
     gender: "",
     civilStatus: "",
@@ -217,7 +218,7 @@ const ProfilePage = () => {
     const activeOnes =
       reservations.filter((r) => {
         const status = r.reservationStatus || r.status;
-        return status !== "completed" && status !== "cancelled";
+        return !hasReservationStatus(status, "moveOut", "cancelled");
       }) || [];
     return activeOnes[0] || null;
   }, [reservations]);
@@ -353,7 +354,7 @@ const ProfilePage = () => {
   // ── Derived values ─────────────────────────────────────────
   const activeReservations = reservations.filter((r) => {
     const status = r.reservationStatus || r.status;
-    return status !== "completed" && status !== "cancelled";
+    return !hasReservationStatus(status, "moveOut", "cancelled");
   });
 
   const selectedReservation = selectedReservationId

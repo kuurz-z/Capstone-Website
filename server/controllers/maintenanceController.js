@@ -14,6 +14,7 @@ import {
   sendSuccess,
   AppError,
 } from "../middleware/errorHandler.js";
+import { CURRENT_RESIDENT_STATUS_QUERY } from "../utils/lifecycleNaming.js";
 
 /**
  * Get maintenance requests for logged-in tenant
@@ -97,7 +98,9 @@ export const createRequest = async (req, res, next) => {
     }
 
     const reservation = await Reservation.findOne({
-      userId, branch, status: "checked-in",
+      userId,
+      branch,
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
     });
 
     if (!reservation) {

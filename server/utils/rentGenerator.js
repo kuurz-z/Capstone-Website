@@ -1,56 +1,57 @@
 import dayjs from "dayjs";
 import { Bill, Reservation, Room, User } from "../models/index.js";
 import { getPenaltyRatePerDay } from "./businessSettings.js";
-import { syncBillAmounts, getReservationCreditAvailable } from "./billingPolicy.js";
+import {
+  buildBillingCycle,
+  syncBillAmounts,
+  getReservationCreditAvailable,
+} from "./billingPolicy.js";
 import logger from "../middleware/logger.js";
 import notify from "./notificationService.js";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  readMoveInDate,
+} from "./lifecycleNaming.js";
 
 /**
- * Automatically generates Monthly Rent bills for tenants 5 days before their check-in anniversary.
+ * Automatically generates Monthly Rent bills for tenants 5 days before their due date.
  */
-export async function generateAutomatedRentBills() {
+export async function generateAutomatedRentBills({ force = false, now = dayjs() } = {}) {
   try {
-    const now = dayjs();
+    const currentDay = dayjs(now).startOf("day");
     let generatedCount = 0;
 
     // We look for all checked-in reservations
     const reservations = await Reservation.find({
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,
     })
       .populate("userId", "firstName lastName email")
       .populate("roomId", "name branch price monthlyPrice type");
 
     for (const reservation of reservations) {
-      if (!reservation.checkInDate || !reservation.userId || !reservation.roomId) {
+      const moveInDate = readMoveInDate(reservation);
+      if (!moveInDate || !reservation.userId || !reservation.roomId) {
         continue;
       }
 
-      const checkInDay = dayjs(reservation.checkInDate).date();
-      
-      // Calculate their NEXT anniversary date based on the current month/year
-      // If today's day is past the check-in day, their next due date is next month.
-      let nextAnniversary = now.date(checkInDay).startOf('day');
-      if (now.date() > checkInDay - 5) {
-        nextAnniversary = nextAnniversary.add(1, 'month');
-      }
+      const existingRentBills = await Bill.countDocuments({
+        reservationId: reservation._id,
+        isArchived: false,
+        "charges.rent": { $gt: 0 },
+      });
+      const billingCycle = buildBillingCycle(moveInDate, existingRentBills);
+      const dueDate = dayjs(billingCycle.dueDate).startOf("day");
+      const dueInDays = dueDate.diff(currentDay, "day");
 
-      const dueInDays = nextAnniversary.diff(now.startOf('day'), 'day');
-
-      // The exact generation trigger is exactly 5 days before the anniversary!
-      if (dueInDays !== 5) {
-        continue;
-      }
-
-      // Do NOT generate automated bills for the first month or prior to checkInDate!
-      // The move-in payment covers the first cycle (from checkInDate to checkInDate + 1 month).
-      // Therefore, the first automated bill should only be due starting exactly 1 month AFTER checkInDate.
-      if (!nextAnniversary.isAfter(dayjs(reservation.checkInDate).endOf('day'), 'day')) {
+      // Generate rent bills only when the next due date is five days away,
+      // unless a manual force-run explicitly overrides the schedule.
+      if (!force && dueInDays !== 5) {
         continue;
       }
 
       // Determine rent price
-      const isLongTerm = dayjs().diff(dayjs(reservation.checkInDate), "month", true) >= 6;
+      const isLongTerm = currentDay.diff(dayjs(moveInDate), "month", true) >= 6;
       let rentPrice = reservation.monthlyRent || reservation.totalPrice;
       if (!rentPrice) {
         rentPrice = isLongTerm ? (reservation.roomId.monthlyPrice ?? reservation.roomId.price ?? 0) : (reservation.roomId.price ?? 0);
@@ -71,7 +72,9 @@ export async function generateAutomatedRentBills() {
       }
 
       const grossAmount = rentPrice + applianceFees;
-      const billingMonthStartDate = nextAnniversary.subtract(1, 'month').toDate();
+  const billingMonthStartDate = dayjs(billingCycle.billingCycleStart).toDate();
+  const billingCycleEndDate = dayjs(billingCycle.billingCycleEnd).toDate();
+  const dueDateValue = dayjs(billingCycle.dueDate).toDate();
 
       // Check if we already generated a rent bill for this specific period to prevent duplicates
       const dupeFilter = {
@@ -98,10 +101,10 @@ export async function generateAutomatedRentBills() {
         roomId: reservation.roomId._id,
         billingMonth: billingMonthStartDate,
         billingCycleStart: billingMonthStartDate,
-        billingCycleEnd: nextAnniversary.toDate(),
-        dueDate: nextAnniversary.toDate(),
+        billingCycleEnd: billingCycleEndDate,
+        dueDate: dueDateValue,
         isFirstCycleBill: reservationCreditApplied > 0, // Flag it as the first cycle if credit is applied
-        proRataDays: dayjs(nextAnniversary).diff(dayjs(billingMonthStartDate), 'day'),
+        proRataDays: dayjs(billingCycleEndDate).diff(dayjs(billingMonthStartDate), 'day'),
         charges: {
           rent: rentPrice,
           electricity: 0,
@@ -133,7 +136,7 @@ export async function generateAutomatedRentBills() {
       // Notify the tenant
       if (reservation.userId.email) {
         const monthLabel = dayjs(billingMonthStartDate).format("MMMM YYYY");
-        const dueDateLabel = nextAnniversary.format("MMMM D, YYYY");
+        const dueDateLabel = dayjs(dueDateValue).format("MMMM D, YYYY");
         // We can send the standard Bill Generated notification here
         notify.billGenerated(reservation.userId._id, monthLabel, bill.totalAmount, dueDateLabel);
       }

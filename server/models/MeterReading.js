@@ -16,6 +16,11 @@
  */
 
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
+import {
+  CANONICAL_UTILITY_EVENT_TYPES,
+  normalizeUtilityEventType,
+} from "../utils/lifecycleNaming.js";
 
 const meterReadingSchema = new mongoose.Schema(
   {
@@ -28,7 +33,7 @@ const meterReadingSchema = new mongoose.Schema(
     },
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       required: true,
       index: true,
     },
@@ -44,8 +49,9 @@ const meterReadingSchema = new mongoose.Schema(
     },
     eventType: {
       type: String,
-      enum: ["move-in", "move-out", "regular-billing"],
+      enum: CANONICAL_UTILITY_EVENT_TYPES,
       required: true,
+      set: normalizeUtilityEventType,
     },
 
     // --- Tenant Reference (for move-in / move-out events) ---
@@ -99,6 +105,14 @@ meterReadingSchema.index({ roomId: 1, billingPeriodId: 1 });
 
 // For branch-scoped queries
 meterReadingSchema.index({ branch: 1, date: -1 });
+
+meterReadingSchema.pre("validate", function (next) {
+  if (this.eventType) {
+    this.eventType = normalizeUtilityEventType(this.eventType);
+  }
+
+  next();
+});
 
 // ============================================================================
 // EXPORT

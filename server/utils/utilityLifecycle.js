@@ -67,7 +67,7 @@ export async function ensureOpenUtilityPeriodForRoom({
     roomId: room._id,
     branch: room.branch,
     startDate: periodStartDate || new Date(anchorDate),
-    startReading: Number(anchorReading),
+    startReading: utilityType === "water" ? 0 : Number(anchorReading),
     ratePerUnit,
     status: "open",
   });

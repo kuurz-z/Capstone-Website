@@ -58,7 +58,7 @@ const PERMISSIONS = [
 
 /**
  * PermissionEditor — Toggle grid for admin permissions.
- * Used by SuperAdmin to customise what each admin can do.
+ * Used by the owner to customise what each admin can do.
  *
  * @param {Object} props
  * @param {string[]} props.permissions - Current permissions array
