@@ -111,7 +111,11 @@ export const RESERVATION_COLUMNS = [
   { key: "tenantName", label: "Tenant" },
   { key: "roomName", label: "Room" },
   { key: "status", label: "Status" },
-  { key: "checkInDate", label: "Check-In", formatter: (v) => v ? new Date(v).toLocaleDateString("en-PH") : "" },
+  {
+    key: "moveInDate",
+    label: "Move In",
+    formatter: (v) => (v ? new Date(v).toLocaleDateString("en-PH") : ""),
+  },
   { key: "leaseDuration", label: "Lease (months)" },
   { key: "totalPrice", label: "Total Price (₱)", formatter: (v) => (v || 0).toFixed(2) },
   { key: "createdAt", label: "Created", formatter: (v) => v ? new Date(v).toLocaleDateString("en-PH") : "" },

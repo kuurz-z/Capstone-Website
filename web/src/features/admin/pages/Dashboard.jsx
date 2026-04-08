@@ -3,6 +3,10 @@ import { Link } from "react-router-dom";
 import { LayoutGrid, MessageSquare, CalendarCheck, Clock } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
+  hasReservationStatus,
+  readMoveInDate,
+} from "../../../shared/utils/lifecycleNaming";
+import {
   formatRoomType,
   formatBranch,
   formatDate,
@@ -50,7 +54,9 @@ export default function Dashboard() {
       (occupancyStats?.totalOccupancy || 0);
     const registeredUsers = userStatsData?.total || 0;
     const activeBookings = (reservations || []).filter((r) =>
-      ["confirmed", "checked-in"].includes(r.status),
+      r.status === "confirmed" ||
+      r.status === "reserved" ||
+      hasReservationStatus(r.status, "moveIn"),
     ).length;
     const revenue = billingStats?.totalCollected
       ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
@@ -131,14 +137,16 @@ export default function Dashboard() {
         item.guestName ||
         "Unknown",
       branch: formatBranch(item.roomId?.branch || item.branch),
-      date: formatDate(item.checkInDate || item.createdAt),
+      date: formatDate(readMoveInDate(item) || item.createdAt),
       status: item.status || "pending",
     }));
   }, [reservations]);
 
   const reservationStatus = useMemo(() => {
     const approved = (reservations || []).filter((r) =>
-      ["confirmed", "checked-in"].includes(r.status),
+      r.status === "confirmed" ||
+      r.status === "reserved" ||
+      hasReservationStatus(r.status, "moveIn"),
     ).length;
     const pending = (reservations || []).filter(
       (r) => r.status === "pending",

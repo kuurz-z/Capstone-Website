@@ -11,6 +11,10 @@ import {
   DetailDrawer,
 } from "../components/shared";
 import { formatBranch, formatRoomType } from "../utils/formatters";
+import {
+  readMoveInDate,
+  readMoveOutDate,
+} from "../../../shared/utils/lifecycleNaming";
 import "../styles/design-tokens.css";
 import "../styles/admin-tenants.css";
 
@@ -37,8 +41,9 @@ const fmtDate = (value) =>
     : "-";
 
 const getTenantStatus = (reservation) => {
-  if (reservation.checkOutDate) {
-    const daysLeft = Math.ceil((new Date(reservation.checkOutDate) - new Date()) / 86_400_000);
+  const moveOutDate = readMoveOutDate(reservation);
+  if (moveOutDate) {
+    const daysLeft = Math.ceil((new Date(moveOutDate) - new Date()) / 86_400_000);
     if (daysLeft <= 0) return { key: "overdue", label: "Overdue" };
     if (daysLeft <= 30) return { key: "moving-out", label: "Moving Out" };
   }
@@ -107,8 +112,8 @@ export default function TenantsPage() {
         floor: room?.floor || "-",
         roomType: formatRoomType(room?.type) || "-",
         monthlyRent: reservation.monthlyRent || room?.price || null,
-        moveIn: fmtDate(reservation.checkInDate),
-        moveOut: fmtDate(reservation.checkOutDate),
+        moveIn: fmtDate(readMoveInDate(reservation)),
+        moveOut: fmtDate(readMoveOutDate(reservation)),
         bed: reservation.selectedBed?.position
           ? `${reservation.selectedBed.position.charAt(0).toUpperCase()}${reservation.selectedBed.position.slice(1)} Bed`
           : "-",
@@ -274,8 +279,8 @@ export default function TenantsPage() {
                 }
               : {
                   icon: Users,
-                  title: "No checked-in residents",
-                  description: "Residents appear here once an admin completes their check-in.",
+                  title: "No moved-in residents",
+                  description: "Residents appear here once an admin completes their move-in.",
                 }
           }
         />

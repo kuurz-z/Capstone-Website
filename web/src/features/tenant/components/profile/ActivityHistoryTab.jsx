@@ -15,6 +15,11 @@ import {
   Bed,
 } from "lucide-react";
 import dayjs from "dayjs";
+import {
+  hasReservationStatus,
+  readMoveInDate,
+  readMoveOutDate,
+} from "../../../../shared/utils/lifecycleNaming";
 
 /* ── Date helpers ────────────────────────────────── */
 const fmtDate = (d) =>
@@ -100,8 +105,13 @@ const buildTimeline = (r) => {
       }
     });
 
-    const terminalStatuses = ["cancelled", "checked-out", "archived"];
-    if (r.visitDate && !r.scheduleRejected && !r.visitApproved && !terminalStatuses.includes(r.status)) {
+    const terminalStatuses = ["cancelled", "moveOut", "archived"];
+    if (
+      r.visitDate &&
+      !r.scheduleRejected &&
+      !r.visitApproved &&
+      !terminalStatuses.includes(r.status)
+    ) {
       const attemptNum = r.visitHistory.length + 1;
       const visitDateStr = fmtDate(r.visitDate) + (r.visitTime ? ` at ${r.visitTime}` : "");
       events.push({
@@ -183,22 +193,22 @@ const buildTimeline = (r) => {
     });
   }
 
-  if (r.status === "checked-in") {
+  if (hasReservationStatus(r.status, "moveIn")) {
     events.push({
       id: "checkin", icon: UserCheck, iconBg: "#EEF2FF", iconColor: "#6366F1",
-      title: "Checked In",
+      title: "Moved In",
       description: "You have officially moved into your room.",
-      date: r.checkInDate || r.updatedAt,
+      date: readMoveInDate(r) || r.updatedAt,
       status: "Active", statusColor: "#6366F1", statusBg: "#EEF2FF",
     });
   }
 
-  if (r.status === "checked-out") {
+  if (hasReservationStatus(r.status, "moveOut")) {
     events.push({
       id: "checkout", icon: Home, iconBg: "#F3F4F6", iconColor: "#6B7280",
-      title: "Checked Out",
+      title: "Moved Out",
       description: "Your stay has ended.",
-      date: r.checkOutDate || r.updatedAt,
+      date: readMoveOutDate(r) || r.updatedAt,
       status: "Completed", statusColor: "#059669", statusBg: "#F0FDF4",
     });
   }
@@ -246,8 +256,8 @@ const deriveStage = (r) => {
 
   // Terminal states
   if (s === "cancelled")    return { color: "#EF4444", bg: "#FEF2F2", label: "Cancelled" };
-  if (s === "checked-out") return { color: "#6B7280", bg: "#F3F4F6", label: "Completed" };
-  if (s === "checked-in")  return { color: "#6366F1", bg: "#EEF2FF", label: "Checked In" };
+  if (hasReservationStatus(s, "moveOut")) return { color: "#6B7280", bg: "#F3F4F6", label: "Completed" };
+  if (hasReservationStatus(s, "moveIn"))  return { color: "#6366F1", bg: "#EEF2FF", label: "Moved In" };
   if (s === "reserved" || r.paymentStatus === "paid")
     return { color: "#059669", bg: "#D1FAE5", label: "Reserved" };
 
@@ -441,7 +451,7 @@ const ActivityHistoryTab = ({ reservations = [] }) => {
   const stats = useMemo(() => ({
     total:     reservations.length,
     active:    reservations.filter((r) => IN_PROGRESS.includes(r.status)).length,
-    completed: reservations.filter((r) => r.status === "checked-out").length,
+    completed: reservations.filter((r) => hasReservationStatus(r.status, "moveOut")).length,
     cancelled: reservations.filter((r) => r.status === "cancelled").length,
   }), [reservations]);
 

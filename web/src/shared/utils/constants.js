@@ -51,8 +51,8 @@ export const BRANCH_DISPLAY_NAMES = {
 export const RESERVATION_STATUS = {
   PENDING: "pending",
   RESERVED: "reserved",
-  CHECKED_IN: "checked-in",
-  CHECKED_OUT: "checked-out",
+  MOVE_IN: "moveIn",
+  MOVE_OUT: "moveOut",
   CANCELLED: "cancelled",
 };
 

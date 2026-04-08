@@ -31,6 +31,20 @@ import {
   getCheckinBlockers,
 } from "../utils/reservationHelpers.js";
 import {
+  ACTIVE_OCCUPANCY_STATUS_QUERY,
+  ACTIVE_STAY_STATUS_QUERY,
+  CURRENT_RESIDENT_STATUS_QUERY,
+  hasReservationStatus,
+  normalizeReservationPayload,
+  normalizeReservationStatus,
+  readMoveInDate,
+  readMoveOutDate,
+  reservationStatusesForQuery,
+  serializeReservation,
+  serializeReservations,
+  utilityEventTypesForQuery,
+} from "../utils/lifecycleNaming.js";
+import {
   sendReservationConfirmedEmail,
   sendVisitApprovedEmail,
 } from "../config/email.js";
@@ -49,7 +63,8 @@ const ADMIN_LIST_FIELDS = [
   "status",
   "paymentStatus",
   "createdAt",
-  "checkInDate",
+  "moveInDate",
+  "moveOutDate",
   "visitDate",
   "visitTime",
   "visitApproved",
@@ -71,8 +86,8 @@ const CURRENT_RESIDENT_FIELDS = [
   "reservationCode",
   "status",
   "paymentStatus",
-  "checkInDate",
-  "checkOutDate",
+  "moveInDate",
+  "moveOutDate",
   "leaseDuration",
   "monthlyRent",
   "mobileNumber",
@@ -123,9 +138,10 @@ const getResidentStatus = (reservation, now = new Date()) => {
     statusLabel = "Overdue";
   }
 
-  if (reservation.checkOutDate) {
+  const moveOutDate = readMoveOutDate(reservation);
+  if (moveOutDate) {
     const daysLeft = Math.ceil(
-      (new Date(reservation.checkOutDate) - now) / 86_400_000,
+      (new Date(moveOutDate) - now) / 86_400_000,
     );
     if (daysLeft <= 30 && daysLeft > 0) statusLabel = "Moving Out";
     if (daysLeft <= 0) statusLabel = "Overdue";
@@ -135,10 +151,9 @@ const getResidentStatus = (reservation, now = new Date()) => {
 };
 
 const mapCurrentResident = (reservation, now = new Date()) => {
+  const serialized = serializeReservation(reservation);
   return {
-    ...(typeof reservation.toObject === "function"
-      ? reservation.toObject()
-      : reservation),
+    ...serialized,
     statusLabel: getResidentStatus(reservation, now),
   };
 };
@@ -214,7 +229,7 @@ export const getReservations = async (req, res, next) => {
 
     const reservations = await reservationsQuery;
 
-    res.json(reservations);
+    res.json(serializeReservations(reservations));
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Fetch reservations error");
     handleReservationError(res, error, "fetch");
@@ -258,14 +273,14 @@ export const getCurrentResidents = async (req, res) => {
 
     const roomIds = await Room.find(roomQuery).distinct("_id");
     const reservations = await Reservation.find({
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       roomId: { $in: roomIds },
       isArchived: { $ne: true },
     })
       .select(CURRENT_RESIDENT_FIELDS)
       .populate(...CURRENT_RESIDENT_USER)
       .populate(...CURRENT_RESIDENT_ROOM)
-      .sort({ checkInDate: -1 })
+      .sort({ moveInDate: -1 })
       .lean();
 
     const now = new Date();
@@ -318,7 +333,7 @@ export const getReservationById = async (req, res, next) => {
       });
     }
 
-    res.json(reservation);
+    res.json(serializeReservation(reservation));
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Fetch reservation error");
     handleReservationError(res, error, "fetch");
@@ -328,6 +343,7 @@ export const getReservationById = async (req, res, next) => {
 /* ─── CREATE reservation ─────────────────────────── */
 export const createReservation = async (req, res, next) => {
   try {
+    const payload = normalizeReservationPayload(req.body);
     const dbUser = await findDbUser(req.user.uid);
     if (!dbUser)
       return res.status(404).json({
@@ -339,7 +355,9 @@ export const createReservation = async (req, res, next) => {
     // Single reservation enforcement
     const existingActive = await Reservation.findOne({
       userId: dbUser._id,
-      status: { $nin: ["cancelled", "archived"] },
+      status: {
+        $nin: reservationStatusesForQuery("cancelled", "archived", "moveOut"),
+      },
       isArchived: { $ne: true },
     });
     if (existingActive)
@@ -351,16 +369,16 @@ export const createReservation = async (req, res, next) => {
         existingStatus: existingActive.status,
       });
 
-    const { roomId, roomName, checkInDate, totalPrice } = req.body;
-    if ((!roomId && !roomName) || !checkInDate || !totalPrice)
+    const { roomId, roomName, moveInDate, totalPrice } = payload;
+    if ((!roomId && !roomName) || !moveInDate || !totalPrice)
       return res.status(400).json({
         error:
-          "Missing required fields: roomId or roomName, checkInDate, and totalPrice are required",
+          "Missing required fields: roomId or roomName, moveInDate, and totalPrice are required",
         code: "MISSING_REQUIRED_FIELDS",
       });
 
     // Enforce 3-month window
-    if (!validateMoveInDate(checkInDate))
+    if (!validateMoveInDate(moveInDate))
       return res.status(400).json({
         error: "Move-in date must be within 3 months from today.",
         code: "MOVEIN_DATE_OUT_OF_RANGE",
@@ -385,7 +403,7 @@ export const createReservation = async (req, res, next) => {
     // (e.g. when reservations are cancelled/deleted without proper decrements).
     const activeReservationCount = await Reservation.countDocuments({
       roomId: room._id,
-      status: { $in: ["pending", "reserved", "checked-in"] },
+      status: { $in: ["pending", ...ACTIVE_OCCUPANCY_STATUS_QUERY] },
       isArchived: { $ne: true },
     });
     if (activeReservationCount >= room.capacity) {
@@ -407,7 +425,7 @@ export const createReservation = async (req, res, next) => {
     }
 
     // Create reservation with all form fields
-    const b = req.body;
+    const b = payload;
     const reservation = new Reservation({
       userId: dbUser._id,
       roomId: room._id,
@@ -475,8 +493,8 @@ export const createReservation = async (req, res, next) => {
       agreedToCertification: b.agreedToCertification || false,
       proofOfPaymentUrl: b.proofOfPaymentUrl || null,
       applianceFees: b.applianceFees || 0,
-      checkInDate: b.checkInDate,
-      checkOutDate: b.checkOutDate || null,
+      moveInDate: b.moveInDate,
+      moveOutDate: b.moveOutDate || null,
       totalPrice: b.totalPrice,
       notes: b.notes || "",
       status: "pending",
@@ -499,7 +517,7 @@ export const createReservation = async (req, res, next) => {
       message: "Reservation created successfully",
       reservationId: reservation._id,
       reservationCode: reservation.reservationCode,
-      reservation,
+      reservation: serializeReservation(reservation),
     });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Create reservation error");
@@ -511,6 +529,7 @@ export const createReservation = async (req, res, next) => {
 /* ─── UPDATE reservation (admin) ─────────────────── */
 export const updateReservation = async (req, res, next) => {
   try {
+    req.body = normalizeReservationPayload(req.body);
     const { reservationId } = req.params;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
@@ -531,8 +550,8 @@ export const updateReservation = async (req, res, next) => {
     );
     if (denied) return;
 
-    // Enforce 3-month window on checkInDate update
-    if (req.body.checkInDate && !validateMoveInDate(req.body.checkInDate)) {
+    // Enforce 3-month window on moveInDate update
+    if (req.body.moveInDate && !validateMoveInDate(req.body.moveInDate)) {
       return res.status(400).json({
         error: "Move-in date must be within 3 months from today.",
         code: "MOVEIN_DATE_OUT_OF_RANGE",
@@ -542,7 +561,7 @@ export const updateReservation = async (req, res, next) => {
     // Status transition side-effects
     if (
       req.body.status === "reserved" &&
-      existingReservation.status !== "reserved"
+      !hasReservationStatus(existingReservation.status, "reserved")
     ) {
       req.body.paymentStatus = "paid";
       req.body.approvedDate = new Date();
@@ -554,10 +573,10 @@ export const updateReservation = async (req, res, next) => {
 
     // ── Move-in gate: enforce full prerequisite checklist ─────────────
     // Prevents admins from bypassing the proper flow (visit → payment →
-    // reservation confirmed) and jumping straight to checked-in.
+    // reservation confirmed) and jumping straight to moveIn.
     if (
-      req.body.status === "checked-in" &&
-      existingReservation.status !== "checked-in"
+      req.body.status === "moveIn" &&
+      !hasReservationStatus(existingReservation.status, "moveIn")
     ) {
       const blockers = getCheckinBlockers(existingReservation);
       if (blockers.length > 0) {
@@ -582,14 +601,14 @@ export const updateReservation = async (req, res, next) => {
 
       // Use explicit lifecycle datetime when provided to avoid same-day ambiguity.
       const moveInDate = combineLifecycleDateTime({
-        dateInput: req.body.checkInDate,
-        timeInput: req.body.checkInTime,
+        dateInput: req.body.moveInDate,
+        timeInput: req.body.moveInTime,
         fallbackDate: new Date(),
       });
       if (!moveInDate) {
         return res.status(400).json({
           error:
-            "Invalid check-in date/time. Use a valid date and HH:mm format.",
+            "Invalid move-in date/time. Use a valid date and HH:mm format.",
           code: "INVALID_CHECKIN_DATETIME",
         });
       }
@@ -598,7 +617,7 @@ export const updateReservation = async (req, res, next) => {
         utilityType: "electricity",
         roomId: existingReservation.roomId?._id || existingReservation.roomId,
         tenantId: existingReservation.userId?._id || existingReservation.userId,
-        eventType: "move-in",
+        eventType: { $in: utilityEventTypesForQuery("moveIn") },
         date: moveInDate,
         isArchived: false,
       })
@@ -612,7 +631,7 @@ export const updateReservation = async (req, res, next) => {
         });
       }
 
-      req.body.checkInDate = moveInDate;
+      req.body.moveInDate = moveInDate;
     }
 
     await syncReservationUserLifecycle({
@@ -636,8 +655,8 @@ export const updateReservation = async (req, res, next) => {
       "paymentStatus",
       "paymentDate",
       "notes",
-      "checkInDate",
-      "checkOutDate",
+      "moveInDate",
+      "moveOutDate",
       "approvedDate",
       "reservedAt",
       "visitApproved",
@@ -732,8 +751,8 @@ export const updateReservation = async (req, res, next) => {
     // The reading is saved immediately. The billing period must be created
     // explicitly by the admin from the billing module.
     if (
-      req.body.status === "checked-in" &&
-      oldData.status !== "checked-in" &&
+      req.body.status === "moveIn" &&
+      !hasReservationStatus(oldData.status, "moveIn") &&
       req.body.meterReading != null &&
       !isNaN(Number(req.body.meterReading))
     ) {
@@ -746,7 +765,7 @@ export const updateReservation = async (req, res, next) => {
         }).lean();
         const meterValue = Number(req.body.meterReading);
         const moveInDate = new Date(
-          updatedReservation.checkInDate || new Date(),
+          readMoveInDate(updatedReservation) || new Date(),
         );
 
         if (roomDoc) {
@@ -756,7 +775,7 @@ export const updateReservation = async (req, res, next) => {
           // Snapshot all currently checked-in tenants for this room
           const checkedInRes = await Reservation.find({
             roomId: roomId,
-            status: "checked-in",
+            status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
             isArchived: { $ne: true },
           })
             .select("userId")
@@ -771,7 +790,7 @@ export const updateReservation = async (req, res, next) => {
             branch: roomDoc.branch,
             reading: meterValue,
             date: moveInDate,
-            eventType: "move-in",
+            eventType: "moveIn",
             tenantId: tenantUserId,
             activeTenantIds,
             recordedBy: adminUser?._id || null,
@@ -818,7 +837,7 @@ export const updateReservation = async (req, res, next) => {
     );
     res.json({
       message: "Reservation updated successfully",
-      reservation: updatedReservation,
+      reservation: serializeReservation(updatedReservation),
     });
 
     // Send confirmation email if status just changed to "reserved"
@@ -836,8 +855,8 @@ export const updateReservation = async (req, res, next) => {
           reservationCode: updatedReservation.reservationCode || "N/A",
           roomName: updatedReservation.roomId?.name || "N/A",
           branchName: updatedReservation.roomId?.branch || "Lilycrest",
-          checkInDate: updatedReservation.checkInDate
-            ? new Date(updatedReservation.checkInDate).toLocaleDateString(
+          moveInDate: readMoveInDate(updatedReservation)
+            ? new Date(readMoveInDate(updatedReservation)).toLocaleDateString(
                 "en-PH",
                 { year: "numeric", month: "long", day: "numeric" },
               )
@@ -1174,8 +1193,10 @@ export const deleteReservation = async (req, res, next) => {
     const reservationData = reservation.toObject();
 
     // Release occupancy — use toObject() to avoid Mongoose getter issues with spread
-    const hadOccupancy =
-      reservation.status === "reserved" || reservation.status === "checked-in";
+    const hadOccupancy = hasReservationStatus(
+      reservation.status,
+      ACTIVE_STAY_STATUS_QUERY,
+    );
     if (hadOccupancy) {
       try {
         await updateOccupancyOnReservationChange(
@@ -1255,11 +1276,11 @@ export const extendReservation = async (req, res, next) => {
 
     const oldData = reservation.toObject();
     const newMoveIn = new Date(
-      reservation.checkInDate || reservation.finalMoveInDate,
+      readMoveInDate(reservation) || reservation.finalMoveInDate,
     );
     newMoveIn.setDate(newMoveIn.getDate() + extensionDays);
 
-    reservation.checkInDate = newMoveIn;
+    reservation.moveInDate = newMoveIn;
     reservation.finalMoveInDate = newMoveIn;
     reservation.moveInExtendedTo = newMoveIn;
     // Keep status as reserved — admin extended the deadline
@@ -1282,7 +1303,7 @@ export const extendReservation = async (req, res, next) => {
     res.json({
       message: `Reservation extended by ${extensionDays} days`,
       newMoveInDate: newMoveIn,
-      reservation,
+      reservation: serializeReservation(reservation),
     });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Extend reservation error");
@@ -1391,10 +1412,7 @@ export const archiveReservation = async (req, res, next) => {
     const dbUser = await findDbUser(req.user.uid);
 
     // Release occupancy if was active
-    if (
-      reservation.status === "reserved" ||
-      reservation.status === "checked-in"
-    ) {
+    if (hasReservationStatus(reservation.status, ACTIVE_STAY_STATUS_QUERY)) {
       const prevStatus = reservation.status;
       reservation.status = "cancelled";
       await reservation.save();
@@ -1473,9 +1491,9 @@ export const renewContract = async (req, res, next) => {
         code: "RESERVATION_NOT_FOUND",
       });
 
-    if (reservation.status !== "checked-in") {
+    if (!hasReservationStatus(reservation.status, "moveIn")) {
       return res.status(400).json({
-        error: "Only checked-in reservations can be renewed.",
+        error: "Only moved-in reservations can be renewed.",
         code: "INVALID_STATUS_FOR_RENEWAL",
       });
     }
@@ -1524,7 +1542,7 @@ export const renewContract = async (req, res, next) => {
       message: `Contract renewed for ${additionalMonths} additional months`,
       oldDuration,
       newDuration: reservation.leaseDuration,
-      reservation,
+      reservation: serializeReservation(reservation),
     });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Renew contract error");
@@ -1536,14 +1554,15 @@ export const renewContract = async (req, res, next) => {
 /* ─── CHECKOUT ───────────────────────────────────── */
 export const checkoutReservation = async (req, res, next) => {
   try {
+    const payload = normalizeReservationPayload(req.body);
     const { reservationId } = req.params;
     const {
       notes: checkoutNotes = "",
       inspectionPassed = true,
       meterReading,
-      checkOutDate,
-      checkOutTime,
-    } = req.body;
+      moveOutDate,
+      moveOutTime,
+    } = payload;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId)
@@ -1555,9 +1574,9 @@ export const checkoutReservation = async (req, res, next) => {
         code: "RESERVATION_NOT_FOUND",
       });
 
-    if (reservation.status !== "checked-in") {
+    if (!hasReservationStatus(reservation.status, "moveIn")) {
       return res.status(400).json({
-        error: "Only checked-in tenants can be moved out.",
+        error: "Only moved-in tenants can be moved out.",
         code: "INVALID_STATUS_FOR_CHECKOUT",
       });
     }
@@ -1580,23 +1599,20 @@ export const checkoutReservation = async (req, res, next) => {
     const oldData = reservation.toObject();
 
     const checkoutDate = combineLifecycleDateTime({
-      dateInput: checkOutDate,
-      timeInput: checkOutTime,
+      dateInput: moveOutDate,
+      timeInput: moveOutTime,
       fallbackDate: new Date(),
     });
     if (!checkoutDate) {
       return res.status(400).json({
         error:
-          "Invalid check-out date/time. Use a valid date and HH:mm format.",
+          "Invalid move-out date/time. Use a valid date and HH:mm format.",
         code: "INVALID_CHECKOUT_DATETIME",
       });
     }
-    if (
-      reservation.checkInDate &&
-      checkoutDate < new Date(reservation.checkInDate)
-    ) {
+    if (readMoveInDate(reservation) && checkoutDate < new Date(readMoveInDate(reservation))) {
       return res.status(400).json({
-        error: "Check-out date/time cannot be earlier than check-in date/time.",
+        error: "Move-out date/time cannot be earlier than move-in date/time.",
         code: "CHECKOUT_BEFORE_CHECKIN",
       });
     }
@@ -1605,7 +1621,7 @@ export const checkoutReservation = async (req, res, next) => {
       utilityType: "electricity",
       roomId: reservation.roomId?._id || reservation.roomId,
       tenantId: reservation.userId?._id || reservation.userId,
-      eventType: "move-out",
+      eventType: { $in: utilityEventTypesForQuery("moveOut") },
       date: checkoutDate,
       isArchived: false,
     })
@@ -1620,9 +1636,9 @@ export const checkoutReservation = async (req, res, next) => {
     }
 
     // 1. Update reservation status
-    reservation.status = "checked-out";
-    reservation.checkOutDate = checkoutDate;
-    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Checked out${inspectionPassed ? " (inspection passed)" : " (inspection issues noted)"}. ${checkoutNotes}`;
+    reservation.status = "moveOut";
+    reservation.moveOutDate = checkoutDate;
+    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Moved out${inspectionPassed ? " (inspection passed)" : " (inspection issues noted)"}. ${checkoutNotes}`;
     await reservation.save();
 
     // 2. Release bed and decrease occupancy
@@ -1638,7 +1654,7 @@ export const checkoutReservation = async (req, res, next) => {
 
     const userId = reservation.userId?._id || reservation.userId;
     await syncReservationUserLifecycle({
-      status: "checked-out",
+      status: "moveOut",
       previousStatus: oldData.status,
       userId,
       roomId: reservation.roomId?._id || reservation.roomId,
@@ -1662,7 +1678,7 @@ export const checkoutReservation = async (req, res, next) => {
         if (roomDoc) {
           const checkedInRes = await Reservation.find({
             roomId: reservation.roomId._id,
-            status: "checked-in",
+            status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
             isArchived: { $ne: true },
           })
             .select("userId")
@@ -1677,7 +1693,7 @@ export const checkoutReservation = async (req, res, next) => {
             branch: roomDoc.branch,
             reading: checkoutReading,
             date: checkoutDate,
-            eventType: "move-out",
+            eventType: "moveOut",
             tenantId: userId,
             activeTenantIds,
             recordedBy: adminUser?._id || null,
@@ -1727,12 +1743,12 @@ export const checkoutReservation = async (req, res, next) => {
       reservationId,
       oldData,
       reservation.toObject(),
-      `Tenant checked out from ${roomName}${meterReading != null ? ` (meter: ${meterReading} kWh)` : ""}`,
+      `Tenant moved out from ${roomName}${meterReading != null ? ` (meter: ${meterReading} kWh)` : ""}`,
     );
 
     res.json({
-      message: "Tenant checked out successfully",
-      reservation,
+      message: "Tenant moved out successfully",
+      reservation: serializeReservation(reservation),
       electricityResult,
     });
   } catch (error) {
@@ -1765,9 +1781,9 @@ export const transferTenant = async (req, res, next) => {
         code: "RESERVATION_NOT_FOUND",
       });
 
-    if (reservation.status !== "checked-in") {
+    if (!hasReservationStatus(reservation.status, "moveIn")) {
       return res.status(400).json({
-        error: "Only checked-in tenants can be transferred.",
+        error: "Only moved-in tenants can be transferred.",
         code: "INVALID_STATUS_FOR_TRANSFER",
       });
     }
@@ -1861,7 +1877,7 @@ export const transferTenant = async (req, res, next) => {
 
     res.json({
       message: `Tenant transferred from ${oldRoomName} to ${newRoom.name}`,
-      reservation,
+      reservation: serializeReservation(reservation),
     });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Transfer error");
@@ -1879,10 +1895,10 @@ export const getMyContract = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Find the tenant's active checked-in reservation
+    // Find the tenant's active moved-in reservation
     const reservation = await Reservation.findOne({
       userId: user._id,
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,
     }).populate("roomId", "name branch type price floor");
 
@@ -1892,7 +1908,7 @@ export const getMyContract = async (req, res) => {
 
     const dayjs = (await import("dayjs")).default;
     const now = dayjs();
-    const leaseStart = dayjs(reservation.checkInDate);
+    const leaseStart = dayjs(readMoveInDate(reservation));
     const leaseDuration = reservation.leaseDuration || 12;
     const leaseEnd = leaseStart.add(leaseDuration, "month");
     const monthsCompleted = Math.min(

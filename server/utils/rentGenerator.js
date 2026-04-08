@@ -4,6 +4,10 @@ import { getPenaltyRatePerDay } from "./businessSettings.js";
 import { syncBillAmounts, getReservationCreditAvailable } from "./billingPolicy.js";
 import logger from "../middleware/logger.js";
 import notify from "./notificationService.js";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  readMoveInDate,
+} from "./lifecycleNaming.js";
 
 /**
  * Automatically generates Monthly Rent bills for tenants 5 days before their check-in anniversary.
@@ -15,18 +19,19 @@ export async function generateAutomatedRentBills() {
 
     // We look for all checked-in reservations
     const reservations = await Reservation.find({
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,
     })
       .populate("userId", "firstName lastName email")
       .populate("roomId", "name branch price monthlyPrice type");
 
     for (const reservation of reservations) {
-      if (!reservation.checkInDate || !reservation.userId || !reservation.roomId) {
+      const moveInDate = readMoveInDate(reservation);
+      if (!moveInDate || !reservation.userId || !reservation.roomId) {
         continue;
       }
 
-      const checkInDay = dayjs(reservation.checkInDate).date();
+      const checkInDay = dayjs(moveInDate).date();
       
       // Calculate their NEXT anniversary date based on the current month/year
       // If today's day is past the check-in day, their next due date is next month.
@@ -45,12 +50,12 @@ export async function generateAutomatedRentBills() {
       // Do NOT generate automated bills for the first month or prior to checkInDate!
       // The move-in payment covers the first cycle (from checkInDate to checkInDate + 1 month).
       // Therefore, the first automated bill should only be due starting exactly 1 month AFTER checkInDate.
-      if (!nextAnniversary.isAfter(dayjs(reservation.checkInDate).endOf('day'), 'day')) {
+      if (!nextAnniversary.isAfter(dayjs(moveInDate).endOf('day'), 'day')) {
         continue;
       }
 
       // Determine rent price
-      const isLongTerm = dayjs().diff(dayjs(reservation.checkInDate), "month", true) >= 6;
+      const isLongTerm = dayjs().diff(dayjs(moveInDate), "month", true) >= 6;
       let rentPrice = reservation.monthlyRent || reservation.totalPrice;
       if (!rentPrice) {
         rentPrice = isLongTerm ? (reservation.roomId.monthlyPrice ?? reservation.roomId.price ?? 0) : (reservation.roomId.price ?? 0);

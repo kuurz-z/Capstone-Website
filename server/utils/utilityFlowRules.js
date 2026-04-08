@@ -1,10 +1,18 @@
+import {
+  BILLABLE_RESERVATION_STATUS_QUERY,
+  hasReservationStatus,
+  isUtilityEventType,
+  readMoveInDate,
+  readMoveOutDate,
+} from "./lifecycleNaming.js";
+
 const WATER_BILLABLE_ROOM_TYPES = new Set([
   "private",
   "double-sharing",
   "quadruple-sharing",
 ]);
 
-const BILLABLE_RESERVATION_STATUSES = new Set(["checked-in", "checked-out"]);
+const BILLABLE_RESERVATION_STATUSES = new Set(BILLABLE_RESERVATION_STATUS_QUERY);
 
 function startOfDay(value) {
   if (!value) return null;
@@ -78,8 +86,8 @@ export function filterBillableReservationsForPeriod({
     if (!reservation?.userId) return false;
     if (!BILLABLE_RESERVATION_STATUSES.has(reservation.status)) return false;
 
-    const checkInDate = startOfDay(reservation.checkInDate);
-    const checkOutDate = startOfDay(reservation.checkOutDate);
+    const checkInDate = startOfDay(readMoveInDate(reservation));
+    const checkOutDate = startOfDay(readMoveOutDate(reservation));
     if (!checkInDate || checkInDate >= end) return false;
     if (checkOutDate && checkOutDate <= start) return false;
     return true;
@@ -104,13 +112,13 @@ export function findMissingElectricityLifecycleReadings({
     const tenantKey = getTenantKey(reading?.tenantId);
     if (!tenantKey) continue;
 
-    if (reading.eventType === "move-in") {
+    if (isUtilityEventType(reading.eventType, "moveIn")) {
       const arr = moveInReadingsByTenant.get(tenantKey) || [];
       arr.push(reading);
       moveInReadingsByTenant.set(tenantKey, arr);
     }
 
-    if (reading.eventType === "move-out") {
+    if (isUtilityEventType(reading.eventType, "moveOut")) {
       const arr = moveOutReadingsByTenant.get(tenantKey) || [];
       arr.push(reading);
       moveOutReadingsByTenant.set(tenantKey, arr);
@@ -131,40 +139,40 @@ export function findMissingElectricityLifecycleReadings({
     const tenantMoveInReadings = moveInReadingsByTenant.get(tenantKey) || [];
     if (
       fallsStrictlyAfterCycleStart(
-        reservation.checkInDate,
+        readMoveInDate(reservation),
         period?.startDate,
         period?.endDate,
       ) &&
       !tenantMoveInReadings.some((entry) =>
-        isSameDay(entry.date, reservation.checkInDate),
+        isSameDay(entry.date, readMoveInDate(reservation)),
       )
     ) {
       missingMoveInReadings.push({
         reservationId: reservation._id,
         tenantId: tenantKey,
         tenantName,
-        checkInDate: reservation.checkInDate,
+        moveInDate: readMoveInDate(reservation),
         reason: "missing exact-date move-in reading",
       });
     }
 
     const tenantMoveOutReadings = moveOutReadingsByTenant.get(tenantKey) || [];
     if (
-      reservation.status === "checked-out" &&
+      hasReservationStatus(reservation.status, "moveOut") &&
       fallsWithinCycle(
-        reservation.checkOutDate,
+        readMoveOutDate(reservation),
         period?.startDate,
         period?.endDate,
       ) &&
       !tenantMoveOutReadings.some((entry) =>
-        isSameDay(entry.date, reservation.checkOutDate),
+        isSameDay(entry.date, readMoveOutDate(reservation)),
       )
     ) {
       missingMoveOutReadings.push({
         reservationId: reservation._id,
         tenantId: tenantKey,
         tenantName,
-        checkOutDate: reservation.checkOutDate,
+        moveOutDate: readMoveOutDate(reservation),
         reason: "missing exact-date move-out reading",
       });
     }
@@ -196,14 +204,14 @@ export function buildTenantEventsForPeriod({
     const tenantKey = getTenantKey(reading?.tenantId);
     if (!tenantKey) continue;
 
-    if (reading.eventType === "move-in") {
+    if (isUtilityEventType(reading.eventType, "moveIn")) {
       const existing = moveInReadingsByTenant.get(tenantKey);
       if (!existing || new Date(reading.date) < new Date(existing.date)) {
         moveInReadingsByTenant.set(tenantKey, reading);
       }
     }
 
-    if (reading.eventType === "move-out") {
+    if (isUtilityEventType(reading.eventType, "moveOut")) {
       const existing = moveOutReadingsByTenant.get(tenantKey);
       if (!existing || new Date(reading.date) > new Date(existing.date)) {
         moveOutReadingsByTenant.set(tenantKey, reading);
@@ -221,7 +229,7 @@ export function buildTenantEventsForPeriod({
         : "Tenant";
       const moveInReading = moveInReadingsByTenant.get(tenantKey)?.reading;
       const moveOutReading = moveOutReadingsByTenant.get(tenantKey)?.reading;
-      const checkInDay = startOfDay(reservation.checkInDate);
+      const checkInDay = startOfDay(readMoveInDate(reservation));
       const cycleStartDay = startOfDay(period?.startDate);
       const checkedInBeforeCycle =
         checkInDay && cycleStartDay && checkInDay <= cycleStartDay;
@@ -266,8 +274,8 @@ export function findBedOccupancyOverlaps({
     const bedKey = getBedKey(reservation);
     if (!bedKey) continue;
 
-    const effectiveStart = startOfDay(reservation.checkInDate);
-    const rawEnd = startOfDay(reservation.checkOutDate) || end;
+    const effectiveStart = startOfDay(readMoveInDate(reservation));
+    const rawEnd = startOfDay(readMoveOutDate(reservation)) || end;
     if (!effectiveStart) continue;
 
     const overlapStart = effectiveStart > start ? effectiveStart : start;

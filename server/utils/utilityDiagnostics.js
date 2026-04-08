@@ -10,6 +10,12 @@ import {
   getUtilityTargetCloseDate,
 } from "./billingPolicy.js";
 import { getRoomLabel } from "./roomLabel.js";
+import {
+  BILLABLE_RESERVATION_STATUS_QUERY,
+  hasReservationStatus,
+  isUtilityEventType,
+  readMoveInDate,
+} from "./lifecycleNaming.js";
 
 const WATER_BILLABLE_ROOM_TYPES = new Set([
   "private",
@@ -28,7 +34,8 @@ export function detectMissingMoveInAnchors({
 }) {
   const moveInByTenant = new Map();
   for (const reading of readings) {
-    if (reading.eventType !== "move-in" || !reading.tenantId) continue;
+    if (!isUtilityEventType(reading.eventType, "moveIn") || !reading.tenantId)
+      continue;
     const key = String(reading.tenantId);
     const current = moveInByTenant.get(key);
     if (!current || new Date(reading.date) < new Date(current.date)) {
@@ -40,7 +47,8 @@ export function detectMissingMoveInAnchors({
     .filter((r) => {
       const key = String(r.userId._id || r.userId);
       if (moveInByTenant.has(key)) return false;
-      if (periodStartDate && r.checkInDate && new Date(r.checkInDate) < new Date(periodStartDate)) return false;
+      const moveInDate = readMoveInDate(r);
+      if (periodStartDate && moveInDate && new Date(moveInDate) < new Date(periodStartDate)) return false;
       return true;
     })
     .map((r) => ({
@@ -49,7 +57,7 @@ export function detectMissingMoveInAnchors({
       tenantName: r.userId?.firstName
         ? `${r.userId.firstName || ""} ${r.userId.lastName || ""}`.trim()
         : "Tenant",
-      checkInDate: r.checkInDate || null,
+      moveInDate: readMoveInDate(r),
       status: r.status,
     }));
 }
@@ -116,8 +124,8 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     type: room.type,
     capacity: room.capacity,
     status: issues.length ? "needs_repair" : "ok",
-    hasActiveTenants: reservations.some((r) => r.status === "checked-in"),
-    activeTenantCount: reservations.filter((r) => r.status === "checked-in").length,
+    hasActiveTenants: reservations.some((r) => hasReservationStatus(r.status, "moveIn")),
+    activeTenantCount: reservations.filter((r) => hasReservationStatus(r.status, "moveIn")).length,
     reservationIds: reservations.map((r) => r._id),
     latestReading: latestReadingValue,
     hasOpenPeriod: Boolean(openPeriod),
@@ -142,7 +150,7 @@ export async function getUtilityRoomDiagnostics(roomId, utilityType) {
   const [periods, readings, reservations] = await Promise.all([
     UtilityPeriod.find({ roomId: room._id, utilityType, isArchived: false }).sort({ startDate: 1 }).lean(),
     UtilityReading.find({ roomId: room._id, utilityType, isArchived: false }).sort({ date: 1, createdAt: 1 }).lean(),
-    Reservation.find({ roomId: room._id, status: { $in: ["checked-in", "checked-out"] }, isArchived: { $ne: true } })
+    Reservation.find({ roomId: room._id, status: { $in: BILLABLE_RESERVATION_STATUS_QUERY }, isArchived: { $ne: true } })
       .populate("userId", "firstName lastName").lean(),
   ]);
 
@@ -174,7 +182,7 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
   const [allPeriods, allReadings, allReservations] = await Promise.all([
     UtilityPeriod.find({ roomId: { $in: roomIds }, isArchived: false }).sort({ startDate: 1 }).lean(),
     UtilityReading.find({ roomId: { $in: roomIds }, isArchived: false }).sort({ date: 1, createdAt: 1 }).lean(),
-    Reservation.find({ roomId: { $in: roomIds }, status: { $in: ["checked-in", "checked-out"] }, isArchived: { $ne: true } })
+    Reservation.find({ roomId: { $in: roomIds }, status: { $in: BILLABLE_RESERVATION_STATUS_QUERY }, isArchived: { $ne: true } })
       .populate("userId", "firstName lastName").lean(),
   ]);
 

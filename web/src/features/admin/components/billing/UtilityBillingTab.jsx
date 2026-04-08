@@ -37,6 +37,12 @@ import {
 import { utilityApi } from "../../../../shared/api/utilityApi.js";
 import { useBusinessSettings } from "../../../../shared/hooks/queries/useSettings";
 import { exportToCSV } from "../../../../shared/utils/exportUtils.js";
+import {
+  isUtilityEventType,
+  normalizeUtilityEventType,
+  readMoveInDate,
+  readMoveOutDate,
+} from "../../../../shared/utils/lifecycleNaming";
 import { getRoomLabel } from "../../../../shared/utils/roomLabel.js";
 import { fmtDate } from "../../utils/formatters";
 import BillingContentEmpty from "./shared/BillingContentEmpty";
@@ -128,23 +134,33 @@ const getEventDayKey = (value) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 const EVENT_TYPE_LABELS = {
-  "move-in": "Move In",
-  "move-out": "Move Out",
-  "regular-billing": "Regular Reading",
-  "period-start": "Start Reading",
-  "period-end": "End Reading",
-  "manual-adjustment": "Adjustment",
+  moveIn: "Move In",
+  moveOut: "Move Out",
+  regularBilling: "Regular Reading",
+  periodStart: "Start Reading",
+  periodEnd: "End Reading",
+  manualAdjustment: "Adjustment",
 };
 const EVENT_TYPE_ORDER = {
-  "move-out": 0,
-  "regular-billing": 1,
-  "period-start": 1,
-  "period-end": 1,
-  "manual-adjustment": 1,
-  "move-in": 2,
+  moveOut: 0,
+  regularBilling: 1,
+  periodStart: 1,
+  periodEnd: 1,
+  manualAdjustment: 1,
+  moveIn: 2,
 };
+const getEventTypeLabel = (eventType) =>
+  EVENT_TYPE_LABELS[normalizeUtilityEventType(eventType)] ||
+  eventType ||
+  EMPTY_VALUE;
+const getEventTypeOrder = (eventType) =>
+  EVENT_TYPE_ORDER[normalizeUtilityEventType(eventType)] ?? 1;
+const isMoveLifecycleEvent = (eventType) =>
+  isUtilityEventType(eventType, "moveIn") ||
+  isUtilityEventType(eventType, "moveOut");
 const isSystemBoundaryEvent = (eventType) =>
-  eventType === "period-start" || eventType === "period-end";
+  isUtilityEventType(eventType, "periodStart") ||
+  isUtilityEventType(eventType, "periodEnd");
 const getReadingStatusLabel = (reading) => {
   if (!reading) return "Recorded";
   if (reading.readingStatus === "voided") return "Canceled";
@@ -162,10 +178,10 @@ const getTimelineRecordLabel = (row) => {
 const getTimelineStatusLabel = (row) => {
   if (!row) return EMPTY_VALUE;
   if (row.source === "occupancy") {
-    if (row.eventType === "move-in") {
+    if (isUtilityEventType(row.eventType, "moveIn")) {
       return row.isActive ? "Current" : "Past";
     }
-    if (row.eventType === "move-out") return "Moved Out";
+    if (isUtilityEventType(row.eventType, "moveOut")) return "Moved Out";
   }
   if (row.rawReading) return getReadingStatusLabel(row.rawReading);
   return EMPTY_VALUE;
@@ -290,7 +306,7 @@ const UtilityBillingTab = ({ utilityType }) => {
   const [editReadingForm, setEditReadingForm] = useState({
     reading: "",
     date: "",
-    eventType: "move-in",
+    eventType: "moveIn",
   });
 
   // Pagination
@@ -377,8 +393,8 @@ const UtilityBillingTab = ({ utilityType }) => {
         const leftDate = new Date(left.date).getTime();
         const rightDate = new Date(right.date).getTime();
         if (leftDate !== rightDate) return leftDate - rightDate;
-        const leftPriority = EVENT_TYPE_ORDER[left.eventType] ?? 1;
-        const rightPriority = EVENT_TYPE_ORDER[right.eventType] ?? 1;
+        const leftPriority = getEventTypeOrder(left.eventType);
+        const rightPriority = getEventTypeOrder(right.eventType);
         if (leftPriority !== rightPriority) return leftPriority - rightPriority;
         return (
           new Date(left.createdAt || 0).getTime() -
@@ -448,13 +464,13 @@ const UtilityBillingTab = ({ utilityType }) => {
 
     for (const entry of roomHistory) {
       if (entry.moveInDate) {
-        const moveInKey = `${entry.tenantId || entry.id || entry.tenantName}-move-in-${getEventDayKey(entry.moveInDate)}`;
+        const moveInKey = `${entry.tenantId || entry.id || entry.tenantName}-moveIn-${getEventDayKey(entry.moveInDate)}`;
         upsertRow({
           id: `occ-in-${entry.id || entry.tenantId}-${entry.moveInDate}`,
           mergeKey: moveInKey,
           source: "occupancy",
           date: entry.moveInDate,
-          eventType: "move-in",
+          eventType: "moveIn",
           tenantName: entry.tenantName || EMPTY_VALUE,
           tenantEmail: entry.tenantEmail || null,
           bedName: entry.bedName || EMPTY_VALUE,
@@ -466,13 +482,13 @@ const UtilityBillingTab = ({ utilityType }) => {
       }
 
       if (entry.moveOutDate) {
-        const moveOutKey = `${entry.tenantId || entry.id || entry.tenantName}-move-out-${getEventDayKey(entry.moveOutDate)}`;
+        const moveOutKey = `${entry.tenantId || entry.id || entry.tenantName}-moveOut-${getEventDayKey(entry.moveOutDate)}`;
         upsertRow({
           id: `occ-out-${entry.id || entry.tenantId}-${entry.moveOutDate}`,
           mergeKey: moveOutKey,
           source: "occupancy",
           date: entry.moveOutDate,
-          eventType: "move-out",
+          eventType: "moveOut",
           tenantName: entry.tenantName || EMPTY_VALUE,
           tenantEmail: entry.tenantEmail || null,
           bedName: entry.bedName || EMPTY_VALUE,
@@ -484,23 +500,24 @@ const UtilityBillingTab = ({ utilityType }) => {
     }
 
     for (const reading of meterTimelineEvents) {
-      if (reading.eventType === "regular-billing") {
+      const eventType = normalizeUtilityEventType(reading.eventType);
+      if (eventType === "regularBilling") {
         // User-facing timeline keeps lifecycle and boundary events only.
         continue;
       }
 
       const eventDayKey = getEventDayKey(reading.date);
       const meterKey =
-        reading.eventType === "move-in" || reading.eventType === "move-out"
-          ? `${reading.tenantId || reading.tenant || "unassigned"}-${reading.eventType}-${eventDayKey}`
-          : `${reading.eventType}-${eventDayKey}-${reading.reading}`;
+        isMoveLifecycleEvent(eventType)
+          ? `${reading.tenantId || reading.tenant || "unassigned"}-${eventType}-${eventDayKey}`
+          : `${eventType}-${eventDayKey}-${reading.reading}`;
 
       upsertRow({
         id: `meter-${reading.id}`,
         mergeKey: meterKey,
         source: "meter",
         date: reading.date,
-        eventType: reading.eventType,
+        eventType,
         tenantName: reading.tenant || EMPTY_VALUE,
         tenantEmail: reading.tenantEmail || null,
         bedName: EMPTY_VALUE,
@@ -516,8 +533,8 @@ const UtilityBillingTab = ({ utilityType }) => {
       const rightDate = new Date(right.date).getTime();
       if (leftDate !== rightDate) return rightDate - leftDate;
 
-      const leftPriority = EVENT_TYPE_ORDER[left.eventType] ?? 1;
-      const rightPriority = EVENT_TYPE_ORDER[right.eventType] ?? 1;
+      const leftPriority = getEventTypeOrder(left.eventType);
+      const rightPriority = getEventTypeOrder(right.eventType);
       if (leftPriority !== rightPriority) return rightPriority - leftPriority;
 
       return String(right.id).localeCompare(String(left.id));
@@ -763,14 +780,14 @@ const UtilityBillingTab = ({ utilityType }) => {
     if (Array.isArray(missingMoveIns) && missingMoveIns.length > 0) {
       for (const entry of missingMoveIns.slice(0, 5)) {
         lines.push(
-          `Missing move-in reading: ${entry.tenantName || "Tenant"} (${fmtDate(entry.checkInDate) || "date required"})`,
+          `Missing move-in reading: ${entry.tenantName || "Tenant"} (${fmtDate(readMoveInDate(entry)) || "date required"})`,
         );
       }
     }
     if (Array.isArray(missingMoveOuts) && missingMoveOuts.length > 0) {
       for (const entry of missingMoveOuts.slice(0, 5)) {
         lines.push(
-          `Missing move-out reading: ${entry.tenantName || "Tenant"} (${fmtDate(entry.checkOutDate) || "date required"})`,
+          `Missing move-out reading: ${entry.tenantName || "Tenant"} (${fmtDate(readMoveOutDate(entry)) || "date required"})`,
         );
       }
     }
@@ -808,7 +825,7 @@ const UtilityBillingTab = ({ utilityType }) => {
     setEditReadingForm({
       reading: String(r.reading),
       date: r.date ? new Date(r.date).toISOString().slice(0, 10) : "",
-      eventType: r.eventType || "move-in",
+      eventType: normalizeUtilityEventType(r.eventType) || "moveIn",
     });
     setEditReadingModal({ open: true, reading: r });
   };
@@ -1958,8 +1975,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 <td>
                                   <div className="eb-timeline-event">
                                     <div className="eb-timeline-event__title">
-                                      {EVENT_TYPE_LABELS[row.eventType] ||
-                                        row.eventType}
+                                      {getEventTypeLabel(row.eventType)}
                                     </div>
                                     <div className="eb-timeline-event__meta">
                                       <span className="eb-timeline-badge">
@@ -1972,8 +1988,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                   </div>
                                 </td>
                                 <td>
-                                  {row.eventType !== "move-in" &&
-                                  row.eventType !== "move-out" ? (
+                                  {!isMoveLifecycleEvent(row.eventType) ? (
                                     "Room Level"
                                   ) : (
                                     <div className="eb-tenant-identity">
@@ -1987,8 +2002,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                   )}
                                 </td>
                                 <td>
-                                  {row.eventType !== "move-in" &&
-                                  row.eventType !== "move-out"
+                                  {!isMoveLifecycleEvent(row.eventType)
                                     ? "Room Level"
                                     : row.bedName || EMPTY_VALUE}
                                 </td>
@@ -2358,9 +2372,9 @@ const UtilityBillingTab = ({ utilityType }) => {
                       })
                     }
                   >
-                    <option value="move-in">Move-In</option>
-                    <option value="move-out">Move-Out</option>
-                    <option value="manual-adjustment">Manual Adjustment</option>
+                    <option value="moveIn">Move-In</option>
+                    <option value="moveOut">Move-Out</option>
+                    <option value="manualAdjustment">Manual Adjustment</option>
                   </select>
                 </div>
               </div>

@@ -38,6 +38,20 @@ import {
   getUtilityDispatchEntry,
   syncBillAmounts,
 } from "../utils/billingPolicy.js";
+import {
+  buildMoveInBeforeQuery,
+  buildMoveOutAfterOrMissingQuery,
+  BILLABLE_RESERVATION_STATUS_QUERY,
+  hasReservationStatus,
+  isUtilityEventType,
+  normalizeReservationPayload,
+  normalizeUtilityEventType,
+  readMoveInDate,
+  readMoveOutDate,
+  serializeUtilityPeriod,
+  serializeUtilityReading,
+  utilityEventTypesForQuery,
+} from "../utils/lifecycleNaming.js";
 import logger from "../middleware/logger.js";
 
 async function getAdminInfo(req) {
@@ -179,7 +193,7 @@ async function closePeriodAndGenerateDrafts({
       branch: room.branch,
       reading: Number(endReading),
       date: closingDate,
-      eventType: "period-end",
+      eventType: "periodEnd",
       readingStatus: "locked",
       recordedBy: admin._id,
       utilityPeriodId: period._id,
@@ -207,10 +221,12 @@ async function closePeriodAndGenerateDrafts({
 
   const reservations = await Reservation.find({
     roomId: room._id,
-    status: { $in: ["checked-in", "checked-out"] },
+    status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },
     isArchived: { $ne: true },
-    checkInDate: { $lt: closingDate },
-    $or: [{ checkOutDate: null }, { checkOutDate: { $gt: period.startDate } }],
+    $and: [
+      buildMoveInBeforeQuery(closingDate),
+      buildMoveOutAfterOrMissingQuery(period.startDate),
+    ],
   })
     .populate("userId", "firstName lastName email")
     .lean();
@@ -251,11 +267,11 @@ async function closePeriodAndGenerateDrafts({
     const inCycleMoveTenantIds = new Set();
     for (const res of billableReservations) {
       const tenantKey = String(res.userId?._id || res.userId);
-      const checkIn = res.checkInDate
-        ? dayjs(res.checkInDate).startOf("day")
+      const checkIn = readMoveInDate(res)
+        ? dayjs(readMoveInDate(res)).startOf("day")
         : null;
-      const checkOut = res.checkOutDate
-        ? dayjs(res.checkOutDate).startOf("day")
+      const checkOut = readMoveOutDate(res)
+        ? dayjs(readMoveOutDate(res)).startOf("day")
         : null;
       if (
         checkIn &&
@@ -277,14 +293,15 @@ async function closePeriodAndGenerateDrafts({
     // move-in/move-out readings for tenants who actually moved during this cycle.
     cycleReadings = allReadings.filter((r) => {
       if (
-        r.eventType === "regular-billing" ||
-        r.eventType === "period-start" ||
-        r.eventType === "period-end"
+        isUtilityEventType(r.eventType, "regularBilling") ||
+        isUtilityEventType(r.eventType, "periodStart") ||
+        isUtilityEventType(r.eventType, "periodEnd")
       ) {
         return true;
       }
       if (
-        (r.eventType === "move-in" || r.eventType === "move-out") &&
+        (isUtilityEventType(r.eventType, "moveIn") ||
+          isUtilityEventType(r.eventType, "moveOut")) &&
         r.tenantId
       ) {
         return inCycleMoveTenantIds.has(String(r.tenantId));
@@ -416,7 +433,7 @@ export const openUtilityPeriod = async (req, res, next) => {
         branch: room.branch,
         reading: Number(startReading),
         date: dayjs(startDate).startOf("day").toDate(),
-        eventType: "period-start",
+        eventType: "periodStart",
         readingStatus: "locked",
         recordedBy: admin._id,
         utilityPeriodId: period._id,
@@ -425,7 +442,7 @@ export const openUtilityPeriod = async (req, res, next) => {
       await startBaselineReading.save();
     }
 
-    res.status(201).json({ success: true, period });
+    res.status(201).json({ success: true, period: serializeUtilityPeriod(period) });
   } catch (err) {
     next(err);
   }
@@ -433,11 +450,12 @@ export const openUtilityPeriod = async (req, res, next) => {
 
 export const recordUtilityReading = async (req, res, next) => {
   try {
+    const payload = normalizeReservationPayload(req.body);
     const admin = await getAdminInfo(req);
     const utilityType = req.params.utilityType;
-    const { roomId, reading, date, eventType, tenantId } = req.body;
+    const { roomId, reading, date, eventType, tenantId } = payload;
 
-    if (eventType === "regular-billing") {
+    if (eventType === "regularBilling") {
       return res.status(400).json({
         error:
           "Mid-period checkpoint readings are no longer supported. Use move-in, move-out, or boundary readings from New Billing Period.",
@@ -468,7 +486,10 @@ export const recordUtilityReading = async (req, res, next) => {
     });
     await newReading.save();
 
-    res.status(201).json({ success: true, reading: newReading });
+    res.status(201).json({
+      success: true,
+      reading: serializeUtilityReading(newReading),
+    });
   } catch (err) {
     next(err);
   }
@@ -604,7 +625,7 @@ export const deleteUtilityPeriod = async (req, res, next) => {
     await UtilityReading.updateMany(
       {
         utilityPeriodId: period._id,
-        eventType: { $in: ["move-in", "move-out"] },
+        eventType: { $in: utilityEventTypesForQuery("moveIn", "moveOut") },
       },
       { $set: { utilityPeriodId: null } },
     );
@@ -613,7 +634,13 @@ export const deleteUtilityPeriod = async (req, res, next) => {
     await UtilityReading.updateMany(
       {
         utilityPeriodId: period._id,
-        eventType: { $in: ["period-start", "period-end", "regular-billing"] },
+        eventType: {
+          $in: utilityEventTypesForQuery(
+            "periodStart",
+            "periodEnd",
+            "regularBilling",
+          ),
+        },
       },
       { $set: { isArchived: true } },
     );
@@ -642,7 +669,7 @@ export const updateUtilityPeriod = async (req, res, next) => {
     }
     await period.save();
 
-    res.json({ success: true, period });
+    res.json({ success: true, period: serializeUtilityPeriod(period) });
   } catch (err) {
     next(err);
   }
@@ -668,11 +695,12 @@ export const deleteUtilityReading = async (req, res, next) => {
 
 export const updateUtilityReading = async (req, res, next) => {
   try {
+    const payload = normalizeReservationPayload(req.body);
     const admin = await getAdminInfo(req);
     const { utilityType, id } = req.params;
-    const { reading, date, eventType } = req.body;
+    const { reading, date, eventType } = payload;
 
-    if (eventType === "regular-billing") {
+    if (eventType === "regularBilling") {
       return res.status(400).json({
         error:
           "Mid-period checkpoint readings are no longer supported. Use move-in, move-out, or boundary readings from New Billing Period.",
@@ -688,7 +716,7 @@ export const updateUtilityReading = async (req, res, next) => {
     if (eventType !== undefined) readingDoc.eventType = eventType;
 
     await readingDoc.save();
-    res.json({ success: true, reading: readingDoc });
+    res.json({ success: true, reading: serializeUtilityReading(readingDoc) });
   } catch (err) {
     next(err);
   }
@@ -718,12 +746,11 @@ export const reviseUtilityResult = async (req, res, next) => {
 
     const reservations = await Reservation.find({
       roomId: room._id,
-      status: { $in: ["checked-in", "checked-out"] },
+      status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },
       isArchived: { $ne: true },
-      checkInDate: { $lt: period.endDate },
-      $or: [
-        { checkOutDate: null },
-        { checkOutDate: { $gt: period.startDate } },
+      $and: [
+        buildMoveInBeforeQuery(period.endDate),
+        buildMoveOutAfterOrMissingQuery(period.startDate),
       ],
     })
       .populate("userId", "firstName lastName email")
@@ -1008,12 +1035,12 @@ export const getUtilityReadings = async (req, res, next) => {
         id: r._id,
         reading: r.reading,
         date: r.date,
-        eventType: r.eventType,
+        eventType: normalizeUtilityEventType(r.eventType),
         readingStatus: r.readingStatus || "recorded",
         isLocked:
           r.readingStatus === "locked" ||
-          r.eventType === "period-start" ||
-          r.eventType === "period-end" ||
+          isUtilityEventType(r.eventType, "periodStart") ||
+          isUtilityEventType(r.eventType, "periodEnd") ||
           (r.utilityPeriodId &&
             ["closed", "revised"].includes(
               periodStatusMap.get(String(r.utilityPeriodId)) || "",
@@ -1170,11 +1197,11 @@ export const getUtilityResult = async (req, res, next) => {
       .map((summary) => summary.tenantId)
       .filter(Boolean);
 
-    const formatDurationRange = (checkInDate, checkOutDate) => {
-      if (!checkInDate) return "Ongoing";
-      const start = dayjs(checkInDate).format("MMM D, YYYY");
-      const end = checkOutDate
-        ? dayjs(checkOutDate).format("MMM D, YYYY")
+    const formatDurationRange = (moveInDate, moveOutDate) => {
+      if (!moveInDate) return "Ongoing";
+      const start = dayjs(moveInDate).format("MMM D, YYYY");
+      const end = moveOutDate
+        ? dayjs(moveOutDate).format("MMM D, YYYY")
         : "Ongoing";
       return `${start} - ${end}`;
     };
@@ -1190,13 +1217,12 @@ export const getUtilityResult = async (req, res, next) => {
             roomId: period.roomId,
             userId: { $in: tenantIds },
             isArchived: { $ne: true },
-            checkInDate: { $lt: period.endDate || period.startDate },
-            $or: [
-              { checkOutDate: null },
-              { checkOutDate: { $gt: period.startDate } },
+            $and: [
+              buildMoveInBeforeQuery(period.endDate || period.startDate),
+              buildMoveOutAfterOrMissingQuery(period.startDate),
             ],
           })
-            .sort({ checkInDate: -1 })
+            .sort({ moveInDate: -1 })
             .populate("userId", "firstName lastName email")
             .lean()
         : [],
@@ -1240,8 +1266,8 @@ export const getUtilityResult = async (req, res, next) => {
         ...summary,
         durationRange: reservation
           ? formatDurationRange(
-              reservation.checkInDate,
-              reservation.checkOutDate,
+              readMoveInDate(reservation),
+              readMoveOutDate(reservation),
             )
           : summary.durationRange || "Ongoing",
         tenantEmail:
@@ -1289,25 +1315,25 @@ export const getRoomHistory = async (req, res, next) => {
     // Get all check-in / check-out reservations for this room
     const reservations = await Reservation.find({
       roomId: room._id,
-      status: { $in: ["checked-in", "checked-out"] },
+      status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },
       isArchived: { $ne: true },
     })
       .populate("userId", "firstName lastName email")
-      .sort({ checkInDate: -1 })
+      .sort({ moveInDate: -1 })
       .lean();
 
     // Get all move-in / move-out meter readings for this room
     const readings = await UtilityReading.find({
       roomId: room._id,
       utilityType,
-      eventType: { $in: ["move-in", "move-out"] },
+      eventType: { $in: utilityEventTypesForQuery("moveIn", "moveOut") },
       isArchived: false,
     }).lean();
 
     // Index readings by tenantId + eventType for fast lookup
     const readingMap = {};
     for (const r of readings) {
-      const key = `${r.tenantId}_${r.eventType}`;
+      const key = `${r.tenantId}_${normalizeUtilityEventType(r.eventType)}`;
       // Keep the latest reading for each tenant+event combo
       if (
         !readingMap[key] ||
@@ -1329,13 +1355,13 @@ export const getRoomHistory = async (req, res, next) => {
     const now = new Date();
     const history = reservations.map((res) => {
       const tenantId = res.userId?._id?.toString();
-      const moveInReading = tenantId ? readingMap[`${tenantId}_move-in`] : null;
+      const moveInReading = tenantId ? readingMap[`${tenantId}_moveIn`] : null;
       const moveOutReading = tenantId
-        ? readingMap[`${tenantId}_move-out`]
+        ? readingMap[`${tenantId}_moveOut`]
         : null;
 
-      const moveIn = res.checkInDate ? new Date(res.checkInDate) : null;
-      const moveOut = res.checkOutDate ? new Date(res.checkOutDate) : null;
+      const moveIn = readMoveInDate(res) ? new Date(readMoveInDate(res)) : null;
+      const moveOut = readMoveOutDate(res) ? new Date(readMoveOutDate(res)) : null;
       const endDate = moveOut || now;
       const durationDays = moveIn
         ? Math.max(1, Math.ceil((endDate - moveIn) / 86_400_000))
@@ -1355,9 +1381,9 @@ export const getRoomHistory = async (req, res, next) => {
         tenantId: tenantId || null,
         bedName,
         bedId: bedId || null,
-        moveInDate: res.checkInDate,
-        moveOutDate: res.checkOutDate || null,
-        isActive: res.status === "checked-in",
+        moveInDate: moveIn,
+        moveOutDate: moveOut || null,
+        isActive: hasReservationStatus(res.status, "moveIn"),
         durationDays,
         moveInReading: moveInReading
           ? {

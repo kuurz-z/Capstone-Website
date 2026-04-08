@@ -16,6 +16,10 @@ import { queryKeys } from "../../../shared/lib/queryKeys";
 import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
+import {
+  hasReservationStatus,
+  readMoveInDate,
+} from "../../../shared/utils/lifecycleNaming";
 import ReservationDetailsModal from "../components/ReservationDetailsModal";
 import VisitSchedulesTab from "../components/VisitSchedulesTab";
 import InquiriesPage from "./InquiriesPage";
@@ -113,8 +117,8 @@ function ReservationsPage() {
       reserved: reservations.filter(
         (reservation) => reservation.status === "reserved",
       ).length,
-      checkedIn: reservations.filter(
-        (reservation) => reservation.status === "checked-in",
+      movedIn: reservations.filter(
+        (reservation) => hasReservationStatus(reservation.status, "moveIn"),
       ).length,
       overdue: reservations.filter(checkOverdueReservation).length,
     }),
@@ -137,7 +141,7 @@ function ReservationsPage() {
             ? checkOverdueReservation(reservation)
             : statusFilter === "in_progress"
               ? IN_PROGRESS_STATUSES.includes(reservation.status)
-              : reservation.status.toLowerCase() === statusFilter;
+              : hasReservationStatus(reservation.status, statusFilter);
       const matchBranch =
         branchFilter === "all" ||
         reservation.branch.toLowerCase() === branchFilter.toLowerCase();
@@ -157,8 +161,11 @@ function ReservationsPage() {
       if (rightValue == null) return -1;
 
       let comparison = 0;
-      if (key === "createdAt" || key === "moveInDate" || key === "checkInDate") {
+      if (key === "createdAt") {
         comparison = new Date(leftValue) - new Date(rightValue);
+      } else if (key === "moveInDate") {
+        comparison =
+          new Date(readMoveInDate(left)) - new Date(readMoveInDate(right));
       } else if (typeof leftValue === "string") {
         comparison = leftValue.localeCompare(rightValue);
       } else {
@@ -183,7 +190,7 @@ function ReservationsPage() {
       { label: "Total", value: counts.total, icon: CalendarCheck, color: "blue" },
       { label: "In Progress", value: counts.inProgress, icon: Clock, color: "orange" },
       { label: "Reserved", value: counts.reserved, icon: CheckCircle, color: "green" },
-      { label: "Checked In", value: counts.checkedIn, icon: UserCheck, color: "blue" },
+      { label: "Moved In", value: counts.movedIn, icon: UserCheck, color: "blue" },
       { label: "Overdue", value: counts.overdue, icon: AlertTriangle, color: "red" },
     ],
     [counts],
@@ -223,7 +230,7 @@ function ReservationsPage() {
           { value: "all", label: "All Status" },
           { value: "in_progress", label: "In Progress" },
           { value: "reserved", label: "Reserved" },
-          { value: "checked-in", label: "Checked In" },
+          { value: "moveIn", label: "Moved In" },
           { value: "overdue", label: "Overdue" },
           { value: "cancelled", label: "Cancelled" },
         ],
@@ -289,8 +296,8 @@ function ReservationsPage() {
         proofOfPaymentUrl: reservation.proofOfPaymentUrl,
         leaseDuration: reservation.leaseDuration,
         billingEmail: reservation.billingEmail,
-        checkInDate: reservation.checkInDate,
-        moveInDate: reservation.checkInDate,
+        moveInDate: reservation.moveInDate,
+        moveOutDate: reservation.moveOutDate,
         visitDate: reservation.visitDate,
         visitTime: reservation.visitTime,
         visitApproved: reservation.visitApproved,

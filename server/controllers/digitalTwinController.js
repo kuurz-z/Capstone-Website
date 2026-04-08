@@ -19,6 +19,10 @@ import Bill from "../models/Bill.js";
 import MaintenanceRequest from "../models/MaintenanceRequest.js";
 import BillingPeriod from "../models/BillingPeriod.js";
 import { deriveRoomOccupancyState } from "../utils/occupancyManager.js";
+import {
+  ACTIVE_OCCUPANCY_STATUS_QUERY,
+  hasReservationStatus,
+} from "../utils/lifecycleNaming.js";
 
 // ============================================================================
 // HEALTH SCORE CALCULATION
@@ -92,7 +96,7 @@ export const getSnapshot = async (req, res) => {
     const [rooms, activeReservations, openMaintenance] = await Promise.all([
       Room.find(roomFilter).lean(),
       Reservation.find({
-        status: { $in: ["reserved", "checked-in"] },
+        status: { $in: ACTIVE_OCCUPANCY_STATUS_QUERY },
         isArchived: false,
         ...(branch && branch !== "all" ? { branch } : {}),
       })
@@ -204,7 +208,9 @@ export const getSnapshot = async (req, res) => {
 
             let displayStatus = bed.status;
             if (matchingRes && displayStatus === "available") {
-              displayStatus = matchingRes.status === "checked-in" ? "occupied" : "reserved";
+              displayStatus = hasReservationStatus(matchingRes.status, "moveIn")
+                ? "occupied"
+                : "reserved";
             }
 
             return {
@@ -228,7 +234,9 @@ export const getSnapshot = async (req, res) => {
           for (const res of unmatched) {
             const freeBed = enrichedBeds.find((b) => b.status === "available");
             if (freeBed) {
-              freeBed.status = res.status === "checked-in" ? "occupied" : "reserved";
+              freeBed.status = hasReservationStatus(res.status, "moveIn")
+                ? "occupied"
+                : "reserved";
               freeBed.occupant = res.userId
                 ? {
                     name: `${res.userId.firstName || ""} ${res.userId.lastName || ""}`.trim(),
@@ -396,7 +404,7 @@ export const getRoomDetail = async (req, res) => {
     const [reservations, maintenance] = await Promise.all([
       Reservation.find({
         roomId,
-        status: { $in: ["reserved", "checked-in"] },
+        status: { $in: ACTIVE_OCCUPANCY_STATUS_QUERY },
         isArchived: false,
       })
         .populate("userId", "firstName lastName email phone profileImage")
@@ -445,7 +453,9 @@ export const getRoomDetail = async (req, res) => {
       // otherwise infer from reservation status (handles stale data)
       let displayStatus = bed.status;
       if (reservation && displayStatus === "available") {
-        displayStatus = reservation.status === "checked-in" ? "occupied" : "reserved";
+        displayStatus = hasReservationStatus(reservation.status, "moveIn")
+          ? "occupied"
+          : "reserved";
       }
 
       return {
@@ -478,7 +488,9 @@ export const getRoomDetail = async (req, res) => {
       for (const res of unmatchedReservations) {
         const freeBed = enrichedBeds.find((b) => !b.occupant && b.status === "available");
         if (freeBed) {
-          freeBed.status = res.status === "checked-in" ? "occupied" : "reserved";
+          freeBed.status = hasReservationStatus(res.status, "moveIn")
+            ? "occupied"
+            : "reserved";
           freeBed.occupant = {
             _id: res.userId._id,
             name: `${res.userId.firstName || ""} ${res.userId.lastName || ""}`.trim(),

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Building2,
@@ -18,6 +19,7 @@ import {
   formatBranch,
   formatRelativeTime,
 } from "../../admin/utils/formatters";
+import { hasReservationStatus } from "../../../shared/utils/lifecycleNaming";
 import "../styles/superadmin-dashboard.css";
 
 // Accent colors per stat — kept minimal, single hue each
@@ -54,7 +56,9 @@ export default function SuperAdminDashboard() {
     const totalOcc = occupancyStats?.totalOccupancy || 0;
     const occRate = totalCap > 0 ? Math.round((totalOcc / totalCap) * 100) : 0;
     const activeBookings = reservations.filter((r) =>
-      ["confirmed", "checked-in", "reserved"].includes(r.status)
+      r.status === "confirmed" ||
+      r.status === "reserved" ||
+      hasReservationStatus(r.status, "moveIn")
     ).length;
 
     return [

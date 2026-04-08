@@ -40,9 +40,17 @@ const bedHistorySchema = new mongoose.Schema(
       ref: "Reservation",
       default: null,
     },
-    checkInDate: {
+    moveInDate: {
       type: Date,
       required: true,
+    },
+    checkInDate: {
+      type: Date,
+      default: null,
+    },
+    moveOutDate: {
+      type: Date,
+      default: null,
     },
     checkOutDate: {
       type: Date,
@@ -58,38 +66,40 @@ const bedHistorySchema = new mongoose.Schema(
 // INDEXES
 // ============================================================================
 
-bedHistorySchema.index({ roomId: 1, bedId: 1, checkInDate: -1 });
-bedHistorySchema.index({ tenantId: 1, checkInDate: -1 });
+bedHistorySchema.index({ roomId: 1, bedId: 1, moveInDate: -1 });
+bedHistorySchema.index({ tenantId: 1, moveInDate: -1 });
 
 // ============================================================================
 // STATICS
 // ============================================================================
 
 /**
- * Record a check-in
+ * Record a move-in
  */
-bedHistorySchema.statics.recordCheckIn = async function (data) {
+bedHistorySchema.statics.recordMoveIn = async function (data) {
+  const moveInDate = data.moveInDate || data.checkInDate || new Date();
   return this.create({
     bedId: data.bedId,
     roomId: data.roomId,
     tenantId: data.tenantId,
     reservationId: data.reservationId || null,
-    checkInDate: data.checkInDate || new Date(),
+    moveInDate,
   });
 };
 
 /**
- * Record a check-out
+ * Record a move-out
  */
-bedHistorySchema.statics.recordCheckOut = async function (bedId, tenantId) {
+bedHistorySchema.statics.recordMoveOut = async function (bedId, tenantId) {
   const record = await this.findOne({
     bedId,
     tenantId,
-    checkOutDate: null,
-  }).sort({ checkInDate: -1 });
+    moveOutDate: null,
+  }).sort({ moveInDate: -1 });
 
   if (record) {
-    record.checkOutDate = new Date();
+    const moveOutDate = new Date();
+    record.moveOutDate = moveOutDate;
     await record.save();
   }
   return record;
@@ -101,8 +111,22 @@ bedHistorySchema.statics.recordCheckOut = async function (bedId, tenantId) {
 bedHistorySchema.statics.getBedHistory = function (bedId, roomId) {
   return this.find({ bedId, roomId })
     .populate("tenantId", "firstName lastName email")
-    .sort({ checkInDate: -1 });
+    .sort({ moveInDate: -1 });
 };
+
+bedHistorySchema.statics.recordCheckIn = bedHistorySchema.statics.recordMoveIn;
+bedHistorySchema.statics.recordCheckOut = bedHistorySchema.statics.recordMoveOut;
+
+bedHistorySchema.pre("validate", function (next) {
+  if (!this.moveInDate && this.checkInDate) {
+    this.moveInDate = this.checkInDate;
+  }
+  if (!this.moveOutDate && this.checkOutDate) {
+    this.moveOutDate = this.checkOutDate;
+  }
+
+  next();
+});
 
 // ============================================================================
 // EXPORT

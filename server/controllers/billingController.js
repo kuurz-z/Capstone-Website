@@ -37,6 +37,11 @@ import {
 import { getPenaltyRatePerDay } from "../utils/businessSettings.js";
 import { sendDraftUtilityBills } from "../utils/utilityBillFlow.js";
 import { isWaterBillableRoom } from "../utils/utilityFlowRules.js";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  hasReservationStatus,
+  readMoveInDate,
+} from "../utils/lifecycleNaming.js";
 
 /* ─── shared helpers ─────────────────────────────── */
 
@@ -101,7 +106,8 @@ const formatBill = (bill) => {
 
 async function getReservationBillingContext(reservationId, currentBillId = null) {
   const reservation = await Reservation.findById(reservationId);
-  if (!reservation || !reservation.checkInDate) return null;
+  const moveInDate = readMoveInDate(reservation);
+  if (!reservation || !moveInDate) return null;
 
   const existingCount = await Bill.countDocuments({
     reservationId: reservation._id,
@@ -109,7 +115,7 @@ async function getReservationBillingContext(reservationId, currentBillId = null)
     ...(currentBillId ? { _id: { $ne: currentBillId } } : {}),
   });
 
-  const cycle = buildBillingCycle(reservation.checkInDate, existingCount);
+  const cycle = buildBillingCycle(moveInDate, existingCount);
   const creditAvailable = getReservationCreditAvailable(reservation);
 
   return {
@@ -436,7 +442,7 @@ export const getCurrentBilling = async (req, res, next) => {
     const activeStay = await Reservation.findOne({
       userId: dbUser._id,
       branch,
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
     });
     if (!activeStay)
       return res.status(404).json({ error: "No active stay found" });
@@ -645,7 +651,7 @@ export const generateRoomBill = async (req, res, next) => {
     const bedReservations = bedReservationIds.length > 0
       ? await Reservation.find({
           _id: { $in: bedReservationIds },
-          status: "checked-in",
+          status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
           isArchived: { $ne: true },
         }).populate("userId", "firstName lastName email")
       : [];
@@ -658,12 +664,12 @@ export const generateRoomBill = async (req, res, next) => {
     for (const bed of occupiedBeds) {
       if (!bed.occupiedBy.reservationId) continue;
       const reservation = bedReservationMap.get(String(bed.occupiedBy.reservationId));
-      if (!reservation?.userId || reservation.status !== "checked-in") continue;
+      if (!reservation?.userId || !hasReservationStatus(reservation.status, "moveIn")) continue;
       if (seenUserIds.has(String(reservation.userId._id))) continue;
       seenUserIds.add(String(reservation.userId._id));
 
       const moveInDate =
-        bed.occupiedBy.occupiedSince || reservation.checkInDate || monthStart;
+        bed.occupiedBy.occupiedSince || readMoveInDate(reservation) || monthStart;
       const rent = suggestRent(reservation, room, moveInDate);
       const customCharges = reservation.customCharges || [];
       const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
@@ -688,7 +694,7 @@ export const generateRoomBill = async (req, res, next) => {
     if (tenantInfos.length === 0) {
       const checkedInReservations = await Reservation.find({
         roomId: room._id,
-        status: "checked-in",
+        status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
         isArchived: { $ne: true },
       }).populate("userId", "firstName lastName email");
 
@@ -697,7 +703,7 @@ export const generateRoomBill = async (req, res, next) => {
         if (seenUserIds.has(String(reservation.userId._id))) continue;
         seenUserIds.add(String(reservation.userId._id));
 
-        const moveInDate = reservation.checkInDate || monthStart;
+        const moveInDate = readMoveInDate(reservation) || monthStart;
         const rent = suggestRent(reservation, room, moveInDate);
         const customCharges = reservation.customCharges || [];
         const tenantStart = dayjs(Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()));
@@ -722,7 +728,7 @@ export const generateRoomBill = async (req, res, next) => {
     if (tenantInfos.length === 0)
       return res.status(400).json({
         error:
-          "No checked-in tenants found in this room. Only tenants with 'checked-in' status can be billed.",
+          "No moved-in tenants found in this room. Only tenants with 'moveIn' status can be billed.",
       });
 
     // Pro-rata calculation
@@ -917,7 +923,7 @@ export const getRoomsWithTenants = async (req, res, next) => {
     const roomIds = rooms.map((r) => r._id);
     const allReservations = await Reservation.find({
       roomId: { $in: roomIds },
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: { $ne: true },
     })
       .populate("userId", "firstName lastName email")
@@ -950,8 +956,8 @@ export const getRoomsWithTenants = async (req, res, next) => {
                 `${r.userId.firstName || ""} ${r.userId.lastName || ""}`.trim() ||
                 "Tenant",
               email: r.userId.email || "",
-              checkInDate: r.checkInDate,
-              monthlyRent: suggestRent(r, room, r.checkInDate),
+              moveInDate: readMoveInDate(r),
+              monthlyRent: suggestRent(r, room, readMoveInDate(r)),
               customCharges: r.customCharges || [],
               bedPosition: bed?.position || null,
             };
@@ -1410,7 +1416,7 @@ export const generateBulkBills = async (req, res, next) => {
       // Find checked-in tenants for this room
       const checkedInReservations = await Reservation.find({
         roomId: room._id,
-        status: "checked-in",
+        status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
         isArchived: { $ne: true },
       }).populate("userId", "firstName lastName email");
 
@@ -1428,7 +1434,7 @@ export const generateBulkBills = async (req, res, next) => {
         if (seenUserIds.has(String(reservation.userId._id))) continue;
         seenUserIds.add(String(reservation.userId._id));
 
-        const moveInDate = reservation.checkInDate || monthStart;
+        const moveInDate = readMoveInDate(reservation) || monthStart;
         const rent = suggestRent(reservation, room, moveInDate);
         const customCharges = reservation.customCharges || [];
         const tenantStart = dayjs(

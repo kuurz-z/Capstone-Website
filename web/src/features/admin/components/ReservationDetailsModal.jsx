@@ -4,6 +4,10 @@ import { Calendar, Eye, ClipboardList, CreditCard } from "lucide-react";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
+import {
+  hasReservationStatus,
+  readMoveInDate,
+} from "../../../shared/utils/lifecycleNaming";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../shared/hooks/useEscapeClose";
@@ -43,14 +47,14 @@ const STATUS_MAP = {
     bg: "#ecfdf5",
     dot: "#10b981",
   },
-  "checked-in": {
-    label: "Checked In",
+  moveIn: {
+    label: "Moved In",
     color: "#1d4ed8",
     bg: "#eff6ff",
     dot: "#3b82f6",
   },
-  "checked-out": {
-    label: "Checked Out",
+  moveOut: {
+    label: "Moved Out",
     color: "#64748b",
     bg: "#f8fafc",
     dot: "#94a3b8",
@@ -71,7 +75,7 @@ const ACTION_MSGS = {
     confirmText: "Yes, Confirm",
     variant: "info",
   },
-  checkin: {
+  moveIn: {
     title: "Move In Tenant",
     message:
       "Mark this tenant as moved in? They'll be promoted to Tenant role with full system access.",
@@ -184,9 +188,11 @@ export default function ReservationDetailsModal({
 
   if (!reservation) return null;
 
-  const status = (reservation.status || "").toLowerCase();
+  const status = reservation.status || "pending";
   const sc = STATUS_MAP[status] || STATUS_MAP.pending;
-  const moveIn = reservation.moveInDate ?? reservation.checkInDate ?? null;
+  const moveIn = readMoveInDate(reservation);
+  const isMovedIn = hasReservationStatus(status, "moveIn");
+  const isMovedOut = hasReservationStatus(status, "moveOut");
   const isOverdue =
     status === "reserved" && moveIn && new Date(moveIn) < new Date();
   const daysOverdue = isOverdue
@@ -332,7 +338,7 @@ export default function ReservationDetailsModal({
             </div>
 
             {/* Actions */}
-            {status !== "cancelled" && status !== "checked-out" && (
+            {status !== "cancelled" && !isMovedOut && (
               <div className="rdm-actions-card">
 
                 {/* ── Stage guidance cards (read-only stages) ─────────── */}
@@ -384,7 +390,7 @@ export default function ReservationDetailsModal({
 
                 {/* ── Cancel (all pre-check-in stages) ─────────────── */}
                 <div className="rdm-action-divider" />
-                {status !== "checked-in" && (
+                {!isMovedIn && (
                   <button
                     className="rdm-action rdm-action-cancel"
                     onClick={() =>
@@ -582,12 +588,12 @@ export default function ReservationDetailsModal({
                   }
                   setShowMeterPrompt(false);
                   doAction(
-                    "checkin",
+                    "moveIn",
                     () => reservationApi.update(reservation.id, {
-                      status: "checked-in",
+                      status: "moveIn",
                       meterReading: reading,
                     }),
-                    "Tenant checked in successfully",
+                    "Tenant moved in successfully",
                   );
                 }}
                 disabled={isSubmitting}

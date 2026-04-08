@@ -163,7 +163,6 @@ export const sendInquiryResponseEmail = async ({
     );
     return { success: false, message: "Email service not configured" };
   }
-
   const mailOptions = {
     from: {
       name: "Lilycrest Dormitory",
@@ -214,7 +213,7 @@ const generateReservationConfirmedEmail = (
   reservationCode,
   roomName,
   branchName,
-  checkInDate,
+  moveInDate,
 ) => {
   return `
 <!DOCTYPE html>
@@ -250,10 +249,10 @@ const generateReservationConfirmedEmail = (
                   <tr><td style="padding: 6px 0; color: #6B7280;">Reservation Code</td><td style="padding: 6px 0; font-weight: 600;">${reservationCode}</td></tr>
                   <tr><td style="padding: 6px 0; color: #6B7280;">Room</td><td style="padding: 6px 0; font-weight: 600;">${roomName}</td></tr>
                   <tr><td style="padding: 6px 0; color: #6B7280;">Branch</td><td style="padding: 6px 0; font-weight: 600;">${branchName}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #6B7280;">Check-in Date</td><td style="padding: 6px 0; font-weight: 600;">${checkInDate}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #6B7280;">Move-in Date</td><td style="padding: 6px 0; font-weight: 600;">${moveInDate}</td></tr>
                 </table>
               </div>
-              <p style="color: #555555; font-size: 14px; line-height: 1.6;">Please arrive on your check-in date with your valid ID. If you have questions, contact us through the dormitory portal.</p>
+              <p style="color: #555555; font-size: 14px; line-height: 1.6;">Please arrive on your move-in date with your valid ID. If you have questions, contact us through the dormitory portal.</p>
             </td>
           </tr>
           <tr>
@@ -277,8 +276,10 @@ export const sendReservationConfirmedEmail = async ({
   reservationCode,
   roomName,
   branchName,
+  moveInDate,
   checkInDate,
 }) => {
+  const moveInDateLabel = moveInDate || checkInDate || "TBD";
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     console.log("⚠️ Email not sent — not configured");
     return { success: false, message: "Email service not configured" };
@@ -292,9 +293,9 @@ export const sendReservationConfirmedEmail = async ({
       reservationCode,
       roomName,
       branchName,
-      checkInDate,
+      moveInDateLabel,
     ),
-    text: `Hello ${tenantName}, your reservation (${reservationCode}) for ${roomName} at ${branchName} has been confirmed. Check-in: ${checkInDate}. — Lilycrest Dormitory`,
+    text: `Hello ${tenantName}, your reservation (${reservationCode}) for ${roomName} at ${branchName} has been confirmed. Move-in: ${moveInDateLabel}. — Lilycrest Dormitory`,
   };
   try {
     const info = await transporter.sendMail(mailOptions);

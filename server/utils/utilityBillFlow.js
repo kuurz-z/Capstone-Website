@@ -17,6 +17,10 @@ import {
 } from "./billingPolicy.js";
 import { notify } from "./notificationService.js";
 import { generateBillPdf } from "./pdfGenerator.js";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  readMoveInDate,
+} from "./lifecycleNaming.js";
 
 const UTILITY_BILL_SEND_CONCURRENCY = Math.max(
   1,
@@ -69,11 +73,11 @@ function setUtilityDispatchEntry(bill, utilityType, updates = {}) {
 export async function getReservationBillingContextForUser(userId) {
   const reservation = await Reservation.findOne({
     userId,
-    status: "checked-in",
+    status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
     isArchived: { $ne: true },
-  }).sort({ checkInDate: 1 });
+  }).sort({ moveInDate: 1 });
 
-  if (!reservation?.checkInDate) return null;
+  if (!readMoveInDate(reservation)) return null;
 
   const existingCount = await Bill.countDocuments({
     reservationId: reservation._id,
@@ -83,7 +87,7 @@ export async function getReservationBillingContextForUser(userId) {
   return {
     reservation,
     existingCount,
-    cycle: buildBillingCycle(reservation.checkInDate, existingCount),
+    cycle: buildBillingCycle(readMoveInDate(reservation), existingCount),
     isFirstCycleBill: existingCount === 0,
     creditAvailable: getReservationCreditAvailable(reservation),
   };
@@ -93,7 +97,8 @@ export async function getReservationBillingContextForBill(bill) {
   if (!bill?.reservationId) return null;
 
   const reservation = await Reservation.findById(bill.reservationId);
-  if (!reservation?.checkInDate) return null;
+  const moveInDate = readMoveInDate(reservation);
+  if (!moveInDate) return null;
 
   const existingCount = await Bill.countDocuments({
     reservationId: reservation._id,
@@ -104,7 +109,7 @@ export async function getReservationBillingContextForBill(bill) {
   return {
     reservation,
     existingCount,
-    cycle: buildBillingCycle(reservation.checkInDate, existingCount),
+    cycle: buildBillingCycle(moveInDate, existingCount),
     isFirstCycleBill: existingCount === 0,
     creditAvailable: getReservationCreditAvailable(reservation),
   };

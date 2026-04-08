@@ -280,6 +280,14 @@ userSchema.pre("save", function (next) {
 
 userSchema.index({ branch: 1, role: 1 });
 userSchema.index({ isArchived: 1, isActive: 1 });
+userSchema.index({
+  isArchived: 1,
+  branch: 1,
+  accountStatus: 1,
+  role: 1,
+  createdAt: -1,
+});
+userSchema.index({ isArchived: 1, accountStatus: 1, createdAt: -1 });
 
 // ============================================================================
 // VIRTUALS

@@ -9,6 +9,11 @@
 
 import dayjs from "dayjs";
 import { User, Room, Reservation } from "../models/index.js";
+import {
+  hasReservationStatus,
+  normalizeReservationStatus,
+  reservationStatusesForQuery,
+} from "./lifecycleNaming.js";
 
 /** Validate MongoDB ObjectId format */
 export const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
@@ -88,22 +93,22 @@ export const validateMoveInDate = (dateStr) => {
 export const getCheckinBlockers = (reservation) => {
   const blockers = [];
 
-  if (reservation.status !== "reserved") {
+  if (!hasReservationStatus(reservation.status, "reserved")) {
     blockers.push(
-      `Reservation must be in "Reserved" state before check-in (currently "${reservation.status}").`
+      `Reservation must be in "Reserved" state before move-in (currently "${normalizeReservationStatus(reservation.status)}").`
     );
   }
 
   if (reservation.paymentStatus !== "paid") {
     blockers.push(
-      "Payment must be confirmed (status: Paid) before check-in."
+      "Payment must be confirmed (status: Paid) before move-in."
     );
   }
 
   const visitWaived = reservation.isOutOfTown === true;
   if (!reservation.visitApproved && !visitWaived) {
     blockers.push(
-      "Site visit must be completed and approved by admin before check-in."
+      "Site visit must be completed and approved by admin before move-in."
     );
   }
 
@@ -111,7 +116,7 @@ export const getCheckinBlockers = (reservation) => {
 };
 
 /**
- * Handle status transitions (confirmed / checked-in / cancelled).
+ * Handle status transitions (reserved / moveIn / cancelled).
  * Centralises ~55 lines duplicated in updateReservation, releaseSlot, archiveReservation.
  *
  * Also syncs Firebase Custom Claims so the user's token reflects
@@ -123,7 +128,10 @@ export const handleStatusTransition = async (
   userId,
   roomId,
 ) => {
-  if (newStatus === oldStatus) return;
+  const normalizedNewStatus = normalizeReservationStatus(newStatus);
+  const normalizedOldStatus = normalizeReservationStatus(oldStatus);
+
+  if (normalizedNewStatus === normalizedOldStatus) return;
   const user = await User.findById(userId);
   if (!user) return;
 
@@ -140,7 +148,10 @@ export const handleStatusTransition = async (
     }
   };
 
-  if (newStatus === "reserved" && oldStatus !== "reserved") {
+  if (
+    normalizedNewStatus === "reserved" &&
+    normalizedOldStatus !== "reserved"
+  ) {
     // Reservation state is tracked in Reservation model, not on User.
     // Only set branch from room so user is associated with correct branch.
     const room = await Room.findById(roomId);
@@ -149,7 +160,7 @@ export const handleStatusTransition = async (
     await syncFirebaseClaims({ role: "applicant", tenantStatus: "none" });
   }
 
-  if (newStatus === "checked-in" && oldStatus !== "checked-in") {
+  if (normalizedNewStatus === "moveIn" && normalizedOldStatus !== "moveIn") {
     user.role = "tenant";
     user.tenantStatus = "active";
     await user.save();
@@ -157,8 +168,8 @@ export const handleStatusTransition = async (
   }
 
   if (
-    newStatus === "cancelled" &&
-    oldStatus !== "cancelled" &&
+    normalizedNewStatus === "cancelled" &&
+    normalizedOldStatus !== "cancelled" &&
     user.role === "applicant"
   ) {
     user.tenantStatus = "none";
@@ -191,13 +202,13 @@ const getFallbackLifecycleState = async (userId, excludedReservationId) => {
     Reservation.findOne({
       userId,
       _id: { $ne: excludedReservationId },
-      status,
+      status: { $in: reservationStatusesForQuery(status) },
       isArchived: { $ne: true },
     })
       .sort({ updatedAt: -1, createdAt: -1 })
       .populate("roomId", "branch");
 
-  const checkedInReservation = await findLatestReservation("checked-in");
+  const checkedInReservation = await findLatestReservation("moveIn");
   if (checkedInReservation) {
     return {
       role: "tenant",
@@ -215,7 +226,7 @@ const getFallbackLifecycleState = async (userId, excludedReservationId) => {
     };
   }
 
-  const checkedOutReservation = await findLatestReservation("checked-out");
+  const checkedOutReservation = await findLatestReservation("moveOut");
   if (checkedOutReservation) {
     return {
       role: "applicant",
@@ -237,20 +248,20 @@ export const resolveReservationLifecycleState = async ({
   userId,
   reservationId,
 }) => {
-  switch (status) {
+  switch (normalizeReservationStatus(status)) {
     case "reserved":
       return {
         role: "applicant",
         tenantStatus: "none",
         branch: await getRoomBranch(roomId),
       };
-    case "checked-in":
+    case "moveIn":
       return {
         role: "tenant",
         tenantStatus: "active",
         branch: await getRoomBranch(roomId),
       };
-    case "checked-out":
+    case "moveOut":
       return {
         role: "applicant",
         tenantStatus: "inactive",
@@ -272,13 +283,16 @@ export const syncReservationUserLifecycle = async ({
   reservationId,
   force = false,
 }) => {
-  if (status === previousStatus && !force) return;
+  const normalizedStatus = normalizeReservationStatus(status);
+  const normalizedPreviousStatus = normalizeReservationStatus(previousStatus);
+
+  if (normalizedStatus === normalizedPreviousStatus && !force) return;
 
   const user = await User.findById(userId);
   if (!user) return;
 
   const nextState = await resolveReservationLifecycleState({
-    status,
+    status: normalizedStatus,
     roomId,
     userId,
     reservationId,
@@ -343,8 +357,8 @@ export const USER_UPDATE_FLAT_FIELDS = [
   "finalMoveInDate",
   "paymentMethod",
   "proofOfPaymentUrl",
-  "checkInDate",
-  "checkOutDate",
+  "moveInDate",
+  "moveOutDate",
   "totalPrice",
   "applianceFees",
   "notes",

@@ -16,6 +16,10 @@ import Payment from "../models/Payment.js";
 import User from "../models/User.js";
 import Reservation from "../models/Reservation.js";
 import dayjs from "dayjs";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  readMoveInDate,
+} from "../utils/lifecycleNaming.js";
 
 const router = express.Router();
 
@@ -87,16 +91,16 @@ router.get("/bill/:billId/payments", verifyToken, async (req, res) => {
 router.get("/vacancy-dates", verifyToken, verifyAdmin, async (req, res) => {
   try {
     const reservations = await Reservation.find({
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,
     })
       .populate("roomId", "name branch beds")
       .populate("userId", "firstName lastName")
-      .select("checkInDate leaseDuration selectedBed roomId userId")
+      .select("moveInDate checkInDate leaseDuration selectedBed roomId userId")
       .lean();
 
     const vacancyData = reservations
-      .filter((r) => r.checkInDate && r.leaseDuration && r.selectedBed?.id)
+      .filter((r) => readMoveInDate(r) && r.leaseDuration && r.selectedBed?.id)
       .map((r) => ({
         roomId: r.roomId?._id,
         roomName: r.roomId?.name,
@@ -104,10 +108,10 @@ router.get("/vacancy-dates", verifyToken, verifyAdmin, async (req, res) => {
         bedId: r.selectedBed.id,
         bedPosition: r.selectedBed.position,
         tenantName: `${r.userId?.firstName || ""} ${r.userId?.lastName || ""}`.trim(),
-        checkInDate: r.checkInDate,
+        moveInDate: readMoveInDate(r),
         leaseDuration: r.leaseDuration,
-        expectedVacancyDate: dayjs(r.checkInDate).add(r.leaseDuration, "month").toDate(),
-        daysRemaining: dayjs(r.checkInDate).add(r.leaseDuration, "month").diff(dayjs(), "day"),
+        expectedVacancyDate: dayjs(readMoveInDate(r)).add(r.leaseDuration, "month").toDate(),
+        daysRemaining: dayjs(readMoveInDate(r)).add(r.leaseDuration, "month").diff(dayjs(), "day"),
       }));
 
     res.json({ success: true, data: vacancyData });

@@ -9,6 +9,7 @@ import {
   sendSuccess,
   AppError,
 } from "../middleware/errorHandler.js";
+import { reservationStatusesForQuery } from "../utils/lifecycleNaming.js";
 
 const normalizeRoomType = (rawType) => {
   if (!rawType) return null;
@@ -259,7 +260,9 @@ export const deleteRoom = async (req, res, next) => {
       Reservation.countDocuments({
         roomId,
         isArchived: false,
-        status: { $nin: ["checked-out", "cancelled", "archived"] },
+        status: {
+          $nin: reservationStatusesForQuery("moveOut", "cancelled", "archived"),
+        },
       }),
       BillingPeriod.countDocuments({
         roomId,

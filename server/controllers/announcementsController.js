@@ -222,7 +222,7 @@ export const createAnnouncement = async (req, res, next) => {
     // Create acknowledgment accounts for all relevant users
     if (requiresAcknowledgment) {
       const query = {
-        role: { $in: ["tenant", "user"] },
+        role: { $in: ["applicant", "tenant"] },
       };
 
       if (targetBranch && targetBranch !== "both") {

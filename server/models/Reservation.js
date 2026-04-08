@@ -8,11 +8,11 @@
  * WORKFLOW:
  * 1. User creates reservation (status: pending)
  * 2. User completes visit + details + payment (status: reserved)
- * 3. Admin verifies move-in (status: checked-in)
- * 4. Tenant checks out (status: checked-out)
+ * 3. Admin verifies move-in (status: moveIn)
+ * 4. Tenant moves out (status: moveOut)
  *
  * CANCELLATION:
- * - Reservations can be cancelled before check-in
+ * - Reservations can be cancelled before move-in
  * - Cancelled reservations remain in system for records
  *
  * PAYMENT:
@@ -27,6 +27,10 @@
  */
 
 import mongoose from "mongoose";
+import {
+  CANONICAL_RESERVATION_STATUSES,
+  normalizeReservationStatus,
+} from "../utils/lifecycleNaming.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -251,9 +255,17 @@ const reservationSchema = new mongoose.Schema(
     },
 
     // --- Reservation Dates & Pricing ---
-    checkInDate: {
+    moveInDate: {
       type: Date,
       required: true,
+    },
+    checkInDate: {
+      type: Date,
+      default: null,
+    },
+    moveOutDate: {
+      type: Date,
+      default: null,
     },
     checkOutDate: {
       type: Date,
@@ -305,18 +317,9 @@ const reservationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "pending",
-        "visit_pending",
-        "visit_approved",
-        "payment_pending",
-        "reserved",
-        "checked-in",
-        "checked-out",
-        "cancelled",
-        "archived",
-      ],
+      enum: CANONICAL_RESERVATION_STATUSES,
       default: "pending",
+      set: normalizeReservationStatus,
     },
 
     // --- Overdue Move-In Tracking ---
@@ -443,6 +446,20 @@ reservationSchema.pre("save", async function (next) {
   next();
 });
 
+reservationSchema.pre("validate", function (next) {
+  if (!this.moveInDate && this.checkInDate) {
+    this.moveInDate = this.checkInDate;
+  }
+  if (!this.moveOutDate && this.checkOutDate) {
+    this.moveOutDate = this.checkOutDate;
+  }
+  if (this.status) {
+    this.status = normalizeReservationStatus(this.status);
+  }
+
+  next();
+});
+
 // NOTE: post('save') hook removed — it queried Room.findById() but never acted
 // on the result. Occupancy is managed atomically in controllers via occupancyManager.js.
 
@@ -453,7 +470,7 @@ reservationSchema.pre("save", async function (next) {
 // Lookup: user's reservations filtered by status (most common query pattern)
 reservationSchema.index({ userId: 1, status: 1 });
 // Lookup: room availability — which reservations are on a given room+date
-reservationSchema.index({ roomId: 1, checkInDate: 1 });
+reservationSchema.index({ roomId: 1, moveInDate: 1 });
 // Admin listing: filter by status + archive flag together (avoids COLLSCAN)
 reservationSchema.index({ status: 1, isArchived: 1 });
 // Room-level status queries (e.g. find all checked-in reservations for a room)
@@ -498,12 +515,12 @@ reservationSchema.methods.cancel = async function () {
 
 /**
  * Check if this reservation counts toward room occupancy
- * (confirmed or checked-in reservations count as occupied)
+ * (reserved or moveIn reservations count as occupied)
  */
 reservationSchema.methods.countsTowardOccupancy = function () {
   return (
     !this.isArchived &&
-    (this.status === "reserved" || this.status === "checked-in")
+    (this.status === "reserved" || this.status === "moveIn")
   );
 };
 

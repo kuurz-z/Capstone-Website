@@ -1,7 +1,16 @@
 import { formatDate } from "../../utils/formatters";
+import {
+  normalizeReservationStatus,
+  readMoveInDate,
+} from "../../../../shared/utils/lifecycleNaming";
+
+const toStatusKey = (status) =>
+  String(normalizeReservationStatus(status) || status || "")
+    .trim()
+    .replace(/\s+/g, "_");
 
 export function statusBadgeClass(status) {
-  switch (status?.toLowerCase()) {
+  switch (toStatusKey(status)) {
     case "pending":
       return "ar-badge-pending";
     case "visit_pending":
@@ -10,11 +19,12 @@ export function statusBadgeClass(status) {
       return "ar-badge-confirmed";
     case "payment_pending":
       return "ar-badge-pending";
+    case "reserved":
     case "confirmed":
       return "ar-badge-confirmed";
-    case "checked-in":
+    case "moveIn":
       return "ar-badge-checkedin";
-    case "checked-out":
+    case "moveOut":
       return "ar-badge-checkedout";
     case "cancelled":
       return "ar-badge-cancelled";
@@ -26,7 +36,7 @@ export function statusBadgeClass(status) {
 }
 
 export function statusLabel(status) {
-  switch (status?.toLowerCase()) {
+  switch (toStatusKey(status)) {
     case "pending":
       return "Pending";
     case "visit_pending":
@@ -35,12 +45,14 @@ export function statusLabel(status) {
       return "Visit Approved";
     case "payment_pending":
       return "Payment Pending";
+    case "reserved":
+      return "Reserved";
     case "confirmed":
       return "Confirmed";
-    case "checked-in":
-      return "Checked In";
-    case "checked-out":
-      return "Checked Out";
+    case "moveIn":
+      return "Moved In";
+    case "moveOut":
+      return "Moved Out";
     case "cancelled":
       return "Cancelled";
     case "rejected":
@@ -52,7 +64,7 @@ export function statusLabel(status) {
 
 export function checkOverdue(r) {
   if (!["pending", "reserved", "payment_pending"].includes(r.status)) return false;
-  const moveIn = new Date(r.moveInDate);
+  const moveIn = new Date(readMoveInDate(r));
   return !isNaN(moveIn.getTime()) && moveIn < new Date();
 }
 
@@ -113,7 +125,7 @@ export default function ReservationTable({
                 </td>
                 <td>
                   <span className={`ar-cell-date ${overdue ? "overdue" : ""}`}>
-                    {formatDate(r.moveInDate)}
+                    {formatDate(readMoveInDate(r))}
                   </span>
                   {overdue && (
                     <span className="ar-badge ar-badge-overdue">Overdue</span>

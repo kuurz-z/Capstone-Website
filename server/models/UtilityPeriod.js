@@ -1,4 +1,8 @@
 import mongoose from "mongoose";
+import {
+  CANONICAL_UTILITY_EVENT_TYPES,
+  normalizeUtilityEventType,
+} from "../utils/lifecycleNaming.js";
 
 const segmentSchema = new mongoose.Schema(
   {
@@ -17,27 +21,15 @@ const segmentSchema = new mongoose.Schema(
     coveredTenantNames: [{ type: String }],
     startEventType: {
       type: String,
-      enum: [
-        "move-in",
-        "move-out",
-        "regular-billing",
-        "period-start",
-        "period-end",
-        "manual-adjustment",
-      ],
-      default: "regular-billing",
+      enum: CANONICAL_UTILITY_EVENT_TYPES,
+      default: "regularBilling",
+      set: normalizeUtilityEventType,
     },
     endEventType: {
       type: String,
-      enum: [
-        "move-in",
-        "move-out",
-        "regular-billing",
-        "period-start",
-        "period-end",
-        "manual-adjustment",
-      ],
-      default: "regular-billing",
+      enum: CANONICAL_UTILITY_EVENT_TYPES,
+      default: "regularBilling",
+      set: normalizeUtilityEventType,
     },
   },
   { _id: false },
@@ -171,6 +163,18 @@ const utilityPeriodSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+utilityPeriodSchema.pre("validate", function (next) {
+  if (Array.isArray(this.segments)) {
+    this.segments = this.segments.map((segment) => ({
+      ...segment,
+      startEventType: normalizeUtilityEventType(segment.startEventType),
+      endEventType: normalizeUtilityEventType(segment.endEventType),
+    }));
+  }
+
+  next();
+});
 
 // Prevent duplicate open periods for the same room & utility type
 utilityPeriodSchema.index(

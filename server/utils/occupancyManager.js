@@ -20,11 +20,16 @@ import Room from "../models/Room.js";
 import Reservation from "../models/Reservation.js";
 import logger from "../middleware/logger.js";
 import { emitRoomUpdate, emitDigitalTwinUpdate } from "./socket.js";
+import {
+  ACTIVE_OCCUPANCY_STATUS_QUERY,
+  hasReservationStatus,
+  normalizeReservationStatus,
+} from "./lifecycleNaming.js";
 
-const ACTIVE_OCCUPANCY_STATUSES = ["reserved", "checked-in"];
+const ACTIVE_OCCUPANCY_STATUSES = ACTIVE_OCCUPANCY_STATUS_QUERY;
 
 const getDisplayStatusForReservation = (status) =>
-  status === "checked-in" ? "occupied" : "reserved";
+  hasReservationStatus(status, "moveIn") ? "occupied" : "reserved";
 
 const getRoomAvailabilityFromBeds = (room, beds, currentOccupancy) => {
   if (Array.isArray(beds) && beds.length > 0) {
@@ -212,10 +217,11 @@ export const updateOccupancyOnReservationChange = async (
   oldData,
 ) => {
   const oldStatus = oldData?.status;
-  const newStatus = reservation.status;
+  const newStatus = normalizeReservationStatus(reservation.status);
+  const previousStatus = normalizeReservationStatus(oldStatus);
 
   // If status hasn't changed, no writes needed — skip opening a session
-  if (oldStatus === newStatus) {
+  if (previousStatus === newStatus) {
     return Room.findById(reservation.roomId);
   }
 
@@ -261,8 +267,8 @@ export const updateOccupancyOnReservationChange = async (
       // Transition to reserved (from any state that isn't already reserved/checked-in)
       if (
         newStatus === "reserved" &&
-        oldStatus !== "reserved" &&
-        oldStatus !== "checked-in"
+        previousStatus !== "reserved" &&
+        previousStatus !== "moveIn"
       ) {
         await increaseOccupancy();
 
@@ -286,8 +292,8 @@ export const updateOccupancyOnReservationChange = async (
       // Transition to checked-in:
       //  a) coming from "reserved" → upgrade bed from "reserved" → "occupied" (no occupancy count change)
       //  b) coming from any other state → increase occupancy + occupy bed
-      if (newStatus === "checked-in" && oldStatus !== "checked-in") {
-        if (oldStatus === "reserved") {
+      if (newStatus === "moveIn" && previousStatus !== "moveIn") {
+        if (previousStatus === "reserved") {
           // Occupancy counter was already increased at reservation time — just upgrade bed status
           if (reservation.selectedBed?.id) {
             const assigned = room.occupyBed(
@@ -313,7 +319,7 @@ export const updateOccupancyOnReservationChange = async (
       }
 
       // === DECREASE OCCUPANCY ===
-      if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+      if (newStatus === "cancelled" && previousStatus !== "cancelled") {
         await decreaseOccupancy();
 
         if (reservation.selectedBed?.id) {
@@ -322,8 +328,8 @@ export const updateOccupancyOnReservationChange = async (
         }
       }
 
-      if (newStatus === "checked-out" && oldStatus !== "checked-out") {
-        if (oldStatus === "reserved" || oldStatus === "checked-in") {
+      if (newStatus === "moveOut" && previousStatus !== "moveOut") {
+        if (previousStatus === "reserved" || previousStatus === "moveIn") {
           await decreaseOccupancy();
 
           if (reservation.selectedBed?.id) {
@@ -381,7 +387,7 @@ export const recalculateRoomOccupancy = async (roomId) => {
     const activeReservations = await Reservation.find({
       roomId,
       isArchived: false,
-      status: { $in: ["reserved", "checked-in"] },
+      status: { $in: ACTIVE_OCCUPANCY_STATUSES },
     });
 
     // Reset occupancy
@@ -397,11 +403,15 @@ export const recalculateRoomOccupancy = async (roomId) => {
       );
       if (occupier) {
         // Use the correct status based on whether the tenant has physically moved in
-        bed.status = occupier.status === "checked-in" ? "occupied" : "reserved";
+        bed.status = hasReservationStatus(occupier.status, "moveIn")
+          ? "occupied"
+          : "reserved";
         bed.occupiedBy = {
           userId: occupier.userId,
           reservationId: occupier._id,
-          occupiedSince: occupier.status === "checked-in" ? (occupier.createdAt || new Date()) : null,
+          occupiedSince: hasReservationStatus(occupier.status, "moveIn")
+            ? occupier.moveInDate || occupier.createdAt || new Date()
+            : null,
         };
       } else {
         bed.status = "available";

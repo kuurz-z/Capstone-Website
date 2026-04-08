@@ -1,31 +1,33 @@
 import "./StatusBadge.css";
+import { normalizeReservationStatus } from "../../../../shared/utils/lifecycleNaming";
 
 /**
  * StatusBadge — Consistent status chip with dot + label.
  *
  * Predefined statuses:
- *   active, checked-in, confirmed, pending, overdue, cancelled,
+ *   active, moveIn, confirmed, pending, overdue, cancelled,
  *   paid, partial, rejected, suspended, banned, maintenance, new
  */
 
 const STATUS_MAP = {
   "active":         { label: "Active",       variant: "success" },
-  "checked-in":     { label: "Checked In",   variant: "success" },
+  "moveIn":         { label: "Moved In",     variant: "success" },
+  "moveOut":        { label: "Moved Out",    variant: "neutral" },
   "confirmed":      { label: "Confirmed",    variant: "success" },
   "paid":           { label: "Paid",         variant: "success" },
   "approved":       { label: "Approved",     variant: "success" },
   "verified":       { label: "Verified",     variant: "success" },
   "resolved":       { label: "Resolved",     variant: "success" },
   "available":      { label: "Available",    variant: "success" },
-  "visit-approved": { label: "Visit Approved", variant: "success" },
+  "visit_approved": { label: "Visit Approved", variant: "success" },
   "pending":        { label: "Pending",      variant: "warning" },
   "partial":        { label: "Partial",      variant: "warning" },
-  "moving-out":     { label: "Moving Out",   variant: "warning" },
-  "payment-pending":{ label: "Payment Pending", variant: "warning" },
+  "moving_out":     { label: "Moving Out",   variant: "warning" },
+  "payment_pending":{ label: "Payment Pending", variant: "warning" },
   "reserved":       { label: "Reserved",     variant: "info" },
   "new":            { label: "New",          variant: "info" },
   "responded":      { label: "Responded",    variant: "info" },
-  "visit-pending":  { label: "Visit Pending", variant: "info" },
+  "visit_pending":  { label: "Visit Pending", variant: "info" },
   "overdue":        { label: "Overdue",      variant: "error" },
   "cancelled":      { label: "Cancelled",    variant: "error" },
   "rejected":       { label: "Rejected",     variant: "error" },
@@ -35,8 +37,13 @@ const STATUS_MAP = {
   "maintenance":    { label: "Maintenance",  variant: "neutral" },
 };
 
+const toStatusKey = (status) =>
+  String(normalizeReservationStatus(status) || status || "")
+    .trim()
+    .replace(/\s+/g, "_");
+
 export default function StatusBadge({ status, label: customLabel }) {
-  const normalized = (status || "").toLowerCase().replace(/\s+/g, "-");
+  const normalized = toStatusKey(status);
   const config = STATUS_MAP[normalized] || { label: status || "Unknown", variant: "neutral" };
   const displayLabel = customLabel || config.label;
 

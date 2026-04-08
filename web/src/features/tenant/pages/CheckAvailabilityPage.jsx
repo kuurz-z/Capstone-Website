@@ -256,7 +256,7 @@ function CheckAvailabilityPage() {
         selectedBed: selectedBed
           ? { id: selectedBed.id, position: selectedBed.position }
           : null,
-        checkInDate: checkInDate.toISOString(),
+        moveInDate: checkInDate.toISOString(),
         totalPrice: selectedRoom.price || 5000,
         applianceFees: calculateApplianceFees(),
         viewingType: null,

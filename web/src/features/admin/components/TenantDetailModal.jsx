@@ -130,7 +130,7 @@ export default function TenantDetailModal({ tenant, onClose }) {
                         reservationCode: tenant.reservationId || 'N/A',
                         roomId: { name: tenant.room, branch: tenant.branch, type: tenant.roomType },
                         selectedBed: { position: 'N/A' },
-                        checkInDate: tenant.moveIn !== '-' ? tenant.moveIn : null,
+                        moveInDate: tenant.moveIn !== '-' ? tenant.moveIn : null,
                         leaseDuration: 12,
                         totalPrice: tenant.monthlyRent,
                       });

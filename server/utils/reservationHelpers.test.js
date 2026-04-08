@@ -56,13 +56,13 @@ describe("syncReservationUserLifecycle", () => {
     setCustomUserClaims.mockReset();
   });
 
-  test("promotes a checked-in reservation user to active tenant and syncs branch", async () => {
+  test("promotes a moved-in reservation user to active tenant and syncs branch", async () => {
     const user = createUser();
     userFindById.mockResolvedValue(user);
     mockRoomBranch("gil-puyat");
 
     await syncReservationUserLifecycle({
-      status: "checked-in",
+      status: "moveIn",
       previousStatus: "reserved",
       userId: "user-1",
       roomId: "room-1",
@@ -79,7 +79,7 @@ describe("syncReservationUserLifecycle", () => {
     });
   });
 
-  test("falls back to the latest checked-out reservation when a reservation is archived", async () => {
+  test("falls back to the latest moved-out reservation when a reservation is archived", async () => {
     const user = createUser({ role: "tenant", tenantStatus: "active", branch: "gil-puyat" });
     userFindById.mockResolvedValue(user);
 
@@ -102,7 +102,7 @@ describe("syncReservationUserLifecycle", () => {
 
     await syncReservationUserLifecycle({
       status: "archived",
-      previousStatus: "checked-in",
+      previousStatus: "moveIn",
       userId: "user-1",
       roomId: "room-1",
       reservationId: "reservation-1",
@@ -123,8 +123,8 @@ describe("syncReservationUserLifecycle", () => {
     mockRoomBranch("guadalupe");
 
     await syncReservationUserLifecycle({
-      status: "checked-in",
-      previousStatus: "checked-in",
+      status: "moveIn",
+      previousStatus: "moveIn",
       userId: "user-1",
       roomId: "room-2",
       reservationId: "reservation-1",

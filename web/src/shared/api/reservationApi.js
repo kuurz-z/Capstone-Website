@@ -3,6 +3,10 @@
  */
 
 import { authFetch } from "./httpClient.js";
+import { normalizeLifecyclePayload } from "../utils/lifecycleNaming.js";
+
+const withLifecycleNormalization = (promise) =>
+  promise.then((payload) => normalizeLifecyclePayload(payload));
 
 export const reservationApi = {
   /**
@@ -11,7 +15,7 @@ export const reservationApi = {
   getAll: (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
     const url = queryString ? `/reservations?${queryString}` : "/reservations";
-    return authFetch(url);
+    return withLifecycleNormalization(authFetch(url));
   },
 
   /**
@@ -23,49 +27,60 @@ export const reservationApi = {
       searchParams.set("branch", params.branch);
     }
     const query = searchParams.toString();
-    return authFetch(`/reservations/current-residents${query ? `?${query}` : ""}`);
+    return withLifecycleNormalization(
+      authFetch(`/reservations/current-residents${query ? `?${query}` : ""}`),
+    );
   },
 
   /**
    * Get reservation by ID
    */
-  getById: (reservationId) => authFetch(`/reservations/${reservationId}`),
+  getById: (reservationId) =>
+    withLifecycleNormalization(authFetch(`/reservations/${reservationId}`)),
 
   /**
    * Create new reservation
    */
   create: (reservationData) =>
-    authFetch("/reservations", {
+    withLifecycleNormalization(
+      authFetch("/reservations", {
       method: "POST",
       body: JSON.stringify(reservationData),
-    }),
+      }),
+    ),
 
   /**
    * Update reservation (admin only)
    */
   update: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Update reservation (tenant only)
    */
   updateByUser: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/user`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/user`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Cancel reservation
    */
   cancel: (reservationId) =>
-    authFetch(`/reservations/${reservationId}`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}`, {
       method: "PUT",
       body: JSON.stringify({ status: "cancelled" }),
-    }),
+      }),
+    ),
 
   /**
    * Delete reservation
@@ -79,53 +94,65 @@ export const reservationApi = {
    * Extend reservation move-in date (admin only)
    */
   extend: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/extend`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/extend`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Release reservation slot (admin only)
    */
   release: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/release`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/release`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Archive (soft delete) reservation (admin only)
    */
   archive: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/archive`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/archive`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Renew a tenant's contract / extend lease (admin only)
    */
   renew: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/renew`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/renew`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Check out a tenant (admin only)
    */
   checkout: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/checkout`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/checkout`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Transfer tenant to a different room/bed (admin only)
    */
   transfer: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/transfer`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/transfer`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 };

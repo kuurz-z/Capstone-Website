@@ -11,8 +11,8 @@ export const RESERVATION_STAGE_MAP = {
   visit_approved: { step: 3, label: "Filling Application" },
   payment_pending: { step: 4, label: "Payment Submitted" },
   reserved: { step: 5, label: "Confirmed" },
-  "checked-in": { step: 5, label: "Moved In" },
-  "checked-out": { step: 5, label: "Completed" },
+  moveIn: { step: 5, label: "Moved In" },
+  moveOut: { step: 5, label: "Completed" },
   cancelled: { step: 0, label: "Cancelled" },
 };
 
@@ -31,12 +31,11 @@ export function mapReservationAdminRow(reservation) {
     room: reservation.roomId?.name || "-",
     roomType: reservation.roomId?.type || "",
     branch: getBranchLabel(reservation.roomId?.branch),
-    moveInDate: reservation.checkInDate,
+    moveInDate: reservation.moveInDate,
     status: reservation.status || "pending",
     totalPrice: reservation.totalPrice,
     paymentStatus: reservation.paymentStatus,
     createdAt: reservation.createdAt,
-    checkInDate: reservation.checkInDate,
     _raw: reservation,
   };
 }
@@ -45,7 +44,7 @@ export function checkOverdueReservation(reservation, now = new Date()) {
   if (!["pending", "reserved", "payment_pending"].includes(reservation.status)) {
     return false;
   }
-  const moveIn = new Date(reservation.moveInDate || reservation.checkInDate);
+  const moveIn = new Date(reservation.moveInDate);
   return !Number.isNaN(moveIn.getTime()) && moveIn < now;
 }
 

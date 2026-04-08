@@ -14,6 +14,11 @@
  */
 
 import dayjs from "dayjs";
+import {
+  isUtilityEventType,
+  readMoveInDate,
+  readMoveOutDate,
+} from "./lifecycleNaming.js";
 
 export const truncate4 = (n) => Math.floor(n * 10000) / 10000;
 export const roundMoney = (n) => Math.round(n * 100) / 100;
@@ -40,12 +45,13 @@ function formatDurationRange(checkInDate, checkOutDate) {
 }
 
 function getReservationOverlapDays(reservation, cycleStart, cycleEnd) {
-  if (!reservation?.checkInDate) return 0;
+  const moveInDate = readMoveInDate(reservation);
+  if (!moveInDate) return 0;
 
   const cycleStartDay = dayjs(cycleStart).startOf("day");
   const cycleEndDay = dayjs(cycleEnd).startOf("day");
-  const moveInDay = dayjs(reservation.checkInDate).startOf("day");
-  const moveOutDay = dayjs(reservation.checkOutDate || cycleEnd).startOf("day");
+  const moveInDay = dayjs(moveInDate).startOf("day");
+  const moveOutDay = dayjs(readMoveOutDate(reservation) || cycleEnd).startOf("day");
 
   const effectiveStart = moveInDay.isAfter(cycleStartDay)
     ? moveInDay
@@ -93,30 +99,30 @@ function buildWaterOccupancyBilling({
       tenantEmail:
         reservation.userId?.email || reservation.billingEmail || null,
       coveredDays: 0,
-      firstCheckInDate: reservation.checkInDate || null,
-      lastCheckOutDate: reservation.checkOutDate || null,
-      overlapStart: reservation.checkInDate || null,
-      overlapEnd: reservation.checkOutDate || null,
+      firstCheckInDate: readMoveInDate(reservation),
+      lastCheckOutDate: readMoveOutDate(reservation),
+      overlapStart: readMoveInDate(reservation),
+      overlapEnd: readMoveOutDate(reservation),
     };
 
     bucket.coveredDays += coveredDays;
     if (
       bucket.overlapStart === null ||
-      (reservation.checkInDate &&
-        new Date(reservation.checkInDate) < new Date(bucket.overlapStart))
+      (readMoveInDate(reservation) &&
+        new Date(readMoveInDate(reservation)) < new Date(bucket.overlapStart))
     ) {
-      bucket.overlapStart = reservation.checkInDate || bucket.overlapStart;
+      bucket.overlapStart = readMoveInDate(reservation) || bucket.overlapStart;
       bucket.firstCheckInDate =
-        reservation.checkInDate || bucket.firstCheckInDate;
+        readMoveInDate(reservation) || bucket.firstCheckInDate;
     }
     if (
       !bucket.overlapEnd ||
-      (reservation.checkOutDate &&
-        new Date(reservation.checkOutDate) > new Date(bucket.overlapEnd))
+      (readMoveOutDate(reservation) &&
+        new Date(readMoveOutDate(reservation)) > new Date(bucket.overlapEnd))
     ) {
-      bucket.overlapEnd = reservation.checkOutDate || bucket.overlapEnd;
+      bucket.overlapEnd = readMoveOutDate(reservation) || bucket.overlapEnd;
       bucket.lastCheckOutDate =
-        reservation.checkOutDate || bucket.lastCheckOutDate;
+        readMoveOutDate(reservation) || bucket.lastCheckOutDate;
     }
 
     buckets.set(tenantKey, bucket);
@@ -220,12 +226,12 @@ function buildWaterOccupancyBilling({
 
 export function sortReadings(readings) {
   const eventPriority = {
-    "move-out": 0,
-    "regular-billing": 1,
-    "period-start": 1,
-    "period-end": 1,
-    "manual-adjustment": 1,
-    "move-in": 2,
+    moveOut: 0,
+    regularBilling: 1,
+    periodStart: 1,
+    periodEnd: 1,
+    manualAdjustment: 1,
+    moveIn: 2,
   };
   return [...readings].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
@@ -299,8 +305,8 @@ export function buildSegments(sortedReadings, tenantEvents) {
       activeTenantCount: activeTenants.length,
       startDate: new Date(startReading.date),
       endDate: new Date(endReading.date),
-      startEventType: startReading.eventType || "regular-billing",
-      endEventType: endReading.eventType || "regular-billing",
+      startEventType: startReading.eventType || "regularBilling",
+      endEventType: endReading.eventType || "regularBilling",
     });
   }
   return segments;
@@ -378,8 +384,8 @@ export function buildProratedShareAmounts(
 
   const tenantDaysArray = reservations.map((res) =>
     calculateOverlapDays(
-      res.checkInDate,
-      res.checkOutDate,
+      readMoveInDate(res),
+      readMoveOutDate(res),
       cycleStart,
       cycleEnd,
     ),
@@ -441,7 +447,9 @@ export function computeBilling({
 
   // Exclude baseline readings to determine if there are intermediate lifecycle events.
   const intermediateReadings = readings.filter(
-    (r) => r.eventType === "move-in" || r.eventType === "move-out",
+    (r) =>
+      isUtilityEventType(r.eventType, "moveIn") ||
+      isUtilityEventType(r.eventType, "moveOut"),
   );
 
   // Strategy 1: Segment-Based Math
@@ -509,8 +517,8 @@ export function computeBilling({
           event?.tenantEmail ||
           null,
         durationRange: formatDurationRange(
-          reservation?.checkInDate || event?.checkInDate || null,
-          reservation?.checkOutDate || event?.checkOutDate || null,
+          readMoveInDate(reservation) || event?.moveInDate || null,
+          readMoveOutDate(reservation) || event?.moveOutDate || null,
         ),
         totalUsage,
         billAmount,
@@ -559,7 +567,10 @@ export function computeBilling({
         reservationId: res._id,
         tenantName,
         tenantEmail: user?.email || res?.billingEmail || null,
-        durationRange: formatDurationRange(res.checkInDate, res.checkOutDate),
+        durationRange: formatDurationRange(
+          readMoveInDate(res),
+          readMoveOutDate(res),
+        ),
         totalUsage,
         billAmount: shareAmount,
       };

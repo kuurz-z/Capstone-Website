@@ -125,7 +125,7 @@ const PaymentTable = ({
                     <p
                       style={{ fontSize: "13px", color: "#1F2937", margin: 0 }}
                     >
-                      {fmtDate(p.checkInDate)}
+                      {fmtDate(p.moveInDate)}
                     </p>
                   </td>
                 )}

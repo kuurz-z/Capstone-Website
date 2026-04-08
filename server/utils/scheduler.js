@@ -38,6 +38,10 @@ import notify from "./notificationService.js";
 import { updateOccupancyOnReservationChange } from "./occupancyManager.js";
 import logger from "../middleware/logger.js";
 import { BUSINESS } from "../config/constants.js";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  readMoveInDate,
+} from "./lifecycleNaming.js";
 import { resolveBillStatus, syncBillAmounts } from "./billingPolicy.js";
 import { getPenaltyRatePerDay, resolvePenaltyRatePerDay } from "./businessSettings.js";
 import { generateAutomatedRentBills } from "./rentGenerator.js";
@@ -231,14 +235,15 @@ async function checkContractExpirations() {
 
     // Get all checked-in reservations
     const activeReservations = await Reservation.find({
-      status: "checked-in",
+      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,
     }).populate("roomId", "name");
 
     for (const reservation of activeReservations) {
-      if (!reservation.checkInDate || !reservation.leaseDuration) continue;
+      const moveInDate = readMoveInDate(reservation);
+      if (!moveInDate || !reservation.leaseDuration) continue;
 
-      const contractEnd = dayjs(reservation.checkInDate).add(reservation.leaseDuration, "month");
+      const contractEnd = dayjs(moveInDate).add(reservation.leaseDuration, "month");
       const daysRemaining = contractEnd.diff(now, "day");
 
       // Send alert only on exact reminder days

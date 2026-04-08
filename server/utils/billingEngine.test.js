@@ -15,12 +15,12 @@ describe("computeBilling - strict segmented mode", () => {
       {
         reading: 100,
         date: new Date("2026-03-15T00:00:00.000Z"),
-        eventType: "period-start",
+        eventType: "periodStart",
       },
       {
         reading: 140,
         date: new Date("2026-04-15T00:00:00.000Z"),
-        eventType: "period-end",
+        eventType: "periodEnd",
       },
     ];
 
@@ -72,12 +72,12 @@ describe("computeBilling - strict segmented mode", () => {
       {
         reading: 200,
         date: new Date("2026-03-15T00:00:00.000Z"),
-        eventType: "period-start",
+        eventType: "periodStart",
       },
       {
         reading: 260,
         date: new Date("2026-04-15T00:00:00.000Z"),
-        eventType: "period-end",
+        eventType: "periodEnd",
       },
     ];
 
@@ -105,17 +105,17 @@ describe("computeBilling - strict segmented mode", () => {
       {
         reading: 1000,
         date: new Date("2026-03-15T00:00:00.000Z"),
-        eventType: "period-start",
+        eventType: "periodStart",
       },
       {
         reading: 1000,
         date: new Date("2026-03-15T00:00:00.000Z"),
-        eventType: "move-in",
+        eventType: "moveIn",
       },
       {
         reading: 1204,
         date: new Date("2026-04-15T00:00:00.000Z"),
-        eventType: "period-end",
+        eventType: "periodEnd",
       },
     ];
 
@@ -167,8 +167,8 @@ describe("computeBilling - water occupancy mode", () => {
           lastName: "Stay",
           email: "ana@example.com",
         },
-        checkInDate: new Date("2026-03-15T00:00:00.000Z"),
-        checkOutDate: null,
+        moveInDate: new Date("2026-03-15T00:00:00.000Z"),
+        moveOutDate: null,
       },
       {
         _id: "res-2",
@@ -178,8 +178,8 @@ describe("computeBilling - water occupancy mode", () => {
           lastName: "Leave",
           email: "ben@example.com",
         },
-        checkInDate: new Date("2026-03-20T00:00:00.000Z"),
-        checkOutDate: new Date("2026-04-05T00:00:00.000Z"),
+        moveInDate: new Date("2026-03-20T00:00:00.000Z"),
+        moveOutDate: new Date("2026-04-05T00:00:00.000Z"),
       },
     ];
 
@@ -230,8 +230,8 @@ describe("computeBilling - water occupancy mode", () => {
           firstName: "Pri",
           lastName: "Vate",
         },
-        checkInDate: new Date("2026-03-18T00:00:00.000Z"),
-        checkOutDate: null,
+        moveInDate: new Date("2026-03-18T00:00:00.000Z"),
+        moveOutDate: null,
       },
     ];
 
