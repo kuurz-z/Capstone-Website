@@ -1262,6 +1262,15 @@ export const deleteReservation = async (req, res, next) => {
     // Delete the reservation FIRST, then recalculate occupancy
     await Reservation.findByIdAndDelete(reservationId);
 
+    await syncReservationUserLifecycle({
+      status: "archived",
+      previousStatus: reservationData.status,
+      userId: reservation.userId?._id || reservation.userId,
+      roomId: reservation.roomId?._id || reservation.roomId,
+      reservationId: reservation._id,
+      force: true,
+    });
+
     // Safety net: recalculate room occupancy from remaining reservations
     // MUST run AFTER deletion — otherwise it recounts the deleted reservation
     if (reservation.roomId?._id) {
