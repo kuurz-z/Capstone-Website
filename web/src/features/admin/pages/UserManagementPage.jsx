@@ -72,6 +72,10 @@ function UserManagementPage() {
     studentId: "",
     school: "",
     yearLevel: "",
+    tenantStatus: "applicant",
+    hasActiveStay: false,
+    hasLifecycleReservation: false,
+    lifecycleManaged: false,
   });
 
   const [addForm, setAddForm] = useState({
@@ -187,6 +191,11 @@ function UserManagementPage() {
       studentId: userData.studentId || "",
       school: userData.school || "",
       yearLevel: userData.yearLevel || "",
+      tenantStatus: userData.tenantStatus || "applicant",
+      hasActiveStay: Boolean(userData.hasActiveStay),
+      hasLifecycleReservation: Boolean(userData.hasLifecycleReservation),
+      lifecycleManaged:
+        userData.lifecycleManaged ?? ["applicant", "tenant"].includes(userData.role),
     });
     setIsEditModalOpen(true);
   };

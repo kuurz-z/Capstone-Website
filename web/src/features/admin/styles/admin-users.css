@@ -320,6 +320,36 @@
   box-shadow: 0 0 0 3px rgba(46, 124, 246, 0.08);
 }
 
+.modal-help-text {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.modal-help-card {
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.modal-help-card strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.modal-help-card p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
 .field-error {
   color: var(--status-error);
   font-size: 11px;

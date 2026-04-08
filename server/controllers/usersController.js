@@ -24,6 +24,7 @@ import {
   hasReservationStatus,
   readMoveInDate,
   readMoveOutDate,
+  reservationStatusesForQuery,
 } from "../utils/lifecycleNaming.js";
 
 const VALID_BRANCHES = ROOM_BRANCHES;
@@ -68,6 +69,7 @@ const escapeRegex = (value = "") =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const VALID_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
+const LIFECYCLE_MANAGED_ROLES = ["applicant", "tenant"];
 
 const buildFirebaseClaimsForRole = (role) => {
   if (role === "owner") {
@@ -83,6 +85,8 @@ const canTransitionTenantStatus = (fromStatus, toStatus) => {
   if (fromStatus === toStatus) return true;
   return (TENANT_STATUS_TRANSITIONS[fromStatus] || []).includes(toStatus);
 };
+
+const isLifecycleManagedRole = (role) => LIFECYCLE_MANAGED_ROLES.includes(role);
 
 /**
  * POST /api/users
@@ -446,8 +450,45 @@ export const getUsers = async (req, res, next) => {
       User.countDocuments(query),
     ]);
 
+    const userIds = users.map((entry) => entry._id).filter(Boolean);
+    const activeStayUserIds = new Set();
+    const lifecycleReservationUserIds = new Set();
+
+    if (userIds.length > 0) {
+      const [activeStays, lifecycleReservations] = await Promise.all([
+        Reservation.find({
+          userId: { $in: userIds },
+          status: { $in: ACTIVE_STAY_STATUS_QUERY },
+          isArchived: { $ne: true },
+        })
+          .select("userId")
+          .lean(),
+        Reservation.find({
+          userId: { $in: userIds },
+          status: {
+            $nin: reservationStatusesForQuery("cancelled", "archived", "moveOut"),
+          },
+          isArchived: { $ne: true },
+        })
+          .select("userId")
+          .lean(),
+      ]);
+
+      activeStays.forEach((entry) => activeStayUserIds.add(String(entry.userId)));
+      lifecycleReservations.forEach((entry) =>
+        lifecycleReservationUserIds.add(String(entry.userId)),
+      );
+    }
+
+    const hydratedUsers = users.map((entry) => ({
+      ...entry,
+      hasActiveStay: activeStayUserIds.has(String(entry._id)),
+      hasLifecycleReservation: lifecycleReservationUserIds.has(String(entry._id)),
+      lifecycleManaged: isLifecycleManagedRole(entry.role),
+    }));
+
     res.json({
-      users,
+      users: hydratedUsers,
       pagination: {
         currentPage: pageNum,
         totalPages: Math.ceil(total / limitNum),
@@ -520,6 +561,13 @@ export const updateUser = async (req, res, next) => {
 
     // Store old data for audit log
     const oldUserData = existingUser.toObject();
+    const activeStayReservation = await Reservation.findOne({
+      userId,
+      status: { $in: ACTIVE_STAY_STATUS_QUERY },
+      isArchived: { $ne: true },
+    })
+      .select("_id status")
+      .lean();
 
     const ALLOWED_ADMIN_UPDATE_FIELDS = [
       "username",
@@ -577,6 +625,28 @@ export const updateUser = async (req, res, next) => {
       }
       updateData.role = nextRole;
 
+      const currentRole = existingUser.role;
+      const isManualLifecycleRoleEdit =
+        currentRole !== nextRole &&
+        isLifecycleManagedRole(currentRole) &&
+        isLifecycleManagedRole(nextRole);
+
+      if (isManualLifecycleRoleEdit) {
+        if (activeStayReservation) {
+          return res.status(409).json({
+            error:
+              "User has an active stay. Move out or archive the reservation first.",
+            code: "ACTIVE_STAY_ROLE_CHANGE_BLOCKED",
+          });
+        }
+
+        return res.status(409).json({
+          error:
+            "Applicant and tenant roles are managed by reservation lifecycle actions.",
+          code: "ROLE_LIFECYCLE_MANAGED",
+        });
+      }
+
       if (["branch_admin", "owner"].includes(nextRole)) {
         updateData.permissions = DEFAULT_PERMISSIONS[nextRole] || [];
       } else {
@@ -603,6 +673,16 @@ export const updateUser = async (req, res, next) => {
 
       const currentRole = existingUser.role;
       const nextRole = updateData.role || currentRole;
+      if (
+        req.body.tenantStatus !== undefined &&
+        (isLifecycleManagedRole(currentRole) || isLifecycleManagedRole(nextRole))
+      ) {
+        return res.status(409).json({
+          error: "Tenant status is managed by reservation lifecycle actions.",
+          code: "ROLE_LIFECYCLE_MANAGED",
+        });
+      }
+
       if (["branch_admin", "owner"].includes(nextRole)) {
         return res.status(400).json({
           error: "Admin accounts cannot use tenant status transitions",

@@ -14,6 +14,17 @@ export default function EditUserModal({
 
   if (typeof document === "undefined") return null;
 
+  const isLifecycleManaged =
+    editForm.lifecycleManaged ?? ["applicant", "tenant"].includes(editForm.role);
+  const lifecycleIndicator = editForm.hasActiveStay
+    ? "Active stay"
+    : editForm.hasLifecycleReservation
+      ? "Active reservation"
+      : "No active reservation";
+  const lifecycleGuidance = editForm.hasActiveStay
+    ? "Use Tenant Actions or Reservations to move this user out before changing lifecycle state."
+    : "Use Reservations or Tenant Actions to change applicant or tenant lifecycle state.";
+
   return createPortal(
     <div
       className="modal-overlay"
@@ -131,20 +142,52 @@ export default function EditUserModal({
             </div>
             <div className="form-group">
               <label>Role</label>
-              <select
-                value={editForm.role}
-                onChange={(e) =>
-                  onFormChange({ ...editForm, role: e.target.value })
-                }
-                required
-              >
-                <option value="applicant">Applicant</option>
-                <option value="tenant">Tenant</option>
-                <option value="branch_admin">Branch Admin</option>
-                {isOwner && <option value="owner">Owner</option>}
-              </select>
+              {isLifecycleManaged ? (
+                <>
+                  <input type="text" value={editForm.role || "applicant"} readOnly />
+                  <p className="modal-help-text">
+                    Applicant and tenant roles are managed by reservation lifecycle.
+                  </p>
+                </>
+              ) : (
+                <select
+                  value={editForm.role}
+                  onChange={(e) =>
+                    onFormChange({ ...editForm, role: e.target.value })
+                  }
+                  required
+                >
+                  <option value="applicant">Applicant</option>
+                  <option value="branch_admin">Branch Admin</option>
+                  {isOwner && <option value="owner">Owner</option>}
+                </select>
+              )}
             </div>
           </div>
+
+          {isLifecycleManaged && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Tenant Status</label>
+                  <input
+                    type="text"
+                    value={editForm.tenantStatus || "applicant"}
+                    readOnly
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Lifecycle State</label>
+                  <input type="text" value={lifecycleIndicator} readOnly />
+                </div>
+              </div>
+
+              <div className="modal-help-card">
+                <strong>Lifecycle Managed</strong>
+                <p>{lifecycleGuidance}</p>
+              </div>
+            </>
+          )}
 
           <div className="form-row">
             <div className="form-group">

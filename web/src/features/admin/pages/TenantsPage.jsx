@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useCurrentResidents } from "../../../shared/hooks/queries/useReservations";
 import { useUsers } from "../../../shared/hooks/queries/useUsers";
+import { reservationApi } from "../../../shared/api/apiClient";
+import { showNotification } from "../../../shared/utils/notification";
 import {
   PageShell,
   SummaryBar,
@@ -58,12 +61,14 @@ const getTenantStatus = (reservation) => {
 
 export default function TenantsPage() {
   const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   const isOwner = user?.role === "owner";
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState(isOwner ? "all" : user?.branch || "all");
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [actionLoading, setActionLoading] = useState(null);
 
   const currentResidentsParams = useMemo(
     () => ({
@@ -301,7 +306,145 @@ export default function TenantsPage() {
     },
     { key: "moveIn", label: "Move In", sortable: true },
     { key: "moveOut", label: "Move Out", sortable: true },
+    {
+      key: "actions",
+      label: "Actions",
+      align: "right",
+      render: (row) => (
+        <div className="tenant-row-actions" data-action-cell="true">
+          <button
+            type="button"
+            className="tenant-row-action tenant-row-action--primary"
+            onClick={() => setSelectedTenant(row)}
+          >
+            View
+          </button>
+          {row.reservationId ? (
+            <>
+              <button
+                type="button"
+                className="tenant-row-action"
+                disabled={actionLoading === `renew:${row.id}`}
+                onClick={() => handleRenew(row)}
+              >
+                {actionLoading === `renew:${row.id}` ? "Saving..." : "Renew"}
+              </button>
+              <button
+                type="button"
+                className="tenant-row-action tenant-row-action--warn"
+                disabled={actionLoading === `transfer:${row.id}`}
+                onClick={() => handleTransfer(row)}
+              >
+                {actionLoading === `transfer:${row.id}` ? "Saving..." : "Transfer"}
+              </button>
+              <button
+                type="button"
+                className="tenant-row-action tenant-row-action--danger"
+                disabled={actionLoading === `moveout:${row.id}`}
+                onClick={() => handleMoveOut(row)}
+              >
+                {actionLoading === `moveout:${row.id}` ? "Saving..." : "Move Out"}
+              </button>
+            </>
+          ) : (
+            <span className="tenant-row-action-note">No active stay</span>
+          )}
+        </div>
+      ),
+    },
   ];
+
+  const invalidateTenantViews = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+      queryClient.invalidateQueries({ queryKey: ["users"] }),
+      queryClient.invalidateQueries({ queryKey: ["rooms"] }),
+    ]);
+
+  const runTenantAction = async (key, callback) => {
+    setActionLoading(key);
+    try {
+      await callback();
+      await invalidateTenantViews();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRenew = async (tenant) => {
+    const months = window.prompt("Extend lease by how many months? (1-24)", "12");
+    if (!months) return;
+
+    const additionalMonths = Number.parseInt(months, 10);
+    if (Number.isNaN(additionalMonths) || additionalMonths < 1 || additionalMonths > 24) {
+      showNotification("Enter a lease extension from 1 to 24 months.", "error", 4000);
+      return;
+    }
+
+    await runTenantAction(`renew:${tenant.id}`, async () => {
+      const response = await reservationApi.renew(tenant.reservationId, { additionalMonths });
+      showNotification(response?.message || "Contract renewed successfully.", "success", 3000);
+    }).catch((error) => {
+      showNotification(error.message || "Failed to renew contract.", "error", 4000);
+    });
+  };
+
+  const handleMoveOut = async (tenant) => {
+    const rawMeter = window.prompt(
+      `Enter the current meter reading for ${tenant.room} (kWh).`,
+      "",
+    );
+    if (rawMeter === null) return;
+
+    const meterReading = Number(rawMeter.trim());
+    if (!rawMeter.trim() || Number.isNaN(meterReading) || meterReading < 0) {
+      showNotification("A valid meter reading is required.", "error", 4000);
+      return;
+    }
+
+    if (!window.confirm(`Move out ${tenant.name} and vacate the bed assignment?`)) {
+      return;
+    }
+
+    await runTenantAction(`moveout:${tenant.id}`, async () => {
+      const response = await reservationApi.checkout(tenant.reservationId, {
+        notes: "Admin move-out",
+        meterReading,
+      });
+      showNotification(response?.message || "Tenant moved out successfully.", "success", 3000);
+      if (selectedTenant?.id === tenant.id) {
+        setSelectedTenant(null);
+      }
+    }).catch((error) => {
+      showNotification(error.message || "Failed to move out tenant.", "error", 4000);
+    });
+  };
+
+  const handleTransfer = async (tenant) => {
+    const newRoomId = window.prompt("Enter the new Room ID.");
+    if (!newRoomId) return;
+
+    const newBedId = window.prompt("Enter the new Bed ID.");
+    if (!newBedId) return;
+
+    const reason =
+      window.prompt("Reason for transfer:", "Room maintenance / accommodation change") ||
+      "Room transfer";
+
+    await runTenantAction(`transfer:${tenant.id}`, async () => {
+      const response = await reservationApi.transfer(tenant.reservationId, {
+        newRoomId,
+        newBedId,
+        reason,
+      });
+      showNotification(response?.message || "Tenant transferred successfully.", "success", 3000);
+      if (selectedTenant?.id === tenant.id) {
+        setSelectedTenant(null);
+      }
+    }).catch((error) => {
+      showNotification(error.message || "Failed to transfer tenant.", "error", 4000);
+    });
+  };
 
   return (
     <PageShell>
@@ -391,6 +534,43 @@ export default function TenantsPage() {
               <DetailDrawer.Section label="Employment / School">
                 <DetailDrawer.Row label="Employer / School" value={selectedTenant.school} />
                 <DetailDrawer.Row label="Occupation" value={selectedTenant.occupation} />
+              </DetailDrawer.Section>
+
+              <DetailDrawer.Section label="Actions">
+                <div className="tenant-drawer-actions">
+                  {selectedTenant.reservationId ? (
+                    <>
+                      <button
+                        type="button"
+                        className="tenant-row-action"
+                        disabled={actionLoading === `renew:${selectedTenant.id}`}
+                        onClick={() => handleRenew(selectedTenant)}
+                      >
+                        {actionLoading === `renew:${selectedTenant.id}` ? "Saving..." : "Renew Contract"}
+                      </button>
+                      <button
+                        type="button"
+                        className="tenant-row-action tenant-row-action--warn"
+                        disabled={actionLoading === `transfer:${selectedTenant.id}`}
+                        onClick={() => handleTransfer(selectedTenant)}
+                      >
+                        {actionLoading === `transfer:${selectedTenant.id}` ? "Saving..." : "Transfer Room"}
+                      </button>
+                      <button
+                        type="button"
+                        className="tenant-row-action tenant-row-action--danger"
+                        disabled={actionLoading === `moveout:${selectedTenant.id}`}
+                        onClick={() => handleMoveOut(selectedTenant)}
+                      >
+                        {actionLoading === `moveout:${selectedTenant.id}` ? "Saving..." : "Move Out Tenant"}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="tenant-row-action-note">
+                      No reservation-linked actions available for this account.
+                    </span>
+                  )}
+                </div>
               </DetailDrawer.Section>
             </>
           )}

@@ -20,12 +20,16 @@ const userModel = {
   findById: jest.fn(),
   findByIdAndUpdate: jest.fn(),
 };
+const reservationModel = {
+  find: jest.fn(),
+  findOne: jest.fn(),
+};
 const setCustomUserClaims = jest.fn();
 const getAuth = jest.fn(() => ({ setCustomUserClaims }));
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   User: userModel,
-  Reservation: {},
+  Reservation: reservationModel,
   Room: {},
 }));
 
@@ -77,6 +81,14 @@ const createResponse = () => {
   return res;
 };
 
+const mockNoActiveStay = () => {
+  reservationModel.findOne.mockReturnValue({
+    select: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue(null),
+    }),
+  });
+};
+
 describe("usersController", () => {
   beforeEach(() => {
     userModel.find.mockReset();
@@ -85,6 +97,8 @@ describe("usersController", () => {
     userModel.findOne.mockReset();
     userModel.findById.mockReset();
     userModel.findByIdAndUpdate.mockReset();
+    reservationModel.find.mockReset();
+    reservationModel.findOne.mockReset();
     setCustomUserClaims.mockReset();
     getAuth.mockClear();
   });
@@ -93,6 +107,17 @@ describe("usersController", () => {
     const users = [{ _id: "u1", username: "jsmith", accountStatus: "active" }];
     userModel.find.mockReturnValue(createFindChain(users));
     userModel.countDocuments.mockResolvedValue(1);
+    reservationModel.find
+      .mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
+      })
+      .mockReturnValueOnce({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
+      });
 
     const req = {
       query: {
@@ -129,7 +154,13 @@ describe("usersController", () => {
       expect.objectContaining({ isArchived: false, branch: "gil-puyat" }),
     );
     expect(res.statusCode).toBe(200);
-    expect(res.body.users).toBe(users);
+    expect(res.body.users).toEqual([
+      expect.objectContaining({
+        _id: "u1",
+        hasActiveStay: false,
+        hasLifecycleReservation: false,
+      }),
+    ]);
     expect(res.body.pagination).toMatchObject({
       currentPage: 2,
       totalPages: 1,
@@ -180,13 +211,14 @@ describe("usersController", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test("updateUser rejects invalid tenant status transition", async () => {
+  test("updateUser rejects manual tenant status edits for lifecycle-managed accounts", async () => {
     userModel.findOne.mockResolvedValue({
       _id: "507f1f77bcf86cd799439011",
       role: "applicant",
       tenantStatus: "applicant",
       toObject: () => ({ role: "applicant", tenantStatus: "applicant" }),
     });
+    mockNoActiveStay();
 
     const req = {
       params: { userId: "507f1f77bcf86cd799439011" },
@@ -199,8 +231,8 @@ describe("usersController", () => {
 
     await updateUser(req, res, next);
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body.code).toBe("INVALID_TENANT_STATUS_TRANSITION");
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("ROLE_LIFECYCLE_MANAGED");
     expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
   });
@@ -230,7 +262,7 @@ describe("usersController", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test("updateUser syncs manual tenant role changes into tenant status and Firebase claims", async () => {
+  test("updateUser blocks applicant to tenant manual role promotion", async () => {
     userModel.findOne.mockResolvedValue({
       _id: "507f1f77bcf86cd799439011",
       firebaseUid: "firebase-tenant-1",
@@ -238,17 +270,7 @@ describe("usersController", () => {
       tenantStatus: "applicant",
       toObject: () => ({ role: "applicant", tenantStatus: "applicant" }),
     });
-
-    userModel.findByIdAndUpdate.mockReturnValue({
-      select: jest.fn().mockResolvedValue({
-        _id: "507f1f77bcf86cd799439011",
-        firebaseUid: "firebase-tenant-1",
-        role: "tenant",
-        tenantStatus: "active",
-        permissions: [],
-        toObject: () => ({ role: "tenant", tenantStatus: "active", permissions: [] }),
-      }),
-    });
+    mockNoActiveStay();
 
     const req = {
       params: { userId: "507f1f77bcf86cd799439011" },
@@ -261,18 +283,85 @@ describe("usersController", () => {
 
     await updateUser(req, res, next);
 
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("ROLE_LIFECYCLE_MANAGED");
+    expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(setCustomUserClaims).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("updateUser blocks tenant to applicant downgrade when active stay exists", async () => {
+    userModel.findOne.mockResolvedValue({
+      _id: "507f1f77bcf86cd799439011",
+      firebaseUid: "firebase-tenant-2",
+      role: "tenant",
+      tenantStatus: "active",
+      toObject: () => ({ role: "tenant", tenantStatus: "active" }),
+    });
+    reservationModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: "reservation-1", status: "moveIn" }),
+      }),
+    });
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      body: { role: "applicant" },
+      branchFilter: null,
+      isOwner: true,
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await updateUser(req, res, next);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("ACTIVE_STAY_ROLE_CHANGE_BLOCKED");
+    expect(userModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("updateUser still allows owner admin role transitions", async () => {
+    userModel.findOne.mockResolvedValue({
+      _id: "507f1f77bcf86cd799439011",
+      firebaseUid: "firebase-admin-1",
+      role: "branch_admin",
+      tenantStatus: "applicant",
+      toObject: () => ({ role: "branch_admin", tenantStatus: "applicant" }),
+    });
+    mockNoActiveStay();
+    userModel.findByIdAndUpdate.mockReturnValue({
+      select: jest.fn().mockResolvedValue({
+        _id: "507f1f77bcf86cd799439011",
+        firebaseUid: "firebase-admin-1",
+        role: "applicant",
+        tenantStatus: "applicant",
+        permissions: [],
+        toObject: () => ({ role: "applicant", tenantStatus: "applicant", permissions: [] }),
+      }),
+    });
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      body: { role: "applicant" },
+      branchFilter: null,
+      isOwner: true,
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await updateUser(req, res, next);
+
+    expect(res.statusCode).toBe(200);
     expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
       "507f1f77bcf86cd799439011",
       expect.objectContaining({
-        role: "tenant",
-        tenantStatus: "active",
+        role: "applicant",
+        tenantStatus: "applicant",
         permissions: [],
       }),
       expect.any(Object),
     );
-    expect(setCustomUserClaims).toHaveBeenCalledWith("firebase-tenant-1", {});
-    expect(res.statusCode).toBe(200);
-    expect(res.body.user.role).toBe("tenant");
     expect(next).not.toHaveBeenCalled();
   });
 });
