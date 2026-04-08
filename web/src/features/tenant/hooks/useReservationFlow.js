@@ -675,7 +675,7 @@ export default function useReservationFlow() {
           "error",
           3000,
         );
-        navigate("/applicant/profile");
+        navigate("/applicant/check-availability");
       } else if (status === 401 || status === 403) {
         showNotification(
           "Please sign in to continue your reservation.",

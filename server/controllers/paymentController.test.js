@@ -109,12 +109,12 @@ describe("paymentController.checkSessionStatus", () => {
     expect(sendSuccess).not.toHaveBeenCalled();
   });
 
-  test("auto-reserves a paid pending deposit exactly once", async () => {
+  test("auto-reserves a paid payment_pending deposit exactly once", async () => {
     const reservation = {
       _id: "res_1",
       userId: "tenant_1",
       roomId: { name: "GP-101", branch: "gil-puyat" },
-      status: "pending",
+      status: "payment_pending",
       paymentStatus: "pending",
       reservationFeeAmount: 2000,
       save: jest.fn(async function save() {

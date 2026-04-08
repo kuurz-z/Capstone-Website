@@ -52,6 +52,10 @@ function extractPaidAmount(eventData) {
   return amountCents ? amountCents / 100 : null;
 }
 
+function canAutoReserveReservation(status) {
+  return status === "pending" || status === "payment_pending";
+}
+
 /* ─── handlers ───────────────────────────────────── */
 
 /**
@@ -103,9 +107,10 @@ async function handleDepositPayment(metadata, eventData) {
   reservation.paymentMethod = "paymongo";
   reservation.paymongoPaymentId = paymentId;
 
-  const canAutoReserve = reservation.status === "pending";
+  const canAutoReserve = canAutoReserveReservation(reservation.status);
   if (canAutoReserve) {
-    // Auto-reserve from pending only.
+    // Auto-reserve once the deposit is settled for the current staged flow,
+    // while still supporting older reservations that stayed at pending.
     reservation.status = "reserved";
   }
 

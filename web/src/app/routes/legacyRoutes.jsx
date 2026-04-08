@@ -9,9 +9,8 @@ export function LegacyRoutes() {
         path="/tenant/forgot-password"
         element={<Navigate to="/forgot-password" replace />}
       />
-      <Route path="/super-admin" element={<Navigate to="/admin/dashboard" replace />} />
       <Route
-        path="/super-admin/dashboard"
+        path="/super-admin"
         element={<Navigate to="/admin/dashboard" replace />}
       />
       <Route
