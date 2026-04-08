@@ -2,6 +2,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reservationApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
+const invalidateReservationSideEffects = (qc) =>
+  Promise.all([
+    qc.invalidateQueries({ queryKey: ["reservations"] }),
+    qc.invalidateQueries({ queryKey: ["rooms"] }),
+    qc.invalidateQueries({ queryKey: ["users", "currentUser"] }),
+  ]);
+
 /** Fetch all reservations — 30s freshness, mutations trigger instant refresh */
 export function useReservations(params = {}) {
   return useQuery({
@@ -37,10 +44,7 @@ export function useCreateReservation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data) => reservationApi.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -50,10 +54,7 @@ export function useUpdateReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.update(reservationId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -63,7 +64,7 @@ export function useUpdateReservationByUser() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.updateByUser(reservationId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -72,10 +73,7 @@ export function useCancelReservation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (reservationId) => reservationApi.cancel(reservationId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -85,7 +83,7 @@ export function useExtendReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.extend(reservationId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -95,10 +93,7 @@ export function useReleaseReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.release(reservationId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -108,6 +103,6 @@ export function useArchiveReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.archive(reservationId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }

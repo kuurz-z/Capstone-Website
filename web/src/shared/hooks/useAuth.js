@@ -32,6 +32,7 @@ import React, {
   useContext,
   useRef,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { authApi } from "../api/authApi";
 import { auth } from "../../firebase/config";
 import { useFirebaseAuth } from "./FirebaseAuthContext";
@@ -62,6 +63,7 @@ export const AuthProvider = ({ children }) => {
   const redirectExecutedRef = useRef(false);
   const { user: firebaseUser, loading: firebaseLoading, getFreshIdToken } =
     useFirebaseAuth();
+  const queryClient = useQueryClient();
 
   /**
    * Check if user is authenticated by fetching profile from backend
@@ -296,6 +298,33 @@ export const AuthProvider = ({ children }) => {
       document.removeEventListener("visibilitychange", syncAuthProfile);
     };
   }, [firebaseLoading, firebaseUser, refreshUser]);
+
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      const key = event?.query?.queryKey;
+      if (!Array.isArray(key) || key[0] !== "users" || key[1] !== "currentUser") {
+        return;
+      }
+
+      const nextUser = event.query.state.data;
+      if (!nextUser || !auth.currentUser) return;
+
+      setUser((prev) => {
+        if (
+          prev?.role &&
+          prev.role !== nextUser.role &&
+          typeof getFreshIdToken === "function"
+        ) {
+          getFreshIdToken().catch(() => {});
+        }
+        return nextUser;
+      });
+      setIsAuthenticated(true);
+      localStorage.setItem("user", JSON.stringify(nextUser));
+    });
+
+    return unsubscribe;
+  }, [getFreshIdToken, queryClient]);
 
   /**
    * Update user data in state (used after profile updates)
