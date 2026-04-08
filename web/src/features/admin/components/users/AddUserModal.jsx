@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
+import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function AddUserModal({
@@ -11,14 +13,29 @@ export default function AddUserModal({
   onClose,
 }) {
   const [showPassword, setShowPassword] = useState(false);
+
+  useBodyScrollLock(true);
   useEscapeClose(true, onClose);
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add new user"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h2>Add New User</h2>
-          <button onClick={onClose} className="modal-close">
+          <button onClick={onClose} className="modal-close" aria-label="Close">
             ×
           </button>
         </div>
@@ -109,13 +126,13 @@ export default function AddUserModal({
                   value={addForm.password}
                   onChange={(e) => onFormChange("password", e.target.value)}
                   required
-                  placeholder="••••••••"
+                  placeholder="Enter a password"
                   minLength={6}
                 />
                 <button
                   type="button"
                   className="password-toggle-btn"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                 >
                   {showPassword ? (
                     <svg
@@ -185,6 +202,7 @@ export default function AddUserModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

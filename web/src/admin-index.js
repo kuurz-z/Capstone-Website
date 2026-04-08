@@ -6,6 +6,7 @@ import { queryClient } from "./shared/lib/queryClient";
 import "./index.css";
 import "./shared/styles/notification.css";
 import App from "./App";
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(
@@ -17,4 +18,3 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
-

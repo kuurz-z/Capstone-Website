@@ -14,12 +14,17 @@ import "./PageShell.css";
 
 function PageShell({ children, tabs, activeTab, onTabChange }) {
   const slots = { summary: null, actions: null, content: null };
+  const extras = [];
 
   React.Children.forEach(children, (child) => {
-    if (!React.isValidElement(child)) return;
+    if (!React.isValidElement(child)) {
+      if (child != null && child !== false) extras.push(child);
+      return;
+    }
     if (child.type === Summary) slots.summary = child;
     else if (child.type === Actions) slots.actions = child;
     else if (child.type === Content) slots.content = child;
+    else extras.push(child);
   });
 
   // Only render slot wrappers if they have real (non-boolean/null) children
@@ -63,6 +68,8 @@ function PageShell({ children, tabs, activeTab, onTabChange }) {
       {slots.content && (
         <div className="page-shell__content">{slots.content}</div>
       )}
+
+      {extras}
     </div>
   );
 }

@@ -217,7 +217,7 @@ router.get(
 );
 
 // ============================================================================
-// UPDATE USER (Owner only)
+// UPDATE USER
 // ============================================================================
 
 /**
@@ -225,9 +225,16 @@ router.get(
  *
  * Update a user's information.
  *
- * Access: Owner only
+ * Access: Admin (filtered by branch) | Owner (all branches)
  */
-router.put("/:userId", verifyToken, verifyOwner, updateUser);
+router.put(
+  "/:userId",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  updateUser,
+);
 
 // ============================================================================
 // DELETE USER (Owner only)
