@@ -637,6 +637,13 @@
   margin-bottom: 10px;
 }
 
+.eb-section__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .eb-section__title {
   font-size: 0.78rem;
   font-weight: 600;
@@ -2028,6 +2035,16 @@
   overflow: hidden;
 }
 
+.eb-section__footer--export {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.eb-section__footer--export .eb-btn {
+  min-width: 112px;
+}
+
 .eb-table-minimal {
   width: 100%;
   border-collapse: collapse;
@@ -2979,6 +2996,14 @@
   .eb-shell .bw-summary-bar__action-group--primary {
     padding-right: 0;
     border-right: none;
+  }
+
+  .eb-shell .eb-section__footer--export {
+    justify-content: stretch;
+  }
+
+  .eb-shell .eb-section__footer--export .eb-btn {
+    width: 100%;
   }
 }
 

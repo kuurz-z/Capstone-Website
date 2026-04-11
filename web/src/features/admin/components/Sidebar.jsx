@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
@@ -24,22 +24,25 @@ import {
 import "../styles/admin-sidebar.css";
 
 /* ─── Navigation structure ─── */
-const NAV_ITEMS = [
-  // WORKSPACE group
-  { to: "/admin/dashboard",          icon: LayoutDashboard, text: "Dashboard",       group: "workspace" },
-  { to: "/admin/reservations",       icon: CalendarCheck,   text: "Reservations",    group: "workspace" },
-  { to: "/admin/room-availability",  icon: BedDouble,       text: "Room Management", group: "workspace" },
-  { to: "/admin/tenants",            icon: Users,           text: "Tenants",         group: "workspace" },
-  { to: "/admin/billing",            icon: Receipt,         text: "Billing",         group: "workspace" },
-  { to: "/admin/announcements",      icon: Megaphone,       text: "Announcements",   group: "workspace", permission: "manageAnnouncements" },
-  // SYSTEM group
-  { to: "/admin/users",              icon: UserCog,         text: "Accounts",     group: "system" },
-  { to: "/admin/audit-logs",         icon: FileText,        text: "Activity Log", group: "system" },
-  { to: "/admin/branches",           icon: Building2,       text: "Branches",     group: "system", saOnly: true },
-  { to: "/admin/settings",           icon: Settings,        text: "Settings",     group: "system", saOnly: true },
+const NAV_GROUPS = [
+  { id: "workspace", label: "Workspace", priority: 1 },
+  { id: "system", label: "System", priority: 2 },
 ];
 
-const STORAGE_KEY = "sidebar-collapsed";
+const NAV_ITEMS = [
+  // WORKSPACE group
+  { to: "/admin/dashboard",          icon: LayoutDashboard, text: "Dashboard",       group: "workspace", priority: 1 },
+  { to: "/admin/reservations",       icon: CalendarCheck,   text: "Reservations",    group: "workspace", priority: 2 },
+  { to: "/admin/room-availability",  icon: BedDouble,       text: "Room Management", group: "workspace", priority: 3 },
+  { to: "/admin/tenants",            icon: Users,           text: "Tenants",         group: "workspace", priority: 4 },
+  { to: "/admin/billing",            icon: Receipt,         text: "Billing",         group: "workspace", priority: 5 },
+  { to: "/admin/announcements",      icon: Megaphone,       text: "Announcements",   group: "workspace", priority: 6, permission: "manageAnnouncements" },
+  // SYSTEM group
+  { to: "/admin/users",              icon: UserCog,         text: "Accounts",     group: "system", priority: 1 },
+  { to: "/admin/audit-logs",         icon: FileText,        text: "Activity Log", group: "system", priority: 2 },
+  { to: "/admin/branches",           icon: Building2,       text: "Branches",     group: "system", priority: 3, saOnly: true },
+  { to: "/admin/settings",           icon: Settings,        text: "Settings",     group: "system", priority: 4, saOnly: true },
+];
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout, globalLoading } = useAuth();
@@ -51,15 +54,19 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
   const [hoveredItem, setHoveredItem] = useState(null);
 
   // Filter items based on role
-  const visibleItems = NAV_ITEMS.filter(
-    (item) =>
-      (!item.saOnly || isOwner) &&
-      (!item.permission || can(item.permission)),
-  );
+  const visibleItems = NAV_ITEMS
+    .filter(
+      (item) =>
+        (!item.saOnly || isOwner) &&
+        (!item.permission || can(item.permission)),
+    )
+    .sort((a, b) => (a.priority || 999) - (b.priority || 999));
 
-  // Group items
-  const workspaceItems = visibleItems.filter((i) => i.group === "workspace");
-  const systemItems = visibleItems.filter((i) => i.group === "system");
+  const groupedItems = visibleItems.reduce((acc, item) => {
+    if (!acc[item.group]) acc[item.group] = [];
+    acc[item.group].push(item);
+    return acc;
+  }, {});
 
   /* ── Logout logic (unchanged) ── */
   const handleLogout = async () => {
@@ -112,35 +119,38 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
     ? `${(user.firstName || "A")[0]}${(user.lastName || "")[0] || ""}`.toUpperCase()
     : "A";
 
-  /* ── Render a nav group ── */
-  const renderGroup = (label, items) => (
-    <div className="sb-group" key={label}>
-      {!collapsed && <span className="sb-group-label">{label}</span>}
-      <ul className="sb-menu">
-        {items.map((item) => (
-          <li key={item.to} className="sb-menu-item">
-            <NavLink
-              to={item.to}
-              className={({ isActive }) =>
-                `sb-link ${isActive ? "active" : ""}`
-              }
-              onClick={onClose}
-              onMouseEnter={() => collapsed && setHoveredItem(item.to)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <span className="sb-link-indicator" />
-              <item.icon className="sb-link-icon" />
-              {!collapsed && <span className="sb-link-text">{item.text}</span>}
-              {/* Tooltip in collapsed mode */}
-              {collapsed && hoveredItem === item.to && (
-                <span className="sb-tooltip">{item.text}</span>
-              )}
-            </NavLink>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+  const renderGroup = (group) => {
+    const items = groupedItems[group.id] || [];
+    if (items.length === 0) return null;
+
+    return (
+      <div className="sb-group" key={group.id}>
+        {!collapsed && <span className="sb-group-label">{group.label}</span>}
+        <ul className="sb-menu">
+          {items.map((item) => (
+            <li key={item.to} className="sb-menu-item">
+              <NavLink
+                to={item.to}
+                className={({ isActive }) =>
+                  `sb-link ${isActive ? "active" : ""}`
+                }
+                onClick={onClose}
+                onMouseEnter={() => collapsed && setHoveredItem(item.to)}
+                onMouseLeave={() => setHoveredItem(null)}
+              >
+                <span className="sb-link-indicator" />
+                <item.icon className="sb-link-icon" />
+                {!collapsed && <span className="sb-link-text">{item.text}</span>}
+                {collapsed && hoveredItem === item.to && (
+                  <span className="sb-tooltip">{item.text}</span>
+                )}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
 
   return (
     <aside className={`sb ${isOpen ? "sb--open" : ""} ${collapsed ? "sb--collapsed" : ""}`}>
@@ -163,8 +173,10 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
 
       {/* ── Navigation ── */}
       <nav className="sb-nav">
-        {renderGroup("Workspace", workspaceItems)}
-        {renderGroup("System", systemItems)}
+        {NAV_GROUPS
+          .slice()
+          .sort((a, b) => a.priority - b.priority)
+          .map((group) => renderGroup(group))}
       </nav>
 
       {/* ── Footer ── */}
@@ -181,7 +193,13 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
 
         {/* User profile pill */}
         <div className="sb-profile">
-          <div className="sb-avatar">{initials}</div>
+          <div
+            className="sb-avatar"
+            onMouseEnter={() => collapsed && setHoveredItem("__profile")}
+            onMouseLeave={() => setHoveredItem(null)}
+          >
+            {initials}
+          </div>
           {!collapsed && (
             <div className="sb-profile-info">
               <span className="sb-profile-name">{displayName}</span>

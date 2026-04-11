@@ -60,7 +60,7 @@ const getAdminInfo = resolveAdminAccessContext;
 function assertUtilityRoomEligibility(room, utilityType) {
   if (utilityType === "water" && !isWaterBillableRoom(room)) {
     const error = new Error(
-      "Water billing only applies to private, double-sharing, and quadruple-sharing rooms.",
+      "Water billing only applies to private and double-sharing rooms.",
     );
     error.statusCode = 400;
     throw error;

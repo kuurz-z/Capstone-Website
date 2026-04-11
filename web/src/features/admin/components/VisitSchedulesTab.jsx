@@ -181,15 +181,15 @@ function VisitSchedulesTab() {
 
   const handleDelete = (id) => {
     confirmAction(
-      "Delete Visit Schedule",
-      "This will permanently delete this visit schedule.",
+      "Archive Visit Schedule",
+      "This action archives the reservation record for this visit schedule and preserves billing history.",
       "danger",
-      "Delete",
+      "Archive",
       async () => {
         await reservationApi.delete(id);
       },
-      "Visit schedule deleted",
-      "Failed to delete visit schedule. Please try again.",
+      "Visit schedule archived",
+      "Failed to archive visit schedule. Please try again.",
     );
   };
 

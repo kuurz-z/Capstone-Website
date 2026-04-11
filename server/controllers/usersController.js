@@ -4,7 +4,7 @@
  */
 
 import dayjs from "dayjs";
-import { User, Reservation, Room } from "../models/index.js";
+import { User, Reservation, Room, Bill } from "../models/index.js";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import { getAuth } from "../config/firebase.js";
 import logger from "../middleware/logger.js";
@@ -753,6 +753,7 @@ export const updateUser = async (req, res, next) => {
 export const deleteUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
+    const isHardDelete = String(req.query?.hardDelete || "").toLowerCase() === "true";
 
     if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
@@ -770,6 +771,76 @@ export const deleteUser = async (req, res, next) => {
       });
     }
 
+    const [reservationCount, activeReservationCount, issuedBillCount, draftBillCount] =
+      await Promise.all([
+        Reservation.countDocuments({
+          userId: user._id,
+          isArchived: { $ne: true },
+        }),
+        Reservation.countDocuments({
+          userId: user._id,
+          isArchived: { $ne: true },
+          status: { $in: ACTIVE_STAY_STATUS_QUERY },
+        }),
+        Bill.countDocuments({
+          userId: user._id,
+          isArchived: false,
+          status: { $ne: "draft" },
+        }),
+        Bill.countDocuments({
+          userId: user._id,
+          isArchived: false,
+          status: "draft",
+        }),
+      ]);
+
+    if (!isHardDelete) {
+      const wasArchived = !!user.isArchived;
+      const oldData = user.toObject();
+      if (!wasArchived) {
+        const actor = await User.findOne({ firebaseUid: req.user.uid })
+          .select("_id")
+          .lean();
+        await user.archive(actor?._id || null);
+      }
+
+      await auditLogger.logModification(
+        req,
+        "user",
+        userId,
+        oldData,
+        user.toObject(),
+        "User archived via delete endpoint",
+      );
+
+      return res.json({
+        message: wasArchived ? "User already archived" : "User archived successfully",
+        archived: true,
+        hardDelete: false,
+        deletedId: userId,
+        safeguards: {
+          reservations: reservationCount,
+          activeReservations: activeReservationCount,
+          issuedBills: issuedBillCount,
+          draftBills: draftBillCount,
+        },
+      });
+    }
+
+    if (reservationCount > 0 || issuedBillCount > 0) {
+      return res.status(409).json({
+        error:
+          "Hard delete blocked. Archive this user instead because related reservations or issued bills exist.",
+        code: "HARD_DELETE_BLOCKED",
+        safeguards: {
+          reservations: reservationCount,
+          activeReservations: activeReservationCount,
+          issuedBills: issuedBillCount,
+          draftBills: draftBillCount,
+        },
+      });
+    }
+
     // Delete Firebase account
     try {
       const auth = getAuth();
@@ -779,6 +850,14 @@ export const deleteUser = async (req, res, next) => {
         { err: fbErr, requestId: req.id },
         "Firebase deletion failed",
       );
+    }
+
+    if (draftBillCount > 0) {
+      await Bill.deleteMany({
+        userId: user._id,
+        isArchived: false,
+        status: "draft",
+      });
     }
 
     // Hard delete from MongoDB
@@ -794,8 +873,12 @@ export const deleteUser = async (req, res, next) => {
     );
 
     res.json({
-      message: "User deleted successfully",
+      message: "User permanently deleted",
       deletedId: userId,
+      hardDelete: true,
+      cleanup: {
+        deletedDraftBills: draftBillCount,
+      },
     });
   } catch (error) {
     await auditLogger.logError(req, error, "Failed to delete user");

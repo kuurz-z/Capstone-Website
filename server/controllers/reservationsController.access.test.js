@@ -7,6 +7,7 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   Reservation: { findById: reservationFindById },
   User: {},
   Room: {},
+  Bill: { countDocuments: jest.fn(), deleteMany: jest.fn() },
   UtilityReading: { findOne: utilityReadingFindOne },
   ROOM_BRANCHES: ["gil-puyat", "guadalupe"],
 }));

@@ -32,6 +32,18 @@ import {
   normalizeReservationStatus,
 } from "../utils/lifecycleNaming.js";
 
+const CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const RESERVATION_CODE_PREFIX = "RES-";
+const VISIT_CODE_PREFIX = "VIS-";
+
+const generateRandomCode = (prefix, length = 6) => {
+  let code = prefix;
+  for (let i = 0; i < length; i++) {
+    code += CODE_CHARS.charAt(Math.floor(Math.random() * CODE_CHARS.length));
+  }
+  return code;
+};
+
 // ============================================================================
 // SCHEMA DEFINITION
 // ============================================================================
@@ -392,44 +404,16 @@ const reservationSchema = new mongoose.Schema(
  */
 reservationSchema.pre("save", async function (next) {
   if (this.status === "reserved" && !this.reservationCode) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     const Reservation = mongoose.model("Reservation");
-
-    for (let attempt = 0; attempt < 5; attempt++) {
-      let code = "RES-";
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-
-      // Check if code already exists
-      const exists = await Reservation.findOne({
-        reservationCode: code,
-      }).lean();
-      if (!exists) {
-        this.reservationCode = code;
-        break;
-      }
-    }
-
-    if (!this.reservationCode) {
-      return next(
-        new Error(
-          "Failed to generate unique reservation code after 5 attempts",
-        ),
-      );
-    }
+    this.reservationCode = await Reservation.generateUniqueReservationCode();
   }
 
   // Generate visitCode when visitDate is first set (visit scheduling stage)
   if (this.visitDate && !this.visitCode) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     const Reservation = mongoose.model("Reservation");
 
     for (let attempt = 0; attempt < 5; attempt++) {
-      let code = "VIS-";
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
+      const code = generateRandomCode(VISIT_CODE_PREFIX);
       const exists = await Reservation.findOne({ visitCode: code }).lean();
       if (!exists) {
         this.visitCode = code;
@@ -585,6 +569,20 @@ reservationSchema.statics.findOverdueMoveIns = function () {
       { moveInExtendedTo: { $ne: null, $lt: now } },
     ],
   });
+};
+
+reservationSchema.statics.generateUniqueReservationCode = async function () {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateRandomCode(RESERVATION_CODE_PREFIX);
+    const exists = await this.findOne({ reservationCode: code })
+      .select("_id")
+      .lean();
+    if (!exists) {
+      return code;
+    }
+  }
+
+  throw new Error("Failed to generate unique reservation code after 5 attempts");
 };
 
 

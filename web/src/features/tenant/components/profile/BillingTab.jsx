@@ -63,6 +63,19 @@ const fmtCycle = (item) => {
   return null;
 };
 
+const getUtilityDisplayStart = (item) =>
+  item?.utilityCycleStart || item?.startDate || item?.billingCycleStart || null;
+
+const getUtilityDisplayEnd = (item) =>
+  item?.utilityCycleEnd || item?.endDate || item?.billingCycleEnd || null;
+
+const fmtUtilityCycle = (item) => {
+  const start = getUtilityDisplayStart(item);
+  const end = getUtilityDisplayEnd(item);
+  if (start && end) return `${fmtDate(start)} - ${fmtDate(end)}`;
+  return null;
+};
+
 const fmtKwh = (n) =>
   `${(n || 0).toLocaleString("en-PH", {
     minimumFractionDigits: 1,
@@ -637,10 +650,10 @@ const ElectricityPeriodRow = ({ period }) => {
         <Zap size={16} color="#F59E0B" />
         <div style={{ flex: 1, marginLeft: 10, textAlign: "left" }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-heading)" }}>
-            {fmtMonth(period.billingMonth || period.endDate || period.computedAt)}
+            {fmtMonth(getUtilityDisplayEnd(period) || period.billingMonth || period.computedAt)}
           </div>
           <div style={{ fontSize: 12, color: "#94a3b8" }}>
-            Cycle: {fmtCycle(period) || "—"}
+            Cycle: {fmtUtilityCycle(period) || fmtCycle(period) || "—"}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

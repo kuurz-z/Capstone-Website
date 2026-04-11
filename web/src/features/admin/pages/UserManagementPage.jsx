@@ -224,18 +224,34 @@ function UserManagementPage() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteUser = async () => {
+  const handleDeleteUser = async ({ hardDelete = false } = {}) => {
     try {
-      await authFetch(`/users/${selectedUser._id}`, { method: "DELETE" });
-      showNotification(
-        `${formatUserLabel(selectedUser)} was deleted successfully.`,
-        "success",
-        3000,
-      );
+      const query = hardDelete ? "?hardDelete=true" : "";
+      const response = await authFetch(`/users/${selectedUser._id}${query}`, {
+        method: "DELETE",
+      });
+
+      const userLabel = formatUserLabel(selectedUser);
+      if (response?.archived) {
+        showNotification(`${userLabel} was archived successfully.`, "success", 3000);
+      } else {
+        showNotification(`${userLabel} was permanently deleted.`, "success", 3000);
+      }
+
       setIsDeleteModalOpen(false);
       refetchAll();
     } catch (error) {
-      showNotification(error.message || "Failed to delete user", "error", 3000);
+      if (error?.code === "HARD_DELETE_BLOCKED") {
+        const issued = Number(error?.safeguards?.issuedBills || 0);
+        const reservations = Number(error?.safeguards?.reservations || 0);
+        showNotification(
+          `Hard delete blocked: ${reservations} reservation(s), ${issued} issued bill(s). Archive the user instead.`,
+          "error",
+          4500,
+        );
+      } else {
+        showNotification(error.message || "Failed to delete user", "error", 3000);
+      }
     }
   };
 

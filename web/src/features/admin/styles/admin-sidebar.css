@@ -5,9 +5,9 @@
 
 /* ── Sidebar shell ────────────────────────────────────────────────────────── */
 .sb {
-  width: 248px;
+  width: 236px;
   height: 100vh;
-  background: var(--bg-card);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
@@ -20,7 +20,7 @@
 }
 
 .sb--collapsed {
-  width: 68px;
+  width: 70px;
 }
 
 /* ── Brand header ─────────────────────────────────────────────────────────── */
@@ -28,7 +28,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 16px 14px;
+  padding: 16px 14px 12px;
   min-height: 58px;
 }
 
@@ -99,7 +99,7 @@
 /* ── Navigation ───────────────────────────────────────────────────────────── */
 .sb-nav {
   flex: 1;
-  padding: 4px 0;
+  padding: 2px 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -121,18 +121,18 @@
 
 /* ── Group ────────────────────────────────────────────────────────────────── */
 .sb-group {
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .sb-group-label {
   display: block;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--text-muted);
-  padding: 20px 18px 6px;
   user-select: none;
+  padding: 14px 14px 5px;
 }
 
 /* ── Menu list ────────────────────────────────────────────────────────────── */
@@ -143,7 +143,7 @@
 }
 
 .sb-menu-item {
-  padding: 1px 8px;
+  padding: 1px 7px;
 }
 
 .sb--collapsed .sb-menu-item {
@@ -154,13 +154,13 @@
 .sb-link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 9px;
+  padding: 7px 9px;
   color: var(--text-muted);
   text-decoration: none;
   border-radius: var(--radius-md);
-  font-size: 13.5px;
-  font-weight: 450;
+  font-size: 13px;
+  font-weight: 500;
   position: relative;
   transition: all var(--duration-fast) var(--ease-out);
   white-space: nowrap;
@@ -169,12 +169,17 @@
 
 .sb--collapsed .sb-link {
   justify-content: center;
-  padding: 9px;
+  padding: 9px 8px;
 }
 
 .sb-link:hover {
-  background: var(--bg-hover);
+  background: #eef2f7;
   color: var(--text-primary);
+}
+
+.sb-link:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
 }
 
 /* Active indicator bar */
@@ -196,15 +201,15 @@
 
 /* Active state */
 .sb-link.active {
-  background: var(--accent-blue-bg);
+  background: rgba(46, 124, 246, 0.11);
   color: var(--text-primary);
-  font-weight: 550;
+  font-weight: 600;
 }
 
 /* Icon */
 .sb-link-icon {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   flex-shrink: 0;
   stroke-width: 1.75;
   transition: color var(--duration-fast) var(--ease-out);
@@ -262,7 +267,7 @@
 
 /* ── Footer ───────────────────────────────────────────────────────────────── */
 .sb-footer {
-  padding: 10px 10px 14px;
+  padding: 10px 9px 13px;
   border-top: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
@@ -311,6 +316,7 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .sb--collapsed .sb-profile {
@@ -383,6 +389,12 @@
 .sb-signout:hover {
   background: var(--status-error-bg);
   color: var(--status-error);
+}
+
+.sb-signout:focus-visible,
+.sb-collapse-toggle:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
 }
 
 /* ── Logout confirmation modal ────────────────────────────────────────────── */
@@ -502,7 +514,7 @@
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sb {
-    width: 268px !important;
+    width: 262px !important;
     transform: translateX(-100%);
     transition: transform 0.3s var(--ease-out);
     box-shadow: none;
@@ -534,6 +546,7 @@
   .sb .sb-menu-item {
     padding: 1px 8px;
   }
+
 }
 
 /* Print */

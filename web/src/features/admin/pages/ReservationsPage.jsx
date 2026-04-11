@@ -323,18 +323,19 @@ function ReservationsPage() {
   const handleDelete = useCallback((reservationId) => {
     setConfirmModal({
       open: true,
-      title: "Delete Reservation",
-      message: "This reservation will be permanently deleted. This cannot be undone.",
+      title: "Archive Reservation",
+      message:
+        "This action archives the reservation and preserves billing history. Permanent deletion is restricted when issued bills exist.",
       variant: "danger",
-      confirmText: "Delete",
+      confirmText: "Archive",
       onConfirm: async () => {
         setConfirmModal((previous) => ({ ...previous, open: false }));
         try {
           await reservationApi.delete(reservationId);
-          showNotification("Reservation deleted", "success");
+          showNotification("Reservation archived", "success");
           refetchReservations();
-        } catch {
-          showNotification("Failed to delete", "error");
+        } catch (error) {
+          showNotification(error?.message || "Failed to archive reservation", "error");
         }
       },
     });

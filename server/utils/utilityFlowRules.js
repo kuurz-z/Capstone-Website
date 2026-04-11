@@ -9,7 +9,6 @@ import {
 const WATER_BILLABLE_ROOM_TYPES = new Set([
   "private",
   "double-sharing",
-  "quadruple-sharing",
 ]);
 
 const BILLABLE_RESERVATION_STATUSES = new Set(BILLABLE_RESERVATION_STATUS_QUERY);

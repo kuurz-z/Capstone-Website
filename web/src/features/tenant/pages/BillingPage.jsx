@@ -128,6 +128,27 @@ const BillingPage = () => {
     return `${fmtDate(bill.billingCycleStart)} - ${fmtDate(bill.billingCycleEnd)}`;
   };
 
+  const isUtilityOnlyBill = (bill) =>
+    Number(bill?.charges?.rent || 0) <= 0 &&
+    (Number(bill?.charges?.electricity || 0) > 0 ||
+      Number(bill?.charges?.water || 0) > 0);
+
+  const getDisplayMonthDate = (bill) =>
+    isUtilityOnlyBill(bill) && (bill?.utilityCycleEnd || bill?.utilityCycleStart)
+      ? bill.utilityCycleEnd || bill.utilityCycleStart
+      : bill?.billingMonth;
+
+  const getDisplayCycle = (bill) => {
+    if (
+      isUtilityOnlyBill(bill) &&
+      bill?.utilityCycleStart &&
+      bill?.utilityCycleEnd
+    ) {
+      return `${fmtDate(bill.utilityCycleStart)} - ${fmtDate(bill.utilityCycleEnd)}`;
+    }
+    return fmtCycle(bill);
+  };
+
   const getStatusLabel = (status) => {
     const labels = {
       pending: "Pending",
@@ -182,7 +203,8 @@ const BillingPage = () => {
             fmtCurrency={fmtCurrency}
             fmtMonth={fmtMonth}
             fmtDate={fmtDate}
-            fmtCycle={fmtCycle}
+            fmtCycle={getDisplayCycle}
+            fmtMonthDate={getDisplayMonthDate}
             getStatusLabel={getStatusLabel}
             onPayOnline={() => handlePayOnline(currentBill.id)}
             payingOnline={payingOnline}
@@ -230,11 +252,11 @@ const BillingPage = () => {
                 <div key={bill.id} className="bill-history-item">
                   <div className="bill-history-left">
                     <span className="bill-month">
-                      {fmtMonth(bill.billingMonth)}
+                      {fmtMonth(getDisplayMonthDate(bill))}
                     </span>
                     <span className="bill-room">
                       {bill.room} • {bill.branch}
-                      {fmtCycle(bill) ? ` • ${fmtCycle(bill)}` : ""}
+                      {getDisplayCycle(bill) ? ` • ${getDisplayCycle(bill)}` : ""}
                       {bill.dueDate ? ` • Due ${fmtDate(bill.dueDate)}` : ""}
                     </span>
                   </div>
@@ -291,6 +313,7 @@ function CurrentBillHero({
   fmtMonth,
   fmtDate,
   fmtCycle,
+  fmtMonthDate,
   getStatusLabel,
   onPayOnline,
   payingOnline,
@@ -302,7 +325,7 @@ function CurrentBillHero({
       <div className="bill-hero-top">
         <div className="bill-period">
           Current Bill
-          <strong>{fmtMonth(bill.billingMonth)}</strong>
+          <strong>{fmtMonth(fmtMonthDate(bill))}</strong>
         </div>
         <span className={`bill-status-badge ${bill.status}`}>
           {getStatusLabel(bill.status)}
@@ -702,6 +725,21 @@ function ChargeBreakdown({ bill, fmtCurrency }) {
  * PaymentReceipt — Embedded receipt card for paid bills with download support
  */
 function PaymentReceipt({ bill, fmtCurrency, fmtMonth, fmtDate }) {
+  const isUtilityOnlyBill =
+    Number(bill?.charges?.rent || 0) <= 0 &&
+    (Number(bill?.charges?.electricity || 0) > 0 ||
+      Number(bill?.charges?.water || 0) > 0);
+  const displayMonthDate =
+    isUtilityOnlyBill && (bill?.utilityCycleEnd || bill?.utilityCycleStart)
+      ? bill.utilityCycleEnd || bill.utilityCycleStart
+      : bill?.billingMonth;
+  const displayCycle =
+    isUtilityOnlyBill && bill?.utilityCycleStart && bill?.utilityCycleEnd
+      ? `${fmtDate(bill.utilityCycleStart)} - ${fmtDate(bill.utilityCycleEnd)}`
+      : bill?.billingCycleStart && bill?.billingCycleEnd
+        ? `${fmtDate(bill.billingCycleStart)} - ${fmtDate(bill.billingCycleEnd)}`
+        : null;
+
   const handleDownload = async () => {
     const { generateBillingReceipt } = await import(
       "../../../shared/utils/pdfReceipt.js"
@@ -738,9 +776,7 @@ function PaymentReceipt({ bill, fmtCurrency, fmtMonth, fmtDate }) {
         <div className="receipt-row">
           <span className="receipt-label">Billing Period</span>
           <span className="receipt-value">
-            {bill.billingCycleStart && bill.billingCycleEnd
-              ? `${fmtDate(bill.billingCycleStart)} - ${fmtDate(bill.billingCycleEnd)}`
-              : fmtMonth(bill.billingMonth)}
+            {displayCycle || fmtMonth(displayMonthDate)}
           </span>
         </div>
         {bill.reservationCreditApplied > 0 && (

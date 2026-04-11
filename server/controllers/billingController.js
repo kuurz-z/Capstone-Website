@@ -102,6 +102,7 @@ async function getReservationBillingContext(reservationId, currentBillId = null)
   const existingCount = await Bill.countDocuments({
     reservationId: reservation._id,
     isArchived: false,
+    "charges.rent": { $gt: 0 },
     ...(currentBillId ? { _id: { $ne: currentBillId } } : {}),
   });
 
@@ -1059,10 +1060,18 @@ export const deleteBill = async (req, res, next) => {
     if (!admin.isOwner && bill.branch !== admin.branch)
       return res.status(403).json({ error: "Access denied" });
 
-    // Guard: don't delete paid bills (audit trail matters)
-    if (bill.status === "paid")
+    // Guard: retain issued bills for audit/history. Only drafts are deletable.
+    if (bill.status !== "draft")
       return res.status(400).json({
-        error: "Cannot delete a paid bill. Paid bills must be retained for audit purposes.",
+        error:
+          "Only draft bills can be deleted. Issued bills (pending, partially-paid, overdue, paid) must be retained.",
+      });
+
+    // Guard: draft bill should not have any payment applied.
+    if ((bill.paidAmount || 0) > 0)
+      return res.status(400).json({
+        error:
+          "Cannot delete this draft bill because it already has payment activity.",
       });
 
     await bill.deleteOne();

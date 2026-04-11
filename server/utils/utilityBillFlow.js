@@ -70,6 +70,15 @@ function setUtilityDispatchEntry(bill, utilityType, updates = {}) {
   };
 }
 
+async function countReservationRentCycles(reservationId, excludeBillId = null) {
+  return Bill.countDocuments({
+    reservationId,
+    isArchived: false,
+    "charges.rent": { $gt: 0 },
+    ...(excludeBillId ? { _id: { $ne: excludeBillId } } : {}),
+  });
+}
+
 export async function getReservationBillingContextForUser(userId) {
   const reservation = await Reservation.findOne({
     userId,
@@ -79,10 +88,7 @@ export async function getReservationBillingContextForUser(userId) {
 
   if (!readMoveInDate(reservation)) return null;
 
-  const existingCount = await Bill.countDocuments({
-    reservationId: reservation._id,
-    isArchived: false,
-  });
+  const existingCount = await countReservationRentCycles(reservation._id);
 
   return {
     reservation,
@@ -100,11 +106,10 @@ export async function getReservationBillingContextForBill(bill) {
   const moveInDate = readMoveInDate(reservation);
   if (!moveInDate) return null;
 
-  const existingCount = await Bill.countDocuments({
-    reservationId: reservation._id,
-    isArchived: false,
-    _id: { $ne: bill._id },
-  });
+  const existingCount = await countReservationRentCycles(
+    reservation._id,
+    bill._id,
+  );
 
   return {
     reservation,

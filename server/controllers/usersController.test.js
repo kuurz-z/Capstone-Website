@@ -24,6 +24,10 @@ const reservationModel = {
   find: jest.fn(),
   findOne: jest.fn(),
 };
+const billModel = {
+  countDocuments: jest.fn(),
+  deleteMany: jest.fn(),
+};
 const setCustomUserClaims = jest.fn();
 const getAuth = jest.fn(() => ({ setCustomUserClaims }));
 
@@ -31,6 +35,7 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   User: userModel,
   Reservation: reservationModel,
   Room: {},
+  Bill: billModel,
 }));
 
 await jest.unstable_mockModule("dayjs", () => ({ default: jest.fn() }));
@@ -99,6 +104,8 @@ describe("usersController", () => {
     userModel.findByIdAndUpdate.mockReset();
     reservationModel.find.mockReset();
     reservationModel.findOne.mockReset();
+    billModel.countDocuments.mockReset();
+    billModel.deleteMany.mockReset();
     setCustomUserClaims.mockReset();
     getAuth.mockClear();
   });

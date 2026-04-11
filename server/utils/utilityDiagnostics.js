@@ -20,7 +20,6 @@ import {
 const WATER_BILLABLE_ROOM_TYPES = new Set([
   "private",
   "double-sharing",
-  "quadruple-sharing",
 ]);
 
 function addIssue(issues, issueCode, status, recommendedAction, extra = {}) {

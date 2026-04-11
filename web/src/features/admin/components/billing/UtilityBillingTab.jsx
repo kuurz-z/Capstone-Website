@@ -57,7 +57,6 @@ const EMPTY_VALUE = "-";
 const WATER_BILLABLE_ROOM_TYPES = new Set([
   "private",
   "double-sharing",
-  "quadruple-sharing",
 ]);
 const fmtCurrency = (val) =>
   val != null
@@ -242,6 +241,46 @@ const ELECTRICITY_EXPORT_COLUMNS = [
     label: "Sent At",
     formatter: (value) => (value ? fmtDate(value) : ""),
   },
+];
+
+const TIMELINE_EXPORT_COLUMNS = [
+  { key: "date", label: "Date" },
+  { key: "event", label: "Event" },
+  { key: "recordType", label: "Record Type" },
+  { key: "status", label: "Status" },
+  { key: "tenant", label: "Tenant" },
+  { key: "tenantEmail", label: "Tenant Email" },
+  { key: "bed", label: "Bed" },
+  { key: "reading", label: "Reading" },
+];
+
+const PERIOD_HISTORY_EXPORT_COLUMNS = [
+  { key: "cycle", label: "Cycle" },
+  { key: "basis", label: "Basis" },
+  { key: "rate", label: "Rate" },
+  { key: "status", label: "Status" },
+];
+
+const TENANT_SUMMARY_EXPORT_COLUMNS = [
+  { key: "tenantName", label: "Tenant Name" },
+  { key: "tenantEmail", label: "Tenant Email" },
+  { key: "durationRange", label: "Duration Range" },
+  { key: "totalUsage", label: "Total Usage" },
+  { key: "billAmount", label: "Bill Amount" },
+];
+
+const SEGMENT_EXPORT_COLUMNS = [
+  { key: "occupants", label: "Occupants" },
+  { key: "firstReadingDate", label: "1st Reading Date" },
+  { key: "firstReading", label: "1st Reading" },
+  { key: "secondReadingDate", label: "2nd Reading Date" },
+  { key: "secondReading", label: "2nd Reading" },
+  { key: "segmentPeriod", label: "Segment Period" },
+  { key: "boundaryEvents", label: "Boundary Events" },
+  { key: "totalConsumption", label: "Total Consumption" },
+  { key: "segmentTotalCost", label: "Segment Total Cost" },
+  { key: "amountDuePerPerson", label: "Amount Due Per Person" },
+  { key: "coveredTenants", label: "Covered Tenants" },
 ];
 
 const UtilityBillingTab = ({ utilityType }) => {
@@ -1101,6 +1140,113 @@ const UtilityBillingTab = ({ utilityType }) => {
     }
   };
 
+  const exportLocalRows = ({
+    rows,
+    columns,
+    filename,
+    emptyMessage,
+  }) => {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      notify.warn(emptyMessage);
+      return;
+    }
+
+    exportToCSV(filename, rows, columns);
+  };
+
+  const handleExportTimeline = () => {
+    const rows = billingTimelineRows.map((row) => ({
+      date: fmtDate(row.date),
+      event: getEventTypeLabel(row.eventType),
+      recordType: getTimelineRecordLabel(row),
+      status: getTimelineStatusLabel(row),
+      tenant: isMoveLifecycleEvent(row.eventType)
+        ? row.tenantName || EMPTY_VALUE
+        : "Room Level",
+      tenantEmail: isMoveLifecycleEvent(row.eventType)
+        ? row.tenantEmail || EMPTY_VALUE
+        : EMPTY_VALUE,
+      bed: isMoveLifecycleEvent(row.eventType)
+        ? row.bedName || EMPTY_VALUE
+        : "Room Level",
+      reading:
+        row.reading != null
+          ? `${fmtNumber(row.reading, 2)} ${utilityType === "electricity" ? "kWh" : "cu.m."}`
+          : EMPTY_VALUE,
+    }));
+
+    exportLocalRows({
+      rows,
+      columns: TIMELINE_EXPORT_COLUMNS,
+      filename: `${utilityType}-billing-timeline-${selectedRoom ? getRoomLabel(selectedRoom).replace(/\s+/g, "-").toLowerCase() : "room"}`,
+      emptyMessage: `No ${utilityType} timeline rows available for export.`,
+    });
+  };
+
+  const handleExportPeriodHistory = () => {
+    const rows = periods.map((period) => ({
+      cycle: getCycleLabel(period),
+      basis: getMeterRangeLabel(period, utilityType),
+      rate: fmtCurrency(period.ratePerUnit),
+      status: getDisplayStatusLabel(period),
+    }));
+
+    exportLocalRows({
+      rows,
+      columns: PERIOD_HISTORY_EXPORT_COLUMNS,
+      filename: `${utilityType}-billing-history-${selectedRoom ? getRoomLabel(selectedRoom).replace(/\s+/g, "-").toLowerCase() : "room"}`,
+      emptyMessage: `No ${utilityType} billing history rows available for export.`,
+    });
+  };
+
+  const handleExportTenantSummary = (period, currentResult) => {
+    const rows = (currentResult?.tenantSummaries || []).map((tenant) => ({
+      tenantName: tenant.tenantName || EMPTY_VALUE,
+      tenantEmail: tenant.tenantEmail || EMPTY_VALUE,
+      durationRange: tenant.durationRange || "Ongoing",
+      totalUsage: fmtNumber(tenant.totalUsage, 4),
+      billAmount: fmtCurrency(tenant.billAmount),
+    }));
+
+    exportLocalRows({
+      rows,
+      columns: TENANT_SUMMARY_EXPORT_COLUMNS,
+      filename: `${utilityType}-tenant-summary-${period?.id || "period"}`,
+      emptyMessage: `No ${utilityType} tenant summary rows available for export.`,
+    });
+  };
+
+  const handleExportSegment = (period, segment, index, ratePerUnit) => {
+    const rows = [
+      {
+        occupants: segment.activeTenantCount ?? 0,
+        firstReadingDate: segment.startDate
+          ? new Date(segment.startDate).toLocaleDateString()
+          : (segment.periodLabel || "").split(/\s*[-â€“]\s*/)[0] || EMPTY_VALUE,
+        firstReading: fmtNumber(segment.readingFrom, 2),
+        secondReadingDate: segment.endDate
+          ? new Date(segment.endDate).toLocaleDateString()
+          : (segment.periodLabel || "").split(/\s*[-â€“]\s*/)[1] || EMPTY_VALUE,
+        secondReading: fmtNumber(segment.readingTo, 2),
+        segmentPeriod: getSegmentPeriodLabel(segment),
+        boundaryEvents: `${EVENT_TYPE_LABELS[segment.startEventType] || segment.startEventType || "Regular"} to ${EVENT_TYPE_LABELS[segment.endEventType] || segment.endEventType || "Regular"}`,
+        totalConsumption: fmtNumber(segment.unitsConsumed, 2),
+        segmentTotalCost: fmtCurrency(segment.totalCost),
+        amountDuePerPerson: `${fmtCurrency(segment.sharePerTenantCost)} @ ${fmtNumber(ratePerUnit, 2)} / ${utilityType === "electricity" ? "kWh" : "cu.m."}`,
+        coveredTenants: segment.coveredTenantNames?.length
+          ? segment.coveredTenantNames.join(", ")
+          : "No active tenant",
+      },
+    ];
+
+    exportLocalRows({
+      rows,
+      columns: SEGMENT_EXPORT_COLUMNS,
+      filename: `${utilityType}-segment-${period?.id || "period"}-${index + 1}`,
+      emptyMessage: `No ${utilityType} segment rows available for export.`,
+    });
+  };
+
   const renderExpandedPeriodDetails = (period) => {
     if (!period || selectedPeriodId !== period.id) return null;
     const displayStatus = getDisplayStatus(period);
@@ -1114,16 +1260,10 @@ const UtilityBillingTab = ({ utilityType }) => {
             >
               {getDisplayStatusLabel(period)}
             </span>
-            <span className="eb-minimal-header__date">
-              {utilityType === "water" ? "Water Charge:" : "Meter Reading:"}{" "}
-              {getMeterRangeLabel(period, utilityType)}
-            </span>
-          </div>
-          <div className="eb-minimal-header__actions">
             <button
-              className="eb-btn-text"
+              type="button"
+              className="eb-btn-text eb-btn-text--subtle"
               onClick={() => setSelectedPeriodId(null)}
-              title="Close Details"
             >
               Close
             </button>
@@ -1362,6 +1502,22 @@ const UtilityBillingTab = ({ utilityType }) => {
                               </tr>
                             </tbody>
                           </table>
+                          <div className="eb-section__footer eb-section__footer--export">
+                            <button
+                              type="button"
+                              className="eb-btn eb-btn--ghost"
+                              onClick={() =>
+                                handleExportSegment(
+                                  period,
+                                  seg,
+                                  index,
+                                  result.ratePerUnit,
+                                )
+                              }
+                            >
+                              <Download size={13} /> Export
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1416,6 +1572,17 @@ const UtilityBillingTab = ({ utilityType }) => {
                             )}
                           </tbody>
                         </table>
+                        <div className="eb-section__footer eb-section__footer--export">
+                          <button
+                            type="button"
+                            className="eb-btn eb-btn--ghost"
+                            onClick={() =>
+                              handleExportTenantSummary(period, result)
+                            }
+                          >
+                            <Download size={13} /> Export
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1434,83 +1601,6 @@ const UtilityBillingTab = ({ utilityType }) => {
 
   return (
     <section className="eb-shell" aria-label={`${utilityType} billing workspace`}>
-      <div className="bw-summary-bar">
-        <div className="bw-summary-bar__left">
-          <span className="bw-summary-bar__mode">
-            <Zap size={13} />{" "}
-            {utilityType === "electricity" ? "Electricity" : "Water"}
-          </span>
-          {branchFilter && (
-            <span className="bw-summary-bar__branch">{branchFilter}</span>
-          )}
-        </div>
-        <div className="bw-summary-bar__counts" aria-live="polite">
-          <span className="bw-count bw-count--open">
-            {filteredRooms.filter((r) => r.hasOpenPeriod).length} open
-          </span>
-          <span className="bw-count bw-count--ready">
-            {
-              filteredRooms.filter(
-                (r) => r.latestPeriodDisplayStatus === "ready",
-              ).length
-            }{" "}
-            ready
-          </span>
-          <span className="bw-count bw-count--neutral">
-            {filteredRooms.length} rooms
-          </span>
-        </div>
-        <div className="bw-summary-bar__actions">
-          <div className="bw-summary-bar__action-group bw-summary-bar__action-group--primary">
-            {selectedReadyPeriod && (
-              <button
-                type="button"
-                className="eb-btn eb-btn--primary"
-                onClick={() =>
-                  handleSendPeriod(
-                    selectedReadyPeriod,
-                    getRoomLabel(selectedRoom || {}, "Room"),
-                  )
-                }
-                disabled={
-                  Boolean(sendingByPeriodId[selectedReadyPeriod.id]) ||
-                  sendPeriod.isPending
-                }
-              >
-                <Send size={13} />{" "}
-                {sendingByPeriodId[selectedReadyPeriod.id]
-                  ? "Sending..."
-                  : "Send Selected Room"}
-              </button>
-            )}
-            {readyRooms.length > 0 && (
-              <button
-                type="button"
-                className="eb-btn eb-btn--outline"
-                onClick={handleSendAllReady}
-                disabled={isSendingAllReady || sendPeriod.isPending}
-              >
-                <Send size={13} />{" "}
-                {isSendingAllReady
-                  ? "Sending..."
-                  : `Send All Ready (${readyRooms.length})`}
-              </button>
-            )}
-          </div>
-
-          <div className="bw-summary-bar__action-group bw-summary-bar__action-group--secondary">
-            <button
-              type="button"
-              className="eb-btn eb-btn--ghost"
-              onClick={handleExportRows}
-              disabled={isExporting}
-            >
-              <Download size={13} /> {isExporting ? "Exporting..." : "Export"}
-            </button>
-          </div>
-        </div>
-      </div>
-
       <div className="eb-layout">
         <aside className="eb-sidebar">
           <div className="eb-sidebar__header">
@@ -1924,6 +2014,16 @@ const UtilityBillingTab = ({ utilityType }) => {
                       {billingTimelineRows.length}
                     </span>
                   </h3>
+                  <div className="eb-section__header-actions">
+                    <button
+                      type="button"
+                      className="eb-btn eb-btn--ghost eb-btn--xs"
+                      onClick={handleExportTimeline}
+                      disabled={billingTimelineRows.length === 0}
+                    >
+                      <Download size={12} /> Export
+                    </button>
+                  </div>
                 </div>
                 <p className="eb-section__hint">
                   Latest meter and occupancy events for the selected billing
@@ -2058,9 +2158,20 @@ const UtilityBillingTab = ({ utilityType }) => {
                     />
                     Billing Cycle History
                   </h3>
-                  <span className="eb-section__count">
-                    {periods.length} period{periods.length !== 1 ? "s" : ""}
-                  </span>
+                  <div className="eb-section__header-actions">
+                    <span className="eb-section__count">
+                      {periods.length} period{periods.length !== 1 ? "s" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      className="eb-btn eb-btn--ghost eb-btn--xs"
+                      onClick={handleExportPeriodHistory}
+                      disabled={periods.length === 0 || isExporting}
+                    >
+                      <Download size={12} />{" "}
+                      {isExporting ? "Exporting..." : "Export"}
+                    </button>
+                  </div>
                 </div>
                 <p className="eb-section__hint">
                   Closed and revised periods remain available for review,

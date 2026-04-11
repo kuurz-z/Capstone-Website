@@ -11,6 +11,7 @@ import {
   Reservation,
   User,
   Room,
+  Bill,
   UtilityReading,
   ROOM_BRANCHES,
 } from "../models/index.js";
@@ -27,6 +28,7 @@ import {
   validateMoveInDate,
   handleStatusTransition,
   syncReservationUserLifecycle,
+  reconcileTenantUsersForScope,
   buildUserUpdatePayload,
   getCheckinBlockers,
 } from "../utils/reservationHelpers.js";
@@ -271,6 +273,10 @@ export const getCurrentResidents = async (req, res) => {
     } else if (requestedBranch && requestedBranch !== "all") {
       roomQuery.branch = requestedBranch;
     }
+
+    await reconcileTenantUsersForScope({
+      branch: roomQuery.branch || null,
+    });
 
     const roomIds = await Room.find(roomQuery).distinct("_id");
     const reservations = await Reservation.find({
@@ -1179,6 +1185,14 @@ export const updateReservationByUser = async (req, res, next) => {
       });
     }
 
+    if (
+      updates.status === "reserved" &&
+      !reservation.reservationCode &&
+      !updates.reservationCode
+    ) {
+      updates.reservationCode = await Reservation.generateUniqueReservationCode();
+    }
+
     const updatedReservation = await Reservation.findByIdAndUpdate(
       reservationId,
       { $set: updates },
@@ -1204,6 +1218,7 @@ export const updateReservationByUser = async (req, res, next) => {
 export const deleteReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
+    const isHardDelete = String(req.query?.hardDelete || "").toLowerCase() === "true";
     const dbUser = await findDbUser(req.user.uid);
     if (!dbUser)
       return res
@@ -1234,6 +1249,31 @@ export const deleteReservation = async (req, res, next) => {
         code: "BRANCH_ACCESS_DENIED",
       });
 
+    const [issuedBillCount, draftBillCount] = await Promise.all([
+      Bill.countDocuments({
+        reservationId: reservation._id,
+        isArchived: false,
+        status: { $ne: "draft" },
+      }),
+      Bill.countDocuments({
+        reservationId: reservation._id,
+        isArchived: false,
+        status: "draft",
+      }),
+    ]);
+
+    if (isHardDelete && issuedBillCount > 0) {
+      return res.status(409).json({
+        error:
+          "Hard delete blocked. This reservation has issued bills and must be archived instead.",
+        code: "HARD_DELETE_BLOCKED",
+        safeguards: {
+          issuedBills: issuedBillCount,
+          draftBills: draftBillCount,
+        },
+      });
+    }
+
     const reservationData = reservation.toObject();
 
     // Release occupancy — use toObject() to avoid Mongoose getter issues with spread
@@ -1257,6 +1297,68 @@ export const deleteReservation = async (req, res, next) => {
           "Occupancy release during deletion failed",
         );
       }
+    }
+
+    if (!isHardDelete) {
+      if (hadOccupancy && reservation.status !== "cancelled") {
+        reservation.status = "cancelled";
+      }
+      reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Archived via delete endpoint`;
+      await reservation.archive(dbUser._id);
+
+      await syncReservationUserLifecycle({
+        status: "archived",
+        previousStatus: reservationData.status,
+        userId: reservation.userId?._id || reservation.userId,
+        roomId: reservation.roomId?._id || reservation.roomId,
+        reservationId: reservation._id,
+        force: true,
+      });
+
+      if (reservation.roomId?._id) {
+        try {
+          const { recalculateRoomOccupancy } =
+            await import("../utils/occupancyManager.js");
+          await recalculateRoomOccupancy(reservation.roomId._id);
+          logger.info(
+            { requestId: req.id, roomId: reservation.roomId._id },
+            "Recalculated room occupancy after archive",
+          );
+        } catch (e) {
+          logger.warn(
+            { err: e, requestId: req.id },
+            "Occupancy recalculation failed",
+          );
+        }
+      }
+
+      await auditLogger.logModification(
+        req,
+        "reservation",
+        reservationId,
+        reservationData,
+        reservation.toObject(),
+        "Reservation archived via delete endpoint",
+      );
+
+      return res.json({
+        message: "Reservation archived successfully",
+        reservationId,
+        archived: true,
+        hardDelete: false,
+        safeguards: {
+          issuedBills: issuedBillCount,
+          draftBills: draftBillCount,
+        },
+      });
+    }
+
+    if (draftBillCount > 0) {
+      await Bill.deleteMany({
+        reservationId: reservation._id,
+        isArchived: false,
+        status: "draft",
+      });
     }
 
     // Delete the reservation FIRST, then recalculate occupancy
@@ -1296,7 +1398,14 @@ export const deleteReservation = async (req, res, next) => {
       reservationId,
       reservationData,
     );
-    res.json({ message: "Reservation deleted successfully", reservationId });
+    res.json({
+      message: "Reservation permanently deleted",
+      reservationId,
+      hardDelete: true,
+      cleanup: {
+        deletedDraftBills: draftBillCount,
+      },
+    });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Delete reservation error");
     await auditLogger.logError(req, error, "Failed to delete reservation");

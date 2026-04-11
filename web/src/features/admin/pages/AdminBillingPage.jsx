@@ -8,29 +8,6 @@ const tabs = [
   { id: "water", label: "Water", icon: Droplets },
 ];
 
-const workflowStages = [
-  {
-    id: "setup",
-    title: "Setup Period",
-    caption: "Choose room and start a new cycle.",
-  },
-  {
-    id: "capture",
-    title: "Capture Reading",
-    caption: "Record usage inputs and rates.",
-  },
-  {
-    id: "review",
-    title: "Review Results",
-    caption: "Check totals, timeline, and changes.",
-  },
-  {
-    id: "publish",
-    title: "Send Or Export",
-    caption: "Send ready charges or export report.",
-  },
-];
-
 const AdminBillingPage = () => {
   const [activeTab, setActiveTab] = useState("electricity");
   const activePanelId = `billing-panel-${activeTab}`;
@@ -86,20 +63,6 @@ const AdminBillingPage = () => {
         id={activePanelId}
         aria-labelledby={`billing-tab-${activeTab}`}
       >
-        <div className="admin-billing-page__workflow" aria-label="Billing workflow stages">
-          {workflowStages.map((stage, index) => (
-            <article key={stage.id} className="admin-billing-stage">
-              <span className="admin-billing-stage__index" aria-hidden="true">
-                {index + 1}
-              </span>
-              <div className="admin-billing-stage__content">
-                <h2 className="admin-billing-stage__title">{stage.title}</h2>
-                <p className="admin-billing-stage__caption">{stage.caption}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-
         {activeTab === "electricity" && (
           <UtilityBillingTab utilityType="electricity" />
         )}
