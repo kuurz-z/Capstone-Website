@@ -14,7 +14,7 @@ const ContractsPage = () => {
   const reservations = Array.isArray(rawReservations) ? rawReservations : [];
   const error = queryError ? (queryError.message || "Failed to load contracts") : null;
 
-  // Active contract = checked-in reservations
+  // Active contract = moved-in reservations
   const activeContract = useMemo(
     () => reservations.find((r) => hasReservationStatus(r.status, "moveIn")),
     [reservations],
@@ -32,7 +32,7 @@ const ContractsPage = () => {
     [reservations],
   );
 
-  // Confirmed (upcoming) = confirmed but not checked-in yet
+  // Confirmed (upcoming) = confirmed but not moved in yet
   const upcomingContract = useMemo(
     () => reservations.find((r) => r.status === "reserved"),
     [reservations],
@@ -373,7 +373,7 @@ const ContractsPage = () => {
             <h3>No Contracts Yet</h3>
             <p>
               Your contract details will appear here once your reservation is
-              confirmed and you've checked in.
+              confirmed and you've moved in.
             </p>
           </div>
         ) : (

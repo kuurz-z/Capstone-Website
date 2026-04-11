@@ -92,13 +92,13 @@ export const RESERVATION_STATUS_APPEARANCE = Object.freeze({
 });
 
 export const RESERVATION_STAGE_MAP = Object.freeze({
-  pending: { step: 1, label: "Room Selected" },
-  visit_pending: { step: 2, label: "Visit Scheduled" },
-  visit_approved: { step: 3, label: "Application Ready" },
-  payment_pending: { step: 4, label: "Payment Submitted" },
-  reserved: { step: 5, label: "Confirmed" },
-  moveIn: { step: 5, label: "Moved In" },
-  moveOut: { step: 5, label: "Completed" },
+  pending: { step: 1, total: 5, label: "Room Selected" },
+  visit_pending: { step: 2, total: 5, label: "Visit Scheduled" },
+  visit_approved: { step: 3, total: 5, label: "Application Ready" },
+  payment_pending: { step: 4, total: 5, label: "Payment Submitted" },
+  reserved: { step: 5, total: 5, label: "Confirmed" },
+  moveIn: { step: 6, total: 6, label: "Moved In" },
+  moveOut: { step: 6, total: 6, label: "Completed" },
   cancelled: { step: 0, label: "Cancelled" },
   archived: { step: 0, label: "Archived" },
 });

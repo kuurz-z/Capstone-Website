@@ -8,14 +8,22 @@ const errBorder = (show, value) =>
  * Section 4: Employment / School — employer info, occupation, company ID.
  */
 const EmploymentSection = ({
-  employerSchool, setEmployerSchool,
-  employerAddress, setEmployerAddress,
-  employerContact, setEmployerContact,
-  startDate, setStartDate,
-  occupation, setOccupation,
-  previousEmployment, setPreviousEmployment,
-  companyID, setCompanyID,
-  companyIDReason, setCompanyIDReason,
+  employerSchool,
+  setEmployerSchool,
+  employerAddress,
+  setEmployerAddress,
+  employerContact,
+  setEmployerContact,
+  startDate,
+  setStartDate,
+  occupation,
+  setOccupation,
+  previousEmployment,
+  setPreviousEmployment,
+  companyID,
+  setCompanyID,
+  companyIDReason,
+  setCompanyIDReason,
   handleGeneralInput,
   showValidationErrors,
 }) => (
@@ -26,7 +34,9 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group" data-field="employerSchool">
-      <label className="form-label">Current Employer <span className="rf-required">*</span></label>
+      <label className="form-label">
+        Current Employer <span className="rf-required">*</span>
+      </label>
       <input
         type="text"
         className="form-input"
@@ -37,11 +47,19 @@ const EmploymentSection = ({
         }
         style={{ border: errBorder(showValidationErrors, employerSchool) }}
       />
-      <FieldError error={showValidationErrors && !employerSchool ? "Employer / school name is required" : null} />
+      <FieldError
+        error={
+          showValidationErrors && !employerSchool
+            ? "Employer / school name is required"
+            : null
+        }
+      />
     </div>
 
     <div className="form-group" data-field="employerAddress">
-      <label className="form-label">Employer's Address <span className="rf-required">*</span></label>
+      <label className="form-label">
+        Employer's Address <span className="rf-required">*</span>
+      </label>
       <textarea
         className="form-textarea"
         placeholder="Full address"
@@ -49,13 +67,24 @@ const EmploymentSection = ({
         onChange={(e) =>
           handleGeneralInput(e.target.value, setEmployerAddress, 100)
         }
-        style={{ resize: "vertical", border: errBorder(showValidationErrors, employerAddress) }}
+        style={{
+          resize: "vertical",
+          border: errBorder(showValidationErrors, employerAddress),
+        }}
       />
-      <FieldError error={showValidationErrors && !employerAddress ? "Employer address is required" : null} />
+      <FieldError
+        error={
+          showValidationErrors && !employerAddress
+            ? "Employer address is required"
+            : null
+        }
+      />
     </div>
 
     <div className="form-group" data-field="employerContact">
-      <label className="form-label">Employer's Contact Number <span className="rf-required">*</span></label>
+      <label className="form-label">
+        Employer's Contact Number <span className="rf-required">*</span>
+      </label>
       <input
         type="tel"
         className="form-input"
@@ -66,7 +95,13 @@ const EmploymentSection = ({
         }
         style={{ border: errBorder(showValidationErrors, employerContact) }}
       />
-      <FieldError error={showValidationErrors && !employerContact ? "Employer contact is required" : null} />
+      <FieldError
+        error={
+          showValidationErrors && !employerContact
+            ? "Employer contact is required"
+            : null
+        }
+      />
     </div>
 
     <div className="form-group">
@@ -80,15 +115,24 @@ const EmploymentSection = ({
     </div>
 
     <div className="form-group" data-field="occupation">
-      <label className="form-label">Occupation / Job Description <span className="rf-required">*</span></label>
+      <label className="form-label">
+        Occupation / Job Description <span className="rf-required">*</span>
+      </label>
       <textarea
         className="form-textarea"
         placeholder="e.g., Software Engineer, Nurse, Currently Job Hunting"
         value={occupation}
         onChange={(e) => handleGeneralInput(e.target.value, setOccupation, 100)}
-        style={{ resize: "vertical", border: errBorder(showValidationErrors, occupation) }}
+        style={{
+          resize: "vertical",
+          border: errBorder(showValidationErrors, occupation),
+        }}
       />
-      <FieldError error={showValidationErrors && !occupation ? "Occupation is required" : null} />
+      <FieldError
+        error={
+          showValidationErrors && !occupation ? "Occupation is required" : null
+        }
+      />
     </div>
 
     <div className="form-group">
@@ -124,7 +168,11 @@ const EmploymentSection = ({
         value={companyIDReason}
         onChange={(e) => setCompanyIDReason(e.target.value)}
         placeholder="N/A if Company ID has been submitted"
-        style={{ border: !companyID ? errBorder(showValidationErrors, companyIDReason) : undefined }}
+        style={{
+          border: !companyID
+            ? errBorder(showValidationErrors, companyIDReason)
+            : undefined,
+        }}
       />
       {showValidationErrors && !companyID && !companyIDReason && (
         <FieldError error="Please upload Company ID or provide a reason" />
@@ -135,11 +183,7 @@ const EmploymentSection = ({
 
 const FieldError = ({ error }) => {
   if (!error) return null;
-  return (
-    <div className="rf-field-error">
-      {error}
-    </div>
-  );
+  return <div className="rf-field-error">{error}</div>;
 };
 
 export default EmploymentSection;

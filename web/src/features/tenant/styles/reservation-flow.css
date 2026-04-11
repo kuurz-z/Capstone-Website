@@ -2233,6 +2233,15 @@ html[data-theme="dark"] .rf-policy-link { color: #60a5fa; }
   }
 }
 
+@keyframes rf-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ============ MOBILE RESPONSIVE ============ */
 @media (max-width: 768px) {
   /* Layout */

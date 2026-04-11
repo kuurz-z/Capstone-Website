@@ -66,7 +66,7 @@ function RoomCard({ room, isSelected, onClick }) {
         ))}
       </div>
 
-      {/* Occupancy bar — two colors: green (checked-in) + blue (reserved) */}
+      {/* Occupancy bar — two colors: green (moved in) + blue (reserved) */}
       <div className="dt-room-card__occupancy">
         <div className="dt-room-card__bar">
           <div

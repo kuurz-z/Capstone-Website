@@ -19,7 +19,7 @@ export function useReservations(params = {}) {
   });
 }
 
-/** Fetch current checked-in residents for admin tenants page */
+/** Fetch current moved-in residents for admin tenants page */
 export function useCurrentResidents(params = {}, options = {}) {
   return useQuery({
     queryKey: queryKeys.reservations.currentResidents(params),

@@ -26,6 +26,53 @@ function addIssue(issues, issueCode, status, recommendedAction, extra = {}) {
   issues.push({ issueCode, status, recommendedAction, ...extra });
 }
 
+export function deriveUtilityPeriodBillingState({
+  period = null,
+  utilityType,
+  linkedBills = [],
+} = {}) {
+  if (!period) {
+    return {
+      billingState: "closed",
+      billingLabel: "Closed",
+      hasDraftBills: false,
+      hasSentBills: false,
+      blockingReason: null,
+    };
+  }
+
+  const hasDraftBills = linkedBills.some(
+    (bill) => getUtilityDispatchEntry(bill, utilityType).state !== "sent",
+  );
+  const hasSentBills = linkedBills.some(
+    (bill) => getUtilityDispatchEntry(bill, utilityType).state === "sent",
+  );
+
+  let billingState = "closed";
+  let billingLabel = "Closed";
+  let blockingReason = null;
+
+  if (period.status === "open") {
+    billingState = "open";
+    billingLabel = "Active";
+  } else if (hasDraftBills) {
+    billingState = "ready_to_send";
+    billingLabel = "Ready to Send";
+  } else if (hasSentBills) {
+    billingState = "sent";
+    billingLabel = "Sent";
+    blockingReason = `This ${utilityType} period has already been sent to tenants.`;
+  }
+
+  return {
+    billingState,
+    billingLabel,
+    hasDraftBills,
+    hasSentBills,
+    blockingReason,
+  };
+}
+
 export function detectMissingMoveInAnchors({
   reservations = [],
   readings = [],
@@ -87,27 +134,38 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     addIssue(issues, "electricity_missing_movein_anchor", "warning", "Missing move-in reading. System will use Graceful Proration Fallback instead of Segment-Based math.", { reservations: missingAnchors.map((e) => e.reservationId) });
   }
 
-  // Compute latestPeriodDisplayStatus using the pre-fetched billStatusMap
+  // Compute canonical billing state using the pre-fetched billStatusMap
   let latestPeriodDisplayStatus = null;
+  let latestPeriodBillingState = "no_active_cycle";
+  let latestPeriodBillingLabel = "No Active Bill";
+  let billingBlockingReason = null;
   if (openPeriod) {
     latestPeriodDisplayStatus = "open";
+    latestPeriodBillingState = "open";
+    latestPeriodBillingLabel = "Active";
   } else if (latestPeriod) {
     const summaryBillIds = (latestPeriod.tenantSummaries || []).map((s) => String(s.billId)).filter(Boolean);
-    if (summaryBillIds.length === 0) {
-      latestPeriodDisplayStatus = latestPeriod.revised ? "revised" : (latestPeriod.status || "closed");
+    const linkedBills = summaryBillIds
+      .map((id) => billStatusMap.get(id))
+      .filter(Boolean);
+    const periodBilling = deriveUtilityPeriodBillingState({
+      period: latestPeriod,
+      utilityType,
+      linkedBills,
+    });
+
+    latestPeriodBillingState = periodBilling.billingState;
+    latestPeriodBillingLabel = periodBilling.billingLabel;
+    billingBlockingReason = periodBilling.blockingReason;
+
+    if (periodBilling.billingState === "ready_to_send") {
+      latestPeriodDisplayStatus = "ready";
+    } else if (periodBilling.billingState === "sent") {
+      latestPeriodDisplayStatus = "finalized";
     } else {
-      const linkedBills = summaryBillIds
-        .map((id) => billStatusMap.get(id))
-        .filter(Boolean);
-      const hasDraft = linkedBills.some(
-        (bill) => getUtilityDispatchEntry(bill, utilityType).state !== "sent",
-      );
-      const hasSent = linkedBills.some(
-        (bill) => getUtilityDispatchEntry(bill, utilityType).state === "sent",
-      );
-      if (hasDraft) latestPeriodDisplayStatus = "ready";
-      else if (hasSent) latestPeriodDisplayStatus = "finalized";
-      else latestPeriodDisplayStatus = latestPeriod.revised ? "revised" : (latestPeriod.status || "closed");
+      latestPeriodDisplayStatus = latestPeriod.revised
+        ? "revised"
+        : (latestPeriod.status || "closed");
     }
   }
 
@@ -132,6 +190,9 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     openPeriodId: openPeriod?._id || null,
     latestPeriodId: latestPeriod?._id || null,
     latestPeriodDisplayStatus,
+    billingState: latestPeriodBillingState,
+    billingLabel: latestPeriodBillingLabel,
+    billingBlockingReason,
     targetCloseDate: openPeriod ? getUtilityTargetCloseDate(openPeriod.startDate) : null,
     issueCodes: issues.map((i) => i.issueCode),
     missingMoveInAnchors: missingAnchors,

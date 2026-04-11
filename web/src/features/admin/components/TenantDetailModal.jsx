@@ -353,7 +353,7 @@ export default function TenantDetailModal({ tenant, onClose }) {
                   <button
                     className="tenant-detail-modal-contract-download"
                     onClick={async () => {
-                      // Capture meter reading — MANDATORY for checkout
+                      // Capture meter reading — required for move-out
                       const kwhInput = prompt(
                         `⚡ Enter the current meter reading for ${tenant.room} (kWh).\n\nThis is required to record the move-out electricity consumption.`,
                         ''
@@ -367,7 +367,7 @@ export default function TenantDetailModal({ tenant, onClose }) {
                       if (!confirm(`Move out ${tenant.name} with meter reading ${meterReading} kWh? This will vacate their bed and mark them as inactive.`)) return;
                       try {
                         const { reservationApi } = await import('../../../shared/api/apiClient');
-                        const res = await reservationApi.checkout(tenant.reservationId, {
+                        const res = await reservationApi.moveOut(tenant.reservationId, {
                           notes: 'Admin move-out',
                           meterReading,
                         });

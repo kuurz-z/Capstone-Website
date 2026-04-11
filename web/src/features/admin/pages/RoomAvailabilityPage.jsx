@@ -6,8 +6,6 @@ import {
   LayoutGrid,
   Settings,
   Plus,
-  Pencil,
-  Trash2,
 } from "lucide-react";
 
 // Components
@@ -498,42 +496,21 @@ function RoomAvailabilityPage() {
       ? [
           {
             key: "action",
-            label: "Actions",
+            label: "Action",
             align: "right",
             render: (r) => (
               <div className="room-action-buttons">
                 <button
-                  className="btn-secondary"
+                  className="btn-secondary room-manage-btn"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleConfigure(r);
                   }}
-                  title="Configure beds"
-                  style={{ padding: "4px 10px", fontSize: "12px" }}
+                  title="Manage room"
+                  type="button"
                 >
                   <Settings size={12} />
-                </button>
-                <button
-                  className="btn-secondary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingRoom(r);
-                  }}
-                  title="Edit room"
-                  style={{ padding: "4px 10px", fontSize: "12px" }}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  className="btn-secondary btn-icon-danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeletingRoom(r);
-                  }}
-                  title="Delete room"
-                  style={{ padding: "4px 10px", fontSize: "12px" }}
-                >
-                  <Trash2 size={12} />
+                  <span>Manage</span>
                 </button>
               </div>
             ),
@@ -619,7 +596,6 @@ function RoomAvailabilityPage() {
             columns={columns}
             data={filteredRooms}
             loading={loading}
-            onRowClick={can("manageRooms") ? handleConfigure : null}
             pagination={{
               page: currentPage,
               pageSize: ROOMS_PER_PAGE,
@@ -774,6 +750,14 @@ function RoomAvailabilityPage() {
             onToggleBed={handleToggleBed}
             onClose={() => setSelectedRoom(null)}
             onSave={handleSaveConfig}
+            onEdit={(room) => {
+              setSelectedRoom(null);
+              setEditingRoom(room);
+            }}
+            onDelete={(room) => {
+              setSelectedRoom(null);
+              setDeletingRoom(room);
+            }}
           />
         )}
 

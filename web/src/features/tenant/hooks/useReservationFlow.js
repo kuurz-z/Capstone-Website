@@ -334,7 +334,8 @@ export default function useReservationFlow() {
 
     const hasVisitScheduled = VISIT_SCHEDULED_STATUSES.includes(status) || Boolean(r.viewingType && r.agreedToPrivacy);
     const isVisitApprovedFlag = VISIT_APPROVED_STATUSES.includes(status) || Boolean(r.visitApproved === true);
-    const hasApplication = APPLICATION_STATUSES.includes(status) || Boolean(r.firstName && r.lastName && r.mobileNumber);
+    const hasApplication =
+      APPLICATION_STATUSES.includes(status) || Boolean(r.applicationSubmittedAt);
     const hasPayment = Boolean(r.proofOfPaymentUrl);
     const isConfirmed = status === "reserved" || r.paymentStatus === "paid";
 
@@ -1152,6 +1153,7 @@ export default function useReservationFlow() {
           companyIDUrl,
           companyIDReason,
           validIDType,
+          submitApplication: true,
         });
         setApplicationSubmitted(true);
         setEditingApplication(false);

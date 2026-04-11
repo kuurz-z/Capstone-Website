@@ -336,10 +336,10 @@
 .sa2-badge-pending { background: #fef3c7; color: #b45309; }
 .sa2-badge-reserved,
 .sa2-badge-confirmed { background: #dbeafe; color: #1d4ed8; }
-.sa2-badge-checked-in { background: #dcfce7; color: #15803d; }
+.sa2-badge-moved-in { background: #dcfce7; color: #15803d; }
 .sa2-badge-cancelled,
 .sa2-badge-rejected { background: #fee2e2; color: #dc2626; }
-.sa2-badge-checked-out { background: #f1f5f9; color: #64748b; }
+.sa2-badge-moved-out { background: #f1f5f9; color: #64748b; }
 
 .sa2-empty {
   font-size: 13px;

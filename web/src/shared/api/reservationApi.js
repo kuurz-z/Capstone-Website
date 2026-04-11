@@ -19,7 +19,7 @@ export const reservationApi = {
   },
 
   /**
-   * Get current checked-in residents for admin tenants page
+   * Get current moved-in residents for admin tenants page
    */
   getCurrentResidents: (params = {}) => {
     const searchParams = new URLSearchParams();
@@ -135,8 +135,18 @@ export const reservationApi = {
     ),
 
   /**
-   * Check out a tenant (admin only)
+   * Move out a tenant (admin only)
+   * Uses the legacy /checkout route for compatibility.
    */
+  moveOut: (reservationId, data) =>
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/checkout`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+      }),
+    ),
+
+  // Legacy alias for the move-out route.
   checkout: (reservationId, data) =>
     withLifecycleNormalization(
       authFetch(`/reservations/${reservationId}/checkout`, {

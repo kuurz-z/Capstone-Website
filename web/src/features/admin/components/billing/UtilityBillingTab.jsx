@@ -5,8 +5,8 @@ import {
   Plus,
   Check,
   AlertTriangle,
-  RefreshCw,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   Trash2,
@@ -28,7 +28,6 @@ import {
   useUpdateUtilityPeriod,
   useCloseUtilityPeriod,
   useSendUtilityPeriod,
-  useReviseUtilityResult,
   useDeleteUtilityReading,
   useUpdateUtilityReading,
   useDeleteUtilityPeriod,
@@ -90,19 +89,25 @@ const getPeriodLabel = (period) => {
   return `${fmtMonthYear(period.startDate)} Cycle`;
 };
 const getDisplayStatus = (period) =>
-  period?.displayStatus || period?.status || "closed";
+  period?.billingState || period?.displayStatus || period?.status || "closed";
 const getDisplayStatusLabel = (period) => {
   const status = getDisplayStatus(period);
-  if (status === "ready") return "Ready";
+  if (status === "ready_to_send" || status === "ready") return "Ready to Send";
+  if (status === "sent" || status === "finalized") return "Sent";
+  if (status === "no_active_cycle") return "No Active Bill";
+  if (status === "open") return "Active";
   return status;
 };
 const getRoomBadgeLabel = (room) => {
-  if (!room) return "Closed";
-  if (room.latestPeriodDisplayStatus === "ready") return "Ready To Send";
-  if (room.latestPeriodDisplayStatus === "finalized") return "Sent";
-  if (room.hasOpenPeriod) return "Active";
-  return "Closed";
+  if (!room) return "No Active Bill";
+  return room.billingLabel || "No Active Bill";
 };
+const canEditPeriod = (period) =>
+  Boolean(period) &&
+  (period.canEdit ?? getDisplayStatus(period) !== "sent");
+const canDeletePeriod = (period) =>
+  Boolean(period) &&
+  (period.canDelete ?? getDisplayStatus(period) !== "sent");
 const getCycleLabel = (period) =>
   period
     ? `${fmtShortDate(period.startDate)} - ${fmtShortDate(period.endDate || period.targetCloseDate) || "Ongoing"}`
@@ -319,23 +324,20 @@ const UtilityBillingTab = ({ utilityType }) => {
     onConfirm: null,
   });
   const [generationBlocker, setGenerationBlocker] = useState(null);
-  const [editingRateId, setEditingRateId] = useState(null);
-  const [editingRateValue, setEditingRateValue] = useState("");
-
   const [isExporting, setIsExporting] = useState(false);
-  const [detailVisibility, setDetailVisibility] = useState({
-    segments: true,
-    tenantSummary: true,
-  });
   const [showSnapshotDetails, setShowSnapshotDetails] = useState(false);
-  const [advancedPeriodActions, setAdvancedPeriodActions] = useState({});
 
-  // Revision note modal
-  const [reviseModal, setReviseModal] = useState({
+  const [editPeriodModal, setEditPeriodModal] = useState({
     open: false,
     periodId: null,
   });
-  const [revisionNote, setRevisionNote] = useState("");
+  const [editPeriodForm, setEditPeriodForm] = useState({
+    startDate: "",
+    endDate: "",
+    startReading: "",
+    endReading: "",
+    ratePerUnit: "",
+  });
 
   // Edit reading modal
   const [editReadingModal, setEditReadingModal] = useState({
@@ -413,7 +415,6 @@ const UtilityBillingTab = ({ utilityType }) => {
   const updatePeriod = useUpdateUtilityPeriod(utilityType);
   const closePeriod = useCloseUtilityPeriod(utilityType);
   const sendPeriod = useSendUtilityPeriod(utilityType);
-  const reviseResult = useReviseUtilityResult(utilityType);
   const deleteReading = useDeleteUtilityReading(utilityType);
   const updateReading = useUpdateUtilityReading(utilityType);
   const deletePeriod = useDeleteUtilityPeriod(utilityType);
@@ -605,14 +606,13 @@ const UtilityBillingTab = ({ utilityType }) => {
   const readyRooms = useMemo(
     () =>
       filteredRooms.filter(
-        (room) =>
-          room.latestPeriodDisplayStatus === "ready" && room.latestPeriodId,
+        (room) => room.billingState === "ready_to_send" && room.latestPeriodId,
       ),
     [filteredRooms],
   );
   const selectedReadyPeriod =
     selectedPeriodFromList &&
-    getDisplayStatus(selectedPeriodFromList) === "ready"
+    getDisplayStatus(selectedPeriodFromList) === "ready_to_send"
       ? selectedPeriodFromList
       : null;
   const currentPeriodUsage =
@@ -737,20 +737,6 @@ const UtilityBillingTab = ({ utilityType }) => {
       return;
     }
     setSelectedPeriodId(periodId);
-    setDetailVisibility({
-      segments: true,
-      tenantSummary: true,
-    });
-  };
-
-  const beginRateEdit = (period) => {
-    setEditingRateId(period.id);
-    setEditingRateValue(String(period.ratePerUnit ?? ""));
-  };
-
-  const cancelRateEdit = () => {
-    setEditingRateId(null);
-    setEditingRateValue("");
   };
 
   const openPanel = (panel, extras = {}) => {
@@ -783,13 +769,6 @@ const UtilityBillingTab = ({ utilityType }) => {
         ...extras,
       }));
     }
-  };
-
-  const toggleAdvancedPeriodActions = (periodId) => {
-    setAdvancedPeriodActions((current) => ({
-      ...current,
-      [periodId]: !current[periodId],
-    }));
   };
 
   const closePanel = () => setActivePanel(null);
@@ -846,19 +825,6 @@ const UtilityBillingTab = ({ utilityType }) => {
       }));
     }
   }, [activePanel, openPeriodForRoom]);
-
-  const handleSaveRate = async (periodId) => {
-    try {
-      await updatePeriod.mutateAsync({
-        periodId,
-        ratePerUnit: Number(editingRateValue),
-      });
-      notify.success("Billing period rate updated.");
-      cancelRateEdit();
-    } catch (err) {
-      notify.error(err, "Failed to update billing period rate.");
-    }
-  };
 
   const handleEditReading = (r) => {
     setEditReadingForm({
@@ -1007,23 +973,81 @@ const UtilityBillingTab = ({ utilityType }) => {
     }
   };
 
-  const handleRevise = (periodId) => {
-    setRevisionNote("");
-    setReviseModal({ open: true, periodId });
-  };
 
-  const handleReviseConfirm = async () => {
-    const { periodId } = reviseModal;
-    setReviseModal({ open: false, periodId: null });
-    try {
-      await reviseResult.mutateAsync({ periodId, revisionNote });
-      notify.success("Billing result revised.");
-    } catch (err) {
-      notify.error(err, "Failed to revise.");
-    }
-  };
 
   // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Draft bills handlers (expand-on-edit) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+
+  const handleOpenEditPeriod = (period) => {
+    if (!period?.id) return;
+    setEditPeriodForm({
+      startDate: toInputDate(period.startDate) || "",
+      endDate: toInputDate(period.endDate) || "",
+      startReading:
+        period.startReading !== undefined && period.startReading !== null
+          ? String(period.startReading)
+          : "",
+      endReading:
+        period.endReading !== undefined && period.endReading !== null
+          ? String(period.endReading)
+          : "",
+      ratePerUnit:
+        period.ratePerUnit !== undefined && period.ratePerUnit !== null
+          ? String(period.ratePerUnit)
+          : "",
+    });
+    setEditPeriodModal({ open: true, periodId: period.id });
+  };
+
+  const handleSaveEditPeriod = async () => {
+    const { periodId } = editPeriodModal;
+    if (!periodId) return;
+    if (!editPeriodForm.startDate || !editPeriodForm.ratePerUnit) {
+      return notify.warn("Start date and rate are required.");
+    }
+    if (
+      editPeriodForm.endDate &&
+      editPeriodForm.endDate < editPeriodForm.startDate
+    ) {
+      return notify.warn("End date must be on or after the start date.");
+    }
+    if (utilityType === "electricity") {
+      if (!editPeriodForm.endDate) {
+        return notify.warn("End date is required.");
+      }
+      if (
+        editPeriodForm.startReading === "" ||
+        editPeriodForm.endReading === ""
+      ) {
+        return notify.warn("Start and end meter readings are required.");
+      }
+      if (
+        Number(editPeriodForm.endReading) < Number(editPeriodForm.startReading)
+      ) {
+        return notify.warn(
+          "End meter reading must be greater than or equal to start meter reading.",
+        );
+      }
+    }
+
+    try {
+      await updatePeriod.mutateAsync({
+        periodId,
+        startDate: editPeriodForm.startDate,
+        endDate: editPeriodForm.endDate || null,
+        ratePerUnit: Number(editPeriodForm.ratePerUnit),
+        ...(utilityType === "electricity"
+          ? {
+              startReading: Number(editPeriodForm.startReading),
+              endReading: Number(editPeriodForm.endReading),
+            }
+          : {}),
+      });
+      notify.success("Billing period updated.");
+      setEditPeriodModal({ open: false, periodId: null });
+    } catch (err) {
+      notify.error(err, "Failed to update billing period.");
+    }
+  };
 
   const sendSinglePeriod = async ({ periodId, roomName, cycleText }) => {
     setSendingByPeriodId((prev) => ({ ...prev, [periodId]: true }));
@@ -1094,7 +1118,7 @@ const UtilityBillingTab = ({ utilityType }) => {
               await sendSinglePeriod({
                 periodId: room.latestPeriodId,
                 roomName: getRoomLabel(room),
-                cycleText: room.latestPeriodDisplayStatus || "ready cycle",
+                cycleText: room.billingLabel || "ready cycle",
               });
               successCount += 1;
             } catch {
@@ -1327,56 +1351,16 @@ const UtilityBillingTab = ({ utilityType }) => {
                       </span>
                     )}
                   </div>
-                  <div className="eb-result-flow__actions">
-                    <button
-                      className="eb-btn-text eb-btn-text--subtle"
-                      onClick={() =>
-                        setDetailVisibility((current) => ({
-                          ...current,
-                          segments: !current.segments,
-                        }))
-                      }
-                    >
-                      {detailVisibility.segments
-                        ? "Hide segments"
-                        : "View segments"}
-                    </button>
-                    <button
-                      className="eb-btn-text eb-btn-text--subtle"
-                      onClick={() =>
-                        setDetailVisibility((current) => ({
-                          ...current,
-                          tenantSummary: !current.tenantSummary,
-                        }))
-                      }
-                    >
-                      {detailVisibility.tenantSummary
-                        ? "Hide tenants"
-                        : "View tenants"}
-                    </button>
-                    <button
-                      className="eb-btn-text eb-btn-text--primary"
-                      onClick={() => handleRevise(selectedPeriodId)}
-                      disabled={reviseResult.isPending}
-                    >
-                      <RefreshCw
-                        size={13}
-                        className={reviseResult.isPending ? "eb-spin" : ""}
-                      />
-                      <span>Sync</span>
-                    </button>
-                  </div>
                 </div>
 
                 <div className="eb-result-flow__content">
-                  {detailVisibility.segments && (
-                    <div className="eb-segment-grid">
-                      {(result.segments || []).map((seg, index) => (
-                        <div
-                          className="eb-table-fluid eb-segment-card"
-                          key={`${period.id}-segment-${index}`}
-                        >
-                          <table className="eb-table-minimal eb-table-minimal--bordered">
+                  <div className="eb-segment-grid">
+                    {(result.segments || []).map((seg, index) => (
+                      <div
+                        className="eb-table-fluid eb-segment-card"
+                        key={`${period.id}-segment-${index}`}
+                      >
+                        <table className="eb-table-minimal eb-table-minimal--bordered">
                             <colgroup>
                               <col style={{ width: "45%" }} />
                               <col style={{ width: "25%" }} />
@@ -1501,31 +1485,29 @@ const UtilityBillingTab = ({ utilityType }) => {
                                 </td>
                               </tr>
                             </tbody>
-                          </table>
-                          <div className="eb-section__footer eb-section__footer--export">
-                            <button
-                              type="button"
-                              className="eb-btn eb-btn--ghost"
-                              onClick={() =>
-                                handleExportSegment(
-                                  period,
-                                  seg,
-                                  index,
-                                  result.ratePerUnit,
-                                )
-                              }
-                            >
-                              <Download size={13} /> Export
-                            </button>
-                          </div>
+                        </table>
+                        <div className="eb-section__footer eb-section__footer--export">
+                          <button
+                            type="button"
+                            className="eb-btn eb-btn--ghost"
+                            onClick={() =>
+                              handleExportSegment(
+                                period,
+                                seg,
+                                index,
+                                result.ratePerUnit,
+                              )
+                            }
+                          >
+                            <Download size={13} /> Export
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </div>
+                    ))}
+                  </div>
 
-                  {detailVisibility.tenantSummary && (
-                    <div className="eb-section-divider">
-                      <div className="eb-table-fluid">
+                  <div className="eb-section-divider">
+                    <div className="eb-table-fluid">
                         <table className="eb-table-minimal w-100">
                           <colgroup>
                             <col style={{ width: "32%" }} />
@@ -1583,9 +1565,8 @@ const UtilityBillingTab = ({ utilityType }) => {
                             <Download size={13} /> Export
                           </button>
                         </div>
-                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </>
@@ -1684,7 +1665,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                     </div>
                     <div className="eb-room__bottom-row">
                       <span
-                        className={`eb-room__badge${room.hasOpenPeriod ? " eb-room__badge--open" : ""}${isEmpty ? " eb-room__badge--empty" : ""}`}
+                        className={`eb-room__badge eb-room__badge--${room.billingState || "no_active_cycle"}${isEmpty ? " eb-room__badge--empty" : ""}`}
                       >
                         {getRoomBadgeLabel(room)}
                       </span>
@@ -2242,7 +2223,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                                     <span className="eb-period-summary__meta">
                                       {p.status === "closed" ||
                                       p.status === "revised"
-                                        ? "Check-in start to billing end"
+                                        ? "Move-in start to billing end"
                                         : "Current active cycle"}
                                     </span>
                                   </div>
@@ -2275,29 +2256,20 @@ const UtilityBillingTab = ({ utilityType }) => {
                                   className="eb-cell--actions eb-cell--actions-nowrap"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  {(p.status === "closed" ||
-                                    p.status === "revised") && (
+                                  {getDisplayStatus(p) === "ready_to_send" && (
                                     <button
-                                      className="eb-btn eb-btn--xs eb-btn--outline"
-                                      onClick={() => selectAndFocusPeriod(p.id)}
-                                    >
-                                      {selectedPeriodId === p.id
-                                        ? "Hide Details"
-                                        : "View Details"}
-                                    </button>
-                                  )}
-                                  {getDisplayStatus(p) === "ready" && (
-                                    <button
+                                      type="button"
                                       className="eb-btn eb-btn--xs eb-btn--primary"
-                                      onClick={() =>
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         handleSendPeriod(
                                           p,
                                           getRoomLabel(
                                             selectedRoom || {},
                                             "Room",
                                           ),
-                                        )
-                                      }
+                                        );
+                                      }}
                                       disabled={
                                         Boolean(sendingByPeriodId[p.id]) ||
                                         sendPeriod.isPending
@@ -2309,81 +2281,60 @@ const UtilityBillingTab = ({ utilityType }) => {
                                         : "Send"}
                                     </button>
                                   )}
-                                  <button
-                                    className="eb-btn eb-btn--xs eb-btn--ghost"
-                                    onClick={() =>
-                                      toggleAdvancedPeriodActions(p.id)
-                                    }
-                                  >
-                                    {advancedPeriodActions[p.id]
-                                      ? "Hide Advanced"
-                                      : "Advanced"}
-                                  </button>
-
-                                  {advancedPeriodActions[p.id] && (
-                                    <>
-                                      {p.status === "open" &&
-                                        (editingRateId === p.id ? (
-                                          <div
-                                            className="eb-rate-editor"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <input
-                                              type="number"
-                                              step="0.01"
-                                              className="eb-inline-input eb-inline-input--rate"
-                                              value={editingRateValue}
-                                              onChange={(e) =>
-                                                setEditingRateValue(
-                                                  e.target.value,
-                                                )
-                                              }
-                                            />
-                                            <button
-                                              className="eb-btn eb-btn--xs eb-btn--primary"
-                                              onClick={() =>
-                                                handleSaveRate(p.id)
-                                              }
-                                              disabled={updatePeriod.isPending}
-                                            >
-                                              <Save size={10} /> Save
-                                            </button>
-                                            <button
-                                              className="eb-btn eb-btn--xs eb-btn--ghost"
-                                              onClick={cancelRateEdit}
-                                            >
-                                              Cancel
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <button
-                                            className="eb-btn eb-btn--xs eb-btn--outline"
-                                            onClick={() => beginRateEdit(p)}
-                                          >
-                                            <Pencil size={11} /> Edit Rate
-                                          </button>
-                                        ))}
-                                      {(p.status === "closed" ||
-                                        p.status === "revised") && (
-                                        <button
-                                          className="eb-btn eb-btn--xs eb-btn--ghost"
-                                          onClick={() => handleRevise(p.id)}
-                                          disabled={reviseResult.isPending}
-                                        >
-                                          <RefreshCw size={11} /> Re-run
-                                        </button>
+                                  {canEditPeriod(p) && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--outline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenEditPeriod(p);
+                                      }}
+                                    >
+                                      <Pencil size={11} /> Edit
+                                    </button>
+                                  )}
+                                  {canDeletePeriod(p) && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--danger"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeletePeriod(p.id);
+                                      }}
+                                      disabled={deletePeriod.isPending}
+                                    >
+                                      <Trash2 size={11} />{" "}
+                                      {deletePeriod.isPending
+                                        ? "Deleting..."
+                                        : "Delete"}
+                                    </button>
+                                  )}
+                                  {(p.status === "closed" ||
+                                    p.status === "revised") && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        selectAndFocusPeriod(p.id);
+                                      }}
+                                      aria-label={
+                                        selectedPeriodId === p.id
+                                          ? "Collapse billing cycle details"
+                                          : "Expand billing cycle details"
+                                      }
+                                      title={
+                                        selectedPeriodId === p.id
+                                          ? "Hide details"
+                                          : "Show details"
+                                      }
+                                    >
+                                      {selectedPeriodId === p.id ? (
+                                        <ChevronUp size={14} />
+                                      ) : (
+                                        <ChevronDown size={14} />
                                       )}
-                                      <button
-                                        className="eb-btn eb-btn--xs eb-btn--danger"
-                                        onClick={() => handleDeletePeriod(p.id)}
-                                        disabled={deletePeriod.isPending}
-                                      >
-                                        <Trash2 size={11} />{" "}
-                                        {deletePeriod.isPending
-                                          ? "Deleting..."
-                                          : "Delete"}
-                                      </button>
-                                    </>
+                                    </button>
                                   )}
                                 </td>
                               </tr>
@@ -2517,6 +2468,119 @@ const UtilityBillingTab = ({ utilityType }) => {
         </div>
       )}
 
+      {editPeriodModal.open && (
+        <div
+          className="eb-modal-overlay"
+          onClick={() => setEditPeriodModal({ open: false, periodId: null })}
+        >
+          <div className="eb-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="eb-modal__header">
+              <span>Edit Billing Period</span>
+              <button
+                className="eb-panel__close"
+                onClick={() =>
+                  setEditPeriodModal({ open: false, periodId: null })
+                }
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="eb-modal__body">
+              <div className="eb-field">
+                <label>Cycle Start</label>
+                <input
+                  type="date"
+                  value={editPeriodForm.startDate}
+                  onChange={(e) =>
+                    setEditPeriodForm((current) => ({
+                      ...current,
+                      startDate: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="eb-field">
+                <label>Cycle End</label>
+                <input
+                  type="date"
+                  value={editPeriodForm.endDate}
+                  onChange={(e) =>
+                    setEditPeriodForm((current) => ({
+                      ...current,
+                      endDate: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              {utilityType === "electricity" && (
+                <>
+                  <div className="eb-field">
+                    <label>Start Meter Reading</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editPeriodForm.startReading}
+                      onChange={(e) =>
+                        setEditPeriodForm((current) => ({
+                          ...current,
+                          startReading: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="eb-field">
+                    <label>End Meter Reading</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editPeriodForm.endReading}
+                      onChange={(e) =>
+                        setEditPeriodForm((current) => ({
+                          ...current,
+                          endReading: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </>
+              )}
+              <div className="eb-field">
+                <label>Rate</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editPeriodForm.ratePerUnit}
+                  onChange={(e) =>
+                    setEditPeriodForm((current) => ({
+                      ...current,
+                      ratePerUnit: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="eb-modal__footer">
+              <button
+                className="eb-btn eb-btn--primary"
+                onClick={handleSaveEditPeriod}
+                disabled={updatePeriod.isPending}
+              >
+                <Save size={13} />{" "}
+                {updatePeriod.isPending ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                className="eb-btn eb-btn--ghost"
+                onClick={() =>
+                  setEditPeriodModal({ open: false, periodId: null })
+                }
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Standard confirm modal */}
       <ConfirmModal
         isOpen={confirmModal.open}
@@ -2527,66 +2591,6 @@ const UtilityBillingTab = ({ utilityType }) => {
         variant={confirmModal.variant || "danger"}
         confirmText={confirmModal.confirmText || "Confirm"}
       />
-
-      {/* Revision note modal */}
-      {reviseModal.open && (
-        <div
-          className="eb-modal-overlay"
-          onClick={() => setReviseModal({ open: false, periodId: null })}
-        >
-          <div className="eb-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="eb-modal__header">
-              <span>Re-run Billing Computation</span>
-              <button
-                className="eb-panel__close"
-                onClick={() => setReviseModal({ open: false, periodId: null })}
-              >
-                <X size={15} />
-              </button>
-            </div>
-            <div className="eb-modal__body">
-              <p
-                style={{
-                  marginBottom: "12px",
-                  fontSize: "0.85rem",
-                  color: "var(--text-muted)",
-                }}
-              >
-                This will re-compute billing for this closed period using the
-                current meter readings. Add a note to explain why.
-              </p>
-              <div className="eb-field">
-                <label>Revision Note (optional)</label>
-                <input
-                  type="text"
-                  value={revisionNote}
-                  onChange={(e) => setRevisionNote(e.target.value)}
-                  placeholder="e.g. Corrected reading entered on Mar 15"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div className="eb-modal__footer">
-              <button
-                className="eb-btn eb-btn--primary"
-                onClick={handleReviseConfirm}
-                disabled={reviseResult.isPending}
-              >
-                <RefreshCw size={13} />{" "}
-                {reviseResult.isPending
-                  ? "Re-running..."
-                  : "Re-run Computation"}
-              </button>
-              <button
-                className="eb-btn eb-btn--ghost"
-                onClick={() => setReviseModal({ open: false, periodId: null })}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 };

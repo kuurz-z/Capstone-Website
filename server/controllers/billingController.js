@@ -389,7 +389,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
  *
  * @param {string}  roomType    – Room.type enum value
  * @param {number}  totalWater  – Total water charge entered for the room
- * @param {number}  tenantCount – Number of checked-in tenants in the room
+ * @param {number}  tenantCount – Number of moved-in tenants in the room
  * @returns {number} Per-tenant water amount
  */
 const computeWaterShare = (roomType, totalWater, tenantCount) => {
@@ -607,7 +607,7 @@ export const getRoomsWithTenants = async (req, res, next) => {
       )
       .sort({ name: 1 });
 
-    // Batch fetch ALL checked-in reservations for every room in one query (N+1 fix)
+    // Batch fetch ALL moved-in reservations for every room in one query (N+1 fix)
     // Was: 1 Reservation.find() per room inside Promise.all → N+1 queries
     // Now: 2 queries total regardless of number of rooms
     const roomIds = rooms.map((r) => r._id);
@@ -1131,7 +1131,7 @@ export const generateBulkBills = async (req, res, next) => {
         continue;
       }
 
-      // Find checked-in tenants for this room
+      // Find moved-in tenants for this room
       const checkedInReservations = await Reservation.find({
         roomId: room._id,
         status: { $in: CURRENT_RESIDENT_STATUS_QUERY },

@@ -63,7 +63,7 @@ async function ensureReading({ room, admin, reservation, eventType, reading }) {
 
   const allRoomReservations = await Reservation.find({
     roomId: room._id,
-    status: { $in: ["checked-in", "checked-out"] },
+    status: { $in: ["moveIn", "moveOut"] },
     isArchived: { $ne: true },
   })
     .select("userId checkInDate checkOutDate")

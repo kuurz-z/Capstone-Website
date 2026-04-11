@@ -40,7 +40,7 @@ const allReadings = await UtilityReading.find({
 
 const reservations = await Reservation.find({
   roomId: room._id,
-  status: { $in: ["checked-in", "checked-out"] },
+  status: { $in: ["moveIn", "moveOut"] },
   isArchived: { $ne: true },
   checkInDate: { $lt: period.endDate },
   $or: [{ checkOutDate: null }, { checkOutDate: { $gt: period.startDate } }],

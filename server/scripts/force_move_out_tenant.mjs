@@ -51,14 +51,14 @@ async function main() {
 
   const reservation = await Reservation.findOne({
     userId: user._id,
-    status: "checked-in",
+    status: "moveIn",
     isArchived: { $ne: true },
   })
     .sort({ checkInDate: -1, createdAt: -1 })
     .populate("roomId");
 
   if (!reservation) {
-    throw new Error(`No checked-in reservation found for ${email}`);
+    throw new Error(`No moved-in reservation found for ${email}`);
   }
 
   const room = await Room.findById(reservation.roomId?._id || reservation.roomId);
@@ -103,16 +103,16 @@ async function main() {
 
   if (!existingMoveOut) {
     // Build active list for the segment ending at move-out: includes departing tenant.
-    const stillCheckedIn = await Reservation.find({
+    const stillMovedIn = await Reservation.find({
       roomId: room._id,
-      status: "checked-in",
+      status: "moveIn",
       isArchived: { $ne: true },
     })
       .select("userId")
       .lean();
 
     const activeTenantIds = uniqObjectIds([
-      ...stillCheckedIn.map((entry) => entry.userId).filter(Boolean),
+      ...stillMovedIn.map((entry) => entry.userId).filter(Boolean),
       user._id,
     ]);
 
@@ -142,9 +142,9 @@ async function main() {
     log(`Existing move-out UtilityReading found (${existingMoveOut._id}); skipping new reading.`);
   }
 
-  reservation.status = "checked-out";
+  reservation.status = "moveOut";
   reservation.checkOutDate = now;
-  reservation.notes = `${reservation.notes ? `${reservation.notes} | ` : ""}Force checked out for billing verification test`;
+  reservation.notes = `${reservation.notes ? `${reservation.notes} | ` : ""}Force moved out for billing verification test`;
   await reservation.save();
 
   if (reservation.selectedBed?.id) {
@@ -166,7 +166,7 @@ async function main() {
   log(`Tenant: ${user.email}`);
   log(`Reservation: ${reservation._id}`);
   log(`Room: ${room.name || room.roomNumber}`);
-  log(`Checkout date: ${now.toISOString()}`);
+  log(`Move-out date: ${now.toISOString()}`);
   log(`Meter reading used: ${meterReading}`);
 }
 

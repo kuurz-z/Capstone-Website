@@ -1,6 +1,6 @@
 /**
  * One-off backfill: create a BillingPeriod + move-in MeterReading
- * for the checked-in tenant in room GP-Q-001.
+ * for the moved-in tenant in room GP-Q-001.
  *
  * Safe to re-run — idempotent (skips if period/reading already exists).
  *
@@ -41,26 +41,26 @@ async function main() {
   }
   ok(`Room found: ${room.name} (${room._id}) — branch: ${room.branch}`);
 
-  // ── 2. Find checked-in tenant(s) ──────────────────────────────────────────
+  // ── 2. Find moved-in tenant(s) ──────────────────────────────────────────
   const reservations = await Reservation.find({
     roomId: room._id,
-    status: "checked-in",
+    status: "moveIn",
     isArchived: { $ne: true },
   })
     .populate("userId", "firstName lastName email")
     .lean();
 
   if (reservations.length === 0) {
-    console.error(`  ❌ No checked-in tenants found in ${ROOM_NAME}.`);
+    console.error(`  ❌ No moved-in tenants found in ${ROOM_NAME}.`);
     process.exit(1);
   }
-  ok(`Found ${reservations.length} checked-in tenant(s):`);
+  ok(`Found ${reservations.length} moved-in tenant(s):`);
   for (const r of reservations) {
     const name = `${r.userId?.firstName || ""} ${r.userId?.lastName || ""}`.trim();
-    info(`  • ${name} (${r.userId?.email}) — check-in: ${r.checkInDate ? new Date(r.checkInDate).toDateString() : "—"}`);
+    info(`  • ${name} (${r.userId?.email}) — move-in: ${r.checkInDate ? new Date(r.checkInDate).toDateString() : "—"}`);
   }
 
-  // Use the earliest check-in date as the period start
+  // Use the earliest move-in date as the period start
   const checkInDates = reservations
     .map((r) => r.checkInDate ? new Date(r.checkInDate) : new Date())
     .sort((a, b) => a - b);

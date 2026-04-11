@@ -8,9 +8,9 @@
  *
  * OCCUPANCY RULES:
  * - Reserved (status=reserved): Room is occupied, bed is assigned
- * - Checked-in (status=checked-in): Room is occupied, bed is occupied
+ * - Moved in (status=moveIn): Room is occupied, bed is occupied
  * - Cancelled (status=cancelled): Room occupancy decreases, bed is vacated
- * - Checked-out (status=checked-out): Room occupancy decreases, bed is vacated
+ * - Moved out (status=moveOut): Room occupancy decreases, bed is vacated
  *
  * ============================================================================
  */
@@ -264,7 +264,7 @@ export const updateOccupancyOnReservationChange = async (
       };
 
       // === INCREASE OCCUPANCY ===
-      // Transition to reserved (from any state that isn't already reserved/checked-in)
+      // Transition to reserved (from any state that isn't already reserved/moved in)
       if (
         newStatus === "reserved" &&
         previousStatus !== "reserved" &&
@@ -289,7 +289,7 @@ export const updateOccupancyOnReservationChange = async (
         }
       }
 
-      // Transition to checked-in:
+      // Transition to moved in:
       //  a) coming from "reserved" → upgrade bed from "reserved" → "occupied" (no occupancy count change)
       //  b) coming from any other state → increase occupancy + occupy bed
       if (newStatus === "moveIn" && previousStatus !== "moveIn") {
@@ -372,7 +372,7 @@ export const updateOccupancyOnReservationChange = async (
 };
 
 /**
- * Recalculate occupancy for a room based on confirmed/checked-in reservations
+ * Recalculate occupancy for a room based on reserved/moved-in reservations
  * @param {string} roomId - Room ID to recalculate
  * @returns {Promise<Object>} - Updated room
  */
@@ -383,7 +383,7 @@ export const recalculateRoomOccupancy = async (roomId) => {
       throw new Error(`Room ${roomId} not found`);
     }
 
-    // Count all reserved and checked-in reservations
+    // Count all reserved and moved-in reservations
     const activeReservations = await Reservation.find({
       roomId,
       isArchived: false,

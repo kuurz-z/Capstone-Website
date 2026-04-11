@@ -31,7 +31,7 @@
 
 Lilycrest DMS is built for **Lilycrest Dormitory**, a multi-branch residential facility operating in Makati, Philippines. The system digitizes and streamlines dormitory operations including:
 
-- **Reservation lifecycle** — from inquiry to check-in via a guided multi-step workflow
+- **Reservation lifecycle** — from inquiry to move-in via a guided multi-step workflow
 - **Room & occupancy management** — real-time bed-level tracking with automatic availability updates
 - **Billing & online payments** — room-based utility bill generation with pro-rata distribution and PayMongo checkout
 - **Maintenance** — tenant-submitted requests with priority tracking and resolution stats
@@ -186,7 +186,7 @@ Capstone-Website/
 - Unified reservation and inquiry management
 - Room management with 3-tab interface (Availability, Setup, Occupancy)
 - Room-based billing with pro-rata utility distribution
-- Tenant lifecycle management (pending → confirmed → checked-in → checked-out)
+- Tenant lifecycle management (pending → confirmed → moved in → moved out)
 - Maintenance request management
 - Comprehensive audit trail for all actions
 - Vacancy date forecasting

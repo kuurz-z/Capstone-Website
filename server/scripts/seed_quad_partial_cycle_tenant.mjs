@@ -3,13 +3,13 @@
  *
  * What it does:
  * - Finds a real non-full quadruple-sharing room.
- * - Seeds staggered checked-in tenants inside the same billing cycle.
+ * - Seeds staggered moved-in tenants inside the same billing cycle.
  * - Ensures an open electricity BillingPeriod exists for the room.
  * - Records move-in MeterReading entries for the seeded tenants.
  *
  * Safe to re-run:
  * - Reuses seeded users by email.
- * - Reuses reservations by user + room + check-in date.
+ * - Reuses reservations by user + room + move-in date.
  * - Reuses move-in readings if they already exist.
  *
  * Usage:
@@ -164,13 +164,13 @@ async function ensureReservation({ room, user, moveInDate }) {
   });
 
   if (reservation) {
-    if (reservation.status !== "checked-in") {
-      reservation.status = "checked-in";
+    if (reservation.status !== "moveIn") {
+      reservation.status = "moveIn";
       reservation.paymentStatus = "paid";
       await reservation.save();
-      ok(`Updated reservation to checked-in for ${user.email}`);
+      ok(`Updated reservation to moveIn for ${user.email}`);
     } else {
-      skip(`Reusing existing checked-in reservation for ${user.email}`);
+      skip(`Reusing existing moved-in reservation for ${user.email}`);
     }
     return reservation;
   }
@@ -190,14 +190,14 @@ async function ensureReservation({ room, user, moveInDate }) {
     totalPrice: room.monthlyPrice ?? room.price ?? 0,
     monthlyRent: room.monthlyPrice ?? room.price ?? 0,
     reservationFeeAmount: 2000,
-    status: "checked-in",
+    status: "moveIn",
     paymentStatus: "paid",
     roomConfirmed: true,
     agreedToPrivacy: true,
     agreedToCertification: true,
   });
 
-  ok(`Created checked-in reservation for ${user.email}`);
+  ok(`Created moved-in reservation for ${user.email}`);
   return reservation;
 }
 
@@ -281,7 +281,7 @@ async function ensureMoveInReading({ room, reservation, user, moveInDate, billin
 
   const activeTenantIds = await Reservation.find({
     roomId: room._id,
-    status: "checked-in",
+    status: "moveIn",
     isArchived: { $ne: true },
   }).distinct("userId");
 
@@ -383,7 +383,7 @@ async function main() {
   const finalRoom = await Room.findById(room._id).lean();
   const finalReservations = await Reservation.find({
     roomId: room._id,
-    status: "checked-in",
+    status: "moveIn",
     isArchived: { $ne: true },
   })
     .populate("userId", "firstName lastName email")
@@ -395,7 +395,7 @@ async function main() {
   console.log(`  Billing cycle start: ${BILLING_CYCLE_START.toISOString().slice(0, 10)}`);
   console.log(`  Open rate: PHP ${BILLING_RATE}/kWh`);
   console.log(`  Occupancy: ${finalRoom.currentOccupancy}/${finalRoom.capacity}`);
-  console.log("  Checked-in tenants:");
+  console.log("  Moved-in tenants:");
   for (const reservation of finalReservations) {
     const fullName = `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim();
     console.log(

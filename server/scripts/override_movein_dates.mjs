@@ -46,7 +46,7 @@ async function main() {
     reservation.checkInDate = item.checkInDate;
 
     if (
-      reservation.status === "checked-out" &&
+      reservation.status === "moveOut" &&
       reservation.checkOutDate &&
       reservation.checkOutDate < item.checkInDate
     ) {

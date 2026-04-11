@@ -109,7 +109,7 @@ async function repairRoom(roomId, archivedReservationIds = new Set()) {
   const currentOccupancy = await Reservation.countDocuments({
     roomId,
     isArchived: { $ne: true },
-    status: { $in: ["reserved", "checked-in"] },
+    status: { $in: ["reserved", "moveIn"] },
   });
 
   room.currentOccupancy = currentOccupancy;

@@ -1,4 +1,5 @@
 import { BedDouble, Lock, Settings, Unlock, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { formatRoomType } from "../../utils/formatters";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
@@ -6,8 +7,12 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
   useEscapeClose(true, onClose);
   const roomInfo = room.room || room;
   const beds = room.beds || [];
-  const occupiedBeds = room.occupiedBeds || [];
-  const reservedBeds = room.reservedBeds || beds.filter((bed) => bed.status === "reserved");
+  const occupiedBeds =
+    room.occupiedBeds ||
+    beds.filter((bed) => bed.status === "occupied" || bed.occupant?.reservationStatus === "moveIn");
+  const reservedBeds =
+    room.reservedBeds ||
+    beds.filter((bed) => bed.status === "reserved" && bed.occupant?.reservationStatus !== "moveIn");
   const availableBeds = room.availableBeds || beds.filter((bed) => bed.status === "available");
   const lockedBeds = room.lockedBeds || beds.filter((bed) => bed.status === "locked");
   const maintenanceBeds = room.maintenanceBeds || beds.filter((bed) => bed.status === "maintenance");
@@ -17,7 +22,21 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
     const position = bed.position || "bed";
     return `${position.charAt(0).toUpperCase()}${position.slice(1)} (${bed.bedId || bed.id})`;
   };
-  return (
+  const formatOccupantName = (bed) =>
+    bed.occupiedBy?.userName ||
+    bed.occupant?.name ||
+    "Unknown";
+
+  const formatOccupantEmail = (bed) =>
+    bed.occupiedBy?.email ||
+    bed.occupant?.email ||
+    null;
+
+  const formatOccupiedSince = (bed) =>
+    bed.occupiedBy?.occupiedSince ||
+    bed.occupant?.since ||
+    null;
+  const modal = (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -69,22 +88,18 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
                           <BedDouble size={22} />
                         </div>
                         <div className="bed-info">
-                          <h4>
-                            {bed.position.charAt(0).toUpperCase() +
-                              bed.position.slice(1)}{" "}
-                            ({bed.bedId})
-                          </h4>
+                          <h4>{formatBedLabel(bed)}</h4>
                           <p>
-                            Resident: {bed.occupiedBy?.userName || "Unknown"}
+                            Resident: {formatOccupantName(bed)}
                           </p>
-                          {bed.occupiedBy?.email && (
-                            <p>Email: {bed.occupiedBy.email}</p>
+                          {formatOccupantEmail(bed) && (
+                            <p>Email: {formatOccupantEmail(bed)}</p>
                           )}
-                          {bed.occupiedBy?.occupiedSince && (
+                          {formatOccupiedSince(bed) && (
                             <p className="small-text">
                               Since:{" "}
                               {new Date(
-                                bed.occupiedBy.occupiedSince,
+                                formatOccupiedSince(bed),
                               ).toLocaleDateString()}
                             </p>
                           )}
@@ -169,11 +184,7 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
                           <Unlock size={22} />
                         </div>
                         <div className="bed-info">
-                          <h4>
-                            {bed.position.charAt(0).toUpperCase() +
-                              bed.position.slice(1)}{" "}
-                            ({bed.bedId})
-                          </h4>
+                          <h4>{formatBedLabel(bed)}</h4>
                           <p className="available-text">
                             Available for booking
                           </p>
@@ -200,4 +211,10 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return modal;
+  }
+
+  return createPortal(modal, document.body);
 }

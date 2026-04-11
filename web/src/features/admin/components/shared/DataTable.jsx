@@ -33,6 +33,7 @@ export default function DataTable({
   sortDir: externalSortDir = "asc",
   onSortChange,
   serverPagination = false,
+  disableRowInteraction = false,
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
@@ -137,10 +138,18 @@ export default function DataTable({
               : pagedData.map((row, i) => (
                   <tr
                     key={row.id || row._id || i}
-                    className={`data-table__row ${onRowClick ? "data-table__row--clickable" : ""}`}
+                    className={`data-table__row ${onRowClick ? "data-table__row--clickable" : ""} ${disableRowInteraction ? "data-table__row--static" : ""}`}
                     onMouseEnter={() => onRowHover?.(row)}
                     onFocus={() => onRowFocus?.(row)}
+                    onClickCapture={(e) => {
+                      if (!disableRowInteraction) return;
+                      const target = e.target;
+                      if (!(target instanceof Element)) return;
+                      if (target.closest("[data-action-cell]")) return;
+                      e.stopPropagation();
+                    }}
                     onClick={(e) => {
+                      if (disableRowInteraction) return;
                       if (!onRowClick) return;
 
                       const target = e.target;

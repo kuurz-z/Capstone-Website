@@ -35,10 +35,10 @@ Each bed in a room has the following structure:
 - **Automatic Updates**: Occupancy automatically updates when reservation status changes
 - **Status-Based Occupancy**:
   - `pending` → No occupancy impact
-  - `confirmed` → Room marked as occupied (+1 to currentOccupancy)
-  - `checked-in` → Room remains occupied (no additional change)
+  - `reserved` → Room marked as occupied (+1 to currentOccupancy)
+  - `moveIn` → Room remains occupied (no additional change)
   - `cancelled` → Occupancy released (-1 to currentOccupancy)
-  - `checked-out` → Occupancy released (-1 to currentOccupancy)
+  - `moveOut` → Occupancy released (-1 to currentOccupancy)
 
 ## Data Models
 
@@ -180,14 +180,14 @@ GET /api/reservations/stats/occupancy?branch=gil-puyat
 
 Handles occupancy updates when reservation status changes.
 
-- **Increases Occupancy**: When status becomes "confirmed" or "checked-in"
-- **Decreases Occupancy**: When status becomes "cancelled" or "checked-out"
+- **Increases Occupancy**: When status becomes "reserved" or "moveIn"
+- **Decreases Occupancy**: When status becomes "cancelled" or "moveOut"
 - **Bed Management**: Assigns/vacates beds based on selectedBed
 - **Room Availability**: Automatically recalculates room availability
 
 #### `recalculateRoomOccupancy(roomId)`
 
-Recalculates occupancy from scratch by counting confirmed/checked-in reservations.
+Recalculates occupancy from scratch by counting reserved/moved-in reservations.
 **Use Case**: Data recovery, consistency checks
 
 #### `getRoomOccupancyStatus(roomId)`
@@ -222,10 +222,10 @@ Bed marked as occupied
 Room availability recalculated
 ```
 
-### Example 2: Tenant Check-In
+### Example 2: Tenant Move-In
 
 ```
-Tenant performs check-in (status: checked-in)
+Tenant performs move-in (status: moveIn)
   ↓
 updateOccupancyOnReservationChange triggered
   ↓
@@ -262,7 +262,7 @@ The following indexes are configured for optimal occupancy queries:
 
 ### Occupancy Counting Rules
 
-1. **Only Confirmed & Checked-In Count**: Only reservations with status "confirmed" or "checked-in" count toward room occupancy
+1. **Only Reserved & Moved-In Count**: Only reservations with status "reserved" or "moveIn" count toward room occupancy
 2. **Archived Don't Count**: Archived reservations never count toward occupancy
 3. **Automatic Availability**: `available` flag automatically set to `true` when occupancy < capacity
 4. **Full Room Status**: `isFull` virtual indicates when room reaches capacity
@@ -271,7 +271,7 @@ The following indexes are configured for optimal occupancy queries:
 
 1. **One Occupant Per Bed**: Each bed can only be occupied by one reservation
 2. **Tracked from Confirmation**: Beds are assigned when reservation status becomes "confirmed"
-3. **Automatic Vacancy**: Beds automatically released when reservation is cancelled or checked-out
+3. **Automatic Vacancy**: Beds automatically released when reservation is cancelled or moved out
 4. **Optional Selection**: selectedBed is optional - rooms without beds assigned for quarantine rooms
 
 ## Error Handling
@@ -336,8 +336,8 @@ All occupancy changes are logged with:
 
 ### User Management
 
-- Tenant status automatically activated on check-in
-- Role updated to "tenant" when checked-in
+- Tenant status automatically activated on move-in
+- Role updated to "tenant" when moved in
 
 ### Room Management
 
@@ -346,7 +346,7 @@ All occupancy changes are logged with:
 
 ## Vacancy Date Forecasting
 
-The system now includes vacancy date forecasting via the `/api/payments/vacancy-dates` endpoint. This computes expected vacancy dates from `checkInDate + leaseDuration` for all checked-in reservations, providing admins with visibility into upcoming room availability.
+The system now includes vacancy date forecasting via the `/api/payments/vacancy-dates` endpoint. This computes expected vacancy dates from move-in date + leaseDuration for all moved-in reservations, providing admins with visibility into upcoming room availability.
 
 ---
 

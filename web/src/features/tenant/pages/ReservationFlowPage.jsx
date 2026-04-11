@@ -23,6 +23,9 @@ import {
 import useReservationFlow from "../hooks/useReservationFlow";
 import { showNotification } from "../../../shared/utils/notification";
 import { billingApi } from "../../../shared/api/apiClient";
+import { reservationApi } from "../../../shared/api/reservationApi";
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ─────────────────────────────────────────────────────────
 // ReservationFlowPage — thin JSX orchestrator
@@ -164,8 +167,24 @@ function ReservationFlowPage() {
                   visitDate: flow.visitDate,
                   visitTime: flow.visitTime,
                 });
-                if (result?.visitCode) flow.setVisitCode(result.visitCode);
-                return result?.visitCode || null;
+                let resolvedCode = result?.visitCode || flow.visitCode || null;
+                const reservationId = result?._id || flow.reservationId || null;
+
+                if (!resolvedCode && reservationId) {
+                  for (let attempt = 0; attempt < 10; attempt += 1) {
+                    await sleep(250);
+                    const freshReservation = await reservationApi.getById(reservationId);
+                    resolvedCode = freshReservation?.visitCode || null;
+                    if (resolvedCode) break;
+                  }
+                }
+
+                if (resolvedCode) {
+                  flow.setVisitCode(resolvedCode);
+                  return resolvedCode;
+                }
+
+                return null;
               }}
               onAfterClose={async () => {
                 flow.setVisitCompleted(true);

@@ -344,7 +344,7 @@ export default function TenantsPage() {
     }
 
     await runTenantAction(`moveout:${tenant.id}`, async () => {
-      const response = await reservationApi.checkout(tenant.reservationId, {
+      const response = await reservationApi.moveOut(tenant.reservationId, {
         notes: "Admin move-out",
         meterReading,
       });

@@ -40,6 +40,19 @@
   color: var(--text-muted);
 }
 
+.room-manage-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 88px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
 @media (max-width: 768px) {
   .room-occupancy-cell span {
     display: none;

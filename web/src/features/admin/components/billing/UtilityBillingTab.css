@@ -245,6 +245,21 @@
   color: var(--color-success-text, #15803d);
 }
 
+.eb-room__badge--ready_to_send {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.eb-room__badge--sent {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.eb-room__badge--no_active_cycle {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
 .eb-room__badge--empty {
   background: var(--surface-muted, #f3f4f6);
   color: var(--text-muted, #9ca3af);
@@ -903,7 +918,8 @@
   flex-shrink: 0;
 }
 
-.eb-status-pill--closed {
+.eb-status-pill--closed,
+.eb-status-pill--no_active_cycle {
   background: var(--color-success-bg, #dcfce7);
   color: var(--color-success-text, #166534);
 }
@@ -911,13 +927,15 @@
   background: var(--color-info-bg, #dbeafe);
   color: var(--color-info-text, #1d4ed8);
 }
-.eb-status-pill--ready {
+.eb-status-pill--ready,
+.eb-status-pill--ready_to_send {
   background: #e0f2fe;
   color: #075985;
   font-weight: 700;
 }
 
-.eb-status-pill--finalized {
+.eb-status-pill--finalized,
+.eb-status-pill--sent {
   background: #ecfdf5;
   color: #065f46;
   font-weight: 600;
@@ -2425,7 +2443,8 @@
   background: #eab308;
 }
 
-.eb-status-pill--closed {
+.eb-status-pill--closed,
+.eb-status-pill--no_active_cycle {
   background: #f0fdf4;
   color: #166534;
   border: 1px solid #bbf7d0;
@@ -2437,14 +2456,16 @@
   border: 1px solid #ddd6fe;
 }
 
-.eb-status-pill--ready {
+.eb-status-pill--ready,
+.eb-status-pill--ready_to_send {
   background: #eff6ff;
   color: #1d4ed8;
   border: 1px solid #bfdbfe;
   font-weight: 700;
 }
 
-.eb-status-pill--finalized {
+.eb-status-pill--finalized,
+.eb-status-pill--sent {
   background: #ecfdf5;
   color: #065f46;
   border: 1px solid #a7f3d0;

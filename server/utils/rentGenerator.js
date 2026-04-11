@@ -21,7 +21,7 @@ export async function generateAutomatedRentBills({ force = false, now = dayjs() 
     const currentDay = dayjs(now).startOf("day");
     let generatedCount = 0;
 
-    // We look for all checked-in reservations
+    // We look for all moved-in reservations
     const reservations = await Reservation.find({
       status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,
