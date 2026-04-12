@@ -57,7 +57,11 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     setSelectedRoom({ room, beds: room.beds || [] });
     try {
       const detailedData = await digitalTwinApi.getRoomDetail(room._id);
-      setSelectedRoom(detailedData);
+      setSelectedRoom({
+        ...detailedData,
+        room: detailedData?.room || room,
+        beds: detailedData?.beds || room.beds || [],
+      });
     } catch (err) {
       console.error("Failed to fetch room details:", err);
     } finally {
@@ -307,7 +311,6 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         columns={columns}
         data={rooms}
         loading={loading}
-        onRowClick={handleViewRoomDetails}
         emptyState={{
           icon: BarChart3,
           title: "No rooms found",

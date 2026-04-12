@@ -19,13 +19,34 @@ export function useReservations(params = {}) {
   });
 }
 
-/** Fetch current checked-in residents for admin tenants page */
+/** Fetch current moved-in residents for admin tenants page */
 export function useCurrentResidents(params = {}, options = {}) {
   return useQuery({
     queryKey: queryKeys.reservations.currentResidents(params),
     queryFn: () => reservationApi.getCurrentResidents(params),
     staleTime: 30 * 1000,
     refetchOnMount: true,
+    ...options,
+  });
+}
+
+/** Fetch tenancy workspace rows for admin tenants page */
+export function useTenantWorkspace(params = {}, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.reservations.tenantWorkspace(params),
+    queryFn: () => reservationApi.getTenantWorkspace(params),
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
+    ...options,
+  });
+}
+
+/** Fetch tenancy workspace detail for a single reservation */
+export function useTenantWorkspaceDetail(reservationId, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.reservations.tenantWorkspaceDetail(reservationId),
+    queryFn: () => reservationApi.getTenantWorkspaceById(reservationId),
+    enabled: !!reservationId,
     ...options,
   });
 }

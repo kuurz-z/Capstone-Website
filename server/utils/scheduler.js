@@ -236,7 +236,7 @@ async function checkContractExpirations() {
     const alertDays = [30, 15, 7, 1];
     let sent = 0;
 
-    // Get all checked-in reservations
+    // Get all moved-in reservations
     const activeReservations = await Reservation.find({
       status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,

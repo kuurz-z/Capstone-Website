@@ -1,9 +1,16 @@
 import { useState } from "react";
 import { formatRoomType, formatBranch } from "../../utils/formatters";
-import { X, Lock, CheckCircle, Info } from "lucide-react";
+import { X, Lock, Pencil, Trash2 } from "lucide-react";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
-export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) {
+export default function RoomConfigModal({
+  room,
+  onToggleBed,
+  onClose,
+  onSave,
+  onEdit,
+  onDelete,
+}) {
   const [saving, setSaving] = useState(false);
   useEscapeClose(true, onClose);
 
@@ -27,9 +34,33 @@ export default function RoomConfigModal({ room, onToggleBed, onClose, onSave }) 
       <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-header">
           <h2>Configure Room: {room.name}</h2>
-          <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
-            <X size={20} />
-          </button>
+          <div className="room-config-modal__header-actions">
+            {onEdit && (
+              <button
+                type="button"
+                className="room-config-modal__icon-btn"
+                onClick={() => onEdit(room)}
+                aria-label="Edit room"
+                title="Edit room"
+              >
+                <Pencil size={16} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                className="room-config-modal__icon-btn room-config-modal__icon-btn--danger"
+                onClick={() => onDelete(room)}
+                aria-label="Archive room"
+                title="Archive room"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+            <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="admin-modal-body">

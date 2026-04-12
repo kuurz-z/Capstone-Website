@@ -26,7 +26,7 @@ This version re-assesses the implemented code after the stabilization work on Mo
 - Reservation status handling is much more structured through `server/utils/lifecycleNaming.js`.
 - Reservation serialization and payload normalization are centralized and reused in `server/controllers/reservationsController.js`.
 - Lifecycle changes now sync user role, tenant status, and branch through `syncReservationUserLifecycle` in `server/utils/reservationHelpers.js`.
-- Check-in blockers are explicitly validated before `moveIn`, which reduces lifecycle skipping.
+- Move-in blockers are explicitly validated before `moveIn`, which reduces lifecycle skipping.
 - There are migration and reconciliation scripts for lifecycle naming and tenant lifecycle repair in `server/scripts/`.
 
 ### Module 3: Room, Bed, and Occupancy Management
@@ -86,7 +86,7 @@ These are the main issues that still matter after the stabilization work.
 
 - Status: substantially improved and close to a stable core module.
 - What is now stable:
-- Canonical statuses, reservation serialization, check-in gating, lifecycle repair scripts, and user lifecycle synchronization.
+- Canonical statuses, reservation serialization, move-in gating, lifecycle repair scripts, and user lifecycle synchronization.
 - What is still weak:
 - Contracts are still represented more as reservation lifecycle output than as a dedicated contract/versioning subsystem.
 - Final assessment:

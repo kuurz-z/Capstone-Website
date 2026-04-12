@@ -79,7 +79,7 @@ await jest.unstable_mockModule("../controllers/reservationsController.js", () =>
   releaseSlot: noop,
   archiveReservation: noop,
   renewContract: noop,
-  checkoutReservation: noop,
+  moveOutReservation: noop,
   transferTenant: noop,
   getMyContract: noop,
 }));

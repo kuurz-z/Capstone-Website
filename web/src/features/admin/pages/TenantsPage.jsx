@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Users } from "lucide-react";
+import { Users, MoreHorizontal, LogOut, ArrowRightLeft, CreditCard } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useCurrentResidents } from "../../../shared/hooks/queries/useReservations";
 import { reservationApi } from "../../../shared/api/apiClient";
@@ -56,6 +56,87 @@ const getTenantStatus = (reservation) => {
   }
 
   return { key: "active", label: "Active" };
+};
+
+const RowActionsMenu = ({ row, onSelect, actionLoading, handleRenew, handleTransfer, handleMoveOut }) => {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = () => setOpen(false);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [open]);
+
+  return (
+    <div className="tenant-row-actions" data-action-cell="true">
+      <button
+        type="button"
+        className="tenant-row-action tenant-row-action--primary"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(row);
+        }}
+      >
+        View Details
+      </button>
+
+      {row.reservationId ? (
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            className="tenant-row-action tenant-action-more"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((o) => !o);
+            }}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+
+          {open && (
+            <div className="tenant-action-dropdown">
+              <button
+                type="button"
+                className="tenant-dropdown-item"
+                disabled={actionLoading === `renew:${row.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRenew(row);
+                }}
+              >
+                <CreditCard size={14} /> Renew Lease
+              </button>
+              <button
+                type="button"
+                className="tenant-dropdown-item"
+                disabled={actionLoading === `transfer:${row.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTransfer(row);
+                }}
+              >
+                <ArrowRightLeft size={14} /> Transfer Room
+              </button>
+              <button
+                type="button"
+                className="tenant-dropdown-item tenant-dropdown-item--danger"
+                disabled={actionLoading === `moveout:${row.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMoveOut(row);
+                }}
+              >
+                <LogOut size={14} /> Move Out
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <span className="tenant-row-action-note">No active stay</span>
+      )}
+    </div>
+  );
 };
 
 export default function TenantsPage() {
@@ -248,45 +329,14 @@ export default function TenantsPage() {
       label: "Actions",
       align: "right",
       render: (row) => (
-        <div className="tenant-row-actions" data-action-cell="true">
-          <button
-            type="button"
-            className="tenant-row-action tenant-row-action--primary"
-            onClick={() => setSelectedTenant(row)}
-          >
-            View
-          </button>
-          {row.reservationId ? (
-            <>
-              <button
-                type="button"
-                className="tenant-row-action"
-                disabled={actionLoading === `renew:${row.id}`}
-                onClick={() => handleRenew(row)}
-              >
-                {actionLoading === `renew:${row.id}` ? "Saving..." : "Renew"}
-              </button>
-              <button
-                type="button"
-                className="tenant-row-action tenant-row-action--warn"
-                disabled={actionLoading === `transfer:${row.id}`}
-                onClick={() => handleTransfer(row)}
-              >
-                {actionLoading === `transfer:${row.id}` ? "Saving..." : "Transfer"}
-              </button>
-              <button
-                type="button"
-                className="tenant-row-action tenant-row-action--danger"
-                disabled={actionLoading === `moveout:${row.id}`}
-                onClick={() => handleMoveOut(row)}
-              >
-                {actionLoading === `moveout:${row.id}` ? "Saving..." : "Move Out"}
-              </button>
-            </>
-          ) : (
-            <span className="tenant-row-action-note">No active stay</span>
-          )}
-        </div>
+        <RowActionsMenu
+          row={row}
+          onSelect={setSelectedTenant}
+          actionLoading={actionLoading}
+          handleRenew={handleRenew}
+          handleTransfer={handleTransfer}
+          handleMoveOut={handleMoveOut}
+        />
       ),
     },
   ];
@@ -344,7 +394,7 @@ export default function TenantsPage() {
     }
 
     await runTenantAction(`moveout:${tenant.id}`, async () => {
-      const response = await reservationApi.checkout(tenant.reservationId, {
+      const response = await reservationApi.moveOut(tenant.reservationId, {
         notes: "Admin move-out",
         meterReading,
       });

@@ -189,7 +189,7 @@ async function ensureReservation(room, user, tenantDef, bed) {
   const checkOutDate = tenantDef.moveOutDate
     ? new Date(tenantDef.moveOutDate)
     : null;
-  const targetStatus = checkOutDate ? "checked-out" : "checked-in";
+  const targetStatus = checkOutDate ? "moveOut" : "moveIn";
 
   let reservation = await Reservation.findOne({
     userId: user._id,
@@ -490,7 +490,7 @@ async function main() {
     .lean();
 
   for (const { reservation, tenantDef, bed } of seedReservations) {
-    if (reservation.status !== "checked-in") {
+    if (reservation.status !== "moveIn") {
       continue;
     }
 

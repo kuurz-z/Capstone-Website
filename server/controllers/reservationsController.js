@@ -7,12 +7,15 @@
  * Eliminates ~200 lines of duplicated validation, error handling, and field mapping.
  */
 
+import dayjs from "dayjs";
+
 import {
   Reservation,
   User,
   Room,
   Bill,
   UtilityReading,
+  BedHistory,
   ROOM_BRANCHES,
 } from "../models/index.js";
 import { BUSINESS } from "../config/constants.js";
@@ -30,7 +33,7 @@ import {
   syncReservationUserLifecycle,
   reconcileTenantUsersForScope,
   buildUserUpdatePayload,
-  getCheckinBlockers,
+  getMoveInBlockers,
 } from "../utils/reservationHelpers.js";
 import {
   ACTIVE_OCCUPANCY_STATUS_QUERY,
@@ -56,6 +59,12 @@ import {
   sendError,
   AppError,
 } from "../middleware/errorHandler.js";
+import {
+  buildBillingSummary,
+  buildTenantWorkspaceEntry,
+  buildTenantWorkspaceStats,
+  computeLeaseEndDate,
+} from "../utils/tenantWorkspace.js";
 
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
@@ -107,6 +116,31 @@ const CURRENT_RESIDENT_FIELDS = [
 ].join(" ");
 const CURRENT_RESIDENT_USER = ["userId", "firstName lastName email phone"];
 const CURRENT_RESIDENT_ROOM = ["roomId", "name roomNumber branch type price floor"];
+const TENANT_WORKSPACE_FIELDS = [
+  "_id",
+  "reservationCode",
+  "status",
+  "paymentStatus",
+  "moveInDate",
+  "moveOutDate",
+  "leaseDuration",
+  "leaseExtensions",
+  "monthlyRent",
+  "mobileNumber",
+  "firstName",
+  "lastName",
+  "email",
+  "nationality",
+  "maritalStatus",
+  "employment",
+  "emergencyContact",
+  "selectedBed",
+  "notes",
+  "userId",
+  "roomId",
+].join(" ");
+const TENANT_WORKSPACE_USER = ["userId", "firstName lastName email phone"];
+const TENANT_WORKSPACE_ROOM = ["roomId", "name roomNumber branch type price floor"];
 const TIME_24H_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const combineLifecycleDateTime = ({
@@ -171,6 +205,107 @@ const buildResidentStats = (residents) => ({
     (resident) => resident.statusLabel === "Moving Out",
   ).length,
 });
+
+const buildWorkspaceRoomQuery = async ({ dbUser, requestedBranch }) => {
+  if (
+    requestedBranch &&
+    requestedBranch !== "all" &&
+    !ROOM_BRANCHES.includes(requestedBranch)
+  ) {
+    throw new AppError(
+      `Invalid branch. Must be one of: ${ROOM_BRANCHES.join(", ")}`,
+      400,
+      "INVALID_BRANCH",
+    );
+  }
+
+  if (dbUser.role === "branch_admin") {
+    return { branch: dbUser.branch };
+  }
+
+  if (requestedBranch && requestedBranch !== "all") {
+    return { branch: requestedBranch };
+  }
+
+  return {};
+};
+
+const getTenantWorkspaceReservations = async ({ roomQuery }) => {
+  const roomIds = await Room.find(roomQuery).distinct("_id");
+  return Reservation.find({
+    status: { $in: reservationStatusesForQuery("moveIn", "moveOut") },
+    roomId: { $in: roomIds },
+    isArchived: { $ne: true },
+  })
+    .select(TENANT_WORKSPACE_FIELDS)
+    .populate(...TENANT_WORKSPACE_USER)
+    .populate(...TENANT_WORKSPACE_ROOM)
+    .sort({ updatedAt: -1, moveInDate: -1 })
+    .lean();
+};
+
+const buildWorkspaceEntries = async (reservations, now = new Date()) => {
+  const reservationIds = reservations.map((reservation) => reservation._id);
+  const tenantIds = reservations
+    .map((reservation) => reservation.userId?._id || reservation.userId)
+    .filter(Boolean);
+
+  const [bills, bedHistoryRecords] = await Promise.all([
+    Bill.find({
+      reservationId: { $in: reservationIds },
+      isArchived: { $ne: true },
+    }).lean(),
+    BedHistory.find({
+      $or: [
+        { reservationId: { $in: reservationIds } },
+        { tenantId: { $in: tenantIds } },
+      ],
+    })
+      .populate("roomId", "name branch")
+      .sort({ moveInDate: -1 })
+      .lean(),
+  ]);
+
+  const billsByReservationId = new Map();
+  for (const bill of bills) {
+    const key = String(bill.reservationId || "");
+    if (!key) continue;
+    if (!billsByReservationId.has(key)) billsByReservationId.set(key, []);
+    billsByReservationId.get(key).push(bill);
+  }
+
+  const historyByReservationId = new Map();
+  const historyByTenantId = new Map();
+  for (const record of bedHistoryRecords) {
+    if (record.reservationId) {
+      const reservationKey = String(record.reservationId);
+      if (!historyByReservationId.has(reservationKey)) {
+        historyByReservationId.set(reservationKey, []);
+      }
+      historyByReservationId.get(reservationKey).push(record);
+    }
+
+    if (record.tenantId) {
+      const tenantKey = String(record.tenantId);
+      if (!historyByTenantId.has(tenantKey)) historyByTenantId.set(tenantKey, []);
+      historyByTenantId.get(tenantKey).push(record);
+    }
+  }
+
+  return reservations.map((reservation) => {
+    const reservationKey = String(reservation._id);
+    const tenantKey = String(reservation.userId?._id || reservation.userId || "");
+    return buildTenantWorkspaceEntry({
+      reservation,
+      bills: billsByReservationId.get(reservationKey) || [],
+      bedHistoryRecords:
+        historyByReservationId.get(reservationKey) ||
+        historyByTenantId.get(tenantKey) ||
+        [],
+      now,
+    });
+  });
+};
 
 /* ── Cached user lookup (saves ~50-100ms per API call) ──── */
 const userCache = new Map();
@@ -309,6 +444,139 @@ export const getCurrentResidents = async (req, res) => {
 };
 
 /* ─── GET single reservation ─────────────────────── */
+export const getTenantWorkspace = async (req, res) => {
+  try {
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    if (dbUser.role !== "owner" && dbUser.role !== "branch_admin") {
+      return res.status(403).json({
+        error: "Access denied. Admin privileges required.",
+        code: "ADMIN_REQUIRED",
+      });
+    }
+
+    const roomQuery = await buildWorkspaceRoomQuery({
+      dbUser,
+      requestedBranch: req.query.branch,
+    });
+
+    await reconcileTenantUsersForScope({
+      branch: roomQuery.branch || null,
+    });
+
+    const reservations = await getTenantWorkspaceReservations({ roomQuery });
+    const tenants = await buildWorkspaceEntries(reservations, new Date());
+
+    return sendSuccess(res, {
+      tenants,
+      stats: buildTenantWorkspaceStats(tenants),
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      return sendError(
+        res,
+        error.message,
+        error.statusCode,
+        error.code,
+        error.details,
+      );
+    }
+    logger.error(
+      { err: error, requestId: req.id },
+      "Fetch tenant workspace error",
+    );
+    return handleReservationError(res, error, "fetch");
+  }
+};
+
+export const getTenantWorkspaceById = async (req, res) => {
+  try {
+    const { reservationId } = req.params;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
+
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    if (dbUser.role !== "owner" && dbUser.role !== "branch_admin") {
+      return res.status(403).json({
+        error: "Access denied. Admin privileges required.",
+        code: "ADMIN_REQUIRED",
+      });
+    }
+
+    const reservation = await Reservation.findById(reservationId)
+      .select(TENANT_WORKSPACE_FIELDS)
+      .populate(...TENANT_WORKSPACE_USER)
+      .populate(...TENANT_WORKSPACE_ROOM)
+      .lean();
+    if (!reservation) {
+      return res.status(404).json({
+        error: "Reservation not found",
+        code: "RESERVATION_NOT_FOUND",
+      });
+    }
+
+    if (
+      dbUser.role === "branch_admin" &&
+      reservation.roomId?.branch !== dbUser.branch
+    ) {
+      return res.status(403).json({
+        error: `Access denied. You can only manage reservations for ${dbUser.branch} branch.`,
+        code: "BRANCH_ACCESS_DENIED",
+      });
+    }
+
+    const [bills, bedHistoryRecords] = await Promise.all([
+      Bill.find({
+        reservationId: reservation._id,
+        isArchived: { $ne: true },
+      }).lean(),
+      BedHistory.find({
+        $or: [
+          { reservationId: reservation._id },
+          { tenantId: reservation.userId?._id || reservation.userId },
+        ],
+      })
+        .populate("roomId", "name branch")
+        .sort({ moveInDate: -1 })
+        .lean(),
+    ]);
+
+    const tenant = buildTenantWorkspaceEntry({
+      reservation,
+      bills,
+      bedHistoryRecords,
+      now: new Date(),
+    });
+
+    return sendSuccess(res, tenant);
+  } catch (error) {
+    if (error instanceof AppError) {
+      return sendError(
+        res,
+        error.message,
+        error.statusCode,
+        error.code,
+        error.details,
+      );
+    }
+    logger.error(
+      { err: error, requestId: req.id },
+      "Fetch tenant workspace detail error",
+    );
+    return handleReservationError(res, error, "fetch");
+  }
+};
+
 export const getReservationById = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
@@ -616,12 +884,12 @@ export const updateReservation = async (req, res, next) => {
       req.body.status === "moveIn" &&
       !hasReservationStatus(existingReservation.status, "moveIn")
     ) {
-      const blockers = getCheckinBlockers(existingReservation);
+      const blockers = getMoveInBlockers(existingReservation);
       if (blockers.length > 0) {
         return res.status(400).json({
           error:
             "Move-in prerequisites not met. Please resolve the following before moving in the tenant.",
-          code: "CHECKIN_PREREQUISITES_NOT_MET",
+          code: "MOVEIN_PREREQUISITES_NOT_MET",
           missing: blockers,
         });
       }
@@ -647,7 +915,7 @@ export const updateReservation = async (req, res, next) => {
         return res.status(400).json({
           error:
             "Invalid move-in date/time. Use a valid date and HH:mm format.",
-          code: "INVALID_CHECKIN_DATETIME",
+          code: "INVALID_MOVEIN_DATETIME",
         });
       }
 
@@ -810,7 +1078,7 @@ export const updateReservation = async (req, res, next) => {
           const tenantUserId =
             updatedReservation.userId?._id || updatedReservation.userId;
 
-          // Snapshot all currently checked-in tenants for this room
+          // Snapshot all currently moved-in tenants for this room
           const checkedInRes = await Reservation.find({
             roomId: roomId,
             status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
@@ -861,6 +1129,30 @@ export const updateReservation = async (req, res, next) => {
           { err: e, requestId: req.id },
           "Occupancy update failed (non-fatal)",
         );
+      }
+    }
+
+    if (
+      req.body.status === "moveIn" &&
+      !hasReservationStatus(oldData.status, "moveIn") &&
+      updatedReservation.selectedBed?.id
+    ) {
+      const existingHistory = await BedHistory.findOne({
+        reservationId: updatedReservation._id,
+        bedId: updatedReservation.selectedBed.id,
+        moveOutDate: null,
+      })
+        .select("_id")
+        .lean();
+
+      if (!existingHistory) {
+        await BedHistory.create({
+          bedId: updatedReservation.selectedBed.id,
+          roomId: updatedReservation.roomId?._id || updatedReservation.roomId,
+          tenantId: updatedReservation.userId?._id || updatedReservation.userId,
+          reservationId: updatedReservation._id,
+          moveInDate: readMoveInDate(updatedReservation) || new Date(),
+        });
       }
     }
 
@@ -1147,7 +1439,16 @@ export const updateReservationByUser = async (req, res, next) => {
       }
     }
     // visit_approved → payment_pending: when tenant submits full application
-    if (updates.firstName && updates.lastName && updates.mobileNumber) {
+    const isApplicationSubmission =
+      req.body.submitApplication === true ||
+      normalizeReservationStatus(updates.status) === "payment_pending";
+
+    if (
+      isApplicationSubmission &&
+      updates.firstName &&
+      updates.lastName &&
+      updates.mobileNumber
+    ) {
       if (hasReservationStatus(reservation.status, "visit_approved")) {
         updates.status = "payment_pending";
       }
@@ -1436,6 +1737,27 @@ export const extendReservation = async (req, res, next) => {
     );
     if (denied) return;
 
+    const moveOutBills = await Bill.find({
+      reservationId: reservation._id,
+      isArchived: { $ne: true },
+    }).lean();
+    const moveOutBilling = buildBillingSummary(moveOutBills, new Date());
+    if (
+      moveOutBilling.hasOutstanding ||
+      moveOutBilling.hasPendingVerification
+    ) {
+      return res.status(409).json({
+        error:
+          "Move-out is blocked until the tenant's billing is fully settled.",
+        code: "UNSETTLED_BILLING",
+        billing: {
+          currentBalance: moveOutBilling.currentBalance,
+          pendingVerification: moveOutBilling.hasPendingVerification,
+          paymentStatus: moveOutBilling.paymentStatus,
+        },
+      });
+    }
+
     const oldData = reservation.toObject();
     const newMoveIn = new Date(
       readMoveInDate(reservation) || reservation.finalMoveInDate,
@@ -1634,15 +1956,12 @@ export const archiveReservation = async (req, res, next) => {
 export const renewContract = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
-    const { additionalMonths = 12, notes: renewNotes = "" } = req.body;
+    const {
+      additionalMonths: rawAdditionalMonths,
+      newLeaseEndDate,
+      notes: renewNotes = "",
+    } = req.body;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
-
-    if (additionalMonths < 1 || additionalMonths > 24) {
-      return res.status(400).json({
-        error: "Renewal must be between 1 and 24 months.",
-        code: "INVALID_RENEWAL_DURATION",
-      });
-    }
 
     const reservation = await Reservation.findById(reservationId)
       .populate("roomId", "name branch")
@@ -1669,6 +1988,50 @@ export const renewContract = async (req, res, next) => {
 
     const oldData = reservation.toObject();
     const oldDuration = reservation.leaseDuration || 12;
+    const currentLeaseEnd = computeLeaseEndDate(reservation);
+    let additionalMonths = Number.parseInt(rawAdditionalMonths, 10);
+
+    if (newLeaseEndDate) {
+      const currentEnd = dayjs(currentLeaseEnd);
+      const requestedEnd = dayjs(newLeaseEndDate);
+      if (!currentEnd.isValid() || !requestedEnd.isValid()) {
+        return res.status(400).json({
+          error: "A valid new lease end date is required.",
+          code: "INVALID_LEASE_END_DATE",
+        });
+      }
+
+      if (!requestedEnd.isAfter(currentEnd, "day")) {
+        return res.status(400).json({
+          error: "New lease end date must be after the current lease end date.",
+          code: "LEASE_END_NOT_EXTENDED",
+        });
+      }
+
+      additionalMonths = requestedEnd.diff(currentEnd, "month");
+      const monthAligned = currentEnd.add(additionalMonths, "month");
+      if (
+        additionalMonths < 1 ||
+        !monthAligned.isSame(requestedEnd.startOf("day"), "day")
+      ) {
+        return res.status(400).json({
+          error:
+            "New lease end date must align to a whole-month extension from the current lease end date.",
+          code: "LEASE_END_NOT_MONTH_ALIGNED",
+        });
+      }
+    }
+
+    if (
+      !Number.isFinite(additionalMonths) ||
+      additionalMonths < 1 ||
+      additionalMonths > 24
+    ) {
+      return res.status(400).json({
+        error: "Renewal must be between 1 and 24 months.",
+        code: "INVALID_RENEWAL_DURATION",
+      });
+    }
 
     reservation.leaseDuration = oldDuration + additionalMonths;
     reservation.leaseExtensions.push({
@@ -1713,13 +2076,13 @@ export const renewContract = async (req, res, next) => {
   }
 };
 
-/* ─── CHECKOUT ───────────────────────────────────── */
-export const checkoutReservation = async (req, res, next) => {
+/* ─── MOVE-OUT ───────────────────────────────────── */
+export const moveOutReservation = async (req, res, next) => {
   try {
     const payload = normalizeReservationPayload(req.body);
     const { reservationId } = req.params;
     const {
-      notes: checkoutNotes = "",
+      notes: moveOutNotes = "",
       inspectionPassed = true,
       meterReading,
       moveOutDate,
@@ -1739,7 +2102,7 @@ export const checkoutReservation = async (req, res, next) => {
     if (!hasReservationStatus(reservation.status, "moveIn")) {
       return res.status(400).json({
         error: "Only moved-in tenants can be moved out.",
-        code: "INVALID_STATUS_FOR_CHECKOUT",
+        code: "INVALID_STATUS_FOR_MOVEOUT",
       });
     }
 
@@ -1760,22 +2123,22 @@ export const checkoutReservation = async (req, res, next) => {
 
     const oldData = reservation.toObject();
 
-    const checkoutDate = combineLifecycleDateTime({
+    const moveOutAt = combineLifecycleDateTime({
       dateInput: moveOutDate,
       timeInput: moveOutTime,
       fallbackDate: new Date(),
     });
-    if (!checkoutDate) {
+    if (!moveOutAt) {
       return res.status(400).json({
         error:
           "Invalid move-out date/time. Use a valid date and HH:mm format.",
-        code: "INVALID_CHECKOUT_DATETIME",
+        code: "INVALID_MOVEOUT_DATETIME",
       });
     }
-    if (readMoveInDate(reservation) && checkoutDate < new Date(readMoveInDate(reservation))) {
+    if (readMoveInDate(reservation) && moveOutAt < new Date(readMoveInDate(reservation))) {
       return res.status(400).json({
         error: "Move-out date/time cannot be earlier than move-in date/time.",
-        code: "CHECKOUT_BEFORE_CHECKIN",
+        code: "MOVEOUT_BEFORE_MOVEIN",
       });
     }
 
@@ -1784,7 +2147,7 @@ export const checkoutReservation = async (req, res, next) => {
       roomId: reservation.roomId?._id || reservation.roomId,
       tenantId: reservation.userId?._id || reservation.userId,
       eventType: { $in: utilityEventTypesForQuery("moveOut") },
-      date: checkoutDate,
+      date: moveOutAt,
       isArchived: false,
     })
       .select("_id")
@@ -1799,8 +2162,8 @@ export const checkoutReservation = async (req, res, next) => {
 
     // 1. Update reservation status
     reservation.status = "moveOut";
-    reservation.moveOutDate = checkoutDate;
-    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Moved out${inspectionPassed ? " (inspection passed)" : " (inspection issues noted)"}. ${checkoutNotes}`;
+    reservation.moveOutDate = moveOutAt;
+    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Moved out${inspectionPassed ? " (inspection passed)" : " (inspection issues noted)"}. ${moveOutNotes}`;
     await reservation.save();
 
     // 2. Release bed and decrease occupancy
@@ -1823,6 +2186,18 @@ export const checkoutReservation = async (req, res, next) => {
       reservationId: reservation._id,
     });
 
+    if (reservation.selectedBed?.id && userId) {
+      const activeHistory = await BedHistory.findOne({
+        bedId: reservation.selectedBed.id,
+        tenantId: userId,
+        moveOutDate: null,
+      }).sort({ moveInDate: -1 });
+      if (activeHistory) {
+        activeHistory.moveOutDate = moveOutAt;
+        await activeHistory.save();
+      }
+    }
+
     // 4. Auto-record move-out electricity reading
     let electricityResult = null;
     if (
@@ -1835,7 +2210,7 @@ export const checkoutReservation = async (req, res, next) => {
           firebaseUid: req.user.uid,
         }).lean();
         const roomDoc = await Room.findById(reservation.roomId._id).lean();
-        const checkoutReading = Number(meterReading);
+        const moveOutReadingValue = Number(meterReading);
 
         if (roomDoc) {
           const checkedInRes = await Reservation.find({
@@ -1853,8 +2228,8 @@ export const checkoutReservation = async (req, res, next) => {
             utilityType: "electricity",
             roomId: reservation.roomId._id,
             branch: roomDoc.branch,
-            reading: checkoutReading,
-            date: checkoutDate,
+            reading: moveOutReadingValue,
+            date: moveOutAt,
             eventType: "moveOut",
             tenantId: userId,
             activeTenantIds,
@@ -1866,7 +2241,7 @@ export const checkoutReservation = async (req, res, next) => {
           electricityResult = {
             tenantName:
               `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim(),
-            meterReading: checkoutReading,
+            meterReading: moveOutReadingValue,
           };
 
           logger.info(
@@ -1914,11 +2289,13 @@ export const checkoutReservation = async (req, res, next) => {
       electricityResult,
     });
   } catch (error) {
-    logger.error({ err: error, requestId: req.id }, "Checkout error");
-    await auditLogger.logError(req, error, "Failed to checkout reservation");
-    handleReservationError(res, error, "checkout");
+    logger.error({ err: error, requestId: req.id }, "Move-out error");
+    await auditLogger.logError(req, error, "Failed to move out reservation");
+    handleReservationError(res, error, "move out");
   }
 };
+
+export const checkoutReservation = moveOutReservation;
 
 /* ─── TRANSFER TENANT ────────────────────────────── */
 export const transferTenant = async (req, res, next) => {
@@ -1963,6 +2340,12 @@ export const transferTenant = async (req, res, next) => {
       return res
         .status(404)
         .json({ error: "New room not found", code: "NEW_ROOM_NOT_FOUND" });
+    if (newRoom.branch !== reservation.roomId?.branch) {
+      return res.status(400).json({
+        error: "Transfers are limited to rooms within the same branch.",
+        code: "CROSS_BRANCH_TRANSFER_NOT_ALLOWED",
+      });
+    }
 
     // Check bed availability
     const newBed = newRoom.beds?.find(
@@ -1977,10 +2360,12 @@ export const transferTenant = async (req, res, next) => {
         error: "Selected bed is not available",
         code: "BED_NOT_AVAILABLE",
       });
+    const targetBedId = newBed.id || String(newBed._id);
 
     const oldData = reservation.toObject();
     const oldRoomName = reservation.roomId?.name || "unknown";
     const oldBedId = reservation.selectedBed?.id;
+    const transferAt = new Date();
 
     // 1. Vacate old bed & decrease old room occupancy
     if (reservation.roomId && oldBedId) {
@@ -1994,7 +2379,11 @@ export const transferTenant = async (req, res, next) => {
     }
 
     // 2. Occupy new bed & increase new room occupancy
-    newRoom.occupyBed(newBedId);
+    newRoom.occupyBed(
+      targetBedId,
+      reservation.userId?._id || reservation.userId,
+      reservation._id,
+    );
     newRoom.increaseOccupancy();
     newRoom.updateAvailability();
     await newRoom.save();
@@ -2002,7 +2391,7 @@ export const transferTenant = async (req, res, next) => {
     // 3. Update reservation
     reservation.roomId = newRoom._id;
     reservation.selectedBed = {
-      id: newBedId,
+      id: targetBedId,
       position: newBed.position || null,
     };
     reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Transferred from ${oldRoomName} to ${newRoom.name}. ${reason}`;
@@ -2016,6 +2405,28 @@ export const transferTenant = async (req, res, next) => {
       reservationId: reservation._id,
       force: true,
     });
+
+    const tenantId = reservation.userId?._id || reservation.userId;
+    if (oldBedId && tenantId) {
+      const activeHistory = await BedHistory.findOne({
+        bedId: oldBedId,
+        tenantId,
+        moveOutDate: null,
+      }).sort({ moveInDate: -1 });
+      if (activeHistory) {
+        activeHistory.moveOutDate = transferAt;
+        await activeHistory.save();
+      }
+    }
+    if (tenantId) {
+      await BedHistory.create({
+        bedId: targetBedId,
+        roomId: newRoom._id,
+        tenantId,
+        reservationId: reservation._id,
+        moveInDate: transferAt,
+      });
+    }
 
     // 4. Notify tenant
     const { notify } = await import("../utils/notificationService.js");

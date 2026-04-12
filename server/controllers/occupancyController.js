@@ -65,7 +65,7 @@ export const getBranchOccupancyStatistics = async (req, res, next) => {
 
 /**
  * Get vacancy forecast for a specific room or branch
- * Computes expected vacancy dates based on checkInDate + leaseDuration + extensions
+ * Computes expected vacancy dates based on move-in date + leaseDuration + extensions
  * GET /api/reservations/vacancy-forecast?branch=gil-puyat
  * GET /api/reservations/vacancy-forecast?roomId=<id>
  */
@@ -131,8 +131,8 @@ export const getVacancyForecast = async (req, res, next) => {
           );
           const totalMonths = baseDuration + extensions;
 
-          const checkIn = dayjs(readMoveInDate(reservation));
-          const expectedEnd = checkIn.add(totalMonths, "month");
+          const moveIn = dayjs(readMoveInDate(reservation));
+          const expectedEnd = moveIn.add(totalMonths, "month");
           const daysRemaining = expectedEnd.diff(dayjs(), "day");
 
           return {

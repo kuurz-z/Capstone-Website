@@ -77,7 +77,7 @@ Meter readings capture **events** during the billing period. Each reading record
 **What gets saved per reading:**
 - The numeric meter value
 - The date/event type
-- A snapshot of all **currently checked-in tenants** (`activeTenantIds`) at that moment
+- A snapshot of all **currently moved-in tenants** (`activeTenantIds`) at that moment
 
 ---
 

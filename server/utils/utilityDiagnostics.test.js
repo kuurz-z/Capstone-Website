@@ -70,7 +70,7 @@ describe("getUtilityDiagnostics", () => {
     });
   });
 
-  test("includes branch rooms with active checked-in tenants even when no readings exist yet", async () => {
+  test("includes branch rooms with active moved-in tenants even when no readings exist yet", async () => {
     roomFind.mockReturnValueOnce(
       mockSelectLeanResult([
         {

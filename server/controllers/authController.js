@@ -204,7 +204,7 @@ export const login = async (req, res, next) => {
     if (user.isEmailVerified !== firebaseEmailVerified) {
       user.isEmailVerified = firebaseEmailVerified;
       // Note: tenantStatus is only set to meaningful values (active/inactive/etc)
-      // when the user becomes a tenant via check-in. No sync needed here.
+      // when the user becomes a tenant via move-in. No sync needed here.
       await user.save();
     }
 

@@ -69,6 +69,6 @@ A room is ready for the next regular electricity close when:
 
 ## Notes
 
-- Electricity now auto-opens on first valid check-in meter reading when no open period exists.
+- Electricity now auto-opens on first valid move-in meter reading when no open period exists.
 - Electricity and water both target a 15th-cycle operational cadence after bootstrap.
 - `quadruple-sharing` remains excluded from water billing in the current product rules.

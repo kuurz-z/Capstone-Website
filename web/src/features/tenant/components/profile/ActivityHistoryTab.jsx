@@ -195,7 +195,7 @@ const buildTimeline = (r) => {
 
   if (hasReservationStatus(r.status, "moveIn")) {
     events.push({
-      id: "checkin", icon: UserCheck, iconBg: "#EEF2FF", iconColor: "#6366F1",
+      id: "movein", icon: UserCheck, iconBg: "#EEF2FF", iconColor: "#6366F1",
       title: "Moved In",
       description: "You have officially moved into your room.",
       date: readMoveInDate(r) || r.updatedAt,
@@ -205,7 +205,7 @@ const buildTimeline = (r) => {
 
   if (hasReservationStatus(r.status, "moveOut")) {
     events.push({
-      id: "checkout", icon: Home, iconBg: "#F3F4F6", iconColor: "#6B7280",
+      id: "moveout", icon: Home, iconBg: "#F3F4F6", iconColor: "#6B7280",
       title: "Moved Out",
       description: "Your stay has ended.",
       date: readMoveOutDate(r) || r.updatedAt,
@@ -231,8 +231,8 @@ const buildTimeline = (r) => {
     application: 3,
     payment: 4,
     reserved: 5,
-    checkin: 6,
-    checkout: 7,
+    movein: 6,
+    moveout: 7,
     cancelled: 8,
   };
   const getOrder = (id) => {

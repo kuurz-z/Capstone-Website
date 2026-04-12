@@ -149,7 +149,7 @@ const ContractTab = () => {
             No Active Contract
           </h3>
           <p style={{ fontSize: 13, color: "#9CA3AF", maxWidth: 320, margin: 0 }}>
-            Your lease contract will appear here once you've been checked in by the admin. If you have questions, contact your branch manager.
+            Your lease contract will appear here once you've been moved in by the admin. If you have questions, contact your branch manager.
           </p>
         </div>
       </div>

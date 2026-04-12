@@ -30,6 +30,8 @@ import {
 import {
   getReservations,
   getCurrentResidents,
+  getTenantWorkspace,
+  getTenantWorkspaceById,
   getReservationById,
   createReservation,
   updateReservation,
@@ -39,7 +41,7 @@ import {
   releaseSlot,
   archiveReservation,
   renewContract,
-  checkoutReservation,
+  moveOutReservation,
   transferTenant,
   getMyContract,
 } from "../controllers/reservationsController.js";
@@ -73,12 +75,28 @@ router.get(
   getCurrentResidents,
 );
 
+router.get(
+  "/tenant-workspace",
+  verifyToken,
+  verifyAdmin,
+  requireAnyPermission(["manageReservations", "manageTenants"]),
+  getTenantWorkspace,
+);
+
+router.get(
+  "/tenant-workspace/:reservationId",
+  verifyToken,
+  verifyAdmin,
+  requireAnyPermission(["manageReservations", "manageTenants"]),
+  getTenantWorkspaceById,
+);
+
 /**
  * GET /api/reservations/my-contract
  *
  * Get the logged-in tenant's active contract details.
  *
- * Access: Authenticated tenants (checked-in status)
+ * Access: Authenticated tenants (moved-in status)
  *
  * @returns {Object} Contract details (lease dates, progress, room/bed info)
  */
@@ -102,7 +120,7 @@ router.get("/:reservationId", verifyToken, getReservationById);
  *
  * Access: Authenticated users (tenants and admins)
  *
- * @body {Object} Reservation data (roomId, checkInDate, checkOutDate, etc.)
+ * @body {Object} Reservation data (roomId, moveInDate, moveOutDate, legacy aliases, etc.)
  * @returns {Object} Created reservation with success message
  */
 router.post("/", verifyToken, verifyApplicant, createReservation);
@@ -241,12 +259,13 @@ router.put(
 /**
  * PUT /api/reservations/:reservationId/checkout
  *
- * Check out a tenant (end stay, vacate bed, update user status).
+ * Move out a tenant (end stay, vacate bed, update user status).
+ * Uses the legacy /checkout route name for compatibility.
  *
  * Access: Admin | Owner
  *
  * @param {string} reservationId - MongoDB ObjectId
- * @body {string} notes - Checkout notes
+ * @body {string} notes - Move-out notes
  * @body {boolean} inspectionPassed - Room inspection result
  * @returns {Object} Updated reservation
  */
@@ -256,7 +275,7 @@ router.put(
   verifyAdmin,
   filterByBranch,
   requirePermission("manageReservations"),
-  checkoutReservation,
+  moveOutReservation,
 );
 
 /**

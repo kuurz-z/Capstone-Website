@@ -56,6 +56,37 @@
   color: var(--text-primary);
 }
 
+.room-config-modal__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-config-modal__icon-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.room-config-modal__icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.room-config-modal__icon-btn--danger:hover {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: var(--status-error);
+}
+
 .modal-close-btn {
   background: none;
   border: none;

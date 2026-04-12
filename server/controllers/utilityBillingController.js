@@ -25,7 +25,10 @@ import {
   sendUtilityPeriodBills,
   upsertDraftBillsForUtility,
 } from "../utils/utilityBillFlow.js";
-import { getUtilityDiagnostics } from "../utils/utilityDiagnostics.js";
+import {
+  deriveUtilityPeriodBillingState,
+  getUtilityDiagnostics,
+} from "../utils/utilityDiagnostics.js";
 
 import {
   buildTenantEventsForPeriod,
@@ -644,17 +647,165 @@ export const deleteUtilityPeriod = async (req, res, next) => {
 
 export const updateUtilityPeriod = async (req, res, next) => {
   try {
+    const payload = normalizeReservationPayload(req.body);
     const admin = await getAdminInfo(req);
     const { utilityType, id } = req.params;
-    const { ratePerUnit } = req.body;
+    const { ratePerUnit, startDate, endDate, startReading, endReading } =
+      payload;
 
-    const period = await UtilityPeriod.findById(id);
+    const period = await UtilityPeriod.findOne({
+      _id: id,
+      utilityType,
+      isArchived: false,
+    });
     if (!period || period.isArchived)
       return res.status(404).json({ error: "Period not found" });
+
+    if (period.status !== "open") {
+      await assertUtilityPeriodNotSent(period, utilityType);
+    }
+
+    const room = await Room.findById(period.roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (!admin.isOwner && room.branch !== admin.branch) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    assertUtilityRoomEligibility(room, utilityType);
+
+    if (startDate !== undefined) {
+      period.startDate = dayjs(startDate).startOf("day").toDate();
+    }
+    if (endDate !== undefined) {
+      period.endDate = endDate
+        ? dayjs(endDate).startOf("day").toDate()
+        : null;
+    }
+    if (startReading !== undefined) {
+      period.startReading = Number(startReading);
+    }
+    if (endReading !== undefined) {
+      period.endReading =
+        endReading === null || endReading === ""
+          ? null
+          : Number(endReading);
+    }
 
     if (ratePerUnit !== undefined) {
       period.ratePerUnit = Number(ratePerUnit);
     }
+
+    if (
+      period.endDate &&
+      dayjs(period.endDate).startOf("day").isBefore(dayjs(period.startDate))
+    ) {
+      return res.status(400).json({
+        error: "Billing cycle end date must be on or after the start date.",
+      });
+    }
+    if (period.status !== "open" && !period.endDate) {
+      return res.status(400).json({
+        error: "Finalized billing periods must have an end date.",
+      });
+    }
+
+    if (utilityType === "electricity" && period.status !== "open") {
+      assertBoundaryReadings({
+        startReading: period.startReading,
+        endReading: period.endReading,
+      });
+    }
+
+    if (period.status !== "open") {
+      const allReadings = await UtilityReading.find({
+        utilityType,
+        roomId: room._id,
+        isArchived: false,
+        date: { $gte: period.startDate, $lte: period.endDate },
+      })
+        .sort({ date: 1, createdAt: 1 })
+        .lean();
+
+      const reservations = await Reservation.find({
+        roomId: room._id,
+        status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },
+        isArchived: { $ne: true },
+        $and: [
+          buildMoveInBeforeQuery(period.endDate),
+          buildMoveOutAfterOrMissingQuery(period.startDate),
+        ],
+      })
+        .populate("userId", "firstName lastName email")
+        .lean();
+
+      const cyclePeriod = {
+        startDate: period.startDate,
+        endDate: period.endDate,
+        startReading: period.startReading,
+        endReading: period.endReading,
+        ratePerUnit: period.ratePerUnit,
+      };
+
+      const billableReservations = filterBillableReservationsForPeriod({
+        reservations,
+        cycleStart: period.startDate,
+        cycleEnd: period.endDate,
+      });
+
+      const occupancyOverlapResult = findBedOccupancyOverlaps({
+        reservations: billableReservations,
+        cycleStart: period.startDate,
+        cycleEnd: period.endDate,
+      });
+      if (occupancyOverlapResult.hasOverlaps) {
+        throw buildOccupancyOverlapError(occupancyOverlapResult);
+      }
+
+      let mappedTenantEvents = [];
+      if (utilityType === "electricity") {
+        const missing = findMissingElectricityLifecycleReadings({
+          period: cyclePeriod,
+          reservations: billableReservations,
+          readings: allReadings,
+        });
+        if (missing.hasMissingReadings) {
+          throw buildElectricityValidationError(missing);
+        }
+
+        mappedTenantEvents = buildTenantEventsForPeriod({
+          period: cyclePeriod,
+          reservations: billableReservations,
+          readings: allReadings,
+        });
+      }
+
+      const computationResult = computeBilling({
+        utilityPeriod: cyclePeriod,
+        readings: allReadings,
+        reservations: billableReservations,
+        tenantEvents: mappedTenantEvents,
+        forceSegmented: utilityType === "electricity",
+        utilityType,
+        roomType: room.type,
+      });
+
+      period.computedTotalUsage = computationResult.computedTotalUsage;
+      period.computedTotalCost = computationResult.computedTotalCost;
+      period.verified = computationResult.verified;
+      period.segments = computationResult.segments;
+      period.tenantSummaries = computationResult.tenantSummaries;
+      period.tenantSummaries = await upsertDraftBillsForUtility({
+        period: period.toObject(),
+        room,
+        tenantSummaries: period.tenantSummaries,
+        utilityType,
+      });
+      period.revised = true;
+      period.revisedAt = new Date();
+      if (period.status === "closed") {
+        period.status = "revised";
+      }
+    }
+
     await period.save();
 
     res.json({ success: true, period: serializeUtilityPeriod(period) });
@@ -1122,17 +1273,22 @@ export const getUtilityPeriods = async (req, res, next) => {
         const linkedBills = getUtilitySummaryBillIds(p)
           .map((id) => billMap.get(String(id)))
           .filter(Boolean);
-        const hasDraftBills = linkedBills.some(
-          (bill) => getUtilityDispatchEntry(bill, utilityType).state !== "sent",
-        );
-        const hasSentBills = linkedBills.some(
-          (bill) => getUtilityDispatchEntry(bill, utilityType).state === "sent",
-        );
+        const {
+          billingState,
+          billingLabel,
+          hasDraftBills,
+          hasSentBills,
+          blockingReason,
+        } = deriveUtilityPeriodBillingState({
+          period: p,
+          utilityType,
+          linkedBills,
+        });
 
         let displayStatus = "closed";
-        if (p.status === "open") displayStatus = "open";
-        else if (hasDraftBills) displayStatus = "ready";
-        else if (hasSentBills) displayStatus = "finalized";
+        if (billingState === "open") displayStatus = "open";
+        else if (billingState === "ready_to_send") displayStatus = "ready";
+        else if (billingState === "sent") displayStatus = "finalized";
         else if (p.revised) displayStatus = "revised";
 
         return {
@@ -1146,9 +1302,17 @@ export const getUtilityPeriods = async (req, res, next) => {
           ratePerUnit: p.ratePerUnit,
           status: p.status,
           displayStatus,
+          billingState,
+          billingLabel,
           revised: p.revised,
           hasDraftBills,
           hasSentBills,
+          blockingReason,
+          canSend: billingState === "ready_to_send",
+          canRevise:
+            (p.status === "closed" || p.status === "revised") &&
+            billingState !== "sent",
+          canDelete: billingState !== "sent",
           dispatchState: hasSentBills && !hasDraftBills ? "sent" : "draft",
           closedAt: p.closedAt,
           targetCloseDate: null,
@@ -1300,7 +1464,7 @@ export const getRoomHistory = async (req, res, next) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    // Get all check-in / check-out reservations for this room
+    // Get all move-in / move-out reservations for this room
     const reservations = await Reservation.find({
       roomId: room._id,
       status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },

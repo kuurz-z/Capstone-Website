@@ -65,19 +65,38 @@ const ReservationVisitStep = ({
 
   const availableDates = useMemo(() => getAvailableDates(10), []);
 
+  useEffect(() => {
+    if (visitCode) setResolvedVisitCode(visitCode);
+  }, [visitCode]);
+
   const handleConfirmSubmit = async () => {
     setShowConfirmModal(false);
     setIsSaving(true);
+    let shouldOpenReceipt = false;
     try {
       const code = onSaveVisit ? await onSaveVisit() : null;
-      setResolvedVisitCode(code || visitCode || null);
+      const finalCode = code || visitCode || null;
+      if (finalCode) {
+        setResolvedVisitCode(finalCode);
+        shouldOpenReceipt = true;
+      } else {
+        showNotification(
+          "Your visit was saved, but the pass is still being prepared. Please reopen it from your dashboard in a moment.",
+          "info",
+          4000,
+        );
+      }
     } catch (err) {
       console.error("Failed to save visit:", err);
+      showNotification("Failed to confirm your visit. Please try again.", "error", 3000);
     } finally {
       setIsSaving(false);
     }
-    setIsSubmitted(true);
-    setShowReceiptModal(true);
+
+    if (shouldOpenReceipt) {
+      setIsSubmitted(true);
+      setShowReceiptModal(true);
+    }
   };
 
   const handleReturnToDashboard = () => {
@@ -271,6 +290,8 @@ const ReservationVisitStep = ({
         />
       )}
 
+      {isSaving && <SavingVisitModal />}
+
       {/* Receipt Modal */}
       {showReceiptModal && (
         <ReceiptModal
@@ -333,6 +354,33 @@ function ConfirmModal({ visitDate, visitTime, onConfirm, onClose }) {
           <button onClick={onClose} className="btn btn-secondary" style={{ flex: 1 }}>Go Back</button>
           <button onClick={onConfirm} className="btn btn-primary" style={{ flex: 1 }}>Yes, Book Visit</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SavingVisitModal() {
+  return (
+    <div className="rf-modal-overlay">
+      <div
+        className="rf-modal-card"
+        style={{ maxWidth: 420, textAlign: "center", paddingTop: 36, paddingBottom: 36 }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: "50%",
+            border: "3px solid rgba(59,130,246,0.14)",
+            borderTopColor: "#2563EB",
+            margin: "0 auto 16px",
+            animation: "rf-spin 0.9s linear infinite",
+          }}
+        />
+        <h3 className="rf-modal-title">Preparing Your Visit Pass</h3>
+        <p className="rf-modal-subtitle">
+          Saving your schedule and generating your visit code.
+        </p>
       </div>
     </div>
   );

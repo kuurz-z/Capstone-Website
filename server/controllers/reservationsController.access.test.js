@@ -33,7 +33,7 @@ await jest.unstable_mockModule("../utils/reservationHelpers.js", () => ({
   handleStatusTransition: jest.fn(),
   syncReservationUserLifecycle: jest.fn(),
   buildUserUpdatePayload: jest.fn(() => ({})),
-  getCheckinBlockers: jest.fn(() => []),
+  getMoveInBlockers: jest.fn(() => []),
 }));
 await jest.unstable_mockModule("../utils/lifecycleNaming.js", () => ({
   ACTIVE_OCCUPANCY_STATUS_QUERY: ["reserved", "moveIn"],

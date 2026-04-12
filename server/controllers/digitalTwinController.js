@@ -168,7 +168,7 @@ export const getSnapshot = async (req, res) => {
       const roomBills = billsByRoom[roomId] || [];
       const occupancy = deriveRoomOccupancyState(room, roomReservations);
 
-      // Separate physical occupancy (checked-in = moved in) from reservations
+      // Separate physical occupancy (moved in) from reservations
       // "reserved" = paid deposit, confirmed, but NOT yet physically present
       const physicalOccupancy = occupancy.physicalOccupancy;
       const reservedCount = occupancy.reservedCount;

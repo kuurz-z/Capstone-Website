@@ -144,7 +144,7 @@ export default function BranchManagementPage() {
                       <span className="sa-branch-admin-name">
                         {admin.firstName} {admin.lastName}
                       </span>
-                      <span className={`sa2-badge sa2-badge-${admin.role === "owner" ? "checked-in" : "reserved"}`}>
+                      <span className={`sa2-badge sa2-badge-${admin.role === "owner" ? "moved-in" : "reserved"}`}>
                         {admin.role === "owner" ? "owner" : "branch admin"}
                       </span>
                     </div>

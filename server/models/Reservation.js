@@ -457,7 +457,7 @@ reservationSchema.index({ userId: 1, status: 1 });
 reservationSchema.index({ roomId: 1, moveInDate: 1 });
 // Admin listing: filter by status + archive flag together (avoids COLLSCAN)
 reservationSchema.index({ status: 1, isArchived: 1 });
-// Room-level status queries (e.g. find all checked-in reservations for a room)
+// Room-level status queries (e.g. find all moved-in reservations for a room)
 reservationSchema.index({ roomId: 1, status: 1 });
 // Overdue move-in cron: finds reserved + non-archived by move-in date
 reservationSchema.index({ status: 1, targetMoveInDate: 1 });

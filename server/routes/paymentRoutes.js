@@ -87,7 +87,7 @@ router.get("/bill/:billId/payments", verifyToken, async (req, res) => {
 /**
  * GET /api/payments/vacancy-dates
  * Get expected vacancy dates for all occupied beds (admin only).
- * Computes from checkInDate + leaseDuration for checked-in reservations.
+ * Computes from move-in date + leaseDuration for moved-in reservations.
  */
 router.get(
   "/vacancy-dates",

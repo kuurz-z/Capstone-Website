@@ -295,7 +295,7 @@ const session = await paymongoClient.createCheckoutSession({
 Role transitions:
 
 - New signup → `applicant`
-- Reservation checked-in → automatically promoted to `tenant`
+- Reservation moved in → automatically promoted to `tenant`
 - Manual promotion → `branch_admin` or `owner` (by owner only)
 
 ---

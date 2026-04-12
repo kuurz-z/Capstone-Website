@@ -35,7 +35,6 @@ import {
 } from "../components/shared";
 import {
   IN_PROGRESS_STATUSES,
-  RESERVATION_STAGE_MAP,
   checkOverdueReservation,
   getBranchLabel,
   mapReservationAdminRow,
@@ -77,6 +76,7 @@ function formatShortDate(value) {
   });
 }
 
+const SUMMARY_FILTERS = ["all", "in_progress", "reserved", "moveIn", "overdue"];
 function ReservationsPage() {
   const { user } = useAuth();
   const { can } = usePermissions();
@@ -192,13 +192,14 @@ function ReservationsPage() {
   const summaryItems = useMemo(
     () => [
       { label: "Total", value: counts.total, icon: CalendarCheck, color: "blue" },
-      { label: "In Progress", value: counts.inProgress, icon: Clock, color: "orange" },
+      { label: "Pending", value: counts.inProgress, icon: Clock, color: "orange" },
       { label: "Reserved", value: counts.reserved, icon: CheckCircle, color: "green" },
-      { label: "Moved In", value: counts.movedIn, icon: UserCheck, color: "blue" },
+      { label: "Checked In", value: counts.movedIn, icon: UserCheck, color: "blue" },
       { label: "Overdue", value: counts.overdue, icon: AlertTriangle, color: "red" },
     ],
     [counts],
   );
+  const activeSummaryIndex = SUMMARY_FILTERS.indexOf(statusFilter);
 
   const tabs = useMemo(
     () => [
@@ -247,11 +248,47 @@ function ReservationsPage() {
 
   const prefetchReservationDetail = useCallback(async (reservationId) => {
     if (!reservationId) return null;
-    return queryClient.ensureQueryData({
+    return queryClient.fetchQuery({
       queryKey: queryKeys.reservations.detail(reservationId),
       queryFn: () => reservationApi.getById(reservationId),
     });
   }, [queryClient]);
+
+  useEffect(() => {
+    if (!selectedReservation?.id) return;
+
+    const liveReservation = reservations.find(
+      (reservation) => reservation.id === selectedReservation.id,
+    );
+
+    if (!liveReservation) return;
+
+    setSelectedReservation((previous) => {
+      if (!previous) return previous;
+      if (
+        previous.status === liveReservation.status &&
+        previous.moveInDate === liveReservation.moveInDate &&
+        previous.moveOutDate === liveReservation.moveOutDate
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        customer: liveReservation.customer,
+        email: liveReservation.email,
+        room: liveReservation.room,
+        branch: liveReservation.branch,
+        branchCode: liveReservation.branchCode,
+        roomType: liveReservation.roomType,
+        reservationCode: liveReservation.reservationCode,
+        status: liveReservation.status,
+        moveInDate: liveReservation.moveInDate,
+        moveOutDate: liveReservation.moveOutDate,
+        createdAt: liveReservation.createdAt,
+      };
+    });
+  }, [reservations, selectedReservation]);
 
   const handleView = useCallback(async (reservationId) => {
     try {
@@ -365,47 +402,25 @@ function ReservationsPage() {
           </div>
         ),
       },
-      { key: "room", label: "Room", sortable: true },
-      { key: "branch", label: "Branch", sortable: true },
+      {
+        key: "room",
+        label: "Room",
+        sortable: true,
+        render: (row) => (
+          <div className="res-room-cell">
+            <span className="res-room-name">{row.room}</span>
+            <span className="res-room-meta">
+              {row.roomType || "Room"} · {row.branch}
+            </span>
+          </div>
+        ),
+      },
       {
         key: "status",
         label: "Status",
         render: (row) => (
           <StatusBadge status={checkOverdueReservation(row) ? "overdue" : row.status} />
         ),
-      },
-      {
-        key: "stage",
-        label: "Stage",
-        render: (row) => {
-          const info = RESERVATION_STAGE_MAP[row.status] || {
-            step: "?",
-            label: row.status,
-          };
-          if (info.step === 0) {
-            return (
-              <span
-                style={{
-                  fontSize: "var(--font-size-xs)",
-                  color: "var(--text-muted)",
-                }}
-              >
-                -
-              </span>
-            );
-          }
-          return (
-            <span
-              style={{
-                fontSize: "var(--font-size-xs)",
-                color: "var(--text-secondary)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Step {info.step}/5 · {info.label}
-            </span>
-          );
-        },
       },
       {
         key: "moveInDate",
@@ -456,49 +471,63 @@ function ReservationsPage() {
           {activeTab === "reservations" && (
             <section
               id="page-shell-panel-reservations"
-              className="page-shell__panel"
+              className="page-shell__panel reservations-workspace"
               role="tabpanel"
               aria-labelledby="page-shell-tab-reservations"
             >
-              <SummaryBar items={summaryItems} />
-              <ActionBar
-                search={{
-                  value: searchTerm,
-                  onChange: (value) => {
-                    setSearchTerm(value);
+              <div className="reservations-workspace__summary">
+                <SummaryBar
+                  items={summaryItems}
+                  activeIndex={activeSummaryIndex}
+                  onItemClick={(index) => {
+                    const nextFilter = index < 0 ? "all" : SUMMARY_FILTERS[index];
+                    setStatusFilter(nextFilter);
                     setCurrentPage(1);
-                  },
-                  placeholder: "Search by name, email, code, or room...",
-                }}
-                filters={filters}
-              />
-              <DataTable
-                columns={columns}
-                data={sortedReservations}
-                loading={loading}
-                sorting="external"
-                sortKey={sortState.key}
-                sortDir={sortState.dir}
-                onSortChange={(key, dir) => setSortState({ key, dir })}
-                onRowClick={(row) => handleView(row.id)}
-                onRowHover={(row) => {
-                  prefetchReservationDetail(row.id).catch(() => {});
-                }}
-                onRowFocus={(row) => {
-                  prefetchReservationDetail(row.id).catch(() => {});
-                }}
-                pagination={{
-                  page: currentPage,
-                  pageSize: itemsPerPage,
-                  total: totalFiltered,
-                  onPageChange: setCurrentPage,
-                }}
-                emptyState={{
-                  icon: CalendarCheck,
-                  title: "No reservations found",
-                  description: "Try adjusting your filters.",
-                }}
-              />
+                  }}
+                />
+              </div>
+              <div className="reservations-workspace__toolbar">
+                <ActionBar
+                  search={{
+                    value: searchTerm,
+                    onChange: (value) => {
+                      setSearchTerm(value);
+                      setCurrentPage(1);
+                    },
+                    placeholder: "Search by name, email, code, or room...",
+                  }}
+                  filters={filters}
+                />
+              </div>
+              <div className="reservations-workspace__table">
+                <DataTable
+                  columns={columns}
+                  data={sortedReservations}
+                  loading={loading}
+                  disableRowInteraction
+                  sorting="external"
+                  sortKey={sortState.key}
+                  sortDir={sortState.dir}
+                  onSortChange={(key, dir) => setSortState({ key, dir })}
+                  onRowHover={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  onRowFocus={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  pagination={{
+                    page: currentPage,
+                    pageSize: itemsPerPage,
+                    total: totalFiltered,
+                    onPageChange: setCurrentPage,
+                  }}
+                  emptyState={{
+                    icon: CalendarCheck,
+                    title: "No reservations found",
+                    description: "Try adjusting your filters.",
+                  }}
+                />
+              </div>
             </section>
           )}
           {activeTab === "visits" && (

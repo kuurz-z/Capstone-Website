@@ -189,7 +189,7 @@ const userSchema = new mongoose.Schema(
       default: "applicant",
       // Usage:
       // - "applicant": not a tenant yet (applicant / pre-tenant)
-      // - "active": checked in, physically moved in
+      // - "active": moved in and physically occupying a bed
       // - "inactive": moved out / contract ended
       // - "evicted": forcefully removed by admin
       // - "blacklisted": banned from future reservations

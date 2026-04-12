@@ -4,7 +4,7 @@
  * ============================================================================
  *
  * Tracks historical occupancy of each bed.
- * Created when a tenant checks in, updated when they check out.
+ * Created when a tenant moves in, updated when they move out.
  *
  * BENEFITS:
  * - Occupancy analytics

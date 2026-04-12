@@ -23,7 +23,7 @@ export const BUSINESS = {
   PENALTY_RATE_PER_DAY: Number(process.env.PENALTY_RATE) || 50,
 
   /** Default electricity rate (₱/kWh) used when auto-opening a billing period at
-   *  check-in and no prior period exists for the room. Admin can update via the
+   *  move-in and no prior period exists for the room. Admin can update via the
    *  Electricity Billing UI. Override via DEFAULT_ELECTRICITY_RATE env var. */
   DEFAULT_ELECTRICITY_RATE_PER_KWH: Number(process.env.DEFAULT_ELECTRICITY_RATE) || 16,
 

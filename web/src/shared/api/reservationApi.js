@@ -19,7 +19,7 @@ export const reservationApi = {
   },
 
   /**
-   * Get current checked-in residents for admin tenants page
+   * Get current moved-in residents for admin tenants page
    */
   getCurrentResidents: (params = {}) => {
     const searchParams = new URLSearchParams();
@@ -31,6 +31,24 @@ export const reservationApi = {
       authFetch(`/reservations/current-residents${query ? `?${query}` : ""}`),
     );
   },
+
+  /**
+   * Get tenancy workspace rows for the admin tenants page.
+   */
+  getTenantWorkspace: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.branch && params.branch !== "all") {
+      searchParams.set("branch", params.branch);
+    }
+    const query = searchParams.toString();
+    return authFetch(`/reservations/tenant-workspace${query ? `?${query}` : ""}`);
+  },
+
+  /**
+   * Get a single tenancy workspace detail payload.
+   */
+  getTenantWorkspaceById: (reservationId) =>
+    authFetch(`/reservations/tenant-workspace/${reservationId}`),
 
   /**
    * Get reservation by ID
@@ -135,8 +153,18 @@ export const reservationApi = {
     ),
 
   /**
-   * Check out a tenant (admin only)
+   * Move out a tenant (admin only)
+   * Uses the legacy /checkout route for compatibility.
    */
+  moveOut: (reservationId, data) =>
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/checkout`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+      }),
+    ),
+
+  // Legacy alias for the move-out route.
   checkout: (reservationId, data) =>
     withLifecycleNormalization(
       authFetch(`/reservations/${reservationId}/checkout`, {

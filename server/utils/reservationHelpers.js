@@ -82,7 +82,7 @@ export const validateMoveInDate = (dateStr) => {
 };
 
 /**
- * Validate check-in prerequisites against the existing reservation document.
+ * Validate move-in prerequisites against the existing reservation document.
  * Returns an array of human-readable failure reasons (empty = all clear).
  *
  * Rules:
@@ -91,7 +91,7 @@ export const validateMoveInDate = (dateStr) => {
  *  3. A site visit must have been approved — UNLESS the tenant is flagged
  *     as out-of-town and has previously received visitApproved via admin.
  */
-export const getCheckinBlockers = (reservation) => {
+export const getMoveInBlockers = (reservation) => {
   const blockers = [];
 
   if (!hasReservationStatus(reservation.status, "reserved")) {

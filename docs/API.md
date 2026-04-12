@@ -48,7 +48,7 @@ Current reference for the main backend API groups.
 | PUT    | `/:reservationId/release`    | Admin | Release reserved slot                |
 | PUT    | `/:reservationId/archive`    | Admin | Archive reservation                  |
 | PUT    | `/:reservationId/renew`      | Admin | Renew tenant contract                |
-| PUT    | `/:reservationId/checkout`   | Admin | Check out tenant                     |
+| PUT    | `/:reservationId/checkout`   | Admin | Move out tenant                      |
 | PUT    | `/:reservationId/transfer`   | Admin | Transfer tenant room/bed             |
 | GET    | `/occupancy/:roomId`         | JWT   | Get room occupancy snapshot          |
 | GET    | `/stats/occupancy`           | JWT   | Get branch occupancy statistics      |

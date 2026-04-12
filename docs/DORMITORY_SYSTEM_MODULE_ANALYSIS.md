@@ -112,7 +112,7 @@ The harshest issues are implementation-level:
 - Final features and functions per role:
 - Guest and Applicant: workflow to browse inventory, select room and bed, schedule visit, submit application data and documents, pay deposit, and track reservation progress.
 - Tenant: workflow to view active reservation or current stay, view contract, renewal status, stay history, and next action.
-- Branch Admin: workflow to approve or reject visit, review application, confirm reservation, extend deadline, check in, transfer, renew, check out, and archive or cancel.
+- Branch Admin: workflow to approve or reject visit, review application, confirm reservation, extend deadline, move in, transfer, renew, move out, and archive or cancel.
 - Owner: reporting for cross-branch override and lifecycle oversight only.
 - Notes on boundaries with other modules: room source data comes from Module 3; billing and payment proof and invoices belong to Module 4; policy acknowledgments belong to Module 6.
 - AI recommendation: Exclude.
@@ -194,7 +194,7 @@ The harshest issues are implementation-level:
 
 - Module 1 must publish the canonical user, role, permissions, and branch context used everywhere else.
 - Module 2 reads room and bed availability from Module 3, then writes reservation state changes that update occupancy, tenant status, contract state, and notifications.
-- Module 4 depends on Module 2 for stay status and on Module 3 for room and branch context; check-in enables billing, move-out ends billability.
+- Module 4 depends on Module 2 for stay status and on Module 3 for room and branch context; move-in enables billing, move-out ends billability.
 - Module 5 depends on an active stay from Module 2 and room and bed context from Module 3.
 - Module 6 consumes events from Modules 2, 4, 5, and 8 to generate notifications and acknowledgment records.
 - Module 7 reads from all operational modules and must stay read-only.
@@ -202,8 +202,8 @@ The harshest issues are implementation-level:
 
 ### What workflows must be linked
 
-- Applicant journey: sign up -> verify email -> browse rooms -> reserve bed -> schedule visit -> submit application -> pay deposit -> admin confirms -> check-in -> tenant billing, maintenance, announcements, and support.
-- Tenant lifecycle: checked-in stay -> monthly billing and payments -> maintenance requests -> announcement and policy acknowledgments -> contract renewal or transfer -> check-out.
+- Applicant journey: sign up -> verify email -> browse rooms -> reserve bed -> schedule visit -> submit application -> pay deposit -> admin confirms -> move-in -> tenant billing, maintenance, announcements, and support.
+- Tenant lifecycle: moved-in stay -> monthly billing and payments -> maintenance requests -> announcement and policy acknowledgments -> contract renewal or transfer -> move-out.
 - Admin operations: approve reservations -> assign beds -> publish bills -> verify payments -> manage maintenance -> send announcements -> respond to support -> watch reports.
 - Owner operations: manage roles, permissions, branches, and settings -> monitor branch KPIs -> audit logs -> revenue and support oversight.
 
@@ -215,7 +215,7 @@ The harshest issues are implementation-level:
 
 ### What modules must update each other
 
-- Reservation confirmation, check-in, check-out, and transfer must update room occupancy and billing eligibility.
+- Reservation confirmation, move-in, move-out, and transfer must update room occupancy and billing eligibility.
 - Bill publication and payment verification must update notifications and reports.
 - Maintenance completion and severe room issues must update room readiness and availability and reports.
 - Policy publication and acknowledgment must update communication records and, if required, block downstream workflow steps.
@@ -227,7 +227,7 @@ The harshest issues are implementation-level:
 - Do not let analytics and digital twin screens become operational sources of truth.
 - Do not bury support inside reservations or notifications inside a fake standalone module.
 - Do not let UI guards be the only protection for owner-only or admin-only actions.
-- Do not keep multiple reservation vocabularies like confirmed, reserved, checked-in, and moveIn without one canonical mapping.
+- Do not keep multiple reservation vocabularies like confirmed, reserved, moved-in, and moveIn without one canonical mapping.
 
 ## 5. Final Build Recommendation
 
@@ -259,7 +259,7 @@ The harshest issues are implementation-level:
 - Authentication and access control.
 - Role and permission assignment.
 - Room and bed assignment and occupancy updates.
-- Reservation approval, rejection, check-in, transfer, and check-out.
+- Reservation approval, rejection, move-in, transfer, and move-out.
 - Bill calculation, penalties, payment verification, and invoice publication.
 - Policy acknowledgment rules.
 
@@ -285,7 +285,7 @@ The harshest issues are implementation-level:
 ## Final Recommended Feature List Per Module
 
 - Module 1: auth, profile, users, roles, permissions, branches, business rules, sessions, login and security logs.
-- Module 2: room selection entry, reservation flow, visit scheduling, application review, deposit state, check-in and check-out, transfer, renewal, contract and stay history.
+- Module 2: room selection entry, reservation flow, visit scheduling, application review, deposit state, move-in and move-out, transfer, renewal, contract and stay history.
 - Module 3: room CRUD, bed configuration, occupancy sync, bed maintenance block, vacancy forecast, public room details.
 - Module 4: rent and utility billing, meter periods and readings, invoice publish, payment gateway, proof verification, receipts, penalties, billing exports and reports.
 - Module 5: maintenance intake, assignment, scheduling, status workflow, cost tracking, completion notes, maintenance notifications.
