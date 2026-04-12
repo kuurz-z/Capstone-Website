@@ -66,6 +66,15 @@ export const billingApi = {
    */
   getBillingReport: () => authFetch("/billing/report"),
 
+  getPendingVerifications: (branch = null) =>
+    authFetch(`/billing/pending-verifications${branch ? `?branch=${branch}` : ""}`),
+
+  verifyPayment: (billId, data) =>
+    authFetch(`/billing/${billId}/verify`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   // ── PayMongo Online Payment ──
 
   /**

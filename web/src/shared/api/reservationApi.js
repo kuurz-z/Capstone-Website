@@ -33,6 +33,24 @@ export const reservationApi = {
   },
 
   /**
+   * Get tenancy workspace rows for the admin tenants page.
+   */
+  getTenantWorkspace: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.branch && params.branch !== "all") {
+      searchParams.set("branch", params.branch);
+    }
+    const query = searchParams.toString();
+    return authFetch(`/reservations/tenant-workspace${query ? `?${query}` : ""}`);
+  },
+
+  /**
+   * Get a single tenancy workspace detail payload.
+   */
+  getTenantWorkspaceById: (reservationId) =>
+    authFetch(`/reservations/tenant-workspace/${reservationId}`),
+
+  /**
    * Get reservation by ID
    */
   getById: (reservationId) =>

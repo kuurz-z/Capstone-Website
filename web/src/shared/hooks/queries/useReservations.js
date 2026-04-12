@@ -30,6 +30,27 @@ export function useCurrentResidents(params = {}, options = {}) {
   });
 }
 
+/** Fetch tenancy workspace rows for admin tenants page */
+export function useTenantWorkspace(params = {}, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.reservations.tenantWorkspace(params),
+    queryFn: () => reservationApi.getTenantWorkspace(params),
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
+    ...options,
+  });
+}
+
+/** Fetch tenancy workspace detail for a single reservation */
+export function useTenantWorkspaceDetail(reservationId, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.reservations.tenantWorkspaceDetail(reservationId),
+    queryFn: () => reservationApi.getTenantWorkspaceById(reservationId),
+    enabled: !!reservationId,
+    ...options,
+  });
+}
+
 /** Fetch a single reservation by ID */
 export function useReservation(reservationId) {
   return useQuery({

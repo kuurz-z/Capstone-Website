@@ -30,6 +30,8 @@ import {
 import {
   getReservations,
   getCurrentResidents,
+  getTenantWorkspace,
+  getTenantWorkspaceById,
   getReservationById,
   createReservation,
   updateReservation,
@@ -71,6 +73,22 @@ router.get(
   verifyAdmin,
   requireAnyPermission(["manageReservations", "manageTenants"]),
   getCurrentResidents,
+);
+
+router.get(
+  "/tenant-workspace",
+  verifyToken,
+  verifyAdmin,
+  requireAnyPermission(["manageReservations", "manageTenants"]),
+  getTenantWorkspace,
+);
+
+router.get(
+  "/tenant-workspace/:reservationId",
+  verifyToken,
+  verifyAdmin,
+  requireAnyPermission(["manageReservations", "manageTenants"]),
+  getTenantWorkspaceById,
 );
 
 /**

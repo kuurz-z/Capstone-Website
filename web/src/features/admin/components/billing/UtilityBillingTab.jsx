@@ -1878,8 +1878,8 @@ const UtilityBillingTab = ({ utilityType }) => {
                       rate) to generate drafts immediately.
                     </p>
                     <div className="eb-form-row">
-                      <div className="eb-field">
-                        <label>Start Date</label>
+                      <div className="eb-field eb-field--date">
+                        <label>Cycle Start</label>
                         <input
                           type="date"
                           value={periodForm.startDate}
@@ -1891,8 +1891,8 @@ const UtilityBillingTab = ({ utilityType }) => {
                           }
                         />
                       </div>
-                      <div className="eb-field">
-                        <label>End Date</label>
+                      <div className="eb-field eb-field--date">
+                        <label>Cycle End</label>
                         <input
                           type="date"
                           value={periodForm.endDate}
@@ -2404,7 +2404,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                     autoFocus
                   />
                 </div>
-                <div className="eb-field">
+                <div className="eb-field eb-field--date">
                   <label>Date</label>
                   <input
                     type="date"
@@ -2486,7 +2486,7 @@ const UtilityBillingTab = ({ utilityType }) => {
               </button>
             </div>
             <div className="eb-modal__body">
-              <div className="eb-field">
+              <div className="eb-field eb-field--date">
                 <label>Cycle Start</label>
                 <input
                   type="date"
@@ -2499,7 +2499,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                   }
                 />
               </div>
-              <div className="eb-field">
+              <div className="eb-field eb-field--date">
                 <label>Cycle End</label>
                 <input
                   type="date"

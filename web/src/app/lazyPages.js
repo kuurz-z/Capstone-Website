@@ -51,7 +51,7 @@ export const RoomAvailabilityPage = React.lazy(
   () => import("../features/admin/pages/RoomAvailabilityPage"),
 );
 export const TenantsPage = React.lazy(
-  () => import("../features/admin/pages/TenantsPage"),
+  () => import("../features/admin/pages/TenantsWorkspacePage"),
 );
 export const AuditLogsPage = React.lazy(
   () => import("../features/admin/pages/AuditLogsPage"),

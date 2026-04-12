@@ -31,6 +31,8 @@ export const queryKeys = {
     all: (params) => ["reservations", "list", params || {}],
     detail: (id) => ["reservations", "detail", id],
     currentResidents: (params) => ["reservations", "currentResidents", params || {}],
+    tenantWorkspace: (params) => ["reservations", "tenantWorkspace", params || {}],
+    tenantWorkspaceDetail: (id) => ["reservations", "tenantWorkspaceDetail", id],
   },
 
   // ── Billing ──

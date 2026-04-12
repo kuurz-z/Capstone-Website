@@ -48,6 +48,7 @@ import BusinessSettings from "./BusinessSettings.js";
 import WaterBillingRecord from "./WaterBillingRecord.js";
 import UtilityPeriod from "./UtilityPeriod.js";
 import UtilityReading from "./UtilityReading.js";
+import BedHistory from "./BedHistory.js";
 import {
   CANONICAL_RESERVATION_STATUSES,
   USER_ROLE_NAMES,
@@ -84,6 +85,7 @@ export {
   WaterBillingRecord,
   UtilityPeriod,
   UtilityReading,
+  BedHistory,
 };
 
 // ============================================================================
@@ -179,6 +181,7 @@ export default {
   WaterBillingRecord,
   UtilityPeriod,
   UtilityReading,
+  BedHistory,
   Notification,
   Payment,
   LoginLog,

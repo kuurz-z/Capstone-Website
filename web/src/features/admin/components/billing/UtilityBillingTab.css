@@ -588,9 +588,9 @@
 }
 
 .eb-form-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
-  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
@@ -598,8 +598,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 130px;
-  flex: 1;
+  min-width: 0;
 }
 
 .eb-field label {
@@ -610,13 +609,18 @@
 
 .eb-field input,
 .eb-field select {
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border-radius: 7px;
   border: 1px solid var(--border-card, #d1d5db);
   font-size: 0.85rem;
   background: var(--surface-card, #fff);
   color: var(--text-body, #1e293b);
-  transition: border-color 0.12s;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s,
+    background-color 0.12s;
 }
 
 .eb-field input:focus,
@@ -624,6 +628,36 @@
   outline: none;
   border-color: var(--color-info, #2563eb);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.eb-field--date {
+  min-width: 180px;
+}
+
+.eb-field--date input[type="date"] {
+  min-height: 42px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  border-color: #cbd5e1;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 1)),
+    var(--surface-card, #fff);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color-scheme: light;
+}
+
+.eb-field--date input[type="date"]:hover {
+  border-color: #94a3b8;
+}
+
+.eb-field--date input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.72;
+}
+
+.eb-field--date input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .eb-panel__footer {
