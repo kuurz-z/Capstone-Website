@@ -2,23 +2,52 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reservationApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
+const invalidateReservationSideEffects = (qc) =>
+  Promise.all([
+    qc.invalidateQueries({ queryKey: ["reservations"] }),
+    qc.invalidateQueries({ queryKey: ["rooms"] }),
+    qc.invalidateQueries({ queryKey: ["users", "currentUser"] }),
+  ]);
+
 /** Fetch all reservations — 30s freshness, mutations trigger instant refresh */
-export function useReservations() {
+export function useReservations(params = {}) {
   return useQuery({
-    queryKey: queryKeys.reservations.all,
-    queryFn: () => reservationApi.getAll(),
+    queryKey: queryKeys.reservations.all(params),
+    queryFn: () => reservationApi.getAll(params),
     staleTime: 30 * 1000,        // data stays fresh 30s — prevents rapid refetches
     refetchOnMount: true,         // refetch if stale, but NOT if fresh
   });
 }
 
-/** Fetch current checked-in residents for admin tenants page */
-export function useCurrentResidents(params = {}) {
+/** Fetch current moved-in residents for admin tenants page */
+export function useCurrentResidents(params = {}, options = {}) {
   return useQuery({
     queryKey: queryKeys.reservations.currentResidents(params),
     queryFn: () => reservationApi.getCurrentResidents(params),
     staleTime: 30 * 1000,
     refetchOnMount: true,
+    ...options,
+  });
+}
+
+/** Fetch tenancy workspace rows for admin tenants page */
+export function useTenantWorkspace(params = {}, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.reservations.tenantWorkspace(params),
+    queryFn: () => reservationApi.getTenantWorkspace(params),
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
+    ...options,
+  });
+}
+
+/** Fetch tenancy workspace detail for a single reservation */
+export function useTenantWorkspaceDetail(reservationId, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.reservations.tenantWorkspaceDetail(reservationId),
+    queryFn: () => reservationApi.getTenantWorkspaceById(reservationId),
+    enabled: !!reservationId,
+    ...options,
   });
 }
 
@@ -36,10 +65,7 @@ export function useCreateReservation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data) => reservationApi.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -49,10 +75,7 @@ export function useUpdateReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.update(reservationId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -62,7 +85,7 @@ export function useUpdateReservationByUser() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.updateByUser(reservationId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -71,10 +94,7 @@ export function useCancelReservation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (reservationId) => reservationApi.cancel(reservationId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -84,7 +104,7 @@ export function useExtendReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.extend(reservationId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -94,10 +114,7 @@ export function useReleaseReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.release(reservationId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["reservations"] });
-      qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }
 
@@ -107,6 +124,6 @@ export function useArchiveReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.archive(reservationId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+    onSuccess: () => invalidateReservationSideEffects(qc),
   });
 }

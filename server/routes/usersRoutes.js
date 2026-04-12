@@ -27,6 +27,10 @@ import {
 } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
+  requireAnyPermission,
+  requirePermission,
+} from "../middleware/permissions.js";
+import {
   createUser,
   getUserStats,
   getUsersByBranch,
@@ -55,10 +59,17 @@ const router = express.Router();
  *
  * Access: Admin (filtered by branch) | Owner (all branches)
  */
-router.get("/stats", verifyToken, verifyAdmin, filterByBranch, getUserStats);
+router.get(
+  "/stats",
+  verifyToken,
+  verifyAdmin,
+  requireAnyPermission(["manageUsers", "viewReports"]),
+  filterByBranch,
+  getUserStats,
+);
 
 // ============================================================================
-// GET USERS BY BRANCH (Super Admin only)
+// GET USERS BY BRANCH (Owner only)
 // ============================================================================
 
 /**
@@ -83,7 +94,7 @@ router.get("/branch/:branch", verifyToken, verifyOwner, getUsersByBranch);
 router.get("/email-by-username", getEmailByUsername);
 
 // ============================================================================
-// CREATE USER (Super Admin only)
+// CREATE USER (Owner only)
 // ============================================================================
 
 /**
@@ -103,16 +114,30 @@ router.post("/", verifyToken, verifyOwner, createUser);
 /**
  * PATCH /api/users/:userId/suspend
  * Suspend a user account.
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  */
-router.patch("/:userId/suspend", verifyToken, verifyAdmin, filterByBranch, suspendUser);
+router.patch(
+  "/:userId/suspend",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  suspendUser,
+);
 
 /**
  * PATCH /api/users/:userId/reactivate
  * Reactivate a suspended/banned user account.
- * Access: Admin | Super Admin
+ * Access: Admin | Owner
  */
-router.patch("/:userId/reactivate", verifyToken, verifyAdmin, filterByBranch, reactivateUser);
+router.patch(
+  "/:userId/reactivate",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  reactivateUser,
+);
 
 /**
  * PATCH /api/users/:userId/ban
@@ -138,7 +163,7 @@ router.patch("/:userId/permissions", verifyToken, verifyOwner, updatePermissions
  * Retrieve all users from the database.
  * Results are filtered by the admin's assigned branch.
  *
- * Access: Admin (filtered by branch) | Super Admin (all branches)
+ * Access: Admin (filtered by branch) | Owner (all branches)
  *
  * Query Parameters:
  * - role: Filter by role (applicant, tenant, branch_admin, owner)
@@ -149,7 +174,14 @@ router.patch("/:userId/permissions", verifyToken, verifyOwner, updatePermissions
  * - sort: Sort field (default: createdAt)
  * - order: Sort order (asc/desc, default: desc)
  */
-router.get("/", verifyToken, verifyAdmin, filterByBranch, getUsers);
+router.get(
+  "/",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  getUsers,
+);
 
 // ============================================================================
 // GET MY STAY HISTORY (Tenant)
@@ -173,12 +205,19 @@ router.get("/my-stays", verifyToken, getMyStays);
  *
  * Retrieve a specific user by their MongoDB ID.
  *
- * Access: Admin (must be from their branch) | Super Admin (any user)
+ * Access: Admin (must be from their branch) | Owner (any user)
  */
-router.get("/:userId", verifyToken, verifyAdmin, filterByBranch, getUserById);
+router.get(
+  "/:userId",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  getUserById,
+);
 
 // ============================================================================
-// UPDATE USER (Super Admin only)
+// UPDATE USER
 // ============================================================================
 
 /**
@@ -186,12 +225,19 @@ router.get("/:userId", verifyToken, verifyAdmin, filterByBranch, getUserById);
  *
  * Update a user's information.
  *
- * Access: Owner only
+ * Access: Admin (filtered by branch) | Owner (all branches)
  */
-router.put("/:userId", verifyToken, verifyOwner, updateUser);
+router.put(
+  "/:userId",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  updateUser,
+);
 
 // ============================================================================
-// DELETE USER (Super Admin only)
+// DELETE USER (Owner only)
 // ============================================================================
 
 /**

@@ -3,6 +3,11 @@
  * Used with the `validate()` middleware helper.
  */
 
+import {
+  ANNOUNCEMENT_CATEGORIES,
+  ANNOUNCEMENT_TARGET_BRANCHES,
+} from "../config/announcements.js";
+
 /**
  * Schema for POST /api/auth/set-role
  * Body: { userId, role }
@@ -54,7 +59,14 @@ export const createAnnouncementSchema = {
   category: {
     type: "string",
     required: true,
-    enum: ["general", "maintenance", "reminder", "emergency", "event"],
+    enum: ANNOUNCEMENT_CATEGORIES,
+  },
+  targetBranch: {
+    type: "string",
+    enum: ANNOUNCEMENT_TARGET_BRANCHES,
+  },
+  requiresAcknowledgment: {
+    type: "boolean",
   },
 };
 

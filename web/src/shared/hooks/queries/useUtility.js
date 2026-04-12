@@ -32,6 +32,14 @@ export function useUtilityReadings(utilityType, roomId) {
   });
 }
 
+export function useRoomHistory(utilityType, roomId) {
+  return useQuery({
+    queryKey: [...utilityKeys.all(utilityType), "roomHistory", roomId],
+    queryFn: () => utilityApi.getRoomHistory(utilityType, roomId),
+    enabled: !!utilityType && !!roomId,
+  });
+}
+
 export function useUtilityLatestReading(utilityType, roomId) {
   return useQuery({
     queryKey: utilityKeys.latestReading(utilityType, roomId),
@@ -130,6 +138,16 @@ export function useCloseUtilityPeriod(utilityType) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ periodId, ...data }) => utilityApi.closePeriod(utilityType, periodId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
+    },
+  });
+}
+
+export function useSendUtilityPeriod(utilityType) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ periodId }) => utilityApi.sendPeriod(utilityType, periodId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
     },

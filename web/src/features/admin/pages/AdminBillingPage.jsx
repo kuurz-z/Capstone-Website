@@ -1,17 +1,16 @@
 import { useState } from "react";
-import { Droplets, Send, Zap } from "lucide-react";
+import { Droplets, Zap } from "lucide-react";
 import UtilityBillingTab from "../components/billing/UtilityBillingTab";
-import InvoicePublishTab from "../components/billing/InvoicePublishTab";
 import "./AdminBillingPage.css";
 
 const tabs = [
   { id: "electricity", label: "Electricity", icon: Zap },
   { id: "water", label: "Water", icon: Droplets },
-  { id: "invoices", label: "Issue Invoices", icon: Send },
 ];
 
 const AdminBillingPage = () => {
   const [activeTab, setActiveTab] = useState("electricity");
+  const activePanelId = `billing-panel-${activeTab}`;
 
   // Visual contract:
   // hero shell + tablist + workspace panel
@@ -22,12 +21,17 @@ const AdminBillingPage = () => {
           <span className="admin-billing-page__eyebrow">Billing Workspace</span>
           <h1 className="admin-billing-page__heading">Billing Management</h1>
           <p className="admin-billing-page__subtitle">
-            Manage utility cycles, review tenant splits, and publish invoices from one workspace.
+            Create billing cycles, review results, and send charges in a few
+            clear steps.
           </p>
         </div>
 
         <div className="admin-billing-page__hero-actions">
-          <div className="admin-billing-page__workspace-tabs" role="tablist" aria-label="Billing type">
+          <div
+            className="admin-billing-page__workspace-tabs"
+            role="tablist"
+            aria-label="Billing type"
+          >
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -35,8 +39,11 @@ const AdminBillingPage = () => {
                   key={tab.id}
                   type="button"
                   role="tab"
+                  id={`billing-tab-${tab.id}`}
+                  aria-controls={`billing-panel-${tab.id}`}
                   aria-selected={activeTab === tab.id}
-                  className={`admin-billing-tab${activeTab === tab.id ? " is-active" : ""}${tab.id === "invoices" ? " admin-billing-tab--publish" : ""}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
+                  className={`admin-billing-tab${activeTab === tab.id ? " is-active" : ""}`}
                   onClick={() => setActiveTab(tab.id)}
                 >
                   <span className="admin-billing-tab__icon">
@@ -50,10 +57,16 @@ const AdminBillingPage = () => {
         </div>
       </header>
 
-      <section className="admin-billing-page__workspace-panel">
-        {activeTab === "electricity" && <UtilityBillingTab utilityType="electricity" />}
+      <section
+        className="admin-billing-page__workspace-panel"
+        role="tabpanel"
+        id={activePanelId}
+        aria-labelledby={`billing-tab-${activeTab}`}
+      >
+        {activeTab === "electricity" && (
+          <UtilityBillingTab utilityType="electricity" />
+        )}
         {activeTab === "water" && <UtilityBillingTab utilityType="water" />}
-        {activeTab === "invoices" && <InvoicePublishTab />}
       </section>
     </div>
   );

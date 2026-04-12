@@ -15,6 +15,15 @@ export const announcementApi = {
   },
 
   /**
+   * Get recent admin announcements
+   */
+  getAdminList: (limit = 20, branch = null) => {
+    let url = `/announcements/admin?limit=${limit}`;
+    if (branch) url += `&branch=${branch}`;
+    return authFetch(url);
+  },
+
+  /**
    * Get unacknowledged announcements
    */
   getUnacknowledged: () => authFetch("/announcements/unacknowledged"),

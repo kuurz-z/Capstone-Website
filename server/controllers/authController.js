@@ -5,8 +5,10 @@
 
 import { getAuth } from "../config/firebase.js";
 import { User, LoginLog } from "../models/index.js";
+import { ROOM_BRANCHES } from "../config/branches.js";
 import logger from "../middleware/logger.js";
 import auditLogger from "../utils/auditLogger.js";
+import { getDefaultPermissionsForRole } from "../config/accessControl.js";
 import {
   sendSuccess,
   sendError,
@@ -19,7 +21,7 @@ import {
 } from "../middleware/validation.js";
 
 
-const VALID_BRANCHES = ["gil-puyat", "guadalupe"];
+const VALID_BRANCHES = ROOM_BRANCHES;
 const VALID_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
 
 export const register = async (req, res, next) => {
@@ -120,7 +122,7 @@ export const register = async (req, res, next) => {
       branch,
       role: "applicant",
       isEmailVerified: req.user.email_verified || false, // Synced from Firebase
-      tenantStatus: "none",
+      tenantStatus: "applicant",
     });
 
     await user.save();
@@ -146,6 +148,7 @@ export const register = async (req, res, next) => {
         phone: user.phone,
         branch: user.branch,
         role: user.role,
+        permissions: user.permissions,
         isEmailVerified: user.isEmailVerified,
       },
     });
@@ -201,7 +204,7 @@ export const login = async (req, res, next) => {
     if (user.isEmailVerified !== firebaseEmailVerified) {
       user.isEmailVerified = firebaseEmailVerified;
       // Note: tenantStatus is only set to meaningful values (active/inactive/etc)
-      // when the user becomes a tenant via check-in. No sync needed here.
+      // when the user becomes a tenant via move-in. No sync needed here.
       await user.save();
     }
 
@@ -234,8 +237,10 @@ export const login = async (req, res, next) => {
         phone: user.phone,
         branch: user.branch,
         role: user.role,
+        permissions: user.permissions,
         isActive: user.isActive,
         isEmailVerified: user.isEmailVerified,
+        accountStatus: user.accountStatus,
       },
     });
   } catch (error) {
@@ -294,7 +299,9 @@ export const getProfile = async (req, res, next) => {
       profileImage: user.profileImage,
       branch: user.branch,
       role: user.role,
+      permissions: user.permissions,
       tenantStatus: user.tenantStatus,
+      accountStatus: user.accountStatus,
       isActive: user.isActive,
       isEmailVerified: user.isEmailVerified,
       // Extended profile fields
@@ -572,6 +579,10 @@ export const setRole = async (req, res, next) => {
 
     // Update role in MongoDB database
     user.role = role;
+    user.permissions =
+      role === "branch_admin" || role === "owner"
+        ? getDefaultPermissionsForRole(role)
+        : [];
     await user.save();
 
     res.json({

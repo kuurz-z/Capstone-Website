@@ -28,9 +28,11 @@ export const queryKeys = {
 
   // ── Reservations ──
   reservations: {
-    all: ["reservations", "list"],
+    all: (params) => ["reservations", "list", params || {}],
     detail: (id) => ["reservations", "detail", id],
     currentResidents: (params) => ["reservations", "currentResidents", params || {}],
+    tenantWorkspace: (params) => ["reservations", "tenantWorkspace", params || {}],
+    tenantWorkspaceDetail: (id) => ["reservations", "tenantWorkspaceDetail", id],
   },
 
   // ── Billing ──
@@ -82,6 +84,10 @@ export const queryKeys = {
 
   settings: {
     business: ["settings", "business"],
+  },
+
+  financial: {
+    overview: (branch) => ["financial", "overview", branch || "all"],
   },
 
   // ── Digital Twin ──

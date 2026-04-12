@@ -3,7 +3,8 @@
  * BILLING ROUTES
  * ============================================================================
  *
- * API endpoints for billing operations.
+ * Module 4 billing route group.
+ * Owns bills, verification, penalties, readiness, publishing, reporting, and exports.
  * All endpoints require authentication.
  *
  * ============================================================================
@@ -13,24 +14,9 @@ import express from "express";
 import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import * as billingController from "../controllers/billingController.js";
-import { generateAutomatedRentBills } from "../utils/rentGenerator.js";
+import { requirePermission } from "../middleware/permissions.js";
 
 const router = express.Router();
-
-router.get("/force-rent", async (req, res) => {
-  console.log("Forcing rent generation via billingRoutes!");
-  const fs = await import('fs');
-  const path = './utils/rentGenerator.js';
-  const original = fs.readFileSync(path, 'utf8');
-  fs.writeFileSync(path, original.replace('if (dueInDays !== 5) {', 'if (false) {'));
-
-  try {
-     await generateAutomatedRentBills();
-     res.send("Generation complete! Check terminal or DB.");
-  } finally {
-     fs.writeFileSync(path, original);
-  }
-});
 
 // All billing routes require authentication
 router.use(verifyToken);
@@ -73,31 +59,61 @@ router.post("/:billId/submit-proof", billingController.submitPaymentProof);
  * GET /api/billing/stats
  * Get billing statistics by branch (Admin only)
  */
-router.get("/stats", verifyAdmin, filterByBranch, billingController.getBillingStats);
+router.get(
+  "/stats",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getBillingStats,
+);
 
 /**
  * GET /api/billing/branch
  * Get all bills for a branch (Admin only)
  */
-router.get("/branch", verifyAdmin, filterByBranch, billingController.getBillsByBranch);
+router.get(
+  "/branch",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getBillsByBranch,
+);
 
 /**
  * GET /api/billing/rooms
  * Get rooms with occupants for bill generation (Admin only)
  */
-router.get("/rooms", verifyAdmin, filterByBranch, billingController.getRoomsWithTenants);
+router.get(
+  "/rooms",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getRoomsWithTenants,
+);
 
 /**
  * GET /api/billing/pending-verifications
  * Get bills with pending payment proof verifications (Admin only)
  */
-router.get("/pending-verifications", verifyAdmin, filterByBranch, billingController.getPendingVerifications);
+router.get(
+  "/pending-verifications",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getPendingVerifications,
+);
 
 /**
  * GET /api/billing/report
  * Get billing report (revenue, overdue, penalties) (Admin only)
  */
-router.get("/report", verifyAdmin, filterByBranch, billingController.getBillingReport);
+router.get(
+  "/report",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getBillingReport,
+);
 
 
 
@@ -105,40 +121,76 @@ router.get("/report", verifyAdmin, filterByBranch, billingController.getBillingR
  * POST /api/billing/:billId/verify
  * Admin approves or rejects payment proof
  */
-router.post("/:billId/verify", verifyAdmin, filterByBranch, billingController.verifyPayment);
+router.post(
+  "/:billId/verify",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.verifyPayment,
+);
 
 /**
  * POST /api/billing/:billId/mark-paid
  * Mark a bill as paid (Admin only)
  */
-router.post("/:billId/mark-paid", verifyAdmin, filterByBranch, billingController.markBillAsPaid);
+router.post(
+  "/:billId/mark-paid",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.markBillAsPaid,
+);
 
 /**
  * DELETE /api/billing/:billId
  * Hard-delete an orphaned or erroneous bill (Admin only)
  * Note: paid bills cannot be deleted.
  */
-router.delete("/:billId", verifyAdmin, filterByBranch, billingController.deleteBill);
+router.delete(
+  "/:billId",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.deleteBill,
+);
 
 /**
  * POST /api/billing/apply-penalties
  * Auto-calculate and apply penalties to overdue bills (Admin only)
  */
-router.post("/apply-penalties", verifyAdmin, filterByBranch, billingController.applyPenalties);
+router.post(
+  "/apply-penalties",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.applyPenalties,
+);
 
 /**
  * GET /api/billing/readiness
  * Get per-room utility finalization status for the active billing cycle.
  * Used by the Issue Invoices tab to show what rooms are ready to publish.
  */
-router.get("/readiness", verifyAdmin, filterByBranch, billingController.getRoomReadiness);
+router.get(
+  "/readiness",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getRoomReadiness,
+);
 
 /**
  * POST /api/billing/publish/:roomId
  * Atomically publish all draft bills for a room — flip to pending + PDF + email.
  * Guards: electricity must be closed + water must be finalized (where applicable).
  */
-router.post("/publish/:roomId", verifyAdmin, filterByBranch, billingController.publishRoomBills);
+router.post(
+  "/publish/:roomId",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.publishRoomBills,
+);
 
 
 /**
@@ -146,11 +198,11 @@ router.post("/publish/:roomId", verifyAdmin, filterByBranch, billingController.p
  * Get flattened billing data for CSV export (Admin only).
  * Query: ?branch=gil-puyat&status=overdue&month=2026-01
  */
-router.get("/export", verifyAdmin, filterByBranch, async (req, res) => {
+router.get("/export", verifyAdmin, requirePermission("manageBilling"), filterByBranch, async (req, res) => {
   try {
     const { Bill } = await import("../models/index.js");
-    // Regular admins: branch is forced from req.branchFilter (their assigned branch)
-    // Super admins: branch comes from query param
+    // Branch admins: branch is forced from req.branchFilter (their assigned branch)
+    // Owners: branch may optionally come from the query param
     const branch = req.branchFilter || req.query.branch;
     const { status, month } = req.query;
 

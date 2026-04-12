@@ -14,7 +14,7 @@
 
 import express from "express";
 import { getAuth } from "../config/firebase.js";
-import { verifyToken, verifyAdmin } from "../middleware/auth.js";
+import { verifyToken, verifyOwner } from "../middleware/auth.js";
 import { publicLimiter } from "../middleware/rateLimiter.js";
 import auditLogger from "../utils/auditLogger.js";
 import {
@@ -151,7 +151,7 @@ router.patch("/update-branch", verifyToken, validate(updateBranchSchema), update
  * @body { userId, role }
  * @returns { message }
  */
-router.post("/set-role", verifyToken, verifyAdmin, validate(setRoleSchema), setRole);
+router.post("/set-role", verifyToken, verifyOwner, validate(setRoleSchema), setRole);
 
 /**
  * POST /api/auth/log-password-reset

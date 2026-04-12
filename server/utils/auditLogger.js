@@ -61,16 +61,19 @@ const getUserAgent = (req) => {
  * @param {Object} req - Express request object
  * @returns {Object} User info object
  */
+const resolveAuditRole = (user) => {
+  if (!user) return "applicant";
+  if (user.role) return user.role;
+  if (user.owner) return "owner";
+  if (user.branch_admin) return "branch_admin";
+  return "applicant";
+};
+
 const getUserInfo = (req) => {
   return {
     email: req?.user?.email || "anonymous",
     userId: req?.user?.mongoId || null,
-    role:
-      req?.user?.role || req?.user?.branch_admin
-        ? "branch_admin"
-        : req?.user?.owner
-          ? "owner"
-          : "applicant",
+    role: resolveAuditRole(req?.user),
     branch: req?.user?.branch || "",
   };
 };
@@ -90,7 +93,8 @@ class AuditLogger {
   async logLogin(req, user, success = true, action = null) {
     try {
       const email = typeof user === "string" ? user : user?.email || "unknown";
-      const userRole = typeof user === "object" ? user?.role : "unknown";
+      const userRole =
+        typeof user === "object" ? resolveAuditRole(user) : "unknown";
       const branch = typeof user === "object" ? user?.branch : null;
 
       // Determine details based on action or success status
@@ -132,7 +136,8 @@ class AuditLogger {
       const userInfo = getUserInfo(req);
       const email =
         typeof user === "string" ? user : user?.email || userInfo.email;
-      const userRole = typeof user === "object" ? user?.role : userInfo.role;
+      const userRole =
+        typeof user === "object" ? resolveAuditRole(user) : userInfo.role;
       const branch = typeof user === "object" ? user?.branch : userInfo.branch;
 
 
@@ -163,7 +168,8 @@ class AuditLogger {
   async logRegistration(req, user, success = true, details = null) {
     try {
       const email = typeof user === "string" ? user : user?.email || "unknown";
-      const userRole = typeof user === "object" ? user?.role : "user";
+      const userRole =
+        typeof user === "object" ? resolveAuditRole(user) : "applicant";
       const branch = typeof user === "object" ? user?.branch : null;
       const userId = typeof user === "object" ? user?._id : null;
       const username = typeof user === "object" ? user?.username : null;

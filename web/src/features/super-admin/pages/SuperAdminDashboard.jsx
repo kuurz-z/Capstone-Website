@@ -14,10 +14,12 @@ import {
 import { useDashboardData } from "../../../shared/hooks/queries/useDashboard";
 import { useBillingStats } from "../../../shared/hooks/queries/useBilling";
 import { useBranchOccupancy } from "../../../shared/hooks/queries/useRooms";
+import { useFinancialOverview } from "../../../shared/hooks/queries/useFinancial";
 import {
   formatBranch,
   formatRelativeTime,
 } from "../../admin/utils/formatters";
+import { hasReservationStatus } from "../../../shared/utils/lifecycleNaming";
 import "../styles/superadmin-dashboard.css";
 
 // Accent colors per stat — kept minimal, single hue each
@@ -43,6 +45,7 @@ export default function SuperAdminDashboard() {
   } = useDashboardData();
 
   const { data: billingStats } = useBillingStats();
+  const { data: financialOverview } = useFinancialOverview("all");
   const { data: gilPuyatOcc } = useBranchOccupancy("gil-puyat");
   const { data: guadalupeOcc } = useBranchOccupancy("guadalupe");
 
@@ -54,7 +57,9 @@ export default function SuperAdminDashboard() {
     const totalOcc = occupancyStats?.totalOccupancy || 0;
     const occRate = totalCap > 0 ? Math.round((totalOcc / totalCap) * 100) : 0;
     const activeBookings = reservations.filter((r) =>
-      ["confirmed", "checked-in", "reserved"].includes(r.status)
+      r.status === "confirmed" ||
+      r.status === "reserved" ||
+      hasReservationStatus(r.status, "moveIn")
     ).length;
 
     return [
@@ -84,11 +89,11 @@ export default function SuperAdminDashboard() {
       },
       {
         label: "Total Revenue",
-        value: billingStats?.totalCollected
-          ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
+        value: financialOverview?.kpis?.totalPaid30d
+          ? `₱${Number(financialOverview.kpis.totalPaid30d).toLocaleString()}`
           : "₱0",
         Icon: DollarSign,
-        sub: `${billingStats?.overdueCount ?? 0} overdue`,
+        sub: `${financialOverview?.kpis?.overdueCount ?? billingStats?.overdueCount ?? 0} overdue`,
       },
       {
         label: "Inquiries",
@@ -97,7 +102,14 @@ export default function SuperAdminDashboard() {
         sub: `${inquiryStats.data?.recentCount ?? 0} this week`,
       },
     ];
-  }, [occupancyStats, userStats.data, reservations, billingStats, inquiryStats.data]);
+  }, [
+    occupancyStats,
+    userStats.data,
+    reservations,
+    billingStats,
+    financialOverview,
+    inquiryStats.data,
+  ]);
 
   const branches = useMemo(() => {
     const parse = (label, raw) => {

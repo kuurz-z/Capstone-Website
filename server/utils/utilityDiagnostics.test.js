@@ -9,6 +9,9 @@ const utilityReadingFind = jest.fn();
 const reservationFind = jest.fn();
 
 await jest.unstable_mockModule("../models/index.js", () => ({
+  Bill: {
+    find: jest.fn(),
+  },
   Room: {
     find: roomFind,
     findById: roomFindById,
@@ -67,7 +70,7 @@ describe("getUtilityDiagnostics", () => {
     });
   });
 
-  test("includes branch rooms with active checked-in tenants even when no readings exist yet", async () => {
+  test("includes branch rooms with active moved-in tenants even when no readings exist yet", async () => {
     roomFind.mockReturnValueOnce(
       mockSelectLeanResult([
         {
@@ -221,6 +224,6 @@ describe("getUtilityDiagnostics", () => {
 
     await getUtilityDiagnostics({ branch: "gil-puyat" });
 
-    expect(selectedFields).toContain("_id type");
+    expect(selectedFields).toContain("_id name roomNumber branch type capacity");
   });
 });

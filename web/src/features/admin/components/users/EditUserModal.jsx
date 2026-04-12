@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function EditUserModal({
@@ -7,18 +9,48 @@ export default function EditUserModal({
   onSubmit,
   onClose,
 }) {
+  useBodyScrollLock(true);
   useEscapeClose(true, onClose);
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "680px" }}>
+
+  if (typeof document === "undefined") return null;
+
+  const isLifecycleManaged =
+    editForm.lifecycleManaged ?? ["applicant", "tenant"].includes(editForm.role);
+  const lifecycleIndicator = editForm.hasActiveStay
+    ? "Active stay"
+    : editForm.hasLifecycleReservation
+      ? "Active reservation"
+      : "No active reservation";
+  const lifecycleGuidance = editForm.hasActiveStay
+    ? "Use Tenant Actions or Reservations to move this user out before changing lifecycle state."
+    : "Use Reservations or Tenant Actions to change applicant or tenant lifecycle state.";
+
+  return createPortal(
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit user"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: "680px" }}
+      >
         <div className="modal-header">
           <h2>Edit User</h2>
-          <button onClick={onClose} className="modal-close">
+          <button onClick={onClose} className="modal-close" aria-label="Close">
             ×
           </button>
         </div>
-        <form onSubmit={onSubmit} className="modal-form" style={{ maxHeight: "70vh", overflowY: "auto" }}>
-          {/* ── Basic Info ── */}
+        <form
+          onSubmit={onSubmit}
+          className="modal-form"
+          style={{ maxHeight: "70vh", overflowY: "auto" }}
+        >
           <div className="form-row">
             <div className="form-group">
               <label>Username</label>
@@ -110,22 +142,52 @@ export default function EditUserModal({
             </div>
             <div className="form-group">
               <label>Role</label>
-              <select
-                value={editForm.role}
-                onChange={(e) =>
-                  onFormChange({ ...editForm, role: e.target.value })
-                }
-                required
-              >
-                <option value="applicant">Applicant</option>
-                <option value="tenant">Tenant</option>
-                <option value="branch_admin">Branch Admin</option>
-                {isOwner && (
-                  <option value="owner">Owner</option>
-                )}
-              </select>
+              {isLifecycleManaged ? (
+                <>
+                  <input type="text" value={editForm.role || "applicant"} readOnly />
+                  <p className="modal-help-text">
+                    Applicant and tenant roles are managed by reservation lifecycle.
+                  </p>
+                </>
+              ) : (
+                <select
+                  value={editForm.role}
+                  onChange={(e) =>
+                    onFormChange({ ...editForm, role: e.target.value })
+                  }
+                  required
+                >
+                  <option value="applicant">Applicant</option>
+                  <option value="branch_admin">Branch Admin</option>
+                  {isOwner && <option value="owner">Owner</option>}
+                </select>
+              )}
             </div>
           </div>
+
+          {isLifecycleManaged && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Tenant Status</label>
+                  <input
+                    type="text"
+                    value={editForm.tenantStatus || "applicant"}
+                    readOnly
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Lifecycle State</label>
+                  <input type="text" value={lifecycleIndicator} readOnly />
+                </div>
+              </div>
+
+              <div className="modal-help-card">
+                <strong>Lifecycle Managed</strong>
+                <p>{lifecycleGuidance}</p>
+              </div>
+            </>
+          )}
 
           <div className="form-row">
             <div className="form-group">
@@ -158,17 +220,18 @@ export default function EditUserModal({
             </div>
           </div>
 
-          {/* ── Extended Profile ── */}
-          <h3 style={{
-            fontSize: "13px",
-            fontWeight: 600,
-            color: "#6B7280",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-            margin: "16px 0 8px",
-            paddingTop: "12px",
-            borderTop: "1px solid #E8EBF0",
-          }}>
+          <h3
+            style={{
+              fontSize: "13px",
+              fontWeight: 600,
+              color: "#6B7280",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+              margin: "16px 0 8px",
+              paddingTop: "12px",
+              borderTop: "1px solid #E8EBF0",
+            }}
+          >
             Extended Profile
           </h3>
 
@@ -204,7 +267,10 @@ export default function EditUserModal({
                 type="text"
                 value={editForm.emergencyContact || ""}
                 onChange={(e) =>
-                  onFormChange({ ...editForm, emergencyContact: e.target.value })
+                  onFormChange({
+                    ...editForm,
+                    emergencyContact: e.target.value,
+                  })
                 }
                 maxLength={100}
               />
@@ -271,6 +337,7 @@ export default function EditUserModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

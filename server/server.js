@@ -1,14 +1,14 @@
 /**
  * ============================================================================
- * LILYCREST DORMITORY MANAGEMENT SYSTEM — SERVER
+ * LILYCREST DORMITORY MANAGEMENT SYSTEM - SERVER
  * ============================================================================
  *
  * Production-grade Express.js server with:
- * - Security headers (Helmet)
- * - Rate limiting (tiered)
+ * - Security headers
+ * - Rate limiting
  * - Request ID tracing
- * - Structured JSON logging (Pino)
- * - Response compression (gzip/brotli)
+ * - Structured logging
+ * - Compression
  * - Standardized error handling
  * - Deep health checks
  * - Graceful shutdown
@@ -16,17 +16,15 @@
  * ============================================================================
  */
 
-import express from "express"; // trigger restart
+import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import compression from "compression";
 import mongoose from "mongoose";
 
-// --- Config ---
 import connectDB from "./config/database.js";
-
-// --- Middleware ---
+import validateStartupConfig from "./config/startupValidation.js";
 import requestId from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/logger.js";
 import logger from "./middleware/logger.js";
@@ -36,8 +34,6 @@ import {
   publicLimiter,
 } from "./middleware/rateLimiter.js";
 import { globalErrorHandler } from "./middleware/errorHandler.js";
-
-// --- Routes ---
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/usersRoutes.js";
 import roomRoutes from "./routes/roomsRoutes.js";
@@ -45,7 +41,6 @@ import reservationRoutes from "./routes/reservationsRoutes.js";
 import inquiryRoutes from "./routes/inquiriesRoutes.js";
 import auditRoutes from "./routes/auditRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
-import forceRentRoute from "./routes/forceRentRoute.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import maintenanceRoutes from "./routes/maintenanceRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
@@ -56,55 +51,127 @@ import digitalTwinRoutes from "./routes/digitalTwinRoutes.js";
 import utilityBillingRoutes from "./routes/utilityBillingRoutes.js";
 import financialRoutes from "./routes/financialRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
-
-// --- Background Jobs ---
-import { startScheduler, stopScheduler } from "./utils/scheduler.js";
-
-// --- Real-time ---
 import { initSocket } from "./utils/socket.js";
 
-// Load environment variables from .env file
 dotenv.config();
-
-// ============================================================================
-// DATABASE CONNECTION
-// ============================================================================
-
-connectDB();
-
-// ============================================================================
-// EXPRESS APP INITIALIZATION
-// ============================================================================
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+let server = null;
+let stopBackgroundJobs = () => {};
 
-// ============================================================================
-// SECURITY MIDDLEWARE (applied first)
-// ============================================================================
+const resolveTrustProxy = () => {
+  const configured = String(process.env.TRUST_PROXY || "").trim().toLowerCase();
+  if (!configured) {
+    return process.env.NODE_ENV === "production" ? 1 : false;
+  }
 
-/**
- * Request ID — trace every request through the system
- */
+  if (configured === "true") return true;
+  if (configured === "false") return false;
+
+  const asNumber = Number(configured);
+  return Number.isNaN(asNumber) ? configured : asNumber;
+};
+
+app.set("trust proxy", resolveTrustProxy());
 app.use(requestId);
 
-/**
- * Allowed origins for CORS
- */
-const allowedOrigins = (
+const normalizeOrigin = (origin = "") => String(origin || "").trim().replace(/\/+$/, "");
+
+const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const wildcardToRegex = (pattern = "") =>
+  new RegExp(`^${escapeRegex(pattern).replace(/\\\*/g, ".*")}$`, "i");
+
+const allowedOriginRules = (
   process.env.CORS_ORIGINS ||
   process.env.FRONTEND_URL ||
   "http://localhost:3000,http://localhost:3001"
 )
   .split(",")
-  .map((o) => o.trim());
+  .map((origin) => normalizeOrigin(origin))
+  .filter(Boolean);
 
-/**
- * Handle OPTIONS preflight explicitly (before any other middleware can block it)
- */
+const allowedOriginMatchers = allowedOriginRules.map((rule) =>
+  rule.includes("*") ? wildcardToRegex(rule) : rule,
+);
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  return allowedOriginMatchers.some((matcher) => {
+    if (matcher instanceof RegExp) {
+      return matcher.test(normalizedOrigin);
+    }
+    return matcher === normalizedOrigin;
+  });
+};
+
+const isTruthyEnv = (value, fallback = false) => {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return fallback;
+  }
+
+  return !["0", "false", "no", "off"].includes(
+    String(value).trim().toLowerCase(),
+  );
+};
+
+const shouldStartScheduler = () => isTruthyEnv(process.env.ENABLE_SCHEDULER, true);
+
+const runPermissionBackfill = async () => {
+  try {
+    const { backfillBranchAdminPermissions } = await import(
+      "./utils/backfillAdminPermissions.js"
+    );
+    const updatedCount = await backfillBranchAdminPermissions();
+
+    if (updatedCount > 0) {
+      logger.info(
+        { count: updatedCount },
+        "Startup permission backfill completed",
+      );
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Startup permission backfill failed");
+  }
+};
+
+const runSchedulerStartup = async () => {
+  if (!shouldStartScheduler()) {
+    logger.info("Scheduler startup skipped because ENABLE_SCHEDULER is disabled");
+    return;
+  }
+
+  try {
+    const { startScheduler, stopScheduler } = await import("./utils/scheduler.js");
+    stopBackgroundJobs = stopScheduler;
+    startScheduler({
+      runWarmup: isTruthyEnv(process.env.RUN_SCHEDULER_WARMUP, false),
+    });
+    logger.info("Scheduler started");
+  } catch (error) {
+    logger.error({ err: error }, "Scheduler startup failed");
+  }
+};
+
+const startBackgroundServices = (mongoConnected) => {
+  if (!mongoConnected) {
+    logger.warn(
+      "Skipping background startup tasks because MongoDB is unavailable",
+    );
+    return;
+  }
+
+  setImmediate(() => {
+    void Promise.allSettled([runPermissionBackfill(), runSchedulerStartup()]);
+  });
+};
+
 app.options("*", (req, res) => {
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
+  if (origin && isOriginAllowed(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader(
       "Access-Control-Allow-Methods",
@@ -119,22 +186,21 @@ app.options("*", (req, res) => {
   res.sendStatus(204);
 });
 
-/**
- * CORS — allow requests from the React frontend(s)
- */
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
     exposedHeaders: ["X-Request-Id"],
   }),
 );
 
-/**
- * Helmet — sets secure HTTP headers:
- * - Content-Security-Policy, X-Content-Type-Options, X-Frame-Options
- * - Strict-Transport-Security, X-XSS-Protection, etc.
- */
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -157,56 +223,20 @@ app.use(
   }),
 );
 
-/**
- * Webhook routes — MUST be before BOTH the rate limiter AND express.json().
- * - Before rate limiter: PayMongo calls must never receive 429 (causes webhook disablement)
- * - Before express.json(): Preserves raw body for HMAC signature verification
- */
 app.use("/api/webhooks", webhookRoutes);
-
-/**
- * Global rate limit — 1000 requests per 15 min per IP
- * (registered AFTER webhook routes so PayMongo is never rate-limited)
- */
 app.use(globalLimiter);
-
-/**
- * Response compression — gzip/brotli for all responses
- */
 app.use(compression());
-
-/**
- * Body Parser — JSON and URL-encoded with per-route appropriate limits
- */
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
-
-/**
- * Structured request logging — every request/response logged with context
- */
 app.use(requestLogger);
 
-// ============================================================================
-// API ROUTES
-// ============================================================================
-
-/**
- * Authentication Routes (/api/auth/*)
- * Extra-strict rate limiting on login/register to prevent brute-force.
- */
 app.use("/api/auth", authLimiter, authRoutes);
-
-/**
- * User, Room, Reservation, Audit, Billing, Announcement, Maintenance Routes
- * Protected by global rate limit + per-route auth middleware.
- */
 app.use("/api/users", userRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/inquiries", publicLimiter, inquiryRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/billing", billingRoutes);
-app.use(forceRentRoute);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/payments", paymentRoutes);
@@ -217,22 +247,10 @@ app.use("/api/utilities", utilityBillingRoutes);
 app.use("/api/financial", financialRoutes);
 app.use("/api/settings", settingsRoutes);
 
-// ============================================================================
-// DEEP HEALTH CHECK
-// ============================================================================
-
-/**
- * GET /api/health
- * Deep health check — verifies:
- * 1. Server is responsive
- * 2. MongoDB is connected and responsive
- * 3. Memory usage is within bounds
- */
 app.get("/api/health", async (req, res) => {
   const checks = {};
   let healthy = true;
 
-  // 1. MongoDB health
   try {
     const state = mongoose.connection.readyState;
     if (state === 1) {
@@ -248,7 +266,6 @@ app.get("/api/health", async (req, res) => {
     healthy = false;
   }
 
-  // 2. Memory health
   const mem = process.memoryUsage();
   const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
   const heapTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
@@ -258,7 +275,6 @@ app.get("/api/health", async (req, res) => {
     heapTotal: `${heapTotalMB}MB`,
   };
 
-  // 3. Uptime
   checks.uptime = `${Math.round(process.uptime())}s`;
 
   res.status(healthy ? 200 : 503).json({
@@ -275,68 +291,29 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
-// ============================================================================
-// GLOBAL ERROR HANDLER (must be AFTER all routes)
-// ============================================================================
-
 app.use(globalErrorHandler);
 
-// ============================================================================
-// SERVER STARTUP
-// ============================================================================
-
-const server = app.listen(PORT, () => {
-  logger.info(
-    {
-      port: PORT,
-      env: process.env.NODE_ENV || "development",
-      node: process.version,
-    },
-    "🚀 LILYCREST DORMITORY MANAGEMENT SYSTEM started",
-  );
-  logger.info(`📡 API available at http://localhost:${PORT}/api`);
-  logger.info(`🏥 Health check: http://localhost:${PORT}/api/health`);
-
-  // Initialize Socket.IO for real-time notifications
-  initSocket(server, allowedOrigins);
-
-  // Start cron scheduler (grace periods, bed lock cleanup, overdue billing)
-  startScheduler();
-});
-
-/**
- * Handle server errors (e.g., port already in use)
- */
-server.on("error", (error) => {
-  if (error.code === "EADDRINUSE") {
-    logger.fatal({ port: PORT }, "Port already in use");
-    process.exit(1);
-  } else {
-    logger.fatal({ err: error }, "Server error");
-    process.exit(1);
-  }
-});
-
-/**
- * Graceful shutdown handling
- */
 const gracefulShutdown = (signal) => {
-  logger.info({ signal }, "Shutting down gracefully...");
+  logger.info({ signal }, "Shutting down gracefully");
 
-  server.close(() => {
-    logger.info("HTTP server closed");
-
-    // Stop cron scheduler
-    stopScheduler();
-
-    // Close MongoDB connection
+  const finalizeShutdown = () => {
+    stopBackgroundJobs();
     mongoose.connection.close(false).then(() => {
       logger.info("MongoDB connection closed");
       process.exit(0);
     });
+  };
+
+  if (!server) {
+    finalizeShutdown();
+    return;
+  }
+
+  server.close(() => {
+    logger.info("HTTP server closed");
+    finalizeShutdown();
   });
 
-  // Force shutdown after 10 seconds
   setTimeout(() => {
     logger.error("Forced shutdown after timeout");
     process.exit(1);
@@ -351,7 +328,47 @@ process.on("uncaughtException", (error) => {
   gracefulShutdown("uncaughtException");
 });
 
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", (reason) => {
   logger.fatal({ reason }, "Unhandled Rejection");
   gracefulShutdown("unhandledRejection");
+});
+
+const bootstrap = async () => {
+  validateStartupConfig();
+
+  const mongoConnected = await connectDB();
+
+  server = app.listen(PORT, () => {
+    logger.info(
+      {
+        port: PORT,
+        env: process.env.NODE_ENV || "development",
+        node: process.version,
+      },
+      "LILYCREST DORMITORY MANAGEMENT SYSTEM started",
+    );
+    logger.info(`API available at http://localhost:${PORT}/api`);
+    logger.info(`Health check: http://localhost:${PORT}/api/health`);
+
+    const socketAllowedOrigins = allowedOriginRules.filter(
+      (origin) => !origin.includes("*"),
+    );
+    initSocket(server, socketAllowedOrigins);
+    startBackgroundServices(mongoConnected);
+  });
+
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE") {
+      logger.fatal({ port: PORT }, "Port already in use");
+      process.exit(1);
+    }
+
+    logger.fatal({ err: error }, "Server error");
+    process.exit(1);
+  });
+};
+
+bootstrap().catch((error) => {
+  logger.fatal({ err: error }, "Server bootstrap failed");
+  process.exit(1);
 });

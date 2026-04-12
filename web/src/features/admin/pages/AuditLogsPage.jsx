@@ -195,6 +195,7 @@ const AuditLogsPage = () => {
           columns={columns}
           data={logs}
           loading={loading}
+          serverPagination
           pagination={{
             page: currentPage,
             pageSize: itemsPerPage,

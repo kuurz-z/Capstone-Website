@@ -1,6 +1,6 @@
 # API Documentation
 
-Complete reference for all backend API endpoints.
+Current reference for the main backend API groups.
 
 **Base URL**: `http://localhost:5000/api`
 
@@ -15,155 +15,131 @@ Complete reference for all backend API endpoints.
 | GET    | `/profile`       | JWT      | Get user profile   |
 | PUT    | `/profile`       | JWT      | Update profile     |
 | PATCH  | `/update-branch` | JWT      | Update user branch |
-| POST   | `/set-role`      | Admin    | Set user role      |
-
-### Register User
-
-```http
-POST /api/auth/register
-Authorization: Bearer <firebase_id_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "email": "user@example.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "username": "johndoe",
-  "branch": "gil-puyat"
-}
-```
-
-### Login
-
-```http
-POST /api/auth/login
-Authorization: Bearer <firebase_id_token>
-```
-
-### Get Profile
-
-```http
-GET /api/auth/profile
-Authorization: Bearer <jwt_token>
-```
-
-### Update Branch
-
-```http
-PATCH /api/auth/update-branch
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-```json
-{
-  "branch": "gil-puyat"
-}
-```
+| POST   | `/set-role`      | Owner    | Set user role      |
 
 ---
 
 ## Rooms (`/api/rooms`)
 
-| Method | Endpoint   | Auth   | Description                  |
-| ------ | ---------- | ------ | ---------------------------- |
-| GET    | `/`        | Public | Get all rooms (with filters) |
-| GET    | `/:roomId` | Public | Get room by ID               |
-| POST   | `/`        | Admin  | Create room                  |
-| PUT    | `/:roomId` | Admin  | Update room                  |
-| DELETE | `/:roomId` | Admin  | Delete room                  |
-
-**Query Parameters** (GET `/`):
-
-- `branch` — Filter by branch (`gil-puyat` | `guadalupe`)
-- `type` — Filter by room type
-- `available` — Filter by availability (`true` | `false`)
+| Method | Endpoint                       | Auth  | Description                  |
+| ------ | ------------------------------ | ----- | ---------------------------- |
+| GET    | `/`                            | Public| Get all rooms with filters   |
+| GET    | `/:roomId`                     | Public| Get room by ID               |
+| POST   | `/`                            | Admin | Create room                  |
+| PUT    | `/:roomId`                     | Admin | Update room                  |
+| DELETE | `/:roomId`                     | Admin | Archive room                 |
+| PATCH  | `/:roomId/beds/:bedId/status`  | Admin | Update bed maintenance state |
 
 ---
 
 ## Reservations (`/api/reservations`)
 
-| Method | Endpoint             | Auth  | Description                     |
-| ------ | -------------------- | ----- | ------------------------------- |
-| GET    | `/`                  | JWT   | Get reservations                |
-| GET    | `/:reservationId`    | JWT   | Get reservation by ID           |
-| POST   | `/`                  | JWT   | Create reservation              |
-| PUT    | `/:reservationId`    | Admin | Update reservation              |
-| DELETE | `/:reservationId`    | Admin | Cancel reservation              |
-| GET    | `/occupancy/:roomId` | Admin | Get room occupancy status       |
-| GET    | `/stats/occupancy`   | Admin | Get branch occupancy statistics |
+| Method | Endpoint                     | Auth  | Description                          |
+| ------ | ---------------------------- | ----- | ------------------------------------ |
+| GET    | `/`                          | JWT   | Get reservations                     |
+| GET    | `/current-residents`         | Admin | Get current residents                |
+| GET    | `/my-contract`               | JWT   | Get active tenant contract view      |
+| GET    | `/:reservationId`            | JWT   | Get reservation by ID                |
+| POST   | `/`                          | JWT   | Create reservation                   |
+| PUT    | `/:reservationId`            | Admin | Update reservation                   |
+| PUT    | `/:reservationId/user`       | JWT   | Update own reservation               |
+| DELETE | `/:reservationId`            | JWT   | Delete reservation                   |
+| PUT    | `/:reservationId/extend`     | Admin | Extend reservation move-in deadline  |
+| PUT    | `/:reservationId/release`    | Admin | Release reserved slot                |
+| PUT    | `/:reservationId/archive`    | Admin | Archive reservation                  |
+| PUT    | `/:reservationId/renew`      | Admin | Renew tenant contract                |
+| PUT    | `/:reservationId/checkout`   | Admin | Move out tenant                      |
+| PUT    | `/:reservationId/transfer`   | Admin | Transfer tenant room/bed             |
+| GET    | `/occupancy/:roomId`         | JWT   | Get room occupancy snapshot          |
+| GET    | `/stats/occupancy`           | JWT   | Get branch occupancy statistics      |
+| GET    | `/vacancy-forecast`          | Admin | Get vacancy forecast read model      |
 
----
-
-## Inquiries (`/api/inquiries`)
-
-| Method | Endpoint              | Auth   | Description                      |
-| ------ | --------------------- | ------ | -------------------------------- |
-| GET    | `/`                   | Admin  | Get all inquiries                |
-| GET    | `/:inquiryId`         | Public | Get inquiry by ID                |
-| POST   | `/`                   | Public | Submit inquiry                   |
-| PUT    | `/:inquiryId`         | Admin  | Update inquiry                   |
-| PATCH  | `/:inquiryId/respond` | Admin  | Respond to inquiry (sends email) |
-| DELETE | `/:inquiryId`         | Admin  | Delete inquiry                   |
+Canonical lifecycle:
+- `pending -> visit_pending -> visit_approved -> payment_pending -> reserved -> moveIn -> moveOut`
+- side exits: `cancelled`, `archived`
 
 ---
 
 ## Billing (`/api/billing`)
 
-| Method | Endpoint                  | Auth  | Description                   |
-| ------ | ------------------------- | ----- | ----------------------------- |
-| GET    | `/current`                | JWT   | Get current month's bill      |
-| GET    | `/history`                | JWT   | Get payment history           |
-| GET    | `/stats`                  | Admin | Get branch billing statistics |
-| POST   | `/:billId/mark-paid`      | Admin | Mark bill as paid             |
-| GET    | `/rooms`                  | Admin | Get rooms for billing         |
-| POST   | `/rooms/:roomId/generate` | Admin | Generate bill for a room      |
-
-**Query Parameters** (GET `/history`):
-
-- `limit` — Max results (default: 50)
+| Method | Endpoint                 | Auth  | Description                            |
+| ------ | ------------------------ | ----- | -------------------------------------- |
+| GET    | `/current`               | JWT   | Get current month's bill               |
+| GET    | `/history`               | JWT   | Get billing history                    |
+| GET    | `/my-bills`              | JWT   | Get all visible tenant bills           |
+| GET    | `/:billId/utility-breakdown/:utilityType` | JWT | Get tenant utility breakdown by bill |
+| POST   | `/:billId/submit-proof`  | JWT   | Submit payment proof for a bill        |
+| GET    | `/stats`                 | Admin | Get branch billing statistics          |
+| GET    | `/branch`                | Admin | Get bills for a branch                 |
+| GET    | `/rooms`                 | Admin | Get billable rooms and occupants       |
+| GET    | `/pending-verifications` | Admin | Get bills awaiting proof verification  |
+| GET    | `/report`                | Admin | Get billing report summary             |
+| POST   | `/:billId/verify`        | Admin | Approve or reject payment proof        |
+| POST   | `/:billId/mark-paid`     | Admin | Mark bill as paid                      |
+| DELETE | `/:billId`               | Admin | Delete an unpaid/orphaned bill         |
+| POST   | `/apply-penalties`       | Admin | Apply late penalties                   |
+| GET    | `/readiness`             | Admin | Get room publish-readiness state       |
+| POST   | `/publish/:roomId`       | Admin | Publish draft bills for one room       |
+| GET    | `/export`                | Admin | Export billing rows for CSV/reporting  |
 
 ---
 
 ## Payments (`/api/payments`)
 
-| Method | Endpoint                      | Auth  | Description                                  |
-| ------ | ----------------------------- | ----- | -------------------------------------------- |
-| POST   | `/bill/:billId/checkout`      | JWT   | Create PayMongo checkout session for a bill   |
-| POST   | `/deposit/:resId/checkout`    | JWT   | Create PayMongo checkout session for deposit  |
-| GET    | `/session/:sessionId/status`  | JWT   | Check PayMongo checkout session status        |
-| GET    | `/history`                    | JWT   | Get payment history for authenticated tenant  |
-| GET    | `/bill/:billId/payments`      | JWT   | Get all payments for a specific bill          |
-| GET    | `/vacancy-dates`              | Admin | Get expected vacancy dates for occupied beds  |
+| Method | Endpoint                     | Auth  | Description                               |
+| ------ | ---------------------------- | ----- | ----------------------------------------- |
+| POST   | `/bill/:billId/checkout`     | JWT   | Create PayMongo checkout for a bill       |
+| POST   | `/deposit/:resId/checkout`   | JWT   | Create PayMongo checkout for deposit      |
+| GET    | `/session/:sessionId/status` | JWT   | Check checkout session payment status     |
+| GET    | `/history`                   | JWT   | Get payment history for current user      |
+| GET    | `/bill/:billId/payments`     | JWT   | Get bill payment records                  |
+| GET    | `/vacancy-dates`             | Admin | Get expected vacancy dates for occupied beds |
 
-### Create Bill Checkout
+---
 
-```http
-POST /api/payments/bill/:billId/checkout
-Authorization: Bearer <jwt_token>
-```
+## Utilities (`/api/utilities`)
 
-Creates a PayMongo checkout session and returns the checkout URL for the tenant to complete payment.
+Utility billing owns periods, readings, computed results, revisions, and send/close workflows.
 
-### Create Deposit Checkout
+Key patterns:
+- `GET /:utilityType/rooms`
+- `GET /:utilityType/readings/:roomId`
+- `GET /:utilityType/periods/:roomId`
+- `GET /:utilityType/results/:periodId`
+- `POST /:utilityType/periods`
+- `POST /:utilityType/readings`
+- `PATCH /:utilityType/periods/:id/close`
+- `POST /:utilityType/periods/:id/send`
+- `POST /:utilityType/batch-close`
+- `POST /:utilityType/results/:periodId/revise`
 
-```http
-POST /api/payments/deposit/:resId/checkout
-Authorization: Bearer <jwt_token>
-```
+---
 
-Creates a PayMongo checkout session for a reservation deposit payment.
+## Financial (`/api/financial`)
 
-### Check Session Status
+| Method | Endpoint    | Auth  | Description                          |
+| ------ | ----------- | ----- | ------------------------------------ |
+| GET    | `/overview` | Owner | Executive financial overview by branch |
 
-```http
-GET /api/payments/session/:sessionId/status
-Authorization: Bearer <jwt_token>
-```
+---
 
-Returns whether a PayMongo checkout session has been paid.
+## Users (`/api/users`)
+
+| Method | Endpoint                | Auth  | Description                  |
+| ------ | ----------------------- | ----- | ---------------------------- |
+| GET    | `/stats`                | Admin | Get user statistics          |
+| GET    | `/branch/:branch`       | Owner | Get users by branch          |
+| GET    | `/email-by-username`    | Public| Get email by username        |
+| POST   | `/`                     | Owner | Create user                  |
+| PATCH  | `/:userId/suspend`      | Admin | Suspend user                 |
+| PATCH  | `/:userId/reactivate`   | Admin | Reactivate user              |
+| PATCH  | `/:userId/ban`          | Owner | Ban user                     |
+| PATCH  | `/:userId/permissions`  | Owner | Update admin permissions     |
+| GET    | `/`                     | Admin | Get users                    |
+| GET    | `/my-stays`             | JWT   | Get current user stay history|
+| GET    | `/:userId`              | Admin | Get user by ID               |
+| PUT    | `/:userId`              | Owner | Update user                  |
+| DELETE | `/:userId`              | Owner | Delete user                  |
 
 ---
 
@@ -178,11 +154,6 @@ Returns whether a PayMongo checkout session has been paid.
 | POST   | `/:announcementId/acknowledge` | JWT   | Acknowledge announcement         |
 | GET    | `/user/engagement-stats`       | JWT   | Get user engagement stats        |
 
-**Query Parameters** (GET `/`):
-
-- `limit` — Max results (default: 50)
-- `category` — Filter by category
-
 ---
 
 ## Maintenance (`/api/maintenance`)
@@ -196,170 +167,35 @@ Returns whether a PayMongo checkout session has been paid.
 | PATCH  | `/requests/:requestId`   | Admin | Update request status      |
 | GET    | `/stats/completion`      | Admin | Get completion statistics  |
 | GET    | `/stats/issue-frequency` | Admin | Get issue frequency stats  |
-
----
-
-## Notifications (`/api/notifications`)
-
-| Method | Endpoint                   | Auth | Description                 |
-| ------ | -------------------------- | ---- | --------------------------- |
-| GET    | `/`                        | JWT  | Get notifications (paginated)|
-| GET    | `/unread-count`            | JWT  | Get unread notification count|
-| PATCH  | `/read-all`                | JWT  | Mark all as read             |
-| PATCH  | `/:notificationId/read`    | JWT  | Mark single as read          |
-
----
-
-## Users (`/api/users`)
-
-| Method | Endpoint           | Auth  | Description           |
-| ------ | ------------------ | ----- | --------------------- |
-| GET    | `/`                | Admin | Get all users         |
-| GET    | `/:userId`         | Admin | Get user by ID        |
-| GET    | `/email/:username` | Admin | Get email by username |
-| GET    | `/stats`           | Admin | Get user statistics   |
-| PUT    | `/:userId`         | Admin | Update user           |
-| DELETE | `/:userId`         | Admin | Delete user           |
-
----
-
-## Uploads (`/api/upload`)
-
-| Method | Endpoint         | Auth | Description                                |
-| ------ | ---------------- | ---- | ------------------------------------------ |
-| GET    | `/imagekit-auth` | JWT  | Get ImageKit upload authentication params  |
-
-### Get ImageKit Auth
-
-```http
-GET /api/upload/imagekit-auth
-Authorization: Bearer <jwt_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "token": "uuid-token",
-    "expire": 1234567890,
-    "signature": "hmac-sha1-signature"
-  }
-}
-```
-
----
-
-## Webhooks (`/api/webhooks`)
-
-| Method | Endpoint    | Auth           | Description                       |
-| ------ | ----------- | -------------- | --------------------------------- |
-| POST   | `/paymongo` | HMAC Signature | Receive PayMongo payment events   |
-
-> **Note:** Webhook routes are registered before the global rate limiter and JSON body parser to preserve raw body for HMAC signature verification. No JWT auth is required — verification is done via PayMongo's webhook signing secret.
+| GET    | `/scheduled`             | Admin | Get scheduled work         |
+| GET    | `/costs`                 | Admin | Get maintenance cost summary |
 
 ---
 
 ## Audit Logs (`/api/audit-logs`)
 
-| Method | Endpoint | Auth  | Description    |
-| ------ | -------- | ----- | -------------- |
-| GET    | `/`      | Admin | Get audit logs |
+| Method | Endpoint                   | Auth  | Description                |
+| ------ | -------------------------- | ----- | -------------------------- |
+| GET    | `/`                        | Admin | Get audit logs             |
+| GET    | `/stats`                   | Admin | Get audit statistics       |
+| GET    | `/security/failed-logins`  | Admin | Get failed login activity  |
+| GET    | `/:id`                     | Admin | Get specific audit log     |
+| POST   | `/`                        | JWT   | Create audit log entry     |
+| POST   | `/export`                  | Admin | Export audit logs          |
+| DELETE | `/cleanup`                 | Owner | Cleanup old audit logs     |
 
 ---
 
-## Health (`/api/health`)
+## Module 4 Route Ownership
 
-| Method | Endpoint | Auth   | Description                         |
-| ------ | -------- | ------ | ----------------------------------- |
-| GET    | `/`      | Public | Deep health check                   |
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "status": "healthy",
-    "checks": {
-      "mongodb": { "status": "ok", "latency": "5ms" },
-      "memory": { "status": "ok", "heapUsed": "45MB", "heapTotal": "64MB" },
-      "uptime": "3600s"
-    },
-    "environment": "development"
-  },
-  "meta": {
-    "requestId": "uuid",
-    "timestamp": "2026-03-21T00:00:00.000Z"
-  }
-}
-```
-
----
-
-## Error Responses
-
-All error responses follow a consistent format:
-
-### 400 Bad Request
-
-```json
-{
-  "error": "Validation failed",
-  "details": ["Username must be 3-30 characters", "Invalid email format"]
-}
-```
-
-### 401 Unauthorized
-
-```json
-{
-  "error": "No token provided"
-}
-```
-
-### 403 Forbidden
-
-```json
-{
-  "error": "Access denied"
-}
-```
-
-### 404 Not Found
-
-```json
-{
-  "error": "Resource not found"
-}
-```
-
-### 429 Too Many Requests
-
-```json
-{
-  "error": "Too many requests, please try again later"
-}
-```
-
-### 500 Internal Server Error
-
-```json
-{
-  "error": "Internal server error"
-}
-```
-
-### Common Error Codes
-
-| Code                   | Description              |
-| ---------------------- | ------------------------ |
-| `VALIDATION_ERROR`     | Input validation failed  |
-| `AUTH_FAILED`          | Authentication failed    |
-| `UNAUTHORIZED`         | Insufficient permissions |
-| `NOT_FOUND`            | Resource not found       |
-| `BRANCH_ACCESS_DENIED` | Branch access violation  |
+- `/api/billing`
+  Bills, verification, penalties, readiness, publishing, reporting, exports
+- `/api/payments`
+  Checkout sessions and payment history only
+- `/api/utilities`
+  Utility periods, readings, results, revisions, send/close workflows
+- `/api/financial`
+  Owner-only executive financial overview
 
 ---
 
@@ -367,8 +203,9 @@ All error responses follow a consistent format:
 
 | Type             | Usage                                                                  |
 | ---------------- | ---------------------------------------------------------------------- |
-| **Firebase**     | `Authorization: Bearer <firebase_id_token>` — Used for register/login  |
-| **JWT**          | `Authorization: Bearer <jwt_token>` — Used for all protected endpoints |
-| **Admin**        | JWT + admin/superAdmin role required                                   |
+| **Firebase**     | `Authorization: Bearer <firebase_id_token>` for register/login         |
+| **JWT**          | `Authorization: Bearer <jwt_token>` for protected endpoints            |
+| **Admin**        | JWT + `branch_admin` or `owner` role                                   |
+| **Owner**        | JWT + `owner` role                                                     |
 | **Public**       | No authentication needed                                               |
 | **HMAC Signature** | PayMongo webhook signing secret verification                         |

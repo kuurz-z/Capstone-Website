@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useMyStays } from "../../../../shared/hooks/queries/useUsers";
 import dayjs from "dayjs";
+import { hasReservationStatus } from "../../../../shared/utils/lifecycleNaming";
 
 // Shared empty state style — matches My Bills
 const emptyStyle = {
@@ -38,11 +39,16 @@ const StayCard = ({ stay, isCurrent }) => {
 
   const statusConfig = {
     "reserved": { color: "#10B981", bg: "#ECFDF5", label: "Reserved" },
-    "checked-in": { color: "#6366F1", bg: "#EEF2FF", label: "Checked In" },
-    "checked-out": { color: "#6B7280", bg: "#F3F4F6", label: "Completed" },
+    moveIn: { color: "#6366F1", bg: "#EEF2FF", label: "Moved In" },
+    moveOut: { color: "#6B7280", bg: "#F3F4F6", label: "Completed" },
     "cancelled": { color: "#EF4444", bg: "#FEF2F2", label: "Cancelled" },
   };
-  const { color, bg, label } = statusConfig[status] || statusConfig["checked-out"];
+  const statusKey = hasReservationStatus(status, "moveIn")
+    ? "moveIn"
+    : hasReservationStatus(status, "moveOut")
+      ? "moveOut"
+      : status;
+  const { color, bg, label } = statusConfig[statusKey] || statusConfig.moveOut;
 
   const branchDisplay =
     room.branch === "gil-puyat" ? "Gil Puyat"

@@ -1,4 +1,9 @@
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
+import {
+  CANONICAL_UTILITY_EVENT_TYPES,
+  normalizeUtilityEventType,
+} from "../utils/lifecycleNaming.js";
 
 const segmentSchema = new mongoose.Schema(
   {
@@ -15,6 +20,18 @@ const segmentSchema = new mongoose.Schema(
     endDate: { type: Date },
     activeTenantIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     coveredTenantNames: [{ type: String }],
+    startEventType: {
+      type: String,
+      enum: CANONICAL_UTILITY_EVENT_TYPES,
+      default: "regularBilling",
+      set: normalizeUtilityEventType,
+    },
+    endEventType: {
+      type: String,
+      enum: CANONICAL_UTILITY_EVENT_TYPES,
+      default: "regularBilling",
+      set: normalizeUtilityEventType,
+    },
   },
   { _id: false },
 );
@@ -34,6 +51,12 @@ const tenantSummarySchema = new mongoose.Schema(
     tenantName: { type: String, required: true },
     totalUsage: { type: Number, required: true },
     billAmount: { type: Number, required: true },
+    coveredDays: { type: Number, default: null },
+    shareFactor: { type: Number, default: null },
+    allocationRule: { type: String, default: null },
+    billingBasis: { type: String, default: null },
+    overlapStart: { type: Date, default: null },
+    overlapEnd: { type: Date, default: null },
     billId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Bill",
@@ -59,7 +82,7 @@ const utilityPeriodSchema = new mongoose.Schema(
     },
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       required: true,
       index: true,
     },
@@ -141,6 +164,18 @@ const utilityPeriodSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+utilityPeriodSchema.pre("validate", function (next) {
+  if (Array.isArray(this.segments)) {
+    this.segments = this.segments.map((segment) => ({
+      ...segment,
+      startEventType: normalizeUtilityEventType(segment.startEventType),
+      endEventType: normalizeUtilityEventType(segment.endEventType),
+    }));
+  }
+
+  next();
+});
 
 // Prevent duplicate open periods for the same room & utility type
 utilityPeriodSchema.index(

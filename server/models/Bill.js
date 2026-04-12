@@ -20,10 +20,43 @@
  */
 
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
 // ============================================================================
+
+const utilityDispatchEntrySchema = new mongoose.Schema(
+  {
+    state: {
+      type: String,
+      enum: ["draft", "sent"],
+      default: "draft",
+    },
+    periodId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UtilityPeriod",
+      default: null,
+    },
+    publishedAt: {
+      type: Date,
+      default: null,
+    },
+    issuedAt: {
+      type: Date,
+      default: null,
+    },
+    dueDate: {
+      type: Date,
+      default: null,
+    },
+    amount: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false },
+);
 
 const billSchema = new mongoose.Schema(
   {
@@ -42,7 +75,7 @@ const billSchema = new mongoose.Schema(
     },
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       required: true,
       index: true,
     },
@@ -218,6 +251,22 @@ const billSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    utilityDispatch: {
+      type: new mongoose.Schema(
+        {
+          electricity: {
+            type: utilityDispatchEntrySchema,
+            default: () => ({}),
+          },
+          water: {
+            type: utilityDispatchEntrySchema,
+            default: () => ({}),
+          },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
     isArchived: {
       type: Boolean,
       default: false,
@@ -274,10 +323,24 @@ const billSchema = new mongoose.Schema(
 billSchema.index({ branch: 1, billingMonth: -1 });
 billSchema.index({ branch: 1, status: 1 });
 billSchema.index({ branch: 1, userId: 1, billingMonth: -1 });
+billSchema.index({
+  userId: 1,
+  reservationId: 1,
+  billingMonth: 1,
+  isArchived: 1,
+});
 
 // For forecasting and trend analysis
 billSchema.index({ billingMonth: -1, totalAmount: 1 });
 billSchema.index({ branch: 1, billingMonth: -1, status: 1 });
+billSchema.index(
+  { paymongoSessionId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
+);
+billSchema.index(
+  { paymongoPaymentId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
+);
 
 // ============================================================================
 // INSTANCE METHODS

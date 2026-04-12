@@ -6,11 +6,17 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "nodemon server.js",
     "kill-port": "node scripts/kill-port.js",
     "restart": "node scripts/kill-port.js && node server.js",
+    "reservation:backfill-codes": "node scripts/backfill_reservation_codes.mjs",
+    "reservation:backfill-codes:write": "node scripts/backfill_reservation_codes.mjs --write",
+    "utility:repair-bill-cycles": "node scripts/repair_utility_only_bill_cycles.mjs",
+    "utility:repair-bill-cycles:write": "node scripts/repair_utility_only_bill_cycles.mjs --write",
     "utility:diagnose": "node scripts/diagnose_utility_sync.mjs",
     "utility:repair": "node scripts/repair_utility_sync.mjs",
+    "utility:cleanup-zero-segments": "node scripts/cleanup_zero_consumption_segments.mjs",
+    "utility:cleanup-zero-segments:write": "node scripts/cleanup_zero_consumption_segments.mjs --write",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [
@@ -21,7 +27,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "capstone-website": "file:..",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dayjs": "^1.11.20",

@@ -41,7 +41,10 @@ export const userApi = {
   /**
    * Delete user (owner only)
    */
-  delete: (userId) => authFetch(`/users/${userId}`, { method: "DELETE" }),
+  delete: (userId, options = {}) => {
+    const query = options.hardDelete ? "?hardDelete=true" : "";
+    return authFetch(`/users/${userId}${query}`, { method: "DELETE" });
+  },
 
   /**
    * Get email by username (public - for login)

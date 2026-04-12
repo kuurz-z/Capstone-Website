@@ -1,31 +1,65 @@
-import { useState, useMemo } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CalendarCheck, Clock, CheckCircle, UserCheck, AlertTriangle, Eye, Trash2,
+  AlertTriangle,
+  CalendarCheck,
+  CheckCircle,
+  Clock,
+  Eye,
+  Trash2,
+  UserCheck,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { reservationApi } from "../../../shared/api/apiClient";
+import { queryKeys } from "../../../shared/lib/queryKeys";
 import { showNotification } from "../../../shared/utils/notification";
+import ConfirmModal from "../../../shared/components/ConfirmModal";
+import { useReservations } from "../../../shared/hooks/queries/useReservations";
+import {
+  CANONICAL_RESERVATION_STATUSES,
+  RESERVATION_STATUS_LABELS,
+  hasReservationStatus,
+  readMoveInDate,
+} from "../../../shared/utils/lifecycleNaming";
+import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import ReservationDetailsModal from "../components/ReservationDetailsModal";
 import VisitSchedulesTab from "../components/VisitSchedulesTab";
 import InquiriesPage from "./InquiriesPage";
-import ConfirmModal from "../../../shared/components/ConfirmModal";
-import { useReservations } from "../../../shared/hooks/queries/useReservations";
-import { useQueryClient } from "@tanstack/react-query";
-import { checkOverdue } from "../components/reservations/ReservationTable";
-import { PageShell, SummaryBar, ActionBar, DataTable, StatusBadge } from "../components/shared";
+import {
+  ActionBar,
+  DataTable,
+  PageShell,
+  StatusBadge,
+  SummaryBar,
+} from "../components/shared";
+import {
+  IN_PROGRESS_STATUSES,
+  checkOverdueReservation,
+  getBranchLabel,
+  mapReservationAdminRow,
+} from "../utils/reservationRows";
 import "../styles/design-tokens.css";
 import "../styles/admin-reservations.css";
 
-/* Stable avatar colors per letter */
 const AVATAR_COLORS = [
-  "#f97316","#8b5cf6","#0ea5e9","#10b981","#ef4444",
-  "#f59e0b","#6366f1","#ec4899","#14b8a6","#84cc16",
+  "#f97316",
+  "#8b5cf6",
+  "#0ea5e9",
+  "#10b981",
+  "#ef4444",
+  "#f59e0b",
+  "#6366f1",
+  "#ec4899",
+  "#14b8a6",
+  "#84cc16",
 ];
+
 function avatarColor(name = "") {
   const code = (name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0);
   return AVATAR_COLORS[code % AVATAR_COLORS.length];
 }
+
 function initials(name = "") {
   const parts = name.trim().split(" ");
   return parts.length >= 2
@@ -33,328 +67,492 @@ function initials(name = "") {
     : (parts[0]?.[0] || "?").toUpperCase();
 }
 
+function formatShortDate(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+const SUMMARY_FILTERS = ["all", "in_progress", "reserved", "moveIn", "overdue"];
 function ReservationsPage() {
   const { user } = useAuth();
-  const isOwner = user?.role === "owner";
   const { can } = usePermissions();
   const queryClient = useQueryClient();
+  const isOwner = user?.role === "owner";
   const [activeTab, setActiveTab] = useState("reservations");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState(
-    isOwner ? "all" : (user?.branch || "all")
+    isOwner ? "all" : user?.branch || "all",
   );
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [actionLoading, setActionLoading] = useState(null);
+  const [sortState, setSortState] = useState({ key: "createdAt", dir: "desc" });
   const [confirmModal, setConfirmModal] = useState({
-    open: false, title: "", message: "", variant: "info", onConfirm: null,
+    open: false,
+    title: "",
+    message: "",
+    variant: "info",
+    onConfirm: null,
   });
   const itemsPerPage = 12;
 
-  const { data: rawReservations = [], isLoading: loading, error: queryError } = useReservations();
+  const {
+    data: rawReservations = [],
+    isLoading: loading,
+    error: queryError,
+  } = useReservations({ view: "admin-list" });
   const error = queryError?.message || null;
 
-  // All reservations mapped to display shape — no status pre-filtering.
-  // Cancelled reservations remain visible in the table with their status badge.
-  const reservations = rawReservations.map((r) => ({
-    id: r._id,
-    reservationCode: r.reservationCode || "—",
-    customer: `${r.userId?.firstName || ""} ${r.userId?.lastName || ""}`.trim() || "Unknown",
-    email: r.userId?.email || "—",
-    room: r.roomId?.name || "—",
-    roomType: r.roomId?.type || "",
-    branch: r.roomId?.branch === "gil-puyat" ? "Gil Puyat" : "Guadalupe",
-    moveInDate: r.checkInDate,
-    status: r.status || "pending",
-    step: r.currentStep || null,
-    totalSteps: r.totalSteps || null,
-    stepLabel: r.stepLabel || null,
-    totalPrice: r.totalPrice,
-    paymentStatus: r.paymentStatus,
-    createdAt: r.createdAt,
-    checkInDate: r.checkInDate,
-    _raw: r,
-  }));
+  const reservations = useMemo(
+    () => rawReservations.map(mapReservationAdminRow),
+    [rawReservations],
+  );
 
-  const refetchReservations = () =>
-    queryClient.invalidateQueries({ queryKey: ["reservations"] });
+  const counts = useMemo(
+    () => ({
+      total: reservations.length,
+      inProgress: reservations.filter((reservation) =>
+        IN_PROGRESS_STATUSES.includes(reservation.status),
+      ).length,
+      reserved: reservations.filter(
+        (reservation) => reservation.status === "reserved",
+      ).length,
+      movedIn: reservations.filter(
+        (reservation) => hasReservationStatus(reservation.status, "moveIn"),
+      ).length,
+      overdue: reservations.filter(checkOverdueReservation).length,
+    }),
+    [reservations],
+  );
 
-  const handleView = async (id) => {
+  const filteredReservations = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return reservations.filter((reservation) => {
+      const matchSearch =
+        !query ||
+        reservation.customer.toLowerCase().includes(query) ||
+        reservation.email.toLowerCase().includes(query) ||
+        reservation.reservationCode.toLowerCase().includes(query) ||
+        reservation.room.toLowerCase().includes(query);
+      const matchStatus =
+        statusFilter === "all"
+          ? true
+          : statusFilter === "overdue"
+            ? checkOverdueReservation(reservation)
+            : statusFilter === "in_progress"
+              ? IN_PROGRESS_STATUSES.includes(reservation.status)
+              : hasReservationStatus(reservation.status, statusFilter);
+      const matchBranch =
+        branchFilter === "all" ||
+        reservation.branchCode === branchFilter;
+      return matchSearch && matchStatus && matchBranch;
+    });
+  }, [branchFilter, reservations, searchTerm, statusFilter]);
+
+  const sortedReservations = useMemo(() => {
+    const { key, dir } = sortState;
+    if (!key) return filteredReservations;
+
+    return [...filteredReservations].sort((left, right) => {
+      const leftValue = left[key];
+      const rightValue = right[key];
+
+      if (leftValue == null) return 1;
+      if (rightValue == null) return -1;
+
+      let comparison = 0;
+      if (key === "createdAt") {
+        comparison = new Date(leftValue) - new Date(rightValue);
+      } else if (key === "moveInDate") {
+        comparison =
+          new Date(readMoveInDate(left)) - new Date(readMoveInDate(right));
+      } else if (typeof leftValue === "string") {
+        comparison = leftValue.localeCompare(rightValue);
+      } else {
+        comparison = leftValue - rightValue;
+      }
+
+      return dir === "asc" ? comparison : -comparison;
+    });
+  }, [filteredReservations, sortState]);
+
+  const totalFiltered = sortedReservations.length;
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+    if (currentPage > maxPage) {
+      setCurrentPage(maxPage);
+    }
+  }, [currentPage, itemsPerPage, totalFiltered]);
+
+  const summaryItems = useMemo(
+    () => [
+      { label: "Total", value: counts.total, icon: CalendarCheck, color: "blue" },
+      { label: "Pending", value: counts.inProgress, icon: Clock, color: "orange" },
+      { label: "Reserved", value: counts.reserved, icon: CheckCircle, color: "green" },
+      { label: "Checked In", value: counts.movedIn, icon: UserCheck, color: "blue" },
+      { label: "Overdue", value: counts.overdue, icon: AlertTriangle, color: "red" },
+    ],
+    [counts],
+  );
+  const activeSummaryIndex = SUMMARY_FILTERS.indexOf(statusFilter);
+
+  const tabs = useMemo(
+    () => [
+      { key: "reservations", label: "Reservations" },
+      { key: "visits", label: "Visit Schedules" },
+      { key: "inquiries", label: "Inquiries" },
+    ],
+    [],
+  );
+
+  const filters = useMemo(
+    () => [
+      ...(isOwner
+        ? [
+            {
+              key: "branch",
+              options: OWNER_BRANCH_FILTER_OPTIONS,
+              value: branchFilter,
+              onChange: (value) => {
+                setBranchFilter(value);
+                setCurrentPage(1);
+              },
+            },
+          ]
+        : []),
+      {
+        key: "status",
+        options: [
+          { value: "all", label: "All Status" },
+          { value: "in_progress", label: "In Progress" },
+          { value: "overdue", label: "Overdue" },
+          ...CANONICAL_RESERVATION_STATUSES.map((status) => ({
+            value: status,
+            label: RESERVATION_STATUS_LABELS[status] || status,
+          })),
+        ],
+        value: statusFilter,
+        onChange: (value) => {
+          setStatusFilter(value);
+          setCurrentPage(1);
+        },
+      },
+    ],
+    [branchFilter, isOwner, statusFilter],
+  );
+
+  const prefetchReservationDetail = useCallback(async (reservationId) => {
+    if (!reservationId) return null;
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.reservations.detail(reservationId),
+      queryFn: () => reservationApi.getById(reservationId),
+    });
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (!selectedReservation?.id) return;
+
+    const liveReservation = reservations.find(
+      (reservation) => reservation.id === selectedReservation.id,
+    );
+
+    if (!liveReservation) return;
+
+    setSelectedReservation((previous) => {
+      if (!previous) return previous;
+      if (
+        previous.status === liveReservation.status &&
+        previous.moveInDate === liveReservation.moveInDate &&
+        previous.moveOutDate === liveReservation.moveOutDate
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        customer: liveReservation.customer,
+        email: liveReservation.email,
+        room: liveReservation.room,
+        branch: liveReservation.branch,
+        branchCode: liveReservation.branchCode,
+        roomType: liveReservation.roomType,
+        reservationCode: liveReservation.reservationCode,
+        status: liveReservation.status,
+        moveInDate: liveReservation.moveInDate,
+        moveOutDate: liveReservation.moveOutDate,
+        createdAt: liveReservation.createdAt,
+      };
+    });
+  }, [reservations, selectedReservation]);
+
+  const handleView = useCallback(async (reservationId) => {
     try {
-      const r = await reservationApi.getById(id);
+      const reservation = await prefetchReservationDetail(reservationId);
       setSelectedReservation({
-        ...r, id: r._id,
-        customer: `${r.userId?.firstName || ""} ${r.userId?.lastName || ""}`.trim() || "Unknown",
-        email: r.userId?.email || "—",
-        room: r.roomId?.name || "—",
-        branch: r.roomId?.branch === "gil-puyat" ? "Gil Puyat" : "Guadalupe",
-        roomType: r.roomId?.type || "",
-        status: r.status || "pending",
-        totalPrice: r.totalPrice, paymentStatus: r.paymentStatus,
-        paymentMethod: r.paymentMethod,
-        createdAt: r.createdAt, reservationCode: r.reservationCode || "—",
-        // ── Stage 3: Personal details (stored on reservation, not on userId) ──
-        firstName: r.firstName,
-        lastName: r.lastName,
-        middleName: r.middleName,
-        nickname: r.nickname,
-        phone: r.mobileNumber || r.phone,
-        birthday: r.birthday, maritalStatus: r.maritalStatus,
-        nationality: r.nationality, educationLevel: r.educationLevel,
-        address: r.address, emergencyContact: r.emergencyContact,
-        healthConcerns: r.healthConcerns, employment: r.employment,
-        // ── Documents ──
-        selfiePhotoUrl: r.selfiePhotoUrl, validIDFrontUrl: r.validIDFrontUrl,
-        validIDBackUrl: r.validIDBackUrl, validIDType: r.validIDType,
-        nbiClearanceUrl: r.nbiClearanceUrl, nbiReason: r.nbiReason,
-        companyIDUrl: r.companyIDUrl, companyIDReason: r.companyIDReason,
-        // ── Dates & scheduling ──
-        finalMoveInDate: r.finalMoveInDate,
-        proofOfPaymentUrl: r.proofOfPaymentUrl, leaseDuration: r.leaseDuration,
-        billingEmail: r.billingEmail, checkInDate: r.checkInDate,
-        moveInDate: r.checkInDate,
-        visitDate: r.visitDate, visitTime: r.visitTime, visitApproved: r.visitApproved,
-        notes: r.notes,
+        ...reservation,
+        id: reservation._id,
+        customer:
+          `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
+          "Unknown",
+        email: reservation.userId?.email || "-",
+        room: reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
+        branch: getBranchLabel(reservation.roomId?.branch),
+        branchCode: reservation.roomId?.branch || "",
+        roomType: reservation.roomId?.type || "",
+        status: reservation.status || "pending",
+        totalPrice: reservation.totalPrice,
+        paymentStatus: reservation.paymentStatus,
+        paymentMethod: reservation.paymentMethod,
+        createdAt: reservation.createdAt,
+        reservationCode: reservation.reservationCode || "-",
+        firstName: reservation.firstName,
+        lastName: reservation.lastName,
+        middleName: reservation.middleName,
+        nickname: reservation.nickname,
+        phone: reservation.mobileNumber || reservation.phone,
+        birthday: reservation.birthday,
+        maritalStatus: reservation.maritalStatus,
+        nationality: reservation.nationality,
+        educationLevel: reservation.educationLevel,
+        address: reservation.address,
+        emergencyContact: reservation.emergencyContact,
+        healthConcerns: reservation.healthConcerns,
+        employment: reservation.employment,
+        selfiePhotoUrl: reservation.selfiePhotoUrl,
+        validIDFrontUrl: reservation.validIDFrontUrl,
+        validIDBackUrl: reservation.validIDBackUrl,
+        validIDType: reservation.validIDType,
+        nbiClearanceUrl: reservation.nbiClearanceUrl,
+        nbiReason: reservation.nbiReason,
+        companyIDUrl: reservation.companyIDUrl,
+        companyIDReason: reservation.companyIDReason,
+        finalMoveInDate: reservation.finalMoveInDate,
+        proofOfPaymentUrl: reservation.proofOfPaymentUrl,
+        leaseDuration: reservation.leaseDuration,
+        billingEmail: reservation.billingEmail,
+        moveInDate: reservation.moveInDate,
+        moveOutDate: reservation.moveOutDate,
+        visitDate: reservation.visitDate,
+        visitTime: reservation.visitTime,
+        visitApproved: reservation.visitApproved,
+        notes: reservation.notes,
       });
     } catch {
-      const fallback = reservations.find((x) => x.id === id);
-      if (fallback) setSelectedReservation(fallback);
+      const fallbackReservation = reservations.find(
+        (reservation) => reservation.id === reservationId,
+      );
+      if (fallbackReservation) {
+        setSelectedReservation(fallbackReservation);
+      }
     }
-  };
+  }, [prefetchReservationDetail, reservations]);
 
-  const handleDelete = (id) => {
+  const refetchReservations = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+    [queryClient],
+  );
+
+  const handleDelete = useCallback((reservationId) => {
     setConfirmModal({
-      open: true, title: "Delete Reservation",
-      message: "This reservation will be permanently deleted. This cannot be undone.",
-      variant: "danger", confirmText: "Delete",
+      open: true,
+      title: "Archive Reservation",
+      message:
+        "This action archives the reservation and preserves billing history. Permanent deletion is restricted when issued bills exist.",
+      variant: "danger",
+      confirmText: "Archive",
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, open: false }));
+        setConfirmModal((previous) => ({ ...previous, open: false }));
         try {
-          await reservationApi.delete(id);
-          showNotification("Reservation deleted", "success");
+          await reservationApi.delete(reservationId);
+          showNotification("Reservation archived", "success");
           refetchReservations();
-        } catch { showNotification("Failed to delete", "error"); }
+        } catch (error) {
+          showNotification(error?.message || "Failed to archive reservation", "error");
+        }
       },
     });
-  };
+  }, [refetchReservations]);
 
-  const IN_PROGRESS_STATUSES = ["pending", "visit_pending", "visit_approved", "payment_pending"];
-
-  /* Filter + paginate */
-  const filtered = reservations.filter((r) => {
-    const q = searchTerm.toLowerCase();
-    const matchSearch = !q ||
-      r.customer.toLowerCase().includes(q) ||
-      r.email.toLowerCase().includes(q) ||
-      r.reservationCode.toLowerCase().includes(q) ||
-      r.room.toLowerCase().includes(q);
-    const matchStatus = statusFilter === "all"
-      ? true
-      : statusFilter === "overdue"      ? checkOverdue(r)
-      : statusFilter === "in_progress"  ? IN_PROGRESS_STATUSES.includes(r.status)
-      : r.status.toLowerCase() === statusFilter;
-    const matchBranch = branchFilter === "all" || r.branch.toLowerCase() === branchFilter.toLowerCase();
-    return matchSearch && matchStatus && matchBranch;
-  });
-
-  const sorted = [...filtered].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  const totalFiltered = sorted.length;
-  const startIdx = (currentPage - 1) * itemsPerPage;
-  const pageData = sorted.slice(startIdx, startIdx + itemsPerPage);
-  if (currentPage > Math.ceil(totalFiltered / itemsPerPage) && totalFiltered > 0) setCurrentPage(1);
-
-
-  const counts = {
-    total:      reservations.length,
-    inProgress: reservations.filter((r) => IN_PROGRESS_STATUSES.includes(r.status)).length,
-    reserved:   reservations.filter((r) => r.status === "reserved").length,
-    checkedIn:  reservations.filter((r) => r.status === "checked-in").length,
-    overdue:    reservations.filter(checkOverdue).length,
-  };
-
-  const summaryItems = [
-    { label: "Total",       value: counts.total,      icon: CalendarCheck, color: "blue"   },
-    { label: "In Progress", value: counts.inProgress, icon: Clock,         color: "orange" },
-    { label: "Reserved",    value: counts.reserved,   icon: CheckCircle,   color: "green"  },
-    { label: "Checked In",  value: counts.checkedIn,  icon: UserCheck,     color: "blue"   },
-    { label: "Overdue",     value: counts.overdue,    icon: AlertTriangle, color: "red"    },
-  ];
-
-  const tabs = [
-    { key: "reservations", label: "Reservations" },
-    { key: "visits",       label: "Visit Schedules" },
-    { key: "inquiries",    label: "Inquiries" },
-  ];
-
-  const filters = [
-    ...(isOwner ? [{
-      key: "branch",
-      options: [
-        { value: "all", label: "All Branches" },
-        { value: "gil puyat", label: "Gil Puyat" },
-        { value: "guadalupe", label: "Guadalupe" },
-      ],
-      value: branchFilter,
-      onChange: (v) => { setBranchFilter(v); setCurrentPage(1); },
-    }] : []),
-    {
-      key: "status",
-      options: [
-        { value: "all",          label: "All Status" },
-        { value: "in_progress",  label: "In Progress" },
-        { value: "reserved",     label: "Reserved" },
-        { value: "checked-in",   label: "Checked In" },
-        { value: "overdue",      label: "Overdue" },
-        { value: "cancelled",    label: "Cancelled" },
-      ],
-      value: statusFilter,
-      onChange: (v) => { setStatusFilter(v); setCurrentPage(1); },
-    },
-  ];
-
-  const columns = [
-    {
-      key: "applicant",
-      label: "Applicant",
-      sortable: true,
-      render: (row) => (
-        <div className="res-applicant-cell">
-          <div
-            className="res-avatar"
-            style={{ background: avatarColor(row.customer) }}
-            aria-label={row.customer}
-          >
-            {initials(row.customer)}
-          </div>
-          <div className="res-applicant-info">
-            <span className="res-applicant-name">{row.customer}</span>
-            <span className="res-applicant-email">{row.email}</span>
-            <span className="res-applicant-code">{row.reservationCode}</span>
-          </div>
-        </div>
-      ),
-    },
-    { key: "room", label: "Room", sortable: true },
-    { key: "branch", label: "Branch", sortable: true },
-    {
-      key: "status",
-      label: "Status",
-      render: (row) => <StatusBadge status={checkOverdue(row) ? "overdue" : row.status} />,
-    },
-    {
-      key: "stage",
-      label: "Stage",
-      render: (row) => {
-        const STAGE_MAP = {
-          pending: { step: 1, label: "Room Selected" },
-          visit_pending: { step: 2, label: "Visit Scheduled" },
-          visit_approved: { step: 3, label: "Filling Application" },
-          payment_pending: { step: 4, label: "Payment Submitted" },
-          reserved: { step: 5, label: "Confirmed" },
-          "checked-in": { step: 5, label: "Moved In" },
-          "checked-out": { step: 5, label: "Completed" },
-          cancelled: { step: 0, label: "Cancelled" },
-        };
-        const info = STAGE_MAP[row.status] || { step: "?", label: row.status };
-        if (info.step === 0) return <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>—</span>;
-        return (
-          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-            Step {info.step}/5 · {info.label}
-          </span>
-        );
-      },
-    },
-    {
-      key: "moveInDate",
-      label: "Move-In",
-      sortable: true,
-      render: (row) => row.moveInDate
-        ? new Date(row.moveInDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : "—",
-    },
-    {
-      key: "createdAt",
-      label: "Date",
-      sortable: true,
-      render: (row) => row.createdAt
-        ? new Date(row.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : "—",
-    },
-    {
-      key: "actions",
-      label: "",
-      width: "70px",
-      align: "right",
-      render: (row) => (
-        <div className="res-actions" onClick={(e) => e.stopPropagation()}>
-          <button
-            className="res-icon-btn"
-            title="View details"
-            onClick={() => handleView(row.id)}
-          >
-            <Eye size={16} />
-          </button>
-          {can("manageReservations") && (
-            <button
-              className="res-icon-btn res-icon-btn--danger"
-              title="Delete"
-              onClick={() => handleDelete(row.id)}
+  const columns = useMemo(
+    () => [
+      {
+        key: "applicant",
+        sortKey: "customer",
+        label: "Applicant",
+        sortable: true,
+        render: (row) => (
+          <div className="res-applicant-cell">
+            <div
+              className="res-avatar"
+              style={{ background: avatarColor(row.customer) }}
+              aria-label={row.customer}
             >
-              <Trash2 size={14} />
+              {initials(row.customer)}
+            </div>
+            <div className="res-applicant-info">
+              <span className="res-applicant-name">{row.customer}</span>
+              <span className="res-applicant-email">{row.email}</span>
+              <span className="res-applicant-code">{row.reservationCode}</span>
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "room",
+        label: "Room",
+        sortable: true,
+        render: (row) => (
+          <div className="res-room-cell">
+            <span className="res-room-name">{row.room}</span>
+            <span className="res-room-meta">
+              {row.roomType || "Room"} · {row.branch}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "status",
+        label: "Status",
+        render: (row) => (
+          <StatusBadge status={checkOverdueReservation(row) ? "overdue" : row.status} />
+        ),
+      },
+      {
+        key: "moveInDate",
+        label: "Move-In",
+        sortable: true,
+        render: (row) => formatShortDate(row.moveInDate),
+      },
+      {
+        key: "createdAt",
+        label: "Date",
+        sortable: true,
+        render: (row) => formatShortDate(row.createdAt),
+      },
+      {
+        key: "actions",
+        label: "",
+        width: "70px",
+        align: "right",
+        render: (row) => (
+          <div className="res-actions" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="res-icon-btn"
+              title="View details"
+              onClick={() => handleView(row.id)}
+            >
+              <Eye size={16} />
             </button>
-          )}
-        </div>
-      ),
-    },
-  ];
+            {can("manageReservations") && (
+              <button
+                className="res-icon-btn res-icon-btn--danger"
+                title="Delete"
+                onClick={() => handleDelete(row.id)}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [can, handleDelete, handleView],
+  );
 
   return (
     <>
       <PageShell tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
-        <PageShell.Summary>
-          {activeTab === "reservations" && <SummaryBar items={summaryItems} />}
-        </PageShell.Summary>
-
-        <PageShell.Actions>
-          {activeTab === "reservations" && (
-            <ActionBar
-              search={{
-                value: searchTerm,
-                onChange: (v) => { setSearchTerm(v); setCurrentPage(1); },
-                placeholder: "Search by name, email, code, or room...",
-              }}
-              filters={filters}
-            />
-          )}
-        </PageShell.Actions>
-
         <PageShell.Content>
           {activeTab === "reservations" && (
-            <DataTable
-              columns={columns}
-              data={pageData}
-              loading={loading}
-              onRowClick={(row) => handleView(row.id)}
-              pagination={{
-                page: currentPage,
-                pageSize: itemsPerPage,
-                total: totalFiltered,
-                onPageChange: setCurrentPage,
-              }}
-              emptyState={{
-                icon: CalendarCheck,
-                title: "No reservations found",
-                description: "Try adjusting your filters.",
-              }}
-            />
+            <section
+              id="page-shell-panel-reservations"
+              className="page-shell__panel reservations-workspace"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-reservations"
+            >
+              <div className="reservations-workspace__summary">
+                <SummaryBar
+                  items={summaryItems}
+                  activeIndex={activeSummaryIndex}
+                  onItemClick={(index) => {
+                    const nextFilter = index < 0 ? "all" : SUMMARY_FILTERS[index];
+                    setStatusFilter(nextFilter);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+              <div className="reservations-workspace__toolbar">
+                <ActionBar
+                  search={{
+                    value: searchTerm,
+                    onChange: (value) => {
+                      setSearchTerm(value);
+                      setCurrentPage(1);
+                    },
+                    placeholder: "Search by name, email, code, or room...",
+                  }}
+                  filters={filters}
+                />
+              </div>
+              <div className="reservations-workspace__table">
+                <DataTable
+                  columns={columns}
+                  data={sortedReservations}
+                  loading={loading}
+                  disableRowInteraction
+                  sorting="external"
+                  sortKey={sortState.key}
+                  sortDir={sortState.dir}
+                  onSortChange={(key, dir) => setSortState({ key, dir })}
+                  onRowHover={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  onRowFocus={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  pagination={{
+                    page: currentPage,
+                    pageSize: itemsPerPage,
+                    total: totalFiltered,
+                    onPageChange: setCurrentPage,
+                  }}
+                  emptyState={{
+                    icon: CalendarCheck,
+                    title: "No reservations found",
+                    description: "Try adjusting your filters.",
+                  }}
+                />
+              </div>
+            </section>
           )}
-          {activeTab === "visits"    && <VisitSchedulesTab />}
-          {activeTab === "inquiries" && <InquiriesPage isEmbedded />}
+          {activeTab === "visits" && (
+            <section
+              id="page-shell-panel-visits"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-visits"
+            >
+              <VisitSchedulesTab />
+            </section>
+          )}
+          {activeTab === "inquiries" && (
+            <section
+              id="page-shell-panel-inquiries"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-inquiries"
+            >
+              <InquiriesPage isEmbedded />
+            </section>
+          )}
         </PageShell.Content>
       </PageShell>
 
-      {/* Modals rendered outside PageShell so they are never swallowed by slot filtering */}
       {selectedReservation && (
         <ReservationDetailsModal
           reservation={selectedReservation}
@@ -364,15 +562,19 @@ function ReservationsPage() {
       )}
       <ConfirmModal
         isOpen={confirmModal.open}
-        onClose={() => setConfirmModal((prev) => ({ ...prev, open: false }))}
+        onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}
         variant={confirmModal.variant}
         confirmText={confirmModal.confirmText || "Confirm"}
       />
+      {error && <div className="sr-only">{error}</div>}
     </>
   );
 }
 
 export default ReservationsPage;
+
+
+

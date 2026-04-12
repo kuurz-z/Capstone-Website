@@ -104,6 +104,22 @@ const notify = {
       `Your bill for ${billingMonth} is ₱${totalAmount}. Due by ${dueDate}.`,
       { entityType: "bill" }),
 
+  utilityChargeAvailable: (
+    userId,
+    utilityType,
+    billingMonth,
+    utilityAmount,
+    totalAmount,
+    dueDate,
+  ) =>
+    createNotification(
+      userId,
+      "bill_generated",
+      `${utilityType === "water" ? "Water" : "Electricity"} Charge Available`,
+      `Your ${utilityType} charge for ${billingMonth} is â‚±${utilityAmount}. Current bill total: â‚±${totalAmount}. Due by ${dueDate}.`,
+      { entityType: "bill" },
+    ),
+
   /**
    * Overdue move-in alert (admin + tenant notification)
    */

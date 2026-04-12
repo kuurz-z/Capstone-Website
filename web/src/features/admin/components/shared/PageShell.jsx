@@ -14,12 +14,17 @@ import "./PageShell.css";
 
 function PageShell({ children, tabs, activeTab, onTabChange }) {
   const slots = { summary: null, actions: null, content: null };
+  const extras = [];
 
   React.Children.forEach(children, (child) => {
-    if (!React.isValidElement(child)) return;
+    if (!React.isValidElement(child)) {
+      if (child != null && child !== false) extras.push(child);
+      return;
+    }
     if (child.type === Summary) slots.summary = child;
     else if (child.type === Actions) slots.actions = child;
     else if (child.type === Content) slots.content = child;
+    else extras.push(child);
   });
 
   // Only render slot wrappers if they have real (non-boolean/null) children
@@ -30,10 +35,15 @@ function PageShell({ children, tabs, activeTab, onTabChange }) {
     <div className="page-shell">
       {/* Tabs — always at top */}
       {tabs && tabs.length > 0 && (
-        <div className="page-shell__tabs">
+        <div className="page-shell__tabs" role="tablist" aria-label="Workspace sections">
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              id={`page-shell-tab-${tab.key}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              aria-controls={`page-shell-panel-${tab.key}`}
               className={`page-shell__tab ${activeTab === tab.key ? "page-shell__tab--active" : ""}`}
               onClick={() => onTabChange?.(tab.key)}
             >
@@ -58,6 +68,8 @@ function PageShell({ children, tabs, activeTab, onTabChange }) {
       {slots.content && (
         <div className="page-shell__content">{slots.content}</div>
       )}
+
+      {extras}
     </div>
   );
 }

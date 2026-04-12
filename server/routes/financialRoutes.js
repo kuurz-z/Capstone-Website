@@ -2,21 +2,19 @@
  * ============================================================================
  * FINANCIAL ROUTES
  * ============================================================================
- * Owner-only financial overview.
- * All routes require: verifyToken → verifyAdmin
- * Owner enforcement is done at the frontend (RequireOwner guard) and
- * optionally hardened here via a role check middleware.
+ * Module 4 executive financial overview.
+ * Owner-only route group.
  * ============================================================================
  */
 
 import express from "express";
-import { verifyToken, verifyAdmin } from "../middleware/auth.js";
+import { verifyToken, verifyOwner } from "../middleware/auth.js";
 import { getOverview } from "../controllers/financialController.js";
 
 const router = express.Router();
 
-// All routes require authentication + admin role
-router.use(verifyToken, verifyAdmin);
+// All routes require authentication + owner role
+router.use(verifyToken, verifyOwner);
 
 /**
  * GET /api/financial/overview?branch=

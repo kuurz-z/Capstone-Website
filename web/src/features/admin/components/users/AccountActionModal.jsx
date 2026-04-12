@@ -1,55 +1,58 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { createPortal } from "react-dom";
+import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
-
-/**
- * AccountActionModal — Confirmation modal for suspend/ban/reactivate actions.
- *
- * Props:
- *   action    — "suspend" | "ban" | "reactivate"
- *   user      — the user object being acted upon
- *   onConfirm — (action, userId, reason) => Promise
- *   onClose   — close handler
- */
 
 const ACTION_CONFIG = {
   suspend: {
     title: "Suspend Account",
-    description: "This will temporarily disable the user's access. They won't be able to log in or use any features until reactivated.",
+    description:
+      "This will temporarily disable the user's access. They won't be able to log in or use any features until reactivated.",
     confirmLabel: "Suspend Account",
-    icon: "⏸️",
+    icon: "S",
     iconBg: "#fff7ed",
     btnClass: "btn-suspend-confirm",
     showReason: true,
-    reasonPlaceholder: "Reason for suspension (e.g., policy violation, non-payment)...",
+    reasonPlaceholder:
+      "Reason for suspension (e.g., policy violation, non-payment)...",
   },
   ban: {
     title: "Ban Account",
-    description: "This will permanently disable the user's access. This is a severe action — only a super admin can reverse it.",
+    description:
+      "This will permanently disable the user's access. This is a severe action and only an owner can reverse it.",
     confirmLabel: "Ban Account",
-    icon: "⛔",
+    icon: "B",
     iconBg: "#fef2f2",
     btnClass: "btn-ban-confirm",
     showReason: true,
-    reasonPlaceholder: "Reason for ban (e.g., repeated violations, fraud)...",
+    reasonPlaceholder:
+      "Reason for ban (e.g., repeated violations, fraud)...",
   },
   reactivate: {
     title: "Reactivate Account",
-    description: "This will restore the user's access. They'll be able to log in and use all features again.",
+    description:
+      "This will restore the user's access. They'll be able to log in and use all features again.",
     confirmLabel: "Reactivate",
-    icon: "🔓",
+    icon: "A",
     iconBg: "#ecfdf5",
     btnClass: "btn-reactivate-confirm",
     showReason: false,
   },
 };
 
-export default function AccountActionModal({ action, user, onConfirm, onClose }) {
+export default function AccountActionModal({
+  action,
+  user,
+  onConfirm,
+  onClose,
+}) {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useBodyScrollLock(!!(action && user));
   useEscapeClose(!!(action && user), onClose);
 
-  if (!action || !user) return null;
+  if (!action || !user || typeof document === "undefined") return null;
 
   const config = ACTION_CONFIG[action];
   if (!config) return null;
@@ -66,20 +69,31 @@ export default function AccountActionModal({ action, user, onConfirm, onClose })
     }
   };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         className="modal-content modal-small"
+        role="dialog"
+        aria-modal="true"
+        aria-label={config.title}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="modal-header">
           <h2>{config.title}</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
         </div>
 
-        {/* Body */}
-        <div className="modal-body" style={{ textAlign: "center", padding: "1.5rem" }}>
+        <div
+          className="modal-body"
+          style={{ textAlign: "center", padding: "1.5rem" }}
+        >
           <div
             style={{
               width: 56,
@@ -96,14 +110,34 @@ export default function AccountActionModal({ action, user, onConfirm, onClose })
             {config.icon}
           </div>
 
-          <p style={{ margin: "0 0 0.5rem", fontWeight: 600, color: "#1e293b", fontSize: "0.9375rem" }}>
+          <p
+            style={{
+              margin: "0 0 0.5rem",
+              fontWeight: 600,
+              color: "#1e293b",
+              fontSize: "0.9375rem",
+            }}
+          >
             {user.firstName} {user.lastName}
           </p>
-          <p style={{ margin: "0 0 1rem", color: "#6b7280", fontSize: "0.8125rem" }}>
+          <p
+            style={{
+              margin: "0 0 1rem",
+              color: "#6b7280",
+              fontSize: "0.8125rem",
+            }}
+          >
             @{user.username || "user"} · {user.email}
           </p>
 
-          <p style={{ margin: "0 0 1rem", color: "#64748b", fontSize: "0.8125rem", lineHeight: 1.5 }}>
+          <p
+            style={{
+              margin: "0 0 1rem",
+              color: "#64748b",
+              fontSize: "0.8125rem",
+              lineHeight: 1.5,
+            }}
+          >
             {config.description}
           </p>
 
@@ -136,7 +170,6 @@ export default function AccountActionModal({ action, user, onConfirm, onClose })
           )}
         </div>
 
-        {/* Footer */}
         <div className="modal-footer">
           <button className="btn-cancel" onClick={onClose} disabled={loading}>
             Cancel
@@ -150,6 +183,7 @@ export default function AccountActionModal({ action, user, onConfirm, onClose })
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

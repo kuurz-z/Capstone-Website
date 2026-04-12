@@ -12,11 +12,9 @@ import {
   AuditLogsPage,
   UserManagementPage,
   AdminBillingPage,
+  AdminAnnouncementsPage,
   MaintenancePage,
   InquiriesPage,
-  DigitalTwinPage,
-  FinancialPage,
-  SuperAdminDashboard,
   BranchManagementPage,
   RolePermissionsPage,
   SystemSettingsPage,
@@ -41,16 +39,6 @@ export function AdminRoutes() {
           <RouteShell name="AdminDashboard">
             <AdminDashboardPage />
           </RouteShell>
-        }
-      />
-      <Route
-        path="dashboard/super"
-        element={
-          <RequireOwner>
-            <RouteShell name="SuperAdminDashboard">
-              <SuperAdminDashboard />
-            </RouteShell>
-          </RequireOwner>
         }
       />
       <Route
@@ -102,6 +90,14 @@ export function AdminRoutes() {
         }
       />
       <Route
+        path="announcements"
+        element={
+          <RouteShell name="AdminAnnouncements">
+            <AdminAnnouncementsPage />
+          </RouteShell>
+        }
+      />
+      <Route
         path="maintenance"
         element={
           <RouteShell name="AdminMaintenance">
@@ -119,29 +115,23 @@ export function AdminRoutes() {
       />
       <Route
         path="room-configuration"
-        element={<Navigate to="/admin/room-availability" replace />}
+        element={<Navigate to="/admin/room-availability?tab=rooms" replace />}
       />
       <Route
         path="occupancy"
-        element={<Navigate to="/admin/room-availability" replace />}
+        element={
+          <Navigate to="/admin/room-availability?tab=occupancy" replace />
+        }
       />
       <Route
         path="digital-twin"
         element={
-          <RouteShell name="DigitalTwin">
-            <DigitalTwinPage />
-          </RouteShell>
+          <Navigate to="/admin/room-availability?tab=occupancy" replace />
         }
       />
       <Route
         path="financial"
-        element={
-          <RequireOwner>
-            <RouteShell name="Financial">
-              <FinancialPage />
-            </RouteShell>
-          </RequireOwner>
-        }
+        element={<Navigate to="/admin/dashboard" replace />}
       />
       <Route
         path="branches"

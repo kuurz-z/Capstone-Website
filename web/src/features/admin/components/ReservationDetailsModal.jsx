@@ -1,160 +1,130 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Calendar, Eye, ClipboardList, CreditCard } from "lucide-react";
-import { reservationApi } from "../../../shared/api/apiClient";
-import { showNotification } from "../../../shared/utils/notification";
-import getFriendlyError from "../../../shared/utils/friendlyError";
+import { Calendar, ClipboardList, CreditCard, Eye } from "lucide-react";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
+import { reservationApi } from "../../../shared/api/apiClient";
 import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../shared/hooks/useEscapeClose";
+import getFriendlyError from "../../../shared/utils/friendlyError";
+import {
+  getAllowedReservationActions,
+  getReservationStatusAppearance,
+  readMoveInDate,
+} from "../../../shared/utils/lifecycleNaming";
+import { showNotification } from "../../../shared/utils/notification";
 import "../styles/reservation-details-modal.css";
 
-const WATER_BILLABLE_TYPES = ["private", "double-sharing"];
-
-/* ─── constants ─────────────────────────────────── */
-const STATUS_MAP = {
-  pending: {
-    label: "Pending Review",
-    color: "#b45309",
-    bg: "#fffbeb",
-    dot: "#f59e0b",
-  },
-  visit_pending: {
-    label: "Visit Pending",
-    color: "#1d4ed8",
-    bg: "#eff6ff",
-    dot: "#3b82f6",
-  },
-  visit_approved: {
-    label: "Visit Approved",
-    color: "#7c3aed",
-    bg: "#f5f3ff",
-    dot: "#8b5cf6",
-  },
-  payment_pending: {
-    label: "Payment Pending",
-    color: "#b45309",
-    bg: "#fffbeb",
-    dot: "#f59e0b",
-  },
-  reserved: {
-    label: "Reserved",
-    color: "#047857",
-    bg: "#ecfdf5",
-    dot: "#10b981",
-  },
-  "checked-in": {
-    label: "Checked In",
-    color: "#1d4ed8",
-    bg: "#eff6ff",
-    dot: "#3b82f6",
-  },
-  "checked-out": {
-    label: "Checked Out",
-    color: "#64748b",
-    bg: "#f8fafc",
-    dot: "#94a3b8",
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "#dc2626",
-    bg: "#fef2f2",
-    dot: "#ef4444",
-  },
-};
-
 const ACTION_MSGS = {
-  confirm: {
-    title: "Confirm Reservation",
-    message:
-      "Confirm the payment and reserve the bed? Branch will be assigned automatically.",
-    confirmText: "Yes, Confirm",
-    variant: "info",
-  },
-  checkin: {
-    title: "Check In Tenant",
+  moveIn: {
+    title: "Move In Tenant",
     message:
       "Mark this tenant as moved in? They'll be promoted to Tenant role with full system access.",
-    confirmText: "Yes, Check In",
+    confirmText: "Yes, Move In",
     variant: "info",
   },
   cancel: {
-    title: "Cancel Reservation",
+    title: "Cancel reservation",
     message:
-      "The ₱2,000 reservation fee is non-refundable. The bed will be freed and user reset to applicant.",
-    confirmText: "Yes, Cancel It",
+      "This will permanently remove the reservation. The reservation fee is non-refundable, and the bed will be released.",
+    confirmText: "Cancel reservation",
     variant: "danger",
   },
 };
 
-/* ─── helpers ───────────────────────────────────── */
-const fmt = (v) => (v === null || v === undefined || v === "" ? "—" : v);
-const METHOD_LABELS = {
-  gcash:      "GCash",
-  paymaya:    "Maya",
-  maya:       "Maya",
-  grabpay:    "GrabPay",
-  grab_pay:   "GrabPay",
-  card:       "Credit/Debit Card",
-  paymongo:   "Online Payment (PayMongo)",
-  cash:       "Cash",
-  bank:       "Bank Transfer",
-};
-const fmtMethod = (v) => {
-  if (!v) return "—";
-  return METHOD_LABELS[(v || "").toLowerCase().replace(/[_\s-]/g, "")] || v;
-};
-const fmtCurrency = (v) =>
-  !v && v !== 0 ? "—" : `₱${Number(v).toLocaleString()}`;
-const fmtDate = (d) => {
-  if (!d) return "—";
+const fmt = (value) =>
+  value === null || value === undefined || value === "" ? "\u2014" : value;
+
+const fmtDate = (value) => {
+  if (!value) return "\u2014";
+
   try {
-    return new Date(d).toLocaleDateString("en-US", {
+    return new Date(value).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
     });
   } catch {
-    return d;
+    return value;
   }
 };
 
 const openImage = (url, title) => {
-  if (!url) return showNotification("No file available", "error");
-  const w = window.open("", "_blank");
-  w.document.write(
+  if (!url) {
+    showNotification("No file available", "error");
+    return;
+  }
+
+  const preview = window.open("", "_blank");
+  preview?.document.write(
     `<html><head><title>${title}</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#111;"><img src="${url}" style="max-width:100%;max-height:100vh;object-fit:contain;" alt="${title}"/></body></html>`,
   );
 };
 
-const buildDocs = (r) => [
-  { label: "Selfie Photo", url: r.selfiePhotoUrl },
+const buildDocs = (reservation) => [
+  { label: "Selfie Photo", url: reservation.selfiePhotoUrl },
   {
-    label: `Valid ID Front${r.validIDType ? ` (${r.validIDType})` : ""}`,
-    url: r.validIDFrontUrl,
+    label: `Valid ID Front${reservation.validIDType ? ` (${reservation.validIDType})` : ""}`,
+    url: reservation.validIDFrontUrl,
   },
-  { label: "Valid ID Back", url: r.validIDBackUrl },
-  { label: "NBI Clearance", url: r.nbiClearanceUrl, reason: r.nbiReason },
+  { label: "Valid ID Back", url: reservation.validIDBackUrl },
+  {
+    label: "NBI Clearance",
+    url: reservation.nbiClearanceUrl,
+    reason: reservation.nbiReason,
+  },
   {
     label: "Company/School ID",
-    url: r.companyIDUrl,
-    reason: r.companyIDReason,
+    url: reservation.companyIDUrl,
+    reason: reservation.companyIDReason,
   },
 ];
 
-const PERSONAL_FIELDS = (r) => [
-  ["First Name",     fmt(r.firstName  || r.userId?.firstName)],
-  ["Last Name",      fmt(r.lastName   || r.userId?.lastName)],
-  ["Middle Name",    fmt(r.middleName)],
-  ["Nickname",       fmt(r.nickname)],
-  ["Birthday",       fmtDate(r.birthday)],
-  ["Marital Status", fmt(r.maritalStatus)],
-  ["Nationality",    fmt(r.nationality)],
-  ["Education",      fmt(r.educationLevel)],
-  ["Phone",          fmt(r.phone || r.mobileNumber)],
+const PERSONAL_FIELDS = (reservation) => [
+  ["First Name", fmt(reservation.firstName || reservation.userId?.firstName)],
+  ["Last Name", fmt(reservation.lastName || reservation.userId?.lastName)],
+  ["Middle Name", fmt(reservation.middleName)],
+  ["Nickname", fmt(reservation.nickname)],
+  ["Birthday", fmtDate(reservation.birthday)],
+  ["Marital Status", fmt(reservation.maritalStatus)],
+  ["Nationality", fmt(reservation.nationality)],
+  ["Education", fmt(reservation.educationLevel)],
+  ["Phone", fmt(reservation.phone || reservation.mobileNumber)],
 ];
 
-/* ─── component ─────────────────────────────────── */
+const getInitials = (name) => {
+  const initials = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+  return initials || "GU";
+};
+
+const STAGE_GUIDANCE = {
+  pending: {
+    Icon: Calendar,
+    message: "Waiting for the tenant to schedule a site visit.",
+  },
+  visit_pending: {
+    Icon: Eye,
+    message:
+      "Tenant has scheduled a visit. Approve or reject it in the Visit Schedules tab.",
+  },
+  visit_approved: {
+    Icon: ClipboardList,
+    message:
+      "Visit approved. Waiting for the tenant to complete their application and pay the reservation fee.",
+  },
+  payment_pending: {
+    Icon: CreditCard,
+    message:
+      "Payment submitted and awaiting automatic verification from the payment gateway.",
+  },
+};
+
 export default function ReservationDetailsModal({
   reservation,
   onClose,
@@ -169,7 +139,6 @@ export default function ReservationDetailsModal({
   const [extendDays, setExtendDays] = useState(3);
   const [showExtendPrompt, setShowExtendPrompt] = useState(false);
   const [meterReadingVal, setMeterReadingVal] = useState("");
-  const [waterMeterReadingVal, setWaterMeterReadingVal] = useState("");
   const [showMeterPrompt, setShowMeterPrompt] = useState(false);
   const [confirmModal, setConfirmModal] = useState({
     open: false,
@@ -179,23 +148,39 @@ export default function ReservationDetailsModal({
     onConfirm: null,
   });
 
-  useBodyScrollLock(!!reservation);
-  useEscapeClose(!!reservation, onClose);
+  useBodyScrollLock(Boolean(reservation));
+  useEscapeClose(Boolean(reservation), onClose);
 
   if (!reservation) return null;
 
-  const status = (reservation.status || "").toLowerCase();
-  const sc = STATUS_MAP[status] || STATUS_MAP.pending;
-  const moveIn = reservation.moveInDate ?? reservation.checkInDate ?? null;
+  const status = reservation.status || "pending";
+  const appearance = getReservationStatusAppearance(status);
+  const allowedActions = getAllowedReservationActions(status);
+  const moveInDate = readMoveInDate(reservation);
+  const isMovedOut = status === "moveOut";
   const isOverdue =
-    status === "reserved" && moveIn && new Date(moveIn) < new Date();
+    status === "reserved" && moveInDate && new Date(moveInDate) < new Date();
   const daysOverdue = isOverdue
-    ? Math.floor((new Date() - new Date(moveIn)) / 86400000)
+    ? Math.floor((new Date() - new Date(moveInDate)) / 86400000)
     : 0;
   const docs = buildDocs(reservation);
+  const guestName = reservation.customer ?? "Unknown";
+  const guestInitials = getInitials(guestName);
+  const stageGuide = STAGE_GUIDANCE[status];
+  const bookingDetails = [
+    ["Room", reservation.room ?? "\u2014"],
+    ["Room type", reservation.roomType ?? "\u2014"],
+    ["Branch", reservation.branch ?? "\u2014"],
+    ["Move-in", fmtDate(moveInDate)],
+    ["Contact", reservation.phone ?? reservation.mobileNumber ?? "\u2014"],
+    [
+      "Lease term",
+      reservation.leaseDuration ? `${reservation.leaseDuration} months` : "\u2014",
+    ],
+  ];
 
   const doAction = (key, apiCall, successMsg) => {
-    const m =
+    const modalConfig =
       key === "extend"
         ? {
             title: `Extend Move-in by ${extendDays} Day${extendDays > 1 ? "s" : ""}`,
@@ -209,20 +194,25 @@ export default function ReservationDetailsModal({
               message: `The ${reservationFeeLabel} reservation fee is non-refundable. The bed will be freed and user reset to applicant.`,
             }
           : ACTION_MSGS[key];
+
     setConfirmModal({
       open: true,
-      ...m,
+      ...modalConfig,
       onConfirm: async () => {
-        setConfirmModal((p) => ({ ...p, open: false }));
+        setConfirmModal((previous) => ({ ...previous, open: false }));
         setIsSubmitting(true);
+
         try {
           await apiCall();
           showNotification(successMsg, "success");
           onUpdate?.();
           onClose();
-        } catch (err) {
-          console.error(err);
-          showNotification(getFriendlyError(err, "Action failed. Please try again."), "error");
+        } catch (error) {
+          console.error(error);
+          showNotification(
+            getFriendlyError(error, "Action failed. Please try again."),
+            "error",
+          );
         } finally {
           setIsSubmitting(false);
         }
@@ -230,9 +220,10 @@ export default function ReservationDetailsModal({
     });
   };
 
-  const saveNotes = async (e) => {
-    e.preventDefault();
+  const saveNotes = async (event) => {
+    event.preventDefault();
     setIsSubmitting(true);
+
     try {
       await reservationApi.update(reservation.id, { notes: adminNotes });
       showNotification("Notes saved", "success");
@@ -247,162 +238,132 @@ export default function ReservationDetailsModal({
   return createPortal(
     <>
       <div className="rdm-overlay" onClick={onClose}>
-        <div className="rdm" onClick={(e) => e.stopPropagation()}>
-          {/* Header */}
-          <div className="rdm-header">
-            <div>
-              <h2 className="rdm-title">{reservation.customer ?? "Unknown"}</h2>
-              <div className="rdm-header-meta">
-                <span className="rdm-code">
-                  {reservation.reservationCode || "—"}
-                </span>
-                <span className="rdm-header-sep">·</span>
-                <span className="rdm-header-detail">
-                  {reservation.email ?? "—"}
-                </span>
-              </div>
-            </div>
-            <button className="rdm-close" onClick={onClose} aria-label="Close">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M18 6L6 18M6 6l12 12"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className="rdm-body">
-            {/* Status */}
-            <div className="rdm-status-row">
-              <div
-                className="rdm-status-chip"
-                style={{ background: sc.bg, color: sc.color }}
-              >
-                <span
-                  className="rdm-status-dot"
-                  style={{ background: sc.dot }}
-                />
-                {sc.label}
-              </div>
-              {isOverdue && (
-                <div className="rdm-overdue-chip">
-                  {daysOverdue} day{daysOverdue > 1 ? "s" : ""} overdue
+        <div className="rdm" onClick={(event) => event.stopPropagation()}>
+          <div className="rdm-top-card">
+            <div className="rdm-top-header">
+              <div className="rdm-guest-block">
+                <div className="rdm-avatar" aria-hidden="true">
+                  {guestInitials}
                 </div>
-              )}
-            </div>
-
-            {/* Quick Info */}
-            <div className="rdm-info-grid">
-              {[
-                ["Room", reservation.room ?? "—"],
-                ["Type", reservation.roomType ?? "—"],
-                ["Branch", reservation.branch ?? "—"],
-              ].map(([l, v]) => (
-                <div className="rdm-info-item" key={l}>
-                  <span className="rdm-info-label">{l}</span>
-                  <span className="rdm-info-value">{v}</span>
-                </div>
-              ))}
-              <div className="rdm-info-item">
-                <span className="rdm-info-label">Move-in Date</span>
-                <span
-                  className={`rdm-info-value ${isOverdue ? "rdm-danger" : ""}`}
-                >
-                  {fmtDate(moveIn)}
-                </span>
-              </div>
-              <div className="rdm-info-item">
-                <span className="rdm-info-label">Phone</span>
-                <span className="rdm-info-value">
-                  {reservation.phone ?? reservation.mobileNumber ?? "—"}
-                </span>
-              </div>
-              {reservation.leaseDuration && (
-                <div className="rdm-info-item">
-                  <span className="rdm-info-label">Lease</span>
-                  <span className="rdm-info-value">
-                    {reservation.leaseDuration} months
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            {status !== "cancelled" && status !== "checked-out" && (
-              <div className="rdm-actions-card">
-
-                {/* ── Stage guidance cards (read-only stages) ─────────── */}
-                {(() => {
-                  const STAGE_GUIDANCE = {
-                    pending:         { Icon: Calendar,      message: "Waiting for the tenant to schedule a site visit." },
-                    visit_pending:   { Icon: Eye,           message: "Tenant has scheduled a visit — approve or reject it in the Visit Schedules tab." },
-                    visit_approved:  { Icon: ClipboardList, message: `Visit approved. Waiting for the tenant to complete their application and pay the ${reservationFeeLabel} reservation fee.` },
-                    payment_pending: { Icon: CreditCard,    message: "Payment submitted — awaiting automatic verification from the payment gateway." },
-                  };
-                  const guide = STAGE_GUIDANCE[status];
-                  if (!guide) return null;
-                  const { Icon, message } = guide;
-                  return (
-                    <div className="rdm-stage-guide">
-                      <div className="rdm-stage-guide-icon-wrap">
-                        <Icon size={16} strokeWidth={1.75} />
-                      </div>
-                      <p className="rdm-stage-guide-msg">{message}</p>
-                    </div>
-                  );
-                })()}
-
-                {/* ── Check In (reserved stage only, already gated via status) ─── */}
-                {status === "reserved" && (
-                  <>
-                    <button
-                      className="rdm-action rdm-action-primary"
-                      onClick={() => {
-                        setMeterReadingVal("");
-                        setWaterMeterReadingVal("");
-                        setShowMeterPrompt(true);
+                <div className="rdm-guest-copy">
+                  <h2 className="rdm-title">{guestName}</h2>
+                  <div className="rdm-header-meta">
+                    <span className="rdm-code">
+                      {reservation.reservationCode || "\u2014"}
+                    </span>
+                    <span className="rdm-header-sep">&bull;</span>
+                    <span className="rdm-header-detail">
+                      {reservation.email ?? "\u2014"}
+                    </span>
+                    <div
+                      className="rdm-status-chip rdm-status-chip-dark"
+                      style={{
+                        "--rdm-status-bg": appearance.bg,
+                        "--rdm-status-color": appearance.color,
+                        "--rdm-status-dot": appearance.dot,
                       }}
-                      disabled={isSubmitting}
-                      title="Mark tenant as moved in — requires initial meter reading"
                     >
-                      ✓ Check In — Tenant Has Moved In
-                    </button>
+                      <span className="rdm-status-dot" />
+                      {appearance.label}
+                    </div>
+                    {isOverdue && (
+                      <div className="rdm-overdue-chip">
+                        {daysOverdue} day{daysOverdue > 1 ? "s" : ""} overdue
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                className="rdm-close rdm-close-dark"
+                onClick={onClose}
+                aria-label="Close"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 6L6 18M6 6l12 12"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
 
-                    <button
-                      className="rdm-action rdm-action-extend"
-                      onClick={() => setShowExtendPrompt(true)}
-                      disabled={isSubmitting}
+            <div className="rdm-top-section">
+              <h3 className="rdm-top-section-label">Booking Details</h3>
+              <div className="rdm-info-grid rdm-info-grid-dark">
+                {bookingDetails.map(([label, value]) => (
+                  <div className="rdm-info-item" key={label}>
+                    <span className="rdm-info-label">{label}</span>
+                    <span
+                      className={`rdm-info-value ${label === "Move-in" && isOverdue ? "rdm-danger" : ""}`}
                     >
-                      Extend Move-in
-                    </button>
-                  </>
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {status !== "cancelled" && !isMovedOut && (
+              <div className="rdm-actions-card rdm-actions-card-dark">
+                {stageGuide && (
+                  <div className="rdm-stage-guide rdm-stage-guide-dark">
+                    <div className="rdm-stage-guide-icon-wrap">
+                      <stageGuide.Icon size={16} strokeWidth={1.75} />
+                    </div>
+                    <p className="rdm-stage-guide-msg">{stageGuide.message}</p>
+                  </div>
                 )}
 
-                {/* ── Cancel (all pre-check-in stages) ─────────────── */}
-                <div className="rdm-action-divider" />
-                {status !== "checked-in" && (
+                {allowedActions.includes("moveIn") && (
                   <button
-                    className="rdm-action rdm-action-cancel"
+                    className="rdm-action rdm-action-dark"
+                    onClick={() => {
+                      setMeterReadingVal("");
+                      setShowMeterPrompt(true);
+                    }}
+                    disabled={isSubmitting}
+                    title="Mark tenant as moved in and record the initial meter reading"
+                  >
+                    Mark as moved in
+                  </button>
+                )}
+
+                {allowedActions.includes("extend") && (
+                  <button
+                    className="rdm-action rdm-action-dark"
+                    onClick={() => setShowExtendPrompt(true)}
+                    disabled={isSubmitting}
+                  >
+                    Reschedule move-in
+                  </button>
+                )}
+
+                {allowedActions.includes("cancelled") && (
+                  <button
+                    className="rdm-action rdm-action-dark rdm-action-dark-cancel"
                     onClick={() =>
                       doAction(
                         "cancel",
-                        () => reservationApi.update(reservation.id, { status: "cancelled" }),
+                        () =>
+                          reservationApi.update(reservation.id, {
+                            status: "cancelled",
+                          }),
                         "Reservation cancelled",
                       )
                     }
                     disabled={isSubmitting}
                   >
-                    Cancel Reservation
+                    Cancel reservation
                   </button>
                 )}
               </div>
             )}
+          </div>
 
-            {/* Notes */}
+          <div className="rdm-body">
             <div className="rdm-section">
               <h4 className="rdm-section-title">Admin Notes</h4>
               <form onSubmit={saveNotes} className="rdm-notes-form">
@@ -410,7 +371,7 @@ export default function ReservationDetailsModal({
                   className="rdm-notes-input"
                   placeholder="Add internal notes..."
                   value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
+                  onChange={(event) => setAdminNotes(event.target.value)}
                   rows="2"
                 />
                 {adminNotes !== (reservation?.notes || "") && (
@@ -425,11 +386,10 @@ export default function ReservationDetailsModal({
               </form>
             </div>
 
-            {/* Personal Details (expandable) */}
             <button
               type="button"
               className="rdm-expand-btn"
-              onClick={() => setShowPersonal(!showPersonal)}
+              onClick={() => setShowPersonal((previous) => !previous)}
             >
               Personal Details
               <svg
@@ -451,13 +411,14 @@ export default function ReservationDetailsModal({
             {showPersonal && (
               <div className="rdm-expand-content">
                 <div className="rdm-info-grid">
-                  {PERSONAL_FIELDS(reservation).map(([l, v]) => (
-                    <div className="rdm-info-item" key={l}>
-                      <span className="rdm-info-label">{l}</span>
-                      <span className="rdm-info-value">{v}</span>
+                  {PERSONAL_FIELDS(reservation).map(([label, value]) => (
+                    <div className="rdm-info-item" key={label}>
+                      <span className="rdm-info-label">{label}</span>
+                      <span className="rdm-info-value">{value}</span>
                     </div>
                   ))}
                 </div>
+
                 {reservation.emergencyContact && (
                   <div className="rdm-info-grid" style={{ marginTop: 10 }}>
                     {[
@@ -473,10 +434,10 @@ export default function ReservationDetailsModal({
                         "Contact #",
                         fmt(reservation.emergencyContact.contactNumber),
                       ],
-                    ].map(([l, v]) => (
-                      <div className="rdm-info-item" key={l}>
-                        <span className="rdm-info-label">{l}</span>
-                        <span className="rdm-info-value">{v}</span>
+                    ].map(([label, value]) => (
+                      <div className="rdm-info-item" key={label}>
+                        <span className="rdm-info-label">{label}</span>
+                        <span className="rdm-info-value">{value}</span>
                       </div>
                     ))}
                   </div>
@@ -484,11 +445,10 @@ export default function ReservationDetailsModal({
               </div>
             )}
 
-            {/* Documents (expandable) */}
             <button
               type="button"
               className="rdm-expand-btn"
-              onClick={() => setShowDocs(!showDocs)}
+              onClick={() => setShowDocs((previous) => !previous)}
             >
               Submitted Documents
               <svg
@@ -509,8 +469,8 @@ export default function ReservationDetailsModal({
             </button>
             {showDocs && (
               <div className="rdm-expand-content">
-                {docs.map((doc, i) => (
-                  <div key={i} className="rdm-doc-row">
+                {docs.map((doc, index) => (
+                  <div key={`${doc.label}-${index}`} className="rdm-doc-row">
                     <span className="rdm-doc-label">{doc.label}</span>
                     {doc.url ? (
                       <button
@@ -522,9 +482,7 @@ export default function ReservationDetailsModal({
                       </button>
                     ) : (
                       <span className="rdm-doc-na">
-                        {doc.reason
-                          ? `Skipped: ${doc.reason}`
-                          : "Not submitted"}
+                        {doc.reason ? `Skipped: ${doc.reason}` : "Not submitted"}
                       </span>
                     )}
                   </div>
@@ -535,7 +493,6 @@ export default function ReservationDetailsModal({
         </div>
       </div>
 
-      {/* Meter Reading Dialog */}
       {showMeterPrompt && (
         <div
           className="rdm-extend-overlay"
@@ -543,21 +500,25 @@ export default function ReservationDetailsModal({
         >
           <div
             className="rdm-extend-dialog"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="rdm-extend-dialog-body">
-              <h3 className="rdm-extend-dialog-title">⚡ Initial Meter Reading</h3>
-              <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 12px" }}>
-                Enter the starting kWh reading to record this tenant's electricity baseline.
+              <h3 className="rdm-extend-dialog-title">Move-In Meter Reading</h3>
+              <p className="rdm-extend-dialog-copy">
+                Enter the starting kWh reading to record this tenant&apos;s
+                move-in electricity baseline.
               </p>
-              <div className="rdm-extend-dialog-input-row" style={{ width: "100%" }}>
+              <div
+                className="rdm-extend-dialog-input-row"
+                style={{ width: "100%" }}
+              >
                 <input
                   type="number"
                   min="0"
                   max="99999"
                   step="0.01"
                   value={meterReadingVal}
-                  onChange={(e) => setMeterReadingVal(e.target.value)}
+                  onChange={(event) => setMeterReadingVal(event.target.value)}
                   className="rdm-extend-dialog-input rdm-extend-dialog-input--wide"
                   placeholder="e.g. 1250"
                   autoFocus
@@ -576,30 +537,35 @@ export default function ReservationDetailsModal({
                 className="rdm-extend-dialog-confirm"
                 onClick={() => {
                   const reading = Number(meterReadingVal);
-                  if (!meterReadingVal.trim() || isNaN(reading) || reading < 0) {
-                    showNotification("A valid meter reading (kWh) is required.", "error", 4000);
+                  if (!meterReadingVal.trim() || Number.isNaN(reading) || reading < 0) {
+                    showNotification(
+                      "A valid meter reading (kWh) is required.",
+                      "error",
+                      4000,
+                    );
                     return;
                   }
+
                   setShowMeterPrompt(false);
                   doAction(
-                    "checkin",
-                    () => reservationApi.update(reservation.id, {
-                      status: "checked-in",
-                      meterReading: reading,
-                    }),
-                    "Tenant checked in successfully",
+                    "moveIn",
+                    () =>
+                      reservationApi.update(reservation.id, {
+                        status: "moveIn",
+                        meterReading: reading,
+                      }),
+                    "Tenant moved in successfully",
                   );
                 }}
                 disabled={isSubmitting}
               >
-                Check In
+                Move In
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Extend Dialog */}
       {showExtendPrompt && (
         <div
           className="rdm-extend-overlay"
@@ -607,7 +573,7 @@ export default function ReservationDetailsModal({
         >
           <div
             className="rdm-extend-dialog"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="rdm-extend-dialog-body">
               <h3 className="rdm-extend-dialog-title">Extend Move-in Date</h3>
@@ -617,9 +583,9 @@ export default function ReservationDetailsModal({
                   min="1"
                   max="30"
                   value={extendDays}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setExtendDays(
-                      Math.max(1, Math.min(30, Number(e.target.value) || 1)),
+                      Math.max(1, Math.min(30, Number(event.target.value) || 1)),
                     )
                   }
                   className="rdm-extend-dialog-input"
@@ -661,7 +627,7 @@ export default function ReservationDetailsModal({
 
       <ConfirmModal
         isOpen={confirmModal.open}
-        onClose={() => setConfirmModal((p) => ({ ...p, open: false }))}
+        onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}

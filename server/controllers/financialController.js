@@ -15,6 +15,7 @@
 
 import { Bill, Room, Reservation, User } from "../models/index.js";
 import dayjs from "dayjs";
+import { reservationStatusesForQuery } from "../utils/lifecycleNaming.js";
 
 // ============================================================================
 // GET /api/financial/overview
@@ -31,7 +32,7 @@ export const getOverview = async (req, res, next) => {
 
     // ── 1. Fetch active reservations (scoped by branch if requested) ──
     const reservationFilter = {
-      status: { $in: ["confirmed", "checked-in"] },
+      status: { $in: reservationStatusesForQuery("reserved", "moveIn") },
       isArchived: false,
     };
     if (branch && branch !== "all") reservationFilter.branch = branch;

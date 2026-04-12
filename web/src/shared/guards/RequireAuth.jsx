@@ -10,7 +10,7 @@
  *   <Route path="/protected" element={<RequireAuth><ProtectedPage /></RequireAuth>} />
  *
  * Note: This only checks if user is authenticated, not their role.
- * For role-specific guards, use RequireAdmin or RequireSuperAdmin.
+ * For role-specific guards, use RequireAdmin or RequireOwner.
  * =============================================================================
  */
 

@@ -1,14 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import financialApi from "../../api/financialApi.js";
+import { financialApi } from "../../api/financialApi";
+import { queryKeys } from "../../lib/queryKeys";
 
-/**
- * Owner-only: financial overview KPIs + per-room breakdown.
- * @param {string} branch - branch filter, or "all" / undefined for all branches
- */
-export function useFinancialOverview(branch) {
+export function useFinancialOverview(branch = "all") {
   return useQuery({
-    queryKey: ["financial", "overview", branch || "all"],
+    queryKey: queryKeys.financial.overview(branch),
     queryFn: () => financialApi.getOverview(branch),
-    staleTime: 60_000, // 1-minute cache — financial data doesn't need real-time
   });
 }

@@ -8,11 +8,11 @@
  * WORKFLOW:
  * 1. User creates reservation (status: pending)
  * 2. User completes visit + details + payment (status: reserved)
- * 3. Admin verifies move-in (status: checked-in)
- * 4. Tenant checks out (status: checked-out)
+ * 3. Admin verifies move-in (status: moveIn)
+ * 4. Tenant moves out (status: moveOut)
  *
  * CANCELLATION:
- * - Reservations can be cancelled before check-in
+ * - Reservations can be cancelled before move-in
  * - Cancelled reservations remain in system for records
  *
  * PAYMENT:
@@ -27,6 +27,22 @@
  */
 
 import mongoose from "mongoose";
+import {
+  CANONICAL_RESERVATION_STATUSES,
+  normalizeReservationStatus,
+} from "../utils/lifecycleNaming.js";
+
+const CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const RESERVATION_CODE_PREFIX = "RES-";
+const VISIT_CODE_PREFIX = "VIS-";
+
+const generateRandomCode = (prefix, length = 6) => {
+  let code = prefix;
+  for (let i = 0; i < length; i++) {
+    code += CODE_CHARS.charAt(Math.floor(Math.random() * CODE_CHARS.length));
+  }
+  return code;
+};
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -251,9 +267,17 @@ const reservationSchema = new mongoose.Schema(
     },
 
     // --- Reservation Dates & Pricing ---
-    checkInDate: {
+    moveInDate: {
       type: Date,
       required: true,
+    },
+    checkInDate: {
+      type: Date,
+      default: null,
+    },
+    moveOutDate: {
+      type: Date,
+      default: null,
     },
     checkOutDate: {
       type: Date,
@@ -305,18 +329,9 @@ const reservationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "pending",
-        "visit_pending",
-        "visit_approved",
-        "payment_pending",
-        "reserved",
-        "checked-in",
-        "checked-out",
-        "cancelled",
-        "archived",
-      ],
+      enum: CANONICAL_RESERVATION_STATUSES,
       default: "pending",
+      set: normalizeReservationStatus,
     },
 
     // --- Overdue Move-In Tracking ---
@@ -389,44 +404,16 @@ const reservationSchema = new mongoose.Schema(
  */
 reservationSchema.pre("save", async function (next) {
   if (this.status === "reserved" && !this.reservationCode) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     const Reservation = mongoose.model("Reservation");
-
-    for (let attempt = 0; attempt < 5; attempt++) {
-      let code = "RES-";
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-
-      // Check if code already exists
-      const exists = await Reservation.findOne({
-        reservationCode: code,
-      }).lean();
-      if (!exists) {
-        this.reservationCode = code;
-        break;
-      }
-    }
-
-    if (!this.reservationCode) {
-      return next(
-        new Error(
-          "Failed to generate unique reservation code after 5 attempts",
-        ),
-      );
-    }
+    this.reservationCode = await Reservation.generateUniqueReservationCode();
   }
 
   // Generate visitCode when visitDate is first set (visit scheduling stage)
   if (this.visitDate && !this.visitCode) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     const Reservation = mongoose.model("Reservation");
 
     for (let attempt = 0; attempt < 5; attempt++) {
-      let code = "VIS-";
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
+      const code = generateRandomCode(VISIT_CODE_PREFIX);
       const exists = await Reservation.findOne({ visitCode: code }).lean();
       if (!exists) {
         this.visitCode = code;
@@ -443,6 +430,20 @@ reservationSchema.pre("save", async function (next) {
   next();
 });
 
+reservationSchema.pre("validate", function (next) {
+  if (!this.moveInDate && this.checkInDate) {
+    this.moveInDate = this.checkInDate;
+  }
+  if (!this.moveOutDate && this.checkOutDate) {
+    this.moveOutDate = this.checkOutDate;
+  }
+  if (this.status) {
+    this.status = normalizeReservationStatus(this.status);
+  }
+
+  next();
+});
+
 // NOTE: post('save') hook removed — it queried Room.findById() but never acted
 // on the result. Occupancy is managed atomically in controllers via occupancyManager.js.
 
@@ -453,13 +454,21 @@ reservationSchema.pre("save", async function (next) {
 // Lookup: user's reservations filtered by status (most common query pattern)
 reservationSchema.index({ userId: 1, status: 1 });
 // Lookup: room availability — which reservations are on a given room+date
-reservationSchema.index({ roomId: 1, checkInDate: 1 });
+reservationSchema.index({ roomId: 1, moveInDate: 1 });
 // Admin listing: filter by status + archive flag together (avoids COLLSCAN)
 reservationSchema.index({ status: 1, isArchived: 1 });
-// Room-level status queries (e.g. find all checked-in reservations for a room)
+// Room-level status queries (e.g. find all moved-in reservations for a room)
 reservationSchema.index({ roomId: 1, status: 1 });
 // Overdue move-in cron: finds reserved + non-archived by move-in date
 reservationSchema.index({ status: 1, targetMoveInDate: 1 });
+reservationSchema.index(
+  { paymongoSessionId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
+);
+reservationSchema.index(
+  { paymongoPaymentId: 1 },
+  { sparse: true, partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
+);
 // REMOVED: { branch: 1, status: 1, isArchived: 1 } — phantom index.
 // Reservation has no 'branch' field; branch lives on the Room document.
 // Use roomId → Room.branch for any branch-level billing queries.
@@ -498,12 +507,12 @@ reservationSchema.methods.cancel = async function () {
 
 /**
  * Check if this reservation counts toward room occupancy
- * (confirmed or checked-in reservations count as occupied)
+ * (reserved or moveIn reservations count as occupied)
  */
 reservationSchema.methods.countsTowardOccupancy = function () {
   return (
     !this.isArchived &&
-    (this.status === "reserved" || this.status === "checked-in")
+    (this.status === "reserved" || this.status === "moveIn")
   );
 };
 
@@ -560,6 +569,20 @@ reservationSchema.statics.findOverdueMoveIns = function () {
       { moveInExtendedTo: { $ne: null, $lt: now } },
     ],
   });
+};
+
+reservationSchema.statics.generateUniqueReservationCode = async function () {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateRandomCode(RESERVATION_CODE_PREFIX);
+    const exists = await this.findOne({ reservationCode: code })
+      .select("_id")
+      .lean();
+    if (!exists) {
+      return code;
+    }
+  }
+
+  throw new Error("Failed to generate unique reservation code after 5 attempts");
 };
 
 

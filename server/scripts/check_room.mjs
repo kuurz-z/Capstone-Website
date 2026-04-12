@@ -19,7 +19,7 @@ room.beds.forEach(b => {
 
 const res = await Reservation.find({
   roomId: room._id,
-  status: { $in: ['checked-in', 'confirmed', 'pending'] }
+  status: { $in: ['moveIn', 'reserved', 'pending'] }
 }).lean();
 
 console.log('\nActive reservations:', res.length);

@@ -20,6 +20,7 @@
  */
 
 import mongoose from "mongoose";
+import { ROOM_BRANCHES } from "../config/branches.js";
 
 const billingPeriodSchema = new mongoose.Schema(
   {
@@ -32,7 +33,7 @@ const billingPeriodSchema = new mongoose.Schema(
     },
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       required: true,
       index: true,
     },

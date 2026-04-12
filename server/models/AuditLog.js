@@ -119,7 +119,16 @@ const auditLogSchema = new mongoose.Schema(
     // --- Entity Reference (for data operations) ---
     entityType: {
       type: String,
-      enum: ["user", "room", "reservation", "inquiry", "billing", "system", ""],
+      enum: [
+        "user",
+        "room",
+        "reservation",
+        "inquiry",
+        "billing",
+        "announcement",
+        "system",
+        "",
+      ],
     },
     entityId: {
       type: String,

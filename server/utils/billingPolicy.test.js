@@ -1,6 +1,8 @@
 import { describe, expect, test } from "@jest/globals";
 import {
   buildBillingCycle,
+  getVisibleBillCharges,
+  getVisibleBillSnapshot,
   getNextUtilityCycleBoundary,
   getNextWorkingDay,
   getPreviousUtilityCycleBoundary,
@@ -116,6 +118,100 @@ describe("syncBillAmounts", () => {
     expect(bill.remainingAmount).toBe(0);
     expect(bill.status).toBe("paid");
     expect(bill.paymentDate).toBeInstanceOf(Date);
+  });
+
+  test("hides unsent utility charges from the payable total while keeping raw charges intact", () => {
+    const bill = {
+      status: "pending",
+      dueDate: new Date("2026-06-05T00:00:00.000Z"),
+      charges: {
+        rent: 3500,
+        electricity: 900,
+        water: 300,
+        applianceFees: 0,
+        corkageFees: 0,
+        penalty: 0,
+        discount: 0,
+      },
+      utilityDispatch: {
+        electricity: { state: "sent", amount: 900 },
+        water: { state: "draft", amount: 300 },
+      },
+      reservationCreditApplied: 0,
+      paidAmount: 0,
+      paymentDate: null,
+    };
+
+    expect(getVisibleBillCharges(bill)).toEqual({
+      rent: 3500,
+      electricity: 900,
+      water: 0,
+      applianceFees: 0,
+      corkageFees: 0,
+      penalty: 0,
+      discount: 0,
+    });
+
+    syncBillAmounts(bill);
+
+    expect(bill.charges.water).toBe(300);
+    expect(bill.totalAmount).toBe(4400);
+    expect(bill.remainingAmount).toBe(4400);
+  });
+
+  test("reopens a previously paid bill when a later utility becomes visible", () => {
+    const bill = {
+      status: "paid",
+      dueDate: new Date("2026-06-05T00:00:00.000Z"),
+      issuedAt: new Date("2026-05-29T00:00:00.000Z"),
+      charges: {
+        rent: 0,
+        electricity: 1000,
+        water: 500,
+        applianceFees: 0,
+        corkageFees: 0,
+        penalty: 0,
+        discount: 0,
+      },
+      utilityDispatch: {
+        electricity: {
+          state: "sent",
+          amount: 1000,
+          issuedAt: new Date("2026-05-29T00:00:00.000Z"),
+          dueDate: new Date("2026-06-05T00:00:00.000Z"),
+        },
+        water: {
+          state: "draft",
+          amount: 500,
+        },
+      },
+      reservationCreditApplied: 0,
+      paidAmount: 1000,
+      paymentDate: new Date("2026-06-01T00:00:00.000Z"),
+    };
+
+    syncBillAmounts(bill);
+    expect(bill.status).toBe("paid");
+    expect(bill.totalAmount).toBe(1000);
+
+    bill.utilityDispatch.water = {
+      state: "sent",
+      amount: 500,
+      issuedAt: new Date("2026-06-10T00:00:00.000Z"),
+      dueDate: new Date("2026-06-17T00:00:00.000Z"),
+    };
+    const reopened = getVisibleBillSnapshot(bill);
+
+    expect(reopened.totalAmount).toBe(1500);
+    expect(reopened.remainingAmount).toBe(500);
+    expect(reopened.status).toBe("partially-paid");
+
+    syncBillAmounts(bill);
+
+    expect(bill.totalAmount).toBe(1500);
+    expect(bill.remainingAmount).toBe(500);
+    expect(bill.status).toBe("partially-paid");
+    expect(bill.paymentDate).toBeNull();
   });
 });
 

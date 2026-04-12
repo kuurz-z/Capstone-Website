@@ -314,7 +314,13 @@ Authentication-aware routing now follows this structure:
   Restricts owner-only admin routes such as `/admin/branches`, `/admin/roles`, `/admin/settings`, `/admin/financial`, and `/admin/dashboard/super`.
 
 - `RequireSuperAdmin`
-  Legacy alias that now delegates to `RequireOwner`.
+  Legacy alias that now delegates to `RequireOwner`. Prefer `RequireOwner` in all new code and docs.
+
+### Permission Resolution
+
+- Persisted admin permissions are evaluated first.
+- Owners bypass permission checks.
+- Branch-admin role defaults are still used only as a transitional fallback for older accounts without explicit saved permissions.
 
 - `ProtectedRoute`
   Shared role-aware wrapper used for applicant/tenant/public gating.

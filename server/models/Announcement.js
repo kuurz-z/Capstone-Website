@@ -20,6 +20,11 @@
  */
 
 import mongoose from "mongoose";
+import {
+  ANNOUNCEMENT_CATEGORIES,
+  ANNOUNCEMENT_TARGET_BRANCHES,
+  ANNOUNCEMENT_VISIBILITY,
+} from "../config/announcements.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -40,7 +45,7 @@ const announcementSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["reminder", "maintenance", "policy", "event", "alert", "general"],
+      enum: ANNOUNCEMENT_CATEGORIES,
       required: true,
       index: true,
     },
@@ -48,13 +53,13 @@ const announcementSchema = new mongoose.Schema(
     // --- Targeting & Visibility ---
     targetBranch: {
       type: String,
-      enum: ["both", "gil-puyat", "guadalupe"],
+      enum: ANNOUNCEMENT_TARGET_BRANCHES,
       default: "both",
       index: true,
     },
     visibility: {
       type: String,
-      enum: ["public", "tenants-only", "staff-only"],
+      enum: ANNOUNCEMENT_VISIBILITY,
       default: "public",
       index: true,
     },
@@ -166,6 +171,14 @@ announcementSchema.statics.findForBranch = function (branch, options = {}) {
     isArchived: false,
   };
 
+  if (options.category) {
+    query.category = options.category;
+  }
+
+  if (Array.isArray(options.visibilities) && options.visibilities.length > 0) {
+    query.visibility = { $in: options.visibilities };
+  }
+
   return this.find(query)
     .sort({ isPinned: -1, publishedAt: -1 })
     .limit(options.limit || 50);
@@ -186,10 +199,12 @@ announcementSchema.statics.getUnacknowledgedForUser = async function (
   const acknowledged = await AcknowledgmentAccount.find({
     userId,
     announcementId: { $in: requiresAck.map((a) => a._id) },
+    isAcknowledged: true,
   }).distinct("announcementId");
+  const acknowledgedSet = new Set(acknowledged.map((value) => String(value)));
 
   // Return unacknowledged
-  return requiresAck.filter((a) => !acknowledged.includes(a._id.toString()));
+  return requiresAck.filter((a) => !acknowledgedSet.has(String(a._id)));
 };
 
 // Get engagement stats by category (for AI analysis)

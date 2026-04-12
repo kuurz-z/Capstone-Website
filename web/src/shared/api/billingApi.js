@@ -56,15 +56,6 @@ export const billingApi = {
     authFetch(`/billing/rooms${branch ? `?branch=${branch}` : ""}`),
 
   /**
-   * Generate room-based bills (admin only)
-   */
-  generateRoomBill: (billData) =>
-    authFetch("/billing/generate-room", {
-      method: "POST",
-      body: JSON.stringify(billData),
-    }),
-
-  /**
    * Apply penalties to overdue bills (admin only)
    */
   applyPenalties: () =>
@@ -74,6 +65,15 @@ export const billingApi = {
    * Get billing report (admin only)
    */
   getBillingReport: () => authFetch("/billing/report"),
+
+  getPendingVerifications: (branch = null) =>
+    authFetch(`/billing/pending-verifications${branch ? `?branch=${branch}` : ""}`),
+
+  verifyPayment: (billId, data) =>
+    authFetch(`/billing/${billId}/verify`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   // ── PayMongo Online Payment ──
 

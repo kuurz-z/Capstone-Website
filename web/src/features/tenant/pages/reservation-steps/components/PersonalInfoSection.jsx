@@ -25,7 +25,6 @@ const PersonalInfoSection = ({
   validIDFront, setValidIDFront,
   validIDBack, setValidIDBack,
   nbiClearance, setNbiClearance,
-  nbiReason, setNbiReason,
   personalNotes, setPersonalNotes,
   handleNameInput, handlePhoneInput, handleGeneralInput,
   validateField, fieldErrors,
@@ -225,18 +224,6 @@ const PersonalInfoSection = ({
         onChange={setNbiClearance}
         hint="NBI Clearance or additional valid ID"
       />
-      <div className="form-group" style={{ marginTop: "12px" }}>
-        <label className="form-label">
-          If not yet available, please indicate reason below
-        </label>
-        <textarea
-          className="form-textarea"
-          value={nbiReason}
-          onChange={(e) => setNbiReason(e.target.value)}
-          placeholder="You may also put 'N/A' if already submitted"
-          maxLength={300}
-        />
-      </div>
     </div>
 
     {/* Notes */}

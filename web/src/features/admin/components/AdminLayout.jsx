@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
 import NotificationBell from "../../../shared/components/NotificationBell";
+import useSocketClient from "../../../shared/hooks/useSocketClient";
 import "../styles/admin-layout.css";
 import "../styles/admin-common.css";
 
@@ -11,18 +12,31 @@ const PAGE_TITLES = {
   "/admin/reservations": "Reservations",
   "/admin/tenants": "Tenants",
   "/admin/users": "Accounts",
-  "/admin/room-availability": "Rooms",
+  "/admin/room-availability": "Room Management",
   "/admin/audit-logs": "Activity Log",
   "/admin/billing": "Billing",
-  "/admin/financial": "Financial Overview",
+  "/admin/announcements": "Announcements",
   "/admin/branches": "Branches",
   "/admin/roles": "Permissions",
   "/admin/settings": "Settings",
 };
 
+function getPageTitle(location) {
+  if (location.pathname === "/admin/room-availability") {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab") || "rooms";
+    if (tab === "occupancy") return "Room Occupancy";
+    if (tab === "forecast") return "Vacancy Forecast";
+    return "Room Management";
+  }
+
+  return PAGE_TITLES[location.pathname] || "Admin";
+}
+
 const COLLAPSE_STORAGE_KEY = "sidebar-collapsed";
 
 export default function AdminLayout() {
+  useSocketClient();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
@@ -33,7 +47,7 @@ export default function AdminLayout() {
     }
   });
 
-  const pageTitle = PAGE_TITLES[location.pathname] || "Admin";
+  const pageTitle = getPageTitle(location);
 
   const handleToggleCollapse = () => {
     setCollapsed((prev) => {

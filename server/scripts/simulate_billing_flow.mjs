@@ -3,10 +3,10 @@
  * BILLING FLOW SIMULATION — DRY RUN (READ-ONLY)
  * ============================================================================
  *
- * This script traces what WOULD happen from check-in → billing without
+ * This script traces what WOULD happen from move-in → billing without
  * writing anything to the database.
  *
- * - If checked-in tenants exist in DB, uses real data.
+ * - If moved-in tenants exist in DB, uses real data.
  * - If not, falls back to MOCK mode using the first available room + user.
  *
  * Run: node scripts/simulate_billing_flow.mjs
@@ -57,10 +57,10 @@ async function main() {
   await mongoose.connect(process.env.MONGODB_URI, { dbName: process.env.DB_NAME || "lilycrest" });
   console.log("\n  🔌 Connected to MongoDB (read-only mode)");
 
-  // ─── STEP 1: Find a checked-in reservation ────────────────────────────────
-  section("STEP 1 — Find a checked-in tenant");
+  // ─── STEP 1: Find a moved-in reservation ────────────────────────────────
+  section("STEP 1 — Find a moved-in tenant");
 
-  const reservation = await Reservation.findOne({ status: "checked-in", isArchived: { $ne: true } })
+  const reservation = await Reservation.findOne({ status: "moveIn", isArchived: { $ne: true } })
     .populate("userId", "firstName lastName email")
     .populate("roomId", "name branch type capacity beds price monthlyPrice")
     .lean();
@@ -69,7 +69,7 @@ async function main() {
   let tenant, room;
 
   if (!reservation) {
-    warn("No checked-in reservations found in DB — switching to MOCK mode.");
+    warn("No moved-in reservations found in DB — switching to MOCK mode.");
     MOCK_MODE = true;
 
     // Pull any available room and user to use as stand-ins
@@ -115,21 +115,21 @@ async function main() {
   }
 
   if (MOCK_MODE) {
-    console.log("\n  ⚡ MOCK MODE — Using stand-in data (no real check-in in DB)");
+    console.log("\n  ⚡ MOCK MODE — Using stand-in data (no real move-in in DB)");
   }
 
   ok(`Tenant: ${tenant?.firstName} ${tenant?.lastName} (${tenant?.email})`);
   ok(`Room: ${room?.name} | Branch: ${room?.branch} | Type: ${room?.type}`);
-  ok(`Check-in date: ${dayjs(reservation.checkInDate).format("MMMM D, YYYY")}${MOCK_MODE ? " (simulated)" : ""}`);
+  ok(`Move-in date: ${dayjs(reservation.checkInDate).format("MMMM D, YYYY")}${MOCK_MODE ? " (simulated)" : ""}`);
   ok(`Lease duration: ${reservation.leaseDuration || "Not set"} month(s)`);
   ok(`Monthly rent: ${fmt(reservation.monthlyRent || reservation.totalPrice)}`);
 
-  // ─── STEP 2: What happened at check-in? ───────────────────────────────────
-  section("STEP 2 — What happens at check-in (status → 'checked-in')");
+  // ─── STEP 2: What happened at move-in? ───────────────────────────────────
+  section("STEP 2 — What happens at move-in (status → 'moveIn')");
 
-  info("Checking in does NOT create a bill automatically.");
-  info("The only thing that happens at check-in:");
-  console.log("    1. Reservation.status → 'checked-in'");
+  info("Moving in does NOT create a bill automatically.");
+  info("The only thing that happens at move-in:");
+  console.log("    1. Reservation.status → 'moveIn'");
   console.log("    2. Bed marked as occupied (occupiedBy) in the Room document");
   console.log("    3. Room.currentOccupancy incremented via occupancyManager");
   console.log("    4. If meterReading is passed: a MeterReading (move-in event) is recorded");
@@ -204,15 +204,15 @@ async function main() {
     info(`No bill exists yet for ${monthLabel}. Simulating what would be created...`);
   }
 
-  // Find all checked-in tenants in the same room (for pro-rata split)
+  // Find all moved-in tenants in the same room (for pro-rata split)
   const roomReservations = await Reservation.find({
     roomId: room._id,
-    status: "checked-in",
+    status: "moveIn",
     isArchived: { $ne: true },
   }).populate("userId", "firstName lastName").lean();
 
   const tenantCount = roomReservations.length;
-  info(`Room has ${tenantCount} checked-in tenant(s) — pro-rata split applies`);
+  info(`Room has ${tenantCount} moved-in tenant(s) — pro-rata split applies`);
 
   // Simulate charges (using example utility values)
   const EXAMPLE_ELECTRICITY = 800; // ₱ total room electricity
@@ -267,8 +267,8 @@ async function main() {
   section("STEP 6 — What admin must do to create a real bill");
 
   console.log("  The billing flow is FULLY MANUAL. Here's the sequence:\n");
-  console.log("  A. Admin marks tenant as 'checked-in' (with optional meterReading)");
-  console.log("     → Reservation.status = 'checked-in'");
+  console.log("  A. Admin marks tenant as 'moveIn' (with optional meterReading)");
+  console.log("     → Reservation.status = 'moveIn'");
   console.log("     → Bed occupied, occupancy incremented");
   console.log("     → If meterReading given: MeterReading (move-in event) recorded\n");
   console.log("  B. (Electricity only) Admin opens a BillingPeriod for the room");

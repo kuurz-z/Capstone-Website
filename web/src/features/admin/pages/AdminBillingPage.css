@@ -109,6 +109,11 @@
   opacity: 1;
 }
 
+.admin-billing-tab:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .admin-billing-tab--publish.is-active {
   color: #7c3aed;
   border-color: #ddd6fe;
@@ -120,6 +125,8 @@
 }
 
 .admin-billing-page__workspace-panel {
+  display: grid;
+  gap: 12px;
   min-height: 680px;
 }
 
@@ -141,6 +148,9 @@
     flex: 1 1 140px;
     justify-content: center;
   }
+}
+
+@media (max-width: 560px) {
 }
 
 

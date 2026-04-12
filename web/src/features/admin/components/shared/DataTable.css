@@ -13,6 +13,8 @@
   border-radius: var(--radius-lg);
   background: var(--bg-card);
   box-shadow: var(--shadow-xs);
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Table ── */
@@ -76,6 +78,14 @@
   background: var(--bg-active);
 }
 
+.data-table__row--static {
+  cursor: default;
+}
+
+.data-table__row--static:hover {
+  background: transparent;
+}
+
 /* ── Cells ── */
 .data-table__td {
   padding: 13px 16px;
@@ -87,6 +97,17 @@
 
 .data-table__td--right { text-align: right; }
 .data-table__td--center { text-align: center; }
+
+/* Ensure action cells remain clickable even when rows create stacking contexts */
+.data-table__td[data-action-cell="true"] {
+  position: relative;
+  z-index: 2001;
+  pointer-events: auto;
+}
+
+.data-table__td[data-action-cell="true"] * {
+  pointer-events: auto;
+}
 
 /* ── Skeleton loading ── */
 .data-table__row--skeleton .data-table__td {

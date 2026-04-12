@@ -11,6 +11,8 @@
  * =============================================================================
  */
 
+import { BRANCH_DISPLAY_NAMES } from "./constants.js";
+
 /* ── Dates ────────────────────────────────────────────────────────────── */
 
 /**
@@ -117,8 +119,8 @@ export const fmtCurrency = (v) =>
 /* ── Branch / Room ────────────────────────────────────────────────────── */
 
 const BRANCH_MAP = {
-  "gil-puyat": "Gil Puyat",
-  guadalupe: "Guadalupe",
+  "gil-puyat": BRANCH_DISPLAY_NAMES["gil-puyat"],
+  guadalupe: BRANCH_DISPLAY_NAMES.guadalupe,
   general: "General",
 };
 const ROOM_TYPE_MAP = {

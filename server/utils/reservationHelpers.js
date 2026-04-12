@@ -9,6 +9,12 @@
 
 import dayjs from "dayjs";
 import { User, Room, Reservation } from "../models/index.js";
+import {
+  hasReservationStatus,
+  normalizeReservationStatus,
+  readMoveOutDate,
+  reservationStatusesForQuery,
+} from "./lifecycleNaming.js";
 
 /** Validate MongoDB ObjectId format */
 export const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
@@ -76,7 +82,7 @@ export const validateMoveInDate = (dateStr) => {
 };
 
 /**
- * Validate check-in prerequisites against the existing reservation document.
+ * Validate move-in prerequisites against the existing reservation document.
  * Returns an array of human-readable failure reasons (empty = all clear).
  *
  * Rules:
@@ -85,25 +91,25 @@ export const validateMoveInDate = (dateStr) => {
  *  3. A site visit must have been approved — UNLESS the tenant is flagged
  *     as out-of-town and has previously received visitApproved via admin.
  */
-export const getCheckinBlockers = (reservation) => {
+export const getMoveInBlockers = (reservation) => {
   const blockers = [];
 
-  if (reservation.status !== "reserved") {
+  if (!hasReservationStatus(reservation.status, "reserved")) {
     blockers.push(
-      `Reservation must be in "Reserved" state before check-in (currently "${reservation.status}").`
+      `Reservation must be in "Reserved" state before move-in (currently "${normalizeReservationStatus(reservation.status)}").`
     );
   }
 
   if (reservation.paymentStatus !== "paid") {
     blockers.push(
-      "Payment must be confirmed (status: Paid) before check-in."
+      "Payment must be confirmed (status: Paid) before move-in."
     );
   }
 
   const visitWaived = reservation.isOutOfTown === true;
   if (!reservation.visitApproved && !visitWaived) {
     blockers.push(
-      "Site visit must be completed and approved by admin before check-in."
+      "Site visit must be completed and approved by admin before move-in."
     );
   }
 
@@ -111,7 +117,7 @@ export const getCheckinBlockers = (reservation) => {
 };
 
 /**
- * Handle status transitions (confirmed / checked-in / cancelled).
+ * Handle status transitions (reserved / moveIn / cancelled).
  * Centralises ~55 lines duplicated in updateReservation, releaseSlot, archiveReservation.
  *
  * Also syncs Firebase Custom Claims so the user's token reflects
@@ -123,7 +129,10 @@ export const handleStatusTransition = async (
   userId,
   roomId,
 ) => {
-  if (newStatus === oldStatus) return;
+  const normalizedNewStatus = normalizeReservationStatus(newStatus);
+  const normalizedOldStatus = normalizeReservationStatus(oldStatus);
+
+  if (normalizedNewStatus === normalizedOldStatus) return;
   const user = await User.findById(userId);
   if (!user) return;
 
@@ -140,16 +149,19 @@ export const handleStatusTransition = async (
     }
   };
 
-  if (newStatus === "reserved" && oldStatus !== "reserved") {
+  if (
+    normalizedNewStatus === "reserved" &&
+    normalizedOldStatus !== "reserved"
+  ) {
     // Reservation state is tracked in Reservation model, not on User.
     // Only set branch from room so user is associated with correct branch.
     const room = await Room.findById(roomId);
     if (room) user.branch = room.branch;
     await user.save();
-    await syncFirebaseClaims({ role: "applicant", tenantStatus: "none" });
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: "applicant" });
   }
 
-  if (newStatus === "checked-in" && oldStatus !== "checked-in") {
+  if (normalizedNewStatus === "moveIn" && normalizedOldStatus !== "moveIn") {
     user.role = "tenant";
     user.tenantStatus = "active";
     await user.save();
@@ -157,14 +169,14 @@ export const handleStatusTransition = async (
   }
 
   if (
-    newStatus === "cancelled" &&
-    oldStatus !== "cancelled" &&
+    normalizedNewStatus === "cancelled" &&
+    normalizedOldStatus !== "cancelled" &&
     user.role === "applicant"
   ) {
-    user.tenantStatus = "none";
+    user.tenantStatus = "applicant";
     user.branch = null;
     await user.save();
-    await syncFirebaseClaims({ role: "applicant", tenantStatus: "none" });
+    await syncFirebaseClaims({ role: "applicant", tenantStatus: "applicant" });
   }
 };
 
@@ -186,18 +198,41 @@ const getRoomBranch = async (roomId) => {
   return room?.branch || null;
 };
 
-const getFallbackLifecycleState = async (userId, excludedReservationId) => {
-  const findLatestReservation = async (status) =>
-    Reservation.findOne({
-      userId,
-      _id: { $ne: excludedReservationId },
-      status,
-      isArchived: { $ne: true },
-    })
-      .sort({ updatedAt: -1, createdAt: -1 })
-      .populate("roomId", "branch");
+const ACTIVE_TENANT_STAY_QUERY = (now = new Date()) => ({
+  status: { $in: reservationStatusesForQuery("moveIn") },
+  isArchived: { $ne: true },
+  $or: [{ moveOutDate: null }, { moveOutDate: { $gt: now } }],
+});
 
-  const checkedInReservation = await findLatestReservation("checked-in");
+const findLatestLifecycleReservation = async ({
+  userId,
+  statuses,
+  excludedReservationId,
+  includeOnlyTenantEligibleStay = false,
+}) => {
+  const query = {
+    userId,
+    isArchived: { $ne: true },
+    _id: { $ne: excludedReservationId },
+  };
+
+  if (includeOnlyTenantEligibleStay) {
+    Object.assign(query, ACTIVE_TENANT_STAY_QUERY());
+  } else {
+    query.status = { $in: reservationStatusesForQuery(statuses) };
+  }
+
+  return Reservation.findOne(query)
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .populate("roomId", "branch moveOutDate");
+};
+
+const getFallbackLifecycleState = async (userId, excludedReservationId) => {
+  const checkedInReservation = await findLatestLifecycleReservation({
+    userId,
+    excludedReservationId,
+    includeOnlyTenantEligibleStay: true,
+  });
   if (checkedInReservation) {
     return {
       role: "tenant",
@@ -206,27 +241,22 @@ const getFallbackLifecycleState = async (userId, excludedReservationId) => {
     };
   }
 
-  const reservedReservation = await findLatestReservation("reserved");
+  const reservedReservation = await findLatestLifecycleReservation({
+    userId,
+    statuses: "reserved",
+    excludedReservationId,
+  });
   if (reservedReservation) {
     return {
       role: "applicant",
-      tenantStatus: "none",
+      tenantStatus: "applicant",
       branch: reservedReservation.roomId?.branch || null,
-    };
-  }
-
-  const checkedOutReservation = await findLatestReservation("checked-out");
-  if (checkedOutReservation) {
-    return {
-      role: "applicant",
-      tenantStatus: "inactive",
-      branch: checkedOutReservation.roomId?.branch || null,
     };
   }
 
   return {
     role: "applicant",
-    tenantStatus: "none",
+    tenantStatus: "applicant",
     branch: null,
   };
 };
@@ -237,25 +267,36 @@ export const resolveReservationLifecycleState = async ({
   userId,
   reservationId,
 }) => {
-  switch (status) {
+  switch (normalizeReservationStatus(status)) {
     case "reserved":
       return {
         role: "applicant",
-        tenantStatus: "none",
+        tenantStatus: "applicant",
         branch: await getRoomBranch(roomId),
       };
-    case "checked-in":
+    case "moveIn":
+      if (reservationId) {
+        const reservation = await Reservation.findById(reservationId)
+          .select("roomId moveOutDate")
+          .populate("roomId", "branch");
+        const moveOutDate = readMoveOutDate(reservation);
+        if (moveOutDate && new Date(moveOutDate) <= new Date()) {
+          return getFallbackLifecycleState(userId, reservationId);
+        }
+
+        return {
+          role: "tenant",
+          tenantStatus: "active",
+          branch: reservation?.roomId?.branch || (await getRoomBranch(roomId)),
+        };
+      }
+
       return {
         role: "tenant",
         tenantStatus: "active",
         branch: await getRoomBranch(roomId),
       };
-    case "checked-out":
-      return {
-        role: "applicant",
-        tenantStatus: "inactive",
-        branch: await getRoomBranch(roomId),
-      };
+    case "moveOut":
     case "cancelled":
     case "archived":
       return getFallbackLifecycleState(userId, reservationId);
@@ -272,13 +313,16 @@ export const syncReservationUserLifecycle = async ({
   reservationId,
   force = false,
 }) => {
-  if (status === previousStatus && !force) return;
+  const normalizedStatus = normalizeReservationStatus(status);
+  const normalizedPreviousStatus = normalizeReservationStatus(previousStatus);
+
+  if (normalizedStatus === normalizedPreviousStatus && !force) return;
 
   const user = await User.findById(userId);
   if (!user) return;
 
   const nextState = await resolveReservationLifecycleState({
-    status,
+    status: normalizedStatus,
     roomId,
     userId,
     reservationId,
@@ -293,6 +337,65 @@ export const syncReservationUserLifecycle = async ({
     role: nextState.role,
     tenantStatus: nextState.tenantStatus,
   });
+};
+
+export const reconcileTenantUsersForScope = async ({ branch = null } = {}) => {
+  const query = { role: "tenant", isArchived: { $ne: true } };
+  if (branch) query.branch = branch;
+
+  const tenantUsers = await User.find(query)
+    .select("_id role tenantStatus branch")
+    .lean();
+
+  for (const tenantUser of tenantUsers) {
+    const activeStay = await findLatestLifecycleReservation({
+      userId: tenantUser._id,
+      includeOnlyTenantEligibleStay: true,
+    });
+
+    if (activeStay) {
+      const activeBranch = activeStay.roomId?.branch || null;
+      const branchMismatch =
+        String(tenantUser.branch || "") !== String(activeBranch || "");
+      const statusMismatch = tenantUser.tenantStatus !== "active";
+
+      if (branchMismatch || statusMismatch) {
+        await syncReservationUserLifecycle({
+          status: "moveIn",
+          previousStatus: "moveIn",
+          userId: tenantUser._id,
+          roomId: activeStay.roomId?._id || activeStay.roomId,
+          reservationId: activeStay._id,
+          force: true,
+        });
+      }
+      continue;
+    }
+
+    const reservedFallback = await findLatestLifecycleReservation({
+      userId: tenantUser._id,
+      statuses: "reserved",
+    });
+
+    if (reservedFallback) {
+      await syncReservationUserLifecycle({
+        status: "reserved",
+        previousStatus: "moveIn",
+        userId: tenantUser._id,
+        roomId: reservedFallback.roomId?._id || reservedFallback.roomId,
+        reservationId: reservedFallback._id,
+      });
+      continue;
+    }
+
+    await syncReservationUserLifecycle({
+      status: "cancelled",
+      previousStatus: "moveIn",
+      userId: tenantUser._id,
+      roomId: null,
+      reservationId: null,
+    });
+  }
 };
 
 /**
@@ -343,8 +446,8 @@ export const USER_UPDATE_FLAT_FIELDS = [
   "finalMoveInDate",
   "paymentMethod",
   "proofOfPaymentUrl",
-  "checkInDate",
-  "checkOutDate",
+  "moveInDate",
+  "moveOutDate",
   "totalPrice",
   "applianceFees",
   "notes",

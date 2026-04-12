@@ -28,32 +28,32 @@ const useNotificationStore = create((set, get) => ({
   setNotifications: (notifications) =>
     set({
       notifications,
-      unreadCount: notifications.filter((n) => !n.read).length,
+      unreadCount: notifications.filter((n) => !n.isRead).length,
     }),
 
   /** Add a new real-time notification (from Socket.IO) */
   addNotification: (notification) =>
     set((state) => ({
       notifications: [notification, ...state.notifications],
-      unreadCount: state.unreadCount + (notification.read ? 0 : 1),
+      unreadCount: state.unreadCount + (notification.isRead ? 0 : 1),
     })),
 
   /** Mark a single notification as read */
   markAsRead: (notificationId) =>
     set((state) => {
       const updated = state.notifications.map((n) =>
-        n._id === notificationId ? { ...n, read: true } : n,
+        n._id === notificationId ? { ...n, isRead: true } : n,
       );
       return {
         notifications: updated,
-        unreadCount: updated.filter((n) => !n.read).length,
+        unreadCount: updated.filter((n) => !n.isRead).length,
       };
     }),
 
   /** Mark all notifications as read */
   markAllAsRead: () =>
     set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      notifications: state.notifications.map((n) => ({ ...n, isRead: true })),
       unreadCount: 0,
     })),
 

@@ -179,7 +179,7 @@ export default function TenantTable({
         <div style={{ padding: "60px 24px", textAlign: "center" }}>
           <div style={{ fontSize: "32px", marginBottom: "12px", opacity: 0.4 }}>🏠</div>
           <div style={{ fontSize: "15px", fontWeight: "500", color: "#374151", marginBottom: "6px" }}>No tenants found</div>
-          <div style={{ fontSize: "13px", color: "#9CA3AF" }}>Tenants will appear here once applicants are checked in.</div>
+          <div style={{ fontSize: "13px", color: "#9CA3AF" }}>Tenants will appear here once applicants are moved in.</div>
         </div>
       ) : (
         tenants.map((tenant) => (

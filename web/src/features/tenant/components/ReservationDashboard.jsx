@@ -116,7 +116,7 @@ function getStepStatus(stepStage, currentStage, reservation) {
     if (stepStage === 2 && reservation?.scheduleRejected) {
       return "rejected";
     }
-    // Show "waiting" for step 2 only (visit pending admin check-in confirmation)
+    // Show "waiting" for step 2 only (visit pending admin move-in confirmation)
     if (stepStage === 2 && reservation) {
       const hasSchedule = reservation.visitDate || reservation.viewingType;
       const approved =
@@ -301,6 +301,19 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
   const action = getNextAction(reservation, currentStage);
   const [showCancelModal, setShowCancelModal] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!showCancelModal) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !isCancelling) {
+        setShowCancelModal(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCancelModal, isCancelling]);
 
   /* ── no reservation ──────────────────────────────────────────────────── */
   if (!reservation) {
@@ -584,28 +597,29 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
             onClick={() => setShowCancelModal(true)}
             style={styles.footerLinkDanger}
           >
-            Cancel Reservation
+            Cancel reservation
           </button>
         </div>
       )}
 
       {/* ── Cancel Confirmation Modal ─────────────────────────────────────── */}
       {showCancelModal && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalCard}>
-            <div style={styles.modalIcon}>⚠️</div>
-            <h3 style={styles.modalTitle}>Cancel Reservation?</h3>
+        <div
+          style={styles.modalOverlay}
+          onClick={() => {
+            if (!isCancelling) setShowCancelModal(false);
+          }}
+        >
+          <div style={styles.modalCard} onClick={(event) => event.stopPropagation()}>
+            <div style={styles.modalIcon}>
+              <AlertCircle size={36} strokeWidth={2.2} color="#B91C1C" aria-hidden="true" />
+            </div>
+            <h3 style={styles.modalTitle}>Cancel reservation?</h3>
             <p style={styles.modalDesc}>
               This will permanently remove your reservation for{" "}
               <strong>{roomName}</strong>. This action cannot be undone.
             </p>
             <div style={styles.modalActions}>
-              <button
-                onClick={() => setShowCancelModal(false)}
-                style={styles.modalBtnSecondary}
-              >
-                Keep Reservation
-              </button>
               <button
                 onClick={async () => {
                   setIsCancelling(true);
@@ -629,9 +643,16 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
                   opacity: isCancelling ? 0.6 : 1,
                 }}
               >
-                {isCancelling ? "Cancelling..." : "Yes, Cancel"}
+                {isCancelling ? "Cancelling..." : "Cancel reservation"}
+              </button>
+              <button
+                onClick={() => setShowCancelModal(false)}
+                style={styles.modalBtnSecondary}
+              >
+                Keep it
               </button>
             </div>
+            <p style={styles.modalHint}>Press Esc or click outside to dismiss</p>
           </div>
         </div>
       )}
@@ -993,7 +1014,9 @@ const styles = {
     textAlign: "center",
   },
   modalIcon: {
-    fontSize: 36,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
   },
   modalTitle: {
@@ -1011,6 +1034,11 @@ const styles = {
   modalActions: {
     display: "flex",
     gap: 12,
+  },
+  modalHint: {
+    fontSize: 13,
+    color: "var(--text-secondary, #64748B)",
+    margin: "14px 0 0",
   },
   modalBtnSecondary: {
     flex: 1,

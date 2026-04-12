@@ -1,7 +1,7 @@
 /**
  * heal_bed_status.mjs
  * One-time script: fixes beds that are stuck as "available" even though
- * the room has a "reserved" or "checked-in" reservation.
+ * the room has a "reserved" or "moveIn" reservation.
  *
  * Run: node scripts/heal_bed_status.mjs
  */
@@ -30,7 +30,7 @@ let healedBeds = 0;
 for (const room of rooms) {
   const reservations = await Reservation.find({
     roomId: room._id,
-    status: { $in: ["reserved", "checked-in"] },
+    status: { $in: ["reserved", "moveIn"] },
     isArchived: { $ne: true },
   }).lean();
 
@@ -44,14 +44,14 @@ for (const room of rooms) {
 
     const occupier = reservations.find((r) => r.selectedBed?.id === bed.id);
     if (occupier) {
-      const expectedStatus = occupier.status === "checked-in" ? "occupied" : "reserved";
+      const expectedStatus = occupier.status === "moveIn" ? "occupied" : "reserved";
       if (bed.status !== expectedStatus) {
         console.log(`  Room ${room.name} | Bed ${bed.id}: ${bed.status} → ${expectedStatus}`);
         bed.status = expectedStatus;
         bed.occupiedBy = {
           userId: occupier.userId,
           reservationId: occupier._id,
-          occupiedSince: occupier.status === "checked-in" ? (occupier.createdAt || new Date()) : null,
+          occupiedSince: occupier.status === "moveIn" ? (occupier.createdAt || new Date()) : null,
         };
         dirty = true;
         healedBeds++;

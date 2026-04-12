@@ -9,7 +9,7 @@
  *
  * What this script does:
  *   1. Loads every room from MongoDB
- *   2. Counts the actual active reservations per room (status: pending/reserved/checked-in)
+ *   2. Counts the actual active reservations per room (status: pending/reserved/moveIn)
  *   3. Compares the live count against `currentOccupancy` and `available`
  *   4. Writes corrections for any room that is out of sync
  *
@@ -69,7 +69,7 @@ async function main() {
   const ReservationModel = mongoose.model("_RepairReservation", reservationSchema);
   const RoomModel = mongoose.model("_RepairRoom", roomSchema);
 
-  const ACTIVE_STATUSES = ["pending", "reserved", "checked-in"];
+  const ACTIVE_STATUSES = ["pending", "reserved", "moveIn"];
 
   // Aggregate: count active reservations per room in a single DB call
   const counts = await ReservationModel.aggregate([

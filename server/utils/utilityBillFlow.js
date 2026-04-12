@@ -1,40 +1,99 @@
 import dayjs from "dayjs";
 import { Bill, Reservation, Room, User } from "../models/index.js";
-import { sendBillGeneratedEmail } from "../config/email.js";
+import {
+  sendBillGeneratedEmail,
+  sendUtilityChargeAvailableEmail,
+} from "../config/email.js";
 import {
   buildBillingCycle,
+  getUtilityDispatchEntry,
   getReservationCreditAvailable,
   getUtilityCycleFromPeriod,
   getUtilityDueDate,
   getUtilityIssueDate,
+  getVisibleBillCharges,
   roundMoney,
   syncBillAmounts,
 } from "./billingPolicy.js";
 import { notify } from "./notificationService.js";
 import { generateBillPdf } from "./pdfGenerator.js";
+import {
+  CURRENT_RESIDENT_STATUS_QUERY,
+  readMoveInDate,
+} from "./lifecycleNaming.js";
+
+const UTILITY_BILL_SEND_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.UTILITY_BILL_SEND_CONCURRENCY || 4),
+);
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const normalizedConcurrency = Math.max(1, Number(concurrency) || 1);
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (true) {
+      const current = cursor;
+      cursor += 1;
+      if (current >= items.length) break;
+      results[current] = await mapper(items[current], current);
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(normalizedConcurrency, Math.max(items.length, 1)) },
+      () => worker(),
+    ),
+  );
+
+  return results;
+}
 
 function getUtilityChargeField(utilityType) {
   return utilityType === "water" ? "water" : "electricity";
 }
 
+function setUtilityDispatchEntry(bill, utilityType, updates = {}) {
+  const current = getUtilityDispatchEntry(bill, utilityType);
+  bill.utilityDispatch = bill.utilityDispatch || {};
+  bill.utilityDispatch[utilityType] = {
+    state: "draft",
+    periodId: null,
+    publishedAt: null,
+    issuedAt: null,
+    dueDate: null,
+    amount: Number(current.amount || bill?.charges?.[utilityType] || 0),
+    ...current,
+    ...updates,
+  };
+}
+
+async function countReservationRentCycles(reservationId, excludeBillId = null) {
+  return Bill.countDocuments({
+    reservationId,
+    isArchived: false,
+    "charges.rent": { $gt: 0 },
+    ...(excludeBillId ? { _id: { $ne: excludeBillId } } : {}),
+  });
+}
+
 export async function getReservationBillingContextForUser(userId) {
   const reservation = await Reservation.findOne({
     userId,
-    status: "checked-in",
+    status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
     isArchived: { $ne: true },
-  }).sort({ checkInDate: 1 });
+  }).sort({ moveInDate: 1 });
 
-  if (!reservation?.checkInDate) return null;
+  if (!readMoveInDate(reservation)) return null;
 
-  const existingCount = await Bill.countDocuments({
-    reservationId: reservation._id,
-    isArchived: false,
-  });
+  const existingCount = await countReservationRentCycles(reservation._id);
 
   return {
     reservation,
     existingCount,
-    cycle: buildBillingCycle(reservation.checkInDate, existingCount),
+    cycle: buildBillingCycle(readMoveInDate(reservation), existingCount),
     isFirstCycleBill: existingCount === 0,
     creditAvailable: getReservationCreditAvailable(reservation),
   };
@@ -44,18 +103,18 @@ export async function getReservationBillingContextForBill(bill) {
   if (!bill?.reservationId) return null;
 
   const reservation = await Reservation.findById(bill.reservationId);
-  if (!reservation?.checkInDate) return null;
+  const moveInDate = readMoveInDate(reservation);
+  if (!moveInDate) return null;
 
-  const existingCount = await Bill.countDocuments({
-    reservationId: reservation._id,
-    isArchived: false,
-    _id: { $ne: bill._id },
-  });
+  const existingCount = await countReservationRentCycles(
+    reservation._id,
+    bill._id,
+  );
 
   return {
     reservation,
     existingCount,
-    cycle: buildBillingCycle(reservation.checkInDate, existingCount),
+    cycle: buildBillingCycle(moveInDate, existingCount),
     isFirstCycleBill: existingCount === 0,
     creditAvailable: getReservationCreditAvailable(reservation),
   };
@@ -72,8 +131,11 @@ export async function upsertDraftBillsForUtility({
   const utilityCycle = getUtilityCycleFromPeriod(period);
 
   for (const summary of tenantSummaries || []) {
-    const billingContext = await getReservationBillingContextForUser(summary.tenantId);
-    const billingMonth = billingContext?.cycle?.billingMonth || period.startDate;
+    const billingContext = await getReservationBillingContextForUser(
+      summary.tenantId,
+    );
+    const billingMonth =
+      billingContext?.cycle?.billingMonth || period.startDate;
     const reservationId = billingContext?.reservation?._id || null;
 
     let bill = await Bill.findOne({
@@ -83,7 +145,7 @@ export async function upsertDraftBillsForUtility({
       isArchived: false,
     });
 
-    if (bill && bill.status !== "draft") {
+    if (bill && getUtilityDispatchEntry(bill, utilityType).state === "sent") {
       const error = new Error(
         `Cannot sync ${utilityType} charges because one or more bills were already sent.`,
       );
@@ -98,8 +160,12 @@ export async function upsertDraftBillsForUtility({
         branch: room.branch,
         roomId: room._id,
         billingMonth,
-        billingCycleStart: billingContext?.cycle?.billingCycleStart || period.startDate,
-        billingCycleEnd: billingContext?.cycle?.billingCycleEnd || period.endDate || period.startDate,
+        billingCycleStart:
+          billingContext?.cycle?.billingCycleStart || period.startDate,
+        billingCycleEnd:
+          billingContext?.cycle?.billingCycleEnd ||
+          period.endDate ||
+          period.startDate,
         utilityCycleStart: utilityCycle.utilityCycleStart,
         utilityCycleEnd: utilityCycle.utilityCycleEnd,
         utilityReadingDate: utilityCycle.utilityReadingDate,
@@ -123,6 +189,14 @@ export async function upsertDraftBillsForUtility({
     }
 
     bill.charges[chargeField] = roundMoney(summary.billAmount || 0);
+    setUtilityDispatchEntry(bill, utilityType, {
+      state: "draft",
+      periodId: period?._id || period?.id || null,
+      publishedAt: null,
+      issuedAt: null,
+      dueDate: null,
+      amount: roundMoney(summary.billAmount || 0),
+    });
     bill.utilityCycleStart = utilityCycle.utilityCycleStart;
     bill.utilityCycleEnd = utilityCycle.utilityCycleEnd;
     bill.utilityReadingDate = utilityCycle.utilityReadingDate;
@@ -139,7 +213,9 @@ export async function upsertDraftBillsForUtility({
 }
 
 export async function getDraftBillsForSummaryBillIds(tenantSummaries = []) {
-  const billIds = tenantSummaries.map((summary) => summary.billId).filter(Boolean);
+  const billIds = tenantSummaries
+    .map((summary) => summary.billId)
+    .filter(Boolean);
   if (billIds.length === 0) return [];
 
   return Bill.find({
@@ -165,11 +241,7 @@ function buildPdfBillingResult(result = {}) {
   };
 }
 
-export async function sendDraftUtilityBills({
-  bills,
-  period,
-  result,
-}) {
+export async function sendDraftUtilityBills({ bills, period, result }) {
   const sentAt = new Date();
   const utilityCycle = getUtilityCycleFromPeriod(period);
   const issuedAt = getUtilityIssueDate({
@@ -184,7 +256,9 @@ export async function sendDraftUtilityBills({
     { path: "roomId", select: "name roomNumber branch" },
   ]);
   const room = populatedBills[0]?.roomId
-    ? await Room.findById(populatedBills[0].roomId._id || populatedBills[0].roomId).lean()
+    ? await Room.findById(
+        populatedBills[0].roomId._id || populatedBills[0].roomId,
+      ).lean()
     : null;
   const billingResult = buildPdfBillingResult({
     ...result,
@@ -201,9 +275,19 @@ export async function sendDraftUtilityBills({
     );
 
     bill.reservationCreditApplied = reservationCreditApplied;
-    bill.billingMonth = billingContext?.cycle?.billingMonth || bill.billingMonth || period.startDate;
-    bill.billingCycleStart = billingContext?.cycle?.billingCycleStart || bill.billingCycleStart || period.startDate;
-    bill.billingCycleEnd = billingContext?.cycle?.billingCycleEnd || bill.billingCycleEnd || period.endDate || period.startDate;
+    bill.billingMonth =
+      billingContext?.cycle?.billingMonth ||
+      bill.billingMonth ||
+      period.startDate;
+    bill.billingCycleStart =
+      billingContext?.cycle?.billingCycleStart ||
+      bill.billingCycleStart ||
+      period.startDate;
+    bill.billingCycleEnd =
+      billingContext?.cycle?.billingCycleEnd ||
+      bill.billingCycleEnd ||
+      period.endDate ||
+      period.startDate;
     bill.utilityCycleStart = utilityCycle.utilityCycleStart;
     bill.utilityCycleEnd = utilityCycle.utilityCycleEnd;
     bill.utilityReadingDate = utilityCycle.utilityReadingDate;
@@ -253,7 +337,9 @@ export async function sendDraftUtilityBills({
       pdfError = error.message;
     }
 
-    const tenantName = [tenant?.firstName, tenant?.lastName].filter(Boolean).join(" ").trim() || "Tenant";
+    const tenantName =
+      [tenant?.firstName, tenant?.lastName].filter(Boolean).join(" ").trim() ||
+      "Tenant";
     const billingMonthLabel = bill.utilityCycleEnd
       ? dayjs(bill.utilityCycleEnd).format("MMMM YYYY")
       : dayjs(bill.billingMonth || issuedAt).format("MMMM YYYY");
@@ -269,7 +355,8 @@ export async function sendDraftUtilityBills({
         branchName: room?.branch || bill.branch || "Lilycrest",
       });
       if (!emailResult?.success) {
-        emailError = emailResult?.error || emailResult?.message || "Email delivery failed";
+        emailError =
+          emailResult?.error || emailResult?.message || "Email delivery failed";
       }
     }
 
@@ -297,4 +384,132 @@ export async function sendDraftUtilityBills({
   }
 
   return { sent, issuedAt, dueDate, sentAt, deliveries };
+}
+
+export async function sendUtilityPeriodBills({
+  bills,
+  period,
+  result,
+  utilityType,
+}) {
+  const chargeField = getUtilityChargeField(utilityType);
+  const publishedAt = new Date();
+  const utilityCycle = getUtilityCycleFromPeriod(period);
+  const issuedAt = getUtilityIssueDate({
+    readingDate: utilityCycle.utilityReadingDate,
+    finalizedAt: publishedAt,
+  });
+  const dueDate = getUtilityDueDate(issuedAt);
+  let sent = 0;
+  const deliveries = [];
+
+  const populatedBills = await Bill.populate(bills, [
+    { path: "userId", select: "firstName lastName email" },
+    { path: "roomId", select: "name roomNumber branch" },
+  ]);
+
+  const settledDeliveries = await mapWithConcurrency(
+    populatedBills,
+    UTILITY_BILL_SEND_CONCURRENCY,
+    async (bill) => {
+      const utilityAmount = roundMoney(bill?.charges?.[chargeField] || 0);
+      const currentDispatch = getUtilityDispatchEntry(bill, utilityType);
+      if (utilityAmount <= 0 || currentDispatch.state === "sent") {
+        return null;
+      }
+
+      setUtilityDispatchEntry(bill, utilityType, {
+        state: "sent",
+        periodId: period?._id || period?.id || currentDispatch.periodId || null,
+        publishedAt,
+        issuedAt,
+        dueDate,
+        amount: utilityAmount,
+      });
+
+      bill.utilityCycleStart = utilityCycle.utilityCycleStart;
+      bill.utilityCycleEnd = utilityCycle.utilityCycleEnd;
+      bill.utilityReadingDate = utilityCycle.utilityReadingDate;
+      bill.sentAt = publishedAt;
+      bill.issuedAt = issuedAt;
+      bill.dueDate = dueDate;
+      bill.paymongoSessionId = null;
+      syncBillAmounts(bill);
+      await bill.save();
+
+      const tenant =
+        bill.userId && typeof bill.userId === "object" ? bill.userId : null;
+      const tenantName =
+        [tenant?.firstName, tenant?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || "Tenant";
+      const billingMonthLabel = bill.utilityCycleEnd
+        ? dayjs(bill.utilityCycleEnd).format("MMMM YYYY")
+        : dayjs(bill.billingMonth || issuedAt).format("MMMM YYYY");
+      const dueDateLabel = dayjs(dueDate).format("MMMM D, YYYY");
+      const visibleCharges = getVisibleBillCharges(bill);
+      const visibleTotalAmount = bill.totalAmount;
+      let emailError = null;
+      let notificationError = null;
+
+      const [emailResult, notificationResult] = await Promise.allSettled([
+        tenant?.email
+          ? sendUtilityChargeAvailableEmail({
+              to: tenant.email,
+              tenantName,
+              utilityType,
+              billingMonth: billingMonthLabel,
+              utilityAmount,
+              totalAmount: visibleTotalAmount,
+              dueDate: dueDateLabel,
+              branchName: bill.roomId?.branch || bill.branch || "Lilycrest",
+            })
+          : Promise.resolve(null),
+        notify.utilityChargeAvailable(
+          bill.userId?._id || bill.userId,
+          utilityType,
+          billingMonthLabel,
+          utilityAmount,
+          visibleTotalAmount,
+          dueDateLabel,
+        ),
+      ]);
+
+      if (emailResult.status === "fulfilled" && emailResult.value) {
+        if (!emailResult.value?.success) {
+          emailError =
+            emailResult.value?.error ||
+            emailResult.value?.message ||
+            "Email delivery failed";
+        }
+      } else if (emailResult.status === "rejected") {
+        emailError = emailResult.reason?.message || "Email delivery failed";
+      }
+
+      if (notificationResult.status === "rejected") {
+        notificationError =
+          notificationResult.reason?.message || "Notification delivery failed";
+      }
+
+      return {
+        billId: bill._id,
+        tenantId: bill.userId?._id || bill.userId,
+        utilityType,
+        utilityAmount,
+        totalAmount: visibleTotalAmount,
+        visibleCharges,
+        emailError,
+        notificationError,
+      };
+    },
+  );
+
+  for (const delivery of settledDeliveries) {
+    if (!delivery) continue;
+    deliveries.push(delivery);
+    sent += 1;
+  }
+
+  return { sent, issuedAt, dueDate, publishedAt, deliveries };
 }

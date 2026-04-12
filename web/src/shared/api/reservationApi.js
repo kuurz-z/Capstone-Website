@@ -3,15 +3,23 @@
  */
 
 import { authFetch } from "./httpClient.js";
+import { normalizeLifecyclePayload } from "../utils/lifecycleNaming.js";
+
+const withLifecycleNormalization = (promise) =>
+  promise.then((payload) => normalizeLifecyclePayload(payload));
 
 export const reservationApi = {
   /**
    * Get all reservations
    */
-  getAll: () => authFetch("/reservations"),
+  getAll: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const url = queryString ? `/reservations?${queryString}` : "/reservations";
+    return withLifecycleNormalization(authFetch(url));
+  },
 
   /**
-   * Get current checked-in residents for admin tenants page
+   * Get current moved-in residents for admin tenants page
    */
   getCurrentResidents: (params = {}) => {
     const searchParams = new URLSearchParams();
@@ -19,49 +27,78 @@ export const reservationApi = {
       searchParams.set("branch", params.branch);
     }
     const query = searchParams.toString();
-    return authFetch(`/reservations/current-residents${query ? `?${query}` : ""}`);
+    return withLifecycleNormalization(
+      authFetch(`/reservations/current-residents${query ? `?${query}` : ""}`),
+    );
   },
+
+  /**
+   * Get tenancy workspace rows for the admin tenants page.
+   */
+  getTenantWorkspace: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.branch && params.branch !== "all") {
+      searchParams.set("branch", params.branch);
+    }
+    const query = searchParams.toString();
+    return authFetch(`/reservations/tenant-workspace${query ? `?${query}` : ""}`);
+  },
+
+  /**
+   * Get a single tenancy workspace detail payload.
+   */
+  getTenantWorkspaceById: (reservationId) =>
+    authFetch(`/reservations/tenant-workspace/${reservationId}`),
 
   /**
    * Get reservation by ID
    */
-  getById: (reservationId) => authFetch(`/reservations/${reservationId}`),
+  getById: (reservationId) =>
+    withLifecycleNormalization(authFetch(`/reservations/${reservationId}`)),
 
   /**
    * Create new reservation
    */
   create: (reservationData) =>
-    authFetch("/reservations", {
+    withLifecycleNormalization(
+      authFetch("/reservations", {
       method: "POST",
       body: JSON.stringify(reservationData),
-    }),
+      }),
+    ),
 
   /**
    * Update reservation (admin only)
    */
   update: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Update reservation (tenant only)
    */
   updateByUser: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/user`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/user`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Cancel reservation
    */
   cancel: (reservationId) =>
-    authFetch(`/reservations/${reservationId}`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}`, {
       method: "PUT",
       body: JSON.stringify({ status: "cancelled" }),
-    }),
+      }),
+    ),
 
   /**
    * Delete reservation
@@ -75,53 +112,75 @@ export const reservationApi = {
    * Extend reservation move-in date (admin only)
    */
   extend: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/extend`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/extend`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Release reservation slot (admin only)
    */
   release: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/release`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/release`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Archive (soft delete) reservation (admin only)
    */
   archive: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/archive`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/archive`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
    * Renew a tenant's contract / extend lease (admin only)
    */
   renew: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/renew`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/renew`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 
   /**
-   * Check out a tenant (admin only)
+   * Move out a tenant (admin only)
+   * Uses the legacy /checkout route for compatibility.
    */
-  checkout: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/checkout`, {
+  moveOut: (reservationId, data) =>
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/checkout`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
+
+  // Legacy alias for the move-out route.
+  checkout: (reservationId, data) =>
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/checkout`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+      }),
+    ),
 
   /**
    * Transfer tenant to a different room/bed (admin only)
    */
   transfer: (reservationId, data) =>
-    authFetch(`/reservations/${reservationId}/transfer`, {
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/transfer`, {
       method: "PUT",
       body: JSON.stringify(data),
-    }),
+      }),
+    ),
 };

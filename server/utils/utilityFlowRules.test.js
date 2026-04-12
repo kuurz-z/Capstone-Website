@@ -2,6 +2,7 @@ import { describe, expect, test } from "@jest/globals";
 import {
   buildTenantEventsForPeriod,
   filterBillableReservationsForPeriod,
+  findBedOccupancyOverlaps,
   findMissingElectricityLifecycleReadings,
   isWaterBillableRoom,
 } from "./utilityFlowRules.js";
@@ -21,28 +22,28 @@ describe("isWaterBillableRoom", () => {
 });
 
 describe("filterBillableReservationsForPeriod", () => {
-  test("keeps only overlapping checked-in and checked-out reservations", () => {
+  test("keeps only overlapping moved-in and moved-out reservations", () => {
     const reservations = [
       {
         _id: "res-1",
         userId: { _id: "tenant-1" },
-        status: "checked-in",
-        checkInDate: new Date("2026-03-10T00:00:00.000Z"),
-        checkOutDate: null,
+        status: "moveIn",
+        moveInDate: new Date("2026-03-10T00:00:00.000Z"),
+        moveOutDate: null,
       },
       {
         _id: "res-2",
         userId: { _id: "tenant-2" },
         status: "reserved",
-        checkInDate: new Date("2026-03-20T00:00:00.000Z"),
-        checkOutDate: null,
+        moveInDate: new Date("2026-03-20T00:00:00.000Z"),
+        moveOutDate: null,
       },
       {
         _id: "res-3",
         userId: { _id: "tenant-3" },
-        status: "checked-out",
-        checkInDate: new Date("2026-02-20T00:00:00.000Z"),
-        checkOutDate: new Date("2026-03-14T00:00:00.000Z"),
+        status: "moveOut",
+        moveInDate: new Date("2026-02-20T00:00:00.000Z"),
+        moveOutDate: new Date("2026-03-14T00:00:00.000Z"),
       },
     ];
 
@@ -62,22 +63,22 @@ describe("findMissingElectricityLifecycleReadings", () => {
       {
         _id: "res-1",
         userId: { _id: "tenant-1", firstName: "Ana", lastName: "MoveIn" },
-        status: "checked-in",
-        checkInDate: new Date("2026-03-20T00:00:00.000Z"),
-        checkOutDate: null,
+        status: "moveIn",
+        moveInDate: new Date("2026-03-20T00:00:00.000Z"),
+        moveOutDate: null,
       },
       {
         _id: "res-2",
         userId: { _id: "tenant-2", firstName: "Ben", lastName: "MoveOut" },
-        status: "checked-out",
-        checkInDate: new Date("2026-03-01T00:00:00.000Z"),
-        checkOutDate: new Date("2026-04-10T00:00:00.000Z"),
+        status: "moveOut",
+        moveInDate: new Date("2026-03-01T00:00:00.000Z"),
+        moveOutDate: new Date("2026-04-10T00:00:00.000Z"),
       },
     ];
     const readings = [
       {
         tenantId: "tenant-2",
-        eventType: "move-in",
+        eventType: "moveIn",
         reading: 120,
         date: new Date("2026-03-15T00:00:00.000Z"),
       },
@@ -90,8 +91,47 @@ describe("findMissingElectricityLifecycleReadings", () => {
     });
 
     expect(result.hasMissingReadings).toBe(true);
-    expect(result.missingMoveInReadings.map((entry) => entry.tenantId)).toEqual(["tenant-1"]);
-    expect(result.missingMoveOutReadings.map((entry) => entry.tenantId)).toEqual(["tenant-2"]);
+    expect(result.missingMoveInReadings.map((entry) => entry.tenantId)).toEqual(
+      ["tenant-1"],
+    );
+    expect(
+      result.missingMoveOutReadings.map((entry) => entry.tenantId),
+    ).toEqual(["tenant-2"]);
+  });
+
+  test("requires lifecycle readings to match the exact move event date", () => {
+    const reservations = [
+      {
+        _id: "res-1",
+        userId: { _id: "tenant-1", firstName: "Mina", lastName: "Exact" },
+        status: "moveIn",
+        moveInDate: new Date("2026-03-22T00:00:00.000Z"),
+        moveOutDate: null,
+      },
+    ];
+
+    const readings = [
+      {
+        tenantId: "tenant-1",
+        eventType: "moveIn",
+        reading: 140,
+        date: new Date("2026-03-21T00:00:00.000Z"),
+      },
+    ];
+
+    const result = findMissingElectricityLifecycleReadings({
+      period: basePeriod,
+      reservations,
+      readings,
+    });
+
+    expect(result.hasMissingReadings).toBe(true);
+    expect(result.missingMoveInReadings).toEqual([
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        reason: "missing exact-date move-in reading",
+      }),
+    ]);
   });
 });
 
@@ -101,28 +141,28 @@ describe("buildTenantEventsForPeriod", () => {
       {
         _id: "res-1",
         userId: { _id: "tenant-1", firstName: "Carry", lastName: "Over" },
-        status: "checked-in",
-        checkInDate: new Date("2026-03-01T00:00:00.000Z"),
-        checkOutDate: null,
+        status: "moveIn",
+        moveInDate: new Date("2026-03-01T00:00:00.000Z"),
+        moveOutDate: null,
       },
       {
         _id: "res-2",
         userId: { _id: "tenant-2", firstName: "New", lastName: "Arrival" },
-        status: "checked-out",
-        checkInDate: new Date("2026-03-20T00:00:00.000Z"),
-        checkOutDate: new Date("2026-04-05T00:00:00.000Z"),
+        status: "moveOut",
+        moveInDate: new Date("2026-03-20T00:00:00.000Z"),
+        moveOutDate: new Date("2026-04-05T00:00:00.000Z"),
       },
     ];
     const readings = [
       {
         tenantId: "tenant-2",
-        eventType: "move-in",
+        eventType: "moveIn",
         reading: 130,
         date: new Date("2026-03-20T00:00:00.000Z"),
       },
       {
         tenantId: "tenant-2",
-        eventType: "move-out",
+        eventType: "moveOut",
         reading: 165,
         date: new Date("2026-04-05T00:00:00.000Z"),
       },
@@ -146,5 +186,73 @@ describe("buildTenantEventsForPeriod", () => {
         moveOutReading: 165,
       }),
     ]);
+  });
+
+  test("anchors move-ins on cycle start date to period start reading", () => {
+    const reservations = [
+      {
+        _id: "res-start",
+        userId: {
+          _id: "tenant-start",
+          firstName: "Start",
+          lastName: "Day",
+        },
+        status: "moveIn",
+        moveInDate: new Date("2026-03-15T00:00:00.000Z"),
+        moveOutDate: null,
+      },
+    ];
+
+    const result = buildTenantEventsForPeriod({
+      period: basePeriod,
+      reservations,
+      readings: [],
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        tenantId: "tenant-start",
+        moveInReading: 100,
+        moveOutReading: null,
+      }),
+    ]);
+  });
+});
+
+describe("findBedOccupancyOverlaps", () => {
+  test("flags overlaps for the same bed during the billing scope", () => {
+    const reservations = [
+      {
+        _id: "res-1",
+        userId: { _id: "tenant-1", firstName: "Alex", lastName: "One" },
+        status: "moveIn",
+        selectedBed: { id: "bed-a" },
+        moveInDate: new Date("2026-03-18T00:00:00.000Z"),
+        moveOutDate: new Date("2026-04-05T00:00:00.000Z"),
+      },
+      {
+        _id: "res-2",
+        userId: { _id: "tenant-2", firstName: "Bea", lastName: "Two" },
+        status: "moveIn",
+        selectedBed: { id: "bed-a" },
+        moveInDate: new Date("2026-04-01T00:00:00.000Z"),
+        moveOutDate: null,
+      },
+    ];
+
+    const result = findBedOccupancyOverlaps({
+      reservations,
+      cycleStart: basePeriod.startDate,
+      cycleEnd: basePeriod.endDate,
+    });
+
+    expect(result.hasOverlaps).toBe(true);
+    expect(result.overlaps[0]).toEqual(
+      expect.objectContaining({
+        bedKey: "bed-a",
+        firstTenantName: "Alex One",
+        secondTenantName: "Bea Two",
+      }),
+    );
   });
 });

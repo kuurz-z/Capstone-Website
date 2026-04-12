@@ -45,7 +45,7 @@ export const auditApi = {
     authFetch(`/audit-logs/security/failed-logins?hours=${hours}`),
 
   /**
-   * Cleanup old logs (super admin only)
+   * Cleanup old logs (owner only)
    */
   cleanup: (daysToKeep = 90) =>
     authFetch(`/audit-logs/cleanup?daysToKeep=${daysToKeep}`, {

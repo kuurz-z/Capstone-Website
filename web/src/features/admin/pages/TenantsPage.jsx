@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
-import { Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Users, MoreHorizontal, LogOut, ArrowRightLeft, CreditCard } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useCurrentResidents } from "../../../shared/hooks/queries/useReservations";
+import { reservationApi } from "../../../shared/api/apiClient";
+import { showNotification } from "../../../shared/utils/notification";
 import {
   PageShell,
   SummaryBar,
@@ -10,8 +13,15 @@ import {
   StatusBadge,
   DetailDrawer,
 } from "../components/shared";
+import { formatBranch, formatRoomType } from "../utils/formatters";
+import {
+  readMoveInDate,
+  readMoveOutDate,
+} from "../../../shared/utils/lifecycleNaming";
 import "../styles/design-tokens.css";
 import "../styles/admin-tenants.css";
+
+const ITEMS_PER_PAGE = 10;
 
 const getInitials = (name) => {
   const parts = String(name || "")
@@ -24,112 +34,224 @@ const getInitials = (name) => {
   return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
 };
 
-const fmt = (branch) =>
-  branch === "gil-puyat" ? "Gil Puyat" : branch === "guadalupe" ? "Guadalupe" : "N/A";
+const fmtDate = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("en-PH", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "-";
 
-const fmtRoomType = (t) =>
-  t === "private" ? "Private" : t === "double-sharing" ? "Double Sharing" : t === "quadruple-sharing" ? "Quad Sharing" : t || "—";
+const getTenantStatus = (reservation) => {
+  const moveOutDate = readMoveOutDate(reservation);
+  if (moveOutDate) {
+    const daysLeft = Math.ceil((new Date(moveOutDate) - new Date()) / 86_400_000);
+    if (daysLeft <= 0) return { key: "overdue", label: "Overdue" };
+    if (daysLeft <= 30) return { key: "moving-out", label: "Moving Out" };
+  }
 
-const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—";
+  if (reservation.paymentStatus === "pending" || reservation.paymentStatus === "partial") {
+    return { key: "overdue", label: "Overdue" };
+  }
+
+  return { key: "active", label: "Active" };
+};
+
+const RowActionsMenu = ({ row, onSelect, actionLoading, handleRenew, handleTransfer, handleMoveOut }) => {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = () => setOpen(false);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [open]);
+
+  return (
+    <div className="tenant-row-actions" data-action-cell="true">
+      <button
+        type="button"
+        className="tenant-row-action tenant-row-action--primary"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(row);
+        }}
+      >
+        View Details
+      </button>
+
+      {row.reservationId ? (
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            className="tenant-row-action tenant-action-more"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((o) => !o);
+            }}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+
+          {open && (
+            <div className="tenant-action-dropdown">
+              <button
+                type="button"
+                className="tenant-dropdown-item"
+                disabled={actionLoading === `renew:${row.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRenew(row);
+                }}
+              >
+                <CreditCard size={14} /> Renew Lease
+              </button>
+              <button
+                type="button"
+                className="tenant-dropdown-item"
+                disabled={actionLoading === `transfer:${row.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTransfer(row);
+                }}
+              >
+                <ArrowRightLeft size={14} /> Transfer Room
+              </button>
+              <button
+                type="button"
+                className="tenant-dropdown-item tenant-dropdown-item--danger"
+                disabled={actionLoading === `moveout:${row.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMoveOut(row);
+                }}
+              >
+                <LogOut size={14} /> Move Out
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <span className="tenant-row-action-note">No active stay</span>
+      )}
+    </div>
+  );
+};
 
 export default function TenantsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   const isOwner = user?.role === "owner";
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState(isOwner ? "all" : user?.branch || "all");
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [actionLoading, setActionLoading] = useState(null);
 
   const currentResidentsParams = useMemo(
     () => ({
-      ...(isOwner && branchFilter !== "all" ? { branch: branchFilter } : {}),
+      ...((branchFilter && branchFilter !== "all") ? { branch: branchFilter } : {}),
     }),
-    [branchFilter, isOwner],
+    [branchFilter],
   );
 
-  const { data: currentResidentsData, isLoading } =
-    useCurrentResidents(currentResidentsParams);
+  const {
+    data: currentResidentsData,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useCurrentResidents(currentResidentsParams, {
+    enabled: !authLoading && !!user,
+  });
   const reservationsData = currentResidentsData?.residents || [];
+  const residentsLoading = authLoading || isLoading || isFetching;
 
   const tenants = useMemo(() => {
     const reservations = Array.isArray(reservationsData) ? reservationsData : [];
-
-    // Only checked-in reservations = current tenants
-    const checkedIn = reservations;
-
-    return checkedIn.map((res) => {
-      const u = res.userId || {};
-      const firstName = u.firstName || res.firstName || "";
-      const lastName = u.lastName || res.lastName || "";
-      const fullName = `${firstName} ${lastName}`.trim() || u.email || "Unknown";
-
-      // Billing status → display status
-      let tenantStatus = "Active";
-      if (res.paymentStatus === "pending" || res.paymentStatus === "partial") {
-        tenantStatus = "Overdue";
-      }
-      const room = res.roomId;
-      if (res.checkOutDate) {
-        const daysLeft = Math.ceil((new Date(res.checkOutDate) - new Date()) / 86_400_000);
-        if (daysLeft <= 30 && daysLeft > 0) tenantStatus = "Moving Out";
-        if (daysLeft <= 0) tenantStatus = "Overdue";
-      }
+    return reservations.map((reservation) => {
+      const profile = reservation.userId || {};
+      const room = reservation.roomId;
+      const firstName = profile.firstName || reservation.firstName || "";
+      const lastName = profile.lastName || reservation.lastName || "";
+      const fullName = `${firstName} ${lastName}`.trim() || profile.email || "Unknown";
+      const tenantStatus = getTenantStatus(reservation);
 
       return {
-        id: res.id || res.reservationId || res._id,
-        reservationId: res.reservationId || res._id,
-        reservationCode: res.reservationCode || "—",
-        userId: res.userId || u._id,
-        name: res.name || fullName,
-        initials: getInitials(res.name || fullName),
-        email: res.email || u.email || "N/A",
-        phone: res.phone || res.mobileNumber || u.phone || "N/A",
-        status: res.statusLabel || tenantStatus,
-        room: res.room || room?.name || room?.roomNumber || "Not Assigned",
-        roomId: res.roomId || room?._id,
-        branch: res.branch || fmt(room?.branch),
-        branchRaw: res.branchRaw || room?.branch || "",
-        floor: room?.floor || "—",
-        roomType: fmtRoomType(room?.type),
-        monthlyRent: res.monthlyRent || room?.price || null,
-        moveIn: fmtDate(res.checkInDate),
-        moveOut: fmtDate(res.checkOutDate),
-        bed: res.selectedBed?.position ? `${res.selectedBed.position.charAt(0).toUpperCase()}${res.selectedBed.position.slice(1)} Bed` : "—",
-        leaseDuration: res.leaseDuration ? `${res.leaseDuration} month${res.leaseDuration > 1 ? "s" : ""}` : "—",
-        // From reservation form
-        emergencyContact: res.emergencyContact?.name || "—",
-        emergencyPhone: res.emergencyContact?.contactNumber || "—",
-        emergencyRelation: res.emergencyContact?.relationship || "—",
-        nationality: res.nationality || "—",
-        maritalStatus: res.maritalStatus || "—",
-        school: res.employment?.employerSchool || "—",
-        occupation: res.employment?.occupation || "—",
+        id: reservation.id || reservation.reservationId || reservation._id,
+        reservationId: reservation.reservationId || reservation._id,
+        reservationCode: reservation.reservationCode || "-",
+        userId: reservation.userId || profile._id,
+        name: reservation.name || fullName,
+        initials: getInitials(reservation.name || fullName),
+        email: reservation.email || profile.email || "N/A",
+        phone: reservation.phone || reservation.mobileNumber || profile.phone || "N/A",
+        statusKey: tenantStatus.key,
+        status: tenantStatus.label,
+        room: reservation.room || room?.name || room?.roomNumber || "Not Assigned",
+        roomId: reservation.roomId || room?._id,
+        branch: formatBranch(room?.branch) || "N/A",
+        branchRaw: room?.branch || "",
+        floor: room?.floor || "-",
+        roomType: formatRoomType(room?.type) || "-",
+        monthlyRent: reservation.monthlyRent || room?.price || null,
+        moveIn: fmtDate(readMoveInDate(reservation)),
+        moveOut: fmtDate(readMoveOutDate(reservation)),
+        bed: reservation.selectedBed?.position
+          ? `${reservation.selectedBed.position.charAt(0).toUpperCase()}${reservation.selectedBed.position.slice(1)} Bed`
+          : "-",
+        leaseDuration: reservation.leaseDuration
+          ? `${reservation.leaseDuration} month${reservation.leaseDuration > 1 ? "s" : ""}`
+          : "-",
+        emergencyContact: reservation.emergencyContact?.name || "-",
+        emergencyPhone: reservation.emergencyContact?.contactNumber || "-",
+        emergencyRelation: reservation.emergencyContact?.relationship || "-",
+        nationality: reservation.nationality || "-",
+        maritalStatus: reservation.maritalStatus || "-",
+        school: reservation.employment?.employerSchool || "-",
+        occupation: reservation.employment?.occupation || "-",
       };
     });
   }, [reservationsData]);
 
-  const stats = useMemo(() => ({
-    total: tenants.length,
-    active: tenants.filter((t) => t.status === "Active").length,
-    overdue: tenants.filter((t) => t.status === "Overdue").length,
-    movingOut: tenants.filter((t) => t.status === "Moving Out").length,
-  }), [tenants]);
+  const stats = useMemo(
+    () => ({
+      total: tenants.length,
+      active: tenants.filter((tenant) => tenant.statusKey === "active").length,
+      overdue: tenants.filter((tenant) => tenant.statusKey === "overdue").length,
+      movingOut: tenants.filter((tenant) => tenant.statusKey === "moving-out").length,
+    }),
+    [tenants],
+  );
 
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return tenants.filter((t) => {
-      const matchSearch = !term || t.name.toLowerCase().includes(term) || t.email.toLowerCase().includes(term) || t.room.toLowerCase().includes(term) || t.reservationCode.toLowerCase().includes(term);
-      const matchStatus = statusFilter === "all" || t.status.toLowerCase() === statusFilter;
-      const matchBranch = branchFilter === "all" || t.branchRaw === branchFilter || t.branch.toLowerCase().includes(branchFilter);
+
+    return tenants.filter((tenant) => {
+      const matchSearch =
+        !term ||
+        tenant.name.toLowerCase().includes(term) ||
+        tenant.email.toLowerCase().includes(term) ||
+        tenant.room.toLowerCase().includes(term) ||
+        tenant.reservationCode.toLowerCase().includes(term);
+      const matchStatus = statusFilter === "all" || tenant.statusKey === statusFilter;
+      const matchBranch = branchFilter === "all" || tenant.branchRaw === branchFilter;
       return matchSearch && matchStatus && matchBranch;
     });
   }, [searchTerm, statusFilter, branchFilter, tenants]);
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, branchFilter]);
+
+  useEffect(() => {
+    const nextPageCount = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+    if (currentPage > nextPageCount) {
+      setCurrentPage(nextPageCount);
+    }
+  }, [filtered.length, currentPage]);
 
   const summaryItems = [
     { label: "Current Residents", value: stats.total, color: "blue" },
@@ -139,23 +261,27 @@ export default function TenantsPage() {
   ];
 
   const filters = [
-    ...(isOwner ? [{
-      key: "branch",
-      options: [
-        { value: "all", label: "All Branches" },
-        { value: "gil-puyat", label: "Gil Puyat" },
-        { value: "guadalupe", label: "Guadalupe" },
-      ],
-      value: branchFilter,
-      onChange: setBranchFilter,
-    }] : []),
+    ...(isOwner
+      ? [
+          {
+            key: "branch",
+            options: [
+              { value: "all", label: "All Branches" },
+              { value: "gil-puyat", label: "Gil Puyat" },
+              { value: "guadalupe", label: "Guadalupe" },
+            ],
+            value: branchFilter,
+            onChange: setBranchFilter,
+          },
+        ]
+      : []),
     {
       key: "status",
       options: [
         { value: "all", label: "All Status" },
         { value: "active", label: "Active" },
         { value: "overdue", label: "Overdue" },
-        { value: "moving out", label: "Moving Out" },
+        { value: "moving-out", label: "Moving Out" },
       ],
       value: statusFilter,
       onChange: setStatusFilter,
@@ -173,14 +299,24 @@ export default function TenantsPage() {
           <div className="tenant-cell__info">
             <span className="tenant-cell__name">{row.name}</span>
             <span className="tenant-cell__email">{row.email}</span>
+            <span className="tenant-cell__meta">{row.phone}</span>
           </div>
         </div>
       ),
     },
-    { key: "room", label: "Room", sortable: true },
+    {
+      key: "room",
+      label: "Room",
+      sortable: true,
+      render: (row) => (
+        <div className="tenant-room-cell">
+          <span className="tenant-room-cell__primary">{row.room}</span>
+          <span className="tenant-room-cell__secondary">{row.bed}</span>
+        </div>
+      ),
+    },
     ...(isOwner ? [{ key: "branch", label: "Branch", sortable: true }] : []),
     { key: "roomType", label: "Type", sortable: true },
-    { key: "bed", label: "Bed" },
     {
       key: "status",
       label: "Status",
@@ -188,7 +324,114 @@ export default function TenantsPage() {
     },
     { key: "moveIn", label: "Move In", sortable: true },
     { key: "moveOut", label: "Move Out", sortable: true },
+    {
+      key: "actions",
+      label: "Actions",
+      align: "right",
+      render: (row) => (
+        <RowActionsMenu
+          row={row}
+          onSelect={setSelectedTenant}
+          actionLoading={actionLoading}
+          handleRenew={handleRenew}
+          handleTransfer={handleTransfer}
+          handleMoveOut={handleMoveOut}
+        />
+      ),
+    },
   ];
+
+  const invalidateTenantViews = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+      queryClient.invalidateQueries({ queryKey: ["users"] }),
+      queryClient.invalidateQueries({ queryKey: ["rooms"] }),
+    ]);
+
+  const runTenantAction = async (key, callback) => {
+    setActionLoading(key);
+    try {
+      await callback();
+      await invalidateTenantViews();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRenew = async (tenant) => {
+    const months = window.prompt("Extend lease by how many months? (1-24)", "12");
+    if (!months) return;
+
+    const additionalMonths = Number.parseInt(months, 10);
+    if (Number.isNaN(additionalMonths) || additionalMonths < 1 || additionalMonths > 24) {
+      showNotification("Enter a lease extension from 1 to 24 months.", "error", 4000);
+      return;
+    }
+
+    await runTenantAction(`renew:${tenant.id}`, async () => {
+      const response = await reservationApi.renew(tenant.reservationId, { additionalMonths });
+      showNotification(response?.message || "Contract renewed successfully.", "success", 3000);
+    }).catch((error) => {
+      showNotification(error.message || "Failed to renew contract.", "error", 4000);
+    });
+  };
+
+  const handleMoveOut = async (tenant) => {
+    const rawMeter = window.prompt(
+      `Enter the current meter reading for ${tenant.room} (kWh).`,
+      "",
+    );
+    if (rawMeter === null) return;
+
+    const meterReading = Number(rawMeter.trim());
+    if (!rawMeter.trim() || Number.isNaN(meterReading) || meterReading < 0) {
+      showNotification("A valid meter reading is required.", "error", 4000);
+      return;
+    }
+
+    if (!window.confirm(`Move out ${tenant.name} and vacate the bed assignment?`)) {
+      return;
+    }
+
+    await runTenantAction(`moveout:${tenant.id}`, async () => {
+      const response = await reservationApi.moveOut(tenant.reservationId, {
+        notes: "Admin move-out",
+        meterReading,
+      });
+      showNotification(response?.message || "Tenant moved out successfully.", "success", 3000);
+      if (selectedTenant?.id === tenant.id) {
+        setSelectedTenant(null);
+      }
+    }).catch((error) => {
+      showNotification(error.message || "Failed to move out tenant.", "error", 4000);
+    });
+  };
+
+  const handleTransfer = async (tenant) => {
+    const newRoomId = window.prompt("Enter the new Room ID.");
+    if (!newRoomId) return;
+
+    const newBedId = window.prompt("Enter the new Bed ID.");
+    if (!newBedId) return;
+
+    const reason =
+      window.prompt("Reason for transfer:", "Room maintenance / accommodation change") ||
+      "Room transfer";
+
+    await runTenantAction(`transfer:${tenant.id}`, async () => {
+      const response = await reservationApi.transfer(tenant.reservationId, {
+        newRoomId,
+        newBedId,
+        reason,
+      });
+      showNotification(response?.message || "Tenant transferred successfully.", "success", 3000);
+      if (selectedTenant?.id === tenant.id) {
+        setSelectedTenant(null);
+      }
+    }).catch((error) => {
+      showNotification(error.message || "Failed to transfer tenant.", "error", 4000);
+    });
+  };
 
   return (
     <PageShell>
@@ -198,7 +441,11 @@ export default function TenantsPage() {
 
       <PageShell.Actions>
         <ActionBar
-          search={{ value: searchTerm, onChange: setSearchTerm, placeholder: "Search by name, email, room, or code..." }}
+          search={{
+            value: searchTerm,
+            onChange: setSearchTerm,
+            placeholder: "Search by name, email, room, or code...",
+          }}
           filters={filters}
         />
       </PageShell.Actions>
@@ -206,20 +453,28 @@ export default function TenantsPage() {
       <PageShell.Content>
         <DataTable
           columns={columns}
-          data={paginated}
-          loading={isLoading}
+          data={filtered}
+          loading={residentsLoading}
           onRowClick={setSelectedTenant}
           pagination={{
             page: currentPage,
-            pageSize: itemsPerPage,
+            pageSize: ITEMS_PER_PAGE,
             total: filtered.length,
             onPageChange: setCurrentPage,
           }}
-          emptyState={{
-            icon: Users,
-            title: "No checked-in residents",
-            description: "Residents appear here once an admin completes their check-in.",
-          }}
+          emptyState={
+            isError
+              ? {
+                  icon: Users,
+                  title: "Unable to load residents",
+                  description: error?.message || "The residents list could not be fetched right now.",
+                }
+              : {
+                  icon: Users,
+                  title: "No moved-in residents",
+                  description: "Residents appear here once an admin completes their move-in.",
+                }
+          }
         />
 
         <DetailDrawer
@@ -247,8 +502,8 @@ export default function TenantsPage() {
                 <DetailDrawer.Row label="Lease Duration" value={selectedTenant.leaseDuration} />
                 <DetailDrawer.Row label="Monthly Rent">
                   {selectedTenant.monthlyRent
-                    ? `₱${Number(selectedTenant.monthlyRent).toLocaleString()}`
-                    : "—"}
+                    ? `PHP ${Number(selectedTenant.monthlyRent).toLocaleString()}`
+                    : "-"}
                 </DetailDrawer.Row>
                 <DetailDrawer.Row label="Move In" value={selectedTenant.moveIn} />
                 <DetailDrawer.Row label="Move Out" value={selectedTenant.moveOut} />
@@ -266,6 +521,43 @@ export default function TenantsPage() {
               <DetailDrawer.Section label="Employment / School">
                 <DetailDrawer.Row label="Employer / School" value={selectedTenant.school} />
                 <DetailDrawer.Row label="Occupation" value={selectedTenant.occupation} />
+              </DetailDrawer.Section>
+
+              <DetailDrawer.Section label="Actions">
+                <div className="tenant-drawer-actions">
+                  {selectedTenant.reservationId ? (
+                    <>
+                      <button
+                        type="button"
+                        className="tenant-row-action"
+                        disabled={actionLoading === `renew:${selectedTenant.id}`}
+                        onClick={() => handleRenew(selectedTenant)}
+                      >
+                        {actionLoading === `renew:${selectedTenant.id}` ? "Saving..." : "Renew Contract"}
+                      </button>
+                      <button
+                        type="button"
+                        className="tenant-row-action tenant-row-action--warn"
+                        disabled={actionLoading === `transfer:${selectedTenant.id}`}
+                        onClick={() => handleTransfer(selectedTenant)}
+                      >
+                        {actionLoading === `transfer:${selectedTenant.id}` ? "Saving..." : "Transfer Room"}
+                      </button>
+                      <button
+                        type="button"
+                        className="tenant-row-action tenant-row-action--danger"
+                        disabled={actionLoading === `moveout:${selectedTenant.id}`}
+                        onClick={() => handleMoveOut(selectedTenant)}
+                      >
+                        {actionLoading === `moveout:${selectedTenant.id}` ? "Saving..." : "Move Out Tenant"}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="tenant-row-action-note">
+                      No reservation-linked actions available for this account.
+                    </span>
+                  )}
+                </div>
               </DetailDrawer.Section>
             </>
           )}

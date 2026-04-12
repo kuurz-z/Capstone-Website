@@ -20,7 +20,7 @@
   flex-shrink: 0;
 }
 
-/* ── Success (Active, Approved, Paid, Checked In) ── */
+/* ── Success (Active, Approved, Paid, Moved In) ── */
 .status-badge--success {
   background: var(--status-success-bg);
   color: var(--status-success);

@@ -20,6 +20,7 @@ import { useAuth } from "../../../shared/hooks/useAuth";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
 import { reservationApi, roomApi, billingApi, authApi } from "../../../shared/api/apiClient";
+import { normalizeReservationStatus } from "../../../shared/utils/lifecycleNaming";
 import { usePaymentRedirect } from "./usePaymentRedirect";
 import { uploadIfFile } from "../../../shared/utils/imageUpload";
 
@@ -325,15 +326,16 @@ export default function useReservationFlow() {
   };
 
   const computeLockingFlags = (r) => {
-    const status = r.status;
+    const status = normalizeReservationStatus(r.status);
     // Status-driven flags (primary) with data-presence fallback (backward compat)
-    const VISIT_SCHEDULED_STATUSES = ["visit_pending","visit_approved","payment_pending","reserved","checked-in"];
-    const VISIT_APPROVED_STATUSES = ["visit_approved","payment_pending","reserved","checked-in"];
-    const APPLICATION_STATUSES = ["payment_pending","reserved","checked-in"];
+    const VISIT_SCHEDULED_STATUSES = ["visit_pending","visit_approved","payment_pending","reserved","moveIn"];
+    const VISIT_APPROVED_STATUSES = ["visit_approved","payment_pending","reserved","moveIn"];
+    const APPLICATION_STATUSES = ["payment_pending","reserved","moveIn"];
 
     const hasVisitScheduled = VISIT_SCHEDULED_STATUSES.includes(status) || Boolean(r.viewingType && r.agreedToPrivacy);
     const isVisitApprovedFlag = VISIT_APPROVED_STATUSES.includes(status) || Boolean(r.visitApproved === true);
-    const hasApplication = APPLICATION_STATUSES.includes(status) || Boolean(r.firstName && r.lastName && r.mobileNumber);
+    const hasApplication =
+      APPLICATION_STATUSES.includes(status) || Boolean(r.applicationSubmittedAt);
     const hasPayment = Boolean(r.proofOfPaymentUrl);
     const isConfirmed = status === "reserved" || r.paymentStatus === "paid";
 
@@ -352,7 +354,7 @@ export default function useReservationFlow() {
       visit_approved: 3,
       payment_pending: 4,
       reserved: 5,
-      "checked-in": 5,
+      moveIn: 5,
     };
     let highest = STAGE_BY_STATUS[status] || 1;
     // Fallback: data-presence checks for legacy records still at "pending"
@@ -546,18 +548,19 @@ export default function useReservationFlow() {
       } = computeLockingFlags(reservation);
 
       // Status-driven stage calculation
+      const reservationStatus = normalizeReservationStatus(reservation.status);
       const STAGE_BY_STATUS = {
         pending: 1,
         visit_pending: 2,
         visit_approved: 3,
         payment_pending: 4,
         reserved: 5,
-        "checked-in": 5,
+        moveIn: 5,
       };
-      let targetStage = STAGE_BY_STATUS[reservation.status] || 1;
+      let targetStage = STAGE_BY_STATUS[reservationStatus] || 1;
 
       // visit_pending: tenant must wait — redirect to profile (unless rejected)
-      if (reservation.status === "visit_pending" && !reservation.scheduleRejected) {
+      if (reservationStatus === "visit_pending" && !reservation.scheduleRejected) {
         showNotification(
           "Waiting for admin to approve your visit. Track progress on your profile.",
           "info",
@@ -673,7 +676,7 @@ export default function useReservationFlow() {
           "error",
           3000,
         );
-        navigate("/applicant/profile");
+        navigate("/applicant/check-availability");
       } else if (status === 401 || status === 403) {
         showNotification(
           "Please sign in to continue your reservation.",
@@ -747,7 +750,7 @@ export default function useReservationFlow() {
     return matched?._id || null;
   };
 
-  const getCheckInDate = () => targetMoveInDate || finalMoveInDate;
+  const getMoveInDate = () => targetMoveInDate || finalMoveInDate;
   const getTotalPrice = () =>
     Number(reservationData?.room?.price || 0) +
     Number(reservationData?.applianceFees || 0);
@@ -762,8 +765,8 @@ export default function useReservationFlow() {
       );
       return null;
     }
-    const checkInDate = getCheckInDate();
-    if (!checkInDate) {
+    const moveInDate = getMoveInDate();
+    if (!moveInDate) {
       showNotification("Please set a move-in date.", "error", 3000);
       return null;
     }
@@ -777,13 +780,13 @@ export default function useReservationFlow() {
               position: reservationData.selectedBed.position,
             }
           : null,
-        targetMoveInDate: getFieldValue(targetMoveInDate, checkInDate),
+        targetMoveInDate: getFieldValue(targetMoveInDate, moveInDate),
         leaseDuration: leaseDuration || "",
         billingEmail: getFieldValue(
           billingEmail,
           user?.email || "test@example.com",
         ),
-        checkInDate,
+        moveInDate,
         totalPrice: totalPrice > 0 ? totalPrice : 5000,
         applianceFees: reservationData?.applianceFees || 0,
         viewingType: null,
@@ -814,13 +817,13 @@ export default function useReservationFlow() {
                   position: reservationData.selectedBed.position,
                 }
               : null,
-            targetMoveInDate: getFieldValue(targetMoveInDate, checkInDate),
+            targetMoveInDate: getFieldValue(targetMoveInDate, moveInDate),
             leaseDuration: null,
             billingEmail: getFieldValue(
               billingEmail,
               user?.email || "test@example.com",
             ),
-            checkInDate,
+            moveInDate,
             totalPrice: totalPrice > 0 ? totalPrice : 5000,
             applianceFees: reservationData?.applianceFees || 0,
             agreedToPrivacy: false,
@@ -1150,6 +1153,7 @@ export default function useReservationFlow() {
           companyIDUrl,
           companyIDReason,
           validIDType,
+          submitApplication: true,
         });
         setApplicationSubmitted(true);
         setEditingApplication(false);

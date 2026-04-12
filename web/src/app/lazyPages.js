@@ -51,7 +51,7 @@ export const RoomAvailabilityPage = React.lazy(
   () => import("../features/admin/pages/RoomAvailabilityPage"),
 );
 export const TenantsPage = React.lazy(
-  () => import("../features/admin/pages/TenantsPage"),
+  () => import("../features/admin/pages/TenantsWorkspacePage"),
 );
 export const AuditLogsPage = React.lazy(
   () => import("../features/admin/pages/AuditLogsPage"),
@@ -62,21 +62,17 @@ export const UserManagementPage = React.lazy(
 export const AdminBillingPage = React.lazy(
   () => import("../features/admin/pages/AdminBillingPage"),
 );
+export const AdminAnnouncementsPage = React.lazy(
+  () => import("../features/admin/pages/AdminAnnouncementsPage"),
+);
 export const InquiriesPage = React.lazy(
   () => import("../features/admin/pages/InquiriesPage"),
 );
 export const DigitalTwinPage = React.lazy(
   () => import("../features/admin/pages/DigitalTwinPage"),
 );
-export const FinancialPage = React.lazy(
-  () => import("../features/admin/pages/FinancialPage"),
-);
 export const MaintenancePage = React.lazy(
   () => import("../features/tenant/pages/MaintenancePage"),
-);
-
-export const SuperAdminDashboard = React.lazy(
-  () => import("../features/super-admin/pages/SuperAdminDashboard"),
 );
 export const BranchManagementPage = React.lazy(
   () => import("../features/super-admin/pages/BranchManagementPage"),

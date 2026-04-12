@@ -48,6 +48,18 @@ import BusinessSettings from "./BusinessSettings.js";
 import WaterBillingRecord from "./WaterBillingRecord.js";
 import UtilityPeriod from "./UtilityPeriod.js";
 import UtilityReading from "./UtilityReading.js";
+import BedHistory from "./BedHistory.js";
+import {
+  CANONICAL_RESERVATION_STATUSES,
+  USER_ROLE_NAMES,
+} from "../utils/lifecycleNaming.js";
+import {
+  INQUIRY_BRANCHES,
+  ROOM_BRANCHES,
+  ROOM_BRANCH_LABELS,
+  isValidInquiryBranch,
+  isValidRoomBranch,
+} from "../config/branches.js";
 
 // ============================================================================
 // NAMED EXPORTS
@@ -73,26 +85,25 @@ export {
   WaterBillingRecord,
   UtilityPeriod,
   UtilityReading,
+  BedHistory,
 };
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-/**
- * Valid branch values for rooms and users
- */
-export const ROOM_BRANCHES = ["gil-puyat", "guadalupe"];
-
-/**
- * Valid branch values for inquiries (includes "general")
- */
-export const INQUIRY_BRANCHES = ["gil-puyat", "guadalupe", "general"];
+export {
+  ROOM_BRANCHES,
+  INQUIRY_BRANCHES,
+  ROOM_BRANCH_LABELS,
+  isValidRoomBranch,
+  isValidInquiryBranch,
+};
 
 /**
  * Valid user roles
  */
-export const USER_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
+export const USER_ROLES = USER_ROLE_NAMES;
 
 /**
  * Valid tenant statuses
@@ -118,17 +129,7 @@ export const INQUIRY_STATUSES = [
 /**
  * Valid reservation statuses
  */
-export const RESERVATION_STATUSES = [
-  "pending",
-  "visit_pending",
-  "visit_approved",
-  "payment_pending",
-  "reserved",
-  "checked-in",
-  "checked-out",
-  "cancelled",
-  "archived",
-];
+export const RESERVATION_STATUSES = CANONICAL_RESERVATION_STATUSES;
 
 /**
  * Valid inquiry tags
@@ -151,21 +152,6 @@ export const INQUIRY_TAGS = [
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * Check if a branch is valid for rooms/users
- * @param {string} branch
- * @returns {boolean}
- */
-export const isValidRoomBranch = (branch) => ROOM_BRANCHES.includes(branch);
-
-/**
- * Check if a branch is valid for inquiries
- * @param {string} branch
- * @returns {boolean}
- */
-export const isValidInquiryBranch = (branch) =>
-  INQUIRY_BRANCHES.includes(branch);
 
 /**
  * Check if a role is valid
@@ -195,11 +181,13 @@ export default {
   WaterBillingRecord,
   UtilityPeriod,
   UtilityReading,
+  BedHistory,
   Notification,
   Payment,
   LoginLog,
   ROOM_BRANCHES,
   INQUIRY_BRANCHES,
+  ROOM_BRANCH_LABELS,
   USER_ROLES,
   TENANT_STATUSES,
   INQUIRY_STATUSES,

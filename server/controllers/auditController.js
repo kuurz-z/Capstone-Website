@@ -46,7 +46,7 @@ const getClientIP = (req) => {
 /**
  * GET /api/audit-logs
  * Get all audit logs with optional filters
- * @access Admin, SuperAdmin
+ * @access Admin, Owner
  */
 export const getAuditLogs = async (req, res, next) => {
   try {
@@ -58,7 +58,7 @@ export const getAuditLogs = async (req, res, next) => {
     const filters = {
       type, severity, user, role,
       // If req.branchFilter is set (regular admin), it overrides the client-sent branch.
-      // If req.branchFilter is null (super admin), use the client-sent branch param.
+      // If req.branchFilter is null (owner), use the client-sent branch param.
       branch: req.branchFilter !== undefined ? (req.branchFilter || branch) : branch,
       startDate, endDate, search,
     };
@@ -84,11 +84,11 @@ export const getAuditLogs = async (req, res, next) => {
 /**
  * GET /api/audit-logs/stats
  * Get audit log statistics
- * @access Admin, SuperAdmin
+ * @access Admin, Owner
  */
 export const getAuditStats = async (req, res, next) => {
   try {
-    // Regular admin: use their assigned branch. Super admin: use query param or all.
+    // Regular admin: use their assigned branch. Owner: use query param or all.
     const branch = req.branchFilter !== undefined
       ? (req.branchFilter || req.query.branch)
       : req.query.branch;
@@ -102,7 +102,7 @@ export const getAuditStats = async (req, res, next) => {
 /**
  * GET /api/audit-logs/:id
  * Get specific audit log entry
- * @access Admin, SuperAdmin
+ * @access Admin, Owner
  */
 export const getAuditLogById = async (req, res, next) => {
   try {
@@ -163,7 +163,7 @@ export const createAuditLog = async (req, res, next) => {
 /**
  * POST /api/audit-logs/export
  * Export audit logs (filtered)
- * @access Admin, SuperAdmin
+ * @access Admin, Owner
  */
 export const exportAuditLogs = async (req, res, next) => {
   try {
@@ -189,7 +189,7 @@ export const exportAuditLogs = async (req, res, next) => {
 /**
  * GET /api/audit-logs/security/failed-logins
  * Get recent failed login attempts (security monitoring)
- * @access Admin, SuperAdmin
+ * @access Admin, Owner
  */
 export const getFailedLogins = async (req, res, next) => {
   try {
@@ -204,7 +204,7 @@ export const getFailedLogins = async (req, res, next) => {
 /**
  * DELETE /api/audit-logs/cleanup
  * Archive/delete old audit logs
- * @access SuperAdmin only
+ * @access Owner only
  */
 export const cleanupAuditLogs = async (req, res, next) => {
   try {

@@ -48,7 +48,7 @@ src/
 │   ├── public/             # Public pages (no auth required)
 │   ├── tenant/             # Applicant & tenant features
 │   ├── admin/              # Branch admin features
-│   ├── super-admin/        # System admin features (nested in admin layout)
+│   ├── super-admin/        # Owner features (legacy folder name, nested in admin layout)
 │   └── shared/             # Cross-feature shared components
 │
 ├── shared/                  # ♻️ Shared across all features
@@ -121,7 +121,7 @@ features/{role}/
 - Reservations management (with embedded Inquiries tab)
 - Tenant management
 - Room management (Availability + Setup + Occupancy tabs)
-- Billing management (room-based bill generation)
+- Billing management (bills, verification, readiness, publishing, reports)
 - Maintenance management
 - User management
 - Audit logs
@@ -134,6 +134,8 @@ Pages nested inside the admin layout via `RequireOwner` guard:
 - Branch management
 - Role/permissions management
 - System settings
+
+Note: the folder name remains `features/super-admin/` for compatibility, but the canonical role is `owner`.
 
 ---
 
@@ -237,13 +239,19 @@ server/
 | `reservationApi.js`  | Reservation CRUD                             |
 | `inquiryApi.js`      | Inquiry submission & management              |
 | `userApi.js`         | User management                              |
-| `billingApi.js`      | Billing & payment                            |
+| `billingApi.js`      | Bills, reports, publishing, and billing admin actions |
 | `announcementApi.js` | Announcements                                |
 | `maintenanceApi.js`  | Maintenance requests                         |
 | `notificationApi.js` | In-app notifications                         |
 | `auditApi.js`        | Audit log retrieval                          |
 | `commonApi.js`       | Common/shared API utilities                  |
 | `tenantApi.js`       | Tenant-specific API calls                    |
+
+Module 4 route ownership:
+- `billingRoutes.js`: bills, verification, penalties, readiness, publishing, reports, exports
+- `paymentRoutes.js`: checkout sessions and payment history
+- `utilityBillingRoutes.js`: utility periods, readings, results, revisions, send/close workflows
+- `financialRoutes.js`: owner-only executive financial overview
 
 ### Guards (`shared/guards/`)
 

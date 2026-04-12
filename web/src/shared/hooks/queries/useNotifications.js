@@ -17,11 +17,18 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notificationApi } from "../../api/notificationApi";
+import useNotificationStore from "../../stores/notificationStore";
 
 // ── Query Keys ──
 const KEYS = {
   all: ["notifications"],
-  list: (page) => ["notifications", "list", page],
+  list: (page, limit, unreadOnly) => [
+    "notifications",
+    "list",
+    page,
+    limit,
+    unreadOnly,
+  ],
   unread: ["notifications", "unread-count"],
 };
 
@@ -34,7 +41,7 @@ export const useNotifications = (page = 1, options = {}) => {
   const { limit = 20, unreadOnly = false, enabled = true } = options;
 
   return useQuery({
-    queryKey: KEYS.list(page),
+    queryKey: KEYS.list(page, limit, unreadOnly),
     queryFn: () => notificationApi.getAll({ page, limit, unreadOnly }),
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -63,7 +70,11 @@ export const useMarkAsRead = () => {
 
   return useMutation({
     mutationFn: (notificationId) => notificationApi.markAsRead(notificationId),
-    onSuccess: () => {
+    onSuccess: (_, notificationId) => {
+      useNotificationStore.getState().markAsRead(notificationId);
+      queryClient.setQueryData(KEYS.unread, (current) => ({
+        unreadCount: Math.max(0, (current?.unreadCount ?? 0) - 1),
+      }));
       // Invalidate both the list and the unread count
       queryClient.invalidateQueries({ queryKey: KEYS.all });
       queryClient.invalidateQueries({ queryKey: KEYS.unread });
@@ -80,6 +91,8 @@ export const useMarkAllAsRead = () => {
   return useMutation({
     mutationFn: () => notificationApi.markAllAsRead(),
     onSuccess: () => {
+      useNotificationStore.getState().markAllAsRead();
+      queryClient.setQueryData(KEYS.unread, { unreadCount: 0 });
       queryClient.invalidateQueries({ queryKey: KEYS.all });
       queryClient.invalidateQueries({ queryKey: KEYS.unread });
     },

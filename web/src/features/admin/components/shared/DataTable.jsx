@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import EmptyState from "./EmptyState";
 import "./DataTable.css";
 
@@ -19,13 +24,29 @@ export default function DataTable({
   data = [],
   pagination,
   onRowClick,
+  onRowHover,
+  onRowFocus,
   emptyState,
   loading = false,
+  sorting = "client",
+  sortKey: externalSortKey = null,
+  sortDir: externalSortDir = "asc",
+  onSortChange,
+  serverPagination = false,
+  disableRowInteraction = false,
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
+  const activeSortKey = sorting === "external" ? externalSortKey : sortKey;
+  const activeSortDir = sorting === "external" ? externalSortDir : sortDir;
 
   const handleSort = (key) => {
+    if (sorting === "external") {
+      const nextDir =
+        activeSortKey === key && activeSortDir === "asc" ? "desc" : "asc";
+      onSortChange?.(key, nextDir);
+      return;
+    }
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -35,18 +56,17 @@ export default function DataTable({
   };
 
   const sortedData = useMemo(() => {
-    if (!sortKey) return data;
+    if (sorting === "external" || !sortKey) return data;
     return [...data].sort((a, b) => {
       const aVal = a[sortKey];
       const bVal = b[sortKey];
       if (aVal == null) return 1;
       if (bVal == null) return -1;
-      const cmp = typeof aVal === "string"
-        ? aVal.localeCompare(bVal)
-        : aVal - bVal;
+      const cmp =
+        typeof aVal === "string" ? aVal.localeCompare(bVal) : aVal - bVal;
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [data, sortKey, sortDir]);
+  }, [data, sortKey, sortDir, sorting]);
 
   // Pagination
   const pageSize = pagination?.pageSize || data.length || 1;
@@ -56,11 +76,19 @@ export default function DataTable({
 
   // Slice data for the current page
   const pagedData = pagination
-    ? sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    ? serverPagination
+      ? sortedData
+      : sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize)
     : sortedData;
 
   if (!loading && data.length === 0 && emptyState) {
-    return <EmptyState icon={emptyState.icon} title={emptyState.title} description={emptyState.description} />;
+    return (
+      <EmptyState
+        icon={emptyState.icon}
+        title={emptyState.title}
+        description={emptyState.description}
+      />
+    );
   }
 
   return (
@@ -69,59 +97,85 @@ export default function DataTable({
         <table className="data-table">
           <thead>
             <tr>
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={`data-table__th ${col.sortable ? "data-table__th--sortable" : ""} ${col.align ? `data-table__th--${col.align}` : ""}`}
-                  style={col.width ? { width: col.width } : undefined}
-                  onClick={() => col.sortable && handleSort(col.key)}
-                >
-                  <span className="data-table__th-content">
-                    {col.label}
-                    {col.sortable && sortKey === col.key && (
-                      sortDir === "asc"
-                        ? <ChevronUp size={13} />
-                        : <ChevronDown size={13} />
-                    )}
-                  </span>
-                </th>
-              ))}
+              {columns.map((col) => {
+                const sortField = col.sortKey || col.key;
+                return (
+                  <th
+                    key={col.key}
+                    className={`data-table__th ${col.sortable ? "data-table__th--sortable" : ""} ${col.align ? `data-table__th--${col.align}` : ""}`}
+                    style={col.width ? { width: col.width } : undefined}
+                    onClick={() => col.sortable && handleSort(sortField)}
+                  >
+                    <span className="data-table__th-content">
+                      {col.label}
+                      {col.sortable &&
+                        activeSortKey === sortField &&
+                        (activeSortDir === "asc" ? (
+                          <ChevronUp size={13} />
+                        ) : (
+                          <ChevronDown size={13} />
+                        ))}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={`skel-${i}`} className="data-table__row data-table__row--skeleton">
-                  {columns.map((col) => (
-                    <td key={col.key} className="data-table__td">
-                      <div className="data-table__skeleton" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : (
-              pagedData.map((row, i) => (
-                <tr
-                  key={row.id || row._id || i}
-                  className={`data-table__row ${onRowClick ? "data-table__row--clickable" : ""}`}
-                  onClick={(e) => {
-                    // Don't fire row click if the event came from an action cell
-                    if (e.target.closest("[data-action-cell]")) return;
-                    onRowClick?.(row);
-                  }}
-                >
-                  {columns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={`data-table__td ${col.align ? `data-table__td--${col.align}` : ""}`}
-                      {...(col.align === "right" ? { "data-action-cell": "true" } : {})}
-                    >
-                      {col.render ? col.render(row) : (row[col.key] ?? "—")}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
+            {loading
+              ? Array.from({ length: 5 }).map((_, i) => (
+                  <tr
+                    key={`skel-${i}`}
+                    className="data-table__row data-table__row--skeleton"
+                  >
+                    {columns.map((col) => (
+                      <td key={col.key} className="data-table__td">
+                        <div className="data-table__skeleton" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : pagedData.map((row, i) => (
+                  <tr
+                    key={row.id || row._id || i}
+                    className={`data-table__row ${onRowClick ? "data-table__row--clickable" : ""} ${disableRowInteraction ? "data-table__row--static" : ""}`}
+                    onMouseEnter={() => onRowHover?.(row)}
+                    onFocus={() => onRowFocus?.(row)}
+                    onClickCapture={(e) => {
+                      if (!disableRowInteraction) return;
+                      const target = e.target;
+                      if (!(target instanceof Element)) return;
+                      if (target.closest("[data-action-cell]")) return;
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      if (disableRowInteraction) return;
+                      if (!onRowClick) return;
+
+                      const target = e.target;
+                      if (!(target instanceof Element)) {
+                        onRowClick(row);
+                        return;
+                      }
+
+                      // Don't fire row click if the event came from an action cell
+                      if (target.closest("[data-action-cell]")) return;
+                      onRowClick(row);
+                    }}
+                  >
+                    {columns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={`data-table__td ${col.align ? `data-table__td--${col.align}` : ""}`}
+                        {...(col.align === "right"
+                          ? { "data-action-cell": "true" }
+                          : {})}
+                      >
+                        {col.render ? col.render(row) : (row[col.key] ?? "—")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
           </tbody>
         </table>
       </div>

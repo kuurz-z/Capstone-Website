@@ -18,6 +18,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
+import ReservationModel from "../models/Reservation.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -77,9 +78,15 @@ async function migrate() {
         name: `${r.firstName || "?"} ${r.lastName || "?"}`,
       });
 
+      const nextUpdate = { status: newStatus };
+      if (newStatus === "reserved" && !r.reservationCode) {
+        nextUpdate.reservationCode =
+          await ReservationModel.generateUniqueReservationCode();
+      }
+
       await Reservation.updateOne(
         { _id: r._id },
-        { $set: { status: newStatus } },
+        { $set: nextUpdate },
       );
       updated++;
     } else {

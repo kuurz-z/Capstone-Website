@@ -3,7 +3,7 @@
  *
  * What it does:
  * - Finds the target room by name or room number.
- * - Archives checked-in or active reservations for the known seeded users in that room.
+ * - Archives moved-in or active reservations for the known seeded users in that room.
  * - Archives move-in meter readings tied to those seeded users in that room.
  * - Vacates any occupied beds linked to the archived reservations.
  * - Recalculates occupancy and availability for the room.
@@ -112,11 +112,11 @@ async function repairRoomOccupancy(roomId, archivedReservations) {
     if (vacated) vacatedBeds += 1;
   }
 
-  // Recompute occupancy from actual non-archived checked-in/reserved reservations.
+  // Recompute occupancy from actual non-archived moved-in/reserved reservations.
   const activeOccupancyCount = await Reservation.countDocuments({
     roomId,
     isArchived: { $ne: true },
-    status: { $in: ["reserved", "checked-in"] },
+    status: { $in: ["reserved", "moveIn"] },
   });
 
   for (const bed of room.beds) {
