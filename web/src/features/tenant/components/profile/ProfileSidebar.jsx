@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
+import Logo from "../../../../assets/images/LOGO.svg";
 import { showNotification } from "../../../../shared/utils/notification";
 import {
   User,
@@ -7,14 +8,12 @@ import {
   History,
   Bed,
   LogOut,
-  Search,
   LayoutDashboard,
   CreditCard,
   ChevronLeft,
   Settings,
   Camera,
   FileText,
-  Home,
   Menu,
   X,
   Wrench,
@@ -24,6 +23,37 @@ import {
 /* ── Timing ─────────────────────────────────────────────────────────────── */
 const TRANSITION = "0.3s cubic-bezier(0.4, 0, 0.2, 1)";
 const MOBILE_BP = 768;
+const LIGHT_THEME = {
+  border: "#E8EBF0",
+  brand: "#0C375F",
+  active: "#D4AF37",
+  activeText: "#FFFFFF",
+  panel: "#FFFFFF",
+  text: "#4B5563",
+  heading: "#1F2937",
+  subText: "#6B7280",
+  sectionLabel: "#9CA3AF",
+  hover: "#F9FAFB",
+  danger: "#EF4444",
+  dangerHover: "#FEF2F2",
+  toggleShadow: "rgba(12, 55, 95, 0.16)",
+};
+
+const DARK_THEME = {
+  border: "#2A3B57",
+  brand: "#E0B84C",
+  active: "#E0B84C",
+  activeText: "#0F1B2D",
+  panel: "#0F1B2D",
+  text: "#C8D3E4",
+  heading: "#F8F5EC",
+  subText: "#AFC0D8",
+  sectionLabel: "#8FA4C2",
+  hover: "#1A2B43",
+  danger: "#FCA5A5",
+  dangerHover: "#2A1315",
+  toggleShadow: "rgba(0, 0, 0, 0.35)",
+};
 
 /* ── Navigation structure ───────────────────────────────────────────────── */
 const NAV_SECTIONS = [
@@ -53,7 +83,7 @@ const NAV_SECTIONS = [
 ];
 
 /* ── NavButton ──────────────────────────────────────────────────────────── */
-const NavButton = ({ item, isActive, onClick, collapsed }) => (
+const NavButton = ({ item, isActive, onClick, collapsed, theme }) => (
   <button
     onClick={onClick}
     title={collapsed ? item.label : undefined}
@@ -61,34 +91,37 @@ const NavButton = ({ item, isActive, onClick, collapsed }) => (
       width: "100%",
       display: "flex",
       alignItems: "center",
-      gap: 12,
-      padding: "8px 12px",
-      justifyContent: "flex-start",
-      borderRadius: 6,
+      gap: collapsed ? 0 : 11,
+      padding: collapsed ? "9px" : "8px 11px",
+      justifyContent: collapsed ? "center" : "flex-start",
+      borderRadius: 8,
       border: "none",
       cursor: "pointer",
-      backgroundColor: isActive ? "var(--surface-card)" : "transparent",
-      color: isActive ? "#FF8C42" : "var(--text-body)",
+      backgroundColor: isActive ? theme.active : "transparent",
+      color: isActive ? theme.activeText : theme.text,
       fontWeight: isActive ? 600 : 500,
       fontSize: 14,
       transition: "background 0.15s, color 0.15s",
       whiteSpace: "nowrap",
       overflow: "hidden",
+      minHeight: 36,
     }}
     onMouseEnter={(e) => {
-      if (!isActive) e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+      if (!isActive) e.currentTarget.style.backgroundColor = theme.hover;
     }}
     onMouseLeave={(e) => {
       if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
     }}
   >
-    <item.icon style={{ width: 18, height: 18, flexShrink: 0 }} />
+    <item.icon style={{ width: collapsed ? 18 : 18, height: collapsed ? 18 : 18, flexShrink: 0 }} />
     <span
       style={{
         opacity: collapsed ? 0 : 1,
+        width: collapsed ? 0 : "auto",
         transition: `opacity ${TRANSITION}`,
         overflow: "hidden",
         textOverflow: "ellipsis",
+        display: collapsed ? "none" : "inline",
       }}
     >
       {item.label}
@@ -119,6 +152,10 @@ const ProfileSidebar = ({
   /* ── Mobile detection ──────────────────────── */
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= MOBILE_BP);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const root = document.documentElement;
+    return root.getAttribute("data-theme") === "dark" || root.classList.contains("dark");
+  });
 
   useEffect(() => {
     const handler = () => {
@@ -128,6 +165,22 @@ const ProfileSidebar = ({
     };
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncTheme = () => {
+      setIsDark(root.getAttribute("data-theme") === "dark" || root.classList.contains("dark"));
+    };
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class"],
+    });
+
+    syncTheme();
+    return () => observer.disconnect();
   }, []);
 
   // Lock body scroll when drawer is open
@@ -175,6 +228,8 @@ const ProfileSidebar = ({
     }
   };
 
+  const theme = isDark ? DARK_THEME : LIGHT_THEME;
+
   /* ── Sidebar inner content (shared between desktop & mobile drawer) ── */
   const sidebarContent = (showCollapsed) => (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", minHeight: 0 }}>
@@ -185,39 +240,46 @@ const ProfileSidebar = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "16px 14px",
-          borderBottom: "1px solid var(--border-subtle)",
-          minHeight: 68,
+          padding: "14px 12px",
+          borderBottom: `1px solid ${theme.border}`,
+          minHeight: 60,
+          backgroundColor: theme.panel,
         }}
       >
         <Link
           to="/"
-          style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", flexShrink: 0 }}
+          style={{ display: "flex", alignItems: "center", gap: showCollapsed ? 0 : 8, textDecoration: "none", flexShrink: 0, width: showCollapsed ? "100%" : "auto", justifyContent: showCollapsed ? "center" : "flex-start" }}
           title="Lilycrest — Home"
         >
           <div
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              backgroundColor: "var(--color-primary)",
+              width: 25,
+              height: 25,
+              borderRadius: 7,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
+              overflow: "hidden",
             }}
           >
-            <Bed style={{ width: 20, height: 20, color: "#fff" }} />
+            <img
+              src={Logo}
+              alt="Lilycrest Logo"
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
           </div>
           <span
             style={{
               fontWeight: 600,
               fontSize: 18,
-              color: "var(--text-heading)",
+              color: theme.brand,
               letterSpacing: "-0.01em",
               whiteSpace: "nowrap",
               opacity: showCollapsed ? 0 : 1,
+              width: showCollapsed ? 0 : "auto",
               transition: `opacity ${TRANSITION}`,
+              overflow: "hidden",
             }}
           >
             Lilycrest
@@ -246,11 +308,13 @@ const ProfileSidebar = ({
       {/* ── User Card ───────────────────────────────────────────────────── */}
       <div
         style={{
-          padding: "14px 14px",
-          borderBottom: "1px solid var(--border-subtle)",
+          padding: "12px",
+          borderBottom: `1px solid ${theme.border}`,
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: 11,
+          justifyContent: showCollapsed ? "center" : "flex-start",
+          backgroundColor: theme.panel,
         }}
       >
         <div
@@ -275,7 +339,7 @@ const ProfileSidebar = ({
           ) : (
             <div
               style={{
-                background: "linear-gradient(135deg, #FF8C42 0%, #D35400 100%)",
+                background: theme.brand,
                 width: "100%",
                 height: "100%",
                 display: "flex",
@@ -324,82 +388,33 @@ const ProfileSidebar = ({
 
         <div
           style={{
-            flex: 1,
-            minWidth: 0,
+            flex: showCollapsed ? 0 : 1,
+            minWidth: showCollapsed ? 0 : "auto",
             opacity: showCollapsed ? 0 : 1,
+            width: showCollapsed ? 0 : "auto",
             transition: `opacity ${TRANSITION}`,
+            overflow: "hidden",
           }}
         >
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text-heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: theme.heading, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {fullName}
           </p>
-          <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: theme.subText, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {profileData.email}
           </p>
         </div>
-      </div>
-
-      {/* ── Browse Rooms CTA ─────────────────────────────────────────────── */}
-      <div style={{ padding: "12px 8px 4px" }}>
-        <Link
-          to="/applicant/check-availability"
-          title="Browse Rooms"
-          onClick={() => isMobile && setDrawerOpen(false)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "9px 12px",
-            borderRadius: 8,
-            textDecoration: "none",
-            fontSize: 13,
-            fontWeight: 600,
-            color: "var(--text-heading)",
-            border: "1.5px solid var(--text-heading)",
-            borderLeft: "3.5px solid #FF8C42",
-            transition: "background 0.2s, color 0.2s, box-shadow 0.2s",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-          }}
-          onMouseEnter={(e) => {
-            const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-            e.currentTarget.style.backgroundColor = isDark ? "#FF8C42" : "var(--color-primary)";
-            e.currentTarget.style.color = "#fff";
-            e.currentTarget.style.borderColor = isDark ? "#FF8C42" : "var(--color-primary)";
-            e.currentTarget.style.boxShadow = isDark
-              ? "0 2px 10px rgba(255,140,66,0.3)"
-              : "0 2px 8px rgba(10,22,40,0.18)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "var(--text-heading)";
-            e.currentTarget.style.borderColor = "var(--text-heading)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        >
-          <Search style={{ width: 16, height: 16, flexShrink: 0 }} />
-          <span
-            style={{
-              opacity: showCollapsed ? 0 : 1,
-              transition: `opacity ${TRANSITION}`,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            Browse Rooms
-          </span>
-        </Link>
       </div>
 
       {/* ── Navigation ───────────────────────────────────────────────────── */}
       <nav
         style={{
           flex: 1,
-          padding: "8px 8px",
-          overflowY: "auto",
+          padding: "10px 8px",
+          overflowY: "hidden",
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: 12,
+          backgroundColor: theme.panel,
         }}
       >
         {NAV_SECTIONS.map((section) => (
@@ -417,16 +432,16 @@ const ProfileSidebar = ({
             {/* Section label — fades out */}
             <p
               style={{
-                margin: "0 0 4px 4px",
-                fontSize: 10,
-                fontWeight: 700,
+                margin: "0 0 2px 4px",
+                fontSize: 11,
+                fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.1em",
-                color: "var(--text-muted)",
+                color: theme.sectionLabel,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 opacity: showCollapsed ? 0 : 1,
-                height: showCollapsed ? 0 : 18,
+                height: showCollapsed ? 0 : 16,
                 marginBottom: showCollapsed ? 0 : 4,
                 transition: `opacity ${TRANSITION}, height ${TRANSITION}, margin ${TRANSITION}`,
               }}
@@ -437,9 +452,9 @@ const ProfileSidebar = ({
             <div
               style={{
                 height: 1,
-                backgroundColor: "var(--border-subtle)",
-                margin: showCollapsed ? "4px 6px 8px" : "0 6px",
-                opacity: showCollapsed ? 0.8 : 0,
+                backgroundColor: theme.border,
+                margin: showCollapsed ? "2px 6px 6px" : "0 6px",
+                opacity: showCollapsed ? 0.35 : 0,
                 transition: `opacity ${TRANSITION}, margin ${TRANSITION}`,
               }}
             />
@@ -451,6 +466,7 @@ const ProfileSidebar = ({
                   isActive={activeTab === item.id}
                   onClick={() => handleNavClick(item.id)}
                   collapsed={showCollapsed}
+                  theme={theme}
                 />
               ))}
             </div>
@@ -461,7 +477,7 @@ const ProfileSidebar = ({
       </nav>
 
       {/* ── Sign Out ──────────────────────────────────────────────────────── */}
-      <div style={{ padding: "16px 8px 12px", borderTop: "1px solid var(--border-card)" }}>
+      <div style={{ padding: "10px 8px 12px", borderTop: `1px solid ${theme.border}`, backgroundColor: theme.panel }}>
         <button
           onClick={onLogout}
           title="Sign Out"
@@ -469,86 +485,40 @@ const ProfileSidebar = ({
             width: "100%",
             display: "flex",
             alignItems: "center",
-            justifyContent: "flex-start",
-            gap: 10,
-            padding: "8px 12px",
+            justifyContent: showCollapsed ? "center" : "flex-start",
+            gap: showCollapsed ? 0 : 10,
+            padding: showCollapsed ? "9px" : "8px 11px",
             border: "none",
             borderRadius: 8,
             cursor: "pointer",
             backgroundColor: "transparent",
-            color: "#EF4444",
+            color: theme.danger,
             fontWeight: 500,
             fontSize: 14,
             transition: "background 0.15s",
             whiteSpace: "nowrap",
             overflow: "hidden",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#FEF2F2"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = theme.dangerHover; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
         >
           <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
           <span
             style={{
               opacity: showCollapsed ? 0 : 1,
+              width: showCollapsed ? 0 : "auto",
               transition: `opacity ${TRANSITION}`,
+              display: showCollapsed ? "none" : "inline",
             }}
           >
             Sign Out
           </span>
         </button>
       </div>
-
-      {/* ── Collapse toggle (desktop only) ─────────────────────────────── */}
-      {!isMobile && (
-        <div style={{ padding: "8px 8px 12px", borderTop: "1px solid var(--border-card)" }}>
-          <button
-            onClick={toggleCollapsed}
-            title={showCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              gap: 10,
-              padding: "8px 12px",
-              border: "none",
-              borderRadius: 8,
-              cursor: "pointer",
-              backgroundColor: "transparent",
-              color: "var(--text-secondary)",
-              fontWeight: 500,
-              fontSize: 14,
-              transition: `background 0.15s, color 0.15s`,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--surface-muted)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-          >
-            <ChevronLeft
-              style={{
-                width: 18,
-                height: 18,
-                flexShrink: 0,
-                transition: `transform ${TRANSITION}`,
-                transform: showCollapsed ? "rotate(180deg)" : "rotate(0deg)",
-              }}
-            />
-            <span
-              style={{
-                opacity: showCollapsed ? 0 : 1,
-                transition: `opacity ${TRANSITION}`,
-              }}
-            >
-              Collapse
-            </span>
-          </button>
-        </div>
-      )}
     </div>
   );
 
-  const W = collapsed ? 64 : 256;
+  const W = collapsed ? 68 : 272;
 
   /* ── MOBILE: Hamburger + Drawer ─────────────────────────────────────── */
   if (isMobile) {
@@ -562,8 +532,8 @@ const ProfileSidebar = ({
             left: 0,
             right: 0,
             height: 56,
-            backgroundColor: "var(--surface-sidebar)",
-            borderBottom: "1px solid var(--border-subtle)",
+            backgroundColor: theme.panel,
+            borderBottom: `1px solid ${theme.border}`,
             display: "flex",
             alignItems: "center",
             padding: "0 16px",
@@ -578,7 +548,7 @@ const ProfileSidebar = ({
               border: "none",
               cursor: "pointer",
               padding: 4,
-              color: "var(--text-heading)",
+              color: theme.brand,
               display: "flex",
               alignItems: "center",
             }}
@@ -595,7 +565,7 @@ const ProfileSidebar = ({
                 width: 30,
                 height: 30,
                 borderRadius: 6,
-                backgroundColor: "var(--color-primary)",
+                backgroundColor: theme.brand,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -603,7 +573,7 @@ const ProfileSidebar = ({
             >
               <Bed style={{ width: 16, height: 16, color: "#fff" }} />
             </div>
-            <span style={{ fontWeight: 600, fontSize: 16, color: "var(--text-heading)" }}>
+            <span style={{ fontWeight: 600, fontSize: 16, color: theme.brand }}>
               Lilycrest
             </span>
           </Link>
@@ -631,14 +601,14 @@ const ProfileSidebar = ({
             left: 0,
             bottom: 0,
             width: 280,
-            backgroundColor: "var(--surface-sidebar)",
-            borderRight: "1px solid var(--border-subtle)",
+            backgroundColor: theme.panel,
+            borderRight: `1px solid ${theme.border}`,
             zIndex: 50,
             transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
             transition: `transform ${TRANSITION}`,
             display: "flex",
             flexDirection: "column",
-            overflowY: "auto",
+            overflowY: "hidden",
           }}
         >
           {sidebarContent(false)}
@@ -654,8 +624,8 @@ const ProfileSidebar = ({
         width: W,
         minWidth: W,
         maxWidth: W,
-        backgroundColor: "var(--surface-sidebar)",
-        borderRight: "1px solid var(--border-subtle)",
+        backgroundColor: theme.panel,
+        borderRight: `1px solid ${theme.border}`,
         display: "flex",
         flexDirection: "column",
         height: "100vh",
@@ -663,11 +633,45 @@ const ProfileSidebar = ({
         top: 0,
         flexShrink: 0,
         transition: `width ${TRANSITION}, min-width ${TRANSITION}, max-width ${TRANSITION}`,
-        overflow: "hidden",
+        overflow: "visible",
         zIndex: 10,
+        alignSelf: "flex-start",
       }}
     >
       {sidebarContent(collapsed)}
+
+      <button
+        onClick={toggleCollapsed}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        style={{
+          position: "absolute",
+          right: 0,
+          top: "50%",
+          transform: "translate(50%, -50%)",
+          width: 38,
+          height: 38,
+          borderRadius: "999px",
+          border: `1px solid ${theme.border}`,
+          backgroundColor: theme.panel,
+          color: theme.brand,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: `0 4px 14px ${theme.toggleShadow}`,
+          zIndex: 20,
+        }}
+      >
+        <ChevronLeft
+          style={{
+            width: 19,
+            height: 19,
+            transition: `transform ${TRANSITION}`,
+            transform: collapsed ? "rotate(180deg)" : "rotate(0deg)",
+          }}
+        />
+      </button>
     </aside>
   );
 };

@@ -45,6 +45,10 @@ const ProfilePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const canViewAnnouncements = authUser?.role === "tenant";
+  const [isDark, setIsDark] = useState(() => {
+    const root = document.documentElement;
+    return root.getAttribute("data-theme") === "dark" || root.classList.contains("dark");
+  });
 
   // ── UI state ───────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(
@@ -75,6 +79,22 @@ const ProfilePage = () => {
       setActiveTab("dashboard");
     }
   }, [activeTab, canViewAnnouncements]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncTheme = () => {
+      setIsDark(root.getAttribute("data-theme") === "dark" || root.classList.contains("dark"));
+    };
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class"],
+    });
+
+    syncTheme();
+    return () => observer.disconnect();
+  }, []);
 
   const [profileData, setProfileData] = useState({
     firstName: "",
@@ -414,6 +434,34 @@ const ProfilePage = () => {
       }
     : null;
 
+    const profileThemeVars = isDark
+      ? {
+          "--surface-page": "#0B1524",
+          "--surface-card": "#0F1B2D",
+          "--surface-muted": "#1A2B43",
+          "--surface-hover": "#21314A",
+          "--border-card": "#2A3B57",
+          "--border-subtle": "#2A3B57",
+          "--text-heading": "#F8F5EC",
+          "--text-body": "#D9E3F2",
+          "--text-secondary": "#AFC0D8",
+          "--text-muted": "#8FA4C2",
+          "--color-primary": "#E0B84C",
+        }
+      : {
+          "--surface-page": "#ffffff",
+          "--surface-card": "#ffffff",
+          "--surface-muted": "#F8F1DC",
+          "--surface-hover": "#FFF4D6",
+          "--border-card": "#E8DDBA",
+          "--border-subtle": "#E8DDBA",
+          "--text-heading": "#0C375F",
+          "--text-body": "#1F2937",
+          "--text-secondary": "#5A6982",
+          "--text-muted": "#8A99B0",
+          "--color-primary": "#D4AF37",
+        };
+
   // ── Tab title map ──────────────────────────────────────────
 
   if (loading) return <ProfilePageSkeleton />;
@@ -422,7 +470,7 @@ const ProfilePage = () => {
   return (
     <ThemeProvider>
     <>
-      <div className="min-h-screen flex" style={{ backgroundColor: "var(--surface-page)" }}>
+      <div className="min-h-screen flex" style={{ ...profileThemeVars, backgroundColor: "var(--surface-page)" }}>
         <ProfileSidebar
           activeTab={activeTab}
           setActiveTab={handleTabChange}
@@ -445,6 +493,7 @@ const ProfilePage = () => {
                   visits={visits}
                   nextAction={nextAction}
                   onGoToPersonal={() => setActiveTab("personal")}
+                  onGoToBilling={() => handleTabChange("billing")}
                 />
               )}
 

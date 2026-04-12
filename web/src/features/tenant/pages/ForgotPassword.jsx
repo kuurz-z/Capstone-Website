@@ -256,7 +256,7 @@ function ForgotPassword() {
                 <button
                   onClick={() => navigate("/signin")}
                   className="w-full py-4 rounded-xl text-white font-light hover:opacity-90 transition-opacity text-base"
-                  style={{ backgroundColor: "#FF8C42" }}
+                  style={{ backgroundColor: "#D4AF37" }}
                 >
                   Back to sign in
                 </button>
