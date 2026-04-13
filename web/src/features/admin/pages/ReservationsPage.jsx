@@ -3,8 +3,11 @@ import {
   AlertTriangle,
   CalendarCheck,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Eye,
+  Search,
   Trash2,
   UserCheck,
 } from "lucide-react";
@@ -26,13 +29,7 @@ import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import ReservationDetailsModal from "../components/ReservationDetailsModal";
 import VisitSchedulesTab from "../components/VisitSchedulesTab";
 import InquiriesPage from "./InquiriesPage";
-import {
-  ActionBar,
-  DataTable,
-  PageShell,
-  StatusBadge,
-  SummaryBar,
-} from "../components/shared";
+import { StatusBadge } from "../components/shared";
 import {
   IN_PROGRESS_STATUSES,
   checkOverdueReservation,
@@ -199,7 +196,37 @@ function ReservationsPage() {
     ],
     [counts],
   );
-  const activeSummaryIndex = SUMMARY_FILTERS.indexOf(statusFilter);
+
+  const summaryColorClasses = {
+    blue: {
+      base: "border-blue-100 bg-blue-50/60",
+      active: "border-blue-300 bg-blue-100/80 shadow-sm ring-1 ring-blue-200",
+      icon: "text-blue-600",
+      label: "text-blue-700",
+      value: "text-blue-900",
+    },
+    orange: {
+      base: "border-amber-100 bg-amber-50/60",
+      active: "border-amber-300 bg-amber-100/80 shadow-sm ring-1 ring-amber-200",
+      icon: "text-amber-600",
+      label: "text-amber-700",
+      value: "text-amber-900",
+    },
+    green: {
+      base: "border-emerald-100 bg-emerald-50/60",
+      active: "border-emerald-300 bg-emerald-100/80 shadow-sm ring-1 ring-emerald-200",
+      icon: "text-emerald-600",
+      label: "text-emerald-700",
+      value: "text-emerald-900",
+    },
+    red: {
+      base: "border-red-100 bg-red-50/60",
+      active: "border-red-300 bg-red-100/80 shadow-sm ring-1 ring-red-200",
+      icon: "text-red-600",
+      label: "text-red-700",
+      value: "text-red-900",
+    },
+  };
 
   const tabs = useMemo(
     () => [
@@ -210,40 +237,17 @@ function ReservationsPage() {
     [],
   );
 
-  const filters = useMemo(
+  const statusOptions = useMemo(
     () => [
-      ...(isOwner
-        ? [
-            {
-              key: "branch",
-              options: OWNER_BRANCH_FILTER_OPTIONS,
-              value: branchFilter,
-              onChange: (value) => {
-                setBranchFilter(value);
-                setCurrentPage(1);
-              },
-            },
-          ]
-        : []),
-      {
-        key: "status",
-        options: [
-          { value: "all", label: "All Status" },
-          { value: "in_progress", label: "In Progress" },
-          { value: "overdue", label: "Overdue" },
-          ...CANONICAL_RESERVATION_STATUSES.map((status) => ({
-            value: status,
-            label: RESERVATION_STATUS_LABELS[status] || status,
-          })),
-        ],
-        value: statusFilter,
-        onChange: (value) => {
-          setStatusFilter(value);
-          setCurrentPage(1);
-        },
-      },
+      { value: "all", label: "All Status" },
+      { value: "in_progress", label: "In Progress" },
+      { value: "overdue", label: "Overdue" },
+      ...CANONICAL_RESERVATION_STATUSES.map((status) => ({
+        value: status,
+        label: RESERVATION_STATUS_LABELS[status] || status,
+      })),
     ],
-    [branchFilter, isOwner, statusFilter],
+    [],
   );
 
   const prefetchReservationDetail = useCallback(async (reservationId) => {
@@ -378,180 +382,347 @@ function ReservationsPage() {
     });
   }, [refetchReservations]);
 
-  const columns = useMemo(
-    () => [
-      {
-        key: "applicant",
-        sortKey: "customer",
-        label: "Applicant",
-        sortable: true,
-        render: (row) => (
-          <div className="res-applicant-cell">
-            <div
-              className="res-avatar"
-              style={{ background: avatarColor(row.customer) }}
-              aria-label={row.customer}
-            >
-              {initials(row.customer)}
-            </div>
-            <div className="res-applicant-info">
-              <span className="res-applicant-name">{row.customer}</span>
-              <span className="res-applicant-email">{row.email}</span>
-              <span className="res-applicant-code">{row.reservationCode}</span>
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "room",
-        label: "Room",
-        sortable: true,
-        render: (row) => (
-          <div className="res-room-cell">
-            <span className="res-room-name">{row.room}</span>
-            <span className="res-room-meta">
-              {row.roomType || "Room"} · {row.branch}
-            </span>
-          </div>
-        ),
-      },
-      {
-        key: "status",
-        label: "Status",
-        render: (row) => (
-          <StatusBadge status={checkOverdueReservation(row) ? "overdue" : row.status} />
-        ),
-      },
-      {
-        key: "moveInDate",
-        label: "Move-In",
-        sortable: true,
-        render: (row) => formatShortDate(row.moveInDate),
-      },
-      {
-        key: "createdAt",
-        label: "Date",
-        sortable: true,
-        render: (row) => formatShortDate(row.createdAt),
-      },
-      {
-        key: "actions",
-        label: "",
-        width: "70px",
-        align: "right",
-        render: (row) => (
-          <div className="res-actions" onClick={(event) => event.stopPropagation()}>
-            <button
-              className="res-icon-btn"
-              title="View details"
-              onClick={() => handleView(row.id)}
-            >
-              <Eye size={16} />
-            </button>
-            {can("manageReservations") && (
-              <button
-                className="res-icon-btn res-icon-btn--danger"
-                title="Delete"
-                onClick={() => handleDelete(row.id)}
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </div>
-        ),
-      },
-    ],
-    [can, handleDelete, handleView],
-  );
+  const paginatedReservations = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return sortedReservations.slice(start, start + itemsPerPage);
+  }, [currentPage, itemsPerPage, sortedReservations]);
+
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const paginatedStart = totalFiltered === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const paginatedEnd = Math.min(currentPage * itemsPerPage, totalFiltered);
+
+  const handleSort = useCallback((key) => {
+    setSortState((previous) => {
+      if (previous.key !== key) return { key, dir: "asc" };
+      return { key, dir: previous.dir === "asc" ? "desc" : "asc" };
+    });
+  }, []);
+
+  const sortIndicator = (key) => {
+    if (sortState.key !== key) return "";
+    return sortState.dir === "asc" ? "▲" : "▼";
+  };
 
   return (
     <>
-      <PageShell tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
-        <PageShell.Content>
-          {activeTab === "reservations" && (
-            <section
-              id="page-shell-panel-reservations"
-              className="page-shell__panel reservations-workspace"
-              role="tabpanel"
-              aria-labelledby="page-shell-tab-reservations"
-            >
-              <div className="reservations-workspace__summary">
-                <SummaryBar
-                  items={summaryItems}
-                  activeIndex={activeSummaryIndex}
-                  onItemClick={(index) => {
-                    const nextFilter = index < 0 ? "all" : SUMMARY_FILTERS[index];
-                    setStatusFilter(nextFilter);
+      <div className="min-h-screen bg-gray-50/50">
+        <div className="border-b border-gray-200/60 bg-gradient-to-b from-gray-100/70 to-gray-50/40">
+          <div className="w-full px-4 py-3 sm:px-6 lg:px-8">
+            <div className="flex items-center">
+              <div className="inline-flex items-center gap-1 rounded-2xl border border-gray-200/80 bg-white/90 p-1.5 shadow-sm backdrop-blur">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`rounded-xl px-4 py-2.5 text-sm font-semibold tracking-[0.01em] transition-all duration-200 ${
+                    activeTab === tab.key
+                      ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
+                      : "text-gray-500 hover:bg-white/70 hover:text-gray-700"
+                  }`}
+                  id={`page-shell-tab-${tab.key}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {activeTab === "reservations" && (
+          <section
+            id="page-shell-panel-reservations"
+            role="tabpanel"
+            aria-labelledby="page-shell-tab-reservations"
+            className="w-full px-4 pb-4 pt-3 sm:px-6 lg:px-8"
+          >
+            <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
+              {summaryItems.map((item, index) => {
+                const Icon = item.icon;
+                const isActive = statusFilter === SUMMARY_FILTERS[index];
+                const palette = summaryColorClasses[item.color] || summaryColorClasses.blue;
+
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => {
+                      const nextFilter = SUMMARY_FILTERS[index] || "all";
+                      setStatusFilter(nextFilter);
+                      setCurrentPage(1);
+                    }}
+                    className={`min-h-[132px] rounded-xl border p-5 text-left transition-all ${
+                      isActive
+                        ? palette.active
+                        : `${palette.base} hover:shadow-sm`
+                    }`}
+                  >
+                    <div className="mb-3 flex items-center gap-2.5">
+                      <Icon
+                        className={`h-5 w-5 ${palette.icon}`}
+                      />
+                      <span
+                        className={`text-sm font-medium ${palette.label}`}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    <div
+                      className={`text-3xl font-semibold leading-none ${palette.value}`}
+                    >
+                      {item.value}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                <div className="relative w-full md:max-w-lg">
+                  <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(event) => {
+                      setSearchTerm(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="Search by name, email, code, or room..."
+                    className="w-full rounded-lg border border-gray-300 py-2.5 pl-11 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {isOwner && (
+                  <select
+                    value={branchFilter}
+                    onChange={(event) => {
+                      setBranchFilter(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {OWNER_BRANCH_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <select
+                  value={statusFilter}
+                  onChange={(event) => {
+                    setStatusFilter(event.target.value);
                     setCurrentPage(1);
                   }}
-                />
+                  className="rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {statusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="reservations-workspace__toolbar">
-                <ActionBar
-                  search={{
-                    value: searchTerm,
-                    onChange: (value) => {
-                      setSearchTerm(value);
-                      setCurrentPage(1);
-                    },
-                    placeholder: "Search by name, email, code, or room...",
-                  }}
-                  filters={filters}
-                />
-              </div>
-              <div className="reservations-workspace__table">
-                <DataTable
-                  columns={columns}
-                  data={sortedReservations}
-                  loading={loading}
-                  disableRowInteraction
-                  sorting="external"
-                  sortKey={sortState.key}
-                  sortDir={sortState.dir}
-                  onSortChange={(key, dir) => setSortState({ key, dir })}
-                  onRowHover={(row) => {
-                    prefetchReservationDetail(row.id).catch(() => {});
-                  }}
-                  onRowFocus={(row) => {
-                    prefetchReservationDetail(row.id).catch(() => {});
-                  }}
-                  pagination={{
-                    page: currentPage,
-                    pageSize: itemsPerPage,
-                    total: totalFiltered,
-                    onPageChange: setCurrentPage,
-                  }}
-                  emptyState={{
-                    icon: CalendarCheck,
-                    title: "No reservations found",
-                    description: "Try adjusting your filters.",
-                  }}
-                />
-              </div>
-            </section>
-          )}
-          {activeTab === "visits" && (
-            <section
-              id="page-shell-panel-visits"
-              className="page-shell__panel"
-              role="tabpanel"
-              aria-labelledby="page-shell-tab-visits"
-            >
-              <VisitSchedulesTab />
-            </section>
-          )}
-          {activeTab === "inquiries" && (
-            <section
-              id="page-shell-panel-inquiries"
-              className="page-shell__panel"
-              role="tabpanel"
-              aria-labelledby="page-shell-tab-inquiries"
-            >
-              <InquiriesPage isEmbedded />
-            </section>
-          )}
-        </PageShell.Content>
-      </PageShell>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+              {loading ? (
+                <div className="p-12 text-center">
+                  <p className="text-base text-gray-500">Loading reservations...</p>
+                </div>
+              ) : paginatedReservations.length === 0 ? (
+                <div className="p-12 text-center">
+                  <CalendarCheck className="mx-auto mb-3 h-12 w-12 text-gray-300" />
+                  <p className="text-base font-medium text-gray-900">No reservations found</p>
+                  <p className="mt-1 text-base text-gray-500">Try adjusting your filters</p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b border-gray-200 bg-gray-50/80">
+                        <tr>
+                          <th className="px-4 py-3 text-left">
+                            <button
+                              className="text-sm font-semibold uppercase tracking-wide text-gray-600"
+                              onClick={() => handleSort("customer")}
+                            >
+                              Applicant {sortIndicator("customer")}
+                            </button>
+                          </th>
+                          <th className="px-4 py-3 text-left">
+                            <button
+                              className="text-sm font-semibold uppercase tracking-wide text-gray-600"
+                              onClick={() => handleSort("room")}
+                            >
+                              Room {sortIndicator("room")}
+                            </button>
+                          </th>
+                          <th className="px-4 py-3 text-left">
+                            <span className="text-sm font-semibold uppercase tracking-wide text-gray-600">
+                              Status
+                            </span>
+                          </th>
+                          <th className="px-4 py-3 text-left">
+                            <button
+                              className="text-sm font-semibold uppercase tracking-wide text-gray-600"
+                              onClick={() => handleSort("moveInDate")}
+                            >
+                              Move-In {sortIndicator("moveInDate")}
+                            </button>
+                          </th>
+                          <th className="px-4 py-3 text-left">
+                            <button
+                              className="text-sm font-semibold uppercase tracking-wide text-gray-600"
+                              onClick={() => handleSort("createdAt")}
+                            >
+                              Date {sortIndicator("createdAt")}
+                            </button>
+                          </th>
+                          <th className="w-[100px] px-4 py-3 text-right">
+                            <span className="text-sm font-semibold uppercase tracking-wide text-gray-600">
+                              Actions
+                            </span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {paginatedReservations.map((row) => (
+                          <tr
+                            key={row.id}
+                            className="transition-colors hover:bg-gray-50/50"
+                            onMouseEnter={() => {
+                              prefetchReservationDetail(row.id).catch(() => {});
+                            }}
+                            onFocus={() => {
+                              prefetchReservationDetail(row.id).catch(() => {});
+                            }}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                                  style={{ background: avatarColor(row.customer) }}
+                                  aria-label={row.customer}
+                                >
+                                  {initials(row.customer)}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-base font-medium text-gray-900">
+                                    {row.customer}
+                                  </div>
+                                  <div className="truncate text-sm text-gray-500">{row.email}</div>
+                                  <div className="font-mono text-sm text-gray-400">
+                                    {row.reservationCode}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-base font-medium text-gray-900">{row.room}</div>
+                              <div className="text-sm text-gray-500">
+                                {row.roomType || "Room"} · {row.branch}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <StatusBadge
+                                status={checkOverdueReservation(row) ? "overdue" : row.status}
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-base text-gray-700">
+                                {formatShortDate(row.moveInDate)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-base text-gray-700">
+                                {formatShortDate(row.createdAt)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div
+                                className="flex items-center justify-end gap-1"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <button
+                                  onClick={() => handleView(row.id)}
+                                  className="rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                                  title="View details"
+                                >
+                                  <Eye className="h-5 w-5" />
+                                </button>
+                                {can("manageReservations") && (
+                                  <button
+                                    onClick={() => handleDelete(row.id)}
+                                    className="rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-5 w-5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+                      <div className="text-base text-gray-500">
+                        Showing {paginatedStart} to {paginatedEnd} of {totalFiltered} results
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                          disabled={currentPage === 1}
+                          className="rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </button>
+                        <span className="text-base text-gray-700">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                          disabled={currentPage === totalPages}
+                          className="rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeTab === "visits" && (
+          <section
+            id="page-shell-panel-visits"
+            role="tabpanel"
+            aria-labelledby="page-shell-tab-visits"
+            className="w-full px-4 pb-4 pt-3 sm:px-6 lg:px-8"
+          >
+            <VisitSchedulesTab />
+          </section>
+        )}
+
+        {activeTab === "inquiries" && (
+          <section
+            id="page-shell-panel-inquiries"
+            role="tabpanel"
+            aria-labelledby="page-shell-tab-inquiries"
+            className="w-full px-4 pb-4 pt-3 sm:px-6 lg:px-8"
+          >
+            <InquiriesPage isEmbedded />
+          </section>
+        )}
+      </div>
 
       {selectedReservation && (
         <ReservationDetailsModal

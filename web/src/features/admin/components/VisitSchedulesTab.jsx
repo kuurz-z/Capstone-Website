@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckCircle2,
   RotateCcw,
+  Search,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -13,7 +14,7 @@ import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import VisitDetailsModal from "./VisitDetailsModal";
-import { ActionBar, DataTable, StatusBadge, SummaryBar } from "./shared";
+import { StatusBadge } from "./shared";
 import { mapVisitScheduleRows } from "../utils/reservationRows";
 import "../styles/design-tokens.css";
 import "../styles/admin-reservations.css";
@@ -252,311 +253,338 @@ function VisitSchedulesTab() {
     return result;
   }, [activeFilter, branchFilter, completed, noShows, rejected, schedules, searchTerm, sortBy, upcoming]);
 
-  const visitFilters = useMemo(
-    () => [
-      {
-        key: "branch",
-        options: [
-          { value: "all", label: "All Branches" },
-          { value: "Gil Puyat", label: "Gil Puyat" },
-          { value: "Guadalupe", label: "Guadalupe" },
-        ],
-        value: branchFilter,
-        onChange: (value) => setBranchFilter(value),
-      },
-      {
-        key: "sort",
-        options: [
-          { value: "recent", label: "Most Recent" },
-          { value: "oldest", label: "Oldest First" },
-          { value: "name-az", label: "Name A-Z" },
-          { value: "name-za", label: "Name Z-A" },
-        ],
-        value: sortBy,
-        onChange: (value) => setSortBy(value),
-      },
-    ],
-    [branchFilter, sortBy],
-  );
-
-  const columns = useMemo(
-    () => [
-      {
-        key: "customer",
-        label: "Visitor",
-        render: (row) => (
-          <div className="res-applicant-cell" style={{ opacity: row.isHistorical ? 0.55 : 1 }}>
-            <div className="res-avatar" style={{ background: avatarColor(row.customer) }}>
-              {initials(row.customer)}
-            </div>
-            <div className="res-applicant-info">
-              <span className="res-applicant-name">
-                {row.customer}
-                {row.historyStatus === "cancelled" ? (
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      padding: "1px 6px",
-                      borderRadius: 8,
-                      background: "#FEF2F2",
-                      color: "#DC2626",
-                    }}
-                  >
-                    Cancelled
-                  </span>
-                ) : row.attemptNumber != null ? (
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      padding: "1px 6px",
-                      borderRadius: 8,
-                      background: row.isHistorical ? "#F3F4F6" : "#EEF2FF",
-                      color: row.isHistorical ? "#9CA3AF" : "#4F46E5",
-                    }}
-                  >
-                    Attempt {row.attemptNumber}
-                  </span>
-                ) : null}
-              </span>
-              <span className="res-applicant-code">{row.email}</span>
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "branch",
-        label: "Branch",
-        render: (row) => <span style={{ opacity: row.isHistorical ? 0.55 : 1 }}>{row.branch}</span>,
-      },
-      {
-        key: "room",
-        label: "Room",
-        render: (row) => <span style={{ opacity: row.isHistorical ? 0.55 : 1 }}>{row.room}</span>,
-      },
-      {
-        key: "scheduledDate",
-        label: "Requested",
-        render: (row) => {
-          const dateValue = row.scheduledDate;
-          if (!dateValue) {
-            return (
-              <span style={{ color: "var(--text-muted)", opacity: row.isHistorical ? 0.55 : 1 }}>
-                -
-              </span>
-            );
-          }
-          const date = new Date(dateValue);
-          return (
-            <div style={{ lineHeight: 1.5, opacity: row.isHistorical ? 0.55 : 1 }}>
-              <div
-                style={{
-                  fontWeight: 500,
-                  color: "var(--text-primary)",
-                  fontSize: "var(--font-size-sm)",
-                }}
-              >
-                {date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </div>
-              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-                {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        key: "visitDate",
-        label: "Visit Appointment",
-        render: (row) => (
-          <div style={{ lineHeight: 1.5, opacity: row.isHistorical ? 0.55 : 1 }}>
-            <div style={{ fontWeight: 500, color: "var(--text-primary)" }}>
-              {row.visitDate
-                ? new Date(row.visitDate).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                : "-"}
-            </div>
-            <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-              {row.visitTime}
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "status",
-        label: "Status",
-        render: (row) => {
-          const ActionedTime = () => {
-            if (!row.actionedAt) return null;
-            const date = new Date(row.actionedAt);
-            return (
-              <div style={{ marginTop: 4, lineHeight: 1.4 }}>
-                <div
-                  style={{
-                    fontSize: "var(--font-size-xs)",
-                    color: "var(--text-primary)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {date.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </div>
-                <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-                  {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                </div>
-              </div>
-            );
-          };
-
-          if (row.isHistorical) {
-            const historyMap = {
-              rejected: { status: "overdue", label: "Rejected" },
-              approved: { status: "verified", label: "Approved" },
-              cancelled: { status: "overdue", label: "Cancelled" },
-              pending: { status: "pending", label: "Scheduled" },
-            };
-            const config = historyMap[row.historyStatus] || historyMap.pending;
-            return (
-              <div style={{ opacity: 0.55 }}>
-                <StatusBadge status={config.status} label={config.label} />
-                <ActionedTime />
-              </div>
-            );
-          }
-
-          if (row.scheduleRejected) {
-            return <StatusBadge status="overdue" label="Rejected" />;
-          }
-
-          const isUpcoming = !row.visitApproved && new Date(row.visitDate) >= new Date();
-          const status = row.visitApproved ? "verified" : isUpcoming ? "pending" : "overdue";
-          const label = row.visitApproved ? "Completed" : isUpcoming ? "Upcoming" : "No Show";
-          return (
-            <div>
-              <StatusBadge status={status} label={label} />
-              <ActionedTime />
-            </div>
-          );
-        },
-      },
-      {
-        key: "actions",
-        label: "",
-        width: "180px",
-        align: "right",
-        render: (row) => {
-          if (row.isHistorical) {
-            return (
-              <div className="res-actions" style={{ opacity: 0.55 }}>
-                <button
-                  className="res-icon-btn res-icon-btn--danger"
-                  title="Delete this history entry"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleDeleteHistoryEntry(row.reservationId, row.historyIndex);
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            );
-          }
-
-          const now = new Date();
-          const visitDate = new Date(row.visitDate);
-          const isUpcoming = !row.visitApproved && !row.scheduleRejected && visitDate >= now;
-          return (
-            <div className="res-actions">
-              {isUpcoming && (
-                <>
-                  <button
-                    className="res-action-btn res-action-btn--success"
-                    disabled={actionLoading === row.id}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleVerify(row.id);
-                    }}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="res-icon-btn"
-                    title="Reject schedule"
-                    style={{ color: "#DC2626" }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedSchedule(row);
-                    }}
-                  >
-                    <Ban size={14} />
-                  </button>
-                </>
-              )}
-              {row.visitApproved && (
-                <button
-                  className="res-icon-btn"
-                  title="Revoke verification"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleRevoke(row.id);
-                  }}
-                >
-                  <RotateCcw size={14} />
-                </button>
-              )}
-              <button
-                className="res-icon-btn res-icon-btn--danger"
-                title="Delete schedule"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleDelete(row.id);
-                }}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          );
-        },
-      },
-    ],
-    [actionLoading],
-  );
+  const summaryColorClasses = {
+    blue: {
+      base: "border-blue-100 bg-blue-50/60",
+      active: "border-blue-300 bg-blue-100/80 shadow-sm ring-1 ring-blue-200",
+      icon: "text-blue-600",
+      label: "text-blue-700",
+      value: "text-blue-900",
+    },
+    orange: {
+      base: "border-amber-100 bg-amber-50/60",
+      active: "border-amber-300 bg-amber-100/80 shadow-sm ring-1 ring-amber-200",
+      icon: "text-amber-600",
+      label: "text-amber-700",
+      value: "text-amber-900",
+    },
+    green: {
+      base: "border-emerald-100 bg-emerald-50/60",
+      active: "border-emerald-300 bg-emerald-100/80 shadow-sm ring-1 ring-emerald-200",
+      icon: "text-emerald-600",
+      label: "text-emerald-700",
+      value: "text-emerald-900",
+    },
+    red: {
+      base: "border-red-100 bg-red-50/60",
+      active: "border-red-300 bg-red-100/80 shadow-sm ring-1 ring-red-200",
+      icon: "text-red-600",
+      label: "text-red-700",
+      value: "text-red-900",
+    },
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-lg)" }}>
-      <SummaryBar items={summaryItems} onItemClick={setActiveFilter} activeIndex={activeFilter} />
-      <ActionBar
-        search={{
-          value: searchTerm,
-          onChange: (value) => setSearchTerm(value),
-          placeholder: "Search by name, email, code, or room...",
-        }}
-        filters={visitFilters}
-      />
-      <DataTable
-        columns={columns}
-        data={displayData}
-        loading={loading}
-        sorting="external"
-        emptyState={{
-          icon: CalendarDays,
-          title: "No visit schedules",
-          description: "Visit schedules will appear here.",
-        }}
-      />
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {summaryItems.map((item, index) => {
+          const Icon = item.icon;
+          const isActive = activeFilter === index;
+          const palette = summaryColorClasses[item.color] || summaryColorClasses.blue;
+
+          return (
+            <button
+              key={item.label}
+              onClick={() => setActiveFilter(index)}
+              className={`min-h-[120px] rounded-xl border p-5 text-left transition-all ${
+                isActive ? palette.active : `${palette.base} hover:shadow-sm`
+              }`}
+            >
+              <div className="mb-3 flex items-center gap-2.5">
+                <Icon className={`h-5 w-5 ${palette.icon}`} />
+                <span className={`text-sm font-medium ${palette.label}`}>{item.label}</span>
+              </div>
+              <div className={`text-3xl font-semibold leading-none ${palette.value}`}>
+                {item.value}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="relative w-full md:max-w-lg">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search by name, email, code, or room..."
+              className="w-full rounded-lg border border-gray-300 py-2.5 pl-11 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <select
+            value={branchFilter}
+            onChange={(event) => setBranchFilter(event.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Branches</option>
+            <option value="Gil Puyat">Gil Puyat</option>
+            <option value="Guadalupe">Guadalupe</option>
+          </select>
+
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value)}
+            className="rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="recent">Most Recent</option>
+            <option value="oldest">Oldest First</option>
+            <option value="name-az">Name A-Z</option>
+            <option value="name-za">Name Z-A</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        {loading ? (
+          <div className="p-12 text-center">
+            <p className="text-base text-gray-500">Loading visit schedules...</p>
+          </div>
+        ) : displayData.length === 0 ? (
+          <div className="p-12 text-center">
+            <CalendarDays className="mx-auto mb-3 h-12 w-12 text-gray-300" />
+            <p className="text-base font-medium text-gray-900">No visit schedules</p>
+            <p className="mt-1 text-base text-gray-500">Visit schedules will appear here.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b border-gray-200 bg-gray-50/80">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Visitor
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Branch
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Room
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Requested
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Visit Appointment
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Status
+                  </th>
+                  <th className="w-[180px] px-4 py-3 text-right text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {displayData.map((row) => {
+                  const isDim = row.isHistorical ? "opacity-55" : "";
+                  const now = new Date();
+                  const visitDate = new Date(row.visitDate);
+                  const isUpcoming = !row.visitApproved && !row.scheduleRejected && visitDate >= now;
+                  const actionedDate = row.actionedAt ? new Date(row.actionedAt) : null;
+
+                  let statusNode;
+                  if (row.isHistorical) {
+                    const historyMap = {
+                      rejected: { status: "overdue", label: "Rejected" },
+                      approved: { status: "verified", label: "Approved" },
+                      cancelled: { status: "overdue", label: "Cancelled" },
+                      pending: { status: "pending", label: "Scheduled" },
+                    };
+                    const config = historyMap[row.historyStatus] || historyMap.pending;
+                    statusNode = (
+                      <div className="opacity-60">
+                        <StatusBadge status={config.status} label={config.label} />
+                        {actionedDate && (
+                          <div className="mt-1 text-xs text-gray-500">
+                            {actionedDate.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                            <div>
+                              {actionedDate.toLocaleTimeString("en-US", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } else if (row.scheduleRejected) {
+                    statusNode = <StatusBadge status="overdue" label="Rejected" />;
+                  } else {
+                    const status = row.visitApproved ? "verified" : isUpcoming ? "pending" : "overdue";
+                    const label = row.visitApproved ? "Completed" : isUpcoming ? "Upcoming" : "No Show";
+                    statusNode = (
+                      <div>
+                        <StatusBadge status={status} label={label} />
+                        {actionedDate && (
+                          <div className="mt-1 text-xs text-gray-500">
+                            {actionedDate.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                            <div>
+                              {actionedDate.toLocaleTimeString("en-US", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <tr key={row.id} className="transition-colors hover:bg-gray-50/50">
+                      <td className="px-4 py-3">
+                        <div className={`flex items-center gap-3 ${isDim}`}>
+                          <div
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                            style={{ background: avatarColor(row.customer) }}
+                          >
+                            {initials(row.customer)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-base font-medium text-gray-900">
+                              {row.customer}
+                              {row.historyStatus === "cancelled" ? (
+                                <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                                  Cancelled
+                                </span>
+                              ) : row.attemptNumber != null ? (
+                                <span
+                                  className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    row.isHistorical
+                                      ? "bg-gray-100 text-gray-500"
+                                      : "bg-indigo-50 text-indigo-600"
+                                  }`}
+                                >
+                                  Attempt {row.attemptNumber}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="truncate text-sm text-gray-500">{row.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-base text-gray-700">
+                        <span className={isDim}>{row.branch}</span>
+                      </td>
+                      <td className="px-4 py-3 text-base text-gray-700">
+                        <span className={isDim}>{row.room}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className={`leading-5 ${isDim}`}>
+                          <div className="text-sm font-medium text-gray-900">
+                            {row.scheduledDate
+                              ? new Date(row.scheduledDate).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })
+                              : "-"}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {row.scheduledDate
+                              ? new Date(row.scheduledDate).toLocaleTimeString("en-US", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "-"}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className={`leading-5 ${isDim}`}>
+                          <div className="text-sm font-medium text-gray-900">
+                            {row.visitDate
+                              ? new Date(row.visitDate).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })
+                              : "-"}
+                          </div>
+                          <div className="text-xs text-gray-500">{row.visitTime || "-"}</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{statusNode}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          {row.isHistorical ? (
+                            <button
+                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                              title="Delete this history entry"
+                              onClick={() => handleDeleteHistoryEntry(row.reservationId, row.historyIndex)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          ) : (
+                            <>
+                              {isUpcoming && (
+                                <>
+                                  <button
+                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                                    disabled={actionLoading === row.id}
+                                    onClick={() => handleVerify(row.id)}
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                    title="Reject schedule"
+                                    onClick={() => setSelectedSchedule(row)}
+                                  >
+                                    <Ban size={14} />
+                                  </button>
+                                </>
+                              )}
+                              {row.visitApproved && (
+                                <button
+                                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                                  title="Revoke verification"
+                                  onClick={() => handleRevoke(row.id)}
+                                >
+                                  <RotateCcw size={14} />
+                                </button>
+                              )}
+                              <button
+                                className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                title="Delete schedule"
+                                onClick={() => handleDelete(row.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <ConfirmModal
         isOpen={confirmModal.open}
         onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
@@ -576,4 +604,3 @@ function VisitSchedulesTab() {
 }
 
 export default VisitSchedulesTab;
-

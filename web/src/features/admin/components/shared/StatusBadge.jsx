@@ -1,4 +1,3 @@
-import "./StatusBadge.css";
 import { normalizeReservationStatus } from "../../../../shared/utils/lifecycleNaming";
 
 /**
@@ -29,7 +28,7 @@ const STATUS_MAP = {
   "payment_pending":{ label: "Payment Pending", variant: "warning" },
   "reserved":       { label: "Reserved",     variant: "info" },
   "new":            { label: "New",          variant: "info" },
-  "responded":      { label: "Responded",    variant: "info" },
+  "responded":      { label: "Responded",    variant: "success" },
   "visit_pending":  { label: "Visit Pending", variant: "info" },
   "overdue":        { label: "Overdue",      variant: "error" },
   "cancelled":      { label: "Cancelled",    variant: "error" },
@@ -50,9 +49,18 @@ export default function StatusBadge({ status, label: customLabel }) {
   const config = STATUS_MAP[normalized] || { label: status || "Unknown", variant: "neutral" };
   const displayLabel = customLabel || config.label;
 
+  const variantClasses = {
+    success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    warning: "border border-amber-200 bg-amber-50 text-amber-700",
+    error: "border border-red-200 bg-red-50 text-red-700",
+    info: "border border-blue-200 bg-blue-50 text-blue-700",
+    neutral: "border border-slate-200 bg-slate-100 text-slate-700",
+  };
+
   return (
-    <span className={`status-badge status-badge--${config.variant}`}>
-      <span className="status-badge__dot" />
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold capitalize leading-none tracking-[0.01em] ${variantClasses[config.variant] || variantClasses.neutral}`}
+    >
       {displayLabel}
     </span>
   );

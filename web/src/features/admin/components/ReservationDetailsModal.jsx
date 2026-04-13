@@ -178,6 +178,26 @@ export default function ReservationDetailsModal({
       reservation.leaseDuration ? `${reservation.leaseDuration} months` : "\u2014",
     ],
   ];
+  const activityTimeline = [
+    {
+      label: "Reservation Created",
+      value: fmtDate(reservation.createdAt),
+    },
+    {
+      label: "Target Move-in",
+      value: fmtDate(moveInDate),
+    },
+    reservation.finalMoveInDate
+      ? {
+          label: "Final Move-in",
+          value: fmtDate(reservation.finalMoveInDate),
+        }
+      : null,
+    {
+      label: "Current Status",
+      value: appearance.label,
+    },
+  ].filter(Boolean);
 
   const doAction = (key, apiCall, successMsg) => {
     const modalConfig =
@@ -240,7 +260,7 @@ export default function ReservationDetailsModal({
       <div className="rdm-overlay" onClick={onClose}>
         <div className="rdm" onClick={(event) => event.stopPropagation()}>
           <div className="rdm-top-card">
-            <div className="rdm-top-header">
+            <div className="rdm-top-header rdm-top-header--gradient">
               <div className="rdm-guest-block">
                 <div className="rdm-avatar" aria-hidden="true">
                   {guestInitials}
@@ -255,240 +275,282 @@ export default function ReservationDetailsModal({
                     <span className="rdm-header-detail">
                       {reservation.email ?? "\u2014"}
                     </span>
-                    <div
-                      className="rdm-status-chip rdm-status-chip-dark"
-                      style={{
-                        "--rdm-status-bg": appearance.bg,
-                        "--rdm-status-color": appearance.color,
-                        "--rdm-status-dot": appearance.dot,
-                      }}
-                    >
-                      <span className="rdm-status-dot" />
-                      {appearance.label}
-                    </div>
-                    {isOverdue && (
-                      <div className="rdm-overdue-chip">
-                        {daysOverdue} day{daysOverdue > 1 ? "s" : ""} overdue
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
-              <button
-                className="rdm-close rdm-close-dark"
-                onClick={onClose}
-                aria-label="Close"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M18 6L6 18M6 6l12 12"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <div className="rdm-top-section">
-              <h3 className="rdm-top-section-label">Booking Details</h3>
-              <div className="rdm-info-grid rdm-info-grid-dark">
-                {bookingDetails.map(([label, value]) => (
-                  <div className="rdm-info-item" key={label}>
-                    <span className="rdm-info-label">{label}</span>
-                    <span
-                      className={`rdm-info-value ${label === "Move-in" && isOverdue ? "rdm-danger" : ""}`}
-                    >
-                      {value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {status !== "cancelled" && !isMovedOut && (
-              <div className="rdm-actions-card rdm-actions-card-dark">
-                {stageGuide && (
-                  <div className="rdm-stage-guide rdm-stage-guide-dark">
-                    <div className="rdm-stage-guide-icon-wrap">
-                      <stageGuide.Icon size={16} strokeWidth={1.75} />
-                    </div>
-                    <p className="rdm-stage-guide-msg">{stageGuide.message}</p>
+              <div className="rdm-header-actions">
+                <div
+                  className="rdm-status-chip rdm-status-chip-dark"
+                  style={{
+                    "--rdm-status-bg": appearance.bg,
+                    "--rdm-status-color": appearance.color,
+                    "--rdm-status-dot": appearance.dot,
+                  }}
+                >
+                  <span className="rdm-status-dot" />
+                  {appearance.label}
+                </div>
+                {isOverdue && (
+                  <div className="rdm-overdue-chip">
+                    {daysOverdue} day{daysOverdue > 1 ? "s" : ""} overdue
                   </div>
                 )}
-
-                {allowedActions.includes("moveIn") && (
-                  <button
-                    className="rdm-action rdm-action-dark"
-                    onClick={() => {
-                      setMeterReadingVal("");
-                      setShowMeterPrompt(true);
-                    }}
-                    disabled={isSubmitting}
-                    title="Mark tenant as moved in and record the initial meter reading"
-                  >
-                    Mark as moved in
-                  </button>
-                )}
-
-                {allowedActions.includes("extend") && (
-                  <button
-                    className="rdm-action rdm-action-dark"
-                    onClick={() => setShowExtendPrompt(true)}
-                    disabled={isSubmitting}
-                  >
-                    Reschedule move-in
-                  </button>
-                )}
-
-                {allowedActions.includes("cancelled") && (
-                  <button
-                    className="rdm-action rdm-action-dark rdm-action-dark-cancel"
-                    onClick={() =>
-                      doAction(
-                        "cancel",
-                        () =>
-                          reservationApi.update(reservation.id, {
-                            status: "cancelled",
-                          }),
-                        "Reservation cancelled",
-                      )
-                    }
-                    disabled={isSubmitting}
-                  >
-                    Cancel reservation
-                  </button>
-                )}
+                <button
+                  className="rdm-close rdm-close-dark"
+                  onClick={onClose}
+                  aria-label="Close"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M18 6L6 18M6 6l12 12"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
               </div>
-            )}
+            </div>
           </div>
 
-          <div className="rdm-body">
-            <div className="rdm-section">
-              <h4 className="rdm-section-title">Admin Notes</h4>
-              <form onSubmit={saveNotes} className="rdm-notes-form">
-                <textarea
-                  className="rdm-notes-input"
-                  placeholder="Add internal notes..."
-                  value={adminNotes}
-                  onChange={(event) => setAdminNotes(event.target.value)}
-                  rows="2"
-                />
-                {adminNotes !== (reservation?.notes || "") && (
-                  <button
-                    type="submit"
-                    className="rdm-action rdm-action-outline"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Saving..." : "Save Notes"}
-                  </button>
-                )}
-              </form>
-            </div>
-
-            <button
-              type="button"
-              className="rdm-expand-btn"
-              onClick={() => setShowPersonal((previous) => !previous)}
-            >
-              Personal Details
-              <svg
-                className={`rdm-chevron ${showPersonal ? "open" : ""}`}
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <path
-                  d="M6 9l6 6 6-6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            {showPersonal && (
-              <div className="rdm-expand-content">
-                <div className="rdm-info-grid">
-                  {PERSONAL_FIELDS(reservation).map(([label, value]) => (
+          <div className="rdm-body rdm-layout">
+            <div className="rdm-main-column">
+              <div className="rdm-section rdm-surface-card">
+                <h3 className="rdm-top-section-label">Booking Details</h3>
+                <div className="rdm-info-grid rdm-info-grid-dark">
+                  {bookingDetails.map(([label, value]) => (
                     <div className="rdm-info-item" key={label}>
                       <span className="rdm-info-label">{label}</span>
-                      <span className="rdm-info-value">{value}</span>
+                      <span
+                        className={`rdm-info-value ${label === "Move-in" && isOverdue ? "rdm-danger" : ""}`}
+                      >
+                        {value}
+                      </span>
                     </div>
                   ))}
                 </div>
+              </div>
 
-                {reservation.emergencyContact && (
-                  <div className="rdm-info-grid" style={{ marginTop: 10 }}>
-                    {[
-                      [
-                        "Emergency Contact",
-                        fmt(reservation.emergencyContact.name),
-                      ],
-                      [
-                        "Relationship",
-                        fmt(reservation.emergencyContact.relationship),
-                      ],
-                      [
-                        "Contact #",
-                        fmt(reservation.emergencyContact.contactNumber),
-                      ],
-                    ].map(([label, value]) => (
+              <div className="rdm-section rdm-surface-card">
+                <h4 className="rdm-section-title">Admin Notes</h4>
+                <form onSubmit={saveNotes} className="rdm-notes-form">
+                  <textarea
+                    className="rdm-notes-input"
+                    placeholder="Add internal notes..."
+                    value={adminNotes}
+                    onChange={(event) => setAdminNotes(event.target.value)}
+                    rows="2"
+                  />
+                  {adminNotes !== (reservation?.notes || "") && (
+                    <button
+                      type="submit"
+                      className="rdm-action rdm-action-outline"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "Saving..." : "Save Notes"}
+                    </button>
+                  )}
+                </form>
+              </div>
+
+              <button
+                type="button"
+                className="rdm-expand-btn"
+                onClick={() => setShowPersonal((previous) => !previous)}
+              >
+                Personal Details
+                <svg
+                  className={`rdm-chevron ${showPersonal ? "open" : ""}`}
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="M6 9l6 6 6-6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              {showPersonal && (
+                <div className="rdm-expand-content">
+                  <div className="rdm-info-grid">
+                    {PERSONAL_FIELDS(reservation).map(([label, value]) => (
                       <div className="rdm-info-item" key={label}>
                         <span className="rdm-info-label">{label}</span>
                         <span className="rdm-info-value">{value}</span>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-            )}
 
-            <button
-              type="button"
-              className="rdm-expand-btn"
-              onClick={() => setShowDocs((previous) => !previous)}
-            >
-              Submitted Documents
-              <svg
-                className={`rdm-chevron ${showDocs ? "open" : ""}`}
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
+                  {reservation.emergencyContact && (
+                    <div className="rdm-info-grid" style={{ marginTop: 10 }}>
+                      {[
+                        [
+                          "Emergency Contact",
+                          fmt(reservation.emergencyContact.name),
+                        ],
+                        [
+                          "Relationship",
+                          fmt(reservation.emergencyContact.relationship),
+                        ],
+                        [
+                          "Contact #",
+                          fmt(reservation.emergencyContact.contactNumber),
+                        ],
+                      ].map(([label, value]) => (
+                        <div className="rdm-info-item" key={label}>
+                          <span className="rdm-info-label">{label}</span>
+                          <span className="rdm-info-value">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="rdm-expand-btn"
+                onClick={() => setShowDocs((previous) => !previous)}
               >
-                <path
-                  d="M6 9l6 6 6-6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            {showDocs && (
-              <div className="rdm-expand-content">
-                {docs.map((doc, index) => (
-                  <div key={`${doc.label}-${index}`} className="rdm-doc-row">
-                    <span className="rdm-doc-label">{doc.label}</span>
-                    {doc.url ? (
+                Submitted Documents
+                <svg
+                  className={`rdm-chevron ${showDocs ? "open" : ""}`}
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="M6 9l6 6 6-6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              {showDocs && (
+                <div className="rdm-expand-content">
+                  {docs.map((doc, index) => (
+                    <div key={`${doc.label}-${index}`} className="rdm-doc-row">
+                      <span className="rdm-doc-label">{doc.label}</span>
+                      {doc.url ? (
+                        <button
+                          type="button"
+                          className="rdm-doc-view"
+                          onClick={() => openImage(doc.url, doc.label)}
+                        >
+                          View
+                        </button>
+                      ) : (
+                        <span className="rdm-doc-na">
+                          {doc.reason ? `Skipped: ${doc.reason}` : "Not submitted"}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <aside className="rdm-side-column">
+              <div className="rdm-side-card">
+                <h4 className="rdm-side-title">Quick Summary</h4>
+                <div className="rdm-side-summary-list">
+                  <div className="rdm-side-summary-item">
+                    <span>Reservation Fee</span>
+                    <strong>{reservationFeeLabel}</strong>
+                  </div>
+                  <div className="rdm-side-summary-item">
+                    <span>Payment Status</span>
+                    <strong>{fmt(reservation.paymentStatus)}</strong>
+                  </div>
+                  <div className="rdm-side-summary-item">
+                    <span>Payment Method</span>
+                    <strong>{fmt(reservation.paymentMethod)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {status !== "cancelled" && !isMovedOut && (
+                <div className="rdm-side-card">
+                  <h4 className="rdm-side-title">Quick Actions</h4>
+                  <div className="rdm-actions-card rdm-actions-card-dark">
+                    {stageGuide && (
+                      <div className="rdm-stage-guide rdm-stage-guide-dark">
+                        <div className="rdm-stage-guide-icon-wrap">
+                          <stageGuide.Icon size={16} strokeWidth={1.75} />
+                        </div>
+                        <p className="rdm-stage-guide-msg">{stageGuide.message}</p>
+                      </div>
+                    )}
+
+                    {allowedActions.includes("moveIn") && (
                       <button
-                        type="button"
-                        className="rdm-doc-view"
-                        onClick={() => openImage(doc.url, doc.label)}
+                        className="rdm-action rdm-action-dark"
+                        onClick={() => {
+                          setMeterReadingVal("");
+                          setShowMeterPrompt(true);
+                        }}
+                        disabled={isSubmitting}
+                        title="Mark tenant as moved in and record the initial meter reading"
                       >
-                        View
+                        Mark as moved in
                       </button>
-                    ) : (
-                      <span className="rdm-doc-na">
-                        {doc.reason ? `Skipped: ${doc.reason}` : "Not submitted"}
-                      </span>
+                    )}
+
+                    {allowedActions.includes("extend") && (
+                      <button
+                        className="rdm-action rdm-action-dark"
+                        onClick={() => setShowExtendPrompt(true)}
+                        disabled={isSubmitting}
+                      >
+                        Reschedule move-in
+                      </button>
+                    )}
+
+                    {allowedActions.includes("cancelled") && (
+                      <button
+                        className="rdm-action rdm-action-dark rdm-action-dark-cancel"
+                        onClick={() =>
+                          doAction(
+                            "cancel",
+                            () =>
+                              reservationApi.update(reservation.id, {
+                                status: "cancelled",
+                              }),
+                            "Reservation cancelled",
+                          )
+                        }
+                        disabled={isSubmitting}
+                      >
+                        Cancel reservation
+                      </button>
                     )}
                   </div>
-                ))}
+                </div>
+              )}
+
+              <div className="rdm-side-card">
+                <h4 className="rdm-side-title">Activity Timeline</h4>
+                <div className="rdm-timeline">
+                  {activityTimeline.map((item, index) => (
+                    <div className="rdm-timeline-item" key={`${item.label}-${index}`}>
+                      <span className="rdm-timeline-dot" />
+                      <div className="rdm-timeline-copy">
+                        <span className="rdm-timeline-label">{item.label}</span>
+                        <span className="rdm-timeline-value">{item.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
+            </aside>
           </div>
         </div>
       </div>
