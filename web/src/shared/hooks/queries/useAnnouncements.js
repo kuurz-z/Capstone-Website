@@ -53,3 +53,21 @@ export function useCreateAnnouncement() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
   });
 }
+
+/** Update announcement (admin) */
+export function useUpdateAnnouncement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }) => announcementApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
+  });
+}
+
+/** Delete announcement (admin) */
+export function useDeleteAnnouncement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => announcementApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
+  });
+}

@@ -1,6 +1,7 @@
 import Navbar from "../components/Navbar";
 import { ContactFooter } from "../components/ContactFooter";
 import { HeroSection } from "../components/HeroSection";
+import { JourneyHighlightsSection } from "../components/JourneyHighlightsSection";
 import { BenefitsSection } from "../components/BenefitsSection";
 import { SocialProofSection } from "../components/SocialProofSection";
 import { RoomInventory } from "../components/RoomInventory";
@@ -86,6 +87,13 @@ function LandingPageContent() {
       </RouteErrorBoundary>
 
       {/* 2. FEATURES — Why choose us */}
+      <RouteErrorBoundary
+        name="JourneyHighlightsSection"
+        fallback={<SectionFallback name="Journey" />}
+      >
+        <JourneyHighlightsSection />
+      </RouteErrorBoundary>
+
       <div style={{ borderBottom: '1px solid var(--lp-border)' }}>
         <ScrollReveal variant="fade-up">
           <RouteErrorBoundary name="BenefitsSection" fallback={<SectionFallback name="Benefits" />}>

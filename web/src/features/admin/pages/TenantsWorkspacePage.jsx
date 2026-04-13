@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRightLeft,
-  FileSignature,
   RefreshCcw,
-  SearchX,
   UserRoundCheck,
   Users,
   MoreHorizontal,
@@ -15,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
+  useTenantActionContext,
   useTenantWorkspace,
   useTenantWorkspaceDetail,
 } from "../../../shared/hooks/queries/useReservations";
@@ -22,29 +21,52 @@ import { useRooms } from "../../../shared/hooks/queries/useRooms";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import {
-  ActionBar,
   DataTable,
   DetailDrawer,
   PageShell,
   StatusBadge,
   SummaryBar,
 } from "../components/shared";
+import TenantFilterBarOptimized from "../components/TenantFilterBarOptimized";
 import { formatBranch } from "../utils/formatters";
+import {
+  getTenantActionMeta,
+  hasEnabledTenantAction,
+  openTenantAction,
+} from "./tenantWorkspaceActions.mjs";
 import "../styles/design-tokens.css";
 import "../styles/admin-tenants.css";
 
 const ITEMS_PER_PAGE = 10;
 
-const DATE_FILTER_OPTIONS = [
-  { value: "moveInDate", label: "Move-In Date" },
-  { value: "moveOutDate", label: "Move-Out Date" },
-  { value: "leaseEndDate", label: "Lease End Date" },
-];
-
 const QUICK_FILTERS = [
   { key: "expiring_soon", label: "Expiring Soon" },
   { key: "needs_action", label: "Needs Action" },
   { key: "overdue", label: "Overdue" },
+];
+
+const TENANT_ACTION_ITEMS = [
+  {
+    key: "renew",
+    type: "renew",
+    label: "Renew Lease",
+    icon: RefreshCcw,
+    className: "",
+  },
+  {
+    key: "transfer",
+    type: "transfer",
+    label: "Transfer Room",
+    icon: ArrowRightLeft,
+    className: "",
+  },
+  {
+    key: "moveOut",
+    type: "moveOut",
+    label: "Move Out",
+    icon: LogOut,
+    className: "tenant-dropdown-item--danger",
+  },
 ];
 
 const fmtDate = (value) =>
@@ -70,6 +92,11 @@ const toDateInputValue = (value) => {
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 10);
 };
+
+const normalizeStatusLabel = (value) =>
+  String(value || "—")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function warningTone(severity) {
   if (severity === "error") return "tenant-warning-pill--error";
@@ -151,17 +178,42 @@ function TenantModalShell({ open, title, children, footer, onClose }) {
   );
 }
 
-function RenewLeaseModal({ open, tenant, detail, loading, onClose, onSubmit }) {
+function RenewLeaseModal({
+  open,
+  tenant,
+  detail,
+  context,
+  contextLoading,
+  loading,
+  submitError,
+  onClose,
+  onSubmit,
+}) {
+  const [newLeaseStartDate, setNewLeaseStartDate] = useState("");
   const [newLeaseEndDate, setNewLeaseEndDate] = useState("");
+  const [monthlyRent, setMonthlyRent] = useState("");
   const [notes, setNotes] = useState("");
+  const [confirm, setConfirm] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setNewLeaseEndDate(toDateInputValue(detail?.leaseInfo?.leaseEndDate));
+    const currentEnd = context?.currentStay?.leaseEndDate || detail?.leaseInfo?.leaseEndDate;
+    const nextStart = currentEnd ? new Date(currentEnd) : new Date();
+    nextStart.setDate(nextStart.getDate() + 1);
+    const nextEnd = currentEnd ? new Date(currentEnd) : new Date();
+    nextEnd.setMonth(nextEnd.getMonth() + 12);
+    setNewLeaseStartDate(toDateInputValue(nextStart));
+    setNewLeaseEndDate(toDateInputValue(nextEnd));
+    setMonthlyRent(String(context?.currentStay?.monthlyRent ?? ""));
     setNotes("");
-  }, [open, detail]);
+    setConfirm(false);
+  }, [open, detail, context]);
 
-  const extensionHistory = detail?.leaseInfo?.extensionHistory || [];
+  const extensionHistory = context?.renewalHistory || detail?.leaseInfo?.extensionHistory || [];
+  const hasDateError =
+    newLeaseStartDate &&
+    newLeaseEndDate &&
+    new Date(newLeaseEndDate) <= new Date(newLeaseStartDate);
 
   return (
     <TenantModalShell
@@ -493,12 +545,61 @@ function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit }) {
 
 const RowActionsMenu = ({ row, onSelect, onAction }) => {
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const hasActionMenu = hasEnabledTenantAction(
+    row,
+    TENANT_ACTION_ITEMS.map(({ key }) => key),
+  );
+
+  const notifyBlocked = (actionMeta) => {
+    showNotification(
+      actionMeta?.reason || "This action is not available for this tenant.",
+      "error",
+      3500,
+    );
+  };
+
+  const updateMenuPosition = () => {
+    const trigger = triggerRef.current;
+    if (!trigger || typeof window === "undefined") return;
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menuRef.current?.getBoundingClientRect();
+    const menuWidth = menuRect?.width || 180;
+    const menuHeight = menuRect?.height || 140;
+    const gutter = 8;
+
+    const left = Math.min(
+      Math.max(gutter, triggerRect.right - menuWidth),
+      window.innerWidth - menuWidth - gutter,
+    );
+
+    const preferredTop = triggerRect.bottom + 6;
+    const top =
+      preferredTop + menuHeight <= window.innerHeight - gutter
+        ? preferredTop
+        : Math.max(gutter, triggerRect.top - menuHeight - 6);
+
+    setMenuPosition({ top, left });
+  };
 
   useEffect(() => {
     if (!open) return;
-    const handleClick = () => setOpen(false);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
+    updateMenuPosition();
+
+    const rafId = window.requestAnimationFrame(updateMenuPosition);
+    const handleViewportChange = () => setOpen(false);
+
+    window.addEventListener("resize", handleViewportChange);
+    document.addEventListener("scroll", handleViewportChange, true);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", handleViewportChange);
+      document.removeEventListener("scroll", handleViewportChange, true);
+    };
   }, [open]);
 
   return (
@@ -514,9 +615,10 @@ const RowActionsMenu = ({ row, onSelect, onAction }) => {
         View Details
       </button>
 
-      {(row.allowedActions?.renew?.enabled || row.allowedActions?.transfer?.enabled || row.allowedActions?.moveOut?.enabled) ? (
+      {hasActionMenu ? (
         <div style={{ position: "relative" }}>
           <button
+            ref={triggerRef}
             type="button"
             className="tenant-row-action tenant-action-more"
             onClick={(e) => {
@@ -527,46 +629,57 @@ const RowActionsMenu = ({ row, onSelect, onAction }) => {
             <MoreHorizontal size={14} />
           </button>
 
-          {open && (
-            <div className="tenant-action-dropdown">
-              <button
-                type="button"
-                className="tenant-dropdown-item"
-                disabled={!row.allowedActions?.renew?.enabled}
-                title={row.allowedActions?.renew?.reason || ""}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAction({ type: "renew", tenant: row });
-                }}
-              >
-                <RefreshCcw size={14} /> Renew Lease
-              </button>
-              <button
-                type="button"
-                className="tenant-dropdown-item"
-                disabled={!row.allowedActions?.transfer?.enabled}
-                title={row.allowedActions?.transfer?.reason || ""}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAction({ type: "transfer", tenant: row });
-                }}
-              >
-                <ArrowRightLeft size={14} /> Transfer Room
-              </button>
-              <button
-                type="button"
-                className="tenant-dropdown-item tenant-dropdown-item--danger"
-                disabled={!row.allowedActions?.moveOut?.enabled}
-                title={row.allowedActions?.moveOut?.reason || ""}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAction({ type: "moveOut", tenant: row });
-                }}
-              >
-                <LogOut size={14} /> Move Out
-              </button>
-            </div>
-          )}
+          {open && typeof document !== "undefined"
+            ? createPortal(
+                <>
+                  <button
+                    type="button"
+                    className="tenant-action-dropdown-backdrop"
+                    data-action-portal="true"
+                    aria-label="Close tenant actions"
+                    onClick={() => setOpen(false)}
+                  />
+                  <div
+                    ref={menuRef}
+                    className="tenant-action-dropdown tenant-action-dropdown--portal"
+                    data-action-portal="true"
+                    style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {TENANT_ACTION_ITEMS.map(({ key, type, label, icon: Icon, className }) => {
+                      const actionMeta = getTenantActionMeta(row, key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`tenant-dropdown-item${className ? ` ${className}` : ""}`}
+                          aria-disabled={!actionMeta.enabled}
+                          title={actionMeta.reason || ""}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const opened = openTenantAction({
+                              tenant: row,
+                              actionKey: key,
+                              actionType: type,
+                              notifyBlocked,
+                              onAction,
+                            });
+                            if (opened) {
+                              setOpen(false);
+                            }
+                          }}
+                        >
+                          <Icon size={14} /> {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>,
+                document.body,
+              )
+            : null}
         </div>
       ) : null}
     </div>
@@ -584,7 +697,6 @@ export default function TenantsWorkspacePage() {
   const [leaseStatusFilter, setLeaseStatusFilter] = useState("all");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [stayStatusFilter, setStayStatusFilter] = useState("all");
-  const [dateFilterField, setDateFilterField] = useState("leaseEndDate");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [quickFilters, setQuickFilters] = useState([]);
@@ -621,6 +733,9 @@ export default function TenantsWorkspacePage() {
   } = useTenantWorkspaceDetail(actionState.tenant?.reservationId, {
     enabled: !!actionState.tenant?.reservationId,
   });
+  const { data: actionContext } = useTenantActionContext(actionState.tenant?.reservationId, {
+    enabled: !!actionState.tenant?.reservationId,
+  });
 
   const tenants = workspaceData?.tenants || [];
   const loading = authLoading || isLoading || isFetching;
@@ -644,11 +759,7 @@ export default function TenantsWorkspacePage() {
         tenant.paymentStatus === paymentStatusFilter;
       const matchesStay =
         stayStatusFilter === "all" || tenant.stayStatus === stayStatusFilter;
-      const matchesDate = matchesDateRange(
-        tenant[dateFilterField],
-        dateFrom,
-        dateTo,
-      );
+      const matchesDate = matchesDateRange(tenant.leaseEndDate, dateFrom, dateTo);
 
       return (
         matchesSearch &&
@@ -664,7 +775,6 @@ export default function TenantsWorkspacePage() {
     leaseStatusFilter,
     paymentStatusFilter,
     stayStatusFilter,
-    dateFilterField,
     dateFrom,
     dateTo,
   ]);
@@ -739,7 +849,6 @@ export default function TenantsWorkspacePage() {
     leaseStatusFilter,
     paymentStatusFilter,
     stayStatusFilter,
-    dateFilterField,
     dateFrom,
     dateTo,
     quickFilters,
@@ -758,7 +867,6 @@ export default function TenantsWorkspacePage() {
     setLeaseStatusFilter("all");
     setPaymentStatusFilter("all");
     setStayStatusFilter("all");
-    setDateFilterField("leaseEndDate");
     setDateFrom("");
     setDateTo("");
     setQuickFilters([]);
@@ -776,10 +884,10 @@ export default function TenantsWorkspacePage() {
   const runAction = async (label, callback) => {
     setActionLoading(label);
     try {
-      await callback();
+      const response = await callback();
       await invalidateWorkspace();
       setActionState({ type: null, tenant: null });
-      showNotification("Tenant record updated.", "success", 2500);
+      showNotification(response?.message || "Tenant record updated.", "success", 2500);
     } catch (actionError) {
       showNotification(
         actionError.message || "The tenant action could not be completed.",
@@ -790,6 +898,23 @@ export default function TenantsWorkspacePage() {
       setActionLoading(null);
     }
   };
+
+  const notifyBlockedAction = (actionMeta) => {
+    showNotification(
+      actionMeta?.reason || "This action is not available for this tenant.",
+      "error",
+      3500,
+    );
+  };
+
+  const openActionForTenant = (tenant, actionKey, actionType) =>
+    openTenantAction({
+      tenant,
+      actionKey,
+      actionType,
+      notifyBlocked: notifyBlockedAction,
+      onAction: setActionState,
+    });
 
   const columns = useMemo(
     () => [
@@ -837,7 +962,7 @@ export default function TenantsWorkspacePage() {
       },
       {
         key: "leaseEndDate",
-        label: "Lease End",
+        label: "Contract End",
         sortable: true,
         render: (row) => (
           <div className="tenant-room-cell">
@@ -852,17 +977,17 @@ export default function TenantsWorkspacePage() {
       },
       {
         key: "paymentStatus",
-        label: "Payment",
+        label: "Billing",
         render: (row) => <StatusBadge status={row.paymentStatus} />,
       },
       {
         key: "leaseStatus",
-        label: "Lease",
+        label: "Contract",
         render: (row) => <StatusBadge status={row.leaseStatus} />,
       },
       {
         key: "stayStatus",
-        label: "Stay",
+        label: "Occupancy",
         render: (row) => <StatusBadge status={row.stayStatus} />,
       },
       {
@@ -897,111 +1022,27 @@ export default function TenantsWorkspacePage() {
       </PageShell.Summary>
 
       <PageShell.Actions>
-        <ActionBar
-          search={{
-            value: searchTerm,
-            onChange: setSearchTerm,
-            placeholder: "Search by name, contact, room, or bed...",
-          }}
-          filters={[
-            ...(isOwner
-              ? [
-                  {
-                    key: "branch",
-                    value: branchFilter,
-                    onChange: setBranchFilter,
-                    options: [
-                      { value: "all", label: "All Branches" },
-                      { value: "gil-puyat", label: "Gil Puyat" },
-                      { value: "guadalupe", label: "Guadalupe" },
-                    ],
-                  },
-                ]
-              : []),
-            {
-              key: "leaseStatus",
-              value: leaseStatusFilter,
-              onChange: setLeaseStatusFilter,
-              options: [
-                { value: "all", label: "All Lease Statuses" },
-                { value: "active", label: "Active" },
-                { value: "expiring_soon", label: "Expiring Soon" },
-                { value: "expired", label: "Expired" },
-              ],
-            },
-            {
-              key: "paymentStatus",
-              value: paymentStatusFilter,
-              onChange: setPaymentStatusFilter,
-              options: [
-                { value: "all", label: "All Payment Statuses" },
-                { value: "paid", label: "Paid" },
-                { value: "partial", label: "Partial" },
-                { value: "overdue", label: "Overdue" },
-              ],
-            },
-            {
-              key: "stayStatus",
-              value: stayStatusFilter,
-              onChange: setStayStatusFilter,
-              options: [
-                { value: "all", label: "All Stay Statuses" },
-                { value: "active", label: "Active" },
-                { value: "moving_out", label: "Moving Out" },
-                { value: "moved_out", label: "Moved Out" },
-              ],
-            },
-          ]}
-          actions={[
-            {
-              label: "Reset",
-              icon: SearchX,
-              onClick: resetFilters,
-              variant: "ghost",
-            },
-          ]}
-        >
-          <div className="tenant-inline-filters">
-            <select
-              className="action-bar__select"
-              value={dateFilterField}
-              onChange={(event) => setDateFilterField(event.target.value)}
-            >
-              {DATE_FILTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <input
-              className="tenant-inline-filters__date"
-              type="date"
-              value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
-            />
-            <input
-              className="tenant-inline-filters__date"
-              type="date"
-              value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
-            />
-          </div>
-          <div className="tenant-quick-filters">
-            {QUICK_FILTERS.map((filter) => {
-              const active = quickFilters.includes(filter.key);
-              return (
-                <button
-                  key={filter.key}
-                  type="button"
-                  className={`tenant-quick-filter${active ? " tenant-quick-filter--active" : ""}`}
-                  onClick={() => toggleQuickFilter(filter.key)}
-                >
-                  {filter.label}
-                </button>
-              );
-            })}
-          </div>
-        </ActionBar>
+        <TenantFilterBarOptimized
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          branchFilter={branchFilter}
+          setBranchFilter={setBranchFilter}
+          isOwner={isOwner}
+          leaseStatusFilter={leaseStatusFilter}
+          setLeaseStatusFilter={setLeaseStatusFilter}
+          paymentStatusFilter={paymentStatusFilter}
+          setPaymentStatusFilter={setPaymentStatusFilter}
+          stayStatusFilter={stayStatusFilter}
+          setStayStatusFilter={setStayStatusFilter}
+          dateFrom={dateFrom}
+          setDateFrom={setDateFrom}
+          dateTo={dateTo}
+          setDateTo={setDateTo}
+          quickFilters={quickFilters}
+          toggleQuickFilter={toggleQuickFilter}
+          QUICK_FILTERS={QUICK_FILTERS}
+          resetFilters={resetFilters}
+        />
       </PageShell.Actions>
 
       <PageShell.Content>
@@ -1009,7 +1050,7 @@ export default function TenantsWorkspacePage() {
           columns={columns}
           data={sortedTenants}
           loading={loading}
-          onRowClick={(row) => setSelectedReservationId(row.reservationId)}
+          disableRowInteraction
           pagination={{
             page: currentPage,
             pageSize: ITEMS_PER_PAGE,
@@ -1052,13 +1093,13 @@ export default function TenantsWorkspacePage() {
                 <DetailDrawer.Row label="Bed" value={tenantDetail.basicInfo?.bed || "—"} />
               </DetailDrawer.Section>
 
-              <DetailDrawer.Section label="Lease Info">
+              <DetailDrawer.Section label="Contract Info">
                 <DetailDrawer.Row label="Move-In Date" value={fmtDate(tenantDetail.leaseInfo?.moveInDate)} />
-                <DetailDrawer.Row label="Lease End Date" value={fmtDate(tenantDetail.leaseInfo?.leaseEndDate)} />
-                <DetailDrawer.Row label="Days Until Lease End">
+                <DetailDrawer.Row label="Contract End Date" value={fmtDate(tenantDetail.leaseInfo?.leaseEndDate)} />
+                <DetailDrawer.Row label="Days Until Contract End">
                   {tenantDetail.leaseInfo?.daysUntilLeaseEnd ?? "—"}
                 </DetailDrawer.Row>
-                <DetailDrawer.Row label="Lease Status">
+                <DetailDrawer.Row label="Contract Status">
                   <StatusBadge status={tenantDetail.leaseStatus} />
                 </DetailDrawer.Row>
                 <div className="tenant-drawer-list">
@@ -1131,40 +1172,6 @@ export default function TenantsWorkspacePage() {
                 </div>
               </DetailDrawer.Section>
 
-              <DetailDrawer.Section label="Actions">
-                <div className="tenant-drawer-actions">
-                  <button
-                    type="button"
-                    className="tenant-row-action"
-                    disabled={!tenantDetail.allowedActions?.renew?.enabled}
-                    title={tenantDetail.allowedActions?.renew?.reason || ""}
-                    onClick={() => setActionState({ type: "renew", tenant: tenantDetail })}
-                  >
-                    <FileSignature size={14} />
-                    Renew Lease
-                  </button>
-                  <button
-                    type="button"
-                    className="tenant-row-action tenant-row-action--warn"
-                    disabled={!tenantDetail.allowedActions?.transfer?.enabled}
-                    title={tenantDetail.allowedActions?.transfer?.reason || ""}
-                    onClick={() => setActionState({ type: "transfer", tenant: tenantDetail })}
-                  >
-                    <ArrowRightLeft size={14} />
-                    Transfer Tenant
-                  </button>
-                  <button
-                    type="button"
-                    className="tenant-row-action tenant-row-action--danger"
-                    disabled={!tenantDetail.allowedActions?.moveOut?.enabled}
-                    title={tenantDetail.allowedActions?.moveOut?.reason || ""}
-                    onClick={() => setActionState({ type: "moveOut", tenant: tenantDetail })}
-                  >
-                    <RefreshCcw size={14} />
-                    Process Move-Out
-                  </button>
-                </div>
-              </DetailDrawer.Section>
             </>
           )}
         </DetailDrawer>
@@ -1178,7 +1185,25 @@ export default function TenantsWorkspacePage() {
             onClose={() => setActionState({ type: null, tenant: null })}
             onSubmit={(payload) =>
               runAction("renew", async () => {
-                await reservationApi.renew(actionState.tenant.reservationId, payload);
+                const currentLeaseEnd =
+                  actionContext?.currentStay?.leaseEndDate ||
+                  actionTenantDetail?.leaseInfo?.leaseEndDate;
+                const defaultStart = new Date(currentLeaseEnd || Date.now());
+                defaultStart.setDate(defaultStart.getDate() + 1);
+                if (!window.confirm("Confirm lease renewal? This will preserve the current stay history and create a new lease term.")) {
+                  return null;
+                }
+                return reservationApi.renew(actionState.tenant.reservationId, {
+                  newLeaseStartDate: payload.newLeaseStartDate || toDateInputValue(defaultStart),
+                  newLeaseEndDate: payload.newLeaseEndDate,
+                  monthlyRent:
+                    payload.monthlyRent ??
+                    actionContext?.currentStay?.monthlyRent ??
+                    actionState.tenant?.monthlyRent ??
+                    0,
+                  notes: payload.notes,
+                  confirm: true,
+                });
               })
             }
           />
@@ -1193,10 +1218,16 @@ export default function TenantsWorkspacePage() {
             onClose={() => setActionState({ type: null, tenant: null })}
             onSubmit={(payload) =>
               runAction("transfer", async () => {
-                await reservationApi.transfer(actionState.tenant.reservationId, {
-                  newRoomId: payload.roomId,
-                  newBedId: payload.bedId,
+                if (!window.confirm("Confirm room transfer? This will close the current room history and create a new room assignment.")) {
+                  return null;
+                }
+                return reservationApi.transfer(actionState.tenant.reservationId, {
+                  targetRoomId: payload.roomId,
+                  targetBedId: payload.bedId,
+                  effectiveTransferDate: payload.effectiveTransferDate || toDateInputValue(new Date()),
                   reason: payload.reason,
+                  notes: payload.notes || "",
+                  confirm: true,
                 });
               })
             }
@@ -1212,10 +1243,29 @@ export default function TenantsWorkspacePage() {
             onClose={() => setActionState({ type: null, tenant: null })}
             onSubmit={(payload) =>
               runAction("moveOut", async () => {
-                await reservationApi.moveOut(actionState.tenant.reservationId, payload);
+                if (!window.confirm("Confirm move-out? This will end the active stay and release the assigned bed while preserving tenant history.")) {
+                  return null;
+                }
+                const response = await reservationApi.moveOut(actionState.tenant.reservationId, {
+                  moveOutDate: payload.moveOutDate,
+                  actualVacateDate: payload.actualVacateDate || payload.moveOutDate,
+                  reason: payload.reason || "move_out",
+                  finalNotes: payload.finalNotes || payload.notes || "",
+                  damages: payload.damages || 0,
+                  deductions: payload.deductions || 0,
+                  outstandingBalanceSnapshot:
+                    actionContext?.billingSummary?.currentBalance ??
+                    actionTenantDetail?.paymentInfo?.currentBalance ??
+                    0,
+                  finalUtilityReading:
+                    payload.finalUtilityReading ??
+                    payload.meterReading,
+                  confirm: true,
+                });
                 if (selectedReservationId === actionState.tenant.reservationId) {
                   setSelectedReservationId(null);
                 }
+                return response;
               })
             }
           />

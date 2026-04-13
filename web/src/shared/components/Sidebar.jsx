@@ -1,5 +1,20 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import {
+  Building2,
+  CalendarCheck2,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  FileText,
+  Home,
+  LogOut,
+  Megaphone,
+  Search,
+  UserRound,
+  Wrench,
+  X,
+} from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import ConfirmModal from "./ConfirmModal";
 import { showNotification } from "../utils/notification";
@@ -11,32 +26,70 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Determine if user is a tenant (has active or past stay)
   const isTenant =
     user?.role === "tenant" ||
     user?.tenantStatus === "active" ||
     user?.tenantStatus === "inactive";
 
-  // Navigation items for Pre-Tenant (Registered User)
-  const preTenantNavItems = [
-    { path: "/applicant/profile", icon: "fas fa-home", label: "Home" },
-    { path: "/applicant/profile", icon: "fas fa-user", label: "Profile" },
-    {
-      path: "/applicant/reservation",
-      icon: "fas fa-calendar-check",
-      label: "Reservation",
-    },
-  ];
+  const roleLabel = isTenant ? "Resident Portal" : "Applicant Portal";
+  const fullName =
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+    user?.email ||
+    "Lilycrest User";
+  const initials =
+    `${user?.firstName?.[0] || "L"}${user?.lastName?.[0] || "C"}`.toUpperCase();
 
-  // Navigation items for Tenant (Active/Former)
-  const tenantNavItems = [
-    { path: "/applicant/profile", icon: "fas fa-home", label: "Home" },
-    { path: "/applicant/profile", icon: "fas fa-user", label: "Profile" },
-  ];
+  const navSections = useMemo(
+    () =>
+      isTenant
+        ? [
+            {
+              label: "Current Stay",
+              items: [
+                { path: "/applicant/profile", label: "Overview", icon: Home },
+                { path: "/applicant/billing", label: "Billing", icon: CreditCard },
+                { path: "/applicant/contracts", label: "Contracts", icon: FileText },
+                { path: "/applicant/maintenance", label: "Maintenance", icon: Wrench },
+                {
+                  path: "/applicant/announcements",
+                  label: "Announcements",
+                  icon: Megaphone,
+                },
+              ],
+            },
+            {
+              label: "Explore",
+              items: [
+                {
+                  path: "/applicant/check-availability",
+                  label: "Browse Rooms",
+                  icon: Search,
+                },
+              ],
+            },
+          ]
+        : [
+            {
+              label: "Get Started",
+              items: [
+                { path: "/applicant/profile", label: "Profile", icon: UserRound },
+                {
+                  path: "/applicant/check-availability",
+                  label: "Browse Rooms",
+                  icon: Search,
+                },
+                {
+                  path: "/applicant/reservation",
+                  label: "Reservation",
+                  icon: CalendarCheck2,
+                },
+              ],
+            },
+          ],
+    [isTenant],
+  );
 
-  const navItems = isTenant ? tenantNavItems : preTenantNavItems;
-
-  const handleLogout = async () => {
+  const handleLogout = () => {
     if (isLoggingOut) return;
     setShowLogoutConfirm(true);
   };
@@ -57,99 +110,107 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) => {
 
   return (
     <>
-      {/* Overlay for mobile */}
-      {isOpen && (
-        <div className="sidebar-overlay" onClick={toggleSidebar}></div>
-      )}
+      {isOpen ? <div className="sidebar-overlay" onClick={toggleSidebar} /> : null}
 
-      {/* Sidebar */}
-      <aside
-        className={`sidebar ${isOpen ? "open" : ""} ${
-          isCollapsed ? "collapsed" : ""
-        }`}
-      >
-        {/* Logo Section */}
+      <aside className={`sidebar ${isOpen ? "open" : ""} ${isCollapsed ? "collapsed" : ""}`}>
         <div className="sidebar-header">
-          <div className="sidebar-logo">
-            <i className="fas fa-building"></i>
-            {!isCollapsed && (
-              <span className="sidebar-logo-text">LilyCrest</span>
-            )}
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-mark">
+              <Building2 size={18} />
+            </div>
+            {!isCollapsed ? (
+              <div className="sidebar-brand-copy">
+                <span className="sidebar-logo-text">Lilycrest</span>
+                <span className="sidebar-brand-subtitle">{roleLabel}</span>
+              </div>
+            ) : null}
           </div>
-          <button className="sidebar-close" onClick={toggleSidebar}>
-            <i className="fas fa-times"></i>
+          <button className="sidebar-close" onClick={toggleSidebar} aria-label="Close menu">
+            <X size={18} />
           </button>
         </div>
 
-        {/* Desktop Collapse Toggle */}
-        <button className="sidebar-collapse-toggle" onClick={toggleCollapse}>
-          <i className={`fas fa-chevron-${isCollapsed ? "right" : "left"}`}></i>
+        <button
+          className="sidebar-collapse-toggle"
+          onClick={toggleCollapse}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        {/* User Info */}
-        {!isCollapsed && (
-          <div className="sidebar-user">
-            <div className="sidebar-user-avatar">
-              {user?.profileImage ? (
-                <img
-                  src={user.profileImage}
-                  alt="Profile"
-                  onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex'); }}
-                />
-              ) : null}
-              {(!user?.profileImage || true) && (
-                <div className="sidebar-user-initials" style={{ display: user?.profileImage ? 'none' : 'flex' }}>
-                  {user?.firstName?.[0]}
-                  {user?.lastName?.[0]}
-                </div>
-              )}
-            </div>
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">
-                {user?.firstName} {user?.lastName}
-              </div>
-              <div className="sidebar-user-role">
-                {isTenant ? "Tenant" : "Registered User"}
-              </div>
+        <div className="sidebar-user">
+          <div className="sidebar-user-avatar">
+            {user?.profileImage ? (
+              <img
+                src={user.profileImage}
+                alt="Profile"
+                onError={(e) => {
+                  e.target.style.display = "none";
+                  if (e.target.nextSibling) e.target.nextSibling.style.display = "flex";
+                }}
+              />
+            ) : null}
+            <div
+              className="sidebar-user-initials"
+              style={{ display: user?.profileImage ? "none" : "flex" }}
+            >
+              {initials}
             </div>
           </div>
-        )}
+          {!isCollapsed ? (
+            <div className="sidebar-user-info">
+              <div className="sidebar-user-name">{fullName}</div>
+              <div className="sidebar-user-role">{roleLabel}</div>
+            </div>
+          ) : null}
+        </div>
 
-        {/* Navigation Items */}
-        <nav className="sidebar-nav">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `sidebar-nav-item ${isActive ? "active" : ""}`
-              }
-              onClick={() => window.innerWidth < 768 && toggleSidebar()}
-              title={isCollapsed ? item.label : ""}
-            >
-              <i className={item.icon}></i>
-              {!isCollapsed && <span>{item.label}</span>}
-            </NavLink>
+        <nav className="sidebar-nav" aria-label="Tenant navigation">
+          {navSections.map((section) => (
+            <div key={section.label} className="sidebar-group">
+              {!isCollapsed ? (
+                <div className="sidebar-group-label">{section.label}</div>
+              ) : null}
+              <div className="sidebar-group-items">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `sidebar-nav-item ${isActive ? "active" : ""}`
+                      }
+                      onClick={() => {
+                        if (window.innerWidth < 768) toggleSidebar();
+                      }}
+                      title={isCollapsed ? item.label : undefined}
+                    >
+                      <Icon className="sidebar-nav-icon" size={18} />
+                      {!isCollapsed ? <span>{item.label}</span> : null}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </nav>
 
-        {/* Logout Button */}
         <div className="sidebar-footer">
           <button
             className="sidebar-logout"
             onClick={handleLogout}
             disabled={isLoggingOut}
-            title={isCollapsed ? "Logout" : ""}
+            title={isCollapsed ? "Sign out" : undefined}
           >
-            <i className="fas fa-sign-out-alt"></i>
-            {!isCollapsed && (
-              <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
-            )}
+            <LogOut size={18} />
+            {!isCollapsed ? (
+              <span>{isLoggingOut ? "Signing out..." : "Sign Out"}</span>
+            ) : null}
           </button>
         </div>
       </aside>
 
-      {/* Logout Confirm Modal */}
       <ConfirmModal
         isOpen={showLogoutConfirm}
         onClose={() => setShowLogoutConfirm(false)}

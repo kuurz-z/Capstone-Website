@@ -17,10 +17,7 @@ import {
   readMoveInDate,
 } from "./lifecycleNaming.js";
 
-const WATER_BILLABLE_ROOM_TYPES = new Set([
-  "private",
-  "double-sharing",
-]);
+const WATER_BILLABLE_ROOM_TYPES = new Set(["private", "double-sharing"]);
 
 function addIssue(issues, issueCode, status, recommendedAction, extra = {}) {
   issues.push({ issueCode, status, recommendedAction, ...extra });
@@ -94,7 +91,12 @@ export function detectMissingMoveInAnchors({
       const key = String(r.userId._id || r.userId);
       if (moveInByTenant.has(key)) return false;
       const moveInDate = readMoveInDate(r);
-      if (periodStartDate && moveInDate && new Date(moveInDate) < new Date(periodStartDate)) return false;
+      if (
+        periodStartDate &&
+        moveInDate &&
+        new Date(moveInDate) < new Date(periodStartDate)
+      )
+        return false;
       return true;
     })
     .map((r) => ({
@@ -111,27 +113,60 @@ export function detectMissingMoveInAnchors({
 /**
  * Build a room diagnostic object from pre-fetched data (no DB queries).
  */
-function buildRoomDiagnostic({ room, utilityType, periods, readings, reservations, billStatusMap }) {
+function buildRoomDiagnostic({
+  room,
+  utilityType,
+  periods,
+  readings,
+  reservations,
+  billStatusMap,
+}) {
   const issues = [];
   const orphanReadings = readings.filter((r) => !r.utilityPeriodId);
   const openPeriod = periods.find((p) => p.status === "open") || null;
   const latestPeriod = periods[periods.length - 1] || null;
   const latestReading = readings[readings.length - 1] || null;
-  const latestReadingValue = latestReading != null && Number.isFinite(latestReading.reading)
-    ? latestReading.reading
-    : null;
-  const periodStartDate = openPeriod?.startDate || periods[0]?.startDate || null;
+  const latestReadingValue =
+    latestReading != null && Number.isFinite(latestReading.reading)
+      ? latestReading.reading
+      : null;
+  const periodStartDate =
+    openPeriod?.startDate || periods[0]?.startDate || null;
 
-  const missingAnchors = detectMissingMoveInAnchors({ reservations, readings, periodStartDate });
+  const missingAnchors = detectMissingMoveInAnchors({
+    reservations,
+    readings,
+    periodStartDate,
+  });
 
-  if ((reservations.length > 0 || readings.length > 0) && periods.length === 0) {
-    addIssue(issues, `${utilityType}_missing_period`, "informational", `Create one open ${utilityType} period to begin tracking.`);
+  if (
+    (reservations.length > 0 || readings.length > 0) &&
+    periods.length === 0
+  ) {
+    addIssue(
+      issues,
+      `${utilityType}_missing_period`,
+      "informational",
+      `Create one open ${utilityType} period to begin tracking.`,
+    );
   }
   if (orphanReadings.length > 0) {
-    addIssue(issues, `${utilityType}_orphan_readings`, "repair_required", `Attach orphan readings to the room's active ${utilityType} period.`, { readingIds: orphanReadings.map((r) => r._id) });
+    addIssue(
+      issues,
+      `${utilityType}_orphan_readings`,
+      "repair_required",
+      `Attach orphan readings to the room's active ${utilityType} period.`,
+      { readingIds: orphanReadings.map((r) => r._id) },
+    );
   }
   if (missingAnchors.length > 0 && utilityType === "electricity") {
-    addIssue(issues, "electricity_missing_movein_anchor", "warning", "Missing move-in reading. System will use Graceful Proration Fallback instead of Segment-Based math.", { reservations: missingAnchors.map((e) => e.reservationId) });
+    addIssue(
+      issues,
+      "electricity_missing_movein_anchor",
+      "warning",
+      "Missing move-in reading. System will use Graceful Proration Fallback instead of Segment-Based math.",
+      { reservations: missingAnchors.map((e) => e.reservationId) },
+    );
   }
 
   // Compute canonical billing state using the pre-fetched billStatusMap
@@ -144,7 +179,10 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     latestPeriodBillingState = "open";
     latestPeriodBillingLabel = "Active";
   } else if (latestPeriod) {
-    const summaryBillIds = (latestPeriod.tenantSummaries || []).map((s) => String(s.billId)).filter(Boolean);
+    const summaryBillIds = (latestPeriod.tenantSummaries || [])
+      .filter((s) => Number(s.billAmount || 0) > 0)
+      .map((s) => String(s.billId))
+      .filter(Boolean);
     const linkedBills = summaryBillIds
       .map((id) => billStatusMap.get(id))
       .filter(Boolean);
@@ -165,7 +203,7 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     } else {
       latestPeriodDisplayStatus = latestPeriod.revised
         ? "revised"
-        : (latestPeriod.status || "closed");
+        : latestPeriod.status || "closed";
     }
   }
 
@@ -181,8 +219,12 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     type: room.type,
     capacity: room.capacity,
     status: issues.length ? "needs_repair" : "ok",
-    hasActiveTenants: reservations.some((r) => hasReservationStatus(r.status, "moveIn")),
-    activeTenantCount: reservations.filter((r) => hasReservationStatus(r.status, "moveIn")).length,
+    hasActiveTenants: reservations.some((r) =>
+      hasReservationStatus(r.status, "moveIn"),
+    ),
+    activeTenantCount: reservations.filter((r) =>
+      hasReservationStatus(r.status, "moveIn"),
+    ).length,
     reservationIds: reservations.map((r) => r._id),
     latestReading: latestReadingValue,
     hasOpenPeriod: Boolean(openPeriod),
@@ -193,7 +235,9 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
     billingState: latestPeriodBillingState,
     billingLabel: latestPeriodBillingLabel,
     billingBlockingReason,
-    targetCloseDate: openPeriod ? getUtilityTargetCloseDate(openPeriod.startDate) : null,
+    targetCloseDate: openPeriod
+      ? getUtilityTargetCloseDate(openPeriod.startDate)
+      : null,
     issueCodes: issues.map((i) => i.issueCode),
     missingMoveInAnchors: missingAnchors,
     issues,
@@ -204,17 +248,34 @@ function buildRoomDiagnostic({ room, utilityType, periods, readings, reservation
  * Single-room diagnostics (used when inspecting a specific room's detail view).
  */
 export async function getUtilityRoomDiagnostics(roomId, utilityType) {
-  const room = await Room.findById(roomId).select("name roomNumber branch type capacity").lean();
+  const room = await Room.findById(roomId)
+    .select("name roomNumber branch type capacity")
+    .lean();
   if (!room) return null;
 
   const [periods, readings, reservations] = await Promise.all([
-    UtilityPeriod.find({ roomId: room._id, utilityType, isArchived: false }).sort({ startDate: 1 }).lean(),
-    UtilityReading.find({ roomId: room._id, utilityType, isArchived: false }).sort({ date: 1, createdAt: 1 }).lean(),
-    Reservation.find({ roomId: room._id, status: { $in: BILLABLE_RESERVATION_STATUS_QUERY }, isArchived: { $ne: true } })
-      .populate("userId", "firstName lastName").lean(),
+    UtilityPeriod.find({ roomId: room._id, utilityType, isArchived: false })
+      .sort({ startDate: 1 })
+      .lean(),
+    UtilityReading.find({ roomId: room._id, utilityType, isArchived: false })
+      .sort({ date: 1, createdAt: 1 })
+      .lean(),
+    Reservation.find({
+      roomId: room._id,
+      status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },
+      isArchived: { $ne: true },
+    })
+      .populate("userId", "firstName lastName")
+      .lean(),
   ]);
 
-  const allBillIds = periods.flatMap((p) => (p.tenantSummaries || []).map((s) => s.billId)).filter(Boolean);
+  const allBillIds = periods
+    .flatMap((p) =>
+      (p.tenantSummaries || [])
+        .filter((s) => Number(s.billAmount || 0) > 0)
+        .map((s) => s.billId),
+    )
+    .filter(Boolean);
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
     const bills = await Bill.find({ _id: { $in: allBillIds } })
@@ -223,7 +284,14 @@ export async function getUtilityRoomDiagnostics(roomId, utilityType) {
     for (const b of bills) billStatusMap.set(String(b._id), b);
   }
 
-  return buildRoomDiagnostic({ room, utilityType, periods, readings, reservations, billStatusMap });
+  return buildRoomDiagnostic({
+    room,
+    utilityType,
+    periods,
+    readings,
+    reservations,
+    billStatusMap,
+  });
 }
 
 /**
@@ -235,19 +303,36 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
   if (branch) roomFilter.branch = branch;
 
   // Query 1: All rooms
-  const allRooms = await Room.find(roomFilter).select("_id name roomNumber branch type capacity").lean();
+  const allRooms = await Room.find(roomFilter)
+    .select("_id name roomNumber branch type capacity")
+    .lean();
   const roomIds = allRooms.map((r) => r._id);
 
   // Queries 2-4: Bulk fetch all related data in parallel
   const [allPeriods, allReadings, allReservations] = await Promise.all([
-    UtilityPeriod.find({ roomId: { $in: roomIds }, isArchived: false }).sort({ startDate: 1 }).lean(),
-    UtilityReading.find({ roomId: { $in: roomIds }, isArchived: false }).sort({ date: 1, createdAt: 1 }).lean(),
-    Reservation.find({ roomId: { $in: roomIds }, status: { $in: BILLABLE_RESERVATION_STATUS_QUERY }, isArchived: { $ne: true } })
-      .populate("userId", "firstName lastName").lean(),
+    UtilityPeriod.find({ roomId: { $in: roomIds }, isArchived: false })
+      .sort({ startDate: 1 })
+      .lean(),
+    UtilityReading.find({ roomId: { $in: roomIds }, isArchived: false })
+      .sort({ date: 1, createdAt: 1 })
+      .lean(),
+    Reservation.find({
+      roomId: { $in: roomIds },
+      status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },
+      isArchived: { $ne: true },
+    })
+      .populate("userId", "firstName lastName")
+      .lean(),
   ]);
 
   // Query 5: All bill statuses for all periods
-  const allBillIds = allPeriods.flatMap((p) => (p.tenantSummaries || []).map((s) => s.billId)).filter(Boolean);
+  const allBillIds = allPeriods
+    .flatMap((p) =>
+      (p.tenantSummaries || [])
+        .filter((s) => Number(s.billAmount || 0) > 0)
+        .map((s) => s.billId),
+    )
+    .filter(Boolean);
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
     const bills = await Bill.find({ _id: { $in: allBillIds } })
@@ -257,20 +342,22 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
   }
 
   // Group by roomId in memory
-  const periodsByRoom    = new Map();
-  const readingsByRoom   = new Map();
+  const periodsByRoom = new Map();
+  const readingsByRoom = new Map();
   const reservationsByRoom = new Map();
 
   for (const p of allPeriods) {
     const key = String(p.roomId);
-    if (!periodsByRoom.has(key)) periodsByRoom.set(key, { electricity: [], water: [] });
+    if (!periodsByRoom.has(key))
+      periodsByRoom.set(key, { electricity: [], water: [] });
     const group = periodsByRoom.get(key);
     if (p.utilityType === "electricity") group.electricity.push(p);
     else if (p.utilityType === "water") group.water.push(p);
   }
   for (const r of allReadings) {
     const key = String(r.roomId);
-    if (!readingsByRoom.has(key)) readingsByRoom.set(key, { electricity: [], water: [] });
+    if (!readingsByRoom.has(key))
+      readingsByRoom.set(key, { electricity: [], water: [] });
     const group = readingsByRoom.get(key);
     if (r.utilityType === "electricity") group.electricity.push(r);
     else if (r.utilityType === "water") group.water.push(r);
@@ -282,35 +369,43 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
   }
 
   // Build all diagnostic objects in memory (zero additional DB queries)
-  const electricityRooms = allRooms.map((room) => {
-    const key = String(room._id);
-    return buildRoomDiagnostic({
-      room, utilityType: "electricity",
-      periods: periodsByRoom.get(key)?.electricity || [],
-      readings: readingsByRoom.get(key)?.electricity || [],
-      reservations: reservationsByRoom.get(key) || [],
-      billStatusMap,
-    });
-  }).filter(Boolean);
+  const electricityRooms = allRooms
+    .map((room) => {
+      const key = String(room._id);
+      return buildRoomDiagnostic({
+        room,
+        utilityType: "electricity",
+        periods: periodsByRoom.get(key)?.electricity || [],
+        readings: readingsByRoom.get(key)?.electricity || [],
+        reservations: reservationsByRoom.get(key) || [],
+        billStatusMap,
+      });
+    })
+    .filter(Boolean);
 
   const waterRooms = allRooms
     .filter((room) => WATER_BILLABLE_ROOM_TYPES.has(room.type))
     .map((room) => {
       const key = String(room._id);
       return buildRoomDiagnostic({
-        room, utilityType: "water",
+        room,
+        utilityType: "water",
         periods: periodsByRoom.get(key)?.water || [],
         readings: readingsByRoom.get(key)?.water || [],
         reservations: reservationsByRoom.get(key) || [],
         billStatusMap,
       });
-    }).filter(Boolean);
+    })
+    .filter(Boolean);
 
   return {
     generatedAt: new Date(),
     summary: {
       electricityRoomCount: electricityRooms.length,
-      electricityIssueCount: electricityRooms.reduce((sum, r) => sum + r.issues.length, 0),
+      electricityIssueCount: electricityRooms.reduce(
+        (sum, r) => sum + r.issues.length,
+        0,
+      ),
       waterRoomCount: waterRooms.length,
       waterIssueCount: waterRooms.reduce((sum, r) => sum + r.issues.length, 0),
     },

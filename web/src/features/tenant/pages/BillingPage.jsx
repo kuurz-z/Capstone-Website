@@ -407,7 +407,9 @@ function CurrentBillHero({
  */
 function ElectricityBreakdown({ billId, fmtCurrency }) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, isError } = useMyUtilityBreakdownByBillId("electricity", open ? billId : null);
+  const [hasOpened, setHasOpened] = useState(false);
+  if (open && !hasOpened) setHasOpened(true);
+  const { data, isLoading, isError } = useMyUtilityBreakdownByBillId("electricity", hasOpened ? billId : null);
 
   const fmtKwh = (n) =>
     `${(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} kWh`;
@@ -514,7 +516,9 @@ function ElectricityBreakdown({ billId, fmtCurrency }) {
 
 function WaterBreakdown({ billId, fmtCurrency }) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, isError } = useMyUtilityBreakdownByBillId("water", open ? billId : null);
+  const [hasOpened, setHasOpened] = useState(false);
+  if (open && !hasOpened) setHasOpened(true);
+  const { data, isLoading, isError } = useMyUtilityBreakdownByBillId("water", hasOpened ? billId : null);
   const record = data?.record || null;
 
   const fmtShortDate = (value) =>
@@ -862,9 +866,11 @@ function ElectricityHistory({ fmtCurrency }) {
 
 function ElectricityPeriodRow({ period, fmtCurrency, fmtDate, fmtKwh }) {
   const [open, setOpen] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
+  if (open && !hasOpened) setHasOpened(true);
   const { data, isLoading } = useMyUtilityBreakdownByBillId(
     "electricity",
-    open ? (period.id || period._id) : null,
+    hasOpened ? (period.id || period._id) : null,
   );
 
   const mySegments = data

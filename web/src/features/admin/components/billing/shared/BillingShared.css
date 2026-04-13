@@ -1,7 +1,7 @@
 .billing-room-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .billing-room-list__header {
@@ -9,20 +9,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  margin-bottom: 10px;
 }
 
 .billing-room-list__title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #102542;
+  color: var(--text-heading);
   margin: 0;
 }
 
 .billing-room-list__filter {
   width: 180px;
-  border: 1px solid #d8e1ea;
+  border: 1px solid var(--border-card);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface-card);
   padding: 10px 12px;
   font: inherit;
   box-sizing: border-box;
@@ -31,57 +32,73 @@
 .billing-room-list__body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .billing-room-list__search-wrap {
-  padding-top: 2px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border-card);
 }
 
 .billing-room-list__search {
   width: 100%;
-  border: 1px solid #d8e1ea;
-  border-radius: 10px;
-  background: #fff;
-  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border-card);
+  background: transparent;
+  padding: 10px 0;
   font: inherit;
   box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.billing-room-list__search:focus {
+  border-bottom-color: var(--color-primary);
 }
 
 .billing-room-list__empty {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.92rem;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-card);
 }
 
 .billing-room-list__skeleton-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .billing-room-list__skeleton-card {
   height: 58px;
-  border-radius: 14px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+  background: linear-gradient(90deg, transparent 0%, var(--surface-hover) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: billing-room-list-shimmer 1.4s infinite linear;
+  border-bottom: 1px solid var(--border-card);
 }
 
 .billing-room-card {
   text-align: left;
-  border: 1px solid #dbe5ef;
-  border-radius: 14px;
-  background: #f8fbff;
-  padding: 12px;
+  border: none;
+  border-bottom: 1px solid var(--border-card);
+  border-left: 3px solid transparent;
+  background: transparent;
+  padding: 12px 0 12px 9px;
   cursor: pointer;
-  transition: 0.2s ease;
+  transition: all 0.2s ease;
   width: 100%;
+  position: relative;
 }
 
-.billing-room-card:hover,
+.billing-room-card:hover {
+  background: var(--surface-hover);
+  border-left-color: var(--color-primary);
+}
+
 .billing-room-card.is-active {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  background: var(--surface-hover);
+  border-left-color: var(--color-primary);
 }
 
 .billing-room-card__top {
@@ -94,20 +111,28 @@
 
 .billing-room-card__name {
   font-weight: 700;
-  color: #102542;
+  color: var(--text-heading);
 }
 
 .billing-room-card__badge {
   font-size: 0.75rem;
-  color: #1d4f91;
-  background: #dbeafe;
+  color: var(--text-secondary);
+  background: transparent;
   padding: 3px 8px;
+  border: 1px solid var(--color-accent);
   border-radius: 999px;
   text-transform: capitalize;
+  transition: all 0.2s ease;
+}
+
+.billing-room-card.is-active .billing-room-card__badge,
+.billing-room-card:hover .billing-room-card__badge {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
 }
 
 .billing-room-card__meta {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.82rem;
 }
 
@@ -123,19 +148,19 @@
 
 .billing-status-badge--draft,
 .billing-status-badge--open {
-  background: #fff7ed;
-  color: #c2410c;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .billing-status-badge--finalized,
 .billing-status-badge--closed {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .billing-status-badge--revised {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-info-bg);
+  color: var(--color-accent-hover);
 }
 
 .billing-inline-rate {
@@ -147,9 +172,9 @@
 
 .billing-inline-rate__input {
   width: 110px;
-  border: 1px solid #d8e1ea;
-  border-radius: 10px;
-  background: #fff;
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  background: var(--surface-card);
   padding: 8px 10px;
   font: inherit;
   box-sizing: border-box;
@@ -169,7 +194,7 @@
   gap: 10px;
   height: 100%;
   min-height: 300px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
@@ -184,18 +209,17 @@
 .billing-room-header__title {
   font-size: 1.05rem;
   font-weight: 700;
-  color: #0a1628;
+  color: var(--text-heading);
   margin: 0;
   display: flex;
-  align-items: center;
   gap: 7px;
 }
 
 .billing-room-header__branch {
   font-size: 0.72rem;
-  color: #6b7280;
+  color: var(--text-muted);
   padding: 2px 8px;
-  background: #f3f4f6;
+  background: var(--surface-muted);
   border-radius: 4px;
   text-transform: capitalize;
 }

@@ -12,7 +12,10 @@
 import express from "express";
 import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 import { validate } from "../validation/validate.js";
-import { createAnnouncementSchema } from "../validation/schemas.js";
+import {
+  createAnnouncementSchema,
+  updateAnnouncementSchema,
+} from "../validation/schemas.js";
 import { requirePermission } from "../middleware/permissions.js";
 import * as announcementsController from "../controllers/announcementsController.js";
 
@@ -86,6 +89,29 @@ router.post(
   requirePermission("manageAnnouncements"),
   validate(createAnnouncementSchema),
   announcementsController.createAnnouncement,
+);
+
+/**
+ * PUT /api/announcements/:id
+ * Update an announcement (Admin only)
+ */
+router.put(
+  "/:id",
+  verifyAdmin,
+  requirePermission("manageAnnouncements"),
+  validate(updateAnnouncementSchema),
+  announcementsController.updateAnnouncement,
+);
+
+/**
+ * DELETE /api/announcements/:id
+ * Delete an announcement (Admin only)
+ */
+router.delete(
+  "/:id",
+  verifyAdmin,
+  requirePermission("manageAnnouncements"),
+  announcementsController.deleteAnnouncement,
 );
 
 // ============================================================================

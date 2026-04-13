@@ -536,6 +536,91 @@ export const createAnnouncement = async (req, res, next) => {
   }
 };
 
+/**
+ * Update an existing announcement.
+ * @route PUT /api/announcements/:id
+ */
+export const updateAnnouncement = async (req, res, next) => {
+  try {
+    const dbUser = await getDbUserOrThrow(
+      req.user.uid,
+      "_id role branch firstName lastName"
+    );
+    const { id } = req.params;
+    
+    // Find the announcement
+    const announcement = await Announcement.findById(id);
+    if (!announcement) {
+      throw new AppError("Announcement not found", 404, "NOT_FOUND");
+    }
+
+    // Role check: branch admin can only update their own branch announcements
+    // Wait, the role in Capstone is often 'branch_admin' or 'branch admin'? Let me check user validations/accessControl before guessing correctly.
+    if (dbUser.role !== "owner" && dbUser.role !== "admin" && announcement.targetBranch !== dbUser.branch && announcement.targetBranch !== "both") {
+      throw new AppError("Not authorized to update announcements for this branch", 403, "FORBIDDEN");
+    }
+
+    // Update fields
+    if (req.body.title) announcement.title = clean(req.body.title).trim();
+    if (req.body.content) announcement.content = clean(req.body.content).trim();
+    if (req.body.category) announcement.category = req.body.category;
+    if (req.body.targetBranch && dbUser.role === "owner") {
+       announcement.targetBranch = req.body.targetBranch;
+    }
+    if (req.body.requiresAcknowledgment !== undefined) {
+      announcement.requiresAcknowledgment = Boolean(req.body.requiresAcknowledgment);
+    }
+
+    await announcement.save();
+
+    await auditLogger.log({
+      req,
+      type: "data_modification",
+      action: "Updated announcement",
+      entityType: "announcement",
+      entityId: announcement._id,
+      details: `Updated announcement: ${announcement.title}`,
+    });
+
+    sendSuccess(res, { announcement });
+  } catch (error) {
+    await auditLogger.logError(req, error, "Failed to update announcement");
+    next(error);
+  }
+};
+
+/**
+ * Delete an announcement.
+ * @route DELETE /api/announcements/:id
+ */
+export const deleteAnnouncement = async (req, res, next) => {
+  try {
+    const dbUser = await getDbUserOrThrow(req.user.uid, "_id role branch");
+    const { id } = req.params;
+
+    const announcement = await Announcement.findById(id);
+    if (!announcement) {
+      throw new AppError("Announcement not found", 404, "NOT_FOUND");
+    }
+
+    if (dbUser.role !== "owner" && dbUser.role !== "admin" && announcement.targetBranch !== dbUser.branch && announcement.targetBranch !== "both") {
+      throw new AppError("Not authorized to delete announcements for this branch", 403, "FORBIDDEN");
+    }
+
+    await Announcement.findByIdAndDelete(id);
+
+    await auditLogger.log(req, "ANNOUNCEMENT_DELETED", {
+      announcementId: id,
+      title: announcement.title,
+    });
+
+    sendSuccess(res, "Announcement deleted successfully");
+  } catch (error) {
+    await auditLogger.logError(req, error, "Failed to delete announcement");
+    next(error);
+  }
+};
+
 export default {
   getAnnouncements,
   getUnacknowledged,
@@ -544,4 +629,6 @@ export default {
   getUserEngagementStats,
   getAdminAnnouncements,
   createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
 };

@@ -8,7 +8,7 @@ import {
   AdminDashboardPage,
   ReservationsPage,
   RoomAvailabilityPage,
-  TenantsPage,
+  TenantsWorkspacePage,
   AuditLogsPage,
   UserManagementPage,
   AdminBillingPage,
@@ -61,7 +61,7 @@ export function AdminRoutes() {
         path="tenants"
         element={
           <RouteShell name="Tenants">
-            <TenantsPage />
+            <TenantsWorkspacePage />
           </RouteShell>
         }
       />

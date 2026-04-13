@@ -145,7 +145,7 @@ export default function DataTable({
                       if (!disableRowInteraction) return;
                       const target = e.target;
                       if (!(target instanceof Element)) return;
-                      if (target.closest("[data-action-cell]")) return;
+                      if (target.closest("[data-action-cell], [data-action-portal='true']")) return;
                       e.stopPropagation();
                     }}
                     onClick={(e) => {

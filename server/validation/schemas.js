@@ -71,6 +71,25 @@ export const createAnnouncementSchema = {
 };
 
 /**
+ * Validation schema for updating announcements.
+ */
+export const updateAnnouncementSchema = {
+  title: { type: "string" },
+  content: { type: "string" },
+  category: {
+    type: "string",
+    enum: ANNOUNCEMENT_CATEGORIES,
+  },
+  targetBranch: {
+    type: "string",
+    enum: ANNOUNCEMENT_TARGET_BRANCHES,
+  },
+  requiresAcknowledgment: {
+    type: "boolean",
+  },
+};
+
+/**
  * Schema for POST /api/maintenance/requests
  * Body: { category, title, description, urgency? }
  */

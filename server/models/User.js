@@ -185,7 +185,7 @@ const userSchema = new mongoose.Schema(
 
     tenantStatus: {
       type: String,
-      enum: ["applicant", "active", "inactive", "evicted", "blacklisted"],
+      enum: ["applicant", "active", "inactive", "moved_out", "evicted", "blacklisted"],
       default: "applicant",
       // Usage:
       // - "applicant": not a tenant yet (applicant / pre-tenant)

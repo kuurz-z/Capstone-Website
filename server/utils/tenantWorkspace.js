@@ -93,6 +93,14 @@ export function buildStayStatus(reservation, now = new Date()) {
   return "active";
 }
 
+export function normalizeTenantStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "moved_out") return "moved_out";
+  if (normalized === "inactive") return "inactive";
+  if (normalized === "active") return "active";
+  return normalized || "applicant";
+}
+
 export function buildLeaseStatus(daysUntilLeaseEnd) {
   if (daysUntilLeaseEnd == null) return "active";
   if (daysUntilLeaseEnd <= 0) return "expired";
@@ -177,31 +185,49 @@ export function buildNextAction({
 
 export function buildAllowedActions({
   reservation,
+  currentStay = null,
   stayStatus,
   billingSummary,
+  tenantStatus = "",
+  hasAvailableBedsInBranch = true,
+  hasFutureRenewal = false,
 }) {
   const isMovedInReservation = hasReservationStatus(reservation?.status, "moveIn");
-  const canManageStay = isMovedInReservation && stayStatus !== "moved_out";
-  const hasUnsettledBilling =
-    billingSummary.hasOutstanding || billingSummary.hasPendingVerification;
+  const normalizedTenantStatus = normalizeTenantStatus(tenantStatus);
+  const hasActiveStay = currentStay ? currentStay.status === "active" : isMovedInReservation;
+  const canManageStay =
+    isMovedInReservation &&
+    hasActiveStay &&
+    stayStatus !== "moved_out" &&
+    !["inactive", "moved_out"].includes(normalizedTenantStatus);
+
+  const withReason = (enabled, reason = "", blockingCodes = [], extra = {}) => ({
+    enabled,
+    reason,
+    blockingCodes,
+    ...extra,
+  });
 
   return {
-    renew: {
-      enabled: canManageStay,
-      reason: canManageStay ? "" : "Only active moved-in stays can be renewed.",
-    },
-    transfer: {
-      enabled: canManageStay,
-      reason: canManageStay ? "" : "Only active moved-in stays can be transferred.",
-    },
-    moveOut: {
-      enabled: canManageStay && !hasUnsettledBilling,
-      reason: !canManageStay
-        ? "Only active moved-in stays can be moved out."
-        : hasUnsettledBilling
-          ? "Move-out is blocked until billing is fully settled."
-          : "",
-    },
+    renew: !canManageStay
+      ? withReason(false, "Only active moved-in stays can be renewed.", ["NO_ACTIVE_STAY"])
+      : hasFutureRenewal
+        ? withReason(false, "A future renewal already exists for this tenant.", ["FUTURE_RENEWAL_EXISTS"])
+        : withReason(true),
+    transfer: !canManageStay
+      ? withReason(false, "Only active moved-in stays can be transferred.", ["NO_ACTIVE_STAY"], { hasAvailableBedsInBranch })
+      : !hasAvailableBedsInBranch
+        ? withReason(false, "No available same-branch bed is available for transfer.", ["NO_AVAILABLE_BED"], { hasAvailableBedsInBranch })
+        : withReason(true, "", [], { hasAvailableBedsInBranch }),
+    moveOut: !canManageStay
+      ? withReason(false, "Only active moved-in stays can be moved out.", ["NO_ACTIVE_STAY"])
+      : withReason(
+          true,
+          billingSummary.hasOutstanding || billingSummary.hasPendingVerification
+            ? "Outstanding billing will remain for final settlement after move-out."
+            : "",
+          [],
+        ),
   };
 }
 
@@ -238,14 +264,21 @@ function buildRoomHistoryEntries({ reservation, bedHistoryRecords = [] }) {
 
 export function buildTenantWorkspaceEntry({
   reservation,
+  currentStay = null,
+  stayHistory = [],
   bills = [],
   bedHistoryRecords = [],
+  tenantStatus = "",
+  hasAvailableBedsInBranch = true,
   now = new Date(),
 }) {
-  const leaseEndDate = computeLeaseEndDate(reservation);
+  const leaseEndDate = currentStay?.leaseEndDate || computeLeaseEndDate(reservation);
   const daysUntilLeaseEnd = computeDaysUntil(leaseEndDate, now);
   const billingSummary = buildBillingSummary(bills, now);
-  const stayStatus = buildStayStatus(reservation, now);
+  const stayStatus =
+    currentStay?.status === "completed" || currentStay?.status === "terminated"
+      ? "moved_out"
+      : buildStayStatus(reservation, now);
   const leaseStatus = buildLeaseStatus(daysUntilLeaseEnd);
   const roomHistory = buildRoomHistoryEntries({ reservation, bedHistoryRecords });
   const warningFlags = buildWarningFlags({
@@ -259,10 +292,19 @@ export function buildTenantWorkspaceEntry({
     leaseStatus,
     billingSummary,
   });
+  const hasFutureRenewal = stayHistory.some((stay) =>
+    currentStay?._id &&
+    String(stay.previousStayId || "") === String(currentStay._id) &&
+    ["active", "ending_soon"].includes(String(stay.status || "")),
+  );
   const allowedActions = buildAllowedActions({
     reservation,
+    currentStay,
     stayStatus,
     billingSummary,
+    tenantStatus,
+    hasAvailableBedsInBranch,
+    hasFutureRenewal,
   });
 
   const tenantUser = reservation.userId || {};
@@ -284,14 +326,16 @@ export function buildTenantWorkspaceEntry({
     },
     branch: reservation.roomId?.branch || "",
     room: reservation.roomId?.name || reservation.roomId?.roomNumber || "",
-    roomId: reservation.roomId?._id ? String(reservation.roomId._id) : "",
+    roomId: currentStay?.roomId ? String(currentStay.roomId) : reservation.roomId?._id ? String(reservation.roomId._id) : "",
     bed: reservation.selectedBed?.position || reservation.selectedBed?.id || "",
-    bedId: reservation.selectedBed?.id || "",
-    moveInDate: readMoveInDate(reservation),
+    bedId: currentStay?.bedId || reservation.selectedBed?.id || "",
+    moveInDate: currentStay?.leaseStartDate || readMoveInDate(reservation),
     moveOutDate: readMoveOutDate(reservation),
     leaseEndDate,
     daysUntilLeaseEnd,
     currentBalance: billingSummary.currentBalance,
+    currentStayId: currentStay?._id ? String(currentStay._id) : String(reservation.currentStayId || ""),
+    tenantStatus: normalizeTenantStatus(tenantStatus),
     stayStatus,
     leaseStatus,
     paymentStatus: billingSummary.paymentStatus,
@@ -313,17 +357,30 @@ export function buildTenantWorkspaceEntry({
       bed: reservation.selectedBed?.position || reservation.selectedBed?.id || "",
     },
     leaseInfo: {
-      moveInDate: readMoveInDate(reservation),
+      moveInDate: currentStay?.leaseStartDate || readMoveInDate(reservation),
       leaseEndDate,
       daysUntilLeaseEnd,
-      extensionHistory: (reservation.leaseExtensions || []).map((entry, index) => ({
-        id: `${reservation._id || reservation.id}:extension:${index}`,
-        addedMonths: Number(entry.addedMonths || 0),
-        previousDuration: Number(entry.previousDuration || 0),
-        newDuration: Number(entry.newDuration || 0),
-        extendedAt: entry.extendedAt || null,
-        notes: entry.notes || "",
-      })),
+      extensionHistory:
+        stayHistory.length > 0
+          ? stayHistory.map((stay) => ({
+              id: String(stay._id || stay.id),
+              addedMonths: null,
+              previousDuration: null,
+              newDuration: null,
+              extendedAt: stay.createdAt || null,
+              notes: stay.renewalNotes || "",
+              leaseStartDate: stay.leaseStartDate || null,
+              leaseEndDate: stay.leaseEndDate || null,
+              status: stay.status || "",
+            }))
+          : (reservation.leaseExtensions || []).map((entry, index) => ({
+              id: `${reservation._id || reservation.id}:extension:${index}`,
+              addedMonths: Number(entry.addedMonths || 0),
+              previousDuration: Number(entry.previousDuration || 0),
+              newDuration: Number(entry.newDuration || 0),
+              extendedAt: entry.extendedAt || null,
+              notes: entry.notes || "",
+            })),
     },
     paymentInfo: {
       currentBalance: billingSummary.currentBalance,

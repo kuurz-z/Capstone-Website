@@ -2,6 +2,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { utilityApi } from "../../api/utilityApi.js";
 import { billingApi } from "../../api/billingApi.js";
 
+const resolveQueryOptions = (options) => {
+  if (typeof options === "boolean") {
+    return { enabled: options };
+  }
+  return options || {};
+};
+
+const buildQueryOptions = (baseEnabled, options) => {
+  const normalizedOptions = resolveQueryOptions(options);
+  const { enabled, ...queryOptions } = normalizedOptions;
+
+  return {
+    ...queryOptions,
+    enabled: (enabled ?? true) && baseEnabled,
+  };
+};
+
 // Basic key generators
 export const utilityKeys = {
   all: (utilityType) => ["utilities", utilityType],
@@ -16,51 +33,51 @@ export const utilityKeys = {
   myBillBreakdown: (utilityType, billId) => [...utilityKeys.all(utilityType), "myBillBreakdown", billId],
 };
 
-export function useUtilityRooms(utilityType, branch) {
+export function useUtilityRooms(utilityType, branch, options) {
   return useQuery({
     queryKey: utilityKeys.rooms(utilityType, branch),
     queryFn: () => utilityApi.getRooms(utilityType, branch),
-    enabled: !!utilityType,
+    ...buildQueryOptions(!!utilityType, options),
   });
 }
 
-export function useUtilityReadings(utilityType, roomId) {
+export function useUtilityReadings(utilityType, roomId, options) {
   return useQuery({
     queryKey: utilityKeys.readings(utilityType, roomId),
     queryFn: () => utilityApi.getReadings(utilityType, roomId),
-    enabled: !!utilityType && !!roomId,
+    ...buildQueryOptions(!!utilityType && !!roomId, options),
   });
 }
 
-export function useRoomHistory(utilityType, roomId) {
+export function useRoomHistory(utilityType, roomId, options) {
   return useQuery({
     queryKey: [...utilityKeys.all(utilityType), "roomHistory", roomId],
     queryFn: () => utilityApi.getRoomHistory(utilityType, roomId),
-    enabled: !!utilityType && !!roomId,
+    ...buildQueryOptions(!!utilityType && !!roomId, options),
   });
 }
 
-export function useUtilityLatestReading(utilityType, roomId) {
+export function useUtilityLatestReading(utilityType, roomId, options) {
   return useQuery({
     queryKey: utilityKeys.latestReading(utilityType, roomId),
     queryFn: () => utilityApi.getLatestReading(utilityType, roomId),
-    enabled: !!utilityType && !!roomId,
+    ...buildQueryOptions(!!utilityType && !!roomId, options),
   });
 }
 
-export function useUtilityPeriods(utilityType, roomId) {
+export function useUtilityPeriods(utilityType, roomId, options) {
   return useQuery({
     queryKey: utilityKeys.periods(utilityType, roomId),
     queryFn: () => utilityApi.getPeriods(utilityType, roomId),
-    enabled: !!utilityType && !!roomId,
+    ...buildQueryOptions(!!utilityType && !!roomId, options),
   });
 }
 
-export function useUtilityResult(utilityType, periodId) {
+export function useUtilityResult(utilityType, periodId, options) {
   return useQuery({
     queryKey: utilityKeys.result(utilityType, periodId),
     queryFn: () => utilityApi.getResult(utilityType, periodId),
-    enabled: !!utilityType && !!periodId,
+    ...buildQueryOptions(!!utilityType && !!periodId, options),
   });
 }
 
@@ -125,12 +142,8 @@ export function useOpenUtilityPeriod(utilityType) {
 }
 
 export function useUpdateUtilityPeriod(utilityType) {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ periodId, ...data }) => utilityApi.updatePeriod(utilityType, periodId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
-    },
   });
 }
 

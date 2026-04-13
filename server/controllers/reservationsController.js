@@ -16,6 +16,7 @@ import {
   Bill,
   UtilityReading,
   BedHistory,
+  Stay,
   ROOM_BRANCHES,
 } from "../models/index.js";
 import { BUSINESS } from "../config/constants.js";
@@ -65,6 +66,12 @@ import {
   buildTenantWorkspaceStats,
   computeLeaseEndDate,
 } from "../utils/tenantWorkspace.js";
+import {
+  getTenantActionContext as loadTenantActionContext,
+  moveOutStayWorkflow,
+  renewStayWorkflow,
+  transferStayWorkflow,
+} from "../utils/tenantActionService.js";
 
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
@@ -126,6 +133,8 @@ const TENANT_WORKSPACE_FIELDS = [
   "leaseDuration",
   "leaseExtensions",
   "monthlyRent",
+  "currentStayId",
+  "latestStayStatus",
   "mobileNumber",
   "firstName",
   "lastName",
@@ -139,7 +148,10 @@ const TENANT_WORKSPACE_FIELDS = [
   "userId",
   "roomId",
 ].join(" ");
-const TENANT_WORKSPACE_USER = ["userId", "firstName lastName email phone"];
+const TENANT_WORKSPACE_USER = [
+  "userId",
+  "firstName lastName email phone role tenantStatus branch",
+];
 const TENANT_WORKSPACE_ROOM = ["roomId", "name roomNumber branch type price floor"];
 const TIME_24H_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -245,12 +257,24 @@ const getTenantWorkspaceReservations = async ({ roomQuery }) => {
 };
 
 const buildWorkspaceEntries = async (reservations, now = new Date()) => {
-  const reservationIds = reservations.map((reservation) => reservation._id);
-  const tenantIds = reservations
+  const visibleReservations = reservations.filter((reservation) => {
+    const tenantUser = reservation?.userId;
+    return Boolean(tenantUser && tenantUser.role === "tenant");
+  });
+
+  const reservationIds = visibleReservations.map((reservation) => reservation._id);
+  const tenantIds = visibleReservations
     .map((reservation) => reservation.userId?._id || reservation.userId)
     .filter(Boolean);
+  const branchSet = [
+    ...new Set(
+      visibleReservations
+        .map((reservation) => reservation.roomId?.branch)
+        .filter(Boolean),
+    ),
+  ];
 
-  const [bills, bedHistoryRecords] = await Promise.all([
+  const [bills, bedHistoryRecords, stays, branchRooms] = await Promise.all([
     Bill.find({
       reservationId: { $in: reservationIds },
       isArchived: { $ne: true },
@@ -264,6 +288,17 @@ const buildWorkspaceEntries = async (reservations, now = new Date()) => {
       .populate("roomId", "name branch")
       .sort({ moveInDate: -1 })
       .lean(),
+    Stay.find({
+      reservationId: { $in: reservationIds },
+    })
+      .sort({ leaseStartDate: -1, createdAt: -1 })
+      .lean(),
+    Room.find({
+      branch: { $in: branchSet },
+      isArchived: { $ne: true },
+    })
+      .select("branch _id beds")
+      .lean(),
   ]);
 
   const billsByReservationId = new Map();
@@ -276,6 +311,8 @@ const buildWorkspaceEntries = async (reservations, now = new Date()) => {
 
   const historyByReservationId = new Map();
   const historyByTenantId = new Map();
+  const staysByReservationId = new Map();
+  const branchAvailability = new Map();
   for (const record of bedHistoryRecords) {
     if (record.reservationId) {
       const reservationKey = String(record.reservationId);
@@ -291,17 +328,48 @@ const buildWorkspaceEntries = async (reservations, now = new Date()) => {
       historyByTenantId.get(tenantKey).push(record);
     }
   }
+  for (const stay of stays) {
+    const reservationKey = String(stay.reservationId || "");
+    if (!reservationKey) continue;
+    if (!staysByReservationId.has(reservationKey)) staysByReservationId.set(reservationKey, []);
+    staysByReservationId.get(reservationKey).push(stay);
+  }
+  for (const room of branchRooms) {
+    const branchKey = String(room.branch || "");
+    const availableBeds = (room.beds || []).filter((bed) => bed.status === "available");
+    if (!branchAvailability.has(branchKey)) branchAvailability.set(branchKey, []);
+    branchAvailability.get(branchKey).push({
+      roomId: String(room._id),
+      bedIds: availableBeds.map((bed) => bed.id || String(bed._id)),
+    });
+  }
 
-  return reservations.map((reservation) => {
+  return visibleReservations.map((reservation) => {
     const reservationKey = String(reservation._id);
     const tenantKey = String(reservation.userId?._id || reservation.userId || "");
+    const stayHistory = staysByReservationId.get(reservationKey) || [];
+    const currentStay =
+      stayHistory.find((stay) => stay.status === "active") ||
+      stayHistory[0] ||
+      null;
+    const branchRoomsForReservation = branchAvailability.get(String(reservation.roomId?.branch || "")) || [];
+    const hasAvailableBedsInBranch = branchRoomsForReservation.some(
+      (room) =>
+        room.bedIds.length > 0 &&
+        (room.roomId !== String(currentStay?.roomId || reservation.roomId?._id || "") ||
+          room.bedIds.some((bedId) => String(bedId) !== String(currentStay?.bedId || reservation.selectedBed?.id || ""))),
+    );
     return buildTenantWorkspaceEntry({
       reservation,
+      currentStay,
+      stayHistory,
       bills: billsByReservationId.get(reservationKey) || [],
       bedHistoryRecords:
         historyByReservationId.get(reservationKey) ||
         historyByTenantId.get(tenantKey) ||
         [],
+      tenantStatus: reservation.userId?.tenantStatus || "applicant",
+      hasAvailableBedsInBranch,
       now,
     });
   });
@@ -535,7 +603,7 @@ export const getTenantWorkspaceById = async (req, res) => {
       });
     }
 
-    const [bills, bedHistoryRecords] = await Promise.all([
+    const [bills, bedHistoryRecords, stayHistory, branchRooms] = await Promise.all([
       Bill.find({
         reservationId: reservation._id,
         isArchived: { $ne: true },
@@ -549,12 +617,39 @@ export const getTenantWorkspaceById = async (req, res) => {
         .populate("roomId", "name branch")
         .sort({ moveInDate: -1 })
         .lean(),
+      Stay.find({ reservationId: reservation._id })
+        .sort({ leaseStartDate: -1, createdAt: -1 })
+        .lean(),
+      Room.find({
+        branch: reservation.roomId?.branch || "",
+        isArchived: { $ne: true },
+      })
+        .select("_id beds")
+        .lean(),
     ]);
+    const currentStay =
+      stayHistory.find((stay) => stay.status === "active") ||
+      stayHistory[0] ||
+      null;
+    const hasAvailableBedsInBranch = branchRooms.some((room) => {
+      const availableBeds = (room.beds || [])
+        .filter((bed) => bed.status === "available")
+        .map((bed) => bed.id || String(bed._id));
+      return (
+        availableBeds.length > 0 &&
+        (String(room._id) !== String(currentStay?.roomId || reservation.roomId?._id || "") ||
+          availableBeds.some((bedId) => String(bedId) !== String(currentStay?.bedId || reservation.selectedBed?.id || "")))
+      );
+    });
 
     const tenant = buildTenantWorkspaceEntry({
       reservation,
+      currentStay,
+      stayHistory,
       bills,
       bedHistoryRecords,
+      tenantStatus: reservation.userId?.tenantStatus || "applicant",
+      hasAvailableBedsInBranch,
       now: new Date(),
     });
 
@@ -573,6 +668,40 @@ export const getTenantWorkspaceById = async (req, res) => {
       { err: error, requestId: req.id },
       "Fetch tenant workspace detail error",
     );
+    return handleReservationError(res, error, "fetch");
+  }
+};
+
+export const getTenantActionContext = async (req, res) => {
+  try {
+    const { reservationId } = req.params;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
+
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res.status(404).json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+    if (dbUser.role !== "owner" && dbUser.role !== "branch_admin") {
+      return res.status(403).json({
+        error: "Access denied. Admin privileges required.",
+        code: "ADMIN_REQUIRED",
+      });
+    }
+
+    const context = await loadTenantActionContext(reservationId);
+    if (!context) {
+      return res.status(404).json({ error: "Reservation not found", code: "RESERVATION_NOT_FOUND" });
+    }
+    if (dbUser.role === "branch_admin" && context.currentStay.branch !== dbUser.branch) {
+      return res.status(403).json({
+        error: `Access denied. You can only manage reservations for ${dbUser.branch} branch.`,
+        code: "BRANCH_ACCESS_DENIED",
+      });
+    }
+
+    return sendSuccess(res, context);
+  } catch (error) {
+    logger.error({ err: error, requestId: req.id }, "Fetch tenant action context error");
     return handleReservationError(res, error, "fetch");
   }
 };
@@ -1956,27 +2085,11 @@ export const archiveReservation = async (req, res, next) => {
 export const renewContract = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
-    const {
-      additionalMonths: rawAdditionalMonths,
-      newLeaseEndDate,
-      notes: renewNotes = "",
-    } = req.body;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
-    const reservation = await Reservation.findById(reservationId)
-      .populate("roomId", "name branch")
-      .populate("userId", "firstName lastName email");
-    if (!reservation)
-      return res.status(404).json({
-        error: "Reservation not found",
-        code: "RESERVATION_NOT_FOUND",
-      });
-
-    if (!hasReservationStatus(reservation.status, "moveIn")) {
-      return res.status(400).json({
-        error: "Only moved-in reservations can be renewed.",
-        code: "INVALID_STATUS_FOR_RENEWAL",
-      });
+    const reservation = await Reservation.findById(reservationId).populate("roomId", "branch");
+    if (!reservation) {
+      return res.status(404).json({ error: "Reservation not found", code: "RESERVATION_NOT_FOUND" });
     }
 
     const denied = checkBranchAccess(
@@ -1986,92 +2099,46 @@ export const renewContract = async (req, res, next) => {
     );
     if (denied) return;
 
-    const oldData = reservation.toObject();
-    const oldDuration = reservation.leaseDuration || 12;
-    const currentLeaseEnd = computeLeaseEndDate(reservation);
-    let additionalMonths = Number.parseInt(rawAdditionalMonths, 10);
-
-    if (newLeaseEndDate) {
-      const currentEnd = dayjs(currentLeaseEnd);
-      const requestedEnd = dayjs(newLeaseEndDate);
-      if (!currentEnd.isValid() || !requestedEnd.isValid()) {
-        return res.status(400).json({
-          error: "A valid new lease end date is required.",
-          code: "INVALID_LEASE_END_DATE",
-        });
-      }
-
-      if (!requestedEnd.isAfter(currentEnd, "day")) {
-        return res.status(400).json({
-          error: "New lease end date must be after the current lease end date.",
-          code: "LEASE_END_NOT_EXTENDED",
-        });
-      }
-
-      additionalMonths = requestedEnd.diff(currentEnd, "month");
-      const monthAligned = currentEnd.add(additionalMonths, "month");
-      if (
-        additionalMonths < 1 ||
-        !monthAligned.isSame(requestedEnd.startOf("day"), "day")
-      ) {
-        return res.status(400).json({
-          error:
-            "New lease end date must align to a whole-month extension from the current lease end date.",
-          code: "LEASE_END_NOT_MONTH_ALIGNED",
-        });
-      }
-    }
-
-    if (
-      !Number.isFinite(additionalMonths) ||
-      additionalMonths < 1 ||
-      additionalMonths > 24
-    ) {
-      return res.status(400).json({
-        error: "Renewal must be between 1 and 24 months.",
-        code: "INVALID_RENEWAL_DURATION",
-      });
-    }
-
-    reservation.leaseDuration = oldDuration + additionalMonths;
-    reservation.leaseExtensions.push({
-      addedMonths: additionalMonths,
-      previousDuration: oldDuration,
-      newDuration: reservation.leaseDuration,
-      extendedBy: (await findDbUser(req.user.uid))?._id || null,
-      notes: renewNotes,
+    const actor = await findDbUser(req.user.uid);
+    const previousStaySnapshot = await Stay.findOne({
+      reservationId,
+      status: "active",
+    }).lean();
+    const result = await renewStayWorkflow({
+      reservationId,
+      payload: req.body,
+      actorId: actor?._id || null,
     });
-    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Contract renewed: +${additionalMonths} months (${oldDuration} → ${reservation.leaseDuration}). ${renewNotes}`;
-    await reservation.save();
 
-    // Notify tenant
     const { notify } = await import("../utils/notificationService.js");
-    const roomName = reservation.roomId?.name || "your room";
+    const roomName = result.reservation.roomId?.name || "your room";
     notify.general(
-      reservation.userId?._id || reservation.userId,
+      result.reservation.userId?._id || result.reservation.userId,
       "Contract Renewed",
-      `Your lease for ${roomName} has been renewed for an additional ${additionalMonths} month${additionalMonths === 1 ? "" : "s"} (total: ${reservation.leaseDuration} months).`,
-      { entityType: "reservation" },
+      `Your lease for ${roomName} has been renewed through ${dayjs(result.stay.leaseEndDate).format("MMM D, YYYY")}.`,
+      { entityType: "stay" },
     );
 
     await auditLogger.logModification(
       req,
       "reservation",
       reservationId,
-      oldData,
-      reservation.toObject(),
-      `Contract renewed: +${additionalMonths} months`,
+      { reservation: reservation.toObject(), stay: previousStaySnapshot },
+      { reservation: result.reservation.toObject(), stay: result.stay },
+      "Tenant stay renewed",
     );
 
     res.json({
-      message: `Contract renewed for ${additionalMonths} additional months`,
-      oldDuration,
-      newDuration: reservation.leaseDuration,
-      reservation: serializeReservation(reservation),
+      message: "Lease renewed successfully",
+      reservation: serializeReservation(result.reservation),
+      stay: result.stay,
     });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Renew contract error");
     await auditLogger.logError(req, error, "Failed to renew contract");
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code || "RENEW_FAILED" });
+    }
     handleReservationError(res, error, "renew");
   }
 };
@@ -2079,15 +2146,7 @@ export const renewContract = async (req, res, next) => {
 /* ─── MOVE-OUT ───────────────────────────────────── */
 export const moveOutReservation = async (req, res, next) => {
   try {
-    const payload = normalizeReservationPayload(req.body);
     const { reservationId } = req.params;
-    const {
-      notes: moveOutNotes = "",
-      inspectionPassed = true,
-      meterReading,
-      moveOutDate,
-      moveOutTime,
-    } = payload;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId)
@@ -2121,176 +2180,48 @@ export const moveOutReservation = async (req, res, next) => {
     );
     if (denied) return;
 
+    const actor = await findDbUser(req.user.uid);
     const oldData = reservation.toObject();
-
-    const moveOutAt = combineLifecycleDateTime({
-      dateInput: moveOutDate,
-      timeInput: moveOutTime,
-      fallbackDate: new Date(),
-    });
-    if (!moveOutAt) {
-      return res.status(400).json({
-        error:
-          "Invalid move-out date/time. Use a valid date and HH:mm format.",
-        code: "INVALID_MOVEOUT_DATETIME",
-      });
-    }
-    if (readMoveInDate(reservation) && moveOutAt < new Date(readMoveInDate(reservation))) {
-      return res.status(400).json({
-        error: "Move-out date/time cannot be earlier than move-in date/time.",
-        code: "MOVEOUT_BEFORE_MOVEIN",
-      });
-    }
-
-    const duplicateMoveOut = await UtilityReading.findOne({
-      utilityType: "electricity",
-      roomId: reservation.roomId?._id || reservation.roomId,
-      tenantId: reservation.userId?._id || reservation.userId,
-      eventType: { $in: utilityEventTypesForQuery("moveOut") },
-      date: moveOutAt,
-      isArchived: false,
-    })
-      .select("_id")
-      .lean();
-    if (duplicateMoveOut) {
-      return res.status(409).json({
-        error:
-          "A move-out reading already exists for this tenant at the same date/time. Use a different time.",
-        code: "DUPLICATE_LIFECYCLE_READING",
-      });
-    }
-
-    // 1. Update reservation status
-    reservation.status = "moveOut";
-    reservation.moveOutDate = moveOutAt;
-    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Moved out${inspectionPassed ? " (inspection passed)" : " (inspection issues noted)"}. ${moveOutNotes}`;
-    await reservation.save();
-
-    // 2. Release bed and decrease occupancy
-    if (reservation.roomId && reservation.selectedBed?.id) {
-      const room = await Room.findById(reservation.roomId._id);
-      if (room) {
-        room.vacateBed(reservation.selectedBed.id);
-        room.decreaseOccupancy();
-        room.updateAvailability();
-        await room.save();
-      }
-    }
-
-    const userId = reservation.userId?._id || reservation.userId;
-    await syncReservationUserLifecycle({
-      status: "moveOut",
-      previousStatus: oldData.status,
-      userId,
-      roomId: reservation.roomId?._id || reservation.roomId,
-      reservationId: reservation._id,
+    const result = await moveOutStayWorkflow({
+      reservationId,
+      payload: req.body,
+      actorId: actor?._id || null,
     });
 
-    if (reservation.selectedBed?.id && userId) {
-      const activeHistory = await BedHistory.findOne({
-        bedId: reservation.selectedBed.id,
-        tenantId: userId,
-        moveOutDate: null,
-      }).sort({ moveInDate: -1 });
-      if (activeHistory) {
-        activeHistory.moveOutDate = moveOutAt;
-        await activeHistory.save();
-      }
-    }
-
-    // 4. Auto-record move-out electricity reading
-    let electricityResult = null;
-    if (
-      meterReading != null &&
-      !isNaN(Number(meterReading)) &&
-      reservation.roomId?._id
-    ) {
-      try {
-        const adminUser = await User.findOne({
-          firebaseUid: req.user.uid,
-        }).lean();
-        const roomDoc = await Room.findById(reservation.roomId._id).lean();
-        const moveOutReadingValue = Number(meterReading);
-
-        if (roomDoc) {
-          const checkedInRes = await Reservation.find({
-            roomId: reservation.roomId._id,
-            status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
-            isArchived: { $ne: true },
-          })
-            .select("userId")
-            .lean();
-          const activeTenantIds = checkedInRes
-            .map((entry) => entry.userId)
-            .filter(Boolean);
-
-          const moveOutReading = new UtilityReading({
-            utilityType: "electricity",
-            roomId: reservation.roomId._id,
-            branch: roomDoc.branch,
-            reading: moveOutReadingValue,
-            date: moveOutAt,
-            eventType: "moveOut",
-            tenantId: userId,
-            activeTenantIds,
-            recordedBy: adminUser?._id || null,
-            utilityPeriodId: null,
-          });
-          await moveOutReading.save();
-
-          electricityResult = {
-            tenantName:
-              `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim(),
-            meterReading: moveOutReadingValue,
-          };
-
-          logger.info(
-            { requestId: req.id, reservationId, meterReading },
-            "Auto-recorded move-out electricity reading",
-          );
-        } else {
-          logger.info(
-            { requestId: req.id },
-            "No room found for move-out electricity reading",
-          );
-        }
-      } catch (elecErr) {
-        logger.warn(
-          { err: elecErr, requestId: req.id },
-          "Auto move-out electricity record failed (non-fatal)",
-        );
-      }
-    }
-
-    // 5. Notify tenant
     const { notify } = await import("../utils/notificationService.js");
-    const roomName = reservation.roomId?.name || "your room";
+    const roomName = result.reservation.roomId?.name || "your room";
     notify.general(
-      userId,
+      result.reservation.userId?._id || result.reservation.userId,
       "Move-Out Complete",
       `You have been moved out from ${roomName}. Thank you for staying at Lilycrest!`,
-      { entityType: "reservation" },
+      { entityType: "stay" },
     );
 
-    await reservation.populate(...POPULATE_USER);
-    await reservation.populate(...POPULATE_ROOM);
     await auditLogger.logModification(
       req,
       "reservation",
       reservationId,
       oldData,
-      reservation.toObject(),
-      `Tenant moved out from ${roomName}${meterReading != null ? ` (meter: ${meterReading} kWh)` : ""}`,
+      {
+        reservation: result.reservation.toObject(),
+        stay: result.stay,
+        billingSummary: result.billingSummary,
+      },
+      `Tenant moved out from ${roomName}`,
     );
 
     res.json({
       message: "Tenant moved out successfully",
-      reservation: serializeReservation(reservation),
-      electricityResult,
+      reservation: serializeReservation(result.reservation),
+      stay: result.stay,
+      finalBillingSummary: result.billingSummary,
     });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Move-out error");
     await auditLogger.logError(req, error, "Failed to move out reservation");
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code || "MOVEOUT_FAILED" });
+    }
     handleReservationError(res, error, "move out");
   }
 };
@@ -2301,15 +2232,7 @@ export const checkoutReservation = moveOutReservation;
 export const transferTenant = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
-    const { newRoomId, newBedId, reason = "Room transfer" } = req.body;
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
-
-    if (!newRoomId || !newBedId) {
-      return res.status(400).json({
-        error: "New room ID and bed ID are required.",
-        code: "MISSING_TRANSFER_FIELDS",
-      });
-    }
 
     const reservation = await Reservation.findById(reservationId)
       .populate("roomId")
@@ -2334,127 +2257,46 @@ export const transferTenant = async (req, res, next) => {
     );
     if (denied) return;
 
-    // Validate new room
-    const newRoom = await Room.findById(newRoomId);
-    if (!newRoom)
-      return res
-        .status(404)
-        .json({ error: "New room not found", code: "NEW_ROOM_NOT_FOUND" });
-    if (newRoom.branch !== reservation.roomId?.branch) {
-      return res.status(400).json({
-        error: "Transfers are limited to rooms within the same branch.",
-        code: "CROSS_BRANCH_TRANSFER_NOT_ALLOWED",
-      });
-    }
-
-    // Check bed availability
-    const newBed = newRoom.beds?.find(
-      (b) => String(b._id) === String(newBedId),
-    );
-    if (!newBed)
-      return res
-        .status(404)
-        .json({ error: "Bed not found in new room", code: "BED_NOT_FOUND" });
-    if (newBed.status !== "available")
-      return res.status(400).json({
-        error: "Selected bed is not available",
-        code: "BED_NOT_AVAILABLE",
-      });
-    const targetBedId = newBed.id || String(newBed._id);
-
     const oldData = reservation.toObject();
-    const oldRoomName = reservation.roomId?.name || "unknown";
-    const oldBedId = reservation.selectedBed?.id;
-    const transferAt = new Date();
-
-    // 1. Vacate old bed & decrease old room occupancy
-    if (reservation.roomId && oldBedId) {
-      const oldRoom = await Room.findById(reservation.roomId._id);
-      if (oldRoom) {
-        oldRoom.vacateBed(oldBedId);
-        oldRoom.decreaseOccupancy();
-        oldRoom.updateAvailability();
-        await oldRoom.save();
-      }
-    }
-
-    // 2. Occupy new bed & increase new room occupancy
-    newRoom.occupyBed(
-      targetBedId,
-      reservation.userId?._id || reservation.userId,
-      reservation._id,
-    );
-    newRoom.increaseOccupancy();
-    newRoom.updateAvailability();
-    await newRoom.save();
-
-    // 3. Update reservation
-    reservation.roomId = newRoom._id;
-    reservation.selectedBed = {
-      id: targetBedId,
-      position: newBed.position || null,
-    };
-    reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Transferred from ${oldRoomName} to ${newRoom.name}. ${reason}`;
-    await reservation.save();
-
-    await syncReservationUserLifecycle({
-      status: reservation.status,
-      previousStatus: reservation.status,
-      userId: reservation.userId?._id || reservation.userId,
-      roomId: newRoom._id,
-      reservationId: reservation._id,
-      force: true,
+    const actor = await findDbUser(req.user.uid);
+    const result = await transferStayWorkflow({
+      reservationId,
+      payload: {
+        ...req.body,
+        targetRoomId: req.body.targetRoomId || req.body.newRoomId,
+        targetBedId: req.body.targetBedId || req.body.newBedId,
+      },
+      actorId: actor?._id || null,
     });
 
-    const tenantId = reservation.userId?._id || reservation.userId;
-    if (oldBedId && tenantId) {
-      const activeHistory = await BedHistory.findOne({
-        bedId: oldBedId,
-        tenantId,
-        moveOutDate: null,
-      }).sort({ moveInDate: -1 });
-      if (activeHistory) {
-        activeHistory.moveOutDate = transferAt;
-        await activeHistory.save();
-      }
-    }
-    if (tenantId) {
-      await BedHistory.create({
-        bedId: targetBedId,
-        roomId: newRoom._id,
-        tenantId,
-        reservationId: reservation._id,
-        moveInDate: transferAt,
-      });
-    }
-
-    // 4. Notify tenant
     const { notify } = await import("../utils/notificationService.js");
     notify.general(
-      reservation.userId?._id || reservation.userId,
+      result.reservation.userId?._id || result.reservation.userId,
       "Room Transfer",
-      `You have been transferred from ${oldRoomName} to ${newRoom.name}. Reason: ${reason}`,
-      { entityType: "reservation" },
+      `You have been transferred from ${result.fromRoomName} to ${result.toRoomName}.`,
+      { entityType: "stay" },
     );
 
-    await reservation.populate(...POPULATE_USER);
-    await reservation.populate(...POPULATE_ROOM);
     await auditLogger.logModification(
       req,
       "reservation",
       reservationId,
       oldData,
-      reservation.toObject(),
-      `Tenant transferred: ${oldRoomName} → ${newRoom.name}`,
+      { reservation: result.reservation.toObject(), stay: result.stay },
+      `Tenant transferred: ${result.fromRoomName} → ${result.toRoomName}`,
     );
 
     res.json({
-      message: `Tenant transferred from ${oldRoomName} to ${newRoom.name}`,
-      reservation: serializeReservation(reservation),
+      message: `Tenant transferred from ${result.fromRoomName} to ${result.toRoomName}`,
+      reservation: serializeReservation(result.reservation),
+      stay: result.stay,
     });
   } catch (error) {
     logger.error({ err: error, requestId: req.id }, "Transfer error");
     await auditLogger.logError(req, error, "Failed to transfer tenant");
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message, code: error.code || "TRANSFER_FAILED" });
+    }
     handleReservationError(res, error, "transfer");
   }
 };

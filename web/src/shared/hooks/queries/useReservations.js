@@ -51,6 +51,15 @@ export function useTenantWorkspaceDetail(reservationId, options = {}) {
   });
 }
 
+export function useTenantActionContext(reservationId, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.reservations.tenantActionContext(reservationId),
+    queryFn: () => reservationApi.getTenantActionContext(reservationId),
+    enabled: !!reservationId,
+    ...options,
+  });
+}
+
 /** Fetch a single reservation by ID */
 export function useReservation(reservationId) {
   return useQuery({

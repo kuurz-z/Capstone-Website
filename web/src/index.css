@@ -6,6 +6,19 @@
    LILYCREST DESIGN SYSTEM — CSS Custom Properties
    ============================================================================= */
 :root {
+  --font-sans:
+    "Plus Jakarta Sans",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Roboto",
+    "Oxygen",
+    "Ubuntu",
+    "Cantarell",
+    "Fira Sans",
+    "Droid Sans",
+    "Helvetica Neue",
+    sans-serif;
   /* ── Brand Colors (Lilycrest — Navy Blue + Gold) ─────────── */
   --color-primary: #0A1628;
   --color-primary-hover: #13243D;
@@ -81,6 +94,7 @@
 
   /* ── Focus Ring ────────────────────────────────────────────── */
   --focus-ring: 0 0 0 1.5px rgba(10, 22, 40, 0.07);
+  --focus-outline: 2px solid rgba(212, 175, 55, 0.52);
 }
 
 html {
@@ -89,22 +103,15 @@ html {
 
 body {
   margin: 0;
-  font-family:
-    "Plus Jakarta Sans",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "Roboto",
-    "Oxygen",
-    "Ubuntu",
-    "Cantarell",
-    "Fira Sans",
-    "Droid Sans",
-    "Helvetica Neue",
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--text-primary);
+  background: var(--bg-page);
+}
+
+#root {
+  min-height: 100vh;
 }
 
 /* ── Hide Native Browser Password Reveal Icons ─────────────── */
@@ -117,6 +124,42 @@ input[type="password"]::-ms-clear {
 /* Offset anchor scroll for sticky navbar */
 section[id] {
   scroll-margin-top: 80px;
+}
+
+:where(
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  summary
+):focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
+
+:where(button, input, select, textarea) {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(212, 175, 55, 0.26);
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ── Theme Toggle Animations ─────────────────────────────── */

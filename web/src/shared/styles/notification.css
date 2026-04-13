@@ -11,7 +11,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  z-index: 10000;
+  z-index: 100000;
   animation: slideInRight 0.3s ease;
   font-family: inherit;
 }
@@ -97,7 +97,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 100000;
   animation: fadeIn 0.2s ease;
 }
 
