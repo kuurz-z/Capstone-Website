@@ -6,6 +6,9 @@ import {
   Megaphone,
   Send,
   ShieldAlert,
+  Pencil,
+  Trash2,
+  X
 } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
@@ -19,7 +22,11 @@ import {
 import {
   useAdminAnnouncements,
   useCreateAnnouncement,
+  useUpdateAnnouncement,
+  useDeleteAnnouncement,
 } from "../../../shared/hooks/queries/useAnnouncements";
+import AdminAnnouncementModal from "../components/AdminAnnouncementModal";
+import ConfirmModal from "../../../shared/components/ConfirmModal";
 import "../styles/design-tokens.css";
 import "../styles/admin-common.css";
 import "../styles/admin-announcements.css";
@@ -45,8 +52,13 @@ export default function AdminAnnouncementsPage() {
   const { user } = useAuth();
   const { can, isOwner } = usePermissions();
   const [form, setForm] = useState(INITIAL_FORM);
+  const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+  const [announcementToDelete, setAnnouncementToDelete] = useState(null);
 
   const createAnnouncement = useCreateAnnouncement();
+  const updateAnnouncement = useUpdateAnnouncement();
+  const deleteAnnouncement = useDeleteAnnouncement();
   const { data, isLoading, isFetching } = useAdminAnnouncements(20);
 
   const announcements = data?.announcements || [];
@@ -106,6 +118,52 @@ export default function AdminAnnouncementsPage() {
         "error",
         4000,
       );
+    }
+  };
+
+  const handleEditSubmit = async (payload) => {
+    try {
+      await updateAnnouncement.mutateAsync({ id: editingAnnouncement.id, data: payload });
+      showNotification("Announcement updated successfully.", "success", 3500);
+      setIsEditingModalOpen(false);
+      setEditingAnnouncement(null);
+    } catch (error) {
+      showNotification(
+        error.message || "Failed to update announcement.",
+        "error",
+        4000,
+      );
+    }
+  };
+
+  const handleEdit = (announcement) => {
+    setEditingAnnouncement(announcement);
+    setIsEditingModalOpen(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingAnnouncement(null);
+    setIsEditingModalOpen(false);
+  };
+
+  const handleDeleteClick = (id) => {
+    setAnnouncementToDelete(id);
+  };
+
+  const cancelDelete = () => {
+    if (!deleteAnnouncement.isPending) {
+      setAnnouncementToDelete(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!announcementToDelete) return;
+    try {
+      await deleteAnnouncement.mutateAsync(announcementToDelete);
+      showNotification("Announcement deleted successfully.", "success", 3500);
+      setAnnouncementToDelete(null);
+    } catch (error) {
+      showNotification(error.message || "Failed to delete announcement.", "error", 4000);
     }
   };
 
@@ -316,6 +374,26 @@ export default function AdminAnnouncementsPage() {
                       <span className="admin-announcement-meta-text">
                         {formatDateTime(announcement.publishedAt)}
                       </span>
+                      <div className="admin-announcement-item__actions style-overrides">
+                        <button
+                          type="button"
+                          className="admin-icon-btn"
+                          title="Edit Announcement"
+                          onClick={() => handleEdit(announcement)}
+                          disabled={deleteAnnouncement.isPending || updateAnnouncement.isPending}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-icon-btn admin-icon-btn--danger"
+                          title="Delete Announcement"
+                          onClick={() => handleDeleteClick(announcement.id)}
+                          disabled={deleteAnnouncement.isPending || updateAnnouncement.isPending}
+                        >
+                          {deleteAnnouncement.isPending ? <LoaderCircle size={15} className="admin-announcements-spin" /> : <Trash2 size={15} />}
+                        </button>
+                      </div>
                     </div>
                   </article>
                 );
@@ -324,6 +402,26 @@ export default function AdminAnnouncementsPage() {
           )}
         </section>
       </div>
-    </div>
+
+      <AdminAnnouncementModal
+        isOpen={isEditingModalOpen}
+        onClose={handleCancelEdit}
+        onSubmit={handleEditSubmit}
+        isPending={updateAnnouncement.isPending}
+        initialData={editingAnnouncement}
+        isOwner={isOwner}
+        defaultBranch={defaultBranch}
+      />
+
+        <ConfirmModal
+          isOpen={!!announcementToDelete}
+          onClose={cancelDelete}
+          onConfirm={confirmDelete}
+          title="Delete Announcement"
+          message="Are you sure you want to delete this announcement? This action cannot be undone."
+          confirmText="Delete Announcement"
+          variant="danger"
+          loading={deleteAnnouncement.isPending}
+        />    </div>
   );
 }
