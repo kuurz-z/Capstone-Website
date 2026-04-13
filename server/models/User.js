@@ -26,6 +26,7 @@
  * ============================================================================
  */
 
+import crypto from "crypto";
 import mongoose from "mongoose";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import {
@@ -62,6 +63,13 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       minlength: 3,
+      index: true,
+    },
+    user_id: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
       index: true,
     },
 
@@ -273,6 +281,10 @@ const userSchema = new mongoose.Schema(
 // ============================================================================
 
 userSchema.pre("save", function (next) {
+  if (!this.user_id) {
+    this.user_id = `user_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  }
+
   // Backward compatibility for legacy records/scripts that still send "none".
   if (this.tenantStatus === "none") {
     this.tenantStatus = "applicant";
@@ -337,12 +349,20 @@ userSchema.methods.archive = async function (archivedById = null) {
 
 /**
  * Restore an archived user
+ * @param {ObjectId} restoredById - ID of user restoring the account
+ * @param {string} reason - Optional audit reason
  */
-userSchema.methods.restore = async function () {
+userSchema.methods.restore = async function (
+  restoredById = null,
+  reason = "Restored from archive",
+) {
   this.isArchived = false;
   this.accountStatus = "active";
   this.archivedAt = null;
   this.archivedBy = null;
+  this.statusChangedAt = new Date();
+  this.statusChangedBy = restoredById;
+  this.statusReason = reason;
   return this.save();
 };
 

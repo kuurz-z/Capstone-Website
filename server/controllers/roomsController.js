@@ -17,6 +17,7 @@ import {
 } from "../utils/businessSettings.js";
 import { deriveRoomOccupancyState } from "../utils/occupancyManager.js";
 import { sendSuccess, AppError } from "../middleware/errorHandler.js";
+import { OPEN_MAINTENANCE_STATUSES } from "../config/maintenance.js";
 import {
   ACTIVE_OCCUPANCY_STATUS_QUERY,
   reservationStatusesForQuery,
@@ -688,7 +689,7 @@ export const deleteRoom = async (req, res, next) => {
       MaintenanceRequest.countDocuments({
         roomId,
         isArchived: false,
-        status: { $nin: ["completed", "cancelled"] },
+        status: { $in: OPEN_MAINTENANCE_STATUSES },
       }),
     ]);
 

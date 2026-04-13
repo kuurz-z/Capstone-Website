@@ -36,6 +36,10 @@ const PAGE_META = {
     title: "Billing",
     description: "Generate statements, review balances, and follow payment progress without leaving the admin workspace.",
   },
+  "/admin/maintenance": {
+    title: "Maintenance",
+    description: "Review tenant repair requests, assign work, and keep the tenant-visible admin response up to date.",
+  },
   "/admin/announcements": {
     title: "Announcements",
     description: "Publish notices with clearer targeting and follow-up visibility.",

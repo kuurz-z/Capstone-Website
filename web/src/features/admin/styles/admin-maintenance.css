@@ -1,0 +1,293 @@
+.admin-maintenance__filters {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-maintenance__filters-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.admin-maintenance__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-maintenance__field span {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.admin-maintenance__field input,
+.admin-maintenance__field select,
+.admin-maintenance__field textarea {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  padding: 11px 12px;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.admin-maintenance__field textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.admin-maintenance__field input:focus,
+.admin-maintenance__field select:focus,
+.admin-maintenance__field textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-bg);
+}
+
+.admin-maintenance__filter-actions,
+.admin-maintenance__drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-maintenance__primary-btn,
+.admin-maintenance__secondary-btn {
+  border-radius: 999px;
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.admin-maintenance__primary-btn {
+  background: var(--accent-blue);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-maintenance__secondary-btn {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.admin-maintenance__primary-btn:hover,
+.admin-maintenance__secondary-btn:hover {
+  transform: translateY(-1px);
+}
+
+.admin-maintenance__primary-btn:disabled,
+.admin-maintenance__secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.admin-maintenance__tenant-cell,
+.admin-maintenance__type-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-maintenance__avatar,
+.admin-maintenance__type-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.admin-maintenance__avatar {
+  background: linear-gradient(135deg, #0f766e 0%, #1d4ed8 100%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.admin-maintenance__tenant-name,
+.admin-maintenance__type-label {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.admin-maintenance__tenant-meta,
+.admin-maintenance__type-meta,
+.admin-maintenance__description-meta {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-top: 2px;
+}
+
+.admin-maintenance__description-cell {
+  min-width: 240px;
+}
+
+.admin-maintenance__description-preview {
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+}
+
+.admin-maintenance__urgency-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.admin-maintenance__drawer-loading,
+.admin-maintenance__empty-inline,
+.admin-maintenance__drawer-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.admin-maintenance__spin {
+  animation: admin-maintenance-spin 0.8s linear infinite;
+}
+
+.admin-maintenance__description-panel {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.admin-maintenance__attachments {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.admin-maintenance__attachment {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-decoration: none;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.admin-maintenance__attachment img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-inset);
+}
+
+.admin-maintenance__attachment span {
+  display: block;
+  padding: 10px 12px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.admin-maintenance__history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-maintenance__history-item {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-maintenance__history-item strong {
+  color: var(--text-primary);
+}
+
+.admin-maintenance__history-item span,
+.admin-maintenance__history-item p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.admin-maintenance__callout {
+  margin-bottom: 14px;
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  line-height: 1.5;
+}
+
+.admin-maintenance__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@keyframes admin-maintenance-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-maintenance__description-cell {
+    min-width: 180px;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-maintenance__filters {
+    padding: 14px;
+  }
+
+  .admin-maintenance__filter-actions,
+  .admin-maintenance__drawer-footer {
+    flex-direction: column-reverse;
+  }
+
+  .admin-maintenance__primary-btn,
+  .admin-maintenance__secondary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

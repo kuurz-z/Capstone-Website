@@ -1,20 +1,27 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { maintenanceApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
 /** Fetch current tenant's maintenance requests */
-export function useMyMaintenanceRequests(limit, status) {
+export function useMyMaintenanceRequests(filters) {
   return useQuery({
-    queryKey: [...queryKeys.maintenance.all, "my", limit, status],
-    queryFn: () => maintenanceApi.getMyRequests(limit, status),
+    queryKey: queryKeys.maintenance.mine(filters),
+    queryFn: () => maintenanceApi.getMyRequests(filters),
+    placeholderData: keepPreviousData,
   });
 }
 
-/** Fetch maintenance requests by branch (admin) */
-export function useMaintenanceByBranch(limit, status, category) {
+/** Fetch maintenance requests for admins */
+export function useAdminMaintenanceRequests(filters) {
   return useQuery({
-    queryKey: [...queryKeys.maintenance.all, "branch", limit, status, category],
-    queryFn: () => maintenanceApi.getByBranch(limit, status, category),
+    queryKey: queryKeys.maintenance.admin(filters),
+    queryFn: () => maintenanceApi.getAdminAll(filters),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -32,21 +39,57 @@ export function useCreateMaintenanceRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data) => maintenanceApi.createRequest(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["maintenance"] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
   });
 }
 
-/** Update maintenance request status (admin) */
+/** Update a pending maintenance request (tenant) */
+export function useUpdateMyMaintenanceRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, data }) =>
+      maintenanceApi.updateMyRequest(requestId, data),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
+  });
+}
+
+/** Cancel a pending maintenance request (tenant) */
+export function useCancelMaintenanceRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (requestId) => maintenanceApi.cancelRequest(requestId),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
+  });
+}
+
+/** Reopen a resolved/completed maintenance request (tenant) */
+export function useReopenMaintenanceRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, note }) =>
+      maintenanceApi.reopenRequest(requestId, note),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
+  });
+}
+
+/** Update maintenance request status/notes/assignment (admin) */
 export function useUpdateMaintenanceRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ requestId, status, completionNote }) =>
-      maintenanceApi.updateRequest(requestId, status, completionNote),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["maintenance"] }),
+    mutationFn: ({ requestId, payload }) =>
+      maintenanceApi.updateAdminRequestStatus(requestId, payload),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
   });
 }
 
-/** Get completion statistics (admin) */
+/** Backward-compatible alias for previous admin callers */
+export const useMaintenanceByBranch = useAdminMaintenanceRequests;
+
 export function useMaintenanceCompletionStats(days) {
   return useQuery({
     queryKey: ["maintenance", "completionStats", days],
@@ -54,7 +97,6 @@ export function useMaintenanceCompletionStats(days) {
   });
 }
 
-/** Get issue frequency stats (admin) */
 export function useIssueFrequency(limit, months) {
   return useQuery({
     queryKey: ["maintenance", "issueFrequency", limit, months],

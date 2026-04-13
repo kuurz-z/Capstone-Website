@@ -4,58 +4,95 @@
 
 import { authFetch } from "./httpClient.js";
 
+const buildQueryString = (filters = {}) => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(filters || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    searchParams.set(key, value);
+  });
+
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : "";
+};
+
 export const maintenanceApi = {
   /**
    * Get current tenant's maintenance requests
    */
-  getMyRequests: (limit = 50, status = null) => {
-    let url = `/maintenance/my-requests?limit=${limit}`;
-    if (status) url += `&status=${status}`;
-    return authFetch(url);
-  },
-
-  /**
-   * Get all maintenance requests by branch (admin only)
-   */
-  getByBranch: (limit = 50, status = null, category = null) => {
-    let url = `/maintenance/branch?limit=${limit}`;
-    if (status) url += `&status=${status}`;
-    if (category) url += `&category=${category}`;
-    return authFetch(url);
-  },
+  getMyRequests: (filters = {}) =>
+    authFetch(`/m/maintenance/me${buildQueryString(filters)}`),
 
   /**
    * Create maintenance request
    */
   createRequest: (requestData) =>
-    authFetch("/maintenance/requests", {
+    authFetch("/m/maintenance", {
       method: "POST",
       body: JSON.stringify(requestData),
     }),
 
   /**
-   * Get maintenance request details
+   * Update a pending maintenance request
    */
-  getRequest: (requestId) => authFetch(`/maintenance/requests/${requestId}`),
+  updateMyRequest: (requestId, requestData) =>
+    authFetch(`/m/maintenance/${requestId}`, {
+      method: "PUT",
+      body: JSON.stringify(requestData),
+    }),
 
   /**
-   * Update maintenance request status (admin only)
+   * Cancel a pending maintenance request
    */
+  cancelRequest: (requestId) =>
+    authFetch(`/m/maintenance/${requestId}/cancel`, {
+      method: "PATCH",
+    }),
+
+  /**
+   * Reopen a resolved/completed maintenance request
+   */
+  reopenRequest: (requestId, note) =>
+    authFetch(`/m/maintenance/${requestId}/reopen`, {
+      method: "PATCH",
+      body: JSON.stringify({ note }),
+    }),
+
+  /**
+   * Get maintenance request details
+   */
+  getRequest: (requestId) => authFetch(`/m/maintenance/${requestId}`),
+
+  /**
+   * Get all admin maintenance requests
+   */
+  getAdminAll: (filters = {}) =>
+    authFetch(`/m/maintenance/admin/all${buildQueryString(filters)}`),
+
+  /**
+   * Update maintenance request status/notes/assignment (admin only)
+   */
+  updateAdminRequestStatus: (requestId, payload) =>
+    authFetch(`/m/maintenance/admin/${requestId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Legacy compatibility methods retained for untouched callers.
+   */
+  getByBranch: (filters = {}) =>
+    authFetch(`/maintenance/branch${buildQueryString(filters)}`),
+
   updateRequest: (requestId, status, completionNote) =>
     authFetch(`/maintenance/requests/${requestId}`, {
       method: "PATCH",
       body: JSON.stringify({ status, completionNote }),
     }),
 
-  /**
-   * Get completion statistics by branch (admin only)
-   */
   getCompletionStats: (days = 30) =>
     authFetch(`/maintenance/stats/completion?days=${days}`),
 
-  /**
-   * Get issue frequency for predictive maintenance (admin only)
-   */
   getIssueFrequency: (limit = 12, months = 6) =>
     authFetch(
       `/maintenance/stats/issue-frequency?limit=${limit}&months=${months}`,

@@ -44,6 +44,7 @@ const TENANT_STATUS_TRANSITIONS = {
 };
 const LIST_SEARCH_FIELDS = ["username", "firstName", "lastName", "email"];
 const LIST_USER_FIELDS = [
+  "user_id",
   "username",
   "firstName",
   "lastName",
@@ -53,6 +54,7 @@ const LIST_USER_FIELDS = [
   "branch",
   "accountStatus",
   "isActive",
+  "isArchived",
   "gender",
   "dateOfBirth",
   "address",
@@ -87,6 +89,26 @@ const canTransitionTenantStatus = (fromStatus, toStatus) => {
 };
 
 const isLifecycleManagedRole = (role) => LIFECYCLE_MANAGED_ROLES.includes(role);
+
+const hasBranchAccessToTargetUser = async (targetUser, branchFilter) => {
+  if (!branchFilter) return true;
+  if (!targetUser) return false;
+  if (targetUser.branch === branchFilter) return true;
+
+  const branchRoomIds = await Room.find({ branch: branchFilter })
+    .distinct("_id");
+
+  if (branchRoomIds.length === 0) return false;
+
+  const linkedReservation = await Reservation.findOne({
+    userId: targetUser._id,
+    roomId: { $in: branchRoomIds },
+  })
+    .select("_id")
+    .lean();
+
+  return Boolean(linkedReservation);
+};
 
 /**
  * POST /api/users
@@ -223,6 +245,7 @@ export const createUser = async (req, res, next) => {
       message: "User created successfully",
       user: {
         id: user._id,
+        user_id: user.user_id,
         firebaseUid: user.firebaseUid,
         email: user.email,
         username: user.username,
@@ -243,7 +266,17 @@ export const createUser = async (req, res, next) => {
 
 export const getUserStats = async (req, res, next) => {
   try {
-    const matchQuery = req.branchFilter ? { branch: req.branchFilter } : {};
+    const matchQuery = {};
+    if (req.branchFilter) {
+      const branchRooms = await Room.find({ branch: req.branchFilter }).select("_id").lean();
+      const branchRoomIds = branchRooms.map((r) => r._id);
+      const branchUserIds = await Reservation.find({ roomId: { $in: branchRoomIds } }).distinct("userId");
+
+      matchQuery.$or = [
+        { branch: req.branchFilter },
+        { _id: { $in: branchUserIds } }
+      ];
+    }
 
     const [statsResult = {}] = await User.aggregate([
       { $match: matchQuery },
@@ -253,26 +286,44 @@ export const getUserStats = async (req, res, next) => {
             {
               $group: {
                 _id: null,
-                total: { $sum: 1 },
+                total: { 
+                  $sum: { $cond: [{ $ne: ["$isArchived", true] }, 1, 0] } 
+                },
                 activeCount: {
                   $sum: {
-                    $cond: [{ $eq: ["$accountStatus", "active"] }, 1, 0],
+                    $cond: [
+                      { $and: [{ $eq: ["$accountStatus", "active"] }, { $ne: ["$isArchived", true] }] },
+                      1, 0
+                    ],
                   },
                 },
                 verifiedCount: {
                   $sum: {
-                    $cond: [{ $eq: ["$isEmailVerified", true] }, 1, 0],
+                    $cond: [
+                      { $and: [{ $eq: ["$isEmailVerified", true] }, { $ne: ["$isArchived", true] }] },
+                      1, 0
+                    ],
                   },
                 },
+                archivedCount: {
+                  $sum: { $cond: [{ $eq: ["$isArchived", true] }, 1, 0] }
+                }
               },
             },
           ],
-          byRole: [{ $group: { _id: "$role", count: { $sum: 1 } } }],
+          byRole: [
+            { $match: { isArchived: { $ne: true } } },
+            { $group: { _id: "$role", count: { $sum: 1 } } }
+          ],
           byAccountStatus: [
-            { $group: { _id: "$accountStatus", count: { $sum: 1 } } },
+            { $match: { isArchived: { $ne: true } } },
+            { $group: { _id: "$accountStatus", count: { $sum: 1 } } }
           ],
           byBranch: req.isOwner
-            ? [{ $group: { _id: "$branch", count: { $sum: 1 } } }]
+            ? [
+                { $match: { isArchived: { $ne: true } } },
+                { $group: { _id: "$branch", count: { $sum: 1 } } }
+              ]
             : [],
         },
       },
@@ -282,6 +333,7 @@ export const getUserStats = async (req, res, next) => {
       total: 0,
       activeCount: 0,
       verifiedCount: 0,
+      archivedCount: 0,
     };
 
     // Format response
@@ -289,6 +341,7 @@ export const getUserStats = async (req, res, next) => {
       total: totals.total,
       activeCount: totals.activeCount,
       verifiedCount: totals.verifiedCount,
+      archivedCount: totals.archivedCount || 0,
       byRole: { applicant: 0, tenant: 0, branch_admin: 0, owner: 0 },
       byAccountStatus: {
         active: 0,
@@ -391,10 +444,16 @@ export const getUsers = async (req, res, next) => {
     // Build query with branch filter (exclude archived/soft-deleted users)
     const query = { isArchived: false };
 
-    if (req.branchFilter) {
-      query.branch = req.branchFilter;
-    } else if (branch) {
-      query.branch = branch;
+    const targetBranch = req.branchFilter || branch;
+    if (targetBranch) {
+      const branchRooms = await Room.find({ branch: targetBranch }).select("_id").lean();
+      const branchRoomIds = branchRooms.map((r) => r._id);
+      const branchUserIds = await Reservation.find({ roomId: { $in: branchRoomIds } }).distinct("userId");
+
+      query.$or = [
+        { branch: targetBranch },
+        { _id: { $in: branchUserIds } }
+      ];
     }
 
     if (role) {
@@ -410,12 +469,25 @@ export const getUsers = async (req, res, next) => {
     }
 
     if (accountStatus) {
-      query.accountStatus = accountStatus;
+      if (accountStatus === "archived") {
+        query.isArchived = true;
+      } else if (accountStatus.includes(",")) {
+        query.accountStatus = { $in: accountStatus.split(",").map((s) => s.trim()) };
+      } else {
+        query.accountStatus = accountStatus;
+      }
     }
 
     if (search?.trim()) {
       const searchRegex = new RegExp(escapeRegex(search.trim()), "i");
-      query.$or = LIST_SEARCH_FIELDS.map((field) => ({ [field]: searchRegex }));
+      const searchOr = LIST_SEARCH_FIELDS.map((field) => ({ [field]: searchRegex }));
+      
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
     }
 
     // Pagination
@@ -771,6 +843,32 @@ export const deleteUser = async (req, res, next) => {
       });
     }
 
+    const canAccessTarget = await hasBranchAccessToTargetUser(
+      user,
+      req.isOwner ? null : req.branchFilter,
+    );
+
+    if (!canAccessTarget) {
+      return res.status(404).json({
+        error: "User not found or access denied",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    if (!req.isOwner && ["branch_admin", "owner"].includes(user.role)) {
+      return res.status(403).json({
+        error: "Only the owner can archive admin accounts",
+        code: "ROLE_FORBIDDEN",
+      });
+    }
+
+    if (isHardDelete && (!req.isOwner && !req.isAdmin)) {
+      return res.status(403).json({
+        error: "Only owners or admins can permanently delete accounts",
+        code: "ROLE_FORBIDDEN",
+      });
+    }
+
     const [reservationCount, activeReservationCount, issuedBillCount, draftBillCount] =
       await Promise.all([
         Reservation.countDocuments({
@@ -827,10 +925,10 @@ export const deleteUser = async (req, res, next) => {
       });
     }
 
-    if (reservationCount > 0 || issuedBillCount > 0) {
+    if (activeReservationCount > 0 || issuedBillCount > 0) {
       return res.status(409).json({
         error:
-          "Hard delete blocked. Archive this user instead because related reservations or issued bills exist.",
+          "Hard delete blocked. Cannot permanently delete user because they have active reservations or issued bills.",
         code: "HARD_DELETE_BLOCKED",
         safeguards: {
           reservations: reservationCount,
@@ -838,6 +936,13 @@ export const deleteUser = async (req, res, next) => {
           issuedBills: issuedBillCount,
           draftBills: draftBillCount,
         },
+      });
+    }
+
+    if (reservationCount > 0) {
+      await Reservation.deleteMany({
+        userId: user._id,
+        isArchived: { $ne: true },
       });
     }
 
@@ -995,6 +1100,77 @@ export const reactivateUser = async (req, res, next) => {
     res.json({ message: "User reactivated successfully", user: targetUser });
   } catch (error) {
     await auditLogger.logError(req, error, "Failed to reactivate user");
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/users/:userId/restore
+ * Restore an archived user account.
+ * Access: Owner only
+ */
+export const restoreUser = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res
+        .status(400)
+        .json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+    }
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found", code: "USER_NOT_FOUND" });
+    }
+
+    const canAccessTarget = await hasBranchAccessToTargetUser(
+      targetUser,
+      req.isOwner ? null : req.branchFilter,
+    );
+
+    if (!canAccessTarget) {
+      return res.status(404).json({
+        error: "User not found or access denied",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    if (!req.isOwner && ["branch_admin", "owner"].includes(targetUser.role)) {
+      return res.status(403).json({
+        error: "Only the owner can restore admin accounts",
+        code: "ROLE_FORBIDDEN",
+      });
+    }
+
+    if (!targetUser.isArchived) {
+      return res.status(400).json({
+        error: "User is not archived",
+        code: "USER_NOT_ARCHIVED",
+      });
+    }
+
+    const adminUser = await User.findOne({ firebaseUid: req.user.uid })
+      .select("_id")
+      .lean();
+    const oldData = targetUser.toObject();
+
+    await targetUser.restore(adminUser?._id || null);
+
+    await auditLogger.logModification(
+      req,
+      "user",
+      userId,
+      oldData,
+      targetUser.toObject(),
+      "User restored from archive",
+    );
+
+    res.json({ message: "User restored successfully", user: targetUser });
+  } catch (error) {
+    await auditLogger.logError(req, error, "Failed to restore user");
     next(error);
   }
 };

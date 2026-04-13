@@ -10,6 +10,8 @@ import { queryKeys } from "../../../shared/lib/queryKeys";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
 import DeleteUserModal from "../components/users/DeleteUserModal";
+import HardDeleteUserModal from "../components/users/HardDeleteUserModal";
+import RestoreUserModal from "../components/users/RestoreUserModal";
 import AccountActionModal from "../components/users/AccountActionModal";
 import AccountRowActions from "../components/users/AccountRowActions";
 import {
@@ -32,6 +34,7 @@ function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isHardDeleteModalOpen, setIsHardDeleteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [accountAction, setAccountAction] = useState({
     type: null,
@@ -133,10 +136,12 @@ function UserManagementPage() {
     if (roleFilter !== "all") params.role = roleFilter;
     if (branchFilter !== "all") params.branch = branchFilter;
     if (statusFilter !== "all") {
-      if (["active", "suspended", "banned"].includes(statusFilter)) {
+      if (statusFilter === "restricted") {
+        params.accountStatus = "suspended,banned";
+      } else if (statusFilter === "archived") {
+        params.accountStatus = "archived";
+      } else if (["active", "suspended", "banned"].includes(statusFilter)) {
         params.accountStatus = statusFilter;
-      } else {
-        params.isActive = statusFilter === "active";
       }
     }
     return params;
@@ -224,6 +229,11 @@ function UserManagementPage() {
     setIsDeleteModalOpen(true);
   };
 
+  const handleHardDeleteClick = (userData) => {
+    setSelectedUser(userData);
+    setIsHardDeleteModalOpen(true);
+  };
+
   const handleDeleteUser = async ({ hardDelete = false } = {}) => {
     try {
       const query = hardDelete ? "?hardDelete=true" : "";
@@ -239,6 +249,7 @@ function UserManagementPage() {
       }
 
       setIsDeleteModalOpen(false);
+      setIsHardDeleteModalOpen(false);
       refetchAll();
     } catch (error) {
       if (error?.code === "HARD_DELETE_BLOCKED") {
@@ -386,13 +397,15 @@ function UserManagementPage() {
       },
       { label: "Active", value: stats?.activeCount || 0, color: "green" },
       {
-        label: "Suspended",
-        value: stats?.byAccountStatus?.suspended || 0,
+        label: "Blocked",
+        value:
+          (stats?.byAccountStatus?.suspended || 0) +
+          (stats?.byAccountStatus?.banned || 0),
         color: "orange",
       },
       {
-        label: "Banned",
-        value: stats?.byAccountStatus?.banned || 0,
+        label: "Archived",
+        value: stats?.archivedCount || 0,
         color: "red",
       },
     ],
@@ -437,8 +450,8 @@ function UserManagementPage() {
       options: [
         { value: "all", label: "All Status" },
         { value: "active", label: "Active" },
-        { value: "suspended", label: "Suspended" },
-        { value: "banned", label: "Banned" },
+        { value: "restricted", label: "Blocked" },
+        { value: "archived", label: "Archived/Deleted" },
       ],
       value: statusFilter,
       onChange: (v) => {
@@ -496,31 +509,40 @@ function UserManagementPage() {
       align: "right",
       render: (row) => {
         const isCurrentUser = row._id === (user?._id || user?.uid);
+        const isArchived = row.isArchived === true;
+        const isPrivilegedAccount = ["branch_admin", "owner"].includes(row.role);
         const status =
           row.accountStatus || (row.isActive ? "active" : "suspended");
-        const canSuspend =
-          canManageUsers && !isCurrentUser && status === "active";
-        const canReactivate =
+        const canBlock =
+          canManageUsers && !isCurrentUser && !isArchived && status === "active";
+        const canUnblock =
           canManageUsers &&
           !isCurrentUser &&
+          !isArchived &&
           ["suspended", "banned"].includes(status);
-        const canBan = isOwner && !isCurrentUser && status !== "banned";
-        const canDelete = isOwner && !isCurrentUser;
+        const canRestore =
+          canManageUsers &&
+          !isCurrentUser &&
+          isArchived &&
+          (isOwner || !isPrivilegedAccount);
+        const canHardDelete = canManageUsers && !isCurrentUser && isArchived && (!isPrivilegedAccount || isOwner);
 
         return (
           <AccountRowActions
-            canEdit={canManageUsers}
-            canSuspend={canSuspend}
-            canReactivate={canReactivate}
-            canBan={canBan}
-            canDelete={canDelete}
+            canEdit={canManageUsers && !isArchived && (isOwner || !isPrivilegedAccount)}
+            canBlock={canBlock}
+            canUnblock={canUnblock}
+            canRestore={canRestore}
+            canHardDelete={canHardDelete}
             onEdit={() => handleEditClick(row)}
-            onSuspend={() => setAccountAction({ type: "suspend", user: row })}
-            onReactivate={() =>
+            onBlock={() => setAccountAction({ type: "suspend", user: row })}
+            onUnblock={() =>
               setAccountAction({ type: "reactivate", user: row })
             }
-            onBan={() => setAccountAction({ type: "ban", user: row })}
-            onDelete={() => handleDeleteClick(row)}
+            onRestore={() =>
+              setAccountAction({ type: "restore", user: row })
+            }
+            onHardDelete={() => handleHardDeleteClick(row)}
           />
         );
       },
@@ -611,14 +633,27 @@ function UserManagementPage() {
           onClose={() => setIsAddModalOpen(false)}
         />
       )}
-      {isDeleteModalOpen && (
-        <DeleteUserModal
+      {isHardDeleteModalOpen && (
+        <HardDeleteUserModal
           user={selectedUser}
           onDelete={handleDeleteUser}
-          onClose={() => setIsDeleteModalOpen(false)}
+          onClose={() => setIsHardDeleteModalOpen(false)}
         />
       )}
-      {accountAction.type && (
+      {accountAction.type === "restore" && (
+        <RestoreUserModal
+          user={accountAction.user}
+          onConfirm={async () => {
+            try {
+              await handleAccountAction("restore", accountAction.user?._id, "");
+            } finally {
+              setAccountAction({ type: null, user: null });
+            }
+          }}
+          onClose={() => setAccountAction({ type: null, user: null })}
+        />
+      )}
+      {accountAction.type && accountAction.type !== "restore" && (
         <AccountActionModal
           action={accountAction.type}
           user={accountAction.user}

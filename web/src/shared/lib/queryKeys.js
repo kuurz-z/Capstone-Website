@@ -68,7 +68,9 @@ export const queryKeys = {
 
   // ── Maintenance ──
   maintenance: {
-    all: ["maintenance", "list"],
+    all: ["maintenance"],
+    mine: (filters) => ["maintenance", "mine", filters || {}],
+    admin: (filters) => ["maintenance", "admin", filters || {}],
     detail: (id) => ["maintenance", "detail", id],
   },
 
