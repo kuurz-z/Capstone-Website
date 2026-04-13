@@ -1,11 +1,14 @@
-/*
+import React, { useState } from "react";
 import { ClipboardList, Plus, Wrench } from "lucide-react";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
-import { useMyMaintenanceRequests, useCreateMaintenanceRequest } from "../../../shared/hooks/queries/useMaintenance";
+import {
+  useCreateMaintenanceRequest,
+  useMyMaintenanceRequests,
+} from "../../../shared/hooks/queries/useMaintenance";
 import MaintenancePageSkeleton from "../components/maintenance/MaintenancePageSkeleton";
 import "../styles/tenant-common.css";
 
-const MaintenancePage = () => {
+export default function MaintenanceWorkspacePage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     category: "other",
@@ -13,20 +16,18 @@ const MaintenancePage = () => {
     description: "",
   });
 
-  const { data: requestsData, isLoading: loading } = useMyMaintenanceRequests(50);
-  const requests = requestsData?.requests || [];
+  const { data: requestsData, isLoading } = useMyMaintenanceRequests(50);
   const createMutation = useCreateMaintenanceRequest();
+  const requests = requestsData?.requests || [];
 
-  if (loading) {
-    return (
-      <TenantLayout>
-        <MaintenancePageSkeleton />
-      </TenantLayout>
-    );
-  }
+  const getStatusClass = (status) => {
+    if (status === "Completed") return "badge-success";
+    if (status === "In Progress") return "badge-info";
+    return "badge-warning";
+  };
 
-  const handleSubmitRequest = async (e) => {
-    e.preventDefault();
+  const handleSubmitRequest = async (event) => {
+    event.preventDefault();
     try {
       await createMutation.mutateAsync(formData);
       setFormData({ category: "other", title: "", description: "" });
@@ -36,13 +37,13 @@ const MaintenancePage = () => {
     }
   };
 
-  const getStatusClass = (status) => {
-    return status === "Completed"
-      ? "badge-success"
-      : status === "In Progress"
-        ? "badge-info"
-        : "badge-warning";
-  };
+  if (isLoading) {
+    return (
+      <TenantLayout>
+        <MaintenancePageSkeleton />
+      </TenantLayout>
+    );
+  }
 
   return (
     <TenantLayout>
@@ -52,27 +53,33 @@ const MaintenancePage = () => {
             <h1>
               <Wrench size={22} /> Maintenance Requests
             </h1>
-            <p>Submit issues, monitor progress, and keep a record of completed work.</p>
+            <p>
+              Submit issues, monitor progress, and keep a record of completed
+              work.
+            </p>
           </div>
           <button
+            type="button"
             className="btn btn-primary"
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => setShowForm((value) => !value)}
           >
-            <Plus size={16} /> {showForm ? "Close Form" : "New Request"}
+            <Plus size={16} />
+            {showForm ? "Close Form" : "New Request"}
           </button>
         </div>
 
-        {showForm && (
+        {showForm ? (
           <div className="section-card">
             <h2>Submit Maintenance Request</h2>
             <form className="maintenance-form" onSubmit={handleSubmitRequest}>
               <div className="form-group">
-                <label>Category</label>
+                <label htmlFor="maintenance-category">Category</label>
                 <select
+                  id="maintenance-category"
                   className="form-control"
                   value={formData.category}
-                  onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
+                  onChange={(event) =>
+                    setFormData({ ...formData, category: event.target.value })
                   }
                   required
                 >
@@ -84,32 +91,40 @@ const MaintenancePage = () => {
                   <option value="other">Other</option>
                 </select>
               </div>
+
               <div className="form-group">
-                <label>Title</label>
+                <label htmlFor="maintenance-title">Title</label>
                 <input
+                  id="maintenance-title"
                   type="text"
                   className="form-control"
                   placeholder="Brief description"
                   value={formData.title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
+                  onChange={(event) =>
+                    setFormData({ ...formData, title: event.target.value })
                   }
                   required
                 />
               </div>
+
               <div className="form-group">
-                <label>Description</label>
+                <label htmlFor="maintenance-description">Description</label>
                 <textarea
+                  id="maintenance-description"
                   className="form-control"
                   rows="4"
                   placeholder="Detailed description of the issue"
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
+                  onChange={(event) =>
+                    setFormData({
+                      ...formData,
+                      description: event.target.value,
+                    })
                   }
                   required
-                ></textarea>
+                />
               </div>
+
               <div className="form-actions">
                 <button
                   type="button"
@@ -124,7 +139,7 @@ const MaintenancePage = () => {
               </div>
             </form>
           </div>
-        )}
+        ) : null}
 
         <div className="section-card">
           <h2>Request History</h2>
@@ -134,21 +149,36 @@ const MaintenancePage = () => {
                 <ClipboardList size={30} />
                 <div>
                   <strong>No maintenance requests yet</strong>
-                    {request.category} •{" "}
+                  <p>
                     Use the new request button when you need help with repairs,
+                    utilities, or room concerns.
                   </p>
                 </div>
-                <span className={`badge ${getStatusClass(request.status)}`}>
-                  {request.status}
-                </span>
               </div>
-            ))}
+            ) : (
+              requests.map((request) => (
+                <div
+                  key={request.id || request._id}
+                  className="maintenance-item"
+                >
+                  <div className="maintenance-info">
+                    <h3>{request.title}</h3>
+                    <p>
+                      {request.category} |{" "}
+                      {new Date(
+                        request.date || request.createdAt || Date.now(),
+                      ).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <span className={`badge ${getStatusClass(request.status)}`}>
+                    {request.status}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
     </TenantLayout>
   );
-};
-
-*/
-export { default } from "./MaintenanceWorkspacePage";
+}

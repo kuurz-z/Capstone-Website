@@ -35,7 +35,7 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -47,8 +47,8 @@
 
 .bs-legend-avail { background: #10B981; }
 .bs-legend-occ   { background: #EF4444; }
-.bs-legend-resv  { background: #F59E0B; }
-.bs-legend-lock  { background: #9CA3AF; }
+.bs-legend-resv  { background: var(--color-warning); }
+.bs-legend-lock  { background: var(--text-muted); }
 
 /* ── Bunk container ── */
 .bs-bunks {
@@ -62,7 +62,7 @@
   flex: 1;
   min-width: 200px;
   max-width: 280px;
-  border: 1.5px solid #E5E7EB;
+  border: 1.5px solid var(--border-card);
   border-radius: 12px;
   overflow: hidden;
   background: #FAFAFA;
@@ -74,7 +74,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #9CA3AF;
+  color: var(--text-muted);
   padding: 8px 14px 0;
 }
 
@@ -84,7 +84,7 @@
 
 .bs-divider {
   height: 1px;
-  background: #E5E7EB;
+  background: var(--border-card);
   margin: 0 12px;
 }
 
@@ -121,8 +121,8 @@
 
 .bs-dot-available   { background: #10B981; box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
 .bs-dot-occupied    { background: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
-.bs-dot-reserved    { background: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
-.bs-dot-locked      { background: #9CA3AF; box-shadow: 0 0 0 3px rgba(156,163,175,0.15); }
+.bs-dot-reserved    { background: var(--color-warning); box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
+.bs-dot-locked      { background: var(--text-muted); box-shadow: 0 0 0 3px rgba(156,163,175,0.15); }
 .bs-dot-maintenance { background: #D1D5DB; }
 
 /* ── Labels ── */
@@ -135,7 +135,7 @@
 
 .bs-id {
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   font-family: "SF Mono", "Fira Code", monospace;
 }
 
@@ -153,8 +153,8 @@
   background: white;
 }
 .bs-available .bs-badge {
-  background: #ECFDF5;
-  color: #059669;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .bs-occupied {
@@ -163,11 +163,11 @@
   cursor: not-allowed;
 }
 .bs-occupied .bs-badge {
-  background: #FEF2F2;
-  color: #DC2626;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 .bs-occupied .bs-label {
-  color: #9CA3AF;
+  color: var(--text-muted);
 }
 
 .bs-reserved {
@@ -193,7 +193,7 @@
   color: #6B7280;
 }
 .bs-locked .bs-label {
-  color: #9CA3AF;
+  color: var(--text-muted);
 }
 
 .bs-maintenance {
@@ -206,7 +206,7 @@
   color: #6B7280;
 }
 .bs-maintenance .bs-label {
-  color: #9CA3AF;
+  color: var(--text-muted);
 }
 
 /* ── Clickable ── */
@@ -214,14 +214,14 @@
   cursor: pointer;
 }
 .bs-clickable:hover {
-  background: #F0FDF4;
+  background: var(--color-warning-bg);
   border-color: #86EFAC;
 }
 
 /* ── Selected ── */
 .bs-selected {
-  background: #FFFBEB !important;
-  border-color: #F59E0B !important;
+  background: var(--color-warning-bg) !important;
+  border-color: var(--color-warning) !important;
   opacity: 1 !important;
 }
 .bs-selected .bs-badge {
@@ -229,7 +229,7 @@
   color: #92400E !important;
 }
 .bs-selected .bs-dot {
-  background: #F59E0B !important;
+  background: var(--color-warning) !important;
   box-shadow: 0 0 0 3px rgba(245,158,11,0.2) !important;
 }
 .bs-selected .bs-label {

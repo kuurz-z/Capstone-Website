@@ -7,6 +7,9 @@ import {
   ReservationFlowPage,
   ProfilePage,
   ContractsPage,
+  TenantBillingPage,
+  TenantMaintenancePage,
+  TenantAnnouncementsPage,
 } from "../lazyPages";
 
 export function TenantRoutes() {
@@ -78,7 +81,9 @@ export function TenantRoutes() {
         path="/applicant/billing"
         element={
           <ProtectedRoute requiredRole="applicant">
-            <Navigate to="/applicant/profile" state={{ tab: "billing" }} replace />
+            <RouteShell name="Billing">
+              <TenantBillingPage />
+            </RouteShell>
           </ProtectedRoute>
         }
       />
@@ -86,7 +91,9 @@ export function TenantRoutes() {
         path="/applicant/maintenance"
         element={
           <ProtectedRoute requiredRole="applicant">
-            <Navigate to="/applicant/profile" state={{ tab: "maintenance" }} replace />
+            <RouteShell name="Maintenance">
+              <TenantMaintenancePage />
+            </RouteShell>
           </ProtectedRoute>
         }
       />
@@ -94,7 +101,9 @@ export function TenantRoutes() {
         path="/applicant/announcements"
         element={
           <ProtectedRoute requiredRole="applicant">
-            <Navigate to="/applicant/profile" state={{ tab: "announcements" }} replace />
+            <RouteShell name="Announcements">
+              <TenantAnnouncementsPage />
+            </RouteShell>
           </ProtectedRoute>
         }
       />

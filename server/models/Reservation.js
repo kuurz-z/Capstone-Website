@@ -78,6 +78,17 @@ const reservationSchema = new mongoose.Schema(
       ref: "Room",
       required: true,
     },
+    currentStayId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Stay",
+      default: null,
+      index: true,
+    },
+    latestStayStatus: {
+      type: String,
+      default: "",
+      index: true,
+    },
 
     // Bed Assignment
     selectedBed: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
@@ -7,30 +7,78 @@ import useSocketClient from "../../../shared/hooks/useSocketClient";
 import "../styles/admin-layout.css";
 import "../styles/admin-common.css";
 
-const PAGE_TITLES = {
-  "/admin/dashboard": "Dashboard",
-  "/admin/reservations": "Reservations",
-  "/admin/tenants": "Tenants",
-  "/admin/users": "Accounts",
-  "/admin/room-availability": "Room Management",
-  "/admin/audit-logs": "Activity Log",
-  "/admin/billing": "Billing",
-  "/admin/announcements": "Announcements",
-  "/admin/branches": "Branches",
-  "/admin/roles": "Permissions",
-  "/admin/settings": "Settings",
+const PAGE_META = {
+  "/admin/dashboard": {
+    title: "Dashboard",
+    description: "Monitor branch activity, incoming work, and unresolved exceptions at a glance.",
+  },
+  "/admin/reservations": {
+    title: "Reservations",
+    description: "Review applications, confirm documents, and move accepted residents toward assignment.",
+  },
+  "/admin/tenants": {
+    title: "Tenants",
+    description: "Handle renewals, transfers, move-out actions, and current-stay visibility in one workspace.",
+  },
+  "/admin/users": {
+    title: "Accounts",
+    description: "Manage access, verify account states, and resolve sign-in or lifecycle issues.",
+  },
+  "/admin/room-availability": {
+    title: "Room Management",
+    description: "Track available capacity, assignments, and demand trends by room and branch.",
+  },
+  "/admin/audit-logs": {
+    title: "Activity Log",
+    description: "Review system activity, administrative changes, and user-facing events.",
+  },
+  "/admin/billing": {
+    title: "Billing",
+    description: "Generate statements, review balances, and follow payment progress without leaving the admin workspace.",
+  },
+  "/admin/announcements": {
+    title: "Announcements",
+    description: "Publish notices with clearer targeting and follow-up visibility.",
+  },
+  "/admin/branches": {
+    title: "Branches",
+    description: "Manage branch-level details that affect room inventory and resident operations.",
+  },
+  "/admin/roles": {
+    title: "Permissions",
+    description: "Adjust role capabilities carefully so admin actions remain predictable and auditable.",
+  },
+  "/admin/settings": {
+    title: "Settings",
+    description: "Control platform-wide behavior, defaults, and operational safeguards.",
+  },
 };
 
-function getPageTitle(location) {
+function getPageMeta(location) {
   if (location.pathname === "/admin/room-availability") {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab") || "rooms";
-    if (tab === "occupancy") return "Room Occupancy";
-    if (tab === "forecast") return "Vacancy Forecast";
-    return "Room Management";
+    if (tab === "occupancy") {
+      return {
+        title: "Room Occupancy",
+        description: "See who is assigned where and catch room-level conflicts early.",
+      };
+    }
+    if (tab === "forecast") {
+      return {
+        title: "Vacancy Forecast",
+        description: "Plan around expected openings, pending reservations, and room turnover.",
+      };
+    }
+    return PAGE_META[location.pathname];
   }
 
-  return PAGE_TITLES[location.pathname] || "Admin";
+  return (
+    PAGE_META[location.pathname] || {
+      title: "Admin",
+      description: "Manage daily operations, resident workflows, and branch performance.",
+    }
+  );
 }
 
 const COLLAPSE_STORAGE_KEY = "sidebar-collapsed";
@@ -47,7 +95,7 @@ export default function AdminLayout() {
     }
   });
 
-  const pageTitle = getPageTitle(location);
+  const pageMeta = getPageMeta(location);
 
   const handleToggleCollapse = () => {
     setCollapsed((prev) => {
@@ -77,7 +125,10 @@ export default function AdminLayout() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="admin-topbar-title">{pageTitle}</h1>
+            <div className="admin-topbar-copy">
+              <h1 className="admin-topbar-title">{pageMeta.title}</h1>
+              <p className="admin-topbar-subtitle">{pageMeta.description}</p>
+            </div>
           </div>
           <div className="admin-topbar-right">
             <NotificationBell />

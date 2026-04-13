@@ -10,7 +10,6 @@ const tabs = [
 
 const AdminBillingPage = () => {
   const [activeTab, setActiveTab] = useState("electricity");
-  const activePanelId = `billing-panel-${activeTab}`;
 
   // Visual contract:
   // hero shell + tablist + workspace panel
@@ -57,17 +56,32 @@ const AdminBillingPage = () => {
         </div>
       </header>
 
-      <section
-        className="admin-billing-page__workspace-panel"
-        role="tabpanel"
-        id={activePanelId}
-        aria-labelledby={`billing-tab-${activeTab}`}
-      >
-        {activeTab === "electricity" && (
-          <UtilityBillingTab utilityType="electricity" />
-        )}
-        {activeTab === "water" && <UtilityBillingTab utilityType="water" />}
-      </section>
+      <div className="admin-billing-page__workspace-container" style={{ minHeight: "680px" }}>
+        <section
+          role="tabpanel"
+          id="billing-panel-electricity"
+          aria-labelledby="billing-tab-electricity"
+          className={`admin-billing-page__workspace-panel ${activeTab === "electricity" ? "is-active" : ""}`}
+          style={{ display: activeTab === "electricity" ? "grid" : "none" }}
+        >
+          <UtilityBillingTab
+            utilityType="electricity"
+            isActive={activeTab === "electricity"}
+          />
+        </section>
+        <section
+          role="tabpanel"
+          id="billing-panel-water"
+          aria-labelledby="billing-tab-water"
+          className={`admin-billing-page__workspace-panel ${activeTab === "water" ? "is-active" : ""}`}
+          style={{ display: activeTab === "water" ? "grid" : "none" }}
+        >
+          <UtilityBillingTab
+            utilityType="water"
+            isActive={activeTab === "water"}
+          />
+        </section>
+      </div>
     </div>
   );
 };

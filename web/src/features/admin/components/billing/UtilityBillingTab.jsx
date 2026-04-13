@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Fragment } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Zap,
   Plus,
@@ -18,20 +19,20 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../../../shared/hooks/useAuth";
 import ConfirmModal from "../../../../shared/components/ConfirmModal";
+import NewBillingPeriodModal from "./NewBillingPeriodModal";
 import {
   useUtilityRooms,
   useUtilityReadings,
   useUtilityLatestReading,
   useUtilityPeriods,
   useUtilityResult,
-  useOpenUtilityPeriod,
   useUpdateUtilityPeriod,
-  useCloseUtilityPeriod,
   useSendUtilityPeriod,
   useDeleteUtilityReading,
   useUpdateUtilityReading,
   useDeleteUtilityPeriod,
   useRoomHistory,
+  utilityKeys,
 } from "../../../../shared/hooks/queries/useUtility";
 import { utilityApi } from "../../../../shared/api/utilityApi.js";
 import { useBusinessSettings } from "../../../../shared/hooks/queries/useSettings";
@@ -53,10 +54,7 @@ import useBillingNotifier from "./shared/useBillingNotifier";
 import "./UtilityBillingTab.css";
 
 const EMPTY_VALUE = "-";
-const WATER_BILLABLE_ROOM_TYPES = new Set([
-  "private",
-  "double-sharing",
-]);
+const WATER_BILLABLE_ROOM_TYPES = new Set(["private", "double-sharing"]);
 const fmtCurrency = (val) =>
   val != null
     ? `PHP ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -103,11 +101,8 @@ const getRoomBadgeLabel = (room) => {
   return room.billingLabel || "No Active Bill";
 };
 const canEditPeriod = (period) =>
-  Boolean(period) &&
-  (period.canEdit ?? getDisplayStatus(period) !== "sent");
-const canDeletePeriod = (period) =>
-  Boolean(period) &&
-  (period.canDelete ?? getDisplayStatus(period) !== "sent");
+  Boolean(period) && (period.canEdit ?? getDisplayStatus(period) !== "sent");
+const canDeletePeriod = (period) => Boolean(period);
 const getCycleLabel = (period) =>
   period
     ? `${fmtShortDate(period.startDate)} - ${fmtShortDate(period.endDate || period.targetCloseDate) || "Ongoing"}`
@@ -288,7 +283,7 @@ const SEGMENT_EXPORT_COLUMNS = [
   { key: "coveredTenants", label: "Covered Tenants" },
 ];
 
-const UtilityBillingTab = ({ utilityType }) => {
+const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
   const dropdownRef = useRef(null);
@@ -316,6 +311,7 @@ const UtilityBillingTab = ({ utilityType }) => {
 
   // Panel / section state
   const [activePanel, setActivePanel] = useState(null);
+  const [isNewPeriodModalOpen, setIsNewPeriodModalOpen] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState({
     open: false,
@@ -323,9 +319,10 @@ const UtilityBillingTab = ({ utilityType }) => {
     message: "",
     onConfirm: null,
   });
-  const [generationBlocker, setGenerationBlocker] = useState(null);
+
   const [isExporting, setIsExporting] = useState(false);
-  const [showSnapshotDetails, setShowSnapshotDetails] = useState(false);
+  const [editingRate, setEditingRate] = useState(false);
+  const [editingRateValue, setEditingRateValue] = useState("");
 
   const [editPeriodModal, setEditPeriodModal] = useState({
     open: false,
@@ -358,44 +355,43 @@ const UtilityBillingTab = ({ utilityType }) => {
   const [timelinePage, setTimelinePage] = useState(1);
   const [roomsPage, setRoomsPage] = useState(1);
   const hasAutoSelectedPeriodRef = useRef(false);
+  const queryClient = useQueryClient();
 
   // Form state - billing periods default to 15th-to-15th cycle
-  const get15th = () => {
-    const d = new Date();
-    d.setDate(15);
-    return d.toISOString().slice(0, 10);
-  };
 
-  const getNext15th = (fromDateStr) => {
-    const d = fromDateStr ? new Date(fromDateStr) : new Date();
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(15);
-    return d.toISOString().slice(0, 10);
-  };
-
-  const [periodForm, setPeriodForm] = useState({
-    startDate: get15th(),
-    startReading: "",
-    ratePerUnit: "",
-    endReading: "",
-    endDate: getNext15th(),
-  });
+  const utilityQueryOptions = useMemo(
+    () => ({
+      enabled: isActive,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      staleTime: Number.POSITIVE_INFINITY,
+    }),
+    [isActive],
+  );
 
   // Queries
   const { data: businessSettings } = useBusinessSettings(Boolean(user));
   const { data: roomsData, isLoading: roomsLoading } = useUtilityRooms(
     utilityType,
     branchFilter,
+    utilityQueryOptions,
   );
   const { data: readingsData } = useUtilityReadings(
     utilityType,
     selectedRoomId,
+    utilityQueryOptions,
   );
   const { data: latestData } = useUtilityLatestReading(
     utilityType,
     selectedRoomId,
+    utilityQueryOptions,
   );
-  const { data: periodsData } = useUtilityPeriods(utilityType, selectedRoomId);
+  const { data: periodsData } = useUtilityPeriods(
+    utilityType,
+    selectedRoomId,
+    utilityQueryOptions,
+  );
   const periodList = periodsData?.periods || [];
   const selectedPeriodFromList = periodList.find(
     (period) => period.id === selectedPeriodId,
@@ -407,13 +403,16 @@ const UtilityBillingTab = ({ utilityType }) => {
   const { data: resultData } = useUtilityResult(
     utilityType,
     selectedResultPeriodId,
+    utilityQueryOptions,
   );
-  const { data: roomHistoryData } = useRoomHistory(utilityType, selectedRoomId);
+  const { data: roomHistoryData } = useRoomHistory(
+    utilityType,
+    selectedRoomId,
+    utilityQueryOptions,
+  );
 
   // Mutations
-  const openPeriod = useOpenUtilityPeriod(utilityType);
   const updatePeriod = useUpdateUtilityPeriod(utilityType);
-  const closePeriod = useCloseUtilityPeriod(utilityType);
   const sendPeriod = useSendUtilityPeriod(utilityType);
   const deleteReading = useDeleteUtilityReading(utilityType);
   const updateReading = useUpdateUtilityReading(utilityType);
@@ -547,10 +546,9 @@ const UtilityBillingTab = ({ utilityType }) => {
       }
 
       const eventDayKey = getEventDayKey(reading.date);
-      const meterKey =
-        isMoveLifecycleEvent(eventType)
-          ? `${reading.tenantId || reading.tenant || "unassigned"}-${eventType}-${eventDayKey}`
-          : `${eventType}-${eventDayKey}-${reading.reading}`;
+      const meterKey = isMoveLifecycleEvent(eventType)
+        ? `${reading.tenantId || reading.tenant || "unassigned"}-${eventType}-${eventDayKey}`
+        : `${eventType}-${eventDayKey}-${reading.reading}`;
 
       upsertRow({
         id: `meter-${reading.id}`,
@@ -739,38 +737,9 @@ const UtilityBillingTab = ({ utilityType }) => {
     setSelectedPeriodId(periodId);
   };
 
-  const openPanel = (panel, extras = {}) => {
+  const openPanel = (panel) => {
     setActivePanel(panel);
-    if (panel === "newPeriod") {
-      setGenerationBlocker(null);
-    }
-    if (panel === "newPeriod") {
-      // If a closed period exists, continue from where it left off
-      // (replicates what auto-chain would have set)
-      const continuationDate = lastClosedPeriod?.endDate
-        ? toInputDate(lastClosedPeriod.endDate)
-        : null;
-      const continuationReading = lastClosedPeriod?.endReading ?? null;
-      const startDate = continuationDate || get15th();
-      setPeriodForm((f) => ({
-        ...f,
-        startReading: continuationReading ?? latestData?.reading?.reading ?? "",
-        ratePerUnit:
-          lastClosedPeriod?.ratePerUnit != null
-            ? String(lastClosedPeriod.ratePerUnit)
-            : defaultRatePerUnit !== undefined &&
-                defaultRatePerUnit !== null &&
-                defaultRatePerUnit !== ""
-              ? String(defaultRatePerUnit)
-              : "",
-        startDate,
-        endDate: getNext15th(startDate),
-        endReading: "",
-        ...extras,
-      }));
-    }
   };
-
   const closePanel = () => setActivePanel(null);
 
   const buildGenerationBlocker = (error) => {
@@ -851,6 +820,23 @@ const UtilityBillingTab = ({ utilityType }) => {
       setEditReadingModal({ open: false, reading: null });
     } catch (err) {
       notify.error(err, "Failed to update reading.");
+    }
+  };
+
+  const handleSaveRate = async () => {
+    if (!editingRateValue || Number(editingRateValue) <= 0) {
+      return notify.warn("Rate must be a positive number.");
+    }
+    try {
+      await updatePeriod.mutateAsync({
+        periodId: currentPeriod?.id,
+        ratePerUnit: Number(editingRateValue),
+      });
+      notify.success("Rate updated successfully.");
+      setEditingRate(false);
+      setEditingRateValue("");
+    } catch (err) {
+      notify.error(err, "Failed to update rate.");
     }
   };
 
@@ -973,8 +959,6 @@ const UtilityBillingTab = ({ utilityType }) => {
     }
   };
 
-
-
   // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Draft bills handlers (expand-on-edit) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
 
   const handleOpenEditPeriod = (period) => {
@@ -1030,7 +1014,7 @@ const UtilityBillingTab = ({ utilityType }) => {
     }
 
     try {
-      await updatePeriod.mutateAsync({
+      const response = await updatePeriod.mutateAsync({
         periodId,
         startDate: editPeriodForm.startDate,
         endDate: editPeriodForm.endDate || null,
@@ -1042,6 +1026,43 @@ const UtilityBillingTab = ({ utilityType }) => {
             }
           : {}),
       });
+
+      const updatedPeriodId = response?.period?.id || periodId;
+      setSelectedPeriodId(updatedPeriodId);
+
+      if (response?.result) {
+        queryClient.setQueryData(
+          utilityKeys.result(utilityType, updatedPeriodId),
+          { result: response.result },
+        );
+      }
+
+      const refreshTasks = [];
+      if (selectedRoomId) {
+        refreshTasks.push(
+          queryClient.refetchQueries({
+            queryKey: utilityKeys.periods(utilityType, selectedRoomId),
+            exact: true,
+          }),
+        );
+        refreshTasks.push(
+          queryClient.refetchQueries({
+            queryKey: utilityKeys.readings(utilityType, selectedRoomId),
+            exact: true,
+          }),
+        );
+      }
+      refreshTasks.push(
+        queryClient.refetchQueries({
+          queryKey: utilityKeys.rooms(utilityType, branchFilter),
+          exact: true,
+        }),
+      );
+
+      if (refreshTasks.length > 0) {
+        await Promise.all(refreshTasks);
+      }
+
       notify.success("Billing period updated.");
       setEditPeriodModal({ open: false, periodId: null });
     } catch (err) {
@@ -1164,12 +1185,7 @@ const UtilityBillingTab = ({ utilityType }) => {
     }
   };
 
-  const exportLocalRows = ({
-    rows,
-    columns,
-    filename,
-    emptyMessage,
-  }) => {
+  const exportLocalRows = ({ rows, columns, filename, emptyMessage }) => {
     if (!Array.isArray(rows) || rows.length === 0) {
       notify.warn(emptyMessage);
       return;
@@ -1361,130 +1377,122 @@ const UtilityBillingTab = ({ utilityType }) => {
                         key={`${period.id}-segment-${index}`}
                       >
                         <table className="eb-table-minimal eb-table-minimal--bordered">
-                            <colgroup>
-                              <col style={{ width: "45%" }} />
-                              <col style={{ width: "25%" }} />
-                              <col style={{ width: "30%" }} />
-                            </colgroup>
-                            <thead>
-                              <tr className="eb-segment-table__head-row">
-                                <th
-                                  colSpan="2"
-                                  className="eb-segment-table__head-label"
-                                >
-                                  No. of occupants in the room:
-                                </th>
-                                <th className="eb-align-center eb-segment-table__head-count">
-                                  {seg.activeTenantCount}
-                                </th>
-                              </tr>
-                              <tr>
-                                <th></th>
-                                <th className="eb-align-center eb-segment-table__subhead">
-                                  Date
-                                </th>
-                                <th className="eb-align-center eb-segment-table__subhead">
-                                  {utilityType === "electricity"
-                                    ? "kwh"
-                                    : "cu.m."}
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                <td className="eb-text-muted">1st reading</td>
-                                <td className="eb-align-center">
-                                  {seg.startDate
-                                    ? new Date(
-                                        seg.startDate,
-                                      ).toLocaleDateString()
-                                    : (seg.periodLabel || "").split(
-                                        /\s*[-–]\s*/,
-                                      )[0] || "-"}
-                                </td>
-                                <td className="eb-align-center">
-                                  {fmtNumber(seg.readingFrom, 2)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="eb-text-muted">2nd reading</td>
-                                <td className="eb-align-center">
-                                  {seg.endDate
-                                    ? new Date(seg.endDate).toLocaleDateString()
-                                    : (seg.periodLabel || "").split(
-                                        /\s*[-–]\s*/,
-                                      )[1] || "-"}
-                                </td>
-                                <td className="eb-align-center">
-                                  {fmtNumber(seg.readingTo, 2)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="eb-text-muted">
-                                  Segment period
-                                </td>
-                                <td className="eb-align-center" colSpan={2}>
-                                  {getSegmentPeriodLabel(seg)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="eb-text-muted">
-                                  Boundary events
-                                </td>
-                                <td className="eb-align-center" colSpan={2}>
-                                  {EVENT_TYPE_LABELS[seg.startEventType] ||
-                                    seg.startEventType ||
-                                    "Regular"}{" "}
-                                  to{" "}
-                                  {EVENT_TYPE_LABELS[seg.endEventType] ||
-                                    seg.endEventType ||
-                                    "Regular"}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="eb-text-muted eb-text-italic">
-                                  Total consumption
-                                </td>
-                                <td
-                                  className="eb-align-center"
-                                  style={{ borderBottom: "none" }}
-                                ></td>
-                                <td className="eb-align-center">
-                                  {fmtNumber(seg.unitsConsumed, 2)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td colSpan="2" className="eb-text-muted">
-                                  Segment total cost
-                                </td>
-                                <td className="eb-align-center eb-text-strong">
-                                  {fmtCurrency(seg.totalCost)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td colSpan="2" className="eb-text-muted">
-                                  Amount due (Php{" "}
-                                  {fmtNumber(result.ratePerUnit, 2)} /{" "}
-                                  {utilityType === "electricity"
-                                    ? "kwh"
-                                    : "cu.m."}
-                                  ) per person
-                                </td>
-                                <td className="eb-align-center eb-text-strong eb-segment-table__amount">
-                                  {fmtCurrency(seg.sharePerTenantCost)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="eb-text-muted">
-                                  Covered tenants
-                                </td>
-                                <td className="eb-align-center" colSpan={2}>
-                                  {seg.coveredTenantNames?.length
-                                    ? seg.coveredTenantNames.join(", ")
-                                    : "No active tenant"}
-                                </td>
-                              </tr>
-                            </tbody>
+                          <colgroup>
+                            <col style={{ width: "45%" }} />
+                            <col style={{ width: "25%" }} />
+                            <col style={{ width: "30%" }} />
+                          </colgroup>
+                          <thead>
+                            <tr className="eb-segment-table__head-row">
+                              <th
+                                colSpan="2"
+                                className="eb-segment-table__head-label"
+                              >
+                                No. of occupants in the room:
+                              </th>
+                              <th className="eb-align-center eb-segment-table__head-count">
+                                {seg.activeTenantCount}
+                              </th>
+                            </tr>
+                            <tr>
+                              <th></th>
+                              <th className="eb-align-center eb-segment-table__subhead">
+                                Date
+                              </th>
+                              <th className="eb-align-center eb-segment-table__subhead">
+                                {utilityType === "electricity"
+                                  ? "kwh"
+                                  : "cu.m."}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="eb-text-muted">1st reading</td>
+                              <td className="eb-align-center">
+                                {seg.startDate
+                                  ? new Date(seg.startDate).toLocaleDateString()
+                                  : (seg.periodLabel || "").split(
+                                      /\s*[-–]\s*/,
+                                    )[0] || "-"}
+                              </td>
+                              <td className="eb-align-center">
+                                {fmtNumber(seg.readingFrom, 2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">2nd reading</td>
+                              <td className="eb-align-center">
+                                {seg.endDate
+                                  ? new Date(seg.endDate).toLocaleDateString()
+                                  : (seg.periodLabel || "").split(
+                                      /\s*[-–]\s*/,
+                                    )[1] || "-"}
+                              </td>
+                              <td className="eb-align-center">
+                                {fmtNumber(seg.readingTo, 2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">Segment period</td>
+                              <td className="eb-align-center" colSpan={2}>
+                                {getSegmentPeriodLabel(seg)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">Boundary events</td>
+                              <td className="eb-align-center" colSpan={2}>
+                                {EVENT_TYPE_LABELS[seg.startEventType] ||
+                                  seg.startEventType ||
+                                  "Regular"}{" "}
+                                to{" "}
+                                {EVENT_TYPE_LABELS[seg.endEventType] ||
+                                  seg.endEventType ||
+                                  "Regular"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted eb-text-italic">
+                                Total consumption
+                              </td>
+                              <td
+                                className="eb-align-center"
+                                style={{ borderBottom: "none" }}
+                              ></td>
+                              <td className="eb-align-center">
+                                {fmtNumber(seg.unitsConsumed, 2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td colSpan="2" className="eb-text-muted">
+                                Segment total cost
+                              </td>
+                              <td className="eb-align-center eb-text-strong">
+                                {fmtCurrency(seg.totalCost)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td colSpan="2" className="eb-text-muted">
+                                Amount due (Php{" "}
+                                {fmtNumber(result.ratePerUnit, 2)} /{" "}
+                                {utilityType === "electricity"
+                                  ? "kwh"
+                                  : "cu.m."}
+                                ) per person
+                              </td>
+                              <td className="eb-align-center eb-text-strong eb-segment-table__amount">
+                                {fmtCurrency(seg.sharePerTenantCost)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">Covered tenants</td>
+                              <td className="eb-align-center" colSpan={2}>
+                                {seg.coveredTenantNames?.length
+                                  ? seg.coveredTenantNames.join(", ")
+                                  : "No active tenant"}
+                              </td>
+                            </tr>
+                          </tbody>
                         </table>
                         <div className="eb-section__footer eb-section__footer--export">
                           <button
@@ -1508,63 +1516,61 @@ const UtilityBillingTab = ({ utilityType }) => {
 
                   <div className="eb-section-divider">
                     <div className="eb-table-fluid">
-                        <table className="eb-table-minimal w-100">
-                          <colgroup>
-                            <col style={{ width: "32%" }} />
-                            <col style={{ width: "24%" }} />
-                            <col style={{ width: "22%" }} />
-                            <col style={{ width: "22%" }} />
-                          </colgroup>
-                          <thead>
-                            <tr>
-                              <th>Tenant Name</th>
-                              <th>Duration Range</th>
-                              <th className="eb-align-right">
-                                Total{" "}
-                                {utilityType === "electricity"
-                                  ? "kWh"
-                                  : "cu.m."}
-                              </th>
-                              <th className="eb-align-right">Bill Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(result.tenantSummaries || []).map(
-                              (tenant, index) => (
-                                <tr key={`${period.id}-tenant-${index}`}>
-                                  <td>
-                                    <div className="eb-tenant-identity">
-                                      <div className="eb-tenant-identity__name">
-                                        {tenant.tenantName}
-                                      </div>
-                                      <div className="eb-tenant-identity__email">
-                                        {tenant.tenantEmail || EMPTY_VALUE}
-                                      </div>
+                      <table className="eb-table-minimal w-100">
+                        <colgroup>
+                          <col style={{ width: "32%" }} />
+                          <col style={{ width: "24%" }} />
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "22%" }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Tenant Name</th>
+                            <th>Duration Range</th>
+                            <th className="eb-align-right">
+                              Total{" "}
+                              {utilityType === "electricity" ? "kWh" : "cu.m."}
+                            </th>
+                            <th className="eb-align-right">Bill Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(result.tenantSummaries || []).map(
+                            (tenant, index) => (
+                              <tr key={`${period.id}-tenant-${index}`}>
+                                <td>
+                                  <div className="eb-tenant-identity">
+                                    <div className="eb-tenant-identity__name">
+                                      {tenant.tenantName}
                                     </div>
-                                  </td>
-                                  <td>{tenant.durationRange || "Ongoing"}</td>
-                                  <td className="eb-align-right">
-                                    {fmtNumber(tenant.totalUsage, 4)}
-                                  </td>
-                                  <td className="eb-align-right eb-text-strong">
-                                    {fmtCurrency(tenant.billAmount)}
-                                  </td>
-                                </tr>
-                              ),
-                            )}
-                          </tbody>
-                        </table>
-                        <div className="eb-section__footer eb-section__footer--export">
-                          <button
-                            type="button"
-                            className="eb-btn eb-btn--ghost"
-                            onClick={() =>
-                              handleExportTenantSummary(period, result)
-                            }
-                          >
-                            <Download size={13} /> Export
-                          </button>
-                        </div>
+                                    <div className="eb-tenant-identity__email">
+                                      {tenant.tenantEmail || EMPTY_VALUE}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>{tenant.durationRange || "Ongoing"}</td>
+                                <td className="eb-align-right">
+                                  {fmtNumber(tenant.totalUsage, 4)}
+                                </td>
+                                <td className="eb-align-right eb-text-strong">
+                                  {fmtCurrency(tenant.billAmount)}
+                                </td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                      <div className="eb-section__footer eb-section__footer--export">
+                        <button
+                          type="button"
+                          className="eb-btn eb-btn--ghost"
+                          onClick={() =>
+                            handleExportTenantSummary(period, result)
+                          }
+                        >
+                          <Download size={13} /> Export
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1581,7 +1587,10 @@ const UtilityBillingTab = ({ utilityType }) => {
   };
 
   return (
-    <section className="eb-shell" aria-label={`${utilityType} billing workspace`}>
+    <section
+      className="eb-shell"
+      aria-label={`${utilityType} billing workspace`}
+    >
       <div className="eb-layout">
         <aside className="eb-sidebar">
           <div className="eb-sidebar__header">
@@ -1731,18 +1740,23 @@ const UtilityBillingTab = ({ utilityType }) => {
                       {getRoomLabel(selectedRoom)}
                     </h2>
                     <p className="eb-header__subtitle">
-                      Manage cycle setup, readings, and publishing for this room.
+                      Manage cycle setup, readings, and publishing for this
+                      room.
                     </p>
                   </div>
-                  <span className="eb-header__branch">{selectedRoom?.branch}</span>
+                  <span className="eb-header__branch">
+                    {selectedRoom?.branch}
+                  </span>
                   {selectedRoom?.type && (
-                    <span className="eb-header__room-type">{selectedRoom.type}</span>
+                    <span className="eb-header__room-type">
+                      {selectedRoom.type}
+                    </span>
                   )}
                 </div>
                 <div className="eb-header__actions">
                   <button
                     className="eb-btn eb-btn--primary"
-                    onClick={() => openPanel("newPeriod")}
+                    onClick={() => setIsNewPeriodModalOpen(true)}
                   >
                     <Plus size={13} /> New Billing Period
                   </button>
@@ -1796,37 +1810,26 @@ const UtilityBillingTab = ({ utilityType }) => {
                           {utilityType === "electricity" ? "kWh" : "cu.m."}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        className="eb-btn eb-btn--ghost eb-btn--xs"
-                        onClick={() =>
-                          setShowSnapshotDetails((current) => !current)
-                        }
-                      >
-                        {showSnapshotDetails ? "Hide details" : "Show details"}
-                      </button>
                     </div>
 
-                    {showSnapshotDetails && (
-                      <div className="eb-snapshot-card__details">
-                        <span>
-                          Rate: {fmtCurrency(currentPeriod.ratePerUnit)} /
-                          {utilityType === "electricity" ? "kWh" : "cu.m."}
-                        </span>
-                        <span>
-                          Start:{" "}
-                          {currentPeriod.startReading != null
-                            ? fmtNumber(currentPeriod.startReading, 2)
-                            : EMPTY_VALUE}
-                        </span>
-                        <span>
-                          End:{" "}
-                          {currentPeriod.endReading != null
-                            ? fmtNumber(currentPeriod.endReading, 2)
-                            : EMPTY_VALUE}
-                        </span>
-                      </div>
-                    )}
+                    <div className="eb-snapshot-card__details">
+                      <span>
+                        Rate: {fmtCurrency(currentPeriod.ratePerUnit)} /
+                        {utilityType === "electricity" ? "kWh" : "cu.m."}
+                      </span>
+                      <span>
+                        Start:{" "}
+                        {currentPeriod.startReading != null
+                          ? fmtNumber(currentPeriod.startReading, 2)
+                          : EMPTY_VALUE}
+                      </span>
+                      <span>
+                        End:{" "}
+                        {currentPeriod.endReading != null
+                          ? fmtNumber(currentPeriod.endReading, 2)
+                          : EMPTY_VALUE}
+                      </span>
+                    </div>
                   </>
                 ) : (
                   <div className="eb-snapshot-card__empty">
@@ -1835,157 +1838,6 @@ const UtilityBillingTab = ({ utilityType }) => {
                   </div>
                 )}
               </div>
-
-              {activePanel === "newPeriod" && (
-                <div className="eb-panel">
-                  <div className="eb-panel__header">
-                    <span>New Billing Period</span>
-                    <button className="eb-panel__close" onClick={closePanel}>
-                      <X size={15} />
-                    </button>
-                  </div>
-                  <div className="eb-panel__body">
-                    {generationBlocker && (
-                      <div
-                        className="eb-panel eb-panel--warning"
-                        style={{ marginBottom: "12px" }}
-                      >
-                        <div className="eb-panel__header">
-                          Why It Didn't Finalize
-                        </div>
-                        <div className="eb-panel__body">
-                          <div
-                            style={{
-                              marginBottom: generationBlocker.lines.length
-                                ? 8
-                                : 0,
-                            }}
-                          >
-                            {generationBlocker.message}
-                          </div>
-                          {generationBlocker.lines.length > 0 && (
-                            <ul style={{ margin: 0, paddingLeft: "18px" }}>
-                              {generationBlocker.lines.map((line, idx) => (
-                                <li key={`${line}-${idx}`}>{line}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    <p className="eb-panel__hint">
-                      Define the complete billing cycle (dates, readings, and
-                      rate) to generate drafts immediately.
-                    </p>
-                    <div className="eb-form-row">
-                      <div className="eb-field eb-field--date">
-                        <label>Cycle Start</label>
-                        <input
-                          type="date"
-                          value={periodForm.startDate}
-                          onChange={(e) =>
-                            setPeriodForm({
-                              ...periodForm,
-                              startDate: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="eb-field eb-field--date">
-                        <label>Cycle End</label>
-                        <input
-                          type="date"
-                          value={periodForm.endDate}
-                          onChange={(e) =>
-                            setPeriodForm({
-                              ...periodForm,
-                              endDate: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="eb-field">
-                        <label>
-                          {utilityType === "water"
-                            ? "Total Water Charge (PHP)"
-                            : `Rate (PHP/${utilityType === "electricity" ? "kWh" : "cu.m."})`}
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={periodForm.ratePerUnit}
-                          onChange={(e) =>
-                            setPeriodForm({
-                              ...periodForm,
-                              ratePerUnit: e.target.value,
-                            })
-                          }
-                          placeholder="e.g. 16.00"
-                        />
-                      </div>
-                    </div>
-                    {utilityType === "electricity" ? (
-                      <div className="eb-form-row">
-                        <div className="eb-field">
-                          <label>Opening Meter Reading (kWh)</label>
-                          <input
-                            type="number"
-                            value={periodForm.startReading}
-                            onChange={(e) =>
-                              setPeriodForm({
-                                ...periodForm,
-                                startReading: e.target.value,
-                              })
-                            }
-                            placeholder={
-                              latestData?.reading?.reading != null
-                                ? `Last: ${latestData.reading.reading}`
-                                : "e.g. 1200"
-                            }
-                          />
-                        </div>
-                        <div className="eb-field">
-                          <label>Final Reading (Monthly Cutoff) (kWh)</label>
-                          <input
-                            type="number"
-                            value={periodForm.endReading}
-                            onChange={(e) =>
-                              setPeriodForm({
-                                ...periodForm,
-                                endReading: e.target.value,
-                              })
-                            }
-                            placeholder="e.g. 1350"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="eb-panel__hint">
-                        Water billing uses room occupancy overlap. Enter the
-                        total water charge above and the billing engine will
-                        split it by covered days.
-                      </div>
-                    )}
-                    <div className="eb-panel__footer">
-                      <button
-                        className="eb-btn eb-btn--primary"
-                        onClick={handleGenerateCycle}
-                        disabled={openPeriod.isPending || closePeriod.isPending}
-                      >
-                        {openPeriod.isPending || closePeriod.isPending
-                          ? "Processing..."
-                          : "Generate Billing Cycle"}
-                      </button>
-                      <button
-                        className="eb-btn eb-btn--ghost"
-                        onClick={closePanel}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <section className="eb-section">
                 <div className="eb-section__header">
@@ -2135,7 +1987,7 @@ const UtilityBillingTab = ({ utilityType }) => {
                   <h3 className="eb-section__title eb-section__title--primary">
                     <Zap
                       size={14}
-                      style={{ color: "var(--color-info, #2563eb)" }}
+                      style={{ color: "var(--color-accent-hover, #E0752E)" }}
                     />
                     Billing Cycle History
                   </h3>
@@ -2581,7 +2433,28 @@ const UtilityBillingTab = ({ utilityType }) => {
         </div>
       )}
 
+      {/* New Billing Period Modal */}
+      <NewBillingPeriodModal
+        isOpen={isNewPeriodModalOpen}
+        onClose={() => setIsNewPeriodModalOpen(false)}
+        utilityType={utilityType}
+        selectedRoomId={selectedRoomId}
+        selectedPeriodId={selectedPeriodId}
+        openPeriodForRoom={openPeriodForRoom}
+        lastClosedPeriod={lastClosedPeriod}
+        latestReading={latestData?.reading}
+        defaultRatePerUnit={defaultRatePerUnit}
+        onSuccess={(newPeriodId) => {
+          if (newPeriodId) {
+            selectAndFocusPeriod(newPeriodId);
+          } else {
+            setSelectedPeriodId(null);
+          }
+        }}
+      />
+
       {/* Standard confirm modal */}
+
       <ConfirmModal
         isOpen={confirmModal.open}
         onClose={() => setConfirmModal((prev) => ({ ...prev, open: false }))}

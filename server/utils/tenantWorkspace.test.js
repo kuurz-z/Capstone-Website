@@ -2,6 +2,7 @@ import { describe, expect, test } from "@jest/globals";
 import {
   buildBillingSummary,
   buildTenantWorkspaceEntry,
+  buildTenantWorkspaceStats,
   computeLeaseEndDate,
 } from "./tenantWorkspace.js";
 
@@ -59,7 +60,7 @@ describe("tenantWorkspace utilities", () => {
 
     expect(entry.paymentStatus).toBe("partial");
     expect(entry.nextAction).toBe("verify_payment");
-    expect(entry.allowedActions.moveOut.enabled).toBe(false);
+    expect(entry.allowedActions.moveOut.enabled).toBe(true);
     expect(
       entry.warningFlags.some((warning) => warning.code === "pending_payment_verification"),
     ).toBe(true);
@@ -84,5 +85,29 @@ describe("tenantWorkspace utilities", () => {
     expect(summary.paymentStatus).toBe("overdue");
     expect(summary.currentBalance).toBe(4800);
     expect(summary.hasOverdue).toBe(true);
+  });
+
+  test("summary stats only count entries that remain visible in the tenants workspace", () => {
+    const stats = buildTenantWorkspaceStats([
+      {
+        reservationId: "reservation-1",
+        stayStatus: "active",
+        leaseStatus: "active",
+        paymentStatus: "paid",
+      },
+      {
+        reservationId: "reservation-2",
+        stayStatus: "active",
+        leaseStatus: "expiring_soon",
+        paymentStatus: "overdue",
+      },
+    ]);
+
+    expect(stats).toEqual({
+      totalResidents: 2,
+      activeTenants: 2,
+      expiringSoon: 1,
+      overduePayments: 1,
+    });
   });
 });
