@@ -73,6 +73,16 @@
   gap: 8px;
 }
 
+.admin-maintenance__field--actions {
+  justify-content: flex-end;
+}
+
+.admin-maintenance__field--actions button {
+  height: 40px; /* Matches the input height (9px padding top/bottom + 14px line height + 2px border) */
+  font-size: 13px;
+  padding: 0 16px;
+}
+
 .admin-maintenance__field--search {
   grid-column: 1 / -1;
 }
@@ -180,7 +190,6 @@
   font-size: var(--font-size-sm);
 }
 
-.admin-maintenance__filter-actions,
 .admin-maintenance__drawer-footer {
   display: flex;
   align-items: center;

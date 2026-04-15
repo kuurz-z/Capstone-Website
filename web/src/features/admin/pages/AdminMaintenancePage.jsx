@@ -612,6 +612,16 @@ export default function AdminMaintenancePage() {
                 <option value="urgency">Urgency high first</option>
               </select>
             </label>
+
+              <div className="admin-maintenance__field admin-maintenance__field--actions">
+                <button
+                  type="button"
+                  className="admin-maintenance__secondary-btn"
+                  onClick={handleResetFilters}
+                >
+                  Reset Filters
+                </button>
+              </div>
             </div>
 
             <div className="admin-maintenance__filters-footer">
@@ -628,16 +638,6 @@ export default function AdminMaintenancePage() {
                   No active filters. Showing all requests.
                 </p>
               )}
-
-              <div className="admin-maintenance__filter-actions">
-                <button
-                  type="button"
-                  className="admin-maintenance__secondary-btn"
-                  onClick={handleResetFilters}
-                >
-                  Reset Filters
-                </button>
-              </div>
             </div>
           </section>
         </PageShell.Actions>
