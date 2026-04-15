@@ -1,71 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  roomApi,
-  inquiryApi,
-  userApi,
-  reservationApi,
-} from "../../api/apiClient";
+import { analyticsApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
 /**
- * Fetch all admin dashboard data in parallel.
- * Returns individual query results for occupancy, inquiries, users, and reservations.
+ * Fetch role-aware dashboard analytics from the unified analytics endpoint.
  */
-export function useDashboardData() {
-  const queryDefaults = { retry: 2, retryDelay: 1000 };
-
-  const occupancy = useQuery({
-    queryKey: queryKeys.rooms.branchOccupancy("all"),
-    queryFn: () => roomApi.getBranchOccupancy(),
-    ...queryDefaults,
+export function useDashboardData(params = { range: "30d" }) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.admin(params),
+    queryFn: () => analyticsApi.getDashboard(params),
+    retry: 2,
+    retryDelay: 1000,
   });
-
-  const inquiryStats = useQuery({
-    queryKey: queryKeys.inquiries.stats,
-    queryFn: () => inquiryApi.getStats(),
-    ...queryDefaults,
-  });
-
-  const userStats = useQuery({
-    queryKey: queryKeys.users.stats,
-    queryFn: () => userApi.getStats(),
-    ...queryDefaults,
-  });
-
-  const reservations = useQuery({
-    queryKey: queryKeys.reservations.all(),
-    queryFn: () => reservationApi.getAll(),
-    ...queryDefaults,
-  });
-
-  const inquiries = useQuery({
-    queryKey: queryKeys.inquiries.all({ limit: 6, sort: "createdAt", order: "desc" }),
-    queryFn: () =>
-      inquiryApi.getAll({ limit: 6, sort: "createdAt", order: "desc" }),
-    ...queryDefaults,
-  });
-
-  const isLoading =
-    occupancy.isLoading ||
-    inquiryStats.isLoading ||
-    userStats.isLoading ||
-    reservations.isLoading ||
-    inquiries.isLoading;
-
-  const isError =
-    occupancy.isError ||
-    inquiryStats.isError ||
-    userStats.isError ||
-    reservations.isError ||
-    inquiries.isError;
-
-  return {
-    occupancy,
-    inquiryStats,
-    userStats,
-    reservations,
-    inquiries,
-    isLoading,
-    isError,
-  };
 }

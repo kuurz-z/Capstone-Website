@@ -28,7 +28,7 @@ function AppContent() {
       {globalLoading ? (
         <GlobalLoading />
       ) : (
-        <Suspense fallback={<GlobalLoading />}>
+        <Suspense fallback={null}>
           <AppRoutes />
         </Suspense>
       )}

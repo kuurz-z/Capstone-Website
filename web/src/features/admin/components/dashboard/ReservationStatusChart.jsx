@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 
-export default function ReservationStatusChart({ reservationStatus }) {
+export default function ReservationStatusChart({
+  reservationStatus,
+  showHeading = true,
+}) {
   const total = useMemo(
     () =>
       reservationStatus.approved +
@@ -13,7 +16,9 @@ export default function ReservationStatusChart({ reservationStatus }) {
 
   return (
     <div className="admin-dashboard-reservation-status-section">
-      <h2 className="admin-dashboard-section-title">Reservation Status</h2>
+      {showHeading ? (
+        <h2 className="admin-dashboard-section-title">Reservation Status</h2>
+      ) : null}
       <div className="admin-dashboard-donut-container">
         <svg className="admin-dashboard-donut-chart" viewBox="0 0 200 200">
           <circle
