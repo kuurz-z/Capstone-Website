@@ -140,6 +140,7 @@ export const register = async (req, res, next) => {
       userId: req.user.uid,
       user: {
         id: user._id,
+        user_id: user.user_id,
         firebaseUid: user.firebaseUid,
         email: user.email,
         username: user.username,
@@ -229,6 +230,7 @@ export const login = async (req, res, next) => {
       message: "Login successful",
       user: {
         id: user._id,
+        user_id: user.user_id,
         firebaseUid: user.firebaseUid,
         email: user.email,
         username: user.username,
@@ -290,6 +292,7 @@ export const getProfile = async (req, res, next) => {
 
     res.json({
       id: user._id,
+      user_id: user.user_id,
       firebaseUid: user.firebaseUid,
       email: user.email,
       username: user.username,
@@ -432,6 +435,7 @@ export const updateProfile = async (req, res, next) => {
       message: "Profile updated successfully",
       user: {
         id: user._id,
+        user_id: user.user_id,
         email: user.email,
         username: user.username,
         firstName: user.firstName,
@@ -500,6 +504,7 @@ export const updateBranch = async (req, res, next) => {
       message: "Branch updated successfully",
       user: {
         id: user._id,
+        user_id: user.user_id,
         firebaseUid: user.firebaseUid,
         email: user.email,
         username: user.username,
@@ -589,6 +594,7 @@ export const setRole = async (req, res, next) => {
       message: "User role updated successfully",
       user: {
         id: user._id,
+        user_id: user.user_id,
         email: user.email,
         role: user.role,
       },

@@ -15,6 +15,7 @@ import {
   AdminAnnouncementsPage,
   MaintenancePage,
   InquiriesPage,
+  AnalyticsPage,
   BranchManagementPage,
   RolePermissionsPage,
   SystemSettingsPage,
@@ -106,12 +107,32 @@ export function AdminRoutes() {
         }
       />
       <Route
+        path="analytics"
+        element={
+          <RouteShell name="Analytics">
+            <AnalyticsPage />
+          </RouteShell>
+        }
+      />
+      <Route
         path="inquiries"
         element={
           <RouteShell name="Inquiries">
             <InquiriesPage />
           </RouteShell>
         }
+      />
+      <Route
+        path="reports/occupancy"
+        element={<Navigate to="/admin/analytics?tab=occupancy" replace />}
+      />
+      <Route
+        path="reports/billing"
+        element={<Navigate to="/admin/analytics?tab=billing" replace />}
+      />
+      <Route
+        path="reports/operations"
+        element={<Navigate to="/admin/analytics?tab=operations" replace />}
       />
       <Route
         path="room-configuration"
@@ -131,7 +152,11 @@ export function AdminRoutes() {
       />
       <Route
         path="financial"
-        element={<Navigate to="/admin/dashboard" replace />}
+        element={<Navigate to="/admin/analytics?tab=financials" replace />}
+      />
+      <Route
+        path="financials"
+        element={<Navigate to="/admin/analytics?tab=financials" replace />}
       />
       <Route
         path="branches"

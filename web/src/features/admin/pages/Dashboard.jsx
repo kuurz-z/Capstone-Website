@@ -1,164 +1,110 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { MessageSquare, CalendarCheck, Clock } from "lucide-react";
-import {
-  hasReservationStatus,
-  readMoveInDate,
-} from "../../../shared/utils/lifecycleNaming";
+import { MessageSquare, CalendarCheck, Clock, CheckCircle2 } from "lucide-react";
 import {
   formatRoomType,
   formatBranch,
   formatDate,
   formatRelativeTime,
 } from "../utils/formatters";
-
 import { useDashboardData } from "../../../shared/hooks/queries/useDashboard";
-import { useBillingStats } from "../../../shared/hooks/queries/useBilling";
-import { PageShell, SummaryBar, StatusBadge } from "../components/shared";
+import {
+  PageShell,
+  StatusBadge,
+  ReportChartPanel,
+  ReportMetricCard,
+} from "../components/shared";
 import ReservationStatusChart from "../components/dashboard/ReservationStatusChart";
 import "../styles/design-tokens.css";
 import "../styles/admin-dashboard.css";
 
 export default function Dashboard() {
-  const {
-    occupancy,
-    inquiryStats,
-    userStats,
-    reservations: reservationsQuery,
-    inquiries: inquiriesQuery,
-    isLoading,
-    isError,
-  } = useDashboardData();
+  const { data, isLoading, isError } = useDashboardData();
 
-  const { data: billingStats } = useBillingStats();
+  const reservations = data?.recentReservations || [];
+  const inquiryItems = data?.recentInquiries || [];
+  const reservationStatus = data?.reservationStatus || {
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+  };
+  const kpis = data?.kpis || {};
+  const occupancy = data?.occupancy || {};
 
-  // ── Derive dashboard data ──
-  const occupancyStats = occupancy.data?.statistics || occupancy.data;
-  const inquiryStatsData = inquiryStats.data;
-  const userStatsData = userStats.data;
-  const reservations = reservationsQuery.data || [];
-  const inquiryItems = (() => {
-    const raw = inquiriesQuery.data;
-    if (Array.isArray(raw)) return raw;
-    return raw?.inquiries || [];
-  })();
-
-  // ── Summary bar pills ──
-  const summaryItems = useMemo(() => {
-    const totalInquiries = inquiryStatsData?.total || 0;
-    const availableBeds =
-      (occupancyStats?.totalCapacity || 0) -
-      (occupancyStats?.totalOccupancy || 0);
-    const registeredUsers = userStatsData?.total || 0;
-    const activeBookings = (reservations || []).filter(
-      (r) =>
-        r.status === "confirmed" ||
-        r.status === "reserved" ||
-        hasReservationStatus(r.status, "moveIn"),
-    ).length;
-    const revenue = billingStats?.totalCollected
-      ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
-      : "₱0";
-
-    return [
-      {
-        label: "Total Inquiries",
-        value: totalInquiries,
-        trend: inquiryStatsData?.recentCount
-          ? `${inquiryStatsData.recentCount} last 7d`
-          : null,
-        color: "blue",
-      },
-      {
-        label: "Available Beds",
-        value: Math.max(availableBeds, 0),
-        trend: occupancyStats?.overallOccupancyRate
-          ? `${String(occupancyStats.overallOccupancyRate).replace("%", "")}% occ.`
-          : null,
-        color: "green",
-      },
-      {
-        label: "Registered Users",
-        value: registeredUsers,
-        trend: userStatsData?.activeCount
-          ? `${userStatsData.activeCount} active`
-          : null,
-        color: "purple",
-      },
-      {
-        label: "Active Bookings",
-        value: activeBookings,
-        color: "orange",
-      },
-      {
-        label: "Total Revenue",
-        value: revenue,
-        trend: billingStats?.overdueCount
-          ? `${billingStats.overdueCount} overdue`
-          : null,
-        color: "blue",
-      },
-    ];
-  }, [
-    occupancyStats,
-    inquiryStatsData,
-    userStatsData,
-    reservations,
-    billingStats,
-  ]);
-
-  // ── Recent items ──
-  const recentInquiries = useMemo(
+  const unresolvedInquiryCount = useMemo(
     () =>
-      (inquiryItems || []).slice(0, 4).map((item) => ({
-        id: item._id,
-        name:
-          `${item.firstName || ""} ${item.lastName || ""}`.trim() ||
-          item.name ||
-          "Unknown",
-        email: item.email || "—",
-        branch: formatBranch(item.branch),
-        time: formatRelativeTime(item.createdAt),
-        status:
-          item.status === "resolved" || item.status === "closed"
-            ? "responded"
-            : "new",
-      })),
+      inquiryItems.filter((item) => !["resolved", "closed"].includes(item.status)).length,
     [inquiryItems],
   );
 
-  const recentReservations = useMemo(() => {
-    const sorted = (reservations || [])
-      .slice()
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return sorted.slice(0, 4).map((item) => ({
-      id: item._id,
-      roomType: formatRoomType(item.roomId?.type || item.preferredRoomType),
-      guestName:
-        `${item.userId?.firstName || ""} ${item.userId?.lastName || ""}`.trim() ||
-        item.guestName ||
-        "Unknown",
-      branch: formatBranch(item.roomId?.branch || item.branch),
-      date: formatDate(readMoveInDate(item) || item.createdAt),
-      status: item.status || "pending",
-    }));
-  }, [reservations]);
+  const summaryItems = useMemo(
+    () => [
+      {
+        label: "Total Inquiries",
+        value: kpis.inquiries || 0,
+        trend: `${unresolvedInquiryCount} awaiting response`,
+        tone: "blue",
+      },
+      {
+        label: "Available Beds",
+        value: kpis.availableBeds || 0,
+        trend: `${occupancy.totalOccupancy || 0} currently occupied (${occupancy.totalCapacity || 0} total)`,
+        tone: "green",
+      },
+      {
+        label: "Active Maintenance",
+        value: kpis.activeTickets || 0,
+        trend:
+          (kpis.activeTickets || 0) === 0
+            ? "All facilities currently operational"
+            : `${kpis.activeTickets || 0} issue${(kpis.activeTickets || 0) === 1 ? "" : "s"} requiring attention`,
+        tone: "violet",
+      },
+      {
+        label: "Pending Reservations",
+        value: reservationStatus.pending || 0,
+        trend: "Awaiting admin approval",
+        tone: "amber",
+      },
+      {
+        label: "Active Bookings",
+        value: kpis.activeBookings || 0,
+        trend: `${kpis.activeBookings || 0} active tenant account${(kpis.activeBookings || 0) === 1 ? "" : "s"}`,
+        tone: "rose",
+      },
+    ],
+    [kpis, occupancy, reservationStatus, unresolvedInquiryCount],
+  );
 
-  const reservationStatus = useMemo(() => {
-    const approved = (reservations || []).filter(
-      (r) =>
-        r.status === "confirmed" ||
-        r.status === "reserved" ||
-        hasReservationStatus(r.status, "moveIn"),
-    ).length;
-    const pending = (reservations || []).filter(
-      (r) => r.status === "pending",
-    ).length;
-    const rejected = (reservations || []).filter((r) =>
-      ["cancelled", "rejected"].includes(r.status),
-    ).length;
-    return { approved, pending, rejected };
-  }, [reservations]);
+  const recentInquiries = useMemo(
+    () =>
+      inquiryItems.slice(0, 4).map((item) => {
+        const isResponded = item.status === "resolved" || item.status === "closed";
+        return {
+          id: item.id,
+          name: item.name || "Unknown",
+          email: item.email || "-",
+          branch: formatBranch(item.branch),
+          time: formatRelativeTime(item.createdAt),
+          status: isResponded ? "responded" : "new",
+          followUp: isResponded ? "Responded" : "Needs reply",
+        };
+      }),
+    [inquiryItems],
+  );
+
+  const recentReservations = useMemo(
+    () =>
+      reservations.slice(0, 4).map((item) => ({
+        id: item.id,
+        roomType: formatRoomType(item.roomType),
+        guestName: item.guestName || "Unknown",
+        branch: formatBranch(item.branch),
+        date: formatDate(item.moveInDate || item.createdAt),
+        status: item.status || "pending",
+      })),
+    [reservations],
+  );
 
   const error = isError
     ? "Some dashboard data failed to load. Showing partial data."
@@ -167,84 +113,125 @@ export default function Dashboard() {
   return (
     <PageShell>
       <PageShell.Summary>
-        {error && <div className="dash-error">{error}</div>}
-        {isLoading && <div className="dash-loading">Loading dashboard...</div>}
+        {error && <div className="bg-rose-50 text-rose-600 px-4 py-3 rounded-xl mb-6 text-sm font-medium border border-rose-100">{error}</div>}
+        {isLoading && (
+          <div className="dash-loading" aria-live="polite">
+            <span className="dash-loading__spinner" aria-hidden="true" />
+            <span className="dash-loading__label">
+              Loading dashboard data
+              <span className="dash-loading__ellipsis" aria-hidden="true">
+                <span>.</span>
+                <span>.</span>
+                <span>.</span>
+              </span>
+            </span>
+          </div>
+        )}
 
-        <SummaryBar items={summaryItems} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6 mb-8 w-full">
+          {summaryItems.map((item) => (
+            <ReportMetricCard
+              key={item.label}
+              label={item.label}
+              value={item.value}
+              trend={item.trend}
+              tone={item.tone}
+            />
+          ))}
+        </div>
       </PageShell.Summary>
 
       <PageShell.Content>
-        {/* Two-column grid: Inquiries + Reservation Chart */}
-        <div className="dash-grid">
-          <div className="dash-card">
-            <div className="dash-card__header">
-              <h2 className="dash-card__title">Recent Inquiries</h2>
-              <Link to="/admin/reservations" className="dash-card__link">
-                View All
+        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6 mb-8">
+          <ReportChartPanel
+            title="Recent Inquiries"
+            subtitle={`${kpis.inquiries || 0} in the active range • newest items first`}
+            actions={
+              <Link to="/admin/analytics?tab=operations" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+                View All →
               </Link>
-            </div>
-            <div className="dash-card__list">
+            }
+          >
+            <div className="flex flex-col gap-3 py-2">
               {recentInquiries.length > 0 ? (
                 recentInquiries.map((inq) => (
-                  <div key={inq.id} className="dash-list-item">
-                    <div className="dash-list-item__icon">
-                      <MessageSquare size={16} />
-                    </div>
-                    <div className="dash-list-item__body">
-                      <span className="dash-list-item__name">{inq.name}</span>
-                      <span className="dash-list-item__sub">{inq.email}</span>
-                      <div className="dash-list-item__meta">
+                  <div key={inq.id} className="relative bg-slate-50 border border-slate-100 rounded-xl p-4 flex justify-between items-start gap-4 hover:bg-slate-100 transition-colors group">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <MessageSquare size={13} className="text-slate-400 group-hover:text-blue-500 transition-colors" /> {inq.name}
+                      </span>
+                      <div className="text-sm font-semibold text-slate-800">{inq.email}</div>
+                      <p className="flex items-center gap-2 text-xs text-slate-500 mt-1 font-medium">
                         <span>{inq.branch}</span>
-                        <span className="dash-list-item__time">
-                          <Clock size={11} /> {inq.time}
+                        <span>•</span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock size={12} className="text-slate-400" /> {inq.time}
                         </span>
-                      </div>
+                      </p>
                     </div>
-                    <StatusBadge status={inq.status} />
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusBadge status={inq.status} />
+                      <span className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">
+                        {inq.followUp}
+                      </span>
+                    </div>
                   </div>
                 ))
               ) : (
-                <p className="dash-empty">No recent inquiries.</p>
+                <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                  <CheckCircle2 size={32} className="mb-2 text-emerald-400 opacity-50" />
+                  <p className="text-sm font-medium">No recent inquiries.</p>
+                </div>
               )}
             </div>
-          </div>
+          </ReportChartPanel>
 
-          <div className="dash-card">
-            <ReservationStatusChart reservationStatus={reservationStatus} />
-          </div>
+          <ReportChartPanel
+            title="Reservation Status"
+            subtitle={`${reservationStatus.pending || 0} pending • ${reservationStatus.approved || 0} approved • ${reservationStatus.rejected || 0} rejected`}
+          >
+            <ReservationStatusChart reservationStatus={reservationStatus} showHeading={false} />
+          </ReportChartPanel>
         </div>
 
-        {/* Recent Reservations */}
-        <div className="dash-card dash-card--full">
-          <div className="dash-card__header">
-            <h2 className="dash-card__title">Recent Reservations</h2>
-            <Link to="/admin/reservations" className="dash-card__link">
-              View All
+        <ReportChartPanel
+          title="Recent Reservations"
+          subtitle={`${reservationStatus.pending || 0} pending review • ${kpis.activeBookings || 0} active bookings in current scope`}
+          actions={
+            <Link to="/admin/reservations" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+              View All →
             </Link>
-          </div>
-          <div className="dash-card__list">
+          }
+        >
+          <div className="flex flex-col gap-3 py-2">
             {recentReservations.length > 0 ? (
-              recentReservations.map((res) => (
-                <div key={res.id} className="dash-list-item">
-                  <div className="dash-list-item__icon dash-list-item__icon--purple">
-                    <CalendarCheck size={16} />
-                  </div>
-                  <div className="dash-list-item__body">
-                    <span className="dash-list-item__name">{res.roomType}</span>
-                    <span className="dash-list-item__sub">{res.guestName}</span>
-                    <div className="dash-list-item__meta">
-                      <span>{res.branch}</span>
-                      <span>{res.date}</span>
+              recentReservations.map((reservation) => (
+                <div key={reservation.id} className="relative bg-slate-50 border border-slate-100 rounded-xl p-4 flex justify-between items-start gap-4 hover:bg-slate-100 transition-colors group">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                      <CalendarCheck size={16} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="text-sm font-semibold text-slate-800">{reservation.roomType}</div>
+                      <p className="text-sm text-slate-600 font-medium">{reservation.guestName}</p>
+                      <p className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                        <span>{reservation.branch}</span>
+                        <span>•</span>
+                        <span>{reservation.date}</span>
+                      </p>
                     </div>
                   </div>
-                  <StatusBadge status={res.status} />
+                  <StatusBadge status={reservation.status} />
                 </div>
               ))
             ) : (
-              <p className="dash-empty">No recent reservations.</p>
+              <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                <CheckCircle2 size={32} className="mb-2 text-emerald-400 opacity-50" />
+                <p className="text-sm font-medium">No recent reservations.</p>
+              </div>
             )}
           </div>
-        </div>
+        </ReportChartPanel>
       </PageShell.Content>
     </PageShell>
   );

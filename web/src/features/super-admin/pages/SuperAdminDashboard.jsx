@@ -1,230 +1,225 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Building2,
-  Users,
   Percent,
   CalendarCheck,
   DollarSign,
   MessageSquare,
+  ShieldAlert,
+  AlertTriangle,
   ArrowRight,
   ArrowUpRight,
+  Wrench,
 } from "lucide-react";
-
 import { useDashboardData } from "../../../shared/hooks/queries/useDashboard";
-import { useBillingStats } from "../../../shared/hooks/queries/useBilling";
-import { useBranchOccupancy } from "../../../shared/hooks/queries/useRooms";
-import { useFinancialOverview } from "../../../shared/hooks/queries/useFinancial";
+import {
+  useAuditAnalytics,
+  useOccupancyForecast,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
   formatBranch,
   formatRelativeTime,
+  formatDate,
 } from "../../admin/utils/formatters";
-import { hasReservationStatus } from "../../../shared/utils/lifecycleNaming";
+import {
+  ReportChartPanel,
+  ReportFilterBar,
+} from "../../admin/components/shared";
 import "../styles/superadmin-dashboard.css";
 
-// Accent colors per stat — kept minimal, single hue each
 const STAT_ACCENTS = [
-  { color: "#2563eb", bg: "#eff6ff" }, // blue — rooms
-  { color: "#059669", bg: "#ecfdf5" }, // green — tenants
-  { color: "#7c3aed", bg: "#f5f3ff" }, // violet — occupancy
-  { color: "#d97706", bg: "#fffbeb" }, // amber — bookings
-  { color: "#0284c7", bg: "#f0f9ff" }, // sky — revenue
-  { color: "#db2777", bg: "#fdf2f8" }, // pink — inquiries
+  { color: "#2563eb", bg: "#eff6ff" },
+  { color: "#7c3aed", bg: "#f5f3ff" },
+  { color: "#0284c7", bg: "#f0f9ff" },
+  { color: "#d97706", bg: "#fffbeb" },
+  { color: "#db2777", bg: "#fdf2f8" },
+  { color: "#059669", bg: "#ecfdf5" },
+  { color: "#e11d48", bg: "#fff1f2" },
+  { color: "#14b8a6", bg: "#f0fdfa" },
+  { color: "#6b7280", bg: "#f9fafb" },
 ];
 
 const BRANCH_COLORS = ["#2563eb", "#059669"];
 
 export default function SuperAdminDashboard() {
-  const {
-    occupancy,
-    inquiryStats,
-    userStats,
-    reservations: reservationsQuery,
-    isLoading,
-    isError,
-  } = useDashboardData();
+  const { data, isLoading, isError } = useDashboardData();
+  const { data: auditData } = useAuditAnalytics({ range: "30d" });
+  const { data: forecastData } = useOccupancyForecast({ months: 3, branch: "all" });
+  const kpis = data?.kpis || {};
+  const branches = data?.branchComparison || [];
+  const reservations = data?.recentReservations || [];
+  const auditKpis = auditData?.kpis || {};
+  const securityEvents = auditData?.tables?.recentSecurityEvents || [];
+  const securityByBranch = auditData?.series?.branchSummary || [];
+  const forecast = forecastData?.forecast || {};
+  const projectedMonths = forecast.projected || [];
 
-  const { data: billingStats } = useBillingStats();
-  const { data: financialOverview } = useFinancialOverview("all");
-  const { data: gilPuyatOcc } = useBranchOccupancy("gil-puyat");
-  const { data: guadalupeOcc } = useBranchOccupancy("guadalupe");
-
-  const occupancyStats = occupancy.data?.statistics || occupancy.data;
-  const reservations = reservationsQuery.data || [];
-
-  const stats = useMemo(() => {
-    const totalCap = occupancyStats?.totalCapacity || 0;
-    const totalOcc = occupancyStats?.totalOccupancy || 0;
-    const occRate = totalCap > 0 ? Math.round((totalOcc / totalCap) * 100) : 0;
-    const activeBookings = reservations.filter((r) =>
-      r.status === "confirmed" ||
-      r.status === "reserved" ||
-      hasReservationStatus(r.status, "moveIn")
-    ).length;
-
-    return [
+  const stats = useMemo(
+    () => [
       {
         label: "Total Rooms",
-        value: occupancyStats?.totalRooms ?? 0,
+        value: kpis.totalRooms ?? 0,
         Icon: Building2,
-        sub: `${totalCap} beds total`,
-      },
-      {
-        label: "Active Tenants",
-        value: userStats.data?.activeCount ?? totalOcc,
-        Icon: Users,
-        sub: `${userStats.data?.total ?? 0} registered`,
+        sub: `${data?.occupancy?.totalCapacity ?? 0} beds total`,
       },
       {
         label: "Occupancy",
-        value: `${occRate}%`,
+        value: kpis.occupancyRateLabel ?? "0%",
         Icon: Percent,
-        sub: `${totalOcc} / ${totalCap} beds`,
+        sub: `${data?.occupancy?.totalOccupancy ?? 0} occupied beds`,
+      },
+      {
+        label: "Revenue",
+        value: kpis.revenueLabel ?? "PHP 0",
+        Icon: DollarSign,
+        sub: "Last 30 days collected",
       },
       {
         label: "Active Bookings",
-        value: activeBookings,
+        value: kpis.activeBookings ?? 0,
         Icon: CalendarCheck,
-        sub: `${reservations.filter((r) => r.status === "pending").length} pending`,
-      },
-      {
-        label: "Total Revenue",
-        value: financialOverview?.kpis?.totalPaid30d
-          ? `₱${Number(financialOverview.kpis.totalPaid30d).toLocaleString()}`
-          : "₱0",
-        Icon: DollarSign,
-        sub: `${financialOverview?.kpis?.overdueCount ?? billingStats?.overdueCount ?? 0} overdue`,
+        sub: `${data?.reservationStatus?.pending ?? 0} pending`,
       },
       {
         label: "Inquiries",
-        value: inquiryStats.data?.total ?? 0,
+        value: kpis.inquiries ?? 0,
         Icon: MessageSquare,
-        sub: `${inquiryStats.data?.recentCount ?? 0} this week`,
+        sub: "Selected range",
       },
-    ];
-  }, [
-    occupancyStats,
-    userStats.data,
-    reservations,
-    billingStats,
-    financialOverview,
-    inquiryStats.data,
-  ]);
+      {
+        label: "Active Tickets",
+        value: kpis.activeTickets ?? 0,
+        Icon: Wrench,
+        sub: "Open maintenance requests",
+      },
+      {
+        label: "Failed Logins",
+        value: auditKpis.failedLogins ?? 0,
+        Icon: ShieldAlert,
+        sub: "Last 30 days",
+      },
+      {
+        label: "Critical Events",
+        value: auditKpis.criticalEvents ?? 0,
+        Icon: AlertTriangle,
+        sub: "Security and audit alerts",
+      },
+    ],
+    [auditKpis, data, kpis],
+  );
 
-  const branches = useMemo(() => {
-    const parse = (label, raw) => {
-      const s = raw?.statistics || raw || {};
-      const cap = s.totalCapacity || 0;
-      const occ = s.totalOccupancy || 0;
-      return {
-        label,
-        rooms: s.totalRooms || 0,
-        capacity: cap,
-        occupancy: occ,
-        available: cap - occ,
-        rate: cap > 0 ? Math.round((occ / cap) * 100) : 0,
-      };
-    };
-    return [parse("Gil Puyat", gilPuyatOcc), parse("Guadalupe", guadalupeOcc)];
-  }, [gilPuyatOcc, guadalupeOcc]);
-
-  const recentActivity = useMemo(() =>
-    [...reservations]
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 6)
-      .map((r) => ({
-        id: r._id,
-        guest:
-          `${r.userId?.firstName || ""} ${r.userId?.lastName || ""}`.trim() ||
-          "Unknown",
-        branch: formatBranch(r.roomId?.branch || r.branch),
-        room: r.roomId?.name || r.roomId?.roomNumber || "—",
-        status: r.status,
-        time: formatRelativeTime(r.createdAt),
+  const recentActivity = useMemo(
+    () =>
+      reservations.slice(0, 6).map((reservation) => ({
+        id: reservation.id,
+        guest: reservation.guestName || "Unknown",
+        branch: formatBranch(reservation.branch),
+        room: reservation.roomName || "-",
+        status: reservation.status,
+        time: formatRelativeTime(reservation.createdAt),
       })),
-    [reservations]
+    [reservations],
   );
 
   const quickLinks = [
     { label: "Reservations", to: "/admin/reservations" },
     { label: "Room Availability", to: "/admin/room-availability" },
     { label: "Billing", to: "/admin/billing" },
+    { label: "Financials", to: "/admin/analytics?tab=financials" },
     { label: "Tenants", to: "/admin/tenants" },
     { label: "User Management", to: "/admin/users" },
-    { label: "Audit Logs", to: "/admin/audit-logs" },
+    { label: "System Monitoring", to: "/admin/analytics?tab=monitoring" },
   ];
 
   return (
     <div className="sa2">
-      {/* ── Header ── */}
+      <ReportFilterBar
+        title="System-wide dashboard"
+        subtitle="Owner scope • unified analytics payload"
+      />
+
       <header className="sa2-header">
         <div>
           <p className="sa2-eyebrow">Super Admin</p>
           <h1 className="sa2-title">System Overview</h1>
         </div>
         <Link to="/admin/dashboard" className="sa2-back">
-          Branch View <ArrowRight size={14} />
+          Live Dashboard <ArrowRight size={14} />
         </Link>
       </header>
 
       {isError && (
         <div className="sa2-alert">
-          Some data failed to load — showing partial results.
+          Some data failed to load - showing partial results.
         </div>
       )}
 
-      {/* ── Stats ── */}
       <section className="sa2-stats">
-        {stats.map((s, i) => {
-          const { color, bg } = STAT_ACCENTS[i];
-          const Icon = s.Icon;
+        {stats.map((stat, index) => {
+          const { color, bg } = STAT_ACCENTS[index];
+          const Icon = stat.Icon;
           return (
-            <div key={i} className="sa2-stat" style={{ "--accent": color }}>
+            <div key={stat.label} className="sa2-stat" style={{ "--accent": color }}>
               <div className="sa2-stat-icon" style={{ background: bg, color }}>
                 <Icon size={16} strokeWidth={2} />
               </div>
-              <span className="sa2-stat-value">{isLoading ? "—" : s.value}</span>
-              <span className="sa2-stat-label">{s.label}</span>
-              <span className="sa2-stat-sub">{s.sub}</span>
+              <span className="sa2-stat-value">{isLoading ? "-" : stat.value}</span>
+              <span className="sa2-stat-label">{stat.label}</span>
+              <span className="sa2-stat-sub">{stat.sub}</span>
             </div>
           );
         })}
       </section>
 
-      {/* ── Branch Comparison ── */}
       <section className="sa2-card">
         <h2 className="sa2-card-title">Branch Comparison</h2>
         <div className="sa2-branches">
-          {branches.map((b, i) => (
-            <div key={i} className="sa2-branch">
+          {branches.map((branch, index) => (
+            <div key={branch.branch} className="sa2-branch">
               <div className="sa2-branch-top">
-                <span className="sa2-branch-name">{b.label}</span>
-                <span className="sa2-branch-rate" style={{ color: BRANCH_COLORS[i] }}>
-                  {b.rate}%
+                <span className="sa2-branch-name">{branch.label}</span>
+                <span
+                  className="sa2-branch-rate"
+                  style={{ color: BRANCH_COLORS[index % BRANCH_COLORS.length] }}
+                >
+                  {branch.occupancyRate}%
                 </span>
               </div>
               <div className="sa2-bar-track">
                 <div
                   className="sa2-bar-fill"
                   style={{
-                    width: `${b.rate}%`,
-                    background: BRANCH_COLORS[i],
+                    width: `${branch.occupancyRate}%`,
+                    background: BRANCH_COLORS[index % BRANCH_COLORS.length],
                   }}
                 />
               </div>
               <p className="sa2-branch-caption">Occupancy rate</p>
               <div className="sa2-branch-grid">
                 <div className="sa2-branch-kv">
-                  <span>Rooms</span><strong>{b.rooms}</strong>
+                  <span>Rooms</span><strong>{branch.totalRooms}</strong>
                 </div>
                 <div className="sa2-branch-kv">
-                  <span>Capacity</span><strong>{b.capacity}</strong>
+                  <span>Capacity</span><strong>{branch.totalCapacity}</strong>
                 </div>
                 <div className="sa2-branch-kv">
-                  <span>Occupied</span><strong>{b.occupancy}</strong>
+                  <span>Occupied</span><strong>{branch.totalOccupancy}</strong>
                 </div>
                 <div className="sa2-branch-kv">
-                  <span>Available</span><strong>{b.available}</strong>
+                  <span>Available</span><strong>{branch.availableBeds}</strong>
+                </div>
+                <div className="sa2-branch-kv">
+                  <span>Revenue</span><strong>{`PHP ${Number(branch.revenueCollected || 0).toLocaleString()}`}</strong>
+                </div>
+                <div className="sa2-branch-kv">
+                  <span>Tickets</span><strong>{branch.activeTickets}</strong>
+                </div>
+                <div className="sa2-branch-kv">
+                  <span>Overdue</span><strong>{`PHP ${Number(branch.overdueAmount || 0).toLocaleString()}`}</strong>
+                </div>
+                <div className="sa2-branch-kv">
+                  <span>Collection</span><strong>{branch.collectionRate || 0}%</strong>
                 </div>
               </div>
             </div>
@@ -232,60 +227,174 @@ export default function SuperAdminDashboard() {
         </div>
       </section>
 
-      {/* ── Bottom row ── */}
       <div className="sa2-bottom">
-        {/* Activity */}
-        <section className="sa2-card sa2-activity-card">
-          <div className="sa2-card-header">
-            <h2 className="sa2-card-title">Recent Activity</h2>
-            <Link to="/admin/reservations" className="sa2-view-all">
-              View all <ArrowUpRight size={13} />
-            </Link>
-          </div>
-          {recentActivity.length === 0 ? (
-            <p className="sa2-empty">No recent activity.</p>
-          ) : (
-            <table className="sa2-table">
-              <thead>
-                <tr>
-                  <th>Guest</th>
-                  <th>Branch</th>
-                  <th>Room</th>
-                  <th>Status</th>
-                  <th>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentActivity.map((a) => (
-                  <tr key={a.id}>
-                    <td className="sa2-td-guest">{a.guest}</td>
-                    <td>{a.branch}</td>
-                    <td>{a.room}</td>
-                    <td>
-                      <span className={`sa2-badge sa2-badge-${a.status}`}>
-                        {a.status}
-                      </span>
-                    </td>
-                    <td className="sa2-td-time">{a.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-
-        {/* Quick links */}
-        <section className="sa2-card sa2-nav-card">
-          <h2 className="sa2-card-title">Quick Access</h2>
-          <nav className="sa2-nav">
-            {quickLinks.map((l, i) => (
-              <Link key={i} to={l.to} className="sa2-nav-link">
-                <span>{l.label}</span>
-                <ArrowRight size={14} />
+        <ReportChartPanel
+          title="Recent Activity"
+          subtitle="Latest reservations across both branches"
+        >
+          <section className="sa2-card sa2-activity-card">
+            <div className="sa2-card-header">
+              <h2 className="sa2-card-title">Recent Activity</h2>
+              <Link to="/admin/reservations" className="sa2-view-all">
+                View all <ArrowUpRight size={13} />
               </Link>
-            ))}
-          </nav>
-        </section>
+            </div>
+            {recentActivity.length === 0 ? (
+              <p className="sa2-empty">No recent activity.</p>
+            ) : (
+              <table className="sa2-table">
+                <thead>
+                  <tr>
+                    <th>Guest</th>
+                    <th>Branch</th>
+                    <th>Room</th>
+                    <th>Status</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentActivity.map((activity) => (
+                    <tr key={activity.id}>
+                      <td className="sa2-td-guest">{activity.guest}</td>
+                      <td>{activity.branch}</td>
+                      <td>{activity.room}</td>
+                      <td>
+                        <span className={`sa2-badge sa2-badge-${activity.status}`}>
+                          {activity.status}
+                        </span>
+                      </td>
+                      <td className="sa2-td-time">{activity.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </ReportChartPanel>
+
+        <ReportChartPanel
+          title="System Monitoring"
+          subtitle="Owner-level audit and security snapshot"
+        >
+          <section className="sa2-card sa2-activity-card">
+            <div className="sa2-card-header">
+              <h2 className="sa2-card-title">Security Summary</h2>
+              <Link to="/admin/audit-logs" className="sa2-view-all">
+                Review logs <ArrowUpRight size={13} />
+              </Link>
+            </div>
+            <div className="sa2-branches">
+              {securityByBranch.map((branch) => (
+                <div key={branch.branch} className="sa2-branch">
+                  <div className="sa2-branch-top">
+                    <span className="sa2-branch-name">{branch.label}</span>
+                    <span className="sa2-branch-rate">{branch.highSeverityCount}</span>
+                  </div>
+                  <p className="sa2-branch-caption">High-severity actions</p>
+                  <div className="sa2-branch-grid">
+                    <div className="sa2-branch-kv">
+                      <span>Total Events</span><strong>{branch.totalEvents}</strong>
+                    </div>
+                    <div className="sa2-branch-kv">
+                      <span>Critical</span><strong>{branch.criticalCount}</strong>
+                    </div>
+                    <div className="sa2-branch-kv">
+                      <span>Overrides</span><strong>{branch.accessOverrideCount}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {securityEvents.length > 0 ? (
+              <table className="sa2-table">
+                <thead>
+                  <tr>
+                    <th>Event</th>
+                    <th>Branch</th>
+                    <th>Severity</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {securityEvents.slice(0, 5).map((event) => (
+                    <tr key={event.id}>
+                      <td className="sa2-td-guest">{event.action}</td>
+                      <td>{formatBranch(event.branch)}</td>
+                      <td>{event.severity}</td>
+                      <td className="sa2-td-time">{formatDate(event.timestamp)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="sa2-empty">No recent security events.</p>
+            )}
+          </section>
+        </ReportChartPanel>
+
+        <ReportChartPanel
+          title="Forecasting Insights"
+          subtitle="System-wide deterministic occupancy projection"
+        >
+          <section className="sa2-card sa2-activity-card">
+            <div className="sa2-card-header">
+              <h2 className="sa2-card-title">3-Month Outlook</h2>
+            </div>
+            {forecast.sufficientHistory ? (
+              <>
+                <p className="sa2-empty" style={{ textAlign: "left" }}>
+                  {forecast.insights?.headline}
+                </p>
+                <table className="sa2-table">
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Projected</th>
+                      <th>Baseline</th>
+                      <th>Seasonal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectedMonths.map((item) => (
+                      <tr key={item.month}>
+                        <td>{item.label}</td>
+                        <td>{item.projectedOccupancyRate}%</td>
+                        <td>{item.baselineRate}%</td>
+                        <td>{item.seasonalMultiplier}x</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {(forecast.insights?.recommendations || []).slice(0, 2).map((item) => (
+                  <p key={item} className="sa2-empty" style={{ textAlign: "left" }}>
+                    {item}
+                  </p>
+                ))}
+              </>
+            ) : (
+              <p className="sa2-empty">
+                {forecast.insights?.headline || "Insufficient history to forecast occupancy."}
+              </p>
+            )}
+          </section>
+        </ReportChartPanel>
+
+        <ReportChartPanel
+          title="Quick Access"
+          subtitle="Owner workspace shortcuts"
+        >
+          <section className="sa2-card sa2-nav-card">
+            <h2 className="sa2-card-title">Quick Access</h2>
+            <nav className="sa2-nav">
+              {quickLinks.map((link) => (
+                <Link key={link.to} to={link.to} className="sa2-nav-link">
+                  <span>{link.label}</span>
+                  <ArrowRight size={14} />
+                </Link>
+              ))}
+            </nav>
+          </section>
+        </ReportChartPanel>
       </div>
     </div>
   );

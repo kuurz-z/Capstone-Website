@@ -29,6 +29,10 @@ import {
   createRoom,
   updateRoom,
   deleteRoom,
+  addBed,
+  updateBed,
+  reorderBeds,
+  deleteBed,
   updateBedStatus,
 } from "../controllers/roomsController.js";
 
@@ -133,6 +137,42 @@ router.delete(
  * @body {string} status - "maintenance" or "available"
  * @returns {Object} Updated room
  */
+router.patch(
+  "/:roomId/beds/reorder",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageRooms"),
+  filterByBranch,
+  reorderBeds,
+);
+
+router.post(
+  "/:roomId/beds",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageRooms"),
+  filterByBranch,
+  addBed,
+);
+
+router.put(
+  "/:roomId/beds/:bedId",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageRooms"),
+  filterByBranch,
+  updateBed,
+);
+
+router.delete(
+  "/:roomId/beds/:bedId",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageRooms"),
+  filterByBranch,
+  deleteBed,
+);
+
 router.patch(
   "/:roomId/beds/:bedId/status",
   verifyToken,

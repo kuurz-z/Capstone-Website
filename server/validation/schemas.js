@@ -68,6 +68,18 @@ export const createAnnouncementSchema = {
   requiresAcknowledgment: {
     type: "boolean",
   },
+  contentType: {
+    type: "string",
+    enum: ["announcement", "policy"],
+  },
+  publicationStatus: {
+    type: "string",
+    enum: ["draft", "scheduled", "published"],
+  },
+  startsAt: { type: "string" },
+  endsAt: { type: "string" },
+  effectiveDate: { type: "string" },
+  policyKey: { type: "string" },
 };
 
 /**
@@ -87,6 +99,18 @@ export const updateAnnouncementSchema = {
   requiresAcknowledgment: {
     type: "boolean",
   },
+  contentType: {
+    type: "string",
+    enum: ["announcement", "policy"],
+  },
+  publicationStatus: {
+    type: "string",
+    enum: ["draft", "scheduled", "published"],
+  },
+  startsAt: { type: "string" },
+  endsAt: { type: "string" },
+  effectiveDate: { type: "string" },
+  policyKey: { type: "string" },
 };
 
 /**

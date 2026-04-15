@@ -469,22 +469,31 @@ export const getRoomOccupancyStatus = async (roomId) => {
  * @param {string} branch - Branch name ('gil-puyat' or 'guadalupe')
  * @returns {Promise<Object>} - Statistics with room occupancy info
  */
-export const getBranchOccupancyStats = async (branch = null) => {
+export const getBranchOccupancyStats = async (
+  branch = null,
+  { includeUserDetails = true } = {},
+) => {
   try {
     const filter = { isArchived: false };
     if (branch) filter.branch = branch;
 
     const rooms = await Room.find(filter).lean();
     const roomIds = rooms.map((room) => room._id);
-    const reservations = roomIds.length > 0
-      ? await Reservation.find({
-          roomId: { $in: roomIds },
-          isArchived: false,
-          status: { $in: ACTIVE_OCCUPANCY_STATUSES },
-        })
-          .populate("userId", "firstName lastName email phone")
-          .lean()
-      : [];
+    let reservations = [];
+
+    if (roomIds.length > 0) {
+      const reservationQuery = Reservation.find({
+        roomId: { $in: roomIds },
+        isArchived: false,
+        status: { $in: ACTIVE_OCCUPANCY_STATUSES },
+      });
+
+      if (includeUserDetails) {
+        reservationQuery.populate("userId", "firstName lastName email phone");
+      }
+
+      reservations = await reservationQuery.lean();
+    }
 
     const reservationsByRoom = new Map();
     for (const reservation of reservations) {

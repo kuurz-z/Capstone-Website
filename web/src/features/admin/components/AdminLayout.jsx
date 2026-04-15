@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
-import Sidebar from "./Sidebar";
+import Sidebar from "./AdminSidebar";
 import NotificationBell from "../../../shared/components/NotificationBell";
 import useSocketClient from "../../../shared/hooks/useSocketClient";
 import "../styles/admin-layout.css";
@@ -10,7 +10,7 @@ import "../styles/admin-common.css";
 const PAGE_META = {
   "/admin/dashboard": {
     title: "Dashboard",
-    description: "Monitor branch activity, incoming work, and unresolved exceptions at a glance.",
+    description: "Monitor branch activity, queue pressure, and urgent follow-up from one operations view.",
   },
   "/admin/reservations": {
     title: "Reservations",
@@ -26,7 +26,7 @@ const PAGE_META = {
   },
   "/admin/room-availability": {
     title: "Room Management",
-    description: "Track available capacity, assignments, and demand trends by room and branch.",
+    description: "Track available capacity, assignments, and turnover across rooms without leaving operations.",
   },
   "/admin/audit-logs": {
     title: "Activity Log",
@@ -35,6 +35,14 @@ const PAGE_META = {
   "/admin/billing": {
     title: "Billing",
     description: "Generate statements, review balances, and follow payment progress without leaving the admin workspace.",
+  },
+  "/admin/analytics": {
+    title: "Analytics",
+    description: "Review branch KPIs, occupancy trends, billing performance, and operating signals in one workspace.",
+  },
+  "/admin/maintenance": {
+    title: "Maintenance",
+    description: "Review tenant repair requests, assign work, and keep the tenant-visible admin response up to date.",
   },
   "/admin/announcements": {
     title: "Announcements",
@@ -50,11 +58,44 @@ const PAGE_META = {
   },
   "/admin/settings": {
     title: "Settings",
-    description: "Control platform-wide behavior, defaults, and operational safeguards.",
+    description: "Control platform defaults, safeguards, and shared operational behavior.",
   },
 };
 
 function getPageMeta(location) {
+  if (location.pathname === "/admin/analytics") {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab") || "overview";
+    const analyticsMeta = {
+      overview: {
+        title: "Analytics",
+        description: "Review branch KPIs, occupancy trends, billing performance, and operating signals in one workspace.",
+      },
+      occupancy: {
+        title: "Analytics · Occupancy",
+        description: "Track room utilization, capacity shifts, and current availability from the analytics workspace.",
+      },
+      billing: {
+        title: "Analytics · Billing",
+        description: "Monitor collections, overdue balances, and branch billing performance without leaving analytics.",
+      },
+      operations: {
+        title: "Analytics · Operations",
+        description: "Inspect reservation flow, inquiry timing, and maintenance workload in one operations view.",
+      },
+      financials: {
+        title: "Analytics · Financials",
+        description: "Review owner financial performance, overdue exposure, and collection trends across branches.",
+      },
+      monitoring: {
+        title: "Analytics · System Monitoring",
+        description: "Inspect owner-level audit activity, security signals, and operational anomalies from analytics.",
+      },
+    };
+
+    return analyticsMeta[tab] || analyticsMeta.overview;
+  }
+
   if (location.pathname === "/admin/room-availability") {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab") || "rooms";

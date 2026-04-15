@@ -19,6 +19,7 @@ import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import { billingApi } from "../../../shared/api/billingApi";
 import { ThemeProvider } from "../../../features/public/context/ThemeContext";
 import { hasReservationStatus } from "../../../shared/utils/lifecycleNaming";
+import TenantMaintenanceWorkspace from "../components/maintenance/TenantMaintenanceWorkspace";
 
 // Sub-components
 import {
@@ -33,7 +34,6 @@ import {
   ProfileCompletionCard,
   ContractTab,
   ReservationAgreementPage,
-  MaintenanceTab,
   AnnouncementsTab,
 } from "../components/profile";
 
@@ -477,7 +477,7 @@ const ProfilePage = () => {
                 <ActivityHistoryTab reservations={reservations} />
               )}
 
-              {activeTab === "maintenance" && <MaintenanceTab />}
+              {activeTab === "maintenance" && <TenantMaintenanceWorkspace embedded />}
               {activeTab === "announcements" && canViewAnnouncements && <AnnouncementsTab />}
               {activeTab === "notifications" && <NotificationsTab />}
               {activeTab === "settings" && <SettingsTab />}

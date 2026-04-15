@@ -68,7 +68,9 @@ export const queryKeys = {
 
   // ── Maintenance ──
   maintenance: {
-    all: ["maintenance", "list"],
+    all: ["maintenance"],
+    mine: (filters) => ["maintenance", "mine", filters || {}],
+    admin: (filters) => ["maintenance", "admin", filters || {}],
     detail: (id) => ["maintenance", "detail", id],
   },
 
@@ -79,8 +81,17 @@ export const queryKeys = {
 
   // ── Dashboard (composite) ──
   dashboard: {
-    admin: ["dashboard", "admin"],
+    admin: (params) => ["dashboard", "admin", params || {}],
     tenant: ["dashboard", "tenant"],
+  },
+
+  analytics: {
+    occupancyReport: (params) => ["analytics", "occupancy-report", params || {}],
+    billingReport: (params) => ["analytics", "billing-report", params || {}],
+    operationsReport: (params) => ["analytics", "operations-report", params || {}],
+    occupancyForecast: (params) => ["analytics", "occupancy-forecast", params || {}],
+    financials: (params) => ["analytics", "financials", params || {}],
+    audit: (params) => ["analytics", "audit", params || {}],
   },
 
   settings: {

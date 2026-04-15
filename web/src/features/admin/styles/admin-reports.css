@@ -1,0 +1,119 @@
+.admin-reports__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.admin-reports__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.admin-reports__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.admin-reports__bar-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 2.2fr) auto;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.admin-reports__bar-label {
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.admin-reports__bar-track {
+  height: 0.65rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.admin-reports__bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #0f766e);
+}
+
+.admin-reports__bar-value {
+  font-size: 0.85rem;
+  color: #475569;
+  text-align: right;
+}
+
+.admin-reports__panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-reports__meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.admin-reports__meta-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  background: #f8fafc;
+}
+
+.admin-reports__meta-label {
+  display: block;
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.admin-reports__meta-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.admin-reports__hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.admin-reports__actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.admin-reports__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .admin-reports__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-reports__bar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-reports__bar-value {
+    text-align: left;
+  }
+
+  .admin-reports__meta-grid {
+    grid-template-columns: 1fr;
+  }
+}

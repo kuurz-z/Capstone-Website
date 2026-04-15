@@ -74,7 +74,13 @@ function CheckAvailabilityPage() {
         const normalizedType = room.type || room.room_type;
         const mappedType = mapRoomType(normalizedType);
         const branchLabel = mapBranchLabel(room.branch);
-        const images = getRoomImages(normalizedType, room.branch);
+        const storedImages = Array.isArray(room.images)
+          ? room.images.filter(Boolean)
+          : [];
+        const images =
+          storedImages.length > 0
+            ? storedImages
+            : getRoomImages(normalizedType, room.branch);
         const primaryImage = images[0] || getPrimaryImage(normalizedType);
         const roomNumber = room.roomNumber || room.room_number || displayName;
         const beds = room.beds?.length

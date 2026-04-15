@@ -1,0 +1,78 @@
+.analytics-chart {
+  width: 100%;
+}
+
+.analytics-chart__surface {
+  width: 100%;
+  height: var(--analytics-chart-height, 320px);
+}
+
+.analytics-chart__tooltip {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+.analytics-chart__tooltip-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.analytics-chart__tooltip-list {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.analytics-chart__tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.analytics-chart__tooltip-row strong {
+  color: #0f172a;
+}
+
+.analytics-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: 0.2rem 0 0;
+}
+
+.analytics-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.analytics-chart__legend-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+}
+
+.analytics-chart__center-label {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.analytics-chart__center-label strong {
+  display: block;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+
+.analytics-chart__center-label span {
+  font-size: 0.8rem;
+  color: #64748b;
+}

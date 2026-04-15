@@ -5,6 +5,7 @@ import {
   CheckCircle,
   Clock,
   Eye,
+  FileDown,
   Trash2,
   UserCheck,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { reservationApi } from "../../../shared/api/apiClient";
 import { queryKeys } from "../../../shared/lib/queryKeys";
 import { showNotification } from "../../../shared/utils/notification";
+import { exportToCSV } from "../../../shared/utils/exportUtils";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import {
@@ -378,6 +380,32 @@ function ReservationsPage() {
     });
   }, [refetchReservations]);
 
+  const handleExportReservations = useCallback(() => {
+    exportToCSV(
+      sortedReservations.map((reservation) => ({
+        reservationCode: reservation.reservationCode,
+        applicant: reservation.customer,
+        email: reservation.email,
+        branch: reservation.branch,
+        room: reservation.room,
+        status: RESERVATION_STATUS_LABELS[reservation.status] || reservation.status,
+        moveInDate: formatShortDate(readMoveInDate(reservation)),
+        createdAt: formatShortDate(reservation.createdAt),
+      })),
+      [
+        { key: "reservationCode", label: "Reservation Code" },
+        { key: "applicant", label: "Applicant" },
+        { key: "email", label: "Email" },
+        { key: "branch", label: "Branch" },
+        { key: "room", label: "Room" },
+        { key: "status", label: "Status" },
+        { key: "moveInDate", label: "Move In" },
+        { key: "createdAt", label: "Created" },
+      ],
+      "reservations",
+    );
+  }, [sortedReservations]);
+
   const columns = useMemo(
     () => [
       {
@@ -497,6 +525,13 @@ function ReservationsPage() {
                     placeholder: "Search by name, email, code, or room...",
                   }}
                   filters={filters}
+                  actions={[
+                    {
+                      label: "Export CSV",
+                      icon: FileDown,
+                      onClick: handleExportReservations,
+                    },
+                  ]}
                 />
               </div>
               <div className="reservations-workspace__table">

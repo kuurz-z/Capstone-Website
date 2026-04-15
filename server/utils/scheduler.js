@@ -46,6 +46,7 @@ import { syncReservationUserLifecycle } from "./reservationHelpers.js";
 import { resolveBillStatus, syncBillAmounts } from "./billingPolicy.js";
 import { getPenaltyRatePerDay, resolvePenaltyRatePerDay } from "./businessSettings.js";
 import { generateAutomatedRentBills } from "./rentGenerator.js";
+import { dispatchDueScheduledAnnouncements } from "./announcementDispatch.js";
 
 // ─── Job 1: Overdue Move-In Detection (daily at 08:30) ──────────────────────────
 
@@ -571,6 +572,23 @@ async function archiveStaleCancelled() {
   }
 }
 
+async function dispatchScheduledAnnouncements() {
+  try {
+    const result = await dispatchDueScheduledAnnouncements();
+    if (result.dispatchedCount > 0) {
+      logger.info(
+        {
+          dispatchedCount: result.dispatchedCount,
+          dueCount: result.dueCount,
+        },
+        "Scheduled announcements dispatched",
+      );
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Scheduled announcement dispatch job failed");
+  }
+}
+
 // ─── Scheduler Startup ──────────────────────────────────────────────────
 
 const scheduledJobs = [];
@@ -699,6 +717,14 @@ export function startScheduler(options = {}) {
       name: "archive-stale-cancelled",
     }),
   );
+
+  // Job 12: Dispatch due scheduled announcements — every minute
+  scheduledJobs.push(
+    cron.schedule("* * * * *", dispatchScheduledAnnouncements, {
+      scheduled: true,
+      name: "scheduled-announcement-dispatch",
+    }),
+  );
   return scheduledJobs.length;
 }
 
@@ -722,6 +748,7 @@ export {
   cancelNoShowReservations,
   warnStaleVisitPending,
   archiveStaleCancelled,
+  dispatchScheduledAnnouncements,
 };
 
 export default { startScheduler, stopScheduler };

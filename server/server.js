@@ -42,7 +42,7 @@ import inquiryRoutes from "./routes/inquiriesRoutes.js";
 import auditRoutes from "./routes/auditRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
-import maintenanceRoutes from "./routes/maintenanceRoutes.js";
+import maintenanceRoutes from "./routes/maintenanceContractRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
@@ -51,6 +51,7 @@ import digitalTwinRoutes from "./routes/digitalTwinRoutes.js";
 import utilityBillingRoutes from "./routes/utilityBillingRoutes.js";
 import financialRoutes from "./routes/financialRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 import { initSocket } from "./utils/socket.js";
 
 dotenv.config();
@@ -226,8 +227,8 @@ app.use(
 app.use("/api/webhooks", webhookRoutes);
 app.use(globalLimiter);
 app.use(compression());
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 app.use(requestLogger);
 
 app.use("/api/auth", authLimiter, authRoutes);
@@ -238,6 +239,7 @@ app.use("/api/inquiries", publicLimiter, inquiryRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/m/maintenance", maintenanceRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -246,6 +248,7 @@ app.use("/api/digital-twin", digitalTwinRoutes);
 app.use("/api/utilities", utilityBillingRoutes);
 app.use("/api/financial", financialRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 app.get("/api/health", async (req, res) => {
   const checks = {};

@@ -10,61 +10,73 @@
  */
 
 import express from "express";
-import { verifyToken, verifyAdmin } from "../middleware/auth.js";
-import { validate } from "../validation/validate.js";
-import { createMaintenanceSchema } from "../validation/schemas.js";
+import {
+  verifyApplicant,
+  verifyToken,
+  verifyAdmin,
+} from "../middleware/auth.js";
+import { filterByBranch } from "../middleware/branchAccess.js";
 import { requirePermission } from "../middleware/permissions.js";
 import * as maintenanceController from "../controllers/maintenanceController.js";
 
 const router = express.Router();
 
-// All maintenance routes require authentication
 router.use(verifyToken);
 
 // ============================================================================
 // TENANT ROUTES
 // ============================================================================
 
-/**
- * GET /api/maintenance/my-requests
- * Get current tenant's maintenance requests
- */
-router.get("/my-requests", maintenanceController.getMyRequests);
-
-/**
- * POST /api/maintenance/requests
- * Create new maintenance request
- */
-router.post("/requests", validate(createMaintenanceSchema), maintenanceController.createRequest);
-
-/**
- * GET /api/maintenance/requests/:requestId
- * Get maintenance request details
- */
-router.get("/requests/:requestId", maintenanceController.getRequest);
+router.get("/me", verifyApplicant, maintenanceController.getMyRequests);
+router.post("/", verifyApplicant, maintenanceController.createRequest);
+router.put("/:requestId", verifyApplicant, maintenanceController.updateMyRequest);
+router.patch(
+  "/:requestId/cancel",
+  verifyApplicant,
+  maintenanceController.cancelMyRequest,
+);
+router.patch(
+  "/:requestId/reopen",
+  verifyApplicant,
+  maintenanceController.reopenMyRequest,
+);
 
 // ============================================================================
 // ADMIN/STAFF ROUTES
 // ============================================================================
 
-/**
- * GET /api/maintenance/branch
- * Get all maintenance requests for branch (Admin only)
- */
+router.get(
+  "/admin/all",
+  verifyAdmin,
+  filterByBranch,
+  requirePermission("manageMaintenance"),
+  maintenanceController.getAdminAll,
+);
+
+router.patch(
+  "/admin/:requestId/status",
+  verifyAdmin,
+  filterByBranch,
+  requirePermission("manageMaintenance"),
+  maintenanceController.updateAdminRequestStatus,
+);
+
+router.get("/:requestId", maintenanceController.getRequestById);
+
+router.get("/my-requests", verifyApplicant, maintenanceController.getMyRequests);
+router.post("/requests", verifyApplicant, maintenanceController.createRequestCompat);
+router.get("/requests/:requestId", maintenanceController.getRequestById);
 router.get(
   "/branch",
   verifyAdmin,
+  filterByBranch,
   requirePermission("manageMaintenance"),
   maintenanceController.getByBranch,
 );
-
-/**
- * PATCH /api/maintenance/requests/:requestId
- * Update maintenance request status (Admin only)
- */
 router.patch(
   "/requests/:requestId",
   verifyAdmin,
+  filterByBranch,
   requirePermission("manageMaintenance"),
   maintenanceController.updateRequest,
 );
@@ -76,6 +88,7 @@ router.patch(
 router.get(
   "/stats/completion",
   verifyAdmin,
+  filterByBranch,
   requirePermission("manageMaintenance"),
   maintenanceController.getCompletionStats,
 );
@@ -87,6 +100,7 @@ router.get(
 router.get(
   "/stats/issue-frequency",
   verifyAdmin,
+  filterByBranch,
   requirePermission("manageMaintenance"),
   maintenanceController.getIssueFrequency,
 );

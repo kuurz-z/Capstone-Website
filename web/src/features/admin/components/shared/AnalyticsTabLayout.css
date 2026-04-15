@@ -1,0 +1,24 @@
+.analytics-tab-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.analytics-tab-layout__body {
+  display: grid;
+  gap: 1rem;
+}
+
+.analytics-tab-layout__main {
+  min-width: 0;
+}
+
+.analytics-tab-layout__sidebar {
+  min-width: 0;
+}
+
+@media (min-width: 1180px) {
+  .analytics-tab-layout__body {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+  }
+}

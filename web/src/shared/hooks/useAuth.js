@@ -288,14 +288,20 @@ export const AuthProvider = ({ children }) => {
       refreshUser().catch(() => {});
     };
 
-    const intervalId = window.setInterval(syncAuthProfile, 30000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncAuthProfile();
+      }
+    };
+
+    const intervalId = window.setInterval(syncAuthProfile, 5 * 60 * 1000);
     window.addEventListener("focus", syncAuthProfile);
-    document.addEventListener("visibilitychange", syncAuthProfile);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", syncAuthProfile);
-      document.removeEventListener("visibilitychange", syncAuthProfile);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [firebaseLoading, firebaseUser, refreshUser]);
 

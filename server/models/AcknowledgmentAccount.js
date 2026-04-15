@@ -149,11 +149,23 @@ acknowledgmentAccountSchema.statics.createForAnnouncement = async function (
   announcementId,
   userIds,
 ) {
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return [];
+  }
+
   const records = userIds.map((userId) => ({
     userId,
     announcementId,
   }));
-  return this.insertMany(records);
+
+  try {
+    return await this.insertMany(records, { ordered: false });
+  } catch (error) {
+    if (error?.code === 11000 || Array.isArray(error?.writeErrors)) {
+      return [];
+    }
+    throw error;
+  }
 };
 
 // Get engagement metrics for an announcement

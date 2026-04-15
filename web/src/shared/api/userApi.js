@@ -81,6 +81,14 @@ export const userApi = {
     }),
 
   /**
+   * Restore archived user account (owner only)
+   */
+  restore: (userId) =>
+    authFetch(`/users/${userId}/restore`, {
+      method: "PATCH",
+    }),
+
+  /**
    * Update branch admin permissions (owner only)
    */
   updatePermissions: (userId, permissions) =>

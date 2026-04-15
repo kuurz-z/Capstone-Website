@@ -21,46 +21,46 @@ function ActionButton({
 
 export default function AccountRowActions({
   canEdit,
-  canSuspend,
-  canReactivate,
-  canBan,
-  canDelete,
+  canBlock,
+  canUnblock,
+  canRestore,
+  canHardDelete,
   onEdit,
-  onSuspend,
-  onReactivate,
-  onBan,
-  onDelete,
+  onBlock,
+  onUnblock,
+  onRestore,
+  onHardDelete,
 }) {
   return (
     <div className="account-row-actions" onClick={(event) => event.stopPropagation()}>
       {canEdit && <ActionButton label="Edit" onPress={onEdit} />}
-      {canSuspend && (
+      {canBlock && (
         <ActionButton
-          label="Suspend"
+          label="Block"
           variant="warn"
-          onPress={onSuspend}
+          onPress={onBlock}
         />
       )}
-      {canReactivate && (
+      {canUnblock && (
         <ActionButton
-          label="Activate"
+          label="Unblock"
           variant="primary"
-          onPress={onReactivate}
+          onPress={onUnblock}
         />
       )}
-      {canBan && (
+      {canRestore && (
         <ActionButton
-          label="Ban"
-          variant="warn"
-          onPress={onBan}
+          label="Restore"
+          variant="primary"
+          onPress={onRestore}
         />
       )}
-      {canDelete && (
+      {canHardDelete && (
         <ActionButton
           label="Delete"
           variant="danger"
-          ariaLabel="Delete user"
-          onPress={onDelete}
+          ariaLabel="Hard Delete user"
+          onPress={onHardDelete}
         />
       )}
     </div>

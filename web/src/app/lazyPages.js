@@ -81,7 +81,10 @@ export const DigitalTwinPage = React.lazy(
   () => import("../features/admin/pages/DigitalTwinPage"),
 );
 export const MaintenancePage = React.lazy(
-  () => import("../features/tenant/pages/MaintenanceWorkspacePage"),
+  () => import("../features/admin/pages/AdminMaintenancePage.jsx"),
+);
+export const AnalyticsPage = React.lazy(
+  () => import("../features/admin/pages/AnalyticsPage.jsx"),
 );
 export const BranchManagementPage = React.lazy(
   () => import("../features/super-admin/pages/BranchManagementPage"),
