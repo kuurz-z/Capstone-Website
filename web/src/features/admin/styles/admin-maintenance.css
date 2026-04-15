@@ -186,14 +186,16 @@
 .admin-maintenance__drawer-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 10px;
 }
 
 .admin-maintenance__primary-btn,
 .admin-maintenance__secondary-btn {
   border-radius: 999px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   font: inherit;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid transparent;
