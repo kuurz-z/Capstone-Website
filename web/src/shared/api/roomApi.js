@@ -45,6 +45,29 @@ export const roomApi = {
       body: JSON.stringify({ status }),
     }),
 
+  addBed: (roomId, payload) =>
+    authFetch(`/rooms/${roomId}/beds`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  updateBed: (roomId, bedId, payload) =>
+    authFetch(`/rooms/${roomId}/beds/${bedId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  reorderBeds: (roomId, bedIds) =>
+    authFetch(`/rooms/${roomId}/beds/reorder`, {
+      method: "PATCH",
+      body: JSON.stringify({ bedIds }),
+    }),
+
+  deleteBed: (roomId, bedId) =>
+    authFetch(`/rooms/${roomId}/beds/${bedId}`, {
+      method: "DELETE",
+    }),
+
   /**
    * Delete room (admin only)
    */

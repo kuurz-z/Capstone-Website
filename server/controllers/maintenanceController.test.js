@@ -189,20 +189,38 @@ describe("maintenanceController", () => {
   test("updateAdminRequestStatus updates a request and notifies the tenant on status change", async () => {
     const requestDoc = buildRequestDoc();
     maintenanceFindOne.mockResolvedValue(requestDoc);
-    userFindOne.mockReturnValue(
-      buildLeanQuery({
-        _id: "mongo_user_1",
-        user_id: "user_95f39d5b4ea4",
-        firstName: "Lily",
-        lastName: "Tenant",
-        email: "lily@example.com",
-        phone: "0917",
-        branch: "gil-puyat",
-        role: "tenant",
-      }),
-    );
+    userFindOne.mockImplementation(({ firebaseUid, user_id }) => {
+      if (firebaseUid === "firebase-admin-1") {
+        return buildLeanQuery({
+          _id: "admin_user_1",
+          user_id: "admin_1",
+          firstName: "Branch",
+          lastName: "Admin",
+          email: "admin@example.com",
+          phone: "0918",
+          branch: "gil-puyat",
+          role: "branch_admin",
+        });
+      }
+
+      if (user_id === "user_95f39d5b4ea4") {
+        return buildLeanQuery({
+          _id: "mongo_user_1",
+          user_id: "user_95f39d5b4ea4",
+          firstName: "Lily",
+          lastName: "Tenant",
+          email: "lily@example.com",
+          phone: "0917",
+          branch: "gil-puyat",
+          role: "tenant",
+        });
+      }
+
+      return buildLeanQuery(null);
+    });
 
     const req = {
+      user: { uid: "firebase-admin-1" },
       params: { requestId: requestDoc.request_id },
       body: {
         status: "viewed",
@@ -234,8 +252,25 @@ describe("maintenanceController", () => {
   test("updateAdminRequestStatus rejects invalid transitions", async () => {
     const requestDoc = buildRequestDoc({ status: "pending" });
     maintenanceFindOne.mockResolvedValue(requestDoc);
+    userFindOne.mockImplementation(({ firebaseUid }) =>
+      buildLeanQuery(
+        firebaseUid === "firebase-admin-1"
+          ? {
+              _id: "admin_user_1",
+              user_id: "admin_1",
+              firstName: "Branch",
+              lastName: "Admin",
+              email: "admin@example.com",
+              phone: "0918",
+              branch: "gil-puyat",
+              role: "branch_admin",
+            }
+          : null,
+      ),
+    );
 
     const req = {
+      user: { uid: "firebase-admin-1" },
       params: { requestId: requestDoc.request_id },
       body: { status: "completed" },
       branchFilter: "gil-puyat",

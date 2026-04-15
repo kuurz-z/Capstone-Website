@@ -41,6 +41,17 @@ const USER_SELECT_FIELDS =
   "user_id firstName lastName email phone branch role";
 
 const MAINTENANCE_LIMIT_MAX = 200;
+const SLA_TARGET_HOURS = Object.freeze({
+  low: 120,
+  normal: 48,
+  high: 24,
+});
+const CLOSED_MAINTENANCE_STATUSES = new Set([
+  "resolved",
+  "completed",
+  "rejected",
+  "cancelled",
+]);
 
 const parseLimit = (value, fallback = 100) => {
   const parsed = Number.parseInt(value, 10);
@@ -52,6 +63,58 @@ const toOptionalText = (value) => {
   if (value == null) return null;
   const sanitized = clean(String(value)).trim();
   return sanitized ? sanitized : null;
+};
+
+const buildActorSnapshot = (user) => ({
+  actor_id: user?.user_id || null,
+  actor_name:
+    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+    user?.email ||
+    user?.user_id ||
+    null,
+  actor_role: user?.role || null,
+});
+
+const appendStatusHistory = (request, event) => {
+  request.statusHistory = [
+    ...(Array.isArray(request.statusHistory) ? request.statusHistory : []),
+    event,
+  ];
+};
+
+const appendWorkLogEntry = (request, entry) => {
+  request.work_log = [
+    ...(Array.isArray(request.work_log) ? request.work_log : []),
+    entry,
+  ];
+};
+
+const getSlaState = (request) => {
+  const urgency = normalizeMaintenanceUrgency(request?.urgency) || "normal";
+  const baseTimestamp = request?.reopened_at || request?.created_at;
+  const targetHours = SLA_TARGET_HOURS[urgency] || SLA_TARGET_HOURS.normal;
+  const targetAt = baseTimestamp
+    ? new Date(new Date(baseTimestamp).getTime() + targetHours * 60 * 60 * 1000)
+    : null;
+  const isClosed = CLOSED_MAINTENANCE_STATUSES.has(
+    normalizeMaintenanceStatus(request?.status),
+  );
+  const isDelayed =
+    Boolean(targetAt) && !isClosed && Date.now() > targetAt.getTime();
+
+  return {
+    targetHours,
+    targetAt,
+    isDelayed,
+    isHighPriorityUnresolved: urgency === "high" && !isClosed,
+    label: isClosed
+      ? "closed"
+      : isDelayed
+        ? "delayed"
+        : urgency === "high"
+          ? "priority"
+          : "on_track",
+  };
 };
 
 const normalizeAttachments = (attachments) => {
@@ -141,6 +204,16 @@ const serializeMaintenanceRequest = (request, tenant = null) => ({
   attachments: Array.isArray(request.attachments) ? request.attachments : [],
   reopen_note: request.reopen_note ?? null,
   reopen_history: Array.isArray(request.reopen_history) ? request.reopen_history : [],
+  statusHistory: Array.isArray(request.statusHistory) ? request.statusHistory : [],
+  slaState: getSlaState(request),
+  assignment: {
+    assignedTo: request.assigned_to ?? null,
+    assignedAt: request.assigned_at ?? null,
+    startedAt: request.work_started_at ?? null,
+    resolvedAt: request.resolved_at ?? null,
+  },
+  workLog: Array.isArray(request.work_log) ? request.work_log : [],
+  resolutionNote: request.resolution_note ?? null,
   created_at: request.created_at,
   updated_at: request.updated_at,
   cancelled_at: request.cancelled_at ?? null,
@@ -157,7 +230,7 @@ const serializeMaintenanceRequest = (request, tenant = null) => ({
   category: request.request_type,
   date: request.created_at,
   assignedTo: request.assigned_to ?? null,
-  completionNote: request.notes ?? null,
+  completionNote: request.resolution_note ?? request.notes ?? null,
 });
 
 const loadTenantMap = async (requests) => {
@@ -325,6 +398,15 @@ const buildMaintenanceDocument = ({
     attachments,
     reservationId: reservation._id,
     roomId: reservation.roomId || null,
+    statusHistory: [
+      {
+        event: "submitted",
+        status: "pending",
+        ...buildActorSnapshot(dbUser),
+        note: null,
+        timestamp: new Date(),
+      },
+    ],
   });
 
 /**
@@ -517,6 +599,13 @@ export const cancelMyRequest = async (req, res, next) => {
 
     request.status = "cancelled";
     request.cancelled_at = new Date();
+    appendStatusHistory(request, {
+      event: "cancelled",
+      status: "cancelled",
+      ...buildActorSnapshot(dbUser),
+      note: null,
+      timestamp: request.cancelled_at,
+    });
     await request.save();
 
     sendSuccess(res, {
@@ -562,6 +651,15 @@ export const reopenMyRequest = async (req, res, next) => {
     ];
     request.status = "pending";
     request.resolved_at = null;
+    request.work_started_at = null;
+    request.resolution_note = null;
+    appendStatusHistory(request, {
+      event: "reopened",
+      status: "pending",
+      ...buildActorSnapshot(dbUser),
+      note,
+      timestamp: reopenedAt,
+    });
 
     await request.save();
 
@@ -584,6 +682,7 @@ export const updateAdminRequestStatus = async (req, res, next) => {
   try {
     const request = await findAccessibleRequest(req.params.requestId);
     ensureAdminAccess(request, req);
+    const adminUser = await getDbUser(req.user.uid);
 
     const nextStatus = normalizeMaintenanceStatus(req.body.status);
     const nextNotes =
@@ -592,6 +691,11 @@ export const updateAdminRequestStatus = async (req, res, next) => {
       req.body.assigned_to !== undefined
         ? toOptionalText(req.body.assigned_to)
         : undefined;
+    const workLogNote = toOptionalText(
+      req.body.work_log_note !== undefined
+        ? req.body.work_log_note
+        : req.body.workLogNote,
+    );
 
     if (!nextStatus || !isAdminMutableMaintenanceStatus(nextStatus)) {
       throw new AppError(
@@ -610,6 +714,11 @@ export const updateAdminRequestStatus = async (req, res, next) => {
     }
 
     const statusChanged = request.status !== nextStatus;
+    const assignmentChanged =
+      nextAssignedTo !== undefined && request.assigned_to !== nextAssignedTo;
+    const notesChanged = nextNotes !== undefined && request.notes !== nextNotes;
+    const eventTimestamp = new Date();
+
     request.status = nextStatus;
 
     if (nextNotes !== undefined) {
@@ -617,13 +726,44 @@ export const updateAdminRequestStatus = async (req, res, next) => {
     }
     if (nextAssignedTo !== undefined) {
       request.assigned_to = nextAssignedTo;
+      request.assigned_at = nextAssignedTo ? eventTimestamp : null;
     }
 
     if (statusChanged && (nextStatus === "resolved" || nextStatus === "completed")) {
-      request.resolved_at = new Date();
+      request.resolved_at = eventTimestamp;
+      request.resolution_note = nextNotes ?? request.notes ?? null;
     }
     if (statusChanged && ["pending", "viewed", "in_progress"].includes(nextStatus)) {
       request.cancelled_at = null;
+    }
+    if (statusChanged && nextStatus === "in_progress" && !request.work_started_at) {
+      request.work_started_at = eventTimestamp;
+    }
+    if (statusChanged && ["pending", "viewed", "rejected"].includes(nextStatus)) {
+      if (nextStatus !== "rejected") {
+        request.resolved_at = null;
+        request.resolution_note = null;
+      }
+    }
+    if (statusChanged || assignmentChanged || notesChanged) {
+      appendStatusHistory(request, {
+        event: statusChanged
+          ? "status_changed"
+          : assignmentChanged
+            ? "assignment_updated"
+            : "note_updated",
+        status: request.status,
+        ...buildActorSnapshot(adminUser),
+        note: nextNotes ?? workLogNote ?? null,
+        timestamp: eventTimestamp,
+      });
+    }
+    if (workLogNote) {
+      appendWorkLogEntry(request, {
+        note: workLogNote,
+        ...buildActorSnapshot(adminUser),
+        logged_at: eventTimestamp,
+      });
     }
 
     await request.save();

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
+  FileDown,
   Filter,
   Image as ImageIcon,
   Loader2,
@@ -28,6 +29,7 @@ import {
   getMaintenanceTypeMeta,
   getMaintenanceUrgencyMeta,
 } from "../../../shared/utils/maintenanceConfig";
+import { exportToCSV } from "../../../shared/utils/exportUtils";
 import {
   DataTable,
   DetailDrawer,
@@ -60,6 +62,30 @@ const fmtDateTime = (value) => {
     hour: "numeric",
     minute: "2-digit",
   });
+};
+
+const formatSlaState = (slaState) => {
+  if (!slaState) return "No SLA";
+  if (slaState.label === "delayed") return "Delayed";
+  if (slaState.label === "priority") return "Priority";
+  if (slaState.label === "closed") return "Closed";
+  return "On Track";
+};
+
+const getSlaTone = (slaState) => {
+  if (!slaState) {
+    return { bg: "#E2E8F0", color: "#475569" };
+  }
+  if (slaState.label === "delayed") {
+    return { bg: "#FEE2E2", color: "#DC2626" };
+  }
+  if (slaState.label === "priority") {
+    return { bg: "#FEF3C7", color: "#D97706" };
+  }
+  if (slaState.label === "closed") {
+    return { bg: "#DCFCE7", color: "#166534" };
+  }
+  return { bg: "#DBEAFE", color: "#2563EB" };
 };
 
 const urgencyRank = {
@@ -116,6 +142,7 @@ export default function AdminMaintenancePage() {
   const [draftStatus, setDraftStatus] = useState("viewed");
   const [draftNotes, setDraftNotes] = useState("");
   const [draftAssignedTo, setDraftAssignedTo] = useState("");
+  const [draftWorkLogNote, setDraftWorkLogNote] = useState("");
 
   const listFilters = useMemo(
     () =>
@@ -325,6 +352,7 @@ export default function AdminMaintenancePage() {
     setDraftStatus(initialStatus);
     setDraftNotes(selectedRequest.notes || "");
     setDraftAssignedTo(selectedRequest.assigned_to || "");
+    setDraftWorkLogNote("");
   }, [selectedRequest]);
 
   const handleResetFilters = () => {
@@ -336,6 +364,36 @@ export default function AdminMaintenancePage() {
     setBranchFilter("all");
     setSortMode("newest");
     setSearchQuery("");
+  };
+
+  const handleExport = () => {
+    exportToCSV(
+      filteredRequests.map((request) => ({
+        requestId: request.request_id,
+        tenantName: request.tenant?.full_name || "Unknown Tenant",
+        branch: request.tenant?.branch || request.branch || "",
+        requestType: getMaintenanceTypeMeta(request.request_type).label,
+        urgency: getMaintenanceUrgencyMeta(request.urgency).label,
+        status: formatMaintenanceStatus(request.status),
+        sla: formatSlaState(request.slaState),
+        assignedTo: request.assigned_to || "Unassigned",
+        createdAt: fmtDateTime(request.created_at),
+        updatedAt: fmtDateTime(request.updated_at),
+      })),
+      [
+        { key: "requestId", label: "Request ID" },
+        { key: "tenantName", label: "Tenant" },
+        { key: "branch", label: "Branch" },
+        { key: "requestType", label: "Request Type" },
+        { key: "urgency", label: "Urgency" },
+        { key: "status", label: "Status" },
+        { key: "sla", label: "SLA State" },
+        { key: "assignedTo", label: "Assigned To" },
+        { key: "createdAt", label: "Created At" },
+        { key: "updatedAt", label: "Updated At" },
+      ],
+      "maintenance-requests",
+    );
   };
 
   const handleSummaryFilter = (index) => {
@@ -359,9 +417,11 @@ export default function AdminMaintenancePage() {
           status: draftStatus,
           notes: draftNotes,
           assigned_to: draftAssignedTo,
+          work_log_note: draftWorkLogNote,
         },
       });
       showNotification("Maintenance request updated.", "success");
+      setDraftWorkLogNote("");
     } catch (submitError) {
       showNotification(
         submitError.message || "Failed to update maintenance request.",
@@ -470,7 +530,26 @@ export default function AdminMaintenancePage() {
       {
         key: "status",
         label: "Status",
-        render: (row) => <StatusBadge status={row.status} />,
+        render: (row) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <StatusBadge status={row.status} />
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                width: "fit-content",
+                padding: "4px 8px",
+                borderRadius: 999,
+                background: getSlaTone(row.slaState).bg,
+                color: getSlaTone(row.slaState).color,
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {formatSlaState(row.slaState)}
+            </span>
+          </div>
+        ),
       },
       {
         key: "assigned_to",
@@ -617,6 +696,15 @@ export default function AdminMaintenancePage() {
                 <button
                   type="button"
                   className="admin-maintenance__secondary-btn"
+                  onClick={handleExport}
+                  disabled={filteredRequests.length === 0}
+                >
+                  <FileDown size={14} />
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  className="admin-maintenance__secondary-btn"
                   onClick={handleResetFilters}
                 >
                   Reset Filters
@@ -742,6 +830,55 @@ export default function AdminMaintenancePage() {
                 </DetailDrawer.Row>
                 <DetailDrawer.Row label="Created At" value={fmtDateTime(selectedRequest.created_at)} />
                 <DetailDrawer.Row label="Updated At" value={fmtDateTime(selectedRequest.updated_at)} />
+                <DetailDrawer.Row label="SLA">
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "6px 12px",
+                      borderRadius: 999,
+                      background: getSlaTone(selectedRequest.slaState).bg,
+                      color: getSlaTone(selectedRequest.slaState).color,
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {formatSlaState(selectedRequest.slaState)}
+                  </span>
+                </DetailDrawer.Row>
+                <DetailDrawer.Row
+                  label="Target Resolution"
+                  value={
+                    selectedRequest.slaState?.targetAt
+                      ? fmtDateTime(selectedRequest.slaState.targetAt)
+                      : "Not set"
+                  }
+                />
+                <DetailDrawer.Row
+                  label="Assigned At"
+                  value={
+                    selectedRequest.assignment?.assignedAt
+                      ? fmtDateTime(selectedRequest.assignment.assignedAt)
+                      : "Not assigned"
+                  }
+                />
+                <DetailDrawer.Row
+                  label="Started At"
+                  value={
+                    selectedRequest.assignment?.startedAt
+                      ? fmtDateTime(selectedRequest.assignment.startedAt)
+                      : "Not started"
+                  }
+                />
+                <DetailDrawer.Row
+                  label="Resolved At"
+                  value={
+                    selectedRequest.assignment?.resolvedAt
+                      ? fmtDateTime(selectedRequest.assignment.resolvedAt)
+                      : "Not resolved"
+                  }
+                />
               </DetailDrawer.Section>
 
               <DetailDrawer.Section label="Issue Details">
@@ -801,6 +938,53 @@ export default function AdminMaintenancePage() {
                 )}
               </DetailDrawer.Section>
 
+              <DetailDrawer.Section label="Status Timeline">
+                {selectedRequest.statusHistory?.length ? (
+                  <div className="admin-maintenance__history-list">
+                    {selectedRequest.statusHistory.map((entry, index) => (
+                      <article
+                        key={`${entry.timestamp}-${entry.status}-${index}`}
+                        className="admin-maintenance__history-item"
+                      >
+                        <strong>{fmtDateTime(entry.timestamp)}</strong>
+                        <span>
+                          {formatMaintenanceStatus(entry.status)}
+                          {entry.actor_name ? ` • ${entry.actor_name}` : ""}
+                        </span>
+                        <p>{entry.note || entry.event || "Status updated."}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="admin-maintenance__empty-inline">
+                    <Clock3 size={16} />
+                    No timeline entries recorded yet.
+                  </div>
+                )}
+              </DetailDrawer.Section>
+
+              <DetailDrawer.Section label="Work Log">
+                {selectedRequest.workLog?.length ? (
+                  <div className="admin-maintenance__history-list">
+                    {selectedRequest.workLog.map((entry, index) => (
+                      <article
+                        key={`${entry.logged_at}-${index}`}
+                        className="admin-maintenance__history-item"
+                      >
+                        <strong>{fmtDateTime(entry.logged_at)}</strong>
+                        <span>{entry.actor_name || "Staff update"}</span>
+                        <p>{entry.note}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="admin-maintenance__empty-inline">
+                    <ClipboardList size={16} />
+                    No work log entries yet.
+                  </div>
+                )}
+              </DetailDrawer.Section>
+
               <DetailDrawer.Section label="Admin Response">
                 {selectedRequest.status === "cancelled" ? (
                   <div className="admin-maintenance__callout">
@@ -850,6 +1034,17 @@ export default function AdminMaintenancePage() {
                       disabled={selectedRequest.status === "cancelled"}
                     />
                   </label>
+
+                  <label className="admin-maintenance__field">
+                    <span>Work Log Note</span>
+                    <textarea
+                      rows="3"
+                      placeholder="Optional internal progress note for the status timeline and work log."
+                      value={draftWorkLogNote}
+                      onChange={(event) => setDraftWorkLogNote(event.target.value)}
+                      disabled={selectedRequest.status === "cancelled"}
+                    />
+                  </label>
                 </form>
               </DetailDrawer.Section>
             </>
@@ -860,4 +1055,3 @@ export default function AdminMaintenancePage() {
     </div>
   );
 }
-

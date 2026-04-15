@@ -10,6 +10,7 @@ const resolveBillStatus = jest.fn((bill) => bill.status);
 const syncBillAmounts = jest.fn();
 const getPenaltyRatePerDay = jest.fn(async () => 50);
 const resolvePenaltyRatePerDay = jest.fn((rate) => rate || 50);
+const dispatchDueScheduledAnnouncements = jest.fn();
 const notify = {
   reservationExpired: jest.fn(),
   reservationNoShow: jest.fn(),
@@ -96,6 +97,10 @@ await jest.unstable_mockModule("./rentGenerator.js", () => ({
   generateAutomatedRentBills: jest.fn(),
 }));
 
+await jest.unstable_mockModule("./announcementDispatch.js", () => ({
+  dispatchDueScheduledAnnouncements,
+}));
+
 await jest.unstable_mockModule("./lifecycleNaming.js", () => ({
   CURRENT_RESIDENT_STATUS_QUERY: ["moveIn"],
   readMoveInDate: (reservation) => reservation.moveInDate || null,
@@ -136,6 +141,7 @@ describe("scheduler jobs", () => {
     getPenaltyRatePerDay.mockResolvedValue(50);
     resolvePenaltyRatePerDay.mockReset();
     resolvePenaltyRatePerDay.mockImplementation((rate) => rate || 50);
+    dispatchDueScheduledAnnouncements.mockReset();
     notify.reservationExpired.mockReset();
     notify.reservationNoShow.mockReset();
     notify.penaltyApplied.mockReset();
@@ -252,5 +258,16 @@ describe("scheduler jobs", () => {
     expect(noDueDateBill.save).not.toHaveBeenCalled();
     expect(syncBillAmounts).not.toHaveBeenCalled();
     expect(notify.penaltyApplied).not.toHaveBeenCalled();
+  });
+
+  test("dispatchScheduledAnnouncements runs the scheduled announcement dispatcher", async () => {
+    dispatchDueScheduledAnnouncements.mockResolvedValue({
+      dueCount: 2,
+      dispatchedCount: 1,
+    });
+
+    await scheduler.dispatchScheduledAnnouncements();
+
+    expect(dispatchDueScheduledAnnouncements).toHaveBeenCalledTimes(1);
   });
 });

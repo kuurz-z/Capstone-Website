@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import {
   BellRing,
+  FileDown,
   LoaderCircle,
   Megaphone,
   Send,
@@ -14,6 +15,7 @@ import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { showNotification } from "../../../shared/utils/notification";
 import { BRANCH_OPTIONS } from "../../../shared/utils/constants";
+import { exportToCSV } from "../../../shared/utils/exportUtils";
 import {
   ANNOUNCEMENT_CATEGORY_OPTIONS,
   formatAnnouncementBranch,
@@ -34,9 +36,17 @@ import "../styles/admin-announcements.css";
 const INITIAL_FORM = {
   title: "",
   content: "",
+  contentType: "announcement",
   category: "general",
   targetBranch: "both",
   requiresAcknowledgment: false,
+  publicationStatus: "published",
+  startsAt: "",
+  endsAt: "",
+  policyKey: "",
+  version: 1,
+  effectiveDate: "",
+  isPinned: false,
 };
 
 const formatDateTime = (value) =>
@@ -47,6 +57,14 @@ const formatDateTime = (value) =>
     hour: "numeric",
     minute: "2-digit",
   });
+
+const toDateTimeLocal = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 16);
+};
 
 export default function AdminAnnouncementsPage() {
   const { user } = useAuth();
@@ -67,14 +85,12 @@ export default function AdminAnnouncementsPage() {
   const stats = useMemo(
     () => ({
       total: announcements.length,
+      policies: announcements.filter((item) => item.contentType === "policy").length,
       ackRequired: announcements.filter((item) => item.requiresAcknowledgment)
         .length,
-      latestBranch:
-        announcements.length > 0
-          ? formatAnnouncementBranch(announcements[0].targetBranch)
-          : formatAnnouncementBranch(isOwner ? "both" : defaultBranch),
+      scheduled: announcements.filter((item) => item.publicationStatus === "scheduled").length,
     }),
-    [announcements, defaultBranch, isOwner],
+    [announcements],
   );
 
   if (!can("manageAnnouncements")) {
@@ -82,7 +98,59 @@ export default function AdminAnnouncementsPage() {
   }
 
   const handleChange = (field, value) => {
-    setForm((previous) => ({ ...previous, [field]: value }));
+    setForm((previous) => {
+      if (field === "contentType" && value === "policy") {
+        return {
+          ...previous,
+          contentType: value,
+          category: "policy",
+          requiresAcknowledgment: true,
+        };
+      }
+
+      if (field === "publicationStatus" && value === "scheduled" && !previous.startsAt) {
+        const nextStart = new Date(Date.now() + 60 * 60 * 1000);
+        return {
+          ...previous,
+          publicationStatus: value,
+          startsAt: toDateTimeLocal(nextStart),
+        };
+      }
+
+      return { ...previous, [field]: value };
+    });
+  };
+
+  const handleExport = () => {
+    exportToCSV(
+      announcements.map((announcement) => ({
+        title: announcement.title,
+        type: announcement.contentType || "announcement",
+        category: announcement.category,
+        branch: formatAnnouncementBranch(announcement.targetBranch),
+        publicationStatus: announcement.publicationStatus,
+        startsAt: announcement.startsAt ? formatDateTime(announcement.startsAt) : "",
+        endsAt: announcement.endsAt ? formatDateTime(announcement.endsAt) : "",
+        requiresAck: announcement.requiresAcknowledgment ? "Yes" : "No",
+        acknowledgmentCount: announcement.acknowledgmentCount || 0,
+        recipientCount: announcement.recipientCount || 0,
+        completion: `${announcement.acknowledgmentCompletionPercent || 0}%`,
+      })),
+      [
+        { key: "title", label: "Title" },
+        { key: "type", label: "Type" },
+        { key: "category", label: "Category" },
+        { key: "branch", label: "Branch" },
+        { key: "publicationStatus", label: "Status" },
+        { key: "startsAt", label: "Starts At" },
+        { key: "endsAt", label: "Ends At" },
+        { key: "requiresAck", label: "Requires Ack" },
+        { key: "acknowledgmentCount", label: "Acknowledgments" },
+        { key: "recipientCount", label: "Recipients" },
+        { key: "completion", label: "Completion" },
+      ],
+      "announcements-and-policies",
+    );
   };
 
   const handleSubmit = async (event) => {
@@ -91,9 +159,20 @@ export default function AdminAnnouncementsPage() {
     const payload = {
       title: form.title.trim(),
       content: form.content.trim(),
+      contentType: form.contentType,
       category: form.category,
       requiresAcknowledgment: form.requiresAcknowledgment,
+      publicationStatus: form.publicationStatus,
+      startsAt: form.publicationStatus === "scheduled" ? (form.startsAt || undefined) : undefined,
+      endsAt: form.publicationStatus === "scheduled" ? (form.endsAt || undefined) : undefined,
+      isPinned: form.isPinned,
     };
+
+    if (form.contentType === "policy") {
+      payload.policyKey = form.policyKey.trim();
+      payload.version = Number(form.version) || 1;
+      payload.effectiveDate = form.effectiveDate || form.startsAt || undefined;
+    }
 
     if (isOwner) {
       payload.targetBranch = form.targetBranch;
@@ -102,7 +181,7 @@ export default function AdminAnnouncementsPage() {
     try {
       const result = await createAnnouncement.mutateAsync(payload);
       showNotification(
-        `Announcement published to ${result.recipientCount} tenant${
+        `${form.contentType === "policy" ? "Policy" : "Announcement"} saved for ${result.recipientCount} tenant${
           result.recipientCount === 1 ? "" : "s"
         }.`,
         "success",
@@ -183,12 +262,16 @@ export default function AdminAnnouncementsPage() {
           <p className="admin-stat-value">{stats.total}</p>
         </article>
         <article className="admin-stat-card">
-          <p className="admin-stat-label">Ack Required</p>
-          <p className="admin-stat-value">{stats.ackRequired}</p>
+          <p className="admin-stat-label">Policies</p>
+          <p className="admin-stat-value">{stats.policies}</p>
         </article>
         <article className="admin-stat-card">
-          <p className="admin-stat-label">Primary Scope</p>
-          <p className="admin-stat-value">{stats.latestBranch}</p>
+          <p className="admin-stat-label">Scheduled</p>
+          <p className="admin-stat-value">{stats.scheduled}</p>
+        </article>
+        <article className="admin-stat-card">
+          <p className="admin-stat-label">Ack Required</p>
+          <p className="admin-stat-value">{stats.ackRequired}</p>
         </article>
       </div>
 
@@ -196,8 +279,8 @@ export default function AdminAnnouncementsPage() {
         <section className="admin-announcements-card">
           <div className="admin-announcements-card__header">
             <div>
-              <h2>Publish Announcement</h2>
-              <p>Tenant-only delivery with optional acknowledgment tracking.</p>
+              <h2>Publish Notice</h2>
+              <p>Draft, schedule, or publish announcements and governed policy updates.</p>
             </div>
             <Megaphone size={20} />
           </div>
@@ -217,6 +300,17 @@ export default function AdminAnnouncementsPage() {
 
             <div className="admin-announcements-form__row">
               <label className="admin-announcements-field">
+                <span>Record Type</span>
+                <select
+                  value={form.contentType}
+                  onChange={(event) => handleChange("contentType", event.target.value)}
+                >
+                  <option value="announcement">Announcement</option>
+                  <option value="policy">Policy</option>
+                </select>
+              </label>
+
+              <label className="admin-announcements-field">
                 <span>Category</span>
                 <select
                   value={form.category}
@@ -230,6 +324,22 @@ export default function AdminAnnouncementsPage() {
                 </select>
               </label>
 
+              <label className="admin-announcements-field">
+                <span>Publish Mode</span>
+                <select
+                  value={form.publicationStatus}
+                  onChange={(event) =>
+                    handleChange("publicationStatus", event.target.value)
+                  }
+                >
+                  <option value="published">Publish now</option>
+                  <option value="scheduled">Schedule</option>
+                  <option value="draft">Save draft</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="admin-announcements-form__row">
               <label className="admin-announcements-field">
                 <span>Target Branch</span>
                 {isOwner ? (
@@ -254,7 +364,64 @@ export default function AdminAnnouncementsPage() {
                   />
                 )}
               </label>
+
+              {form.publicationStatus === "scheduled" && (
+                <>
+                  <label className="admin-announcements-field">
+                    <span>Starts At</span>
+                    <input
+                      type="datetime-local"
+                      value={form.startsAt || ""}
+                      onChange={(event) => handleChange("startsAt", event.target.value)}
+                    />
+                  </label>
+
+                  <label className="admin-announcements-field">
+                    <span>Ends At</span>
+                    <input
+                      type="datetime-local"
+                      value={form.endsAt || ""}
+                      onChange={(event) => handleChange("endsAt", event.target.value)}
+                    />
+                  </label>
+                </>
+              )}
             </div>
+
+            {form.contentType === "policy" ? (
+              <div className="admin-announcements-form__row">
+                <label className="admin-announcements-field">
+                  <span>Policy Key</span>
+                  <input
+                    type="text"
+                    value={form.policyKey}
+                    onChange={(event) => handleChange("policyKey", event.target.value)}
+                    placeholder="house-rules"
+                  />
+                </label>
+
+                <label className="admin-announcements-field">
+                  <span>Version</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.version}
+                    onChange={(event) => handleChange("version", event.target.value)}
+                  />
+                </label>
+
+                <label className="admin-announcements-field">
+                  <span>Effective Date</span>
+                  <input
+                    type="datetime-local"
+                    value={form.effectiveDate}
+                    onChange={(event) =>
+                      handleChange("effectiveDate", event.target.value)
+                    }
+                  />
+                </label>
+              </div>
+            ) : null}
 
             <label className="admin-announcements-field">
               <span>Message</span>
@@ -284,6 +451,18 @@ export default function AdminAnnouncementsPage() {
               </span>
             </label>
 
+            <label className="admin-announcements-toggle">
+              <input
+                type="checkbox"
+                checked={form.isPinned}
+                onChange={(event) => handleChange("isPinned", event.target.checked)}
+              />
+              <span>
+                <strong>Pin this notice</strong>
+                <small>Keep this notice near the top of the tenant feed.</small>
+              </span>
+            </label>
+
             <div className="admin-announcements-actions">
               <button
                 className="admin-btn-primary"
@@ -300,7 +479,13 @@ export default function AdminAnnouncementsPage() {
                 )}
                 {createAnnouncement.isPending
                   ? "Publishing..."
-                  : "Publish Announcement"}
+                  : form.publicationStatus === "draft"
+                    ? "Save Draft"
+                    : form.publicationStatus === "scheduled"
+                      ? "Schedule Notice"
+                      : form.contentType === "policy"
+                        ? "Publish Policy"
+                        : "Publish Announcement"}
               </button>
             </div>
           </form>
@@ -312,12 +497,24 @@ export default function AdminAnnouncementsPage() {
               <h2>Recent Announcements</h2>
               <p>Latest tenant-facing announcements in your admin scope.</p>
             </div>
-            {isFetching ? (
-              <LoaderCircle
-                size={18}
-                className="admin-announcements-spin"
-              />
-            ) : null}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                type="button"
+                className="admin-btn-secondary"
+                onClick={handleExport}
+                disabled={announcements.length === 0}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+              >
+                <FileDown size={15} />
+                Export CSV
+              </button>
+              {isFetching ? (
+                <LoaderCircle
+                  size={18}
+                  className="admin-announcements-spin"
+                />
+              ) : null}
+            </div>
           </div>
 
           {isLoading ? (
@@ -348,6 +545,11 @@ export default function AdminAnnouncementsPage() {
                       <div>
                         <h3>{announcement.title}</h3>
                         <p>{announcement.content}</p>
+                        {announcement.contentType === "policy" ? (
+                          <p style={{ marginTop: 8, color: "#64748B", fontSize: 13 }}>
+                            Policy key: {announcement.policyKey || "auto"} • Version {announcement.version || 1}
+                          </p>
+                        ) : null}
                       </div>
                       <span
                         className={`admin-announcement-pill admin-announcement-pill--${categoryMeta.tone}`}
@@ -363,7 +565,7 @@ export default function AdminAnnouncementsPage() {
                       {announcement.requiresAcknowledgment ? (
                         <span className="admin-announcement-pill admin-announcement-pill--ack">
                           <ShieldAlert size={13} />
-                          Ack Required
+                          {announcement.acknowledgmentCount || 0}/{announcement.recipientCount || 0} acknowledged
                         </span>
                       ) : (
                         <span className="admin-announcement-pill admin-announcement-pill--notify">
@@ -372,7 +574,15 @@ export default function AdminAnnouncementsPage() {
                         </span>
                       )}
                       <span className="admin-announcement-meta-text">
-                        {formatDateTime(announcement.publishedAt)}
+                        {announcement.startsAt
+                          ? `Starts ${formatDateTime(announcement.startsAt)}`
+                          : "No start date"}
+                      </span>
+                      <span className="admin-announcement-meta-text">
+                        {announcement.publicationStatus}
+                      </span>
+                      <span className="admin-announcement-meta-text">
+                        Views {announcement.viewCount || 0}
                       </span>
                       <div className="admin-announcement-item__actions style-overrides">
                         <button

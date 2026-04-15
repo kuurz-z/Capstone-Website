@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Activity,
   Clock3,
+  FileDown,
   LayoutGrid,
   Settings,
   Plus,
@@ -23,6 +24,7 @@ import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { roomApi } from "../../../shared/api/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { showNotification } from "../../../shared/utils/notification";
+import { exportToCSV } from "../../../shared/utils/exportUtils";
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import { formatRoomType, formatBranch } from "../utils/formatters";
 import OccupancyTrackingPage from "./OccupancyTrackingPage";
@@ -246,36 +248,68 @@ function RoomAvailabilityPage() {
 
   // Handlers
   const handleConfigure = (room) => {
-    setSelectedRoom(room);
-  };
-
-  const handleToggleBed = (bedId) => {
-    if (!selectedRoom) return;
-    const updatedBeds = selectedRoom.beds.map((bed) => {
-      if (bed.id !== bedId) return bed;
-      const currentStatus = bed.status || (bed.available === false ? "occupied" : "available");
-      if (currentStatus === "occupied") return bed;
-      const newStatus = currentStatus === "available" ? "maintenance" : "available";
-      return { ...bed, status: newStatus };
+    setSelectedRoom({
+      ...room,
+      beds: (room.beds || []).map((bed) => ({
+        ...bed,
+        originalId: bed.originalId || bed.id,
+      })),
     });
-    setSelectedRoom({ ...selectedRoom, beds: updatedBeds });
   };
 
   const handleSaveConfig = async (updatedRoom) => {
     try {
       const originalRoom = rooms.find((room) => room._id === updatedRoom._id);
-      const changedBeds = (updatedRoom.beds || []).filter((bed) => {
-        const previousBed = originalRoom?.beds?.find((entry) => entry.id === bed.id);
-        return previousBed && previousBed.status !== bed.status;
-      });
-
-      await Promise.all(
-        changedBeds.map((bed) =>
-          roomApi.updateBedStatus(updatedRoom._id, bed.id, bed.status),
-        ),
+      const originalBeds = originalRoom?.beds || [];
+      const updatedBeds = updatedRoom.beds || [];
+      const originalById = new Map(originalBeds.map((bed) => [bed.id, bed]));
+      const keptOriginalIds = new Set(
+        updatedBeds
+          .map((bed) => bed.originalId)
+          .filter(Boolean),
       );
+      const removedBeds = originalBeds.filter((bed) => !keptOriginalIds.has(bed.id));
+      const newBeds = updatedBeds.filter((bed) => !bed.originalId);
+      const existingBeds = updatedBeds.filter((bed) => bed.originalId);
+
+      for (const bed of removedBeds) {
+        await roomApi.deleteBed(updatedRoom._id, bed.id);
+      }
+
+      for (const bed of existingBeds) {
+        const previousBed = originalById.get(bed.originalId);
+        if (!previousBed) continue;
+
+        if (previousBed.id !== bed.id || previousBed.position !== bed.position) {
+          await roomApi.updateBed(updatedRoom._id, previousBed.id, {
+            id: bed.id,
+            position: bed.position,
+          });
+        }
+
+        if ((previousBed.status || "available") !== (bed.status || "available")) {
+          await roomApi.updateBedStatus(updatedRoom._id, bed.id, bed.status);
+        }
+      }
+
+      for (const bed of newBeds) {
+        await roomApi.addBed(updatedRoom._id, {
+          id: bed.id,
+          position: bed.position,
+        });
+        if (bed.status === "maintenance") {
+          await roomApi.updateBedStatus(updatedRoom._id, bed.id, bed.status);
+        }
+      }
+
+      await roomApi.reorderBeds(
+        updatedRoom._id,
+        updatedBeds.map((bed) => bed.id),
+      );
+
       showNotification("Room configuration updated", "success");
       queryClient.invalidateQueries({ queryKey: ["digital-twin", "snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
       setSelectedRoom(null);
     } catch (err) {
       showNotification(err.message || "Failed to update", "error");
@@ -316,6 +350,32 @@ function RoomAvailabilityPage() {
     const next = new URLSearchParams(searchParams);
     next.set("tab", nextTab);
     setSearchParams(next);
+  };
+
+  const handleExportRooms = () => {
+    exportToCSV(
+      filteredRooms.map((room) => ({
+        roomName: room.name,
+        roomNumber: room.roomNumber,
+        branch: formatBranch(room.branch),
+        type: formatRoomType(room.type),
+        floor: room.floor,
+        capacity: room.capacity,
+        currentOccupancy: room.currentOccupancy || 0,
+        status: `${room.currentOccupancy || 0}/${room.capacity || 0}`,
+      })),
+      [
+        { key: "roomName", label: "Room Name" },
+        { key: "roomNumber", label: "Room Number" },
+        { key: "branch", label: "Branch" },
+        { key: "type", label: "Type" },
+        { key: "floor", label: "Floor" },
+        { key: "capacity", label: "Capacity" },
+        { key: "currentOccupancy", label: "Occupied" },
+        { key: "status", label: "Occupancy" },
+      ],
+      "room-inventory",
+    );
   };
 
   // Config — 2 tabs: Rooms (merged with Bed Config) + Occupancy
@@ -544,8 +604,19 @@ function RoomAvailabilityPage() {
                       variant: "primary",
                       onClick: () => setShowCreateModal(true),
                     },
+                    {
+                      label: "Export CSV",
+                      icon: FileDown,
+                      onClick: handleExportRooms,
+                    },
                   ]
-                : []
+                : [
+                    {
+                      label: "Export CSV",
+                      icon: FileDown,
+                      onClick: handleExportRooms,
+                    },
+                  ]
             }
           />
         )}
@@ -747,7 +818,6 @@ function RoomAvailabilityPage() {
         {selectedRoom && (
           <RoomConfigModal
             room={selectedRoom}
-            onToggleBed={handleToggleBed}
             onClose={() => setSelectedRoom(null)}
             onSave={handleSaveConfig}
             onEdit={(room) => {

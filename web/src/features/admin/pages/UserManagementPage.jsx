@@ -579,6 +579,22 @@ function UserManagementPage() {
       </PageShell.Summary>
 
       <PageShell.Actions>
+        {!isOwner ? (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "12px 14px",
+              borderRadius: 12,
+              background: "#FFF7ED",
+              color: "#9A3412",
+              fontSize: 13,
+              border: "1px solid #FED7AA",
+            }}
+          >
+            Branch admins can manage applicant and tenant account status inside their own branch.
+            Owner-only role changes and cross-branch updates are intentionally hidden here.
+          </div>
+        ) : null}
         <ActionBar
           search={{
             value: searchQuery,

@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   ClipboardList,
+  LoaderCircle,
+  Paperclip,
   Plus,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import {
@@ -18,6 +21,7 @@ import {
   getMaintenanceTypeMeta,
   getMaintenanceUrgencyMeta,
 } from "../../../../shared/utils/maintenanceConfig";
+import { uploadToImageKit } from "../../../../shared/utils/imageUpload";
 import "../../styles/tenant-common.css";
 
 const fmtDate = (value) => {
@@ -30,12 +34,34 @@ const fmtDate = (value) => {
   });
 };
 
+const fmtDateTime = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  return date.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const formatSlaLabel = (slaState) => {
+  if (!slaState) return "No SLA";
+  if (slaState.label === "delayed") return "Delayed";
+  if (slaState.label === "priority") return "Priority";
+  if (slaState.label === "closed") return "Closed";
+  return "On Track";
+};
+
 export default function TenantMaintenanceWorkspace({ embedded = false }) {
   const [showForm, setShowForm] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [formData, setFormData] = useState({
     request_type: "other",
     urgency: "normal",
     description: "",
+    attachments: [],
   });
 
   const { data, isLoading } = useMyMaintenanceRequests({ limit: 50 });
@@ -55,6 +81,42 @@ export default function TenantMaintenanceWorkspace({ embedded = false }) {
     [requests],
   );
 
+  const handleAttachmentUpload = async (event) => {
+    const files = Array.from(event.target.files || []).filter(Boolean);
+    if (files.length === 0) return;
+
+    setUploadingAttachment(true);
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        const uri = await uploadToImageKit(file);
+        uploaded.push({
+          name: file.name,
+          uri,
+          type: file.type || "application/octet-stream",
+        });
+      }
+
+      setFormData((current) => ({
+        ...current,
+        attachments: [...(current.attachments || []), ...uploaded],
+      }));
+      showNotification("Attachment uploaded.", "success");
+    } catch (error) {
+      showNotification(error.message || "Failed to upload attachment.", "error");
+    } finally {
+      setUploadingAttachment(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleRemoveAttachment = (uri) => {
+    setFormData((current) => ({
+      ...current,
+      attachments: (current.attachments || []).filter((entry) => entry.uri !== uri),
+    }));
+  };
+
   const handleSubmitRequest = async (event) => {
     event.preventDefault();
 
@@ -64,6 +126,7 @@ export default function TenantMaintenanceWorkspace({ embedded = false }) {
         request_type: "other",
         urgency: "normal",
         description: "",
+        attachments: [],
       });
       setShowForm(false);
       showNotification("Maintenance request submitted.", "success");
@@ -83,8 +146,8 @@ export default function TenantMaintenanceWorkspace({ embedded = false }) {
             <Wrench size={22} /> Maintenance Requests
           </h1>
           <p>
-            Report issues, check request progress, and review admin responses
-            from one place.
+            Report repair, room, or bed concerns, check request progress, and
+            review admin responses from one place.
           </p>
         </div>
         <button
@@ -166,6 +229,66 @@ export default function TenantMaintenanceWorkspace({ embedded = false }) {
               />
             </div>
 
+            <div className="form-group">
+              <label htmlFor="maintenance-attachments">Attachments</label>
+              <label
+                htmlFor="maintenance-attachments"
+                className="btn btn-secondary"
+                style={{ width: "fit-content", display: "inline-flex", alignItems: "center", gap: 8 }}
+              >
+                {uploadingAttachment ? <LoaderCircle size={16} className="admin-announcements-spin" /> : <Paperclip size={16} />}
+                {uploadingAttachment ? "Uploading..." : "Upload photo or file"}
+              </label>
+              <input
+                id="maintenance-attachments"
+                type="file"
+                hidden
+                multiple
+                accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
+                onChange={handleAttachmentUpload}
+              />
+              {formData.attachments?.length ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 8,
+                    marginTop: 10,
+                  }}
+                >
+                  {formData.attachments.map((attachment) => (
+                    <div
+                      key={attachment.uri}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        padding: "10px 12px",
+                        borderRadius: 12,
+                        background: "#F8FAFC",
+                      }}
+                    >
+                      <span style={{ color: "#334155", fontSize: 13 }}>
+                        {attachment.name}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => handleRemoveAttachment(attachment.uri)}
+                        style={{ padding: "6px 10px" }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ marginTop: 8, color: "#64748B", fontSize: 13 }}>
+                  Attach photos of leaks, broken beds, damaged fixtures, or related proof.
+                </p>
+              )}
+            </div>
+
             <div className="form-actions">
               <button
                 type="button"
@@ -177,7 +300,7 @@ export default function TenantMaintenanceWorkspace({ embedded = false }) {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || uploadingAttachment}
               >
                 {createMutation.isPending ? "Submitting..." : "Submit Request"}
               </button>
@@ -322,11 +445,41 @@ export default function TenantMaintenanceWorkspace({ embedded = false }) {
                     }}
                   >
                     <span>ETA: {urgencyMeta.estimate}</span>
+                    <span>SLA: {formatSlaLabel(request.slaState)}</span>
                     <span>Attachments: {request.attachments?.length || 0}</span>
                     {request.reopen_note ? (
                       <span>Reopen note saved</span>
                     ) : null}
                   </div>
+
+                  {request.attachments?.length ? (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        display: "grid",
+                        gap: 8,
+                      }}
+                    >
+                      {request.attachments.map((attachment, index) => (
+                        <a
+                          key={`${attachment.uri}-${index}`}
+                          href={attachment.uri}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            color: "#2563EB",
+                            fontSize: 13,
+                          }}
+                        >
+                          <Paperclip size={14} />
+                          {attachment.name || `Attachment ${index + 1}`}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
 
                   {request.notes ? (
                     <div
@@ -348,6 +501,33 @@ export default function TenantMaintenanceWorkspace({ embedded = false }) {
                         </strong>
                         <span>{request.notes}</span>
                       </div>
+                    </div>
+                  ) : null}
+
+                  {request.statusHistory?.length ? (
+                    <div
+                      style={{
+                        marginTop: 14,
+                        display: "grid",
+                        gap: 10,
+                        paddingTop: 14,
+                        borderTop: "1px solid rgba(15, 23, 42, 0.08)",
+                      }}
+                    >
+                      {request.statusHistory.map((entry, index) => (
+                        <div key={`${entry.timestamp}-${index}`}>
+                          <strong style={{ display: "block", color: "#0F172A", fontSize: 13 }}>
+                            {fmtDateTime(entry.timestamp)}
+                          </strong>
+                          <span style={{ color: "#475569", fontSize: 13 }}>
+                            {formatMaintenanceStatus(entry.status)}
+                            {entry.actor_name ? ` • ${entry.actor_name}` : ""}
+                          </span>
+                          <p style={{ margin: "4px 0 0", color: "#64748B", fontSize: 13 }}>
+                            {entry.note || entry.event || "Status updated."}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </article>

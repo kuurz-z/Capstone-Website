@@ -27,8 +27,9 @@ const acknowledgmentFind = jest.fn();
 const acknowledgmentFindOne = jest.fn();
 const acknowledgmentCreateForAnnouncement = jest.fn();
 const acknowledgmentStats = jest.fn();
-const createNotification = jest.fn();
-const emitToUser = jest.fn();
+const fetchAnnouncementRecipients = jest.fn();
+const upsertAnnouncementAcknowledgmentAudience = jest.fn();
+const dispatchAnnouncementNotifications = jest.fn();
 const sendSuccess = jest.fn();
 const logModification = jest.fn();
 const logError = jest.fn();
@@ -42,6 +43,7 @@ const Announcement = jest.fn(function Announcement(data) {
   this.publishedBy = data.publishedBy;
   this.requiresAcknowledgment = data.requiresAcknowledgment;
   this.visibility = data.visibility;
+  this.publicationStatus = data.publicationStatus || "published";
   this.publishedAt = data.publishedAt || new Date("2026-04-09T08:00:00Z");
   this.startsAt = data.startsAt || new Date("2026-04-09T08:00:00Z");
   this.isPinned = Boolean(data.isPinned);
@@ -56,6 +58,7 @@ const Announcement = jest.fn(function Announcement(data) {
     publishedBy: this.publishedBy,
     requiresAcknowledgment: this.requiresAcknowledgment,
     visibility: this.visibility,
+    publicationStatus: this.publicationStatus,
     publishedAt: this.publishedAt,
     startsAt: this.startsAt,
     isPinned: this.isPinned,
@@ -124,12 +127,24 @@ await jest.unstable_mockModule("../utils/auditLogger.js", () => ({
   },
 }));
 
-await jest.unstable_mockModule("../utils/notificationService.js", () => ({
-  createNotification,
-}));
-
-await jest.unstable_mockModule("../utils/socket.js", () => ({
-  emitToUser,
+await jest.unstable_mockModule("../utils/announcementDispatch.js", () => ({
+  buildRecipientQuery: (targetBranch) => ({
+    role: "tenant",
+    isArchived: false,
+    accountStatus: "active",
+    branch:
+      targetBranch === "both"
+        ? { $in: ["gil-puyat", "guadalupe"] }
+        : targetBranch,
+  }),
+  fetchAnnouncementRecipients,
+  upsertAnnouncementAcknowledgmentAudience,
+  dispatchAnnouncementNotifications,
+  isAnnouncementLive: (announcement) =>
+    ["scheduled", "published"].includes(announcement.publicationStatus) &&
+    (!announcement.startsAt || announcement.startsAt <= new Date()) &&
+    (!announcement.endsAt || announcement.endsAt > new Date()) &&
+    !announcement.isArchived,
 }));
 
 const {
@@ -150,8 +165,9 @@ describe("announcementsController", () => {
     acknowledgmentFindOne.mockReset();
     acknowledgmentCreateForAnnouncement.mockReset();
     acknowledgmentStats.mockReset();
-    createNotification.mockReset();
-    emitToUser.mockReset();
+    fetchAnnouncementRecipients.mockReset();
+    upsertAnnouncementAcknowledgmentAudience.mockReset();
+    dispatchAnnouncementNotifications.mockReset();
     sendSuccess.mockReset();
     logModification.mockReset();
     logError.mockReset();
@@ -167,36 +183,17 @@ describe("announcementsController", () => {
         lastName: "Admin",
       }),
     );
-    userFind.mockReturnValue(
-      createSelectableChain([{ _id: "tenant-1" }, { _id: "tenant-2" }]),
-    );
-    createNotification
-      .mockResolvedValueOnce({
-        _id: "notification-1",
-        userId: "tenant-1",
-        isRead: false,
-        toObject: () => ({
-          _id: "notification-1",
-          userId: "tenant-1",
-          isRead: false,
-          title: "Water outage",
-          message: "Temporary outage",
-          actionUrl: "/applicant/announcements",
-        }),
-      })
-      .mockResolvedValueOnce({
-        _id: "notification-2",
-        userId: "tenant-2",
-        isRead: false,
-        toObject: () => ({
-          _id: "notification-2",
-          userId: "tenant-2",
-          isRead: false,
-          title: "Water outage",
-          message: "Temporary outage",
-          actionUrl: "/applicant/announcements",
-        }),
-      });
+    fetchAnnouncementRecipients.mockResolvedValue([
+      { _id: "tenant-1" },
+      { _id: "tenant-2" },
+    ]);
+    upsertAnnouncementAcknowledgmentAudience.mockResolvedValue([
+      { _id: "tenant-1" },
+      { _id: "tenant-2" },
+    ]);
+    dispatchAnnouncementNotifications.mockResolvedValue({
+      notificationCount: 2,
+    });
 
     const req = {
       user: { uid: "firebase-admin-1" },
@@ -219,18 +216,11 @@ describe("announcementsController", () => {
         visibility: "tenants-only",
       }),
     );
-    expect(userFind).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "tenant",
-        accountStatus: "active",
-        branch: "gil-puyat",
-      }),
+    expect(fetchAnnouncementRecipients).toHaveBeenCalledWith("gil-puyat");
+    expect(dispatchAnnouncementNotifications).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "announcement-1" }),
+      { recipients: [{ _id: "tenant-1" }, { _id: "tenant-2" }] },
     );
-    expect(acknowledgmentCreateForAnnouncement).toHaveBeenCalledWith(
-      "announcement-1",
-      ["tenant-1", "tenant-2"],
-    );
-    expect(emitToUser).toHaveBeenCalledTimes(2);
     expect(logModification).toHaveBeenCalled();
     expect(sendSuccess).toHaveBeenCalledWith(
       res,
@@ -251,7 +241,10 @@ describe("announcementsController", () => {
         branch: "gil-puyat",
       }),
     );
-    userFind.mockReturnValue(createSelectableChain([]));
+    fetchAnnouncementRecipients.mockResolvedValue([]);
+    dispatchAnnouncementNotifications.mockResolvedValue({
+      notificationCount: 0,
+    });
 
     const req = {
       user: { uid: "firebase-owner-1" },
@@ -261,6 +254,7 @@ describe("announcementsController", () => {
         category: "policy",
         targetBranch: "both",
         requiresAcknowledgment: false,
+        startsAt: "2026-04-01T08:00:00.000Z",
       },
     };
     const res = { req };
@@ -272,10 +266,94 @@ describe("announcementsController", () => {
         targetBranch: "both",
       }),
     );
-    expect(userFind).toHaveBeenCalledWith(
-      expect.objectContaining({
-        branch: { $in: ["gil-puyat", "guadalupe"] },
+    expect(fetchAnnouncementRecipients).toHaveBeenCalledWith("both");
+  });
+
+  test("future scheduled announcements do not dispatch immediately", async () => {
+    userFindOne.mockReturnValue(
+      createSelectableChain({
+        _id: "owner-2",
+        role: "owner",
+        branch: "gil-puyat",
       }),
+    );
+    dispatchAnnouncementNotifications.mockResolvedValue({
+      notificationCount: 0,
+      dispatched: false,
+      skippedReason: "not-live",
+    });
+
+    const req = {
+      user: { uid: "firebase-owner-2" },
+      body: {
+        title: "Future notice",
+        content: "Starts later.",
+        category: "general",
+        targetBranch: "both",
+        publicationStatus: "scheduled",
+        startsAt: "2099-01-01T08:00:00.000Z",
+        requiresAcknowledgment: false,
+      },
+    };
+    const res = { req };
+
+    await createAnnouncement(req, res, jest.fn());
+
+    expect(fetchAnnouncementRecipients).not.toHaveBeenCalled();
+    expect(dispatchAnnouncementNotifications).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "announcement-1" }),
+      { recipients: [] },
+    );
+    expect(sendSuccess).toHaveBeenCalledWith(
+      res,
+      expect.objectContaining({
+        notificationCount: 0,
+      }),
+      201,
+    );
+  });
+
+  test("future scheduled acknowledgments are seeded before dispatch time", async () => {
+    userFindOne.mockReturnValue(
+      createSelectableChain({
+        _id: "owner-3",
+        role: "owner",
+        branch: "gil-puyat",
+      }),
+    );
+    fetchAnnouncementRecipients.mockResolvedValue([{ _id: "tenant-5" }]);
+    upsertAnnouncementAcknowledgmentAudience.mockResolvedValue([
+      { _id: "tenant-5" },
+    ]);
+    dispatchAnnouncementNotifications.mockResolvedValue({
+      notificationCount: 0,
+      dispatched: false,
+      skippedReason: "not-live",
+    });
+
+    const req = {
+      user: { uid: "firebase-owner-3" },
+      body: {
+        title: "Policy draft",
+        content: "Review later.",
+        category: "policy",
+        targetBranch: "both",
+        publicationStatus: "scheduled",
+        startsAt: "2099-01-01T08:00:00.000Z",
+        requiresAcknowledgment: true,
+      },
+    };
+    const res = { req };
+
+    await createAnnouncement(req, res, jest.fn());
+
+    expect(upsertAnnouncementAcknowledgmentAudience).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "announcement-1" }),
+      [{ _id: "tenant-5" }],
+    );
+    expect(dispatchAnnouncementNotifications).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "announcement-1" }),
+      { recipients: [{ _id: "tenant-5" }] },
     );
   });
 

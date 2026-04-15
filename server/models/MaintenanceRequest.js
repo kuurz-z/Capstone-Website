@@ -61,6 +61,75 @@ const reopenHistorySchema = new mongoose.Schema(
   { _id: false },
 );
 
+const statusHistorySchema = new mongoose.Schema(
+  {
+    event: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    status: {
+      type: String,
+      required: true,
+      enum: MAINTENANCE_STATUSES,
+    },
+    actor_id: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    actor_name: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    actor_role: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    note: {
+      type: String,
+      default: null,
+    },
+    timestamp: {
+      type: Date,
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
+const workLogSchema = new mongoose.Schema(
+  {
+    note: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    actor_id: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    actor_name: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    actor_role: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    logged_at: {
+      type: Date,
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
 const buildRequestId = () =>
   `maint_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
@@ -125,6 +194,10 @@ const maintenanceRequestSchema = new mongoose.Schema(
       type: [reopenHistorySchema],
       default: [],
     },
+    statusHistory: {
+      type: [statusHistorySchema],
+      default: [],
+    },
 
     cancelled_at: {
       type: Date,
@@ -133,6 +206,22 @@ const maintenanceRequestSchema = new mongoose.Schema(
     reopened_at: {
       type: Date,
       default: null,
+    },
+    assigned_at: {
+      type: Date,
+      default: null,
+    },
+    work_started_at: {
+      type: Date,
+      default: null,
+    },
+    resolution_note: {
+      type: String,
+      default: null,
+    },
+    work_log: {
+      type: [workLogSchema],
+      default: [],
     },
 
     // Internal compatibility/supporting fields

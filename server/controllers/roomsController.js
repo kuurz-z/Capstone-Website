@@ -60,6 +60,7 @@ const SYSTEM_OWNED_BED_FIELDS = Object.freeze([
 
 const SYSTEM_OWNED_BED_STATUSES = new Set(["locked", "reserved", "occupied"]);
 const ADMIN_EDITABLE_BED_STATUSES = new Set(["available", "maintenance"]);
+const BED_POSITIONS = new Set(["upper", "lower", "single"]);
 
 const normalizeRoomType = (rawType) => {
   if (!rawType) return null;
@@ -127,6 +128,12 @@ const parseNumber = (value) => {
   if (value === undefined || value === null || value === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : value;
+};
+
+const assertRoomId = (roomId) => {
+  if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
+    throw new AppError("Invalid room ID format", 400, "INVALID_ROOM_ID");
+  }
 };
 
 const pickFields = (payload, allowedFields) =>
@@ -306,6 +313,128 @@ const assertBranchCode = (branch) => {
   }
 };
 
+const buildManagedRoomQuery = (roomId, req) => {
+  const query = { _id: roomId, isArchived: false };
+  if (req.branchFilter) query.branch = req.branchFilter;
+  return query;
+};
+
+const findManagedRoom = async (roomId, req) => {
+  assertRoomId(roomId);
+
+  const room = await Room.findOne(buildManagedRoomQuery(roomId, req));
+  if (!room) {
+    throw new AppError("Room not found or access denied", 404, "ROOM_NOT_FOUND");
+  }
+
+  return room;
+};
+
+const getBedIndex = (room, bedId) =>
+  Array.isArray(room?.beds)
+    ? room.beds.findIndex((bed) => String(bed.id) === String(bedId))
+    : -1;
+
+const getBedOrThrow = (room, bedId) => {
+  const index = getBedIndex(room, bedId);
+  if (index === -1) {
+    throw new AppError("Bed not found", 404, "BED_NOT_FOUND");
+  }
+  return { index, bed: room.beds[index] };
+};
+
+const assertAdminMutableBed = (bed, action) => {
+  const currentStatus = String(bed?.status || "available");
+  if (!SYSTEM_OWNED_BED_STATUSES.has(currentStatus)) {
+    return;
+  }
+
+  throw new AppError(
+    `Cannot ${action} a bed while it is ${currentStatus}.`,
+    409,
+    "BED_MUTATION_BLOCKED",
+    { status: currentStatus },
+  );
+};
+
+const normalizeBedPosition = (value) => {
+  const normalized = String(value || "single").trim().toLowerCase();
+  if (!BED_POSITIONS.has(normalized)) {
+    throw new AppError(
+      `Invalid bed position. Use one of: ${[...BED_POSITIONS].join(", ")}.`,
+      400,
+      "INVALID_BED_POSITION",
+    );
+  }
+
+  return normalized;
+};
+
+const buildNextBedId = (room) => {
+  const nextNumber =
+    (room.beds || []).reduce((max, bed) => {
+      const match = String(bed.id || "").match(/^bed-(\d+)$/i);
+      if (!match) return max;
+      return Math.max(max, Number.parseInt(match[1], 10) || 0);
+    }, 0) + 1;
+
+  return `bed-${nextNumber}`;
+};
+
+const normalizeBedId = (room, value, { currentId = null } = {}) => {
+  const candidate = String(value || "").trim() || buildNextBedId(room);
+  const duplicate = (room.beds || []).some(
+    (bed) => bed.id === candidate && bed.id !== currentId,
+  );
+
+  if (duplicate) {
+    throw new AppError(
+      `Bed ID ${candidate} already exists in this room.`,
+      409,
+      "BED_ID_ALREADY_EXISTS",
+    );
+  }
+
+  return candidate;
+};
+
+const syncRoomCapacityFromBeds = (room) => {
+  const totalBeds = Array.isArray(room.beds) ? room.beds.length : 0;
+  if (room.type !== "private") {
+    room.capacity = Math.max(1, totalBeds);
+  }
+  room.available = room.currentOccupancy < room.capacity && !room.isArchived;
+};
+
+const reorderRoomBeds = (room, bedIds) => {
+  const requestedOrder = Array.isArray(bedIds)
+    ? bedIds.map((entry) => String(entry).trim()).filter(Boolean)
+    : [];
+
+  if (requestedOrder.length !== (room.beds || []).length) {
+    throw new AppError(
+      "Bed reorder payload must include every bed exactly once.",
+      400,
+      "INVALID_BED_REORDER",
+    );
+  }
+
+  const currentById = new Map((room.beds || []).map((bed) => [String(bed.id), bed]));
+  const reordered = requestedOrder.map((bedId) => {
+    const bed = currentById.get(bedId);
+    if (!bed) {
+      throw new AppError(
+        `Bed ${bedId} does not belong to this room.`,
+        400,
+        "INVALID_BED_REORDER",
+      );
+    }
+    return bed;
+  });
+
+  room.beds = reordered;
+};
+
 const ensureUniqueRoomNumber = async ({ roomId = null, branch, roomNumber }) => {
   const duplicate = await Room.findOne({
     _id: roomId ? { $ne: roomId } : { $exists: true },
@@ -455,9 +584,7 @@ export const getRoomById = async (req, res, next) => {
   try {
     const { roomId } = req.params;
 
-    if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
-      throw new AppError("Invalid room ID format", 400, "INVALID_ROOM_ID");
-    }
+    assertRoomId(roomId);
 
     const room = await Room.findOne({ _id: roomId, isArchived: false })
       .select("-__v")
@@ -597,17 +724,7 @@ export const updateRoom = async (req, res, next) => {
   try {
     const { roomId } = req.params;
 
-    if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
-      throw new AppError("Invalid room ID format", 400, "INVALID_ROOM_ID");
-    }
-
-    const query = { _id: roomId };
-    if (req.branchFilter) query.branch = req.branchFilter;
-
-    const existingRoom = await Room.findOne(query);
-    if (!existingRoom) {
-      throw new AppError("Room not found or access denied", 404, "ROOM_NOT_FOUND");
-    }
+    const existingRoom = await findManagedRoom(roomId, req);
 
     const roomData = sanitizeRoomPayload(req.body, { allowBeds: false });
     const oldRoomData = existingRoom.toObject();
@@ -651,17 +768,7 @@ export const deleteRoom = async (req, res, next) => {
   try {
     const { roomId } = req.params;
 
-    if (!roomId.match(/^[0-9a-fA-F]{24}$/)) {
-      throw new AppError("Invalid room ID format", 400, "INVALID_ROOM_ID");
-    }
-
-    const query = { _id: roomId };
-    if (req.branchFilter) query.branch = req.branchFilter;
-
-    const room = await Room.findOne(query);
-    if (!room) {
-      throw new AppError("Room not found or access denied", 404, "ROOM_NOT_FOUND");
-    }
+    const room = await findManagedRoom(roomId, req);
 
     const [
       activeReservationCount,
@@ -747,16 +854,12 @@ export const updateBedStatus = async (req, res, next) => {
       );
     }
 
-    const query = { _id: roomId };
-    if (req.branchFilter) query.branch = req.branchFilter;
-
-    const room = await Room.findOne(query);
-    if (!room) {
-      throw new AppError("Room not found", 404, "ROOM_NOT_FOUND");
-    }
+    const room = await findManagedRoom(roomId, req);
+    const { bed } = getBedOrThrow(room, bedId);
 
     let success;
     if (requestedStatus === "maintenance") {
+      assertAdminMutableBed(bed, "place into maintenance");
       success = room.lockBedForMaintenance(bedId);
     } else {
       success = room.unlockBed(bedId);
@@ -781,6 +884,160 @@ export const updateBedStatus = async (req, res, next) => {
     );
 
     sendSuccess(res, { message: `Bed ${bedId} set to ${requestedStatus}`, room });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addBed = async (req, res, next) => {
+  try {
+    const { roomId } = req.params;
+    const room = await findManagedRoom(roomId, req);
+    const before = room.toObject();
+
+    const bed = {
+      id: normalizeBedId(room, req.body?.id),
+      position: normalizeBedPosition(req.body?.position),
+      status: "available",
+    };
+
+    room.beds = [...(room.beds || []), bed];
+    syncRoomCapacityFromBeds(room);
+    await room.save();
+
+    await auditLogger.logModification(
+      req,
+      "room",
+      roomId,
+      before,
+      room.toObject(),
+      `Added bed ${bed.id}`,
+    );
+
+    sendSuccess(res, { message: "Bed added successfully", room, bed }, 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateBed = async (req, res, next) => {
+  try {
+    const { roomId, bedId } = req.params;
+    const room = await findManagedRoom(roomId, req);
+    const before = room.toObject();
+    const { index, bed } = getBedOrThrow(room, bedId);
+
+    assertAdminMutableBed(bed, "edit");
+
+    const nextId =
+      req.body?.id !== undefined
+        ? normalizeBedId(room, req.body.id, { currentId: bed.id })
+        : bed.id;
+    const nextPosition =
+      req.body?.position !== undefined
+        ? normalizeBedPosition(req.body.position)
+        : bed.position;
+
+    room.beds[index].id = nextId;
+    room.beds[index].position = nextPosition;
+
+    if (req.body?.sortIndex !== undefined) {
+      const nextIndex = Number.parseInt(req.body.sortIndex, 10);
+      if (!Number.isFinite(nextIndex) || nextIndex < 0 || nextIndex >= room.beds.length) {
+        throw new AppError("Invalid sortIndex for bed reorder.", 400, "INVALID_BED_REORDER");
+      }
+
+      const [movedBed] = room.beds.splice(index, 1);
+      room.beds.splice(nextIndex, 0, movedBed);
+    }
+
+    await room.save();
+
+    await auditLogger.logModification(
+      req,
+      "room",
+      roomId,
+      before,
+      room.toObject(),
+      `Updated bed ${bedId}`,
+    );
+
+    sendSuccess(res, { message: "Bed updated successfully", room });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const reorderBeds = async (req, res, next) => {
+  try {
+    const { roomId } = req.params;
+    const room = await findManagedRoom(roomId, req);
+    const before = room.toObject();
+
+    reorderRoomBeds(room, req.body?.bedIds);
+    await room.save();
+
+    await auditLogger.logModification(
+      req,
+      "room",
+      roomId,
+      before,
+      room.toObject(),
+      "Reordered beds",
+    );
+
+    sendSuccess(res, { message: "Beds reordered successfully", room });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteBed = async (req, res, next) => {
+  try {
+    const { roomId, bedId } = req.params;
+    const room = await findManagedRoom(roomId, req);
+    const before = room.toObject();
+    const { index, bed } = getBedOrThrow(room, bedId);
+
+    assertAdminMutableBed(bed, "remove");
+
+    const remainingBeds = Math.max(0, room.beds.length - 1);
+    const nextCapacity = room.type === "private" ? room.capacity : Math.max(1, remainingBeds);
+
+    if (remainingBeds === 0) {
+      throw new AppError(
+        "A room must keep at least one bed configured.",
+        409,
+        "BED_DELETE_BLOCKED",
+      );
+    }
+
+    if ((room.currentOccupancy || 0) > nextCapacity) {
+      throw new AppError(
+        "Cannot remove this bed because current occupancy exceeds the remaining capacity.",
+        409,
+        "BED_DELETE_BLOCKED",
+        {
+          currentOccupancy: room.currentOccupancy || 0,
+          nextCapacity,
+        },
+      );
+    }
+
+    room.beds.splice(index, 1);
+    syncRoomCapacityFromBeds(room);
+    await room.save();
+
+    await auditLogger.logModification(
+      req,
+      "room",
+      roomId,
+      before,
+      room.toObject(),
+      `Removed bed ${bedId}`,
+    );
+
+    sendSuccess(res, { message: "Bed removed successfully", room });
   } catch (error) {
     next(error);
   }

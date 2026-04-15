@@ -152,7 +152,7 @@ export default function AnnouncementsTab() {
       <div style={s.heading}>
         <h1 style={s.title}>Announcements</h1>
         <p style={s.subtitle}>
-          Stay updated with important notices and announcements
+          Stay updated with branch notices, policy versions, and required acknowledgments
         </p>
       </div>
 
@@ -222,12 +222,28 @@ export default function AnnouncementsTab() {
 
                 <p style={s.cardBody}>{announcement.content}</p>
 
+                {announcement.contentType === "policy" ? (
+                  <div style={{ marginTop: 10, color: "#64748B", fontSize: 12 }}>
+                    Version {announcement.version || 1}
+                    {announcement.effectiveDate
+                      ? ` • Effective ${fmtDate(announcement.effectiveDate)}`
+                      : ""}
+                  </div>
+                ) : null}
+
                 {announcement.requiresAck ? (
                   <div style={s.actionRow}>
                     {announcement.acknowledged ? (
-                      <span style={s.ackBadge}>
-                        <Check size={13} /> Acknowledged
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={s.ackBadge}>
+                          <Check size={13} /> Acknowledged
+                        </span>
+                        {announcement.acknowledgedAt ? (
+                          <span style={{ color: "#64748B", fontSize: 12 }}>
+                            Acknowledged {fmtDate(announcement.acknowledgedAt)}
+                          </span>
+                        ) : null}
+                      </div>
                     ) : (
                       <button
                         onClick={() => handleAcknowledge(getAnnouncementId(announcement))}
