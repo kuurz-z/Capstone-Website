@@ -1519,11 +1519,33 @@ export const updateReservationByUser = async (req, res, next) => {
     // ── Visit time-slot collision check ─────────────────────
     // Prevent two applicants from booking the same room at the same date/time
     if (updates.visitDate) {
+      const targetVisitTime = updates.visitTime || reservation.visitTime;
+
+      // 1. Check max 5 visits per hour slot globally
+      const hourlyCount = await Reservation.countDocuments({
+        _id: { $ne: reservationId },
+        visitDate: updates.visitDate,
+        visitTime: targetVisitTime,
+        status: {
+          $in: reservationStatusesForQuery("visit_pending", "visit_approved"),
+        },
+        isArchived: { $ne: true },
+      });
+
+      if (hourlyCount >= 5) {
+        return res.status(400).json({
+          error:
+            "This time slot has reached its maximum capacity. Please select an alternative time for your visit.",
+          code: "VISIT_CAPACITY_REACHED",
+        });
+      }
+
+      // 2. Check room-specific conflict
       const conflicting = await Reservation.findOne({
         _id: { $ne: reservationId },
         roomId: reservation.roomId,
         visitDate: updates.visitDate,
-        visitTime: updates.visitTime || reservation.visitTime,
+        visitTime: targetVisitTime,
         status: {
           $in: reservationStatusesForQuery("visit_pending", "visit_approved"),
         },

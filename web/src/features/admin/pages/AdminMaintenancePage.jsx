@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Loader2,
   RefreshCcw,
+  Search,
   UserRound,
   Wrench,
   XCircle,
@@ -109,6 +110,7 @@ export default function AdminMaintenancePage() {
   const [dateTo, setDateTo] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   const [sortMode, setSortMode] = useState("newest");
+  const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [draftStatus, setDraftStatus] = useState("viewed");
@@ -207,6 +209,100 @@ export default function AdminMaintenancePage() {
     return nextRequests;
   }, [requests, sortMode]);
 
+  const filteredRequests = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return sortedRequests;
+
+    return sortedRequests.filter((request) => {
+      const haystack = [
+        request.request_id,
+        request.description,
+        request.assigned_to,
+        request.user_id,
+        request.tenant?.user_id,
+        request.tenant?.full_name,
+        request.tenant?.branch,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [searchQuery, sortedRequests]);
+
+  const activeFilterChips = useMemo(() => {
+    const chips = [];
+
+    if (statusFilter !== "all") {
+      chips.push({
+        key: `status-${statusFilter}`,
+        label: `Status: ${formatMaintenanceStatus(statusFilter)}`,
+      });
+    }
+
+    if (requestTypeFilter !== "all") {
+      chips.push({
+        key: `type-${requestTypeFilter}`,
+        label: `Type: ${getMaintenanceTypeMeta(requestTypeFilter).label}`,
+      });
+    }
+
+    if (urgencyFilter !== "all") {
+      chips.push({
+        key: `urgency-${urgencyFilter}`,
+        label: `Urgency: ${getMaintenanceUrgencyMeta(urgencyFilter).label}`,
+      });
+    }
+
+    if (dateFrom) {
+      chips.push({
+        key: `from-${dateFrom}`,
+        label: `From: ${fmtDate(dateFrom)}`,
+      });
+    }
+
+    if (dateTo) {
+      chips.push({
+        key: `to-${dateTo}`,
+        label: `To: ${fmtDate(dateTo)}`,
+      });
+    }
+
+    if (isOwner && branchFilter !== "all") {
+      chips.push({
+        key: `branch-${branchFilter}`,
+        label: `Branch: ${branchFilter}`,
+      });
+    }
+
+    if (sortMode === "urgency") {
+      chips.push({
+        key: "sort-urgency",
+        label: "Sort: Urgency high first",
+      });
+    }
+
+    if (searchQuery.trim()) {
+      chips.push({
+        key: "search",
+        label: `Search: ${searchQuery.trim()}`,
+      });
+    }
+
+    return chips;
+  }, [
+    branchFilter,
+    dateFrom,
+    dateTo,
+    isOwner,
+    requestTypeFilter,
+    searchQuery,
+    sortMode,
+    statusFilter,
+    urgencyFilter,
+  ]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [
@@ -239,6 +335,7 @@ export default function AdminMaintenancePage() {
     setDateTo("");
     setBranchFilter("all");
     setSortMode("newest");
+    setSearchQuery("");
   };
 
   const handleSummaryFilter = (index) => {
@@ -391,18 +488,40 @@ export default function AdminMaintenancePage() {
   );
 
   return (
-    <PageShell>
-      <PageShell.Summary>
-        <SummaryBar
-          items={summaryItems}
-          activeIndex={activeSummaryIndex === -1 ? 0 : activeSummaryIndex}
-          onItemClick={(index) => handleSummaryFilter(index)}
-        />
-      </PageShell.Summary>
+    <div className="admin-maintenance-page">
+      <PageShell>
+        <PageShell.Summary>
+          <SummaryBar
+            items={summaryItems}
+            activeIndex={activeSummaryIndex === -1 ? 0 : activeSummaryIndex}
+            onItemClick={(index) => handleSummaryFilter(index)}
+          />
+        </PageShell.Summary>
 
-      <PageShell.Actions>
-        <section className="admin-maintenance__filters">
-          <div className="admin-maintenance__filters-grid">
+        <PageShell.Actions>
+          <section className="admin-maintenance__filters">
+            <div className="admin-maintenance__filters-header">
+              <div>
+                <h2 className="admin-maintenance__filters-title">Find requests quickly</h2>
+              </div>
+              <p className="admin-maintenance__result-count">
+                Showing {filteredRequests.length} of {summaryRequests.length} requests
+              </p>
+            </div>
+
+            <div className="admin-maintenance__filters-grid">
+              <label className="admin-maintenance__field admin-maintenance__field--search">
+                <div className="admin-maintenance__search-wrap">
+                  <Search size={16} />
+                  <input
+                    type="search"
+                    placeholder="Search tenant, ID, assignment, or description"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
+                </div>
+              </label>
+
             <label className="admin-maintenance__field">
               <span>Status</span>
               <select
@@ -493,49 +612,65 @@ export default function AdminMaintenancePage() {
                 <option value="urgency">Urgency high first</option>
               </select>
             </label>
-          </div>
+            </div>
 
-          <div className="admin-maintenance__filter-actions">
-            <button
-              type="button"
-              className="admin-maintenance__secondary-btn"
-              onClick={handleResetFilters}
-            >
-              Reset Filters
-            </button>
-          </div>
-        </section>
-      </PageShell.Actions>
+            <div className="admin-maintenance__filters-footer">
+              {activeFilterChips.length ? (
+                <div className="admin-maintenance__active-filters" aria-live="polite">
+                  {activeFilterChips.map((chip) => (
+                    <span key={chip.key} className="admin-maintenance__chip">
+                      {chip.label}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="admin-maintenance__active-filters-empty">
+                  No active filters. Showing all requests.
+                </p>
+              )}
 
-      <PageShell.Content>
-        <DataTable
-          columns={columns}
-          data={sortedRequests}
-          loading={isLoading}
-          onRowClick={(row) => setSelectedRequestId(row.request_id)}
-          pagination={{
-            page: currentPage,
-            pageSize: ITEMS_PER_PAGE,
-            total: sortedRequests.length,
-            onPageChange: setCurrentPage,
-          }}
-          emptyState={
-            isError
-              ? {
-                  icon: AlertTriangle,
-                  title: "Unable to load maintenance requests",
-                  description:
-                    error?.message ||
-                    "The maintenance workspace could not be loaded.",
-                }
-              : {
-                  icon: Wrench,
-                  title: "No maintenance requests found",
-                  description:
-                    "Adjust the filters or wait for new tenant requests to appear.",
-                }
-          }
-        />
+              <div className="admin-maintenance__filter-actions">
+                <button
+                  type="button"
+                  className="admin-maintenance__secondary-btn"
+                  onClick={handleResetFilters}
+                >
+                  Reset Filters
+                </button>
+              </div>
+            </div>
+          </section>
+        </PageShell.Actions>
+
+        <PageShell.Content>
+          <DataTable
+            columns={columns}
+            data={filteredRequests}
+            loading={isLoading}
+            onRowClick={(row) => setSelectedRequestId(row.request_id)}
+            pagination={{
+              page: currentPage,
+              pageSize: ITEMS_PER_PAGE,
+              total: filteredRequests.length,
+              onPageChange: setCurrentPage,
+            }}
+            emptyState={
+              isError
+                ? {
+                    icon: AlertTriangle,
+                    title: "Unable to load maintenance requests",
+                    description:
+                      error?.message ||
+                      "The maintenance workspace could not be loaded.",
+                  }
+                : {
+                    icon: Wrench,
+                    title: "No maintenance requests found",
+                    description:
+                      "Adjust filters or search terms, or wait for new tenant requests.",
+                  }
+            }
+          />
 
         <DetailDrawer
           open={Boolean(selectedRequestId)}
@@ -720,8 +855,9 @@ export default function AdminMaintenancePage() {
             </>
           )}
         </DetailDrawer>
-      </PageShell.Content>
-    </PageShell>
+        </PageShell.Content>
+      </PageShell>
+    </div>
   );
 }
 
