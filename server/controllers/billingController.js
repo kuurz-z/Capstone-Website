@@ -23,12 +23,13 @@ import {
   sendPaymentRejectedEmail,
 } from "../config/email.js";
 import {
-  buildBillingCycle,
   getBillRemainingAmount,
+  getReservationRecurringFees,
   getVisibleBillCharges,
   getVisibleBillSnapshot,
   isUtilityChargeVisible,
   getReservationCreditAvailable,
+  resolveCurrentBillingCycle,
   resolveBillStatus,
   roundMoney,
   syncBillAmounts,
@@ -81,6 +82,7 @@ const formatBill = (bill) => {
     utilityCycleStart: bill.utilityCycleStart || null,
     utilityCycleEnd: bill.utilityCycleEnd || null,
     utilityReadingDate: bill.utilityReadingDate || null,
+    additionalCharges: bill.additionalCharges || [],
     charges: visible.charges,
     grossAmount: visible.grossAmount,
     reservationCreditApplied: bill.reservationCreditApplied || 0,
@@ -94,7 +96,11 @@ const formatBill = (bill) => {
   };
 };
 
-async function getReservationBillingContext(reservationId, currentBillId = null) {
+async function getReservationBillingContext(
+  reservationId,
+  currentBillId = null,
+  referenceDate = new Date(),
+) {
   const reservation = await Reservation.findById(reservationId);
   const moveInDate = readMoveInDate(reservation);
   if (!reservation || !moveInDate) return null;
@@ -106,7 +112,7 @@ async function getReservationBillingContext(reservationId, currentBillId = null)
     ...(currentBillId ? { _id: { $ne: currentBillId } } : {}),
   });
 
-  const cycle = buildBillingCycle(moveInDate, existingCount);
+  const cycle = resolveCurrentBillingCycle(moveInDate, referenceDate);
   const creditAvailable = getReservationCreditAvailable(reservation);
 
   return {
@@ -116,6 +122,26 @@ async function getReservationBillingContext(reservationId, currentBillId = null)
     isFirstCycleBill: existingCount === 0,
     creditAvailable,
   };
+}
+
+async function getActiveReservationForUser(userId) {
+  const activeReservations = await Reservation.find({
+    userId,
+    status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
+    isArchived: { $ne: true },
+  }).lean();
+
+  if (activeReservations.length === 0) return null;
+
+  return [...activeReservations].sort((left, right) => {
+    const leftMoveIn = readMoveInDate(left)
+      ? dayjs(readMoveInDate(left)).valueOf()
+      : 0;
+    const rightMoveIn = readMoveInDate(right)
+      ? dayjs(readMoveInDate(right)).valueOf()
+      : 0;
+    return rightMoveIn - leftMoveIn;
+  })[0];
 }
 
 async function getTenantBillForRequest(req, billId) {
@@ -427,27 +453,32 @@ const suggestRent = (reservation, room, moveInDate) => {
 
 export const getCurrentBilling = async (req, res, next) => {
   try {
-    const { uid, branch } = req.user;
+    const { uid } = req.user;
     const dbUser = await User.findOne({ firebaseUid: uid }).lean();
     if (!dbUser) return res.status(404).json({ error: "User not found" });
-    const activeStay = await Reservation.findOne({
-      userId: dbUser._id,
-      branch,
-      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
-    });
+    const activeStay = await getActiveReservationForUser(dbUser._id);
     if (!activeStay)
       return res.status(404).json({ error: "No active stay found" });
 
     const now = dayjs();
-    const currentBill = await Bill.findOne({
+    let currentBill = await Bill.findOne({
       reservationId: activeStay._id,
-      branch,
       status: { $ne: "draft" },
-      billingMonth: {
-        $gte: now.startOf("month").toDate(),
-        $lt: now.add(1, "month").startOf("month").toDate(),
+      isArchived: false,
+      billingCycleStart: {
+        $lte: now.startOf("day").toDate(),
       },
-    });
+      billingCycleEnd: {
+        $gt: now.startOf("day").toDate(),
+      },
+    }).sort({ billingCycleStart: -1, createdAt: -1 });
+    if (!currentBill) {
+      currentBill = await Bill.findOne({
+        reservationId: activeStay._id,
+        status: { $ne: "draft" },
+        isArchived: false,
+      }).sort({ billingCycleStart: -1, billingMonth: -1, createdAt: -1 });
+    }
     if (!currentBill)
       return res.status(404).json({ error: "No current bill found" });
 
@@ -466,6 +497,7 @@ export const getCurrentBilling = async (req, res, next) => {
       utilityCycleStart: currentBill.utilityCycleStart || null,
       utilityCycleEnd: currentBill.utilityCycleEnd || null,
       utilityReadingDate: currentBill.utilityReadingDate || null,
+      additionalCharges: currentBill.additionalCharges || [],
       status: visible.status,
       charges: visible.charges,
     });
@@ -476,21 +508,17 @@ export const getCurrentBilling = async (req, res, next) => {
 
 export const getBillingHistory = async (req, res, next) => {
   try {
-    const { uid, branch } = req.user;
+    const { uid } = req.user;
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const dbUser = await User.findOne({ firebaseUid: uid }).lean();
     if (!dbUser) return res.status(404).json({ error: "User not found" });
-    const stayIds = (await Reservation.find({ userId: dbUser._id, branch })).map(
-      (s) => s._id,
-    );
 
     const bills = await Bill.find({
-      reservationId: { $in: stayIds },
-      branch,
+      userId: dbUser._id,
       status: { $ne: "draft" },
       isArchived: false,
     })
-      .sort({ billingMonth: -1 })
+      .sort({ billingCycleStart: -1, billingMonth: -1, createdAt: -1 })
       .limit(limit);
     res.json({
       count: bills.length,
@@ -503,12 +531,15 @@ export const getBillingHistory = async (req, res, next) => {
           issuedAt: visible.issuedAt,
           amount: visible.totalAmount,
           grossAmount: visible.grossAmount,
+          billingCycleStart: b.billingCycleStart,
+          billingCycleEnd: b.billingCycleEnd,
           reservationCreditApplied: b.reservationCreditApplied || 0,
           paidAmount: b.paidAmount || 0,
           remainingAmount: visible.remainingAmount,
           utilityCycleStart: b.utilityCycleStart || null,
           utilityCycleEnd: b.utilityCycleEnd || null,
           utilityReadingDate: b.utilityReadingDate || null,
+          additionalCharges: b.additionalCharges || [],
           status: visible.status,
           charges: visible.charges,
           paymentDate: b.paymentDate,
@@ -648,7 +679,7 @@ export const getRoomsWithTenants = async (req, res, next) => {
               email: r.userId.email || "",
               moveInDate: readMoveInDate(r),
               monthlyRent: suggestRent(r, room, readMoveInDate(r)),
-              customCharges: r.customCharges || [],
+              customCharges: getReservationRecurringFees(r).additionalCharges,
               bedPosition: bed?.position || null,
             };
           });
@@ -687,7 +718,7 @@ export const getMyBills = async (req, res, next) => {
       isArchived: false,
     })
       .populate("roomId", "name branch type")
-      .sort({ billingMonth: -1 })
+      .sort({ billingCycleStart: -1, billingMonth: -1, createdAt: -1 })
       .lean();
 
     const billResponses = await Promise.all(
@@ -715,6 +746,7 @@ export const getMyBills = async (req, res, next) => {
           utilityCycleEnd: b.utilityCycleEnd || null,
           utilityReadingDate: b.utilityReadingDate || null,
           utilityPeriodId: null,
+          additionalCharges: b.additionalCharges || [],
           charges: visible.charges,
           totalAmount: visible.totalAmount,
           grossAmount: visible.grossAmount,
@@ -1154,7 +1186,8 @@ export const generateBulkBills = async (req, res, next) => {
 
         const moveInDate = readMoveInDate(reservation) || monthStart;
         const rent = suggestRent(reservation, room, moveInDate);
-        const customCharges = reservation.customCharges || [];
+        const customCharges =
+          getReservationRecurringFees(reservation).additionalCharges;
         const tenantStart = dayjs(
           Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()),
         );
@@ -1200,10 +1233,20 @@ export const generateBulkBills = async (req, res, next) => {
 
         for (const tenant of tenantInfos) {
           const share = tenant.daysInRoom / totalOccupantDays;
+          const billingContext = tenant.reservationId
+            ? await getReservationBillingContext(
+                tenant.reservationId,
+                null,
+                monthStart,
+              )
+            : null;
+          const cycleBillingMonth =
+            billingContext?.cycle?.billingMonth || monthStart;
+
           // Skip if bill already exists for this tenant+month
           const dupeFilter = {
             userId: tenant.userId,
-            billingMonth: monthStart,
+            billingMonth: cycleBillingMonth,
             isArchived: false,
           };
           if (tenant.reservationId)
@@ -1225,9 +1268,6 @@ export const generateBulkBills = async (req, res, next) => {
             0,
           );
           const grossAmount = roundMoney(tenant.rent + utilityShare + customChargesTotal);
-          const billingContext = tenant.reservationId
-            ? await getReservationBillingContext(tenant.reservationId)
-            : null;
           const reservationCreditApplied = Math.min(
             grossAmount,
             billingContext?.creditAvailable || 0,

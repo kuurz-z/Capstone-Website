@@ -4,6 +4,11 @@ export const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 10
 export const UTILITY_CYCLE_DAY = 15;
 export const UTILITY_CHARGE_FIELDS = ["electricity", "water"];
 
+function normalizeBillingDate(dateLike) {
+  const normalized = dayjs(dateLike).startOf("day");
+  return normalized.isValid() ? normalized : null;
+}
+
 export function sumBillCharges(charges = {}) {
   return roundMoney(
     (charges.rent || 0) +
@@ -213,7 +218,7 @@ export function syncBillAmounts(bill, { preserveStatus = false } = {}) {
 }
 
 export function buildBillingCycle(checkInDate, cycleIndex = 0) {
-  const start = dayjs(checkInDate).add(cycleIndex, "month");
+  const start = dayjs(checkInDate).startOf("day").add(cycleIndex, "month");
   const end = start.add(1, "month");
 
   return {
@@ -221,6 +226,74 @@ export function buildBillingCycle(checkInDate, cycleIndex = 0) {
     billingCycleStart: start.startOf("day").toDate(),
     billingCycleEnd: end.startOf("day").toDate(),
     dueDate: end.startOf("day").toDate(),
+  };
+}
+
+export function resolveCurrentBillingCycle(checkInDate, referenceDate = new Date()) {
+  const anchor = normalizeBillingDate(checkInDate);
+  const reference = normalizeBillingDate(referenceDate);
+  if (!anchor || !reference) return null;
+
+  let cycleStart = anchor;
+  let cycleIndex = 0;
+  let nextCycleStart = cycleStart.add(1, "month");
+
+  while (!nextCycleStart.isAfter(reference)) {
+    cycleStart = nextCycleStart;
+    cycleIndex += 1;
+    nextCycleStart = cycleStart.add(1, "month");
+  }
+
+  return {
+    billingMonth: cycleStart.toDate(),
+    billingCycleStart: cycleStart.toDate(),
+    billingCycleEnd: nextCycleStart.toDate(),
+    dueDate: nextCycleStart.toDate(),
+    cycleIndex,
+  };
+}
+
+export function getReservationRecurringFeeEntries(reservation = {}) {
+  const customCharges = Array.isArray(reservation?.customCharges)
+    ? reservation.customCharges
+    : [];
+
+  const recurringCharges = customCharges
+    .map((charge) => ({
+      name: String(charge?.name || "").trim(),
+      amount: roundMoney(charge?.amount || 0),
+    }))
+    .filter((charge) => charge.name && charge.amount > 0);
+
+  if (recurringCharges.length > 0) {
+    return recurringCharges;
+  }
+
+  const legacyApplianceFees = roundMoney(reservation?.applianceFees || 0);
+  if (legacyApplianceFees > 0) {
+    return [
+      {
+        name: "Appliance Fees",
+        amount: legacyApplianceFees,
+      },
+    ];
+  }
+
+  return [];
+}
+
+export function getReservationRecurringFees(reservation = {}) {
+  const additionalCharges = getReservationRecurringFeeEntries(reservation);
+  const applianceFees = roundMoney(
+    additionalCharges.reduce(
+      (sum, charge) => sum + Number(charge.amount || 0),
+      0,
+    ),
+  );
+
+  return {
+    applianceFees,
+    additionalCharges,
   };
 }
 
