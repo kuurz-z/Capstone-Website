@@ -24,6 +24,11 @@ import { reservationApi, roomApi, billingApi, authApi } from "../../../shared/ap
 import { normalizeReservationStatus } from "../../../shared/utils/lifecycleNaming";
 import { usePaymentRedirect } from "./usePaymentRedirect";
 import { uploadIfFile } from "../../../shared/utils/imageUpload";
+import {
+  validateBirthday,
+  validateEstimatedTime,
+  validateTargetMoveInDate,
+} from "../utils/reservationValidation";
 
 export default function useReservationFlow() {
   const navigate = useNavigate();
@@ -1037,81 +1042,121 @@ export default function useReservationFlow() {
         });
       } else if (currentStage === 3) {
         if (!devBypassValidation) {
-          const inc = [];
-          if (!selfiePhoto) inc.push("Email & Photo");
-          if (
-            !firstName ||
-            !lastName ||
-            !mobileNumber ||
-            !birthday ||
-            !addressCity ||
-            !addressProvince ||
-            !validIDFront ||
-            !validIDBack ||
-            (!nbiClearance && !nbiReason)
-          )
-            inc.push("Personal Information");
-          if (
-            !emergencyContactName ||
-            !emergencyRelationship ||
-            !emergencyContactNumber
-          )
-            inc.push("Emergency Contact");
-          if (!occupation || (!companyID && !companyIDReason))
-            inc.push("Employment / School");
-          if (!targetMoveInDate || !estimatedMoveInTime || !workSchedule)
-            inc.push("Dorm Preferences");
-          if (!agreedToPrivacy || !agreedToCertification)
-            inc.push("Agreements & Consent");
-          if (inc.length > 0) {
+          const hasText = (value) => Boolean(value?.trim?.() || value);
+          const isValidPhone = (value) => /^\+\d{10,15}$/.test(value || "");
+          const requiredFields = [
+            { key: "selfiePhoto", label: "Selfie Photo", isMissing: !selfiePhoto },
+            { key: "lastName", label: "Last Name", isMissing: !hasText(lastName) },
+            { key: "firstName", label: "First Name", isMissing: !hasText(firstName) },
+            { key: "middleName", label: "Middle Name", isMissing: !hasText(middleName) },
+            {
+              key: "mobileNumber",
+              label: "Mobile Number",
+              isMissing: !isValidPhone(mobileNumber),
+              message: "Please enter a valid mobile number to continue.",
+            },
+            {
+              key: "birthday",
+              label: "Birthday",
+              isMissing: !validateBirthday(birthday).valid,
+              message: "Please enter a valid birthday to continue.",
+            },
+            { key: "maritalStatus", label: "Marital Status", isMissing: !hasText(maritalStatus) },
+            { key: "nationality", label: "Nationality", isMissing: !hasText(nationality) },
+            { key: "educationLevel", label: "Educational Attainment", isMissing: !hasText(educationLevel) },
+            { key: "addressUnitHouseNo", label: "Unit / House No.", isMissing: !hasText(addressUnitHouseNo) },
+            { key: "addressStreet", label: "Street", isMissing: !hasText(addressStreet) },
+            { key: "addressRegion", label: "Region", isMissing: !hasText(addressRegion) },
+            { key: "addressProvince", label: "Province", isMissing: !hasText(addressProvince) },
+            { key: "addressCity", label: "City / Municipality", isMissing: !hasText(addressCity) },
+            { key: "addressBarangay", label: "Barangay", isMissing: !hasText(addressBarangay) },
+            { key: "validIDFront", label: "Valid ID (Front)", isMissing: !validIDFront },
+            { key: "validIDBack", label: "Valid ID (Back)", isMissing: !validIDBack },
+            {
+              key: "nbiClearance",
+              label: "NBI Clearance",
+              isMissing: !nbiClearance && !hasText(nbiReason),
+              message: "Please upload NBI Clearance or provide a reason to continue.",
+            },
+            {
+              key: "emergencyContactName",
+              label: "Emergency Contact Name",
+              isMissing: !hasText(emergencyContactName),
+            },
+            {
+              key: "emergencyRelationship",
+              label: "Emergency Relationship",
+              isMissing: !hasText(emergencyRelationship),
+            },
+            {
+              key: "emergencyContactNumber",
+              label: "Emergency Contact Number",
+              isMissing: !isValidPhone(emergencyContactNumber),
+              message: "Please enter a valid emergency contact number to continue.",
+            },
+            { key: "healthConcerns", label: "Health Concerns", isMissing: !hasText(healthConcerns) },
+            { key: "employerSchool", label: "Current Employer", isMissing: !hasText(employerSchool) },
+            { key: "employerAddress", label: "Employer Address", isMissing: !hasText(employerAddress) },
+            { key: "employerContact", label: "Employer Contact", isMissing: !hasText(employerContact) },
+            { key: "occupation", label: "Occupation", isMissing: !hasText(occupation) },
+            {
+              key: "companyID",
+              label: "Company ID",
+              isMissing: !companyID && !hasText(companyIDReason),
+              message: "Please upload Company ID or provide a reason to continue.",
+            },
+            { key: "referralSource", label: "Referral Source", isMissing: !hasText(referralSource) },
+            {
+              key: "targetMoveInDate",
+              label: "Move-in Date",
+              isMissing: !validateTargetMoveInDate(targetMoveInDate).valid,
+              message: "Please choose a valid target move-in date to continue.",
+            },
+            {
+              key: "estimatedMoveInTime",
+              label: "Move-in Time",
+              isMissing: !validateEstimatedTime(estimatedMoveInTime).valid,
+              message: "Please select a valid move-in time to continue.",
+            },
+            { key: "workSchedule", label: "Work Schedule", isMissing: !hasText(workSchedule) },
+            {
+              key: "workScheduleOther",
+              label: "Work Schedule Details",
+              isMissing:
+                workSchedule === "others" && !hasText(workScheduleOther),
+              message: "Please describe your work schedule to continue.",
+            },
+          ];
+          const firstInvalid = requiredFields.find((field) => field.isMissing);
+          const missingAgreements = !agreedToPrivacy || !agreedToCertification;
+
+          if (firstInvalid || missingAgreements) {
             setShowValidationErrors(true);
-            // Scroll to the first empty required field directly
-            const requiredFields = [
-              { key: "selfiePhoto", value: selfiePhoto, label: "Selfie Photo" },
-              { key: "lastName", value: lastName, label: "Last Name" },
-              { key: "firstName", value: firstName, label: "First Name" },
-              { key: "middleName", value: middleName, label: "Middle Name" },
-              { key: "mobileNumber", value: mobileNumber, label: "Mobile Number" },
-              { key: "birthday", value: birthday, label: "Birthday" },
-              { key: "maritalStatus", value: maritalStatus, label: "Marital Status" },
-              { key: "nationality", value: nationality, label: "Nationality" },
-              { key: "educationLevel", value: educationLevel, label: "Education Level" },
-              { key: "addressUnitHouseNo", value: addressUnitHouseNo, label: "Unit/House No" },
-              { key: "addressStreet", value: addressStreet, label: "Street" },
-              { key: "addressProvince", value: addressProvince, label: "Region" },
-              { key: "addressCity", value: addressCity, label: "City" },
-              { key: "validIDFront", value: validIDFront, label: "Valid ID (Front)" },
-              { key: "validIDBack", value: validIDBack, label: "Valid ID (Back)" },
-              { key: "emergencyContactName", value: emergencyContactName, label: "Emergency Contact Name" },
-              { key: "emergencyRelationship", value: emergencyRelationship, label: "Emergency Relationship" },
-              { key: "emergencyContactNumber", value: emergencyContactNumber, label: "Emergency Contact Number" },
-              { key: "healthConcerns", value: healthConcerns, label: "Health Concerns" },
-              { key: "employerSchool", value: employerSchool, label: "Current Employer" },
-              { key: "employerAddress", value: employerAddress, label: "Employer Address" },
-              { key: "employerContact", value: employerContact, label: "Employer Contact" },
-              { key: "occupation", value: occupation, label: "Occupation" },
-              { key: "referralSource", value: referralSource, label: "Referral Source" },
-              { key: "targetMoveInDate", value: targetMoveInDate, label: "Move-in Date" },
-              { key: "estimatedMoveInTime", value: estimatedMoveInTime, label: "Move-in Time" },
-              { key: "workSchedule", value: workSchedule, label: "Work Schedule" },
-            ];
-            const firstEmpty = requiredFields.find((f) => !f.value);
-            if (firstEmpty) {
+
+            if (firstInvalid) {
               setTimeout(() => {
-                const el = document.querySelector(`[data-field="${firstEmpty.key}"]`);
+                const el = document.querySelector(
+                  `[data-field="${firstInvalid.key}"]`,
+                );
                 if (el) {
                   el.scrollIntoView({ behavior: "smooth", block: "center" });
                 }
               }, 100);
               showNotification(
-                `"${firstEmpty.label}" is required. Please fill it in to continue.`,
+                firstInvalid.message ||
+                  `"${firstInvalid.label}" is required. Please fill it in to continue.`,
                 "error",
                 4000,
               );
             } else {
-              // Agreements are missing
+              setTimeout(() => {
+                const el = document.getElementById("section-agreements");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              }, 100);
               showNotification(
-                `Please agree to both consent items to continue.`,
+                "Please agree to both consent items to continue.",
                 "error",
                 4000,
               );

@@ -344,6 +344,8 @@ function Sidebar({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) {
           display: "flex",
           alignItems: "center",
           gap: 12,
+          cursor: "default",
+          pointerEvents: "none",
         }}
       >
         <div

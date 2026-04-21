@@ -310,6 +310,18 @@ const SelectField = ({ label, field, options, editing, editData, setEditData }) 
 /* ─────────────────────────────────────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────────────────────────────────────── */
+const resolveOccupancyLabel = ({ role, tenantStatus }) => {
+  if (role === "tenant") return "Tenant";
+  if (role === "applicant") return "Applicant";
+
+  const normalizedTenantStatus = String(tenantStatus || "").toLowerCase();
+  if (["active", "inactive", "moved_out"].includes(normalizedTenantStatus)) {
+    return "Tenant";
+  }
+
+  return "Applicant";
+};
+
 const PersonalDetailsTab = ({
   profileData, editData, setEditData, fullName,
   isEditingProfile, setIsEditingProfile, saving, onSave, onCancel,
@@ -325,6 +337,15 @@ const PersonalDetailsTab = ({
     const l = (profileData.lastName || "").charAt(0).toUpperCase();
     return f + l || "?";
   }, [profileData.firstName, profileData.lastName]);
+
+  const occupancyLabel = useMemo(
+    () =>
+      resolveOccupancyLabel({
+        role: profileData.role,
+        tenantStatus: profileData.tenantStatus,
+      }),
+    [profileData.role, profileData.tenantStatus],
+  );
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -501,6 +522,10 @@ const PersonalDetailsTab = ({
             <h2 style={s.profileName}>{fullName}</h2>
             <p style={s.profileEmail}>{profileData.email}</p>
             <div style={s.profileChips}>
+              <span style={s.chip}>
+                <User size={10} />
+                {occupancyLabel}
+              </span>
               {profileData.occupation && (
                 <span style={s.chip}><Briefcase size={10} />{profileData.occupation}</span>
               )}

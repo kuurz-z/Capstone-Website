@@ -33,16 +33,20 @@ function ToastItem({ notification, onDismiss }) {
     <motion.div
       className={`notification notification-${notification.type || "info"}`}
       initial={
-        prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 400, scale: 0.95 }
+        prefersReducedMotion
+          ? { opacity: 0 }
+          : { opacity: 0, x: 24, y: -8, scale: 0.98 }
       }
       animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 400, scale: 0.95 }}
+      exit={
+        prefersReducedMotion
+          ? { opacity: 0 }
+          : { opacity: 0, x: 16, y: -6, scale: 0.98 }
+      }
       transition={{
-        type: prefersReducedMotion ? "tween" : "spring",
-        stiffness: 400,
-        damping: 30,
-        mass: 1,
-        duration: prefersReducedMotion ? 0.01 : undefined,
+        type: "tween",
+        ease: [0.22, 1, 0.36, 1],
+        duration: prefersReducedMotion ? 0.14 : 0.24,
       }}
       role="status"
       aria-live="polite"
@@ -99,7 +103,7 @@ export default function ToastViewport() {
       aria-live="polite"
       aria-relevant="additions removals"
     >
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         {notifications.map((notification) => (
           <ToastItem
             key={notification.id}

@@ -251,17 +251,16 @@ const ProfileSidebar = ({
           display: "flex",
           alignItems: "center",
           gap: 12,
+          cursor: "default",
         }}
       >
         <div
-          onClick={handleAvatarClick}
-          title={onUpdateImage ? "Click to change photo" : undefined}
           style={{
             position: "relative",
             width: 36,
             height: 36,
             borderRadius: "50%",
-            cursor: onUpdateImage ? "pointer" : "default",
+            pointerEvents: "none",
             flexShrink: 0,
             overflow: "hidden",
           }}

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
+import { useRouteFlash } from "../../../shared/hooks/useRouteFlash";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
@@ -37,6 +38,7 @@ function CheckAvailabilityPage() {
   const navigate = useNavigate();
   const appNavigate = useAppNavigation();
   const { user, logout } = useAuth();
+  useRouteFlash();
   const [searchParams] = useSearchParams();
   const isChangeRoomMode = searchParams.get("changeRoom") === "1";
   const changeRoomReservationId = searchParams.get("reservationId");

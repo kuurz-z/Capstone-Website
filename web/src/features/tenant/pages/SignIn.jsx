@@ -325,6 +325,7 @@ function SignIn() {
   const handleSocialLogin = async (provider) => {
     setSocialLoading(true);
     setGlobalLoading(true);
+    sessionStorage.setItem("socialAuthInProgress", "1");
     try {
       const result = await signInWithPopup(auth, provider);
       const firebaseUser = result.user;
@@ -414,6 +415,7 @@ function SignIn() {
       }
       showNotification(getFirebaseErrorMessage(error, "login"), "error");
     } finally {
+      sessionStorage.removeItem("socialAuthInProgress");
       setSocialLoading(false);
       setGlobalLoading(false);
     }
