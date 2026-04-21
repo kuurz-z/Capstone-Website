@@ -21,6 +21,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useAppNavigation } from "../hooks/useAppNavigation";
 import ConfirmModal from "./ConfirmModal";
 import { showNotification } from "../utils/notification";
+import { buildSignOutSuccessFlash } from "../utils/authToasts";
 
 const MOBILE_BP = 768;
 const TRANSITION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
@@ -249,9 +250,7 @@ function Sidebar({ isOpen, toggleSidebar, isCollapsed, toggleCollapse }) {
 
     try {
       await logout();
-      appNavigate("/", {
-        flash: { type: "success", message: "You have been signed out successfully." },
-      });
+      appNavigate("/", buildSignOutSuccessFlash());
     } catch (error) {
       console.error("Logout error:", error);
       showNotification("Logout failed. Please try again.", "error", 3000);

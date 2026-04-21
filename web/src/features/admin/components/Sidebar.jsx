@@ -5,6 +5,7 @@ import { useAuth } from "../../../shared/hooks/useAuth";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { showNotification } from "../../../shared/utils/notification";
+import { buildSignOutSuccessFlash } from "../../../shared/utils/authToasts";
 import LilycrestLogo from "../../../shared/components/LilycrestLogo";
 import {
   LayoutDashboard,
@@ -83,10 +84,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
       if (result?.success) {
         appNavigate("/signin", {
           replace: true,
-          flash: {
-            type: "success",
-            message: "You have been logged out successfully",
-          },
+          ...buildSignOutSuccessFlash(),
         });
       }
     } catch (error) {

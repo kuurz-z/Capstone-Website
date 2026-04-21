@@ -30,6 +30,10 @@ import {
   validateEmail,
   getFirebaseErrorMessage,
 } from "../../../shared/utils/authValidation";
+import {
+  buildAuthSuccessFlash,
+  buildAuthSuccessMessage,
+} from "../../../shared/utils/authToasts";
 import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import SocialAuthButtons from "../../../shared/components/SocialAuthButtons";
 import FloatingInput from "../../../shared/components/FloatingInput";
@@ -168,6 +172,30 @@ function SignIn() {
   const hasAdminClaims = (tokenResult) =>
     Boolean(tokenResult?.claims?.branch_admin || tokenResult?.claims?.owner);
 
+  const navigateAfterAuth = (user, fallbackName = "there") => {
+    const successFlash = buildAuthSuccessFlash(
+      buildAuthSuccessMessage(user, fallbackName),
+    );
+
+    if (user.role === "branch_admin" || user.role === "owner") {
+      appNavigate("/admin/dashboard", successFlash);
+      return;
+    }
+
+    if (!user.branch || user.branch === "") {
+      appNavigate("/applicant/check-availability", {
+        flash: {
+          type: "info",
+          message: "Please select your branch to continue",
+          duration: 5000,
+        },
+      });
+      return;
+    }
+
+    appNavigate("/applicant/check-availability", successFlash);
+  };
+
   const validateForm = () => {
     setTouched({ email: true, password: true });
     validateField("email", formData.email);
@@ -202,20 +230,8 @@ function SignIn() {
   };
 
   // ── Auth handlers ──────────────────────────────────────────
-  const handlePostAuthFlow = (loginResponse) => {
-    const welcomeMessage = `Welcome back, ${loginResponse.user.firstName}!`;
-    if (
-      loginResponse.user.role === "branch_admin" ||
-      loginResponse.user.role === "owner"
-    ) {
-      appNavigate("/admin/dashboard", {
-        flash: { type: "success", message: welcomeMessage },
-      });
-    } else {
-      appNavigate("/applicant/check-availability", {
-        flash: { type: "success", message: welcomeMessage },
-      });
-    }
+  const handlePostAuthFlow = (loginResponse, fallbackName = "there") => {
+    navigateAfterAuth(loginResponse.user, fallbackName);
   };
 
   const handleEmailPasswordLogin = async (e) => {
@@ -275,32 +291,7 @@ function SignIn() {
 
       try {
         const loginResponse = await login();
-        const welcomeName =
-          loginResponse.user.firstName || firebaseUser.displayName || "back";
-        const welcomeMessage = `Welcome back, ${welcomeName}!`;
-        if (
-          loginResponse.user.role === "branch_admin" ||
-          loginResponse.user.role === "owner"
-        ) {
-          appNavigate("/admin/dashboard", {
-            flash: { type: "success", message: welcomeMessage },
-          });
-          setGlobalLoading(false);
-          return;
-        }
-        if (!loginResponse.user.branch || loginResponse.user.branch === "") {
-          appNavigate("/applicant/check-availability", {
-            flash: {
-              type: "info",
-              message: "Please select your branch to continue",
-            },
-          });
-          setGlobalLoading(false);
-          return;
-        }
-        appNavigate("/applicant/check-availability", {
-          flash: { type: "success", message: welcomeMessage },
-        });
+        navigateAfterAuth(loginResponse.user, firebaseUser.displayName || "there");
       } catch (backendError) {
         await auth.signOut();
         const isNotRegistered =
@@ -353,7 +344,7 @@ function SignIn() {
 
       try {
         const loginResponse = await login();
-        handlePostAuthFlow(loginResponse);
+        handlePostAuthFlow(loginResponse, firebaseUser.displayName || "there");
       } catch (loginError) {
         // Delete the auto-created Firebase account to keep Firebase ↔ MongoDB in sync
         // signInWithPopup auto-creates a Firebase account; if backend rejects, we must remove it
