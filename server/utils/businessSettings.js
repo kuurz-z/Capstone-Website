@@ -2,37 +2,111 @@ import BusinessSettings from "../models/BusinessSettings.js";
 import { BUSINESS } from "../config/constants.js";
 
 const GLOBAL_KEY = "global";
-export const DEFAULT_BRANCH_OVERRIDES = {
+
+export const DEFAULT_BRANCH_OVERRIDES = Object.freeze({
   "gil-puyat": {
     isApplianceFeeEnabled: false,
     applianceFeeAmountPerUnit: 0,
+    changedBy: null,
+    changedAt: null,
   },
   guadalupe: {
     isApplianceFeeEnabled: true,
     applianceFeeAmountPerUnit: 200,
+    changedBy: null,
+    changedAt: null,
   },
-};
+});
+
+export const DEFAULT_POLICY_SETTINGS = Object.freeze({
+  noShowGraceDays: BUSINESS.NOSHOW_GRACE_DAYS,
+  stalePendingHours: BUSINESS.STALE_PENDING_HOURS,
+  staleVisitPendingHours: BUSINESS.STALE_VISIT_PENDING_HOURS,
+  visitPendingWarnDays: BUSINESS.VISIT_PENDING_WARN_DAYS,
+  staleVisitApprovedHours: BUSINESS.STALE_VISIT_APPROVED_HOURS,
+  stalePaymentPendingHours: BUSINESS.STALE_PAYMENT_PENDING_HOURS,
+  archiveCancelledAfterDays: BUSINESS.ARCHIVE_CANCELLED_AFTER_DAYS,
+});
+
+export const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
+  reservationFeeAmount: BUSINESS.DEPOSIT_AMOUNT,
+  penaltyRatePerDay: BUSINESS.PENALTY_RATE_PER_DAY,
+  defaultElectricityRatePerKwh: BUSINESS.DEFAULT_ELECTRICITY_RATE_PER_KWH,
+  defaultWaterRatePerUnit: 0,
+  ...DEFAULT_POLICY_SETTINGS,
+});
+
+const BRANCH_OVERRIDE_KEYS = Object.keys(DEFAULT_BRANCH_OVERRIDES);
+const POLICY_SETTING_KEYS = Object.keys(DEFAULT_POLICY_SETTINGS);
+const BUSINESS_SETTING_KEYS = Object.keys(DEFAULT_BUSINESS_SETTINGS);
 
 const parseFiniteNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-function normalizeBranchOverrides(branchOverridesLike) {
-  const normalized = { ...DEFAULT_BRANCH_OVERRIDES };
-  const source = branchOverridesLike instanceof Map
-    ? Object.fromEntries(branchOverridesLike.entries())
-    : branchOverridesLike || {};
+const normalizeDate = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 
-  for (const [branch, defaults] of Object.entries(DEFAULT_BRANCH_OVERRIDES)) {
-    const override = source?.[branch];
-    normalized[branch] = {
-      isApplianceFeeEnabled:
-        override?.isApplianceFeeEnabled ?? defaults.isApplianceFeeEnabled,
-      applianceFeeAmountPerUnit:
-        parseFiniteNumber(override?.applianceFeeAmountPerUnit) ??
-        defaults.applianceFeeAmountPerUnit,
-    };
+const normalizeChangedBy = (value) => {
+  if (!value || typeof value !== "object") return null;
+
+  const userId =
+    value.userId != null && value.userId !== ""
+      ? String(value.userId)
+      : null;
+  const email = value.email ? String(value.email) : "";
+  const role = value.role ? String(value.role) : "";
+
+  if (!userId && !email && !role) {
+    return null;
+  }
+
+  return {
+    userId,
+    email,
+    role,
+  };
+};
+
+const toSourceObject = (value) => {
+  if (value instanceof Map) {
+    return Object.fromEntries(value.entries());
+  }
+
+  if (value && typeof value.toObject === "function") {
+    return value.toObject();
+  }
+
+  return value || {};
+};
+
+const normalizeBranchOverride = (value, defaults) => {
+  const source = toSourceObject(value);
+
+  return {
+    isApplianceFeeEnabled:
+      source?.isApplianceFeeEnabled ?? defaults.isApplianceFeeEnabled,
+    applianceFeeAmountPerUnit:
+      parseFiniteNumber(source?.applianceFeeAmountPerUnit) ??
+      defaults.applianceFeeAmountPerUnit,
+    changedBy: normalizeChangedBy(source?.changedBy),
+    changedAt: normalizeDate(source?.changedAt),
+  };
+};
+
+function normalizeBranchOverrides(branchOverridesLike) {
+  const source = toSourceObject(branchOverridesLike);
+  const normalized = {};
+
+  for (const branch of BRANCH_OVERRIDE_KEYS) {
+    normalized[branch] = normalizeBranchOverride(
+      source?.[branch],
+      DEFAULT_BRANCH_OVERRIDES[branch],
+    );
   }
 
   return normalized;
@@ -42,54 +116,90 @@ export function serializeBranchOverrides(branchOverridesLike) {
   return normalizeBranchOverrides(branchOverridesLike);
 }
 
+export function mergeBranchOverrides(currentOverridesLike, patchOverridesLike = {}) {
+  const current = normalizeBranchOverrides(currentOverridesLike);
+  const patch = toSourceObject(patchOverridesLike);
+  const merged = { ...current };
+
+  for (const branch of BRANCH_OVERRIDE_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, branch)) continue;
+
+    merged[branch] = normalizeBranchOverride(
+      {
+        ...current[branch],
+        ...toSourceObject(patch[branch]),
+      },
+      DEFAULT_BRANCH_OVERRIDES[branch],
+    );
+  }
+
+  return merged;
+}
+
+export function serializeBusinessSettings(settingsLike = {}) {
+  const source = toSourceObject(settingsLike);
+  const serialized = {
+    branchOverrides: normalizeBranchOverrides(source.branchOverrides),
+    changedBy: normalizeChangedBy(source.changedBy),
+    changedAt: normalizeDate(source.changedAt),
+    updatedAt: normalizeDate(source.updatedAt),
+  };
+
+  for (const key of BUSINESS_SETTING_KEYS) {
+    serialized[key] =
+      parseFiniteNumber(source[key]) ?? DEFAULT_BUSINESS_SETTINGS[key];
+  }
+
+  return serialized;
+}
+
 export async function getBusinessSettings() {
   let settings = await BusinessSettings.findOne({ key: GLOBAL_KEY });
+
   if (!settings) {
     settings = await BusinessSettings.create({
       key: GLOBAL_KEY,
-      reservationFeeAmount: BUSINESS.DEPOSIT_AMOUNT,
-      penaltyRatePerDay: BUSINESS.PENALTY_RATE_PER_DAY,
-      defaultElectricityRatePerKwh: BUSINESS.DEFAULT_ELECTRICITY_RATE_PER_KWH,
-      defaultWaterRatePerUnit: 0,
+      ...DEFAULT_BUSINESS_SETTINGS,
       branchOverrides: DEFAULT_BRANCH_OVERRIDES,
+      changedBy: null,
+      changedAt: null,
     });
-  } else {
-    let changed = false;
+    return settings;
+  }
 
-    if (settings.penaltyRatePerDay === undefined || settings.penaltyRatePerDay === null) {
-      settings.penaltyRatePerDay = BUSINESS.PENALTY_RATE_PER_DAY;
-      changed = true;
-    }
-    if (
-      settings.defaultElectricityRatePerKwh === undefined ||
-      settings.defaultElectricityRatePerKwh === null
-    ) {
-      settings.defaultElectricityRatePerKwh = BUSINESS.DEFAULT_ELECTRICITY_RATE_PER_KWH;
-      changed = true;
-    }
-    if (
-      settings.defaultWaterRatePerUnit === undefined ||
-      settings.defaultWaterRatePerUnit === null
-    ) {
-      settings.defaultWaterRatePerUnit = 0;
-      changed = true;
-    }
-    const currentBranchOverrides = settings.branchOverrides instanceof Map
-      ? Object.fromEntries(settings.branchOverrides.entries())
-      : settings.branchOverrides || {};
-    const normalizedBranchOverrides = normalizeBranchOverrides(currentBranchOverrides);
-    if (
-      JSON.stringify(currentBranchOverrides) !==
-      JSON.stringify(normalizedBranchOverrides)
-    ) {
-      settings.branchOverrides = normalizedBranchOverrides;
-      changed = true;
-    }
+  let changed = false;
 
-    if (changed) {
-      await settings.save();
+  for (const key of BUSINESS_SETTING_KEYS) {
+    if (settings[key] === undefined || settings[key] === null) {
+      settings[key] = DEFAULT_BUSINESS_SETTINGS[key];
+      changed = true;
     }
   }
+
+  if (settings.changedBy === undefined) {
+    settings.changedBy = null;
+    changed = true;
+  }
+
+  if (settings.changedAt === undefined) {
+    settings.changedAt = null;
+    changed = true;
+  }
+
+  const currentBranchOverrides = toSourceObject(settings.branchOverrides);
+  const normalizedBranchOverrides = normalizeBranchOverrides(currentBranchOverrides);
+  if (
+    JSON.stringify(currentBranchOverrides) !==
+    JSON.stringify(normalizedBranchOverrides)
+  ) {
+    settings.branchOverrides = normalizedBranchOverrides;
+    changed = true;
+  }
+
+  if (changed) {
+    await settings.save();
+  }
+
   return settings;
 }
 
@@ -138,10 +248,14 @@ export function getBranchSettings(branch, settingsLike = null) {
   const normalizedOverrides = normalizeBranchOverrides(
     settingsLike?.branchOverrides ?? settingsLike,
   );
-  return normalizedOverrides[normalizedBranch] || {
-    isApplianceFeeEnabled: false,
-    applianceFeeAmountPerUnit: 0,
-  };
+  return (
+    normalizedOverrides[normalizedBranch] || {
+      isApplianceFeeEnabled: false,
+      applianceFeeAmountPerUnit: 0,
+      changedBy: null,
+      changedAt: null,
+    }
+  );
 }
 
 export async function getBranchSettingsForBranch(branch) {
@@ -165,4 +279,18 @@ export function resolveWaterRatePerUnit(requestedRatePerUnit, defaultRatePerUnit
 
   const configured = parseFiniteNumber(defaultRatePerUnit);
   return configured !== null ? configured : 0;
+}
+
+export function serializeLifecyclePolicySettings(settingsLike = {}) {
+  const serialized = serializeBusinessSettings(settingsLike);
+
+  return POLICY_SETTING_KEYS.reduce((acc, key) => {
+    acc[key] = serialized[key];
+    return acc;
+  }, {});
+}
+
+export async function getLifecyclePolicySettings() {
+  const settings = await getBusinessSettings();
+  return serializeLifecyclePolicySettings(settings);
 }

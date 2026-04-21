@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import {
   signInWithEmailAndPassword,
@@ -25,6 +25,7 @@ import {
 import { auth } from "../../../firebase/config";
 import { showNotification } from "../../../shared/utils/notification";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import {
   validateEmail,
   getFirebaseErrorMessage,
@@ -39,10 +40,10 @@ import "../../../shared/styles/notification.css";
 import hero3 from "../../../assets/images/hero3.jpg";
 
 const SIGNIN_IMAGE = hero3;
-  
+
 function SignIn() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const appNavigate = useAppNavigation();
   const { login, setGlobalLoading } = useAuth();
 
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -71,13 +72,6 @@ function SignIn() {
       setRememberMe(true);
       setFieldValid((prev) => ({ ...prev, email: true }));
       setTouched((prev) => ({ ...prev, email: true }));
-    }
-
-    // Show notification passed from signup page (e.g. duplicate Google account)
-    if (location.state?.notification) {
-      showNotification(location.state.notification, "info", 5000);
-      // Clear the state so it doesn't re-show on refresh
-      window.history.replaceState({}, "", window.location.pathname);
     }
 
     // Show success banner if redirected from email verification
@@ -180,10 +174,16 @@ function SignIn() {
     validateField("password", formData.password);
 
     if (!formData.email.trim() || validateEmail(formData.email)) {
-      showNotification(validateEmail(formData.email) || "Email is required", "error");
+      showNotification(
+        validateEmail(formData.email) || "Email is required",
+        "error",
+      );
       setTimeout(() => {
         const el = document.getElementById("email");
-        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.focus();
+        }
       }, 100);
       return false;
     }
@@ -191,7 +191,10 @@ function SignIn() {
       showNotification("Password is required", "error");
       setTimeout(() => {
         const el = document.getElementById("password");
-        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.focus();
+        }
       }, 100);
       return false;
     }
@@ -200,14 +203,18 @@ function SignIn() {
 
   // ── Auth handlers ──────────────────────────────────────────
   const handlePostAuthFlow = (loginResponse) => {
-    showNotification(`Welcome back, ${loginResponse.user.firstName}!`, "success", 4000);
+    const welcomeMessage = `Welcome back, ${loginResponse.user.firstName}!`;
     if (
       loginResponse.user.role === "branch_admin" ||
       loginResponse.user.role === "owner"
     ) {
-      setTimeout(() => navigate("/admin/dashboard"), 800);
+      appNavigate("/admin/dashboard", {
+        flash: { type: "success", message: welcomeMessage },
+      });
     } else {
-      setTimeout(() => navigate("/applicant/check-availability"), 800);
+      appNavigate("/applicant/check-availability", {
+        flash: { type: "success", message: welcomeMessage },
+      });
     }
   };
 
@@ -268,29 +275,32 @@ function SignIn() {
 
       try {
         const loginResponse = await login();
-        const welcomeName = loginResponse.user.firstName || firebaseUser.displayName || "back";
-        // Show notification directly — it appends to document.body and survives route transitions
-        showNotification(`Welcome back, ${welcomeName}!`, "success", 4000);
+        const welcomeName =
+          loginResponse.user.firstName || firebaseUser.displayName || "back";
+        const welcomeMessage = `Welcome back, ${welcomeName}!`;
         if (
           loginResponse.user.role === "branch_admin" ||
           loginResponse.user.role === "owner"
         ) {
-          setTimeout(() => navigate("/admin/dashboard"), 800);
+          appNavigate("/admin/dashboard", {
+            flash: { type: "success", message: welcomeMessage },
+          });
           setGlobalLoading(false);
           return;
         }
         if (!loginResponse.user.branch || loginResponse.user.branch === "") {
-          setTimeout(
-            () =>
-              navigate("/applicant/check-availability", {
-                state: { notice: "Please select your branch to continue" },
-              }),
-            500,
-          );
+          appNavigate("/applicant/check-availability", {
+            flash: {
+              type: "info",
+              message: "Please select your branch to continue",
+            },
+          });
           setGlobalLoading(false);
           return;
         }
-        setTimeout(() => navigate("/applicant/check-availability"), 800);
+        appNavigate("/applicant/check-availability", {
+          flash: { type: "success", message: welcomeMessage },
+        });
       } catch (backendError) {
         await auth.signOut();
         const isNotRegistered =
@@ -352,13 +362,20 @@ function SignIn() {
           if (u) await u.delete();
         } catch (delErr) {
           // delete() can fail if account existed before (e.g. email/password user)
-          try { await auth.signOut(); } catch (_) { /* ignore */ }
+          try {
+            await auth.signOut();
+          } catch (_) {
+            /* ignore */
+          }
         }
 
         const status = loginError.response?.status;
         const errMsg = loginError.message || "";
 
-        if (status === 404 || /not found|not registered|register first/i.test(errMsg)) {
+        if (
+          status === 404 ||
+          /not found|not registered|register first/i.test(errMsg)
+        ) {
           showNotification(
             "This Google account isn't registered yet. Please sign up first.",
             "warning",
@@ -397,7 +414,11 @@ function SignIn() {
         try {
           await auth.currentUser.delete();
         } catch (delErr) {
-          try { await auth.signOut(); } catch (_) { /* ignore */ }
+          try {
+            await auth.signOut();
+          } catch (_) {
+            /* ignore */
+          }
         }
       }
       showNotification(getFirebaseErrorMessage(error, "login"), "error");
@@ -453,8 +474,7 @@ function SignIn() {
             )}
             <h1 className="auth-header__title">Welcome back</h1>
             <p className="auth-header__subtitle">
-              Don&apos;t have an account?{" "}
-              <Link to="/signup">Sign up</Link>
+              Don&apos;t have an account? <Link to="/signup">Sign up</Link>
             </p>
           </div>
 
@@ -462,15 +482,27 @@ function SignIn() {
           {unverifiedEmail && (
             <div className="verify-banner" role="alert">
               {/* Mail icon */}
-              <svg className="verify-banner__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="2" y="4" width="20" height="16" rx="2"/>
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              <svg
+                className="verify-banner__icon"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
               </svg>
 
               {/* Text */}
               <div className="verify-banner__text">
                 <span className="verify-banner__title">Email not verified</span>
-                <span className="verify-banner__desc">A link was sent to your email.</span>
+                <span className="verify-banner__desc">
+                  A link was sent to your email.
+                </span>
               </div>
 
               {/* Action */}
@@ -486,7 +518,9 @@ function SignIn() {
                     );
                     setTimeout(() => {
                       const el = document.getElementById("password");
-                      if (el) { el.focus(); }
+                      if (el) {
+                        el.focus();
+                      }
                     }, 100);
                     return;
                   }
@@ -511,22 +545,32 @@ function SignIn() {
                     showNotification(
                       err.code === "auth/too-many-requests"
                         ? "Too many requests. Please wait a few minutes."
-                        : err.code === "auth/wrong-password" || err.code === "auth/invalid-credential"
-                        ? "Incorrect password. Please re-enter your password."
-                        : "Could not resend. Please try signing in again.",
+                        : err.code === "auth/wrong-password" ||
+                            err.code === "auth/invalid-credential"
+                          ? "Incorrect password. Please re-enter your password."
+                          : "Could not resend. Please try signing in again.",
                       "error",
                     );
                   } finally {
-                    try { await auth.signOut(); } catch (_) { /* ignore */ }
+                    try {
+                      await auth.signOut();
+                    } catch (_) {
+                      /* ignore */
+                    }
                     sessionStorage.removeItem("resendInProgress");
                     setResending(false);
                   }
                 }}
               >
                 {resending ? (
-                  <><Loader2 className="w-3 h-3 auth-spinner" />&nbsp;Sending…</>
+                  <>
+                    <Loader2 className="w-3 h-3 auth-spinner" />
+                    &nbsp;Sending…
+                  </>
                 ) : resendCooldown > 0 ? (
-                  <span className="verify-banner__timer">{resendCooldown}s</span>
+                  <span className="verify-banner__timer">
+                    {resendCooldown}s
+                  </span>
                 ) : (
                   "Resend"
                 )}

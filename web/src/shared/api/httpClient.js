@@ -28,12 +28,21 @@ export const API_URL = API_BASE_URL;
 export const getFreshToken = async (forceRefresh = false) => {
   const user = auth.currentUser;
   if (!user) return null;
+
   try {
     return await user.getIdToken(forceRefresh);
   } catch (error) {
-    console.error("❌ Failed to get fresh token:", error);
+    console.error("Failed to get fresh token:", error);
     return null;
   }
+};
+
+const parseApiJson = (json, preserveEnvelope = false) => {
+  if (json && json.success === true && "data" in json && !preserveEnvelope) {
+    return json.data;
+  }
+
+  return json;
 };
 
 // =============================================================================
@@ -51,7 +60,12 @@ export const getFreshToken = async (forceRefresh = false) => {
  */
 export const authFetch = async (url, options = {}, _isRetry = false) => {
   try {
-    // Always get a fresh token before each request
+    const {
+      preserveEnvelope = false,
+      headers: optionHeaders,
+      ...fetchOptions
+    } = options;
+
     const token = await getFreshToken();
 
     if (!token) {
@@ -63,11 +77,11 @@ export const authFetch = async (url, options = {}, _isRetry = false) => {
     const headers = {
       "Content-Type": "application/json",
       ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
+      ...optionHeaders,
     };
 
     const response = await fetch(`${API_URL}${url}`, {
-      ...options,
+      ...fetchOptions,
       headers,
     });
 
@@ -76,33 +90,32 @@ export const authFetch = async (url, options = {}, _isRetry = false) => {
         .json()
         .catch(() => ({ message: response.statusText }));
 
-      // ── Silent token refresh on 401 (prevents mid-demo crashes) ──
-      // If the token expired mid-session, force-refresh and retry once.
       if (response.status === 401 && !_isRetry) {
-        const freshToken = await getFreshToken(true); // force refresh
+        const freshToken = await getFreshToken(true);
         if (freshToken) {
-          return authFetch(url, options, true); // retry exactly once
+          return authFetch(url, options, true);
         }
       }
 
       let errorMessage = "API request failed";
       if (error && error.error) {
-        errorMessage = typeof error.error === "string" ? error.error : error.error.message;
+        errorMessage =
+          typeof error.error === "string"
+            ? error.error
+            : error.error.message;
       } else if (error && error.message) {
         errorMessage = error.message;
       }
-      
+
       const apiError = new Error(errorMessage);
       apiError.response = { status: response.status, data: error };
       throw apiError;
     }
 
     const json = await response.json();
-    // Auto-unwrap sendSuccess envelope: { success, data, meta } → data
-    if (json && json.success === true && "data" in json) return json.data;
-    return json;
+    return parseApiJson(json, preserveEnvelope);
   } catch (error) {
-    console.error("❌ API Request Error:", error);
+    console.error("API Request Error:", error);
     throw error;
   }
 };
@@ -120,13 +133,19 @@ export const authFetch = async (url, options = {}, _isRetry = false) => {
  */
 export const publicFetch = async (url, options = {}) => {
   try {
+    const {
+      preserveEnvelope = false,
+      headers: optionHeaders,
+      ...fetchOptions
+    } = options;
+
     const headers = {
       "Content-Type": "application/json",
-      ...options.headers,
+      ...optionHeaders,
     };
 
     const response = await fetch(`${API_URL}${url}`, {
-      ...options,
+      ...fetchOptions,
       headers,
     });
 
@@ -143,11 +162,9 @@ export const publicFetch = async (url, options = {}) => {
     }
 
     const json = await response.json();
-    // Auto-unwrap sendSuccess envelope: { success, data, meta } → data
-    if (json && json.success === true && "data" in json) return json.data;
-    return json;
+    return parseApiJson(json, preserveEnvelope);
   } catch (error) {
-    console.error("❌ Public API Request Error:", error);
+    console.error("Public API Request Error:", error);
     throw error;
   }
 };
@@ -168,7 +185,6 @@ export function useApiClient() {
   return {
     authFetch,
     publicFetch,
-    // Convenience methods
     get: (url) => authFetch(url, { method: "GET" }),
     post: (url, data) =>
       authFetch(url, { method: "POST", body: JSON.stringify(data) }),

@@ -126,10 +126,10 @@ export default function SuperAdminDashboard() {
     { label: "Reservations", to: "/admin/reservations" },
     { label: "Room Availability", to: "/admin/room-availability" },
     { label: "Billing", to: "/admin/billing" },
-    { label: "Financials", to: "/admin/analytics?tab=financials" },
+    { label: "Financials", to: "/admin/analytics/details?tab=financials" },
     { label: "Tenants", to: "/admin/tenants" },
     { label: "User Management", to: "/admin/users" },
-    { label: "System Monitoring", to: "/admin/analytics?tab=monitoring" },
+    { label: "System Monitoring", to: "/admin/analytics/details?tab=monitoring" },
   ];
 
   return (

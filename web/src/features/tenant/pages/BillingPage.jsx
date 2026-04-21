@@ -4,7 +4,6 @@ import { billingApi } from "../../../shared/api/apiClient";
 import { useMyUtilityBills, useMyUtilityBreakdownByBillId } from "../../../shared/hooks/queries/useUtility";
 import { showNotification } from "../../../shared/utils/notification";
 import { formatPaymentMethod } from "../../../shared/utils/formatPaymentMethod";
-import TenantLayout from "../../../shared/layouts/TenantLayout";
 import {
   FileText,
   Clock,
@@ -169,7 +168,6 @@ const BillingPage = () => {
 
   if (bills.length === 0) {
     return (
-      <TenantLayout>
         <div className="tenant-billing">
           <div className="billing-page-header">
             <h1>Billing & Payments</h1>
@@ -184,12 +182,10 @@ const BillingPage = () => {
             </p>
           </div>
         </div>
-      </TenantLayout>
     );
   }
 
   return (
-    <TenantLayout>
       <div className="tenant-billing">
         <div className="billing-page-header">
           <h1>Billing & Payments</h1>
@@ -301,7 +297,6 @@ const BillingPage = () => {
         {/* ─── Electricity History ─── */}
         <ElectricityHistory fmtCurrency={fmtCurrency} />
       </div>
-    </TenantLayout>
   );
 };
 

@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
-import TenantLayout from "../../../shared/layouts/TenantLayout";
 import ContractsPageSkeleton from "../components/contracts/ContractsPageSkeleton";
 import "../styles/tenant-common.css";
 import "../styles/contracts.css";
@@ -338,7 +337,6 @@ const ContractsPage = () => {
   };
 
   return (
-    <TenantLayout>
       <div className="contracts-page">
         <div className="contracts-header">
           <h1>My Contracts</h1>
@@ -404,7 +402,6 @@ const ContractsPage = () => {
           </>
         )}
       </div>
-    </TenantLayout>
   );
 };
 

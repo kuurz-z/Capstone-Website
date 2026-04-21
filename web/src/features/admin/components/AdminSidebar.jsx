@@ -3,14 +3,10 @@ import { NavLink } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { showNotification } from "../../../shared/utils/notification";
 import LilycrestLogo from "../../../shared/components/LilycrestLogo";
-import {
-  LogOut,
-  X,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { LogOut, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import {
   NAV_GROUPS,
   getSidebarBrandMeta,
@@ -18,9 +14,15 @@ import {
 } from "./sidebarConfig.mjs";
 import "../styles/admin-sidebar.css";
 
-export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
+export default function AdminSidebar({
+  isOpen,
+  onClose,
+  collapsed,
+  onToggleCollapse,
+}) {
   const { user, logout, globalLoading } = useAuth();
   const { can } = usePermissions();
+  const appNavigate = useAppNavigation();
   const isOwner = user?.role === "owner";
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutInProgress, setLogoutInProgress] = useState(false);
@@ -40,12 +42,10 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
     try {
       const result = await logout();
       if (result?.success) {
-        setTimeout(() => {
-          showNotification("You have been logged out successfully", "success");
-          setTimeout(() => {
-            window.location.href = "/signin";
-          }, 300);
-        }, 400);
+        appNavigate("/signin", {
+          replace: true,
+          flash: { type: "success", message: "You have been logged out successfully" },
+        });
       }
     } catch (error) {
       console.error("Admin logout error:", error);
@@ -76,7 +76,9 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
   };
 
   const displayName = user
-    ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username || "Admin"
+    ? `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+      user.username ||
+      "Admin"
     : "Admin";
   const brandMeta = getSidebarBrandMeta(isOwner);
   const roleLabel = brandMeta.roleLabel;
@@ -96,14 +98,18 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
             <li key={item.to} className="sb-menu-item">
               <NavLink
                 to={item.to}
-                className={({ isActive }) => `sb-link ${isActive ? "active" : ""}`}
+                className={({ isActive }) =>
+                  `sb-link ${isActive ? "active" : ""}`
+                }
                 onClick={onClose}
                 onMouseEnter={() => collapsed && setHoveredItem(item.to)}
                 onMouseLeave={() => setHoveredItem(null)}
               >
                 <span className="sb-link-indicator" />
                 <item.icon className="sb-link-icon" />
-                {!collapsed && <span className="sb-link-text">{item.text}</span>}
+                {!collapsed && (
+                  <span className="sb-link-text">{item.text}</span>
+                )}
                 {collapsed && hoveredItem === item.to && (
                   <span className="sb-tooltip">{item.text}</span>
                 )}
@@ -116,7 +122,9 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
   };
 
   return (
-    <aside className={`sb ${isOpen ? "sb--open" : ""} ${collapsed ? "sb--collapsed" : ""}`}>
+    <aside
+      className={`sb ${isOpen ? "sb--open" : ""} ${collapsed ? "sb--collapsed" : ""}`}
+    >
       <div className="sb-header">
         <div className="sb-brand">
           <LilycrestLogo className="sb-logo" aria-label="Lilycrest Logo" />
@@ -127,14 +135,17 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
             </div>
           )}
         </div>
-        <button className="sb-close" onClick={onClose} aria-label="Close sidebar">
+        <button
+          className="sb-close"
+          onClick={onClose}
+          aria-label="Close sidebar"
+        >
           <X size={18} />
         </button>
       </div>
 
       <nav className="sb-nav">
-        {NAV_GROUPS
-          .slice()
+        {NAV_GROUPS.slice()
           .sort((a, b) => a.priority - b.priority)
           .map((group) => renderGroup(group))}
       </nav>
@@ -145,7 +156,11 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
           onClick={onToggleCollapse}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          {collapsed ? (
+            <PanelLeftOpen size={16} />
+          ) : (
+            <PanelLeftClose size={16} />
+          )}
           {!collapsed && <span>Collapse</span>}
         </button>
 
@@ -187,13 +202,17 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
       {showLogoutConfirm &&
         createPortal(
           <div className="sb-logout-overlay" onClick={cancelLogout}>
-            <div className="sb-logout-modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="sb-logout-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="sb-logout-modal-icon">
                 <LogOut size={22} />
               </div>
               <h3 className="sb-logout-modal-title">Sign Out</h3>
               <p className="sb-logout-modal-text">
-                You will be signed out and redirected to the login page. Are you sure?
+                You will be signed out and redirected to the login page. Are you
+                sure?
               </p>
               <div className="sb-logout-modal-actions">
                 <button
@@ -208,7 +227,9 @@ export default function AdminSidebar({ isOpen, onClose, collapsed, onToggleColla
                   onClick={proceedLogout}
                   disabled={logoutInProgress || globalLoading}
                 >
-                  {logoutInProgress || globalLoading ? "Signing out..." : "Sign Out"}
+                  {logoutInProgress || globalLoading
+                    ? "Signing out..."
+                    : "Sign Out"}
                 </button>
               </div>
             </div>

@@ -11,6 +11,12 @@
 
 .sa-perm-card {
   padding: 24px 28px !important;
+  scroll-margin-top: 120px;
+}
+
+.sa-perm-card--focused {
+  border-color: rgba(37, 99, 235, 0.32) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08), 0 24px 48px rgba(15, 23, 42, 0.1) !important;
 }
 
 .sa-perm-card-header {
@@ -73,6 +79,12 @@
   padding: 3px 10px;
   background: #f1f5f9;
   border-radius: 99px;
+}
+
+.sa-perm-focus-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #1d4ed8;
 }
 
 @media (max-width: 700px) {

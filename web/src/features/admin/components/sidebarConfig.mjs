@@ -10,6 +10,7 @@ import {
   FileText,
   BarChart3,
   Building2,
+  Shield,
   Settings,
 } from "lucide-react";
 
@@ -28,9 +29,10 @@ export const NAV_ITEMS = [
   { to: "/admin/analytics", icon: BarChart3, text: "Analytics", group: "workspace", priority: 7 },
   { to: "/admin/announcements", icon: Megaphone, text: "Announcements", group: "workspace", priority: 8, permission: "manageAnnouncements" },
   { to: "/admin/users", icon: UserCog, text: "Accounts", group: "system", priority: 1 },
-  { to: "/admin/audit-logs", icon: FileText, text: "Activity Log", group: "system", priority: 2 },
-  { to: "/admin/branches", icon: Building2, text: "Branches", group: "system", priority: 3, saOnly: true },
-  { to: "/admin/settings", icon: Settings, text: "Settings", group: "system", priority: 4, saOnly: true },
+  { to: "/admin/roles", icon: Shield, text: "Roles & Permissions", group: "system", priority: 2, saOnly: true },
+  { to: "/admin/audit-logs", icon: FileText, text: "Audit & Security", group: "system", priority: 3 },
+  { to: "/admin/branches", icon: Building2, text: "Branches", group: "system", priority: 4, saOnly: true },
+  { to: "/admin/settings", icon: Settings, text: "Policies & Settings", group: "system", priority: 5, saOnly: true },
 ];
 
 export function getVisibleNavItems({ isOwner = false, can = () => true } = {}) {

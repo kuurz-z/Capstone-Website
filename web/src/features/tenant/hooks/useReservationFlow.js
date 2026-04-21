@@ -17,6 +17,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
 import { reservationApi, roomApi, billingApi, authApi } from "../../../shared/api/apiClient";
@@ -26,6 +27,7 @@ import { uploadIfFile } from "../../../shared/utils/imageUpload";
 
 export default function useReservationFlow() {
   const navigate = useNavigate();
+  const appNavigate = useAppNavigation();
   const location = useLocation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -442,8 +444,9 @@ export default function useReservationFlow() {
         } else if (isStepMode) {
           loadActiveReservation();
         } else {
-          showNotification("No room selected. Redirecting...", "warning", 2000);
-          setTimeout(() => navigate("/applicant/check-availability"), 2000);
+          appNavigate("/applicant/check-availability", {
+            flash: { type: "warning", message: "No room selected. Redirecting..." },
+          });
         }
       }
     }
@@ -469,8 +472,9 @@ export default function useReservationFlow() {
           r.status !== "cancelled" && r.status !== "archived" && !r.isArchived,
       );
       if (!found) {
-        showNotification("No active reservation found.", "warning", 2000);
-        setTimeout(() => navigate("/applicant/check-availability"), 2000);
+        appNavigate("/applicant/check-availability", {
+          flash: { type: "warning", message: "No active reservation found." },
+        });
         return;
       }
       const active = await reservationApi.getById(found._id);
@@ -504,8 +508,9 @@ export default function useReservationFlow() {
       }
     } catch (err) {
       console.error("Failed to load reservation:", err);
-      showNotification("No room selected. Redirecting...", "warning", 2000);
-      setTimeout(() => navigate("/applicant/check-availability"), 2000);
+      appNavigate("/applicant/check-availability", {
+        flash: { type: "warning", message: "No room selected. Redirecting..." },
+      });
     }
   };
 
@@ -561,12 +566,13 @@ export default function useReservationFlow() {
 
       // visit_pending: tenant must wait — redirect to profile (unless rejected)
       if (reservationStatus === "visit_pending" && !reservation.scheduleRejected) {
-        showNotification(
-          "Waiting for admin to approve your visit. Track progress on your profile.",
-          "info",
-          3000,
-        );
-        navigate("/applicant/profile");
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "info",
+            message:
+              "Waiting for admin to approve your visit. Track progress on your profile.",
+          },
+        });
         return;
       }
 
@@ -586,12 +592,13 @@ export default function useReservationFlow() {
         else if (hasApplication) targetStage = 4;
         else if (isVisitApprovedFlag) targetStage = 3;
         else if (hasVisitScheduled) {
-          showNotification(
-            "Waiting for admin to approve your visit. Track progress on your profile.",
-            "info",
-            3000,
-          );
-          navigate("/applicant/profile");
+          appNavigate("/applicant/profile", {
+            flash: {
+              type: "info",
+              message:
+                "Waiting for admin to approve your visit. Track progress on your profile.",
+            },
+          });
           return;
         }
       }
@@ -611,8 +618,12 @@ export default function useReservationFlow() {
               sessionStorage.removeItem("activeReservationId");
               // Back button → redirect to dashboard; Return to merchant → show step 5
               if (paymentReturnStatusRef.current === "cancelled") {
-                showNotification("Payment successful! Your reservation is secured.", "success", 5000);
-                navigate("/applicant/profile");
+                appNavigate("/applicant/profile", {
+                  flash: {
+                    type: "success",
+                    message: "Payment successful! Your reservation is secured.",
+                  },
+                });
                 return;
               }
               // Re-fetch reservation to get the newly generated reservationCode
@@ -671,19 +682,19 @@ export default function useReservationFlow() {
       const status = err?.response?.status;
       if (status === 404) {
         sessionStorage.removeItem("activeReservationId");
-        showNotification(
-          "Reservation not found. It may have been removed or expired.",
-          "error",
-          3000,
-        );
-        navigate("/applicant/check-availability");
+        appNavigate("/applicant/check-availability", {
+          flash: {
+            type: "error",
+            message: "Reservation not found. It may have been removed or expired.",
+          },
+        });
       } else if (status === 401 || status === 403) {
-        showNotification(
-          "Please sign in to continue your reservation.",
-          "error",
-          3000,
-        );
-        navigate("/signin");
+        appNavigate("/signin", {
+          flash: {
+            type: "warning",
+            message: "Please sign in to continue your reservation.",
+          },
+        });
       } else {
         showNotification("Failed to load reservation data", "error", 3000);
       }
@@ -714,12 +725,12 @@ export default function useReservationFlow() {
   const advanceStage = async (nextStage, message) => {
     setHighestStageReached((prev) => Math.max(prev, nextStage));
     await queryClient.invalidateQueries({ queryKey: ["reservations"] });
-    showNotification(
-      message || "Step completed! Track your progress here.",
-      "success",
-      3000,
-    );
-    navigate("/applicant/profile");
+    appNavigate("/applicant/profile", {
+      flash: {
+        type: "success",
+        message: message || "Step completed! Track your progress here.",
+      },
+    });
   };
 
   const getFieldValue = (value, defaultValue = "") =>
@@ -1017,7 +1028,13 @@ export default function useReservationFlow() {
           title: "Visit Scheduled!",
           subtitle: "Your visit request has been submitted. Track progress on your dashboard.",
         });
-        setTimeout(() => navigate("/applicant/profile"), 2200);
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "success",
+            title: "Visit Scheduled!",
+            message: "Your visit request has been submitted. Track progress on your dashboard.",
+          },
+        });
       } else if (currentStage === 3) {
         if (!devBypassValidation) {
           const inc = [];
@@ -1163,7 +1180,13 @@ export default function useReservationFlow() {
           title: "Application Submitted!",
           subtitle: "Payment step is now unlocked. Continue from your dashboard.",
         });
-        setTimeout(() => navigate("/applicant/profile"), 2200);
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "success",
+            title: "Application Submitted!",
+            message: "Payment step is now unlocked. Continue from your dashboard.",
+          },
+        });
       } else if (currentStage === 4) {
         // Stage 4 only uses PayMongo online checkout.
         // If user got here via the "Confirm" button, show overlay and go to profile.
@@ -1177,7 +1200,13 @@ export default function useReservationFlow() {
           title: "Payment Step Ready!",
           subtitle: "Use the Pay Online button to complete your reservation.",
         });
-        setTimeout(() => navigate("/applicant/profile"), 2200);
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "success",
+            title: "Payment Step Ready!",
+            message: "Use the Pay Online button to complete your reservation.",
+          },
+        });
       } else if (currentStage === 5) {
         navigate("/applicant/profile");
       }
@@ -1229,7 +1258,13 @@ export default function useReservationFlow() {
           title: "Room Confirmed!",
           subtitle: "Continue from your dashboard to schedule a visit.",
         });
-        setTimeout(() => navigate("/applicant/profile"), 2200);
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "success",
+            title: "Room Confirmed!",
+            message: "Continue from your dashboard to schedule a visit.",
+          },
+        });
       } else if (pendingStageAction === "stage4") {
         await queryClient.invalidateQueries({ queryKey: ["reservations"] });
         setSuccessOverlay({
@@ -1237,7 +1272,13 @@ export default function useReservationFlow() {
           title: "Reservation Submitted!",
           subtitle: "Your reservation is being processed by admin.",
         });
-        setTimeout(() => navigate("/applicant/profile"), 2200);
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "success",
+            title: "Reservation Submitted!",
+            message: "Your reservation is being processed by admin.",
+          },
+        });
       }
     } catch (error) {
       showNotification(

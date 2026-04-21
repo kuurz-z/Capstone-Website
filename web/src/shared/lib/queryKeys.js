@@ -64,6 +64,8 @@ export const queryKeys = {
   // ── Audit Logs ──
   auditLogs: {
     all: (params) => ["auditLogs", "list", params || {}],
+    paged: (params) => ["auditLogs", "paged", params || {}],
+    failedLogins: (hours) => ["auditLogs", "failedLogins", hours || 24],
   },
 
   // ── Maintenance ──

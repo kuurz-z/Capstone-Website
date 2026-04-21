@@ -9,6 +9,7 @@ import {
   Trash2,
   UserCheck,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
@@ -16,6 +17,10 @@ import { reservationApi } from "../../../shared/api/apiClient";
 import { queryKeys } from "../../../shared/lib/queryKeys";
 import { showNotification } from "../../../shared/utils/notification";
 import { exportToCSV } from "../../../shared/utils/exportUtils";
+import {
+  normalizeBranchFilterValue,
+  syncBranchSearchParam,
+} from "../../../shared/utils/branchFilterQuery.mjs";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import {
@@ -84,11 +89,17 @@ function ReservationsPage() {
   const { can } = usePermissions();
   const queryClient = useQueryClient();
   const isOwner = user?.role === "owner";
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("reservations");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [branchFilter, setBranchFilter] = useState(
-    isOwner ? "all" : user?.branch || "all",
+  const requestedBranch = searchParams.get("branch");
+  const [branchFilter, setBranchFilter] = useState(() =>
+    normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      fallbackBranch: isOwner ? null : user?.branch,
+      allValue: "all",
+    }),
   );
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -190,6 +201,28 @@ function ReservationsPage() {
       setCurrentPage(maxPage);
     }
   }, [currentPage, itemsPerPage, totalFiltered]);
+
+  useEffect(() => {
+    const nextBranch = normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      fallbackBranch: isOwner ? null : user?.branch,
+      allValue: "all",
+    });
+
+    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
+  }, [isOwner, requestedBranch, user?.branch]);
+
+  useEffect(() => {
+    if (!user?.role) return;
+
+    const nextParams = syncBranchSearchParam(searchParams, branchFilter, {
+      enabled: isOwner,
+      allValue: "all",
+    });
+
+    if (nextParams.toString() === searchParams.toString()) return;
+    setSearchParams(nextParams, { replace: true });
+  }, [branchFilter, isOwner, searchParams, setSearchParams, user?.role]);
 
   const summaryItems = useMemo(
     () => [
@@ -299,9 +332,10 @@ function ReservationsPage() {
         ...reservation,
         id: reservation._id,
         customer:
+          reservation.customer ||
           `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
           "Unknown",
-        email: reservation.userId?.email || "-",
+        email: reservation.email || reservation.userId?.email || "-",
         room: reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
         branch: getBranchLabel(reservation.roomId?.branch),
         branchCode: reservation.roomId?.branch || "",

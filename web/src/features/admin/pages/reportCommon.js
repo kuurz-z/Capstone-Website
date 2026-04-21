@@ -5,9 +5,9 @@ export const REPORT_TABS = [
 ];
 
 export const REPORT_ROUTES = {
-  occupancy: "/admin/reports/occupancy",
-  billing: "/admin/reports/billing",
-  operations: "/admin/reports/operations",
+  occupancy: "/admin/analytics/details?tab=occupancy",
+  billing: "/admin/analytics/details?tab=billing",
+  operations: "/admin/analytics/details?tab=operations",
 };
 
 export const formatPeso = (value) =>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   useUnreadCount,
@@ -76,6 +77,7 @@ export default function NotificationBell() {
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
   const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
 
   const { data: unreadData } = useUnreadCount();
   const { data: notifData, isLoading } = useNotifications(1, {
@@ -144,8 +146,27 @@ export default function NotificationBell() {
         ) : null}
       </button>
 
-      {isOpen ? (
-        <div ref={dropdownRef} className="nb-dropdown">
+      <AnimatePresence initial={false}>
+        {isOpen ? (
+          <motion.div
+            ref={dropdownRef}
+            className="nb-dropdown"
+            initial={
+              prefersReducedMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: -8, scale: 0.985 }
+            }
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={
+              prefersReducedMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: -6, scale: 0.985 }
+            }
+            transition={{
+              duration: prefersReducedMotion ? 0.01 : 0.18,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
           <div className="nb-dropdown-header">
             <h3 className="nb-dropdown-title">Notifications</h3>
             {unreadCount > 0 ? (
@@ -215,8 +236,9 @@ export default function NotificationBell() {
               </button>
             </div>
           ) : null}
-        </div>
-      ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

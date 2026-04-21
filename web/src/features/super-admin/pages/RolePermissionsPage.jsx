@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Shield, UserCog } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import PermissionEditor from "../../admin/components/PermissionEditor";
 import { useUsers, useUpdatePermissions } from "../../../shared/hooks/queries/useUsers";
 import "../styles/superadmin-dashboard.css";
@@ -13,9 +15,26 @@ const formatBranch = (branch) => {
 };
 
 export default function RolePermissionsPage() {
+  const [searchParams] = useSearchParams();
   const { data: usersResponse, isLoading, error } = useUsers({ role: "branch_admin" });
   const updatePermissions = useUpdatePermissions();
   const users = usersResponse?.users || usersResponse || [];
+  const focusedUserId = searchParams.get("userId");
+  const hasFocusedUser = Boolean(
+    focusedUserId && users.some((user) => String(user._id) === String(focusedUserId)),
+  );
+
+  useEffect(() => {
+    if (!hasFocusedUser) return;
+
+    const targetCard = document.getElementById(`sa-perm-card-${focusedUserId}`);
+    if (!targetCard) return;
+
+    targetCard.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [focusedUserId, hasFocusedUser]);
 
   return (
     <div className="sa2">
@@ -36,6 +55,11 @@ export default function RolePermissionsPage() {
             <p className="sa2-subtle">
               Review and update the permissions assigned to each branch admin account.
             </p>
+            {hasFocusedUser ? (
+              <p className="sa-perm-focus-note">
+                Focused on the branch admin selected from Accounts.
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -48,7 +72,15 @@ export default function RolePermissionsPage() {
         {!isLoading && !error && users.length > 0 ? (
           <div className="sa-perm-list">
             {users.map((user) => (
-              <section key={user._id} className="sa2-card sa-perm-card">
+              <section
+                key={user._id}
+                id={`sa-perm-card-${user._id}`}
+                className={`sa2-card sa-perm-card ${
+                  String(user._id) === String(focusedUserId)
+                    ? "sa-perm-card--focused"
+                    : ""
+                }`}
+              >
                 <div className="sa-perm-card-header">
                   <div className="sa-perm-user-info">
                     <div className="sa-perm-avatar">

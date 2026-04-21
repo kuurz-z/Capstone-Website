@@ -114,6 +114,19 @@ body {
   min-height: 100vh;
 }
 
+.public-route-frame {
+  min-height: 100vh;
+}
+
+.public-route-frame-flash {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100vw - 32px), 720px);
+  z-index: 100001;
+}
+
 /* ── Hide Native Browser Password Reveal Icons ─────────────── */
 /* Prevents double "show password" icons in Edge/IE */
 input[type="password"]::-ms-reveal,

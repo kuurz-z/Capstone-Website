@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { showNotification } from "../../../shared/utils/notification";
 import LilycrestLogo from "../../../shared/components/LilycrestLogo";
@@ -50,6 +51,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout, globalLoading } = useAuth();
+  const appNavigate = useAppNavigation();
   const { can } = usePermissions();
   const isOwner = user?.role === "owner";
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -79,12 +81,13 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
     try {
       const result = await logout();
       if (result?.success) {
-        setTimeout(() => {
-          showNotification("You have been logged out successfully", "success");
-          setTimeout(() => {
-            window.location.href = "/signin";
-          }, 300);
-        }, 400);
+        appNavigate("/signin", {
+          replace: true,
+          flash: {
+            type: "success",
+            message: "You have been logged out successfully",
+          },
+        });
       }
     } catch (error) {
       console.error("Admin logout error:", error);

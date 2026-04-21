@@ -1,0 +1,1 @@
+import{j as u}from"./admin-B9haQHbp.js";function f({width:t,height:l,borderRadius:r,variant:x,style:i={},className:n=""}){let o=t??"100%",e=l??"16px",s=r??"8px";if(x==="circle"){const p=t??"40px";o=p,e=p,s="50%"}else x==="text"&&(e=l??"14px",s="4px");return u.jsx("div",{className:`skeleton-pulse ${n}`,style:{width:o,height:e,borderRadius:s,...i}})}export{f as S};

@@ -36,6 +36,7 @@ import {
   normalizeMaintenanceUrgency,
 } from "../config/maintenance.js";
 import { buildLegacyDescription } from "../utils/maintenanceMigration.js";
+import { DELETED_ACCOUNT_LABEL } from "../utils/userReference.js";
 
 const USER_SELECT_FIELDS =
   "user_id firstName lastName email phone branch role";
@@ -173,7 +174,7 @@ const serializeTenantSummary = (user, request) => {
   if (!user) {
     return {
       user_id: request.user_id,
-      full_name: "Unknown Tenant",
+      full_name: request.user_id ? DELETED_ACCOUNT_LABEL : "Unknown Tenant",
       branch: request.branch || null,
       email: null,
       phone: null,

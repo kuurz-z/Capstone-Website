@@ -1,19 +1,20 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Users, UserPlus } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { useApiClient } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUsers, useUserStats } from "../../../shared/hooks/queries/useUsers";
-import { queryKeys } from "../../../shared/lib/queryKeys";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
-import DeleteUserModal from "../components/users/DeleteUserModal";
 import HardDeleteUserModal from "../components/users/HardDeleteUserModal";
 import RestoreUserModal from "../components/users/RestoreUserModal";
 import AccountActionModal from "../components/users/AccountActionModal";
 import AccountRowActions from "../components/users/AccountRowActions";
+import AccountAccessDrawer from "../components/users/AccountAccessDrawer";
 import {
   PageShell,
   SummaryBar,
@@ -21,6 +22,10 @@ import {
   DataTable,
   StatusBadge,
 } from "../components/shared";
+import {
+  normalizeBranchFilterValue,
+  syncBranchSearchParam,
+} from "../../../shared/utils/branchFilterQuery.mjs";
 import "../styles/design-tokens.css";
 import "../styles/admin-users.css";
 
@@ -29,11 +34,14 @@ function UserManagementPage() {
   const { can, isOwner: permissionOwner } = usePermissions();
   const isOwner = permissionOwner || user?.role === "owner";
   const canManageUsers = isOwner || can("manageUsers");
+  const canViewReports = isOwner || can("viewReports");
+  const appNavigate = useAppNavigation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { authFetch } = useApiClient();
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState(null);
+  const [accessDrawerUser, setAccessDrawerUser] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isHardDeleteModalOpen, setIsHardDeleteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [accountAction, setAccountAction] = useState({
@@ -44,7 +52,14 @@ function UserManagementPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [branchFilter, setBranchFilter] = useState("all");
+  const requestedBranch = searchParams.get("branch");
+  const [branchFilter, setBranchFilter] = useState(() =>
+    normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      fallbackBranch: isOwner ? null : user?.branch,
+      allValue: "all",
+    }),
+  );
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
@@ -56,6 +71,28 @@ function UserManagementPage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    const nextBranch = normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      fallbackBranch: isOwner ? null : user?.branch,
+      allValue: "all",
+    });
+
+    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
+  }, [isOwner, requestedBranch, user?.branch]);
+
+  useEffect(() => {
+    if (!user?.role && !permissionOwner) return;
+
+    const nextParams = syncBranchSearchParam(searchParams, branchFilter, {
+      enabled: isOwner,
+      allValue: "all",
+    });
+
+    if (nextParams.toString() === searchParams.toString()) return;
+    setSearchParams(nextParams, { replace: true });
+  }, [branchFilter, isOwner, permissionOwner, searchParams, setSearchParams, user?.role]);
 
   const [editForm, setEditForm] = useState({
     username: "",
@@ -140,7 +177,11 @@ function UserManagementPage() {
         params.accountStatus = "suspended,banned";
       } else if (statusFilter === "archived") {
         params.accountStatus = "archived";
-      } else if (["active", "suspended", "banned"].includes(statusFilter)) {
+      } else if (
+        ["active", "suspended", "banned", "pending_verification"].includes(
+          statusFilter,
+        )
+      ) {
         params.accountStatus = statusFilter;
       }
     }
@@ -172,6 +213,11 @@ function UserManagementPage() {
     if (!userData) return "User";
     const fullName = `${userData.firstName || ""} ${userData.lastName || ""}`.trim();
     return fullName || userData.username || userData.email || "User";
+  };
+
+  const handleOpenPermissions = (userData) => {
+    if (!userData?._id) return;
+    appNavigate(`/admin/roles?userId=${encodeURIComponent(userData._id)}`);
   };
 
   const handleEditClick = (userData) => {
@@ -224,26 +270,34 @@ function UserManagementPage() {
     }
   };
 
-  const handleDeleteClick = (userData) => {
-    setSelectedUser(userData);
-    setIsDeleteModalOpen(true);
-  };
-
   const handleHardDeleteClick = (userData) => {
     setSelectedUser(userData);
     setIsHardDeleteModalOpen(true);
   };
 
-  const handleDeleteUser = async ({ hardDelete = false } = {}) => {
+  const handleDeleteUser = async ({
+    hardDelete = false,
+    forceDelete = false,
+    confirmationText = "",
+  } = {}) => {
     try {
-      const query = hardDelete ? "?hardDelete=true" : "";
+      const queryParams = new URLSearchParams();
+      if (hardDelete) queryParams.set("hardDelete", "true");
+      if (forceDelete) queryParams.set("force", "true");
+      const query = queryParams.toString() ? `?${queryParams.toString()}` : "";
       const response = await authFetch(`/users/${selectedUser._id}${query}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmationText }),
       });
 
       const userLabel = formatUserLabel(selectedUser);
-      if (response?.archived) {
+      if (response?.blocked) {
+        showNotification(`${userLabel} was blocked successfully.`, "success", 3000);
+      } else if (response?.archived) {
         showNotification(`${userLabel} was archived successfully.`, "success", 3000);
+      } else if (response?.forceDeleted) {
+        showNotification(`${userLabel} was force deleted successfully.`, "success", 3000);
       } else {
         showNotification(`${userLabel} was permanently deleted.`, "success", 3000);
       }
@@ -253,13 +307,23 @@ function UserManagementPage() {
       refetchAll();
     } catch (error) {
       if (error?.code === "HARD_DELETE_BLOCKED") {
-        const issued = Number(error?.safeguards?.issuedBills || 0);
-        const reservations = Number(error?.safeguards?.reservations || 0);
+        const safeguards = error?.safeguards || {};
+        const summary = [
+          ["reservation(s)", safeguards.reservations],
+          ["utility reading(s)", safeguards.utilityReadings],
+          ["bill(s)", Number(safeguards.issuedBills || 0) + Number(safeguards.draftBills || 0)],
+          ["maintenance record(s)", safeguards.maintenanceRequests],
+        ]
+          .filter(([, count]) => Number(count || 0) > 0)
+          .map(([label, count]) => `${count} ${label}`)
+          .join(", ");
         showNotification(
-          `Hard delete blocked: ${reservations} reservation(s), ${issued} issued bill(s). Archive the user instead.`,
+          `Hard delete blocked: ${summary || "significant history found"}. Block the account instead, or use owner force delete.`,
           "error",
-          4500,
+          5500,
         );
+      } else if (error?.code === "FORCE_DELETE_CONFIRMATION_REQUIRED") {
+        showNotification("Type DELETE exactly to force delete this account.", "error", 3500);
       } else {
         showNotification(error.message || "Failed to delete user", "error", 3000);
       }
@@ -354,7 +418,7 @@ function UserManagementPage() {
           body: JSON.stringify({ reason }),
         });
         showNotification(
-          `${actionUserLabel} was banned successfully.`,
+          `${actionUserLabel} was blocked successfully.`,
           "success",
           3000,
         );
@@ -377,25 +441,19 @@ function UserManagementPage() {
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      !q ||
-      u.username?.toLowerCase().includes(q) ||
-      u.firstName?.toLowerCase().includes(q) ||
-      u.lastName?.toLowerCase().includes(q) ||
-      u.email?.toLowerCase().includes(q)
-    );
-  });
-
   const summaryItems = useMemo(
     () => [
       {
-        label: "Total Users",
+        label: "Total Accounts",
         value: stats?.total || totalUsers,
         color: "blue",
       },
       { label: "Active", value: stats?.activeCount || 0, color: "green" },
+      {
+        label: "Admin Accounts",
+        value: (stats?.byRole?.branch_admin || 0) + (stats?.byRole?.owner || 0),
+        color: "blue",
+      },
       {
         label: "Blocked",
         value:
@@ -450,7 +508,10 @@ function UserManagementPage() {
       options: [
         { value: "all", label: "All Status" },
         { value: "active", label: "Active" },
-        { value: "restricted", label: "Blocked" },
+        { value: "restricted", label: "Blocked (All)" },
+        { value: "suspended", label: "Suspended" },
+        { value: "banned", label: "Blocked account" },
+        { value: "pending_verification", label: "Pending Verification" },
         { value: "archived", label: "Archived/Deleted" },
       ],
       value: statusFilter,
@@ -499,13 +560,18 @@ function UserManagementPage() {
       render: (row) => (
         <StatusBadge
           status={row.accountStatus || (row.isActive ? "active" : "suspended")}
+          label={
+            (row.accountStatus || (row.isActive ? "active" : "suspended")) === "banned"
+              ? "Blocked account"
+              : undefined
+          }
         />
       ),
     },
     {
       key: "actions",
       label: "",
-      width: "280px",
+      width: "360px",
       align: "right",
       render: (row) => {
         const isCurrentUser = row._id === (user?._id || user?.uid);
@@ -513,6 +579,8 @@ function UserManagementPage() {
         const isPrivilegedAccount = ["branch_admin", "owner"].includes(row.role);
         const status =
           row.accountStatus || (row.isActive ? "active" : "suspended");
+        const canManagePermissions =
+          isOwner && row.role === "branch_admin" && !isArchived;
         const canBlock =
           canManageUsers && !isCurrentUser && !isArchived && status === "active";
         const canUnblock =
@@ -529,13 +597,17 @@ function UserManagementPage() {
 
         return (
           <AccountRowActions
+            canViewAccess
+            canManagePermissions={canManagePermissions}
             canEdit={canManageUsers && !isArchived && (isOwner || !isPrivilegedAccount)}
             canBlock={canBlock}
             canUnblock={canUnblock}
             canRestore={canRestore}
             canHardDelete={canHardDelete}
+            onViewAccess={() => setAccessDrawerUser(row)}
+            onManagePermissions={() => handleOpenPermissions(row)}
             onEdit={() => handleEditClick(row)}
-            onBlock={() => setAccountAction({ type: "suspend", user: row })}
+            onBlock={() => setAccountAction({ type: "ban", user: row })}
             onUnblock={() =>
               setAccountAction({ type: "reactivate", user: row })
             }
@@ -612,7 +684,7 @@ function UserManagementPage() {
       <PageShell.Content>
         <DataTable
           columns={columns}
-          data={filteredUsers}
+          data={users}
           loading={loading}
           pagination={{
             page: currentPage,
@@ -626,6 +698,7 @@ function UserManagementPage() {
             title: "No users found",
             description: "Try adjusting your filters.",
           }}
+          onRowClick={(row) => setAccessDrawerUser(row)}
         />
       </PageShell.Content>
 
@@ -652,6 +725,7 @@ function UserManagementPage() {
       {isHardDeleteModalOpen && (
         <HardDeleteUserModal
           user={selectedUser}
+          isOwner={isOwner}
           onDelete={handleDeleteUser}
           onClose={() => setIsHardDeleteModalOpen(false)}
         />
@@ -677,6 +751,14 @@ function UserManagementPage() {
           onClose={() => setAccountAction({ type: null, user: null })}
         />
       )}
+      <AccountAccessDrawer
+        open={Boolean(accessDrawerUser)}
+        userSummary={accessDrawerUser}
+        onClose={() => setAccessDrawerUser(null)}
+        canViewReports={canViewReports}
+        canManagePermissions={isOwner}
+        onOpenPermissions={handleOpenPermissions}
+      />
     </PageShell>
   );
 }

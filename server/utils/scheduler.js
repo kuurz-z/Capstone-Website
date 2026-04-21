@@ -37,14 +37,17 @@ import { getAuth } from "../config/firebase.js";
 import notify from "./notificationService.js";
 import { updateOccupancyOnReservationChange } from "./occupancyManager.js";
 import logger from "../middleware/logger.js";
-import { BUSINESS } from "../config/constants.js";
 import {
   CURRENT_RESIDENT_STATUS_QUERY,
   readMoveInDate,
 } from "./lifecycleNaming.js";
 import { syncReservationUserLifecycle } from "./reservationHelpers.js";
 import { resolveBillStatus, syncBillAmounts } from "./billingPolicy.js";
-import { getPenaltyRatePerDay, resolvePenaltyRatePerDay } from "./businessSettings.js";
+import {
+  getLifecyclePolicySettings,
+  getPenaltyRatePerDay,
+  resolvePenaltyRatePerDay,
+} from "./businessSettings.js";
 import { generateAutomatedRentBills } from "./rentGenerator.js";
 import { dispatchDueScheduledAnnouncements } from "./announcementDispatch.js";
 
@@ -341,6 +344,7 @@ async function cleanupOrphanedAccounts() {
 async function expireStaleReservations() {
   try {
     const now = dayjs();
+    const policy = await getLifecyclePolicySettings();
     let expired = 0;
 
     // Tiered expiration windows by status
@@ -348,22 +352,38 @@ async function expireStaleReservations() {
       {
         statuses: ["pending"],
         // 2 hours after creation
-        filter: { createdAt: { $lt: now.subtract(BUSINESS.STALE_PENDING_HOURS, "hour").toDate() } },
+        filter: {
+          createdAt: {
+            $lt: now.subtract(policy.stalePendingHours, "hour").toDate(),
+          },
+        },
       },
       {
         statuses: ["visit_pending"],
         // 24 hours after creation (they should have scheduled by now)
-        filter: { createdAt: { $lt: now.subtract(BUSINESS.STALE_VISIT_PENDING_HOURS, "hour").toDate() } },
+        filter: {
+          createdAt: {
+            $lt: now.subtract(policy.staleVisitPendingHours, "hour").toDate(),
+          },
+        },
       },
       {
         statuses: ["visit_approved"],
         // 48 hours after the visit date passed
-        filter: { visitDate: { $lt: now.subtract(BUSINESS.STALE_VISIT_APPROVED_HOURS, "hour").toDate() } },
+        filter: {
+          visitDate: {
+            $lt: now.subtract(policy.staleVisitApprovedHours, "hour").toDate(),
+          },
+        },
       },
       {
         statuses: ["payment_pending"],
         // 48 hours after reaching this status (use updatedAt as proxy)
-        filter: { updatedAt: { $lt: now.subtract(BUSINESS.STALE_PAYMENT_PENDING_HOURS, "hour").toDate() } },
+        filter: {
+          updatedAt: {
+            $lt: now.subtract(policy.stalePaymentPendingHours, "hour").toDate(),
+          },
+        },
       },
     ];
 
@@ -426,7 +446,7 @@ async function expireStaleReservations() {
 async function cancelNoShowReservations() {
   try {
     const now = dayjs();
-    const graceDays = BUSINESS.NOSHOW_GRACE_DAYS;
+    const { noShowGraceDays: graceDays } = await getLifecyclePolicySettings();
     let cancelled = 0;
 
     // Find "reserved" (paid) reservations where the move-in deadline + 7 days has passed
@@ -491,7 +511,7 @@ async function cancelNoShowReservations() {
 async function warnStaleVisitPending() {
   try {
     const now = dayjs();
-    const warnDays = BUSINESS.VISIT_PENDING_WARN_DAYS;
+    const { visitPendingWarnDays: warnDays } = await getLifecyclePolicySettings();
     const cutoff = now.subtract(warnDays, "day").toDate();
     let warned = 0;
 
@@ -540,7 +560,10 @@ async function warnStaleVisitPending() {
 async function archiveStaleCancelled() {
   try {
     const now = dayjs();
-    const cutoff = now.subtract(BUSINESS.ARCHIVE_CANCELLED_AFTER_DAYS, "day").toDate();
+    const {
+      archiveCancelledAfterDays,
+    } = await getLifecyclePolicySettings();
+    const cutoff = now.subtract(archiveCancelledAfterDays, "day").toDate();
     let archived = 0;
 
     // Find cancelled, non-archived records older than threshold
@@ -559,7 +582,7 @@ async function archiveStaleCancelled() {
     for (const reservation of staleRecords) {
       reservation.isArchived = true;
       reservation.archivedAt = now.toDate();
-      reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-archived: cancelled ${BUSINESS.ARCHIVE_CANCELLED_AFTER_DAYS}+ days ago — ${now.format("MMM D, YYYY")}`;
+      reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-archived: cancelled ${archiveCancelledAfterDays}+ days ago — ${now.format("MMM D, YYYY")}`;
       await reservation.save();
       archived++;
     }

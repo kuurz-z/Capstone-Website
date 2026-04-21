@@ -4,7 +4,7 @@
  */
 
 import dayjs from "dayjs";
-import { User, Reservation, Room, Bill } from "../models/index.js";
+import { User, Reservation, Room, Bill, UtilityReading, MaintenanceRequest } from "../models/index.js";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import { getAuth } from "../config/firebase.js";
 import logger from "../middleware/logger.js";
@@ -26,6 +26,7 @@ import {
   readMoveOutDate,
   reservationStatusesForQuery,
 } from "../utils/lifecycleNaming.js";
+import { DELETED_ACCOUNT_LABEL } from "../utils/userReference.js";
 
 const VALID_BRANCHES = ROOM_BRANCHES;
 const VALID_TENANT_STATUSES = [
@@ -109,6 +110,63 @@ const hasBranchAccessToTargetUser = async (targetUser, branchFilter) => {
 
   return Boolean(linkedReservation);
 };
+
+const getDeleteSafeguardsForUser = async (userId) => {
+  const [
+    reservations,
+    activeReservations,
+    issuedBills,
+    draftBills,
+    utilityReadings,
+    maintenanceRequests,
+    occupiedBeds,
+  ] = await Promise.all([
+    Reservation.countDocuments({
+      userId,
+      isArchived: { $ne: true },
+    }),
+    Reservation.countDocuments({
+      userId,
+      isArchived: { $ne: true },
+      status: { $in: ACTIVE_STAY_STATUS_QUERY },
+    }),
+    Bill.countDocuments({
+      userId,
+      isArchived: false,
+      status: { $ne: "draft" },
+    }),
+    Bill.countDocuments({
+      userId,
+      isArchived: false,
+      status: "draft",
+    }),
+    UtilityReading.countDocuments({
+      tenantId: userId,
+      isArchived: false,
+    }),
+    MaintenanceRequest.countDocuments({
+      $or: [{ userId }, { user_id: userId }],
+      isArchived: { $ne: true },
+    }),
+    Room.countDocuments({
+      "beds.occupiedBy.userId": userId,
+      isArchived: { $ne: true },
+    }),
+  ]);
+
+  return {
+    reservations,
+    activeReservations,
+    issuedBills,
+    draftBills,
+    utilityReadings,
+    maintenanceRequests,
+    occupiedBeds,
+  };
+};
+
+const hasSignificantUserHistory = (safeguards) =>
+  Object.values(safeguards || {}).some((value) => Number(value || 0) > 0);
 
 /**
  * POST /api/users
@@ -587,14 +645,22 @@ export const getUserById = async (req, res, next) => {
       });
     }
 
-    const query = { _id: userId };
-    if (req.branchFilter) {
-      query.branch = req.branchFilter;
-    }
-
-    const user = await User.findOne(query).select("-__v");
+    const user = await User.findById(userId)
+      .select("-__v")
+      .populate("statusChangedBy", "firstName lastName email role")
+      .populate("archivedBy", "firstName lastName email role");
 
     if (!user) {
+      return res.status(404).json({
+        error: "User not found or access denied",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    if (
+      req.branchFilter &&
+      !(await hasBranchAccessToTargetUser(user, req.branchFilter))
+    ) {
       return res.status(404).json({
         error: "User not found or access denied",
         code: "USER_NOT_FOUND",
@@ -826,6 +892,8 @@ export const deleteUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
     const isHardDelete = String(req.query?.hardDelete || "").toLowerCase() === "true";
+    const isForceDelete = String(req.query?.force || "").toLowerCase() === "true";
+    const confirmationText = String(req.body?.confirmationText || "");
 
     if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
@@ -869,36 +937,57 @@ export const deleteUser = async (req, res, next) => {
       });
     }
 
-    const [reservationCount, activeReservationCount, issuedBillCount, draftBillCount] =
-      await Promise.all([
-        Reservation.countDocuments({
-          userId: user._id,
-          isArchived: { $ne: true },
-        }),
-        Reservation.countDocuments({
-          userId: user._id,
-          isArchived: { $ne: true },
-          status: { $in: ACTIVE_STAY_STATUS_QUERY },
-        }),
-        Bill.countDocuments({
-          userId: user._id,
-          isArchived: false,
-          status: { $ne: "draft" },
-        }),
-        Bill.countDocuments({
-          userId: user._id,
-          isArchived: false,
-          status: "draft",
-        }),
-      ]);
+    if (isForceDelete && !req.isOwner) {
+      return res.status(403).json({
+        error: "Only the owner can force delete accounts",
+        code: "ROLE_FORBIDDEN",
+      });
+    }
+
+    if (isForceDelete && confirmationText !== "DELETE") {
+      return res.status(400).json({
+        error: "Force delete requires confirmation text DELETE",
+        code: "FORCE_DELETE_CONFIRMATION_REQUIRED",
+      });
+    }
+
+    const safeguards = await getDeleteSafeguardsForUser(user._id);
+    const hasSignificantHistory = hasSignificantUserHistory(safeguards);
+    const actor = await User.findOne({ firebaseUid: req.user.uid })
+      .select("_id")
+      .lean();
 
     if (!isHardDelete) {
-      const wasArchived = !!user.isArchived;
       const oldData = user.toObject();
+      if (hasSignificantHistory) {
+        await user.ban(
+          actor?._id || null,
+          "Blocked via delete endpoint because the account has significant history",
+        );
+
+        await auditLogger.logModification(
+          req,
+          "user",
+          userId,
+          oldData,
+          user.toObject(),
+          "User blocked via delete endpoint because significant history exists",
+        );
+
+        return res.json({
+          message: "User blocked successfully",
+          blocked: true,
+          blockedBecauseOfHistory: true,
+          archived: false,
+          hardDelete: false,
+          deletedId: userId,
+          displayLabel: "Blocked account",
+          safeguards,
+        });
+      }
+
+      const wasArchived = !!user.isArchived;
       if (!wasArchived) {
-        const actor = await User.findOne({ firebaseUid: req.user.uid })
-          .select("_id")
-          .lean();
         await user.archive(actor?._id || null);
       }
 
@@ -914,32 +1003,26 @@ export const deleteUser = async (req, res, next) => {
       return res.json({
         message: wasArchived ? "User already archived" : "User archived successfully",
         archived: true,
+        blocked: false,
         hardDelete: false,
         deletedId: userId,
-        safeguards: {
-          reservations: reservationCount,
-          activeReservations: activeReservationCount,
-          issuedBills: issuedBillCount,
-          draftBills: draftBillCount,
-        },
+        safeguards,
       });
     }
 
-    if (activeReservationCount > 0 || issuedBillCount > 0) {
+    if (hasSignificantHistory && !isForceDelete) {
       return res.status(409).json({
         error:
-          "Hard delete blocked. Cannot permanently delete user because they have active reservations or issued bills.",
+          "Hard delete blocked. This account has significant history and must be blocked instead, unless the owner uses force delete.",
         code: "HARD_DELETE_BLOCKED",
-        safeguards: {
-          reservations: reservationCount,
-          activeReservations: activeReservationCount,
-          issuedBills: issuedBillCount,
-          draftBills: draftBillCount,
-        },
+        displayLabel: "Blocked account",
+        requiresForceDelete: req.isOwner,
+        deletedAccountLabel: DELETED_ACCOUNT_LABEL,
+        safeguards,
       });
     }
 
-    if (reservationCount > 0) {
+    if (!hasSignificantHistory && safeguards.reservations > 0) {
       await Reservation.deleteMany({
         userId: user._id,
         isArchived: { $ne: true },
@@ -957,7 +1040,7 @@ export const deleteUser = async (req, res, next) => {
       );
     }
 
-    if (draftBillCount > 0) {
+    if (safeguards.draftBills > 0) {
       await Bill.deleteMany({
         userId: user._id,
         isArchived: false,
@@ -978,12 +1061,17 @@ export const deleteUser = async (req, res, next) => {
     );
 
     res.json({
-      message: "User permanently deleted",
+      message: isForceDelete
+        ? "User permanently deleted via force delete"
+        : "User permanently deleted",
       deletedId: userId,
       hardDelete: true,
+      forceDeleted: isForceDelete,
+      deletedAccountLabel: DELETED_ACCOUNT_LABEL,
       cleanup: {
-        deletedDraftBills: draftBillCount,
+        deletedDraftBills: safeguards.draftBills,
       },
+      safeguards,
     });
   } catch (error) {
     await auditLogger.logError(req, error, "Failed to delete user");
