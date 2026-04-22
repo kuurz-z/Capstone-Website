@@ -72,6 +72,7 @@ import {
   renewStayWorkflow,
   transferStayWorkflow,
 } from "../utils/tenantActionService.js";
+import { ensureCurrentCycleRentBill } from "../utils/rentGenerator.js";
 
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
@@ -1282,6 +1283,34 @@ export const updateReservation = async (req, res, next) => {
           reservationId: updatedReservation._id,
           moveInDate: readMoveInDate(updatedReservation) || new Date(),
         });
+      }
+    }
+
+    if (
+      req.body.status === "moveIn" &&
+      !hasReservationStatus(oldData.status, "moveIn")
+    ) {
+      try {
+        const billingReservation = await Reservation.findById(
+          updatedReservation._id,
+        )
+          .populate("userId", "firstName lastName email")
+          .populate("roomId", "name roomNumber branch price monthlyPrice type");
+
+        if (billingReservation) {
+          await ensureCurrentCycleRentBill({
+            reservation: billingReservation,
+            referenceDate: readMoveInDate(updatedReservation) || new Date(),
+            dryRun: false,
+            notifyTenant: false,
+            requireGenerationDateMatch: false,
+          });
+        }
+      } catch (rentErr) {
+        logger.warn(
+          { err: rentErr, requestId: req.id, reservationId },
+          "Current-cycle rent bill generation failed after move-in (non-fatal)",
+        );
       }
     }
 

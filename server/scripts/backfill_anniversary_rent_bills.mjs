@@ -61,7 +61,7 @@ async function main() {
         referenceDate: new Date(),
         dryRun: !write,
         notifyTenant: false,
-        requireCycleStartMatch: false,
+        requireGenerationDateMatch: false,
       });
 
       if (result.status === "created") {

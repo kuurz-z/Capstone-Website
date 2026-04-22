@@ -136,7 +136,7 @@ EMAIL_USER=your-gmail@gmail.com
 EMAIL_PASSWORD=your-app-specific-password
 
 # CORS
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
 
 # PayMongo
 PAYMONGO_SECRET_KEY=your-paymongo-secret-key
@@ -282,6 +282,7 @@ Server runs on: **http://localhost:5000**
 | GET    | `/`      | Public | Deep health check (DB, memory, uptime)    |
 
 See [docs/API.md](../docs/API.md) for complete endpoint documentation with request/response examples.
+For tenant monthly-billing checkout rollout and sandbox verification, see [docs/TENANT_BILLING_CHECKOUT_ROLLOUT.md](../docs/TENANT_BILLING_CHECKOUT_ROLLOUT.md).
 
 ---
 

@@ -37,7 +37,7 @@ const PAGE_META = {
   "/admin/analytics": {
     title: "Analytics",
     description:
-      "Scan occupancy, billing, operations, and owner signals from one chart-first summary page.",
+      "Review occupancy, billing, operations, and owner-level indicators from one consolidated analytics overview.",
   },
   "/admin/analytics/details": {
     title: "Analytics Details",

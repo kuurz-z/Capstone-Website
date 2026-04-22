@@ -43,9 +43,7 @@ export default function AdminLayout() {
   }, [location.pathname, location.search]);
 
   return (
-    <div
-      className={`admin-layout ${collapsed ? "admin-layout--collapsed" : ""}`}
-    >
+    <div className={`admin-layout ${collapsed ? "admin-layout--collapsed" : ""}`}>
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -83,7 +81,10 @@ export default function AdminLayout() {
         </header>
 
         {/* Page Content */}
-        <main ref={contentRef} className="admin-content">
+        <main
+          ref={contentRef}
+          className="admin-content"
+        >
           <RouteTransitionBoundary
             routeKey={`${location.pathname}${location.search}`}
           >

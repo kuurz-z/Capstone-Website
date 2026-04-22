@@ -603,7 +603,7 @@ export const sendPaymentReminderEmail = async ({
           <p style="color:#6B7280;font-size:12px;text-transform:uppercase;margin:0 0 6px;">Due Date</p>
           <p style="color:#111827;font-size:16px;font-weight:600;margin:0;">${dueDate}</p>
         </div>
-        <p style="color:#555;font-size:14px;line-height:1.6;">Please make your payment and upload proof through the dormitory portal to avoid late penalties.</p>
+        <p style="color:#555;font-size:14px;line-height:1.6;">Please complete payment through the billing portal's online checkout to avoid late penalties. If branch staff accepts an offline payment, they will record it after confirmation.</p>
       </td></tr>
       <tr><td style="background:#f8f9fa;padding:25px 40px;text-align:center;border-top:1px solid #eee;">
         <p style="color:#888;font-size:14px;margin:0;">Best regards,<br><strong style="color:#0C375F;">Lilycrest Dormitory Team</strong></p>
@@ -772,7 +772,7 @@ export const sendPaymentRejectedEmail = async ({
         <div style="background:#FEF2F2;border-left:4px solid #EF4444;padding:15px 20px;margin:20px 0;border-radius:0 8px 8px 0;">
           <p style="color:#991B1B;font-size:14px;margin:0;font-weight:500;">Reason: ${rejectionReason}</p>
         </div>
-        <p style="color:#555;font-size:14px;line-height:1.6;">Please re-upload a valid payment proof through the dormitory portal.</p>
+        <p style="color:#555;font-size:14px;line-height:1.6;">Please complete payment using the billing portal's online checkout. If you need branch-assisted offline settlement, contact the branch staff directly.</p>
       </td></tr>
       <tr><td style="background:#f8f9fa;padding:25px 40px;text-align:center;border-top:1px solid #eee;">
         <p style="color:#888;font-size:14px;margin:0;">Best regards,<br><strong style="color:#0C375F;">Lilycrest Dormitory Team</strong></p>
@@ -786,7 +786,7 @@ export const sendPaymentRejectedEmail = async ({
       to,
       subject: `Payment Proof Rejected — ${billingMonth} | Lilycrest Dormitory`,
       html,
-      text: `Hello ${tenantName}, your payment proof for ${billingMonth} was rejected. Reason: ${rejectionReason}. Please resubmit. — Lilycrest Dormitory`,
+      text: `Hello ${tenantName}, your payment proof for ${billingMonth} was rejected. Reason: ${rejectionReason}. Please use the billing portal's online checkout for monthly payment, or contact the branch for assisted offline settlement. — Lilycrest Dormitory`,
     });
     return { success: true, messageId: info.messageId };
   } catch (error) {

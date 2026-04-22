@@ -5,8 +5,14 @@ const reservationFind = jest.fn();
 const reservationFindById = jest.fn();
 const billFindOne = jest.fn();
 const billFind = jest.fn();
+const billFindById = jest.fn();
 const billCountDocuments = jest.fn();
 const utilityPeriodFindOne = jest.fn();
+const ensureCurrentCycleRentBill = jest.fn();
+const userFindById = jest.fn();
+const sendPaymentApprovedEmail = jest.fn();
+const sendPaymentRejectedEmail = jest.fn();
+const applyBillPayment = jest.fn();
 
 const getVisibleBillSnapshot = jest.fn((bill) => ({
   charges: bill.charges || {},
@@ -38,6 +44,7 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   Bill: {
     findOne: billFindOne,
     find: billFind,
+    findById: billFindById,
     countDocuments: billCountDocuments,
   },
   Reservation: {
@@ -47,6 +54,7 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   Room: {},
   User: {
     findOne: userFindOne,
+    findById: userFindById,
   },
   UtilityPeriod: {
     findOne: utilityPeriodFindOne,
@@ -68,8 +76,12 @@ await jest.unstable_mockModule("../middleware/errorHandler.js", () => ({
 }));
 
 await jest.unstable_mockModule("../config/email.js", () => ({
-  sendPaymentApprovedEmail: jest.fn(),
-  sendPaymentRejectedEmail: jest.fn(),
+  sendPaymentApprovedEmail,
+  sendPaymentRejectedEmail,
+}));
+
+await jest.unstable_mockModule("../utils/paymentLedger.js", () => ({
+  applyBillPayment,
 }));
 
 await jest.unstable_mockModule("../utils/billingPolicy.js", () => ({
@@ -82,11 +94,11 @@ await jest.unstable_mockModule("../utils/billingPolicy.js", () => ({
   getVisibleBillSnapshot,
   isUtilityChargeVisible: jest.fn(() => false),
   getReservationCreditAvailable: jest.fn(() => 0),
-  resolveCurrentBillingCycle: jest.fn(() => ({
+  resolveCurrentRentBillingCycle: jest.fn(() => ({
     billingMonth: new Date("2026-03-05T00:00:00.000Z"),
     billingCycleStart: new Date("2026-03-05T00:00:00.000Z"),
     billingCycleEnd: new Date("2026-04-05T00:00:00.000Z"),
-    dueDate: new Date("2026-04-05T00:00:00.000Z"),
+    dueDate: new Date("2026-04-07T00:00:00.000Z"),
   })),
   resolveBillStatus: jest.fn((bill) => bill.status || "pending"),
   roundMoney: (value) => Math.round((Number(value) || 0) * 100) / 100,
@@ -99,6 +111,10 @@ await jest.unstable_mockModule("../utils/businessSettings.js", () => ({
 
 await jest.unstable_mockModule("../utils/utilityBillFlow.js", () => ({
   sendDraftUtilityBills: jest.fn(),
+}));
+
+await jest.unstable_mockModule("../utils/rentGenerator.js", () => ({
+  ensureCurrentCycleRentBill,
 }));
 
 await jest.unstable_mockModule("../utils/utilityFlowRules.js", () => ({
@@ -121,6 +137,9 @@ const {
   getBillingHistory,
   getCurrentBilling,
   getMyBills,
+  markBillAsPaid,
+  submitPaymentProof,
+  verifyPayment,
 } = await import("./billingController.js");
 
 function createRes() {
@@ -143,19 +162,38 @@ describe("billingController tenant endpoints", () => {
     reservationFindById.mockReset();
     billFindOne.mockReset();
     billFind.mockReset();
+    billFindById.mockReset();
     billCountDocuments.mockReset();
     utilityPeriodFindOne.mockReset();
+    ensureCurrentCycleRentBill.mockReset();
+    userFindById.mockReset();
+    sendPaymentApprovedEmail.mockReset();
+    sendPaymentRejectedEmail.mockReset();
+    applyBillPayment.mockReset();
+    sendPaymentApprovedEmail.mockResolvedValue({ success: true });
+    sendPaymentRejectedEmail.mockResolvedValue({ success: true });
     getVisibleBillSnapshot.mockClear();
     getVisibleBillCharges.mockClear();
   });
 
   test("getCurrentBilling falls back to the latest bill for the active reservation and returns additionalCharges", async () => {
     userFindOne.mockReturnValue(makeQueryChain({ _id: "user-1" }));
+    ensureCurrentCycleRentBill.mockResolvedValue({ status: "skipped" });
     reservationFind.mockReturnValue(
       makeQueryChain([
         {
           _id: "reservation-1",
           moveInDate: new Date("2026-01-05T00:00:00.000Z"),
+          userId: {
+            _id: "user-1",
+            email: "tenant@example.com",
+          },
+          roomId: {
+            _id: "room-1",
+            branch: "gil-puyat",
+            price: 5500,
+            monthlyPrice: 5500,
+          },
         },
       ]),
     );
@@ -256,6 +294,25 @@ describe("billingController tenant endpoints", () => {
 
   test("getMyBills includes additionalCharges in the tenant bill payload", async () => {
     userFindOne.mockReturnValue(makeQueryChain({ _id: "user-1" }));
+    ensureCurrentCycleRentBill.mockResolvedValue({ status: "skipped" });
+    reservationFind.mockReturnValue(
+      makeQueryChain([
+        {
+          _id: "reservation-1",
+          moveInDate: new Date("2026-03-12T00:00:00.000Z"),
+          userId: {
+            _id: "user-1",
+            email: "tenant@example.com",
+          },
+          roomId: {
+            _id: "room-1",
+            branch: "gil-puyat",
+            price: 5200,
+            monthlyPrice: 5200,
+          },
+        },
+      ]),
+    );
     billFind.mockReturnValue(
       makeQueryChain([
         {
@@ -293,8 +350,201 @@ describe("billingController tenant endpoints", () => {
           additionalCharges: [{ name: "Desk Rental", amount: 250 }],
           billingCycleStart: expect.any(Date),
           billingCycleEnd: expect.any(Date),
+          paymentFlow: expect.objectContaining({
+            primary: "online_checkout",
+            manualProofSubmissionEnabled: false,
+            adminManualSettlementScope: "offline-only",
+          }),
         }),
       ],
     });
+  });
+
+  test("getMyBills self-heals the active tenant's missing current rent bill before reading invoices", async () => {
+    userFindOne.mockReturnValue(makeQueryChain({ _id: "user-1" }));
+    reservationFind.mockReturnValue(
+      makeQueryChain([
+        {
+          _id: "reservation-1",
+          moveInDate: new Date("2026-03-12T00:00:00.000Z"),
+          userId: {
+            _id: "user-1",
+            email: "tenant@example.com",
+          },
+          roomId: {
+            _id: "room-1",
+            branch: "gil-puyat",
+            price: 5200,
+            monthlyPrice: 5200,
+          },
+        },
+      ]),
+    );
+    ensureCurrentCycleRentBill.mockResolvedValue({ status: "created" });
+    billFind.mockReturnValue(makeQueryChain([]));
+
+    const req = { user: { uid: "firebase-1" } };
+    const res = createRes();
+    const next = jest.fn();
+
+    await getMyBills(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(ensureCurrentCycleRentBill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reservation: expect.objectContaining({ _id: "reservation-1" }),
+        referenceDate: expect.any(Date),
+        dryRun: false,
+        notifyTenant: false,
+        requireGenerationDateMatch: false,
+      }),
+    );
+  });
+
+  test("submitPaymentProof rejects new monthly-bill proof uploads and returns online-checkout guidance", async () => {
+    userFindOne.mockReturnValue(makeQueryChain({ _id: "user-1" }));
+    billFindById.mockResolvedValue({
+      _id: "bill-proof-disabled-1",
+      userId: "user-1",
+      totalAmount: 2450,
+      remainingAmount: 2450,
+      status: "pending",
+      paymentProof: { verificationStatus: "none" },
+    });
+
+    const req = {
+      params: { billId: "bill-proof-disabled-1" },
+      body: {},
+      user: { uid: "firebase-1" },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await submitPaymentProof(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.stringContaining("online checkout"),
+        bill: expect.objectContaining({
+          id: "bill-proof-disabled-1",
+          paymentFlow: expect.objectContaining({
+            primary: "online_checkout",
+            manualProofSubmissionEnabled: false,
+            onlineCheckoutEligible: true,
+          }),
+        }),
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("markBillAsPaid writes a manual ledger payment and preserves the bill note", async () => {
+    const bill = {
+      _id: "bill-admin-1",
+      branch: "gil-puyat",
+      remainingAmount: 1200,
+      totalAmount: 1200,
+      toObject: jest.fn(() => ({ _id: "bill-admin-1", notes: "GCash received at desk" })),
+      save: jest.fn(async function save() {
+        return this;
+      }),
+    };
+
+    billFindById.mockResolvedValue(bill);
+    applyBillPayment.mockResolvedValue({ bill, appliedAmount: 1200 });
+
+    const req = {
+      params: { billId: "bill-admin-1" },
+      body: { amount: 1200, note: "GCash received at desk" },
+      user: { uid: "firebase-admin" },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await markBillAsPaid(req, res, next);
+
+    expect(applyBillPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bill,
+        amount: 1200,
+        method: "gcash",
+        source: "admin-manual",
+        notes: "GCash received at desk",
+        metadata: { action: "markBillAsPaid" },
+      }),
+    );
+    expect(bill.notes).toBe("GCash received at desk");
+    expect(bill.save).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      bill: { _id: "bill-admin-1", notes: "GCash received at desk" },
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("verifyPayment approval records a tenant-proof ledger entry with the proof image", async () => {
+    const bill = {
+      _id: "bill-proof-1",
+      branch: "gil-puyat",
+      userId: "user-1",
+      billingMonth: new Date("2026-03-01T00:00:00.000Z"),
+      status: "pending",
+      paymentProof: {
+        imageUrl: "https://example.com/proof.png",
+        submittedAmount: 1500,
+        verificationStatus: "pending-verification",
+      },
+      save: jest.fn(async function save() {
+        return this;
+      }),
+    };
+
+    billFindById.mockResolvedValue(bill);
+    applyBillPayment.mockResolvedValue({ bill, appliedAmount: 1500 });
+    userFindById.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({
+        email: "tenant@example.com",
+        firstName: "Proof",
+        lastName: "Tenant",
+      }),
+    });
+
+    const req = {
+      params: { billId: "bill-proof-1" },
+      body: { action: "approve" },
+      user: { uid: "firebase-admin" },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await verifyPayment(req, res, next);
+
+    expect(applyBillPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bill,
+        amount: 1500,
+        method: "bank",
+        source: "tenant-proof",
+        proofImageUrl: "https://example.com/proof.png",
+        metadata: {
+          action: "verifyPayment",
+          verificationAction: "approve",
+        },
+      }),
+    );
+    expect(bill.paymentProof.verificationStatus).toBe("approved");
+    expect(sendPaymentApprovedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ paidAmount: 1500 }),
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Payment approved successfully",
+      bill: {
+        id: "bill-proof-1",
+        status: "pending",
+        paymentProof: bill.paymentProof,
+      },
+    });
+    expect(next).not.toHaveBeenCalled();
   });
 });

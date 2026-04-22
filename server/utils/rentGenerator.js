@@ -3,8 +3,8 @@ import { Bill, Reservation } from "../models/index.js";
 import {
   getReservationCreditAvailable,
   getReservationRecurringFees,
-  resolveCurrentBillingCycle,
   roundMoney,
+  resolveVisibleRentBillingCycle,
   syncBillAmounts,
 } from "./billingPolicy.js";
 import logger from "../middleware/logger.js";
@@ -42,7 +42,7 @@ export async function ensureCurrentCycleRentBill({
   referenceDate = new Date(),
   dryRun = false,
   notifyTenant = true,
-  requireCycleStartMatch = false,
+  requireGenerationDateMatch = false,
 } = {}) {
   const moveInDate = readMoveInDate(reservation);
   const currentDay = dayjs(referenceDate).startOf("day");
@@ -50,14 +50,18 @@ export async function ensureCurrentCycleRentBill({
     return { status: "skipped", reason: "missing_context" };
   }
 
-  const billingCycle = resolveCurrentBillingCycle(moveInDate, referenceDate);
+  const billingCycle = resolveVisibleRentBillingCycle(moveInDate, referenceDate);
   if (!billingCycle) {
-    return { status: "skipped", reason: "invalid_cycle" };
+    return { status: "skipped", reason: "outside_generation_window" };
   }
 
-  const cycleStartDay = dayjs(billingCycle.billingCycleStart).startOf("day");
-  if (requireCycleStartMatch && !currentDay.isSame(cycleStartDay, "day")) {
-    return { status: "skipped", reason: "outside_cycle_start", cycle: billingCycle };
+  const generationDay = dayjs(billingCycle.generationDate).startOf("day");
+  if (requireGenerationDateMatch && !currentDay.isSame(generationDay, "day")) {
+    return {
+      status: "skipped",
+      reason: "outside_generation_day",
+      cycle: billingCycle,
+    };
   }
 
   const billingMonthStartDate = dayjs(billingCycle.billingCycleStart).toDate();
@@ -161,7 +165,9 @@ export async function ensureCurrentCycleRentBill({
 }
 
 /**
- * Automatically generates Monthly Rent bills for tenants on their cycle start date.
+ * Automatically generates Monthly Rent bills 5 calendar days before the
+ * rent due date, where due date is 2 business days after the end of the
+ * tenant's current billing cycle.
  */
 export async function generateAutomatedRentBills({ force = false, now = dayjs() } = {}) {
   try {
@@ -180,7 +186,7 @@ export async function generateAutomatedRentBills({ force = false, now = dayjs() 
         referenceDate: now,
         dryRun: false,
         notifyTenant: true,
-        requireCycleStartMatch: !force,
+        requireGenerationDateMatch: !force,
       });
 
       if (result.status === "created") {

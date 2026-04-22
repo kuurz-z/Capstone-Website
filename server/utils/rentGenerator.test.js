@@ -94,7 +94,7 @@ describe("generateAutomatedRentBills", () => {
     notify.billGenerated.mockReset();
   });
 
-  test("skips rent generation until the tenant reaches the cycle start date", async () => {
+  test("skips rent generation until the bill reaches its generation day", async () => {
     const reservation = createReservation({
       moveInDate: new Date("2026-01-31T00:00:00.000Z"),
     });
@@ -102,7 +102,7 @@ describe("generateAutomatedRentBills", () => {
     reservationFind.mockReturnValue(makePopulateChain([reservation]));
 
     await generateAutomatedRentBills({
-      now: new Date("2026-02-10T00:00:00.000Z"),
+      now: new Date("2026-01-28T00:00:00.000Z"),
     });
 
     expect(billFindOne).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe("generateAutomatedRentBills", () => {
     billFindOne.mockResolvedValueOnce({ _id: "existing-cycle-bill" });
 
     await generateAutomatedRentBills({
-      now: new Date("2026-02-05T00:00:00.000Z"),
+      now: new Date("2026-02-04T00:00:00.000Z"),
     });
 
     expect(billInstances).toHaveLength(0);
@@ -134,12 +134,12 @@ describe("ensureCurrentCycleRentBill", () => {
   });
 
   test.each([
-    ["2026-01-05T00:00:00.000Z", "2026-03-05T00:00:00.000Z", "2026-3-5", "2026-4-5"],
-    ["2026-01-12T00:00:00.000Z", "2026-03-12T00:00:00.000Z", "2026-3-12", "2026-4-12"],
-    ["2026-01-23T00:00:00.000Z", "2026-03-23T00:00:00.000Z", "2026-3-23", "2026-4-23"],
+    ["2026-01-05T00:00:00.000Z", "2026-04-02T00:00:00.000Z", "2026-3-5", "2026-4-5", "2026-4-7"],
+    ["2026-01-12T00:00:00.000Z", "2026-04-09T00:00:00.000Z", "2026-3-12", "2026-4-12", "2026-4-14"],
+    ["2026-01-23T00:00:00.000Z", "2026-04-22T00:00:00.000Z", "2026-3-23", "2026-4-23", "2026-4-27"],
   ])(
-    "creates a bill on the tenant-specific cycle start for move-in %s",
-    async (moveInDate, referenceDate, expectedStart, expectedEnd) => {
+    "creates a bill on the tenant-specific generation date for move-in %s",
+    async (moveInDate, referenceDate, expectedStart, expectedEnd, expectedDueDate) => {
       const reservation = createReservation({
         moveInDate: new Date(moveInDate),
       });
@@ -153,14 +153,14 @@ describe("ensureCurrentCycleRentBill", () => {
         referenceDate: new Date(referenceDate),
         dryRun: false,
         notifyTenant: true,
-        requireCycleStartMatch: true,
+        requireGenerationDateMatch: true,
       });
 
       expect(result.status).toBe("created");
       expect(billInstances).toHaveLength(1);
       expect(localYmd(billInstances[0].billingCycleStart)).toBe(expectedStart);
       expect(localYmd(billInstances[0].billingCycleEnd)).toBe(expectedEnd);
-      expect(localYmd(billInstances[0].dueDate)).toBe(expectedEnd);
+      expect(localYmd(billInstances[0].dueDate)).toBe(expectedDueDate);
       expect(notify.billGenerated).toHaveBeenCalledTimes(1);
     },
   );
@@ -182,7 +182,7 @@ describe("ensureCurrentCycleRentBill", () => {
       referenceDate: new Date("2026-02-05T00:00:00.000Z"),
       dryRun: false,
       notifyTenant: false,
-      requireCycleStartMatch: true,
+      requireGenerationDateMatch: false,
     });
 
     expect(result.status).toBe("created");
@@ -208,7 +208,7 @@ describe("ensureCurrentCycleRentBill", () => {
       referenceDate: new Date("2026-02-05T00:00:00.000Z"),
       dryRun: false,
       notifyTenant: false,
-      requireCycleStartMatch: true,
+      requireGenerationDateMatch: false,
     });
 
     expect(result.status).toBe("created");
@@ -232,13 +232,14 @@ describe("ensureCurrentCycleRentBill", () => {
       referenceDate: new Date("2026-03-20T00:00:00.000Z"),
       dryRun: true,
       notifyTenant: false,
-      requireCycleStartMatch: false,
+      requireGenerationDateMatch: false,
     });
 
     expect(result.status).toBe("preview");
-    expect(localYmd(result.cycle.billingCycleStart)).toBe("2026-3-5");
-    expect(localYmd(result.cycle.billingCycleEnd)).toBe("2026-4-5");
-    expect(localYmd(result.bill.billingCycleStart)).toBe("2026-3-5");
+    expect(localYmd(result.cycle.billingCycleStart)).toBe("2026-2-5");
+    expect(localYmd(result.cycle.billingCycleEnd)).toBe("2026-3-5");
+    expect(localYmd(result.cycle.dueDate)).toBe("2026-3-9");
+    expect(localYmd(result.bill.billingCycleStart)).toBe("2026-2-5");
     expect(notify.billGenerated).not.toHaveBeenCalled();
   });
 });

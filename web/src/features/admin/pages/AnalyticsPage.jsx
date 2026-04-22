@@ -3,16 +3,12 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
-  useAuditAnalytics,
   useBillingReport,
-  useFinancialsAnalytics,
   useOccupancyReport,
   useOperationsReport,
 } from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
   AnalyticsBarChart,
-  AnalyticsComparisonChart,
-  AnalyticsDonutChart,
   AnalyticsLineChart,
   AnalyticsTabLayout,
   AnalyticsToolbar,
@@ -36,147 +32,72 @@ import {
 } from "./reportCommon";
 import "../styles/admin-reports.css";
 
-function SummarySection({ title, subtitle, detailHref, children }) {
+function SummaryDetailAction({ to, label = "View details" }) {
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-            {title}
-          </h2>
-          {subtitle ? (
-            <p className="text-sm font-medium text-slate-500">{subtitle}</p>
-          ) : null}
+    <Link
+      to={to}
+      className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
+    >
+      {label}
+      <ExternalLink size={14} />
+    </Link>
+  );
+}
+
+function SummaryOverviewBlock({
+  sectionKey,
+  title,
+  subtitle,
+  to,
+  children,
+}) {
+  return (
+    <section
+      className="analytics-summary-overview-card"
+      data-summary-overview-block={sectionKey}
+    >
+      <ReportChartPanel
+        title={title}
+        subtitle={subtitle}
+        actions={<SummaryDetailAction to={to} />}
+      >
+        <div className="analytics-summary-overview-card__content">
+          <div className="analytics-summary-overview-card__chart">{children}</div>
         </div>
-        <Link
-          to={detailHref}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
-        >
-          View details
-          <ExternalLink size={14} />
-        </Link>
-      </div>
-      <div className="admin-reports__grid">{children}</div>
+      </ReportChartPanel>
     </section>
   );
 }
 
-function OwnerFinancialSummary({ branch, range }) {
-  const financialParams = useMemo(
-    () => ({
-      branch,
-      range: getSummaryDetailRange("financials", range),
-    }),
-    [branch, range],
-  );
-  const { data } = useFinancialsAnalytics(financialParams);
-  const branchComparison = data?.series?.branchComparison || [];
-  const overdueAging = data?.series?.overdueAging || [];
+function SummarySectionHeader({
+  eyebrow,
+  title,
+  subtitle,
+  className = "",
+}) {
+  const headerClassName = [
+    "analytics-summary-section-header",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <SummarySection
-      title="Financials"
-      subtitle={`Cross-branch collections and overdue exposure for the ${buildRangeLabel(
-        financialParams.range,
-      ).toLowerCase()} window.`}
-      detailHref={buildAnalyticsDetailsHref({
-        tab: "financials",
-        range,
-        branch,
-        isOwner: true,
-      })}
-    >
-      <ReportChartPanel
-        title="Branch comparison"
-        subtitle="Collected revenue versus overdue balances"
-      >
-        <AnalyticsComparisonChart
-          data={branchComparison.map((item) => ({
-            label: item.label,
-            collected: item.collectedRevenue,
-            overdue: item.overdueAmount,
-          }))}
-          bars={[
-            { key: "collected", label: "Collected", color: "#2563eb" },
-            { key: "overdue", label: "Overdue", color: "#dc2626" },
-          ]}
-          valueFormatter={(value) => formatPeso(value)}
-          emptyTitle="No branch comparison data"
-          emptyDescription="Financial comparison will appear once billing records are available."
-        />
-      </ReportChartPanel>
-
-      <ReportChartPanel
-        title="Overdue aging"
-        subtitle="Outstanding balances bucketed by lateness"
-      >
-        <AnalyticsBarChart
-          data={overdueAging.map((item) => ({
-            label: item.label,
-            amount: item.amount,
-          }))}
-          bars={[{ key: "amount", label: "Outstanding", color: "#f97316" }]}
-          valueFormatter={(value) => formatPeso(value)}
-          emptyTitle="No overdue aging data"
-          emptyDescription="There are no overdue balances for the selected scope."
-        />
-      </ReportChartPanel>
-    </SummarySection>
-  );
-}
-
-function OwnerMonitoringSummary({ branch, range }) {
-  const monitoringParams = useMemo(() => ({ branch, range }), [branch, range]);
-  const { data } = useAuditAnalytics(monitoringParams);
-  const severityDistribution = data?.series?.severityDistribution || [];
-  const branchSummary = data?.series?.branchSummary || [];
-  const criticalEvents = data?.kpis?.criticalEvents || 0;
-
-  return (
-    <SummarySection
-      title="System Monitoring"
-      subtitle="Owner-only audit and security signals across the selected scope."
-      detailHref={buildAnalyticsDetailsHref({
-        tab: "monitoring",
-        range,
-        branch,
-        isOwner: true,
-      })}
-    >
-      <ReportChartPanel
-        title="Severity distribution"
-        subtitle="Security and audit events by severity"
-      >
-        <AnalyticsDonutChart
-          data={severityDistribution.map((item) => ({
-            label: item.label,
-            value: item.count,
-          }))}
-          centerLabel={{ value: criticalEvents, label: "Critical" }}
-          emptyTitle="No severity data"
-          emptyDescription="Severity distribution will appear once audit events exist for this scope."
-        />
-      </ReportChartPanel>
-
-      <ReportChartPanel
-        title="Branch-level summary"
-        subtitle="High-severity actions and access overrides"
-      >
-        <AnalyticsComparisonChart
-          data={branchSummary.map((item) => ({
-            label: item.label,
-            highSeverity: item.highSeverityCount,
-            overrides: item.accessOverrideCount,
-          }))}
-          bars={[
-            { key: "highSeverity", label: "High severity", color: "#dc2626" },
-            { key: "overrides", label: "Overrides", color: "#2563eb" },
-          ]}
-          emptyTitle="No branch monitoring data"
-          emptyDescription="Security summary data will appear once audit activity is available."
-        />
-      </ReportChartPanel>
-    </SummarySection>
+    <header className={headerClassName}>
+      {eyebrow ? (
+        <span className="analytics-summary-section-header__eyebrow">
+          {eyebrow}
+        </span>
+      ) : null}
+      <div className="analytics-summary-section-header__copy">
+        <h2 className="analytics-summary-section-header__title">{title}</h2>
+        {subtitle ? (
+          <p className="analytics-summary-section-header__subtitle">
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
+    </header>
   );
 }
 
@@ -252,12 +173,13 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
   const occupancyData = occupancyQuery.data;
   const billingData = billingQuery.data;
   const operationsData = operationsQuery.data;
+  const occupancyKpis = occupancyData?.kpis || {};
+  const billingKpis = billingData?.kpis || {};
+  const operationsKpis = operationsData?.kpis || {};
   const occupancyTrend = occupancyData?.series?.occupancyTrend || [];
-  const roomTypes = occupancyData?.tables?.roomTypes || [];
   const revenueByMonth = billingData?.series?.revenueByMonth || [];
-  const overdueAging = billingData?.series?.overdueAging || [];
   const reservationsByPeriod = operationsData?.series?.reservationsByPeriod || [];
-  const maintenanceByType = operationsData?.series?.maintenanceByType || [];
+
   const branchLabel = formatBranch(
     occupancyData?.scope?.branch ||
       billingData?.scope?.branch ||
@@ -275,34 +197,46 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
       label: "Occupancy Rate",
       value: occupancyQuery.isLoading
         ? "..."
-        : occupancyData?.kpis?.occupancyRateLabel || "0%",
+        : occupancyKpis.occupancyRateLabel || "0%",
       tone: "blue",
     },
     {
       label: "Collected Revenue",
       value: billingQuery.isLoading
         ? "..."
-        : billingData?.kpis?.collectedRevenueLabel || "PHP 0",
+        : billingKpis.collectedRevenueLabel || "PHP 0",
       tone: "green",
     },
     {
       label: "Reservations",
       value: operationsQuery.isLoading
         ? "..."
-        : operationsData?.kpis?.reservations || 0,
+        : operationsKpis.reservations || 0,
       tone: "amber",
     },
     {
       label: "Maintenance",
       value: operationsQuery.isLoading
         ? "..."
-        : operationsData?.kpis?.maintenanceRequests || 0,
+        : operationsKpis.maintenanceRequests || 0,
       tone: "rose",
     },
   ];
 
-  const openDetailsHref = buildAnalyticsDetailsHref({
+  const occupancyDetailHref = buildAnalyticsDetailsHref({
     tab: "occupancy",
+    range,
+    branch,
+    isOwner,
+  });
+  const billingDetailHref = buildAnalyticsDetailsHref({
+    tab: "billing",
+    range,
+    branch,
+    isOwner,
+  });
+  const operationsDetailHref = buildAnalyticsDetailsHref({
+    tab: "operations",
     range,
     branch,
     isOwner,
@@ -310,12 +244,17 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
 
   return (
     <AnalyticsTabLayout
+      className="analytics-summary-layout"
+      headerClassName="analytics-summary-layout__header"
+      bodyClassName="analytics-summary-layout__body"
+      mainClassName="analytics-summary-layout__main"
       header={
         <AnalyticsToolbar
           title="Analytics Summary"
-          subtitle={`Chart-first view for ${branchLabel} - ${buildRangeLabel(
+          subtitle={`Summary view for ${branchLabel} (${buildRangeLabel(
             range,
-          )}`}
+          )})`}
+          compact
           range={{
             value: range,
             onChange: (value) => {
@@ -336,168 +275,206 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
           })}
           actions={
             <Link
-              to={openDetailsHref}
+              to={occupancyDetailHref}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
             >
-              Open detailed analytics
+              View detailed analytics
               <ArrowRight size={16} />
             </Link>
           }
         />
       }
     >
-      {hasPartialError ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-          Some analytics blocks could not be loaded. Available charts are still shown.
-        </div>
-      ) : null}
+      <div className="analytics-summary-focus flex flex-col gap-6">
+        {hasPartialError ? (
+          <div className="analytics-summary-focus__error rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            Some summary sections could not be loaded. Available data is shown where possible.
+          </div>
+        ) : null}
 
-      <MetricGrid items={metricCards} />
-
-      <SummarySection
-        title="Occupancy"
-        subtitle={`Capacity movement and room type mix for ${buildRangeLabel(
-          range,
-        ).toLowerCase()}.`}
-        detailHref={buildAnalyticsDetailsHref({
-          tab: "occupancy",
-          range,
-          branch,
-          isOwner,
-        })}
-      >
-        <ReportChartPanel
-          title="Occupancy trend"
-          subtitle="Daily occupancy rate across the selected range"
+        <section
+          className="analytics-summary-overview"
+          data-summary-overview="true"
         >
-          <AnalyticsLineChart
-            data={occupancyTrend.map((item) => ({
-              label: item.label,
-              occupancy: item.totalRate,
-            }))}
-            lines={[{ key: "occupancy", label: "Occupancy rate" }]}
-            valueFormatter={(value) => `${value}%`}
-            emptyTitle="No occupancy trend"
-            emptyDescription="The selected scope does not have enough occupancy history yet."
+          <SummarySectionHeader
+            className="analytics-summary-overview__header"
+            eyebrow="Overview"
+            title="Key metrics and trend summaries"
+            subtitle="Review occupancy, billing, and operational performance for the selected scope."
           />
-        </ReportChartPanel>
 
-        <ReportChartPanel
-          title="Room type mix"
-          subtitle="Current occupied beds by room type"
+          <div className="analytics-summary-focus__metrics">
+            <MetricGrid items={metricCards} />
+          </div>
+
+          <div className="analytics-summary-overview__grid">
+            <SummaryOverviewBlock
+              sectionKey="occupancy"
+              title="Occupancy overview"
+              subtitle={`Occupancy trend across ${buildRangeLabel(
+                range,
+              ).toLowerCase()}.`}
+              to={occupancyDetailHref}
+            >
+              <AnalyticsLineChart
+                data={occupancyTrend.map((item) => ({
+                  label: item.label,
+                  occupancy: item.totalRate,
+                }))}
+                lines={[{ key: "occupancy", label: "Occupancy rate" }]}
+                height={96}
+                valueFormatter={(value) => `${value}%`}
+                emptyTitle="No occupancy trend"
+                emptyDescription="Occupancy history will appear once reporting data is available."
+              />
+            </SummaryOverviewBlock>
+
+            <SummaryOverviewBlock
+              sectionKey="billing"
+              title="Billing overview"
+              subtitle={`Collections trend across the ${buildRangeLabel(
+                billingParams.range,
+              ).toLowerCase()} reporting period.`}
+              to={billingDetailHref}
+            >
+              <AnalyticsBarChart
+                data={revenueByMonth.map((item) => ({
+                  label: item.label,
+                  collected: item.collectedRevenue,
+                }))}
+                bars={[
+                  { key: "collected", label: "Collected", color: "#2563eb" },
+                ]}
+                height={92}
+                valueFormatter={(value) => formatPeso(value)}
+                emptyTitle="No billing revenue data"
+                emptyDescription="Revenue history will appear once billing data is available."
+              />
+            </SummaryOverviewBlock>
+
+            <SummaryOverviewBlock
+              sectionKey="operations"
+              title="Operations overview"
+              subtitle={`Reservation trend across ${buildRangeLabel(
+                range,
+              ).toLowerCase()}.`}
+              to={operationsDetailHref}
+            >
+              <AnalyticsBarChart
+                data={reservationsByPeriod.map((item) => ({
+                  label: item.label,
+                  count: item.count,
+                }))}
+                bars={[{ key: "count", label: "Reservations", color: "#f59e0b" }]}
+                height={92}
+                emptyTitle="No reservation trend"
+                emptyDescription="Reservation activity will appear once reporting data is available."
+              />
+            </SummaryOverviewBlock>
+          </div>
+        </section>
+
+        <section
+          className="analytics-summary-sections"
+          data-summary-focus-sections="true"
         >
-          <AnalyticsDonutChart
-            data={roomTypes.map((item) => ({
-              label: item.roomTypeLabel,
-              value: item.occupiedBeds,
-            }))}
-            centerLabel={{
-              value: occupancyData?.kpis?.occupiedBeds || 0,
-              label: "Occupied",
-            }}
-            emptyTitle="No room type data"
-            emptyDescription="Room type distribution will appear once occupancy data is available."
+          <SummarySectionHeader
+            className="analytics-summary-sections__header"
+            eyebrow="Detailed analysis"
+            title="Detailed trend analysis"
+            subtitle="Review detailed occupancy, billing, and operations charts below."
           />
-        </ReportChartPanel>
-      </SummarySection>
 
-      <SummarySection
-        title="Billing"
-        subtitle={`Monthly billing view for the ${buildRangeLabel(
-          billingParams.range,
-        ).toLowerCase()} reporting window.`}
-        detailHref={buildAnalyticsDetailsHref({
-          tab: "billing",
-          range,
-          branch,
-          isOwner,
-        })}
-      >
-        <ReportChartPanel
-          title="Monthly revenue"
-          subtitle="Collected versus billed revenue"
-        >
-          <AnalyticsBarChart
-            data={revenueByMonth.map((item) => ({
-              label: item.label,
-              collected: item.collectedRevenue,
-              billed: item.billedAmount,
-            }))}
-            bars={[
-              { key: "collected", label: "Collected", color: "#2563eb" },
-              { key: "billed", label: "Billed", color: "#0f766e" },
-            ]}
-            valueFormatter={(value) => formatPeso(value)}
-            emptyTitle="No billing revenue data"
-            emptyDescription="Revenue history will appear once billing records exist for this scope."
-          />
-        </ReportChartPanel>
+          <div className="analytics-summary-sections__stack">
+            <section
+              className="analytics-summary-focus-section"
+              data-summary-card="occupancy"
+              data-summary-focus-section="occupancy"
+            >
+              <ReportChartPanel
+                title="Occupancy analysis"
+                subtitle={`Detailed occupancy trend across ${buildRangeLabel(
+                  range,
+                ).toLowerCase()}.`}
+                actions={<SummaryDetailAction to={occupancyDetailHref} />}
+              >
+                <div className="flex h-full flex-col">
+                  <AnalyticsLineChart
+                    data={occupancyTrend.map((item) => ({
+                      label: item.label,
+                      occupancy: item.totalRate,
+                    }))}
+                    lines={[{ key: "occupancy", label: "Occupancy rate" }]}
+                    height={220}
+                    valueFormatter={(value) => `${value}%`}
+                    emptyTitle="No occupancy trend"
+                    emptyDescription="The selected scope does not yet have sufficient occupancy history."
+                  />
+                </div>
+              </ReportChartPanel>
+            </section>
 
-        <ReportChartPanel
-          title="Overdue aging"
-          subtitle="Outstanding balances bucketed by lateness"
-        >
-          <AnalyticsBarChart
-            data={overdueAging.map((item) => ({
-              label: item.label,
-              amount: item.amount,
-            }))}
-            bars={[{ key: "amount", label: "Outstanding", color: "#f97316" }]}
-            valueFormatter={(value) => formatPeso(value)}
-            emptyTitle="No overdue aging data"
-            emptyDescription="There are no overdue balances for the selected scope."
-          />
-        </ReportChartPanel>
-      </SummarySection>
+            <section
+              className="analytics-summary-focus-section"
+              data-summary-card="billing"
+              data-summary-focus-section="billing"
+            >
+              <ReportChartPanel
+                title="Billing analysis"
+                subtitle={`Detailed collections view for the ${buildRangeLabel(
+                  billingParams.range,
+                ).toLowerCase()} reporting period.`}
+                actions={<SummaryDetailAction to={billingDetailHref} />}
+              >
+                <div className="flex h-full flex-col">
+                  <AnalyticsBarChart
+                    data={revenueByMonth.map((item) => ({
+                      label: item.label,
+                      collected: item.collectedRevenue,
+                      billed: item.billedAmount,
+                    }))}
+                    bars={[
+                      { key: "collected", label: "Collected", color: "#2563eb" },
+                      { key: "billed", label: "Billed", color: "#0f766e" },
+                    ]}
+                    height={180}
+                    valueFormatter={(value) => formatPeso(value)}
+                    emptyTitle="No billing revenue data"
+                    emptyDescription="Revenue history will appear once billing data is available for this scope."
+                  />
+                </div>
+              </ReportChartPanel>
+            </section>
 
-      <SummarySection
-        title="Operations"
-        subtitle={`Reservations and maintenance demand for ${buildRangeLabel(
-          range,
-        ).toLowerCase()}.`}
-        detailHref={buildAnalyticsDetailsHref({
-          tab: "operations",
-          range,
-          branch,
-          isOwner,
-        })}
-      >
-        <ReportChartPanel
-          title="Reservation trend"
-          subtitle="Reservation volume over the selected period"
-        >
-          <AnalyticsBarChart
-            data={reservationsByPeriod.map((item) => ({
-              label: item.label,
-              count: item.count,
-            }))}
-            bars={[{ key: "count", label: "Reservations" }]}
-            emptyTitle="No reservation trend"
-            emptyDescription="Reservation activity will appear once records exist in this range."
-          />
-        </ReportChartPanel>
-
-        <ReportChartPanel
-          title="Maintenance category mix"
-          subtitle="Most common maintenance request types"
-        >
-          <AnalyticsDonutChart
-            data={maintenanceByType.map((item) => ({
-              label: item.label,
-              value: item.count,
-            }))}
-            centerLabel={{
-              value: operationsData?.kpis?.maintenanceRequests || 0,
-              label: "Requests",
-            }}
-            emptyTitle="No maintenance categories"
-            emptyDescription="Maintenance categories will appear once tickets exist for this scope."
-          />
-        </ReportChartPanel>
-      </SummarySection>
-
-      {isOwner ? <OwnerFinancialSummary branch={branch} range={range} /> : null}
-      {isOwner ? <OwnerMonitoringSummary branch={branch} range={range} /> : null}
+            <section
+              className="analytics-summary-focus-section"
+              data-summary-card="operations"
+              data-summary-focus-section="operations"
+            >
+              <ReportChartPanel
+                title="Operations analysis"
+                subtitle={`Detailed reservation trend across ${buildRangeLabel(
+                  range,
+                ).toLowerCase()}.`}
+                actions={<SummaryDetailAction to={operationsDetailHref} />}
+              >
+                <div className="flex h-full flex-col">
+                  <AnalyticsBarChart
+                    data={reservationsByPeriod.map((item) => ({
+                      label: item.label,
+                      count: item.count,
+                    }))}
+                    bars={[{ key: "count", label: "Reservations" }]}
+                    height={180}
+                    emptyTitle="No reservation trend"
+                    emptyDescription="Reservation activity will appear once data is available for the selected period."
+                  />
+                </div>
+              </ReportChartPanel>
+            </section>
+          </div>
+        </section>
+      </div>
     </AnalyticsTabLayout>
   );
 }
@@ -515,5 +492,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  return <AnalyticsSummaryDashboard clearLegacyOverview={legacyTab === "overview"} />;
+  return (
+    <AnalyticsSummaryDashboard clearLegacyOverview={legacyTab === "overview"} />
+  );
 }

@@ -24,17 +24,17 @@ import {
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
 import { BUSINESS } from "../config/constants.js";
 import { getReservationFeeAmount } from "../utils/businessSettings.js";
+import { settlePaymongoBill } from "../utils/billSettlement.js";
 import {
   getBillRemainingAmount,
   getVisibleBillSnapshot,
   resolveBillStatus,
-  roundMoney,
-  syncBillAmounts,
 } from "../utils/billingPolicy.js";
 import { sendSuccess, AppError } from "../middleware/errorHandler.js";
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL?.split(",")[0]?.trim() || "http://localhost:5173";
+const TENANT_BILLING_PATH = "/applicant/billing";
 
 const PAYMENT_METHOD_LABELS = Object.freeze({
   gcash: "GCash",
@@ -175,8 +175,8 @@ export const createBillCheckout = async (req, res, next) => {
         userId: String(dbUser._id),
         amountDue: String(amountDue),
       },
-      successUrl: `${FRONTEND_URL}/billing?payment=success&session_id={id}`,
-      cancelUrl: `${FRONTEND_URL}/billing?payment=cancelled`,
+      successUrl: `${FRONTEND_URL}${TENANT_BILLING_PATH}?payment=success&session_id={id}`,
+      cancelUrl: `${FRONTEND_URL}${TENANT_BILLING_PATH}?payment=cancelled`,
     });
 
     bill.paymongoSessionId = sessionId;
@@ -308,33 +308,34 @@ export const checkSessionStatus = async (req, res, next) => {
         const bill = sessionBill || (await Bill.findById(metadata.billId));
         if (bill) {
           const paymentReference = paidPayments[0]?.id || sessionId;
-          if (
-            bill.paymongoPaymentId === paymentReference ||
-            getVisibleBillSnapshot(bill).status === "paid"
-          ) {
+          const sessionPaidAmount = Number(paidPayments[0]?.attributes?.amount || 0);
+          const settledAmount = Number(metadata.amountDue || 0) > 0
+            ? Number(metadata.amountDue)
+            : sessionPaidAmount > 0
+              ? sessionPaidAmount / 100
+              : null;
+          const settlement = await settlePaymongoBill({
+            bill,
+            paymentReference,
+            settledAmount,
+            source: "paymongo-polling",
+            metadata: {
+              sessionId,
+              sessionType: metadata.type || "bill",
+            },
+          });
+
+          if (!settlement.applied) {
             logger.info(
-              { billId: metadata.billId, paymentReference },
+              {
+                billId: metadata.billId,
+                paymentReference,
+                reason: settlement.reason,
+              },
               "Bill payment already applied",
             );
           } else {
-            const settledAmount = roundMoney(
-              Number(metadata.amountDue || paidPayments[0]?.attributes?.amount || 0),
-            );
-
             logger.info({ billId: metadata.billId }, "Marking bill as paid");
-            bill.paidAmount = roundMoney(
-              Number(bill.paidAmount || 0) + settledAmount,
-            );
-            syncBillAmounts(bill);
-            bill.paymentDate = new Date();
-            bill.paymentMethod = "paymongo";
-            bill.paymongoPaymentId = paymentReference;
-            bill.paymentProof = {
-              verificationStatus: "approved",
-              verifiedAt: new Date(),
-              submittedAmount: settledAmount,
-            };
-            await bill.save();
 
             try {
               const tenant = await User.findById(bill.userId).lean();
@@ -348,13 +349,13 @@ export const checkSessionStatus = async (req, res, next) => {
                   to: tenant.email,
                   tenantName,
                   billingMonth: monthStr,
-                  paidAmount: settledAmount,
+                  paidAmount: settlement.appliedAmount,
                   branchName: bill.branch,
                 });
                 await sendPaymentReceiptEmail({
                   to: tenant.email,
                   tenantName,
-                  amount: settledAmount,
+                  amount: settlement.appliedAmount,
                   description: `Monthly Bill - ${monthStr}`,
                   paymentMethod: paymentMethod || "Online Payment (PayMongo)",
                   paymentDate: dayjs().format("MMMM D, YYYY"),

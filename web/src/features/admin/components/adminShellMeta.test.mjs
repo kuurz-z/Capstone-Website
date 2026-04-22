@@ -18,7 +18,7 @@ test("analytics summary and detail copy stay distinct", () => {
     "?tab=financials",
   );
 
-  assert.match(summaryMeta.description, /chart-first summary page/i);
+  assert.match(summaryMeta.description, /consolidated analytics overview/i);
   assert.match(financialsMeta.description, /owner financial performance/i);
 });
 
