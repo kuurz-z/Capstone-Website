@@ -86,6 +86,9 @@ export const MaintenancePage = React.lazy(
 export const AnalyticsPage = React.lazy(
   () => import("../features/admin/pages/AnalyticsPage.jsx"),
 );
+export const AnalyticsDetailsPage = React.lazy(
+  () => import("../features/admin/pages/AnalyticsDetailsPage.jsx"),
+);
 export const BranchManagementPage = React.lazy(
   () => import("../features/super-admin/pages/BranchManagementPage"),
 );

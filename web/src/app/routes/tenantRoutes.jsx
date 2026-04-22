@@ -1,6 +1,7 @@
 import React from "react";
 import { Navigate, Route } from "react-router-dom";
 import ProtectedRoute from "../../shared/components/ProtectedRoute";
+import TenantLayout from "../../shared/layouts/TenantLayout";
 import { RouteShell } from "./RouteShell";
 import {
   CheckAvailabilityPage,
@@ -15,10 +16,7 @@ import {
 export function TenantRoutes() {
   return (
     <>
-      <Route
-        path="/applicant"
-        element={<Navigate to="/applicant/profile" replace />}
-      />
+      <Route path="/applicant" element={<Navigate to="/applicant/profile" replace />} />
       <Route
         path="/applicant/dashboard"
         element={
@@ -46,67 +44,64 @@ export function TenantRoutes() {
         }
       />
       <Route
-        path="/applicant/reservation"
+        path="/applicant"
         element={
           <ProtectedRoute requiredRole="applicant">
+            <RouteShell name="TenantLayout">
+              <TenantLayout />
+            </RouteShell>
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          path="reservation"
+          element={
             <RouteShell name="ReservationFlow">
               <ReservationFlowPage />
             </RouteShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/applicant/profile"
-        element={
-          <ProtectedRoute requiredRole="applicant">
+          }
+        />
+        <Route
+          path="profile"
+          element={
             <RouteShell name="Profile">
               <ProfilePage />
             </RouteShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/applicant/contracts"
-        element={
-          <ProtectedRoute requiredRole="applicant">
+          }
+        />
+        <Route
+          path="contracts"
+          element={
             <RouteShell name="Contracts">
               <ContractsPage />
             </RouteShell>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Legacy standalone routes → redirect to profile with tab */}
-      <Route
-        path="/applicant/billing"
-        element={
-          <ProtectedRoute requiredRole="applicant">
+          }
+        />
+        <Route
+          path="billing"
+          element={
             <RouteShell name="Billing">
               <TenantBillingPage />
             </RouteShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/applicant/maintenance"
-        element={
-          <ProtectedRoute requiredRole="applicant">
+          }
+        />
+        <Route
+          path="maintenance"
+          element={
             <RouteShell name="Maintenance">
               <TenantMaintenancePage />
             </RouteShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/applicant/announcements"
-        element={
-          <ProtectedRoute requiredRole="applicant">
+          }
+        />
+        <Route
+          path="announcements"
+          element={
             <RouteShell name="Announcements">
               <TenantAnnouncementsPage />
             </RouteShell>
-          </ProtectedRoute>
-        }
-      />
+          }
+        />
+      </Route>
     </>
   );
 }

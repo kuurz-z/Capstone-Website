@@ -27,6 +27,7 @@ import {
   ACTIVE_OCCUPANCY_STATUS_QUERY,
   hasReservationStatus,
 } from "../utils/lifecycleNaming.js";
+import { resolveReferencedUser } from "../utils/userReference.js";
 
 // ============================================================================
 // HEALTH SCORE CALCULATION
@@ -556,6 +557,10 @@ export const getRoomDetail = async (req, res) => {
         },
         beds: occupancy.beds,
         maintenance: maintenance.map((m) => ({
+          ...(function buildMaintenanceUser() {
+            const submittedBy = resolveReferencedUser(m.userId);
+            return { submittedBy: submittedBy.name };
+          })(),
           _id: m._id,
           title: `${formatMaintenanceTypeLabel(m.request_type)} Request`,
           category: m.request_type,
@@ -565,9 +570,6 @@ export const getRoomDetail = async (req, res) => {
           createdAt: m.created_at,
           resolvedAt: m.resolved_at,
           completionNote: m.notes,
-          submittedBy: m.userId
-            ? `${m.userId.firstName || ""} ${m.userId.lastName || ""}`.trim()
-            : "Unknown",
         })),
         billing: Object.values(tenantBills),
         health: {

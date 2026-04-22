@@ -177,7 +177,7 @@ const DormPreferencesSection = ({
     </div>
 
     {workSchedule === "others" && (
-      <div className="form-group">
+      <div className="form-group" data-field="workScheduleOther">
         <label className="form-label">
           If You Answered "Others", Please Specify Your Work Schedule Below *
         </label>
@@ -186,6 +186,13 @@ const DormPreferencesSection = ({
           value={workScheduleOther}
           onChange={(e) => setWorkScheduleOther(e.target.value)}
           placeholder="Please describe your typical work schedule"
+        />
+        <FieldError
+          error={
+            showValidationErrors && workSchedule === "others" && !workScheduleOther
+              ? "Please describe your work schedule"
+              : null
+          }
         />
       </div>
     )}

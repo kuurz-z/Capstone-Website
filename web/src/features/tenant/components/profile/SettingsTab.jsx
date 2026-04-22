@@ -29,6 +29,7 @@ import {
   updatePassword,
 } from "firebase/auth";
 import { auth } from "../../../../firebase/config";
+import { useAppNavigation } from "../../../../shared/hooks/useAppNavigation";
 import { showNotification } from "../../../../shared/utils/notification";
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -54,6 +55,7 @@ const getSocialProvider = () => {
 // ─── Component ────────────────────────────────────────────────
 
 const SettingsTab = () => {
+  const appNavigate = useAppNavigation();
   // Password form state
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -166,8 +168,13 @@ const SettingsTab = () => {
         }
       }
       await auth.signOut();
-      showNotification("Signed out from all devices", "success");
-      window.location.href = "/signin";
+      appNavigate("/signin", {
+        replace: true,
+        flash: {
+          type: "success",
+          message: "Signed out from all devices",
+        },
+      });
     } catch (error) {
       console.error("❌ Sign out all failed:", error);
       showNotification("Failed to sign out from all devices", "error");

@@ -21,6 +21,12 @@ export default function BillDetailModal({
 
   const hasProof =
     bill.paymentProof?.verificationStatus === "pending-verification";
+  const paymentFlow = bill.paymentFlow || null;
+  const proofSectionTitle =
+    paymentFlow?.legacyProofStatus ? "Legacy Offline Payment Proof" : "Payment Proof";
+  const proofFlowNote =
+    paymentFlow?.adminMessage ||
+    "Manual settlement should only be used for branch-assisted offline payments.";
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -163,8 +169,21 @@ export default function BillDetailModal({
                     color: "#1a1a1a",
                   }}
                 >
-                  <Eye size={16} /> Payment Proof
+                  <Eye size={16} /> {proofSectionTitle}
                 </h3>
+                <div
+                  style={{
+                    background: "#FFF7ED",
+                    border: "1px solid #FED7AA",
+                    borderRadius: "8px",
+                    padding: "0.75rem",
+                    fontSize: "0.85rem",
+                    color: "#9A3412",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  {proofFlowNote}
+                </div>
 
                 {/* Proof image */}
                 {bill.paymentProof.imageUrl && (
@@ -275,7 +294,7 @@ export default function BillDetailModal({
                             onVerifyPayment(bill._id, { action: "approve" })
                           }
                         >
-                          <Check size={16} /> Approve Payment
+                          <Check size={16} /> Approve Legacy Proof
                         </button>
                         <button
                           className="btn"
@@ -358,7 +377,17 @@ export default function BillDetailModal({
             (!bill.paymentProof ||
               bill.paymentProof.verificationStatus === "none") && (
               <div className="mark-paid-section">
-                <h3>Mark as Paid (Manual)</h3>
+                <h3>Record Assisted Offline Payment</h3>
+                <p
+                  style={{
+                    margin: "0 0 0.75rem",
+                    fontSize: "0.85rem",
+                    lineHeight: 1.5,
+                    color: "#64748b",
+                  }}
+                >
+                  {proofFlowNote}
+                </p>
                 <div className="form-group">
                   <label>Amount</label>
                   <input

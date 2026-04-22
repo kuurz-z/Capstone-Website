@@ -105,8 +105,14 @@ html:has(.admin-layout) body {
 
 /* ── Content area ─────────────────────────────────────────────────────────── */
 .admin-content {
+  --admin-topbar-height: 74px;
+  --admin-content-padding: var(--spacing-page);
+  --admin-content-viewport-budget: calc(100dvh - var(--admin-topbar-height));
+  --admin-content-inner-height: calc(
+    var(--admin-content-viewport-budget) - (var(--admin-content-padding) * 2)
+  );
   flex: 1;
-  padding: var(--spacing-page);
+  padding: var(--admin-content-padding);
   overflow-y: scroll;
   scrollbar-gutter: stable;
   background: var(--bg-page);
@@ -129,20 +135,6 @@ html:has(.admin-layout) body {
 }
 
 /* ── Page entry animation ─────────────────────────────────────────────────── */
-@keyframes adminPageFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.admin-content > * {
-  animation: adminPageFadeIn 0.35s var(--ease-out) both;
-}
 
 /* ── Mobile ───────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -162,7 +154,9 @@ html:has(.admin-layout) body {
   }
 
   .admin-content {
-    padding: 16px;
+    --admin-topbar-height: 62px;
+    --admin-content-padding: 16px;
+    padding: var(--admin-content-padding);
     min-height: calc(100vh - 62px);
   }
 
@@ -182,7 +176,8 @@ html:has(.admin-layout) body {
   }
 
   .admin-content {
-    padding: 20px;
+    --admin-content-padding: 20px;
+    padding: var(--admin-content-padding);
   }
 }
 

@@ -1,0 +1,1 @@
+import{a as o}from"./admin-CAQmUedE.js";function a(e,t){o.useEffect(()=>{if(!e)return;const r=n=>{n.key==="Escape"&&t()};return document.addEventListener("keydown",r),()=>document.removeEventListener("keydown",r)},[e,t])}export{a as u};

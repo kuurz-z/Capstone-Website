@@ -2,21 +2,111 @@ import {
   DEFAULT_BRANCH_OVERRIDES,
   getBranchSettings,
   getBusinessSettings,
-  serializeBranchOverrides,
+  mergeBranchOverrides,
+  serializeBusinessSettings,
 } from "../utils/businessSettings.js";
 import { sendSuccess } from "../middleware/errorHandler.js";
+import auditLogger from "../utils/auditLogger.js";
+
+const WHOLE_NUMBER_FIELDS = new Set([
+  "noShowGraceDays",
+  "stalePendingHours",
+  "staleVisitPendingHours",
+  "visitPendingWarnDays",
+  "staleVisitApprovedHours",
+  "stalePaymentPendingHours",
+  "archiveCancelledAfterDays",
+]);
+
+const FIELD_ERROR_LABELS = Object.freeze({
+  reservationFeeAmount: "Reservation fee amount",
+  penaltyRatePerDay: "Penalty rate per day",
+  defaultElectricityRatePerKwh: "Default electricity rate",
+  defaultWaterRatePerUnit: "Default water rate",
+  noShowGraceDays: "No-show grace days",
+  stalePendingHours: "Stale pending hours",
+  staleVisitPendingHours: "Stale visit pending hours",
+  visitPendingWarnDays: "Visit pending warn days",
+  staleVisitApprovedHours: "Stale visit approved hours",
+  stalePaymentPendingHours: "Stale payment pending hours",
+  archiveCancelledAfterDays: "Archive cancelled after days",
+  applianceFeeAmountPerUnit: "Appliance fee amount",
+});
+
+const SETTINGS_ENTITY_TYPE = "business_settings";
+
+const buildSettingsPayload = (settings) => serializeBusinessSettings(settings);
+
+const buildComparablePayload = (payload) => ({
+  reservationFeeAmount: payload.reservationFeeAmount,
+  penaltyRatePerDay: payload.penaltyRatePerDay,
+  defaultElectricityRatePerKwh: payload.defaultElectricityRatePerKwh,
+  defaultWaterRatePerUnit: payload.defaultWaterRatePerUnit,
+  noShowGraceDays: payload.noShowGraceDays,
+  stalePendingHours: payload.stalePendingHours,
+  staleVisitPendingHours: payload.staleVisitPendingHours,
+  visitPendingWarnDays: payload.visitPendingWarnDays,
+  staleVisitApprovedHours: payload.staleVisitApprovedHours,
+  stalePaymentPendingHours: payload.stalePaymentPendingHours,
+  archiveCancelledAfterDays: payload.archiveCancelledAfterDays,
+  branchOverrides: payload.branchOverrides,
+});
+
+const buildBranchComparablePayload = (settings) => ({
+  isApplianceFeeEnabled: settings.isApplianceFeeEnabled,
+  applianceFeeAmountPerUnit: settings.applianceFeeAmountPerUnit,
+});
+
+const areEqual = (left, right) =>
+  JSON.stringify(left) === JSON.stringify(right);
+
+const resolveRequestRole = (req) => {
+  if (req?.user?.dbRole) return req.user.dbRole;
+  if (req?.user?.role) return req.user.role;
+  if (req?.user?.owner) return "owner";
+  if (req?.user?.branch_admin) return "branch_admin";
+  return "";
+};
+
+const buildChangedBy = (req) => ({
+  userId: req?.user?.mongoId || req?.user?.uid || null,
+  email: req?.user?.email || "",
+  role: resolveRequestRole(req),
+});
+
+const normalizeNumberField = (value, fieldKey) => {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return {
+      error: `${FIELD_ERROR_LABELS[fieldKey]} must be a non-negative number`,
+    };
+  }
+
+  if (WHOLE_NUMBER_FIELDS.has(fieldKey) && !Number.isInteger(parsed)) {
+    return {
+      error: `${FIELD_ERROR_LABELS[fieldKey]} must be a non-negative whole number`,
+    };
+  }
+
+  return { value: parsed };
+};
+
+const logSettingsChange = async (req, settings, beforePayload, afterPayload, action) => {
+  await auditLogger.logModification(
+    req,
+    SETTINGS_ENTITY_TYPE,
+    settings?._id || settings?.key || "global",
+    beforePayload,
+    afterPayload,
+    action,
+  );
+};
 
 export async function getBusinessRules(req, res, next) {
   try {
     const settings = await getBusinessSettings();
-    sendSuccess(res, {
-      reservationFeeAmount: settings.reservationFeeAmount,
-      penaltyRatePerDay: settings.penaltyRatePerDay,
-      defaultElectricityRatePerKwh: settings.defaultElectricityRatePerKwh,
-      defaultWaterRatePerUnit: settings.defaultWaterRatePerUnit,
-      branchOverrides: serializeBranchOverrides(settings.branchOverrides),
-      updatedAt: settings.updatedAt,
-    });
+    sendSuccess(res, buildSettingsPayload(settings));
   } catch (error) {
     next(error);
   }
@@ -24,65 +114,103 @@ export async function getBusinessRules(req, res, next) {
 
 export async function updateBusinessRules(req, res, next) {
   try {
-    const {
-      reservationFeeAmount,
-      penaltyRatePerDay,
-      defaultElectricityRatePerKwh,
-      defaultWaterRatePerUnit,
-      branchOverrides,
-    } = req.body;
     const settings = await getBusinessSettings();
+    const beforePayload = buildSettingsPayload(settings);
+    const touchedBranchOverrides = {};
+    let branchOverridePatch = null;
 
-    if (reservationFeeAmount !== undefined) {
-      const parsed = Number(reservationFeeAmount);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        return res.status(400).json({ error: "Reservation fee amount must be a non-negative number" });
+    for (const fieldKey of Object.keys(FIELD_ERROR_LABELS)) {
+      if (
+        fieldKey === "applianceFeeAmountPerUnit" ||
+        req.body[fieldKey] === undefined
+      ) {
+        continue;
       }
-      settings.reservationFeeAmount = parsed;
-    }
 
-    if (penaltyRatePerDay !== undefined) {
-      const parsed = Number(penaltyRatePerDay);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        return res.status(400).json({ error: "Penalty rate per day must be a non-negative number" });
+      const result = normalizeNumberField(req.body[fieldKey], fieldKey);
+      if (result.error) {
+        return res.status(400).json({ error: result.error });
       }
-      settings.penaltyRatePerDay = parsed;
+
+      settings[fieldKey] = result.value;
     }
 
-    if (defaultElectricityRatePerKwh !== undefined) {
-      const parsed = Number(defaultElectricityRatePerKwh);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        return res.status(400).json({ error: "Default electricity rate must be a non-negative number" });
+    if (req.body.branchOverrides !== undefined) {
+      branchOverridePatch = {};
+
+      for (const [branch, overridePatch] of Object.entries(req.body.branchOverrides || {})) {
+        if (!Object.prototype.hasOwnProperty.call(DEFAULT_BRANCH_OVERRIDES, branch)) {
+          return res.status(400).json({
+            error: `Unsupported branch override: ${branch}`,
+          });
+        }
+
+        const nextPatch = {};
+
+        if (overridePatch?.isApplianceFeeEnabled !== undefined) {
+          nextPatch.isApplianceFeeEnabled = Boolean(
+            overridePatch.isApplianceFeeEnabled,
+          );
+        }
+
+        if (overridePatch?.applianceFeeAmountPerUnit !== undefined) {
+          const result = normalizeNumberField(
+            overridePatch.applianceFeeAmountPerUnit,
+            "applianceFeeAmountPerUnit",
+          );
+          if (result.error) {
+            return res.status(400).json({ error: result.error });
+          }
+          nextPatch.applianceFeeAmountPerUnit = result.value;
+        }
+
+        branchOverridePatch[branch] = nextPatch;
+        touchedBranchOverrides[branch] = true;
       }
-      settings.defaultElectricityRatePerKwh = parsed;
+
+      settings.branchOverrides = mergeBranchOverrides(
+        settings.branchOverrides,
+        branchOverridePatch,
+      );
     }
 
-    if (defaultWaterRatePerUnit !== undefined) {
-      const parsed = Number(defaultWaterRatePerUnit);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        return res.status(400).json({ error: "Default water rate must be a non-negative number" });
+    const comparableBefore = buildComparablePayload(beforePayload);
+    const comparableAfter = buildComparablePayload(buildSettingsPayload(settings));
+
+    if (!areEqual(comparableBefore, comparableAfter)) {
+      const changedAt = new Date();
+      const changedBy = buildChangedBy(req);
+
+      settings.changedBy = changedBy;
+      settings.changedAt = changedAt;
+
+      if (Object.keys(touchedBranchOverrides).length > 0) {
+        const branchOverrides = mergeBranchOverrides(settings.branchOverrides);
+        for (const branch of Object.keys(touchedBranchOverrides)) {
+          branchOverrides[branch] = {
+            ...branchOverrides[branch],
+            changedBy,
+            changedAt,
+          };
+        }
+        settings.branchOverrides = branchOverrides;
       }
-      settings.defaultWaterRatePerUnit = parsed;
+
+      await settings.save();
+      const afterPayload = buildSettingsPayload(settings);
+      await logSettingsChange(
+        req,
+        settings,
+        beforePayload,
+        afterPayload,
+        "Updated business settings",
+      );
+
+      sendSuccess(res, afterPayload);
+      return;
     }
 
-    if (branchOverrides !== undefined) {
-      const mergedOverrides = serializeBranchOverrides({
-        ...serializeBranchOverrides(settings.branchOverrides),
-        ...branchOverrides,
-      });
-      settings.branchOverrides = mergedOverrides;
-    }
-
-    await settings.save();
-
-    sendSuccess(res, {
-      reservationFeeAmount: settings.reservationFeeAmount,
-      penaltyRatePerDay: settings.penaltyRatePerDay,
-      defaultElectricityRatePerKwh: settings.defaultElectricityRatePerKwh,
-      defaultWaterRatePerUnit: settings.defaultWaterRatePerUnit,
-      branchOverrides: serializeBranchOverrides(settings.branchOverrides),
-      updatedAt: settings.updatedAt,
-    });
+    sendSuccess(res, beforePayload);
   } catch (error) {
     next(error);
   }
@@ -96,6 +224,7 @@ export async function updateBranchBillingSettings(req, res, next) {
     }
 
     const settings = await getBusinessSettings();
+    const beforePayload = buildSettingsPayload(settings);
     const current = getBranchSettings(branch, settings);
     const nextSettings = { ...current };
 
@@ -104,24 +233,57 @@ export async function updateBranchBillingSettings(req, res, next) {
     }
 
     if (req.body.applianceFeeAmountPerUnit !== undefined) {
-      const parsed = Number(req.body.applianceFeeAmountPerUnit);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        return res.status(400).json({ error: "Appliance fee amount must be a non-negative number" });
+      const result = normalizeNumberField(
+        req.body.applianceFeeAmountPerUnit,
+        "applianceFeeAmountPerUnit",
+      );
+      if (result.error) {
+        return res.status(400).json({ error: result.error });
       }
-      nextSettings.applianceFeeAmountPerUnit = parsed;
+      nextSettings.applianceFeeAmountPerUnit = result.value;
     }
 
-    settings.branchOverrides = {
-      ...serializeBranchOverrides(settings.branchOverrides),
-      [branch]: nextSettings,
-    };
+    if (
+      areEqual(
+        buildBranchComparablePayload(current),
+        buildBranchComparablePayload(nextSettings),
+      )
+    ) {
+      sendSuccess(res, {
+        ...beforePayload,
+        branch,
+        settings: current,
+      });
+      return;
+    }
+
+    const changedAt = new Date();
+    const changedBy = buildChangedBy(req);
+    settings.changedBy = changedBy;
+    settings.changedAt = changedAt;
+    settings.branchOverrides = mergeBranchOverrides(settings.branchOverrides, {
+      [branch]: {
+        ...nextSettings,
+        changedBy,
+        changedAt,
+      },
+    });
+
     await settings.save();
 
+    const afterPayload = buildSettingsPayload(settings);
+    await logSettingsChange(
+      req,
+      settings,
+      beforePayload,
+      afterPayload,
+      `Updated ${branch} branch billing override`,
+    );
+
     sendSuccess(res, {
+      ...afterPayload,
       branch,
       settings: getBranchSettings(branch, settings),
-      branchOverrides: serializeBranchOverrides(settings.branchOverrides),
-      updatedAt: settings.updatedAt,
     });
   } catch (error) {
     next(error);

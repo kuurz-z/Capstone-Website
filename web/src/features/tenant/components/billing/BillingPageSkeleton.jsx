@@ -1,13 +1,11 @@
 import React from "react";
 import SkeletonPulse from "../../../../shared/components/SkeletonPulse";
-import TenantLayout from "../../../../shared/layouts/TenantLayout";
 
 /**
  * BillingPageSkeleton — shimmer skeleton that mirrors the BillingPage layout.
  */
 export default function BillingPageSkeleton() {
   return (
-    <TenantLayout>
       <div className="tenant-billing">
         {/* Page Header */}
         <div className="billing-page-header">
@@ -103,6 +101,5 @@ export default function BillingPageSkeleton() {
           ))}
         </div>
       </div>
-    </TenantLayout>
   );
 }

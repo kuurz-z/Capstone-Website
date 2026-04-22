@@ -1,8 +1,18 @@
 /* Notification Styles */
-.notification {
+.notification-stack {
   position: fixed;
   top: 20px;
   right: 20px;
+  display: grid;
+  gap: 12px;
+  z-index: 100000;
+  pointer-events: none;
+}
+
+.notification {
+  position: relative;
+  top: auto;
+  right: auto;
   min-width: 300px;
   max-width: 500px;
   padding: 16px 20px;
@@ -11,31 +21,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  z-index: 100000;
-  animation: slideInRight 0.3s ease;
   font-family: inherit;
-}
-
-@keyframes slideInRight {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.notification-fade-out {
-  animation: fadeOut 0.3s ease;
-}
-
-@keyframes fadeOut {
-  to {
-    opacity: 0;
-    transform: translateX(400px);
-  }
+  pointer-events: auto;
 }
 
 .notification-success {
@@ -84,6 +71,113 @@
 
 .notification-close:hover {
   opacity: 1;
+}
+
+.flash-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(12px);
+  margin-bottom: 18px;
+}
+
+.flash-message-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.flash-message-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.flash-message-copy strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.flash-message-close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 999px;
+}
+
+.flash-message-close:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: #0f172a;
+}
+
+.flash-message-success {
+  border-color: rgba(5, 150, 105, 0.18);
+  background: rgba(236, 253, 245, 0.96);
+}
+
+.flash-message-success .flash-message-icon {
+  color: #047857;
+  background: rgba(5, 150, 105, 0.14);
+}
+
+.flash-message-error {
+  border-color: rgba(220, 38, 38, 0.18);
+  background: rgba(254, 242, 242, 0.96);
+}
+
+.flash-message-error .flash-message-icon {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.flash-message-warning {
+  border-color: rgba(217, 119, 6, 0.18);
+  background: rgba(255, 251, 235, 0.96);
+}
+
+.flash-message-warning .flash-message-icon {
+  color: #b45309;
+  background: rgba(217, 119, 6, 0.12);
+}
+
+.flash-message-info {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: rgba(239, 246, 255, 0.96);
+}
+
+.flash-message-info .flash-message-icon {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-stack {
+    gap: 10px;
+  }
+
+  .flash-message,
+  .notification {
+    backdrop-filter: none;
+  }
 }
 
 /* Confirmation Dialog Styles */

@@ -70,6 +70,15 @@ const EmergencyContactSection = ({
         <PhoneInput
           value={emergencyContactNumber}
           onChange={(e164) => setEmergencyContactNumber(e164)}
+          onBlur={() =>
+            validateField("emergencyContactNumber", emergencyContactNumber, (value) => {
+              const valid = /^\+\d{10,15}$/.test(value || "");
+              return {
+                valid,
+                error: valid ? null : "Please enter a valid contact number",
+              };
+            })
+          }
           hasError={showValidationErrors && !emergencyContactNumber}
           required
         />

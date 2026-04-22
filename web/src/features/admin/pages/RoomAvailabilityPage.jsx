@@ -26,6 +26,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { showNotification } from "../../../shared/utils/notification";
 import { exportToCSV } from "../../../shared/utils/exportUtils";
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
+import {
+  normalizeBranchFilterValue,
+  syncBranchSearchParam,
+} from "../../../shared/utils/branchFilterQuery.mjs";
 import { formatRoomType, formatBranch } from "../utils/formatters";
 import OccupancyTrackingPage from "./OccupancyTrackingPage";
 
@@ -124,7 +128,14 @@ function RoomAvailabilityPage() {
 
   // State
   const [searchTerm, setSearchTerm] = useState("");
-  const [branchFilter, setBranchFilter] = useState("all");
+  const requestedBranch = searchParams.get("branch");
+  const [branchFilter, setBranchFilter] = useState(() =>
+    normalizeBranchFilterValue({
+      requestedBranch: user?.role === "owner" ? requestedBranch : null,
+      fallbackBranch: user?.role === "owner" ? null : user?.branch,
+      allValue: "all",
+    }),
+  );
   const [floorFilter, setFloorFilter] = useState("all");
   const [roomTypeFilter, setRoomTypeFilter] = useState("all");
   const [forecastStatusFilter, setForecastStatusFilter] = useState("all");
@@ -208,6 +219,28 @@ function RoomAvailabilityPage() {
     next.set("tab", "rooms");
     setSearchParams(next, { replace: true });
   }, [requestedTab, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const nextBranch = normalizeBranchFilterValue({
+      requestedBranch: user?.role === "owner" ? requestedBranch : null,
+      fallbackBranch: user?.role === "owner" ? null : user?.branch,
+      allValue: "all",
+    });
+
+    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
+  }, [requestedBranch, user?.branch, user?.role]);
+
+  useEffect(() => {
+    if (!user?.role) return;
+
+    const nextParams = syncBranchSearchParam(searchParams, branchFilter, {
+      enabled: user?.role === "owner",
+      allValue: "all",
+    });
+
+    if (nextParams.toString() === searchParams.toString()) return;
+    setSearchParams(nextParams, { replace: true });
+  }, [branchFilter, searchParams, setSearchParams, user?.role]);
 
   // Stats
   const stats = useMemo(() => {

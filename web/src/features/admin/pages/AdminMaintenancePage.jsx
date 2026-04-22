@@ -14,6 +14,7 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
   useAdminMaintenanceRequests,
@@ -30,6 +31,11 @@ import {
   getMaintenanceUrgencyMeta,
 } from "../../../shared/utils/maintenanceConfig";
 import { exportToCSV } from "../../../shared/utils/exportUtils";
+import { BRANCH_OPTIONS, BRANCH_DISPLAY_NAMES } from "../../../shared/utils/constants";
+import {
+  normalizeBranchFilterValue,
+  syncBranchSearchParam,
+} from "../../../shared/utils/branchFilterQuery.mjs";
 import {
   DataTable,
   DetailDrawer,
@@ -128,13 +134,20 @@ const createFilterPayload = ({
 export default function AdminMaintenancePage() {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [requestTypeFilter, setRequestTypeFilter] = useState("all");
   const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [branchFilter, setBranchFilter] = useState("all");
+  const requestedBranch = searchParams.get("branch");
+  const [branchFilter, setBranchFilter] = useState(() =>
+    normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      allValue: "all",
+    }),
+  );
   const [sortMode, setSortMode] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -193,12 +206,6 @@ export default function AdminMaintenancePage() {
   const requests = requestsData?.requests || [];
   const summaryRequests = summaryData?.requests || requests;
   const selectedRequest = requestDetailData?.request || null;
-
-  const availableBranches = useMemo(() => {
-    const source = [...requests, ...summaryRequests];
-    return [...new Set(source.map((request) => request.tenant?.branch || request.branch).filter(Boolean))]
-      .sort((left, right) => left.localeCompare(right));
-  }, [requests, summaryRequests]);
 
   const summaryItems = useMemo(() => {
     const counts = summaryRequests.reduce((acc, request) => {
@@ -299,7 +306,7 @@ export default function AdminMaintenancePage() {
     if (isOwner && branchFilter !== "all") {
       chips.push({
         key: `branch-${branchFilter}`,
-        label: `Branch: ${branchFilter}`,
+        label: `Branch: ${BRANCH_DISPLAY_NAMES[branchFilter] || branchFilter}`,
       });
     }
 
@@ -341,6 +348,27 @@ export default function AdminMaintenancePage() {
     statusFilter,
     urgencyFilter,
   ]);
+
+  useEffect(() => {
+    const nextBranch = normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      allValue: "all",
+    });
+
+    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
+  }, [isOwner, requestedBranch]);
+
+  useEffect(() => {
+    if (!user?.role) return;
+
+    const nextParams = syncBranchSearchParam(searchParams, branchFilter, {
+      enabled: isOwner,
+      allValue: "all",
+    });
+
+    if (nextParams.toString() === searchParams.toString()) return;
+    setSearchParams(nextParams, { replace: true });
+  }, [branchFilter, isOwner, searchParams, setSearchParams, user?.role]);
 
   useEffect(() => {
     if (!selectedRequest) return;
@@ -672,9 +700,9 @@ export default function AdminMaintenancePage() {
                   onChange={(event) => setBranchFilter(event.target.value)}
                 >
                   <option value="all">All branches</option>
-                  {availableBranches.map((branch) => (
-                    <option key={branch} value={branch}>
-                      {branch}
+                  {BRANCH_OPTIONS.map((branch) => (
+                    <option key={branch.value} value={branch.value}>
+                      {branch.label}
                     </option>
                   ))}
                 </select>

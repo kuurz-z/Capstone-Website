@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { showNotification } from "../../../shared/utils/notification";
 import getFriendlyError from "../../../shared/utils/friendlyError";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
+import { useRouteFlash } from "../../../shared/hooks/useRouteFlash";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
@@ -34,7 +36,9 @@ import {
 // ─────────────────────────────────────────────────────────────
 function CheckAvailabilityPage() {
   const navigate = useNavigate();
+  const appNavigate = useAppNavigation();
   const { user, logout } = useAuth();
+  useRouteFlash();
   const [searchParams] = useSearchParams();
   const isChangeRoomMode = searchParams.get("changeRoom") === "1";
   const changeRoomReservationId = searchParams.get("reservationId");
@@ -236,8 +240,11 @@ function CheckAvailabilityPage() {
         });
         closeRoomDetails();
         await queryClient.invalidateQueries({ queryKey: ["reservations"] });
-        navigate("/applicant/profile", {
-          state: { notification: `Room changed to ${selectedRoom.title}` },
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "success",
+            message: `Room changed to ${selectedRoom.title}`,
+          },
         });
       } catch (err) {
         console.error("Failed to change room:", err);
@@ -279,7 +286,13 @@ function CheckAvailabilityPage() {
             "warning",
             5000,
           );
-          navigate("/applicant/profile");
+          appNavigate("/applicant/profile", {
+            flash: {
+              type: "warning",
+              message:
+                "You already have an active reservation. Cancel it first if you'd like a different room.",
+            },
+          });
           return;
         } else {
           throw createErr;
@@ -287,9 +300,10 @@ function CheckAvailabilityPage() {
       }
       closeRoomDetails();
       await queryClient.invalidateQueries({ queryKey: ["reservations"] });
-      navigate("/applicant/profile", {
-        state: {
-          notification: `Room ${selectedRoom.title} reserved! Continue from your dashboard.`,
+      appNavigate("/applicant/profile", {
+        flash: {
+          type: "success",
+          message: `Room ${selectedRoom.title} reserved! Continue from your dashboard.`,
         },
       });
     } catch (err) {
@@ -363,8 +377,12 @@ function CheckAvailabilityPage() {
               <button
                 onClick={() => {
                   setShowLoginConfirmBeforeReserve(false);
-                  showNotification("Please sign in to reserve a room", "info", 4000);
-                  setTimeout(() => navigate("/signin"), 300);
+                  appNavigate("/signin", {
+                    flash: {
+                      type: "info",
+                      message: "Please sign in to reserve a room",
+                    },
+                  });
                 }}
                 className="flex-1 py-3 px-4 rounded-full text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer"
                 style={{
@@ -540,8 +558,9 @@ function CheckAvailabilityPage() {
           setShowLogoutConfirm(false);
           try {
             await logout();
-            showNotification("Signed out successfully", "success", 3000);
-            navigate("/signin");
+            appNavigate("/signin", {
+              flash: { type: "success", message: "Signed out successfully" },
+            });
           } catch (err) {
             console.error("Logout error:", err);
           }

@@ -52,6 +52,7 @@ import utilityBillingRoutes from "./routes/utilityBillingRoutes.js";
 import financialRoutes from "./routes/financialRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
+import branchSummaryRoutes from "./routes/branchSummaryRoutes.js";
 import { initSocket } from "./utils/socket.js";
 
 dotenv.config();
@@ -249,6 +250,7 @@ app.use("/api/utilities", utilityBillingRoutes);
 app.use("/api/financial", financialRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/branches", branchSummaryRoutes);
 
 app.get("/api/health", async (req, res) => {
   const checks = {};

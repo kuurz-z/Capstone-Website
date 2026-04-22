@@ -3,6 +3,9 @@ import { showConfirmation, showNotification } from "./notification";
 import { authApi } from "../api/authApi";
 
 /**
+ * Legacy utility kept for compatibility.
+ * Prefer useAuth().logout() plus route flash for routed UI flows.
+ *
  * Log out the current user
  * Calls backend to log logout event, then clears Firebase auth session
  * @param {boolean} skipConfirmation - Skip confirmation dialog
@@ -22,17 +25,9 @@ export const logout = async (skipConfirmation = false) => {
       }
     }
 
-    // Call backend logout endpoint to log the event and sign out
-    // authApi.logout() handles both backend API call and Firebase signOut
+    // Routed flows should handle post-logout navigation and success flash.
+    // This helper only performs the auth-side sign-out work.
     await authApi.logout();
-
-    // Wait for screen to load before showing notification
-    setTimeout(() => {
-      showNotification("Logged out successfully", "success");
-    }, 300);
-    setTimeout(() => {
-      window.location.href = "/";
-    }, 800);
     return true;
   } catch (error) {
     console.error("Logout error:", error);

@@ -266,7 +266,7 @@ async function main() {
   // ─── STEP 6: What admin must do to trigger billing ────────────────────────
   section("STEP 6 — What admin must do to create a real bill");
 
-  console.log("  The billing flow is FULLY MANUAL. Here's the sequence:\n");
+  console.log("  Bill generation is still admin-driven. Payment settlement now defaults to online checkout.\n");
   console.log("  A. Admin marks tenant as 'moveIn' (with optional meterReading)");
   console.log("     → Reservation.status = 'moveIn'");
   console.log("     → Bed occupied, occupancy incremented");
@@ -280,11 +280,19 @@ async function main() {
   console.log("     → System computes pro-rata share for each tenant");
   console.log("     → Bill documents are created in DB (one per tenant)");
   console.log("     → Email sent to each tenant via sendBillGeneratedEmail()\n");
-  console.log("  D. Tenant uploads proof of payment");
-  console.log("     → PATCH /api/billing/:billId/submit-proof\n");
-  console.log("  E. Admin approves/rejects the payment");
-  console.log("     → PATCH /api/billing/:billId/verify\n");
-  console.log("  F. (Automated) If unpaid past due date:");
+  console.log("  D. Tenant opens the Billing page and starts online checkout");
+  console.log("     → POST /api/payments/bill/:billId/checkout");
+  console.log("     → Browser is redirected to PayMongo checkout\n");
+  console.log("  E. After payment, tenant returns to /applicant/billing");
+  console.log("     → GET /api/payments/session/:sessionId/status");
+  console.log("     → Polling path verifies status and is safe to retry\n");
+  console.log("  F. PayMongo webhook confirms the payment server-to-server");
+  console.log("     → POST /api/webhooks/paymongo");
+  console.log("     → Shared bill settlement helper updates the bill + payment ledger\n");
+  console.log("  G. If branch staff accepts an assisted offline payment");
+  console.log("     → Admin records it manually via /api/billing/:billId/mark-paid");
+  console.log("     → Legacy proof verification is for already-submitted historical records only\n");
+  console.log("  H. (Automated) If unpaid past due date:");
   console.log("     → Cron Job 3 (midnight): Bill.status → 'overdue'");
   console.log("     → Cron Job 4 (00:10): ₱50/day penalty applied to charges.penalty");
 

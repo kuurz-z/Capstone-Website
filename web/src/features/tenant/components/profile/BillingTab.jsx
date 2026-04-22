@@ -92,6 +92,109 @@ const STATUS_STYLES = {
 const DASHBOARD_SKELETON_CARDS = [1, 2];
 const BILL_SKELETON_ROWS = [1, 2, 3];
 const UTILITY_SKELETON_ROWS = [1, 2, 3, 4];
+const BILL_FILTER_OPTIONS = ["all", "unpaid", "paid"];
+const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+const getOutstandingAmount = (bill) =>
+  Number(bill?.remainingAmount ?? bill?.totalAmount ?? 0);
+
+const isPaidBill = (bill) =>
+  bill?.status === "paid" || getOutstandingAmount(bill) <= 0;
+
+const getBillFilterGroups = (bills = [], filter = "all") => {
+  const paid = bills.filter((bill) => isPaidBill(bill));
+  const unpaid = bills.filter((bill) => !isPaidBill(bill));
+  const filtered =
+    filter === "unpaid" ? unpaid : filter === "paid" ? paid : bills;
+
+  return { paid, unpaid, filtered };
+};
+
+const getEmptyFilterTitle = (filter = "all", label = "bills") =>
+  filter === "all" ? `No ${label} found` : `No ${filter} ${label} found`;
+
+const getBillSortTimestamp = (bill = {}) => {
+  const candidates = [
+    bill?.dueDate,
+    bill?.billingCycleStart,
+    bill?.billingMonth,
+    bill?.createdAt,
+  ];
+
+  for (const value of candidates) {
+    const timestamp = value ? new Date(value).getTime() : Number.NaN;
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+
+  return Number.POSITIVE_INFINITY;
+};
+
+const sortBillsOldestFirst = (left, right) =>
+  getBillSortTimestamp(left) - getBillSortTimestamp(right);
+
+const getBillChargeSummary = (bill = {}) => {
+  const charges = bill?.charges || {};
+  const rentAndFeesTotal = roundMoney(
+    Math.max(
+      Number(charges.rent || 0) +
+        Number(charges.applianceFees || 0) +
+        Number(charges.corkageFees || 0) +
+        Number(charges.penalty || 0) -
+        Number(charges.discount || 0) -
+        Number(bill?.reservationCreditApplied || 0),
+      0,
+    ),
+  );
+  const electricityTotal = roundMoney(Number(charges.electricity || 0));
+  const waterTotal = roundMoney(Number(charges.water || 0));
+  const utilitiesTotal = roundMoney(electricityTotal + waterTotal);
+  const statementTotal = roundMoney(
+    Number(bill?.totalAmount ?? rentAndFeesTotal + utilitiesTotal),
+  );
+  const remaining = roundMoney(getOutstandingAmount(bill));
+  const chargeSections = [
+    { key: "rent", amount: rentAndFeesTotal },
+    { key: "electricity", amount: electricityTotal },
+    { key: "water", amount: waterTotal },
+  ];
+  const populatedSections = chargeSections.filter((section) => section.amount > 0);
+  const allocationBasis = roundMoney(
+    chargeSections.reduce((sum, section) => sum + section.amount, 0) || statementTotal,
+  );
+  const outstandingBySection = { rent: 0, electricity: 0, water: 0 };
+
+  if (remaining > 0 && allocationBasis > 0 && populatedSections.length > 0) {
+    let unallocated = remaining;
+
+    populatedSections.forEach((section, index) => {
+      const allocated =
+        index === populatedSections.length - 1
+          ? unallocated
+          : roundMoney((remaining * section.amount) / allocationBasis);
+      const safeAllocated = roundMoney(
+        Math.min(Math.max(allocated, 0), unallocated),
+      );
+
+      outstandingBySection[section.key] = safeAllocated;
+      unallocated = roundMoney(unallocated - safeAllocated);
+    });
+  }
+
+  return {
+    rentAndFeesTotal,
+    electricityTotal,
+    waterTotal,
+    utilitiesTotal,
+    statementTotal,
+    remaining,
+    outstandingBySection,
+    hasRentCharges: rentAndFeesTotal > 0,
+    hasElectricityCharge: electricityTotal > 0,
+    hasWaterCharge: waterTotal > 0,
+    hasUtilityCharges: utilitiesTotal > 0,
+    isCombinedStatement: populatedSections.length > 1,
+  };
+};
 
 const BillingTabSkeleton = () => (
   <div style={{ width: "100%" }} aria-busy="true" aria-live="polite">
@@ -184,20 +287,61 @@ const UtilityListSkeleton = () => (
 
 /* ── Dashboard Components ─────────────────────────── */
 
-const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, hasWaterBilling, onPay, payingOnline }) => {
+const StatementScopeNotice = ({ remainingAmount, label }) => (
+  <div style={s.scopeNotice}>
+    <AlertCircle size={14} color="#B45309" />
+    <span>
+      This statement also includes {label}. Checkout pays the full remaining statement
+      balance of {fmt(remainingAmount)}.
+    </span>
+  </div>
+);
+
+const SplitDashboard = ({
+  unpaidRent,
+  unpaidElec,
+  unpaidWater,
+  hasWaterBilling,
+  onPay,
+  payingOnline,
+  combinedStatementCount = 0,
+}) => {
   const unpaidUtilities = unpaidElec + unpaidWater;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "24px" }}>
-      
+    <div>
+      {combinedStatementCount > 0 && (
+        <div style={dash.notice}>
+          <AlertCircle size={16} color="#B45309" />
+          <span>
+            {combinedStatementCount === 1
+              ? "1 open statement combines multiple charge types."
+              : `${combinedStatementCount} open statements combine multiple charge types.`}{" "}
+            Checkout always pays the full remaining balance of the statement you open.
+          </span>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "20px",
+          marginBottom: "24px",
+        }}
+      >
       {/* Rent Panel */}
       <div style={dash.wrapper}>
         <div style={dash.headerRow}>
           <div>
             <h2 style={{...dash.title, color: "#F57C00", display: "flex", gap: "6px", alignItems: "center"}}>
-              <Home size={16} /> Rent & Fees Balance
+              <Home size={16} /> Rent & Fees Due
             </h2>
             <div style={dash.amount}>{fmt(unpaidRent)}</div>
           </div>
+        </div>
+        <div style={dash.helperText}>
+          Opens the oldest unpaid statement that includes rent or fees. Monthly
+          bills are paid through online checkout.
         </div>
         {unpaidRent > 0 && (
           <button
@@ -211,7 +355,7 @@ const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, hasWaterBilling, 
             }}
           >
             <CreditCard size={18} />
-            {payingOnline === "rent" ? "Processing..." : "Pay Rent Online"}
+            {payingOnline === "rent" ? "Processing..." : "Pay Oldest Rent Statement"}
           </button>
         )}
       </div>
@@ -221,10 +365,15 @@ const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, hasWaterBilling, 
         <div style={dash.headerRow}>
           <div>
             <h2 style={{...dash.title, color: "#3B82F6", display: "flex", gap: "6px", alignItems: "center"}}>
-              <Activity size={16} /> Utilities Balance
+              <Activity size={16} /> Utilities Due
             </h2>
             <div style={dash.amount}>{fmt(unpaidUtilities)}</div>
           </div>
+        </div>
+        <div style={dash.helperText}>
+          Opens the oldest unpaid statement that includes electricity or water
+          charges. Offline settlements are recorded by branch staff after
+          confirmation.
         </div>
         
         {(unpaidUtilities > 0 || hasWaterBilling) && (
@@ -263,46 +412,57 @@ const SplitDashboard = ({ unpaidRent, unpaidElec, unpaidWater, hasWaterBilling, 
             }}
           >
             <CreditCard size={18} />
-            {payingOnline === "utilities" ? "Processing..." : "Pay Utilities Online"}
+            {payingOnline === "utilities" ? "Processing..." : "Pay Oldest Utility Statement"}
           </button>
         )}
       </div>
-
+      </div>
     </div>
   );
 };
 
 /* ── Monthly Payment View ──────────────────────────── */
 
+const BillStatusFilters = ({ bills, filter, setFilter }) => {
+  const { unpaid } = getBillFilterGroups(bills, filter);
+
+  return (
+    <div style={s.filterRow}>
+      {BILL_FILTER_OPTIONS.map((value) => (
+        <button
+          key={value}
+          onClick={() => setFilter(value)}
+          style={{
+            ...s.chip,
+            ...(filter === value ? s.chipActive : {}),
+          }}
+        >
+          {value === "all" ? "All Bills" : value === "unpaid" ? "Unpaid" : "Paid"}
+          {value === "unpaid" && unpaid.length > 0 && (
+            <span style={s.chipCount}>{unpaid.length}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 const MonthlyPaymentView = ({ bills, filter, setFilter }) => {
-  const unpaid = bills.filter((b) => (b.remainingAmount ?? b.totalAmount ?? 0) > 0);
-  const paid = bills.filter((b) => b.status === "paid");
-  const filtered = filter === "unpaid" ? unpaid : filter === "paid" ? paid : bills;
+  const { filtered } = getBillFilterGroups(bills, filter);
 
   return (
     <div>
-      <div style={s.filterRow}>
-        {["all", "unpaid", "paid"].map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            style={{
-              ...s.chip,
-              ...(filter === f ? s.chipActive : {}),
-            }}
-          >
-            {f === "all" ? "All Bills" : f === "unpaid" ? "Unpaid" : "Paid"}
-            {f === "unpaid" && unpaid.length > 0 && <span style={s.chipCount}>{unpaid.length}</span>}
-          </button>
-        ))}
-      </div>
+      <BillStatusFilters bills={bills} filter={filter} setFilter={setFilter} />
 
       {filtered.length === 0 ? (
         <div style={s.emptyState}>
           <CreditCard size={40} color="#D1D5DB" />
           <h3 style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>
-            No {filter} bills found
+            {getEmptyFilterTitle(filter, "bills")}
           </h3>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "#94a3b8", maxWidth: 420 }}>
+            Rent bills appear once your current stay is billed. Utility charges only show here after they are issued, not while they are still in draft review.
+          </p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -319,9 +479,11 @@ const MonthlyBillCard = ({ bill }) => {
   const [open, setOpen] = useState((bill.remainingAmount ?? bill.totalAmount) > 0);
   const status = STATUS_STYLES[bill.status] || STATUS_STYLES.pending;
   const charges = bill.charges || {};
+  const summary = getBillChargeSummary(bill);
 
   // Compute the strictly Rent-focused total for this separated tab
-  const rentBase = (charges.rent || 0) + (charges.applianceFees || 0);
+  const rentBase =
+    (charges.rent || 0) + (charges.applianceFees || 0) + (charges.corkageFees || 0);
   let rentOnlyTotal = rentBase + (charges.penalty || 0) - (charges.discount || 0);
   if (bill.grossAmount > 0) {
     rentOnlyTotal -= (bill.reservationCreditApplied || 0);
@@ -339,6 +501,9 @@ const MonthlyBillCard = ({ bill }) => {
           </div>
           <div style={{ fontSize: 12, color: "#94a3b8" }}>
             Cycle: {fmtCycle(bill) || "—"}
+          </div>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+            Due: {bill.dueDate ? fmtDate(bill.dueDate) : "â€”"}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -411,6 +576,13 @@ const MonthlyBillCard = ({ bill }) => {
           >
             <Download size={13} /> Download Statement
           </button>
+
+          {summary.isCombinedStatement && (
+            <StatementScopeNotice
+              remainingAmount={summary.remaining}
+              label="additional charge types"
+            />
+          )}
 
           {bill.status === "paid" && bill.paymentDate && (
             <div style={s.paidInfo}>
@@ -641,6 +813,7 @@ const ElectricityPeriodRow = ({ period }) => {
     open ? (period.id || period._id) : null,
   );
   const data = period.utilityBreakdowns?.electricity || fetchedData;
+  const summary = getBillChargeSummary(period);
   const electricityAmount = period.billAmount ?? period.charges?.electricity ?? 0;
   const electricityKwh = period.totalKwh ?? period.totalUsage ?? data?.myTotalKwh ?? null;
 
@@ -692,22 +865,47 @@ const ElectricityPeriodRow = ({ period }) => {
                 : "Details not available."}
             </div>
           )}
+
+          {summary.isCombinedStatement && (
+            <StatementScopeNotice
+              remainingAmount={summary.remaining}
+              label="additional charge types"
+            />
+          )}
         </div>
       )}
     </div>
   );
 };
 
-const ElectricityTabContent = ({ bills = [], isLoading = false }) => {
+const ElectricityTabContent = ({
+  bills = [],
+  isLoading = false,
+  filter = "all",
+  setFilter,
+}) => {
   if (isLoading) return <UtilityListSkeleton />;
-  if (!bills.length) return <div style={s.emptyState}>No electricity history found.</div>;
+  const { filtered } = getBillFilterGroups(bills, filter);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {bills.map((bill) => (
-        <ElectricityPeriodRow key={bill.id || bill._id} period={bill} />
-      ))}
-    </div>
+    <>
+      <BillStatusFilters bills={bills} filter={filter} setFilter={setFilter} />
+
+      {filtered.length === 0 ? (
+        <div style={s.emptyState}>
+          <CreditCard size={40} color="#D1D5DB" />
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>
+            {getEmptyFilterTitle(filter, "electricity bills")}
+          </h3>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map((bill) => (
+            <ElectricityPeriodRow key={bill.id || bill._id} period={bill} />
+          ))}
+        </div>
+      )}
+    </>
   );
 };
 
@@ -718,6 +916,7 @@ const WaterPeriodRow = ({ period }) => {
   const { data: fetchedData, isLoading } = useMyUtilityBreakdownByBillId("water", open ? period.id || period._id : null);
   const data = period.utilityBreakdowns?.water || fetchedData;
   const record = data?.record;
+  const summary = getBillChargeSummary(period);
 
   return (
     <div style={{ ...s.billCard, borderColor: open ? "#93c5fd" : "var(--border-card)" }}>
@@ -780,22 +979,47 @@ const WaterPeriodRow = ({ period }) => {
           ) : (
             <div style={elecS.loadingRow}>Details not available.</div>
           )}
+
+          {summary.isCombinedStatement && (
+            <StatementScopeNotice
+              remainingAmount={summary.remaining}
+              label="additional charge types"
+            />
+          )}
         </div>
       )}
     </div>
   );
 };
 
-const WaterTabContent = ({ bills = [], isLoading = false }) => {
+const WaterTabContent = ({
+  bills = [],
+  isLoading = false,
+  filter = "all",
+  setFilter,
+}) => {
   if (isLoading) return <UtilityListSkeleton />;
-  if (!bills.length) return <div style={s.emptyState}>No water history found.</div>;
+  const { filtered } = getBillFilterGroups(bills, filter);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {bills.map((bill) => (
-        <WaterPeriodRow key={bill.id || bill._id} period={bill} />
-      ))}
-    </div>
+    <>
+      <BillStatusFilters bills={bills} filter={filter} setFilter={setFilter} />
+
+      {filtered.length === 0 ? (
+        <div style={s.emptyState}>
+          <CreditCard size={40} color="#D1D5DB" />
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>
+            {getEmptyFilterTitle(filter, "water bills")}
+          </h3>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map((bill) => (
+            <WaterPeriodRow key={bill.id || bill._id} period={bill} />
+          ))}
+        </div>
+      )}
+    </>
   );
 };
 
@@ -806,7 +1030,9 @@ const BillingTab = () => {
   const [loading, setLoading] = useState(true);
   const [bills, setBills] = useState([]);
   const [subTab, setSubTab] = useState("monthly"); // monthly | electricity | water
-  const [filter, setFilter] = useState("all");
+  const [monthlyFilter, setMonthlyFilter] = useState("all");
+  const [electricityFilter, setElectricityFilter] = useState("all");
+  const [waterFilter, setWaterFilter] = useState("all");
   const [payingOnline, setPayingOnline] = useState(false);
 
   // Handle PayMongo return
@@ -851,52 +1077,60 @@ const BillingTab = () => {
     loadBills();
   }, [loadBills]);
 
-  const unpaidRent = bills.reduce(
-    (sum, b) => {
-      const r = b.charges?.rent || 0;
-      const a = b.charges?.applianceFees || 0;
-      const isRentBill = r > 0 || (r === 0 && a > 0 && (b.charges?.electricity || 0) === 0 && (b.charges?.water || 0) === 0);
-      
-      if (isRentBill && ((b.remainingAmount ?? b.totalAmount ?? 0) > 0 || b.status === "pending" || b.status === "overdue" || b.status === "partially-paid")) {
-        return sum + (b.remainingAmount ?? b.totalAmount);
-      }
-      return sum;
-    },
-    0,
+  const billSummaries = bills.map((bill) => ({
+    bill,
+    summary: getBillChargeSummary(bill),
+  }));
+  const openBillSummaries = billSummaries.filter(({ bill }) => !isPaidBill(bill));
+
+  const unpaidRent = roundMoney(
+    openBillSummaries.reduce(
+      (sum, { summary }) => sum + summary.outstandingBySection.rent,
+      0,
+    ),
   );
 
-  const unpaidElec = bills.reduce(
-    (sum, b) => {
-      const e = b.charges?.electricity || 0;
-      if (e > 0 && ((b.remainingAmount ?? b.totalAmount ?? 0) > 0 || b.status === "pending" || b.status === "overdue" || b.status === "partially-paid")) {
-        return sum + (b.remainingAmount ?? b.totalAmount);
-      }
-      return sum;
-    },
-    0,
+  const unpaidElec = roundMoney(
+    openBillSummaries.reduce(
+      (sum, { summary }) => sum + summary.outstandingBySection.electricity,
+      0,
+    ),
   );
 
-  const unpaidWater = bills.reduce(
-    (sum, b) => {
-      const w = b.charges?.water || 0;
-      if (w > 0 && ((b.remainingAmount ?? b.totalAmount ?? 0) > 0 || b.status === "pending" || b.status === "overdue" || b.status === "partially-paid")) {
-        return sum + (b.remainingAmount ?? b.totalAmount);
-      }
-      return sum;
-    },
-    0,
+  const unpaidWater = roundMoney(
+    openBillSummaries.reduce(
+      (sum, { summary }) => sum + summary.outstandingBySection.water,
+      0,
+    ),
   );
+  const combinedStatementCount = openBillSummaries.filter(
+    ({ summary }) => summary.isCombinedStatement,
+  ).length;
 
-  const monthlyBills = bills.filter((bill) => {
-    const charges = bill.charges || {};
-    return (charges.rent || 0) > 0 || (charges.applianceFees || 0) > 0;
-  });
+  const monthlyBills = billSummaries
+    .filter(({ summary }) => summary.hasRentCharges)
+    .map(({ bill }) => bill);
 
-  const electricityBills = bills.filter((bill) => (bill.charges?.electricity || 0) > 0);
-  const waterBills = bills.filter((bill) => (bill.charges?.water || 0) > 0);
+  const electricityBills = billSummaries
+    .filter(({ summary }) => summary.hasElectricityCharge)
+    .map(({ bill }) => bill);
+  const waterBills = billSummaries
+    .filter(({ summary }) => summary.hasWaterCharge)
+    .map(({ bill }) => bill);
   // Show water tab only if this tenant has ever been billed for water.
   // If all water bills are paid, the tab still shows with ₱0 balance.
   const hasWaterBilling = waterBills.length > 0;
+  const payableRentBills = openBillSummaries
+    .filter(({ summary }) => summary.hasRentCharges)
+    .map(({ bill }) => bill)
+    .sort(sortBillsOldestFirst);
+  const payableUtilityBills = openBillSummaries
+    .filter(({ summary }) => summary.hasUtilityCharges)
+    .map(({ bill }) => bill)
+    .sort(sortBillsOldestFirst);
+  const payableBills = openBillSummaries
+    .map(({ bill }) => bill)
+    .sort(sortBillsOldestFirst);
 
   const handlePay = async (type = "all") => {
     try {
@@ -904,17 +1138,11 @@ const BillingTab = () => {
       
       let billsToPay = [];
       if (type === "rent") {
-        billsToPay = bills.filter(b => 
-          (b.remainingAmount > 0 || b.status === "pending" || b.status === "overdue") &&
-          ((b.charges?.rent || 0) > 0 || ((b.charges?.applianceFees || 0) > 0 && !b.charges?.electricity && !b.charges?.water))
-        );
+        billsToPay = payableRentBills;
       } else if (type === "utilities") {
-        billsToPay = bills.filter(b => 
-          (b.remainingAmount > 0 || b.status === "pending" || b.status === "overdue") &&
-          ((b.charges?.electricity || 0) > 0 || (b.charges?.water || 0) > 0)
-        );
+        billsToPay = payableUtilityBills;
       } else {
-        billsToPay = bills.filter((b) => b.remainingAmount > 0 || b.status === "pending" || b.status === "overdue");
+        billsToPay = payableBills;
       }
 
       if (billsToPay.length === 0) {
@@ -923,7 +1151,7 @@ const BillingTab = () => {
         return;
       }
 
-      const firstUnpaid = billsToPay.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
+      const firstUnpaid = billsToPay[0];
       const { checkoutUrl } = await billingApi.createCheckout(firstUnpaid.id || firstUnpaid._id);
       window.location.href = checkoutUrl;
     } catch (err) {
@@ -947,6 +1175,7 @@ const BillingTab = () => {
         hasWaterBilling={hasWaterBilling}
         onPay={handlePay}
         payingOnline={payingOnline}
+        combinedStatementCount={combinedStatementCount}
       />
 
       {/* 2. Embedded Sub-Tabs */}
@@ -977,9 +1206,29 @@ const BillingTab = () => {
 
       {/* 3. Content */}
       <div style={{ minHeight: 400 }}>
-        {subTab === "monthly" && <MonthlyPaymentView bills={monthlyBills} filter={filter} setFilter={setFilter} />}
-        {subTab === "electricity" && <ElectricityTabContent bills={electricityBills} isLoading={loading} />}
-        {subTab === "water" && hasWaterBilling && <WaterTabContent bills={waterBills} isLoading={loading} />}
+        {subTab === "monthly" && (
+          <MonthlyPaymentView
+            bills={monthlyBills}
+            filter={monthlyFilter}
+            setFilter={setMonthlyFilter}
+          />
+        )}
+        {subTab === "electricity" && (
+          <ElectricityTabContent
+            bills={electricityBills}
+            isLoading={loading}
+            filter={electricityFilter}
+            setFilter={setElectricityFilter}
+          />
+        )}
+        {subTab === "water" && hasWaterBilling && (
+          <WaterTabContent
+            bills={waterBills}
+            isLoading={loading}
+            filter={waterFilter}
+            setFilter={setWaterFilter}
+          />
+        )}
       </div>
     </div>
   );
@@ -988,6 +1237,19 @@ const BillingTab = () => {
 /* ── Styles ─────────────────────────────────────────── */
 
 const dash = {
+  notice: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: "12px 14px",
+    marginBottom: 16,
+    borderRadius: 12,
+    border: "1px solid #FCD34D",
+    background: "#FFFBEB",
+    color: "#92400E",
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
   wrapper: {
     background: "#fff",
     borderRadius: 16,
@@ -1017,6 +1279,12 @@ const dash = {
     fontWeight: 800,
     color: "#0A1628",
     lineHeight: 1,
+  },
+  helperText: {
+    marginBottom: 16,
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "#64748b",
   },
   payBtn: {
     display: "inline-flex",
@@ -1192,6 +1460,19 @@ const s = {
     fontSize: 12,
     color: "#059669",
     fontWeight: 600,
+  },
+  scopeNotice: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 12,
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "#FFFBEB",
+    border: "1px solid #FDE68A",
+    color: "#92400E",
+    fontSize: 12,
+    lineHeight: 1.5,
   },
   emptyState: {
     display: "flex",

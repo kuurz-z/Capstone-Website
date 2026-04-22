@@ -19,23 +19,42 @@ const userModel = {
   findOne: jest.fn(),
   findById: jest.fn(),
   findByIdAndUpdate: jest.fn(),
+  findByIdAndDelete: jest.fn(),
+};
+const roomModel = {
+  find: jest.fn(),
+  countDocuments: jest.fn(),
 };
 const reservationModel = {
   find: jest.fn(),
   findOne: jest.fn(),
+  countDocuments: jest.fn(),
+  deleteMany: jest.fn(),
 };
 const billModel = {
   countDocuments: jest.fn(),
   deleteMany: jest.fn(),
 };
+const utilityReadingModel = {
+  countDocuments: jest.fn(),
+};
+const maintenanceRequestModel = {
+  countDocuments: jest.fn(),
+};
 const setCustomUserClaims = jest.fn();
-const getAuth = jest.fn(() => ({ setCustomUserClaims }));
+const deleteUserFromAuth = jest.fn();
+const getAuth = jest.fn(() => ({
+  setCustomUserClaims,
+  deleteUser: deleteUserFromAuth,
+}));
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   User: userModel,
   Reservation: reservationModel,
-  Room: {},
+  Room: roomModel,
   Bill: billModel,
+  UtilityReading: utilityReadingModel,
+  MaintenanceRequest: maintenanceRequestModel,
 }));
 
 await jest.unstable_mockModule("dayjs", () => ({ default: jest.fn() }));
@@ -46,7 +65,7 @@ await jest.unstable_mockModule("../middleware/logger.js", () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 await jest.unstable_mockModule("../utils/auditLogger.js", () => ({
-  default: { logModification: jest.fn(), logError: jest.fn() },
+  default: { logModification: jest.fn(), logDeletion: jest.fn(), logError: jest.fn() },
 }));
 await jest.unstable_mockModule("../middleware/errorHandler.js", () => ({
   sendSuccess: jest.fn(),
@@ -70,8 +89,10 @@ await jest.unstable_mockModule("../middleware/permissions.js", () => ({
 const {
   getUsers,
   getUserStats,
+  getUserById,
   updateUser,
   updatePermissions,
+  deleteUser,
   restoreUser,
 } = await import("./usersController.js");
 
@@ -100,6 +121,19 @@ const mockNoActiveStay = () => {
   });
 };
 
+const createPopulateChain = (result) => {
+  const chain = {
+    select: jest.fn(() => chain),
+    populate: jest.fn(),
+  };
+
+  chain.populate
+    .mockImplementationOnce(() => chain)
+    .mockImplementationOnce(() => Promise.resolve(result));
+
+  return chain;
+};
+
 describe("usersController", () => {
   beforeEach(() => {
     userModel.find.mockReset();
@@ -108,11 +142,19 @@ describe("usersController", () => {
     userModel.findOne.mockReset();
     userModel.findById.mockReset();
     userModel.findByIdAndUpdate.mockReset();
+    userModel.findByIdAndDelete.mockReset();
+    roomModel.find.mockReset();
+    roomModel.countDocuments.mockReset();
     reservationModel.find.mockReset();
     reservationModel.findOne.mockReset();
+    reservationModel.countDocuments.mockReset();
+    reservationModel.deleteMany.mockReset();
     billModel.countDocuments.mockReset();
     billModel.deleteMany.mockReset();
+    utilityReadingModel.countDocuments.mockReset();
+    maintenanceRequestModel.countDocuments.mockReset();
     setCustomUserClaims.mockReset();
+    deleteUserFromAuth.mockReset();
     getAuth.mockClear();
   });
 
@@ -120,7 +162,15 @@ describe("usersController", () => {
     const users = [{ _id: "u1", username: "jsmith", accountStatus: "active" }];
     userModel.find.mockReturnValue(createFindChain(users));
     userModel.countDocuments.mockResolvedValue(1);
+    roomModel.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([{ _id: "room-1" }]),
+      }),
+    });
     reservationModel.find
+      .mockReturnValueOnce({
+        distinct: jest.fn().mockResolvedValue([]),
+      })
       .mockReturnValueOnce({
         select: jest.fn().mockReturnValue({
           lean: jest.fn().mockResolvedValue([]),
@@ -148,23 +198,29 @@ describe("usersController", () => {
     await getUsers(req, res, next);
 
     expect(userModel.find).toHaveBeenCalledTimes(1);
+    expect(roomModel.find).toHaveBeenCalledWith({ branch: "gil-puyat" });
     expect(userModel.find.mock.calls[0][0]).toMatchObject({
       isArchived: false,
-      branch: "gil-puyat",
+      $and: expect.any(Array),
     });
-    expect(userModel.find.mock.calls[0][0].$or).toHaveLength(4);
-    expect(userModel.find.mock.calls[0][0].$or[0].username).toBeInstanceOf(
-      RegExp,
-    );
-    expect(userModel.find.mock.calls[0][0].$or[0].username.test("smith")).toBe(
-      true,
-    );
+    expect(userModel.find.mock.calls[0][0].$and).toHaveLength(2);
+    expect(userModel.find.mock.calls[0][0].$and[0].$or).toEqual([
+      { branch: "gil-puyat" },
+      { _id: { $in: [] } },
+    ]);
+    expect(userModel.find.mock.calls[0][0].$and[1].$or).toHaveLength(4);
+    expect(
+      userModel.find.mock.calls[0][0].$and[1].$or[0].username,
+    ).toBeInstanceOf(RegExp);
+    expect(
+      userModel.find.mock.calls[0][0].$and[1].$or[0].username.test("smith"),
+    ).toBe(true);
     expect(userModel.find.mock.results[0].value.select).toHaveBeenCalledWith(
       expect.stringContaining("accountStatus"),
     );
     expect(userModel.find.mock.results[0].value.lean).toHaveBeenCalledTimes(1);
     expect(userModel.countDocuments).toHaveBeenCalledWith(
-      expect.objectContaining({ isArchived: false, branch: "gil-puyat" }),
+      userModel.find.mock.calls[0][0],
     );
     expect(res.statusCode).toBe(200);
     expect(res.body.users).toEqual([
@@ -187,9 +243,17 @@ describe("usersController", () => {
   });
 
   test("getUserStats returns account status counts from one aggregate result", async () => {
+    roomModel.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([{ _id: "room-1" }]),
+      }),
+    });
+    reservationModel.find.mockReturnValue({
+      distinct: jest.fn().mockResolvedValue(["user-1"]),
+    });
     userModel.aggregate.mockResolvedValue([
       {
-        totals: [{ total: 8, activeCount: 5, verifiedCount: 3 }],
+        totals: [{ total: 8, activeCount: 5, verifiedCount: 3, archivedCount: 0 }],
         byRole: [{ _id: "tenant", count: 6 }],
         byAccountStatus: [
           { _id: "active", count: 5 },
@@ -206,12 +270,14 @@ describe("usersController", () => {
 
     await getUserStats(req, res, next);
 
+    expect(roomModel.find).toHaveBeenCalledWith({ branch: "gil-puyat" });
     expect(userModel.aggregate).toHaveBeenCalledTimes(1);
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({
       total: 8,
       activeCount: 5,
       verifiedCount: 3,
+      archivedCount: 0,
       byRole: { applicant: 0, tenant: 6, branch_admin: 0, owner: 0 },
       byAccountStatus: {
         active: 5,
@@ -221,6 +287,42 @@ describe("usersController", () => {
       },
       byBranch: { "gil-puyat": 8 },
     });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("getUserById allows branch-scoped lookup through linked reservations", async () => {
+    const user = {
+      _id: "507f1f77bcf86cd799439011",
+      branch: "guadalupe",
+      email: "tenant@example.com",
+    };
+    userModel.findById.mockReturnValue(createPopulateChain(user));
+    roomModel.find.mockReturnValue({
+      distinct: jest.fn().mockResolvedValue(["room-1"]),
+    });
+    reservationModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: "reservation-1" }),
+      }),
+    });
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      branchFilter: "gil-puyat",
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await getUserById(req, res, next);
+
+    expect(userModel.findById).toHaveBeenCalledWith("507f1f77bcf86cd799439011");
+    expect(roomModel.find).toHaveBeenCalledWith({ branch: "gil-puyat" });
+    expect(reservationModel.findOne).toHaveBeenCalledWith({
+      userId: "507f1f77bcf86cd799439011",
+      roomId: { $in: ["room-1"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(user);
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -409,6 +511,160 @@ describe("usersController", () => {
       expect.objectContaining({
         message: "User restored successfully",
         user: targetUser,
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("deleteUser blocks default deletion when significant history exists", async () => {
+    const ban = jest.fn().mockResolvedValue(undefined);
+    const targetUser = {
+      _id: "507f1f77bcf86cd799439011",
+      role: "tenant",
+      isArchived: false,
+      ban,
+      toObject: () => ({ _id: "507f1f77bcf86cd799439011", accountStatus: "active" }),
+    };
+
+    userModel.findById.mockResolvedValue(targetUser);
+    userModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: "owner-1" }),
+      }),
+    });
+    reservationModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: "reservation-1" }),
+      }),
+    });
+    reservationModel.countDocuments
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    billModel.countDocuments
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    utilityReadingModel.countDocuments.mockResolvedValue(2);
+    maintenanceRequestModel.countDocuments.mockResolvedValue(1);
+    roomModel.countDocuments.mockResolvedValue(1);
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      query: {},
+      user: { uid: "firebase-owner-1" },
+      branchFilter: null,
+      isOwner: true,
+      isAdmin: true,
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await deleteUser(req, res, next);
+
+    expect(ban).toHaveBeenCalledWith(
+      "owner-1",
+      expect.stringContaining("significant history"),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        blocked: true,
+        blockedBecauseOfHistory: true,
+        hardDelete: false,
+      }),
+    );
+    expect(userModel.findByIdAndDelete).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("deleteUser rejects force delete without DELETE confirmation", async () => {
+    userModel.findById.mockResolvedValue({
+      _id: "507f1f77bcf86cd799439011",
+      role: "tenant",
+      isArchived: false,
+      toObject: () => ({ _id: "507f1f77bcf86cd799439011" }),
+    });
+    reservationModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: "reservation-1" }),
+      }),
+    });
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      query: { hardDelete: "true", force: "true" },
+      body: { confirmationText: "delete" },
+      user: { uid: "firebase-owner-1" },
+      branchFilter: null,
+      isOwner: true,
+      isAdmin: true,
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await deleteUser(req, res, next);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe("FORCE_DELETE_CONFIRMATION_REQUIRED");
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("deleteUser allows owner force delete with significant history", async () => {
+    userModel.findById.mockResolvedValue({
+      _id: "507f1f77bcf86cd799439011",
+      firebaseUid: "firebase-tenant-1",
+      role: "tenant",
+      isArchived: false,
+      toObject: () => ({ _id: "507f1f77bcf86cd799439011", firebaseUid: "firebase-tenant-1" }),
+    });
+    userModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: "owner-1" }),
+      }),
+    });
+    reservationModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: "reservation-1" }),
+      }),
+    });
+    reservationModel.countDocuments
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1);
+    billModel.countDocuments
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
+    utilityReadingModel.countDocuments.mockResolvedValue(3);
+    maintenanceRequestModel.countDocuments.mockResolvedValue(1);
+    roomModel.countDocuments.mockResolvedValue(1);
+
+    const req = {
+      params: { userId: "507f1f77bcf86cd799439011" },
+      query: { hardDelete: "true", force: "true" },
+      body: { confirmationText: "DELETE" },
+      user: { uid: "firebase-owner-1" },
+      branchFilter: null,
+      isOwner: true,
+      isAdmin: true,
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await deleteUser(req, res, next);
+
+    expect(deleteUserFromAuth).toHaveBeenCalledWith("firebase-tenant-1");
+    expect(billModel.deleteMany).toHaveBeenCalledWith({
+      userId: "507f1f77bcf86cd799439011",
+      isArchived: false,
+      status: "draft",
+    });
+    expect(userModel.findByIdAndDelete).toHaveBeenCalledWith(
+      "507f1f77bcf86cd799439011",
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        hardDelete: true,
+        forceDeleted: true,
+        deletedAccountLabel: "Deleted account",
       }),
     );
     expect(next).not.toHaveBeenCalled();

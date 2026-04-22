@@ -78,8 +78,7 @@ router.get(
 router.get(
   "/security/failed-logins",
   verifyToken,
-  verifyAdmin,
-  requirePermission("viewReports"),
+  verifyOwner,
   getFailedLogins,
 );
 
@@ -88,7 +87,14 @@ router.get(
  * @desc    Get specific audit log entry
  * @access  Admin, Owner
  */
-router.get("/:id", verifyToken, verifyAdmin, requirePermission("viewReports"), getAuditLogById);
+router.get(
+  "/:id",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("viewReports"),
+  filterByBranch,
+  getAuditLogById,
+);
 
 /**
  * @route   POST /api/audit-logs
@@ -107,6 +113,7 @@ router.post(
   verifyToken,
   verifyAdmin,
   requirePermission("viewReports"),
+  filterByBranch,
   exportAuditLogs,
 );
 

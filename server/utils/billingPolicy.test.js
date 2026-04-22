@@ -1,6 +1,8 @@
 import { describe, expect, test } from "@jest/globals";
 import {
   buildBillingCycle,
+  buildRentBillingCycle,
+  getReservationRecurringFees,
   getVisibleBillCharges,
   getVisibleBillSnapshot,
   getNextUtilityCycleBoundary,
@@ -8,12 +10,14 @@ import {
   getPreviousUtilityCycleBoundary,
   getReservationCreditAvailable,
   isSameUtilityCycleBoundary,
+  resolveCurrentBillingCycle,
   resolveUtilityAutoOpenStartDate,
   getUtilityCycleFromPeriod,
   getUtilityDueDate,
   getUtilityIssueDate,
   getUtilityTargetCloseDate,
   resolveBillStatus,
+  resolveCurrentRentBillingCycle,
   syncBillAmounts,
 } from "./billingPolicy.js";
 
@@ -40,6 +44,109 @@ describe("buildBillingCycle", () => {
     expect(localYmd(firstCycle.billingCycleEnd)).toBe("2026-2-28");
     expect(localYmd(secondCycle.billingCycleStart)).toBe("2026-2-28");
     expect(localYmd(secondCycle.billingCycleEnd)).toBe("2026-3-28");
+  });
+});
+
+describe("buildRentBillingCycle", () => {
+  test("sets rent due date to two business days after the cycle end", () => {
+    const cycle = buildRentBillingCycle(new Date("2026-05-05T00:00:00.000Z"));
+
+    expect(localYmd(cycle.billingCycleStart)).toBe("2026-5-5");
+    expect(localYmd(cycle.billingCycleEnd)).toBe("2026-6-5");
+    expect(localYmd(cycle.dueDate)).toBe("2026-6-9");
+    expect(localYmd(cycle.generationDate)).toBe("2026-6-4");
+  });
+
+  test("skips weekends when the rent due date lands after a Monday cycle end", () => {
+    const cycle = buildRentBillingCycle(new Date("2026-01-23T00:00:00.000Z"));
+
+    expect(localYmd(cycle.billingCycleStart)).toBe("2026-1-23");
+    expect(localYmd(cycle.billingCycleEnd)).toBe("2026-2-23");
+    expect(localYmd(cycle.dueDate)).toBe("2026-2-25");
+    expect(localYmd(cycle.generationDate)).toBe("2026-2-20");
+  });
+});
+
+describe("resolveCurrentBillingCycle", () => {
+  test("returns the cycle that contains the provided reference date", () => {
+    const cycle = resolveCurrentBillingCycle(
+      new Date("2026-01-05T09:00:00.000Z"),
+      new Date("2026-03-18T12:30:00.000Z"),
+    );
+
+    expect(localYmd(cycle.billingCycleStart)).toBe("2026-3-5");
+    expect(localYmd(cycle.billingCycleEnd)).toBe("2026-4-5");
+    expect(localYmd(cycle.dueDate)).toBe("2026-4-5");
+    expect(cycle.cycleIndex).toBe(2);
+  });
+
+  test("rolls month-end move-ins forward using the same clamped anniversaries as indexed cycles", () => {
+    const cycle = resolveCurrentBillingCycle(
+      new Date("2026-01-31T00:00:00.000Z"),
+      new Date("2026-03-10T00:00:00.000Z"),
+    );
+
+    expect(localYmd(cycle.billingCycleStart)).toBe("2026-2-28");
+    expect(localYmd(cycle.billingCycleEnd)).toBe("2026-3-28");
+    expect(cycle.cycleIndex).toBe(1);
+  });
+
+  test("treats the exact cycle end as the start of the next cycle", () => {
+    const cycle = resolveCurrentBillingCycle(
+      new Date("2026-01-23T00:00:00.000Z"),
+      new Date("2026-03-23T00:00:00.000Z"),
+    );
+
+    expect(localYmd(cycle.billingCycleStart)).toBe("2026-3-23");
+    expect(localYmd(cycle.billingCycleEnd)).toBe("2026-4-23");
+    expect(cycle.cycleIndex).toBe(2);
+  });
+});
+
+describe("resolveCurrentRentBillingCycle", () => {
+  test("returns the active rent cycle with the rent-specific due date", () => {
+    const cycle = resolveCurrentRentBillingCycle(
+      new Date("2026-01-05T09:00:00.000Z"),
+      new Date("2026-03-18T12:30:00.000Z"),
+    );
+
+    expect(localYmd(cycle.billingCycleStart)).toBe("2026-3-5");
+    expect(localYmd(cycle.billingCycleEnd)).toBe("2026-4-5");
+    expect(localYmd(cycle.dueDate)).toBe("2026-4-7");
+    expect(localYmd(cycle.generationDate)).toBe("2026-4-2");
+    expect(cycle.cycleIndex).toBe(2);
+  });
+});
+
+describe("getReservationRecurringFees", () => {
+  test("prefers recurring custom charges when they are present", () => {
+    expect(
+      getReservationRecurringFees({
+        customCharges: [
+          { name: "Aircon", amount: 500 },
+          { name: "Locker", amount: 150 },
+        ],
+        applianceFees: 900,
+      }),
+    ).toEqual({
+      applianceFees: 650,
+      additionalCharges: [
+        { name: "Aircon", amount: 500 },
+        { name: "Locker", amount: 150 },
+      ],
+    });
+  });
+
+  test("falls back to legacy applianceFees when no recurring custom charges exist", () => {
+    expect(
+      getReservationRecurringFees({
+        customCharges: [],
+        applianceFees: 700,
+      }),
+    ).toEqual({
+      applianceFees: 700,
+      additionalCharges: [{ name: "Appliance Fees", amount: 700 }],
+    });
   });
 });
 

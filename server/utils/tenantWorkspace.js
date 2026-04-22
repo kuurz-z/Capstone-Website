@@ -148,7 +148,7 @@ export function buildWarningFlags({
     flags.push({
       code: "pending_payment_verification",
       severity: WARNING_SEVERITY.warning,
-      message: "Payment proof is pending verification.",
+      message: "Legacy offline payment proof is pending verification.",
     });
   }
 

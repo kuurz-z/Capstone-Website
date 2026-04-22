@@ -148,14 +148,15 @@ const ReservationApplicationStep = ({
     [
       setFirstName, setLastName, setMiddleName, setNickname, setMobileNumber,
       setBirthday, setAddressUnitHouseNo, setAddressStreet, setAddressBarangay,
-      setAddressCity, setAddressProvince, setNbiReason, setEmergencyContactName,
+      setAddressCity, setAddressProvince, setAddressRegion, setNbiReason,
+      setEmergencyContactName,
       setEmergencyRelationship, setEmergencyContactNumber, setHealthConcerns,
       setEmployerSchool, setEmployerAddress, setEmployerContact, setStartDate,
       setOccupation, setPreviousEmployment, setCompanyIDReason, setReferralSource,
       setReferrerName, setTargetMoveInDate, setEstimatedMoveInTime, setWorkSchedule,
-      setWorkScheduleOther,
+      setWorkScheduleOther, setPersonalNotes, setPreferredRoomNumber,
     ].forEach((s) => s(""));
-    setMaritalStatus(""); setNationality(""); setEducationLevel("");
+    setMaritalStatus(""); setNationality(""); setEducationLevel(""); setLeaseDuration("");
     [setSelfiePhoto, setValidIDFront, setValidIDBack, setNbiClearance, setCompanyID].forEach((s) => s(null));
     setAgreedToPrivacy(false); setAgreedToCertification(false);
     setFieldErrors({});
@@ -172,8 +173,9 @@ const ReservationApplicationStep = ({
     setHealthConcerns("None"); setEmployerSchool("University of the Philippines");
     setEmployerAddress("Diliman, Quezon City"); setEmployerContact("+639191234567");
     setStartDate("2024-06-01"); setOccupation("Software Developer"); setPreviousEmployment("Accenture Philippines");
-    setReferralSource("online"); setReferrerName("Google Search");
-    setEstimatedMoveInTime("morning"); setWorkSchedule("day"); setWorkScheduleOther("");
+    setReferralSource("facebook"); setReferrerName("Google Search");
+    setTargetMoveInDate(moveInMin); setEstimatedMoveInTime("08:00"); setWorkSchedule("day"); setWorkScheduleOther("");
+    setLeaseDuration("12");
     setAgreedToPrivacy(true); setAgreedToCertification(true);
   };
 

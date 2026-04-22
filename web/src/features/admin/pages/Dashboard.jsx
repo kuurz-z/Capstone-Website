@@ -114,20 +114,6 @@ export default function Dashboard() {
     <PageShell>
       <PageShell.Summary>
         {error && <div className="bg-rose-50 text-rose-600 px-4 py-3 rounded-xl mb-6 text-sm font-medium border border-rose-100">{error}</div>}
-        {isLoading && (
-          <div className="dash-loading" aria-live="polite">
-            <span className="dash-loading__spinner" aria-hidden="true" />
-            <span className="dash-loading__label">
-              Loading dashboard data
-              <span className="dash-loading__ellipsis" aria-hidden="true">
-                <span>.</span>
-                <span>.</span>
-                <span>.</span>
-              </span>
-            </span>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6 mb-8 w-full">
           {summaryItems.map((item) => (
             <ReportMetricCard
@@ -147,7 +133,7 @@ export default function Dashboard() {
             title="Recent Inquiries"
             subtitle={`${kpis.inquiries || 0} in the active range • newest items first`}
             actions={
-              <Link to="/admin/analytics?tab=operations" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+              <Link to="/admin/analytics/details?tab=operations" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
                 View All →
               </Link>
             }

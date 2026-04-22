@@ -99,6 +99,10 @@ await jest.unstable_mockModule("../controllers/roomsController.js", () => ({
   createRoom: noop,
   updateRoom: noop,
   deleteRoom: noop,
+  addBed: noop,
+  updateBed: noop,
+  reorderBeds: noop,
+  deleteBed: noop,
   updateBedStatus: noop,
 }));
 await jest.unstable_mockModule("../controllers/billingController.js", () => ({
@@ -160,6 +164,9 @@ await jest.unstable_mockModule("../controllers/maintenanceController.js", () => 
   getCompletionStats: noop,
   getIssueFrequency: noop,
 }));
+await jest.unstable_mockModule("../controllers/branchSummaryController.js", () => ({
+  getOwnerBranchSummaries: noop,
+}));
 
 const authRoutes = (await import("./authRoutes.js")).default;
 const reservationsRoutes = (await import("./reservationsRoutes.js")).default;
@@ -167,6 +174,7 @@ const roomsRoutes = (await import("./roomsRoutes.js")).default;
 const billingRoutes = (await import("./billingRoutes.js")).default;
 const announcementRoutes = (await import("./announcementRoutes.js")).default;
 const auditRoutes = (await import("./auditRoutes.js")).default;
+const branchSummaryRoutes = (await import("./branchSummaryRoutes.js")).default;
 const digitalTwinRoutes = (await import("./digitalTwinRoutes.js")).default;
 const maintenanceRoutes = (await import("./maintenanceContractRoutes.js")).default;
 
@@ -243,6 +251,34 @@ describe("route access guards", () => {
     expect(
       twinHandlers.some((handler) => handler.requiredPermission === "viewReports"),
     ).toBe(true);
+  });
+
+  test("audit security signals stay owner-only", () => {
+    const failedLoginHandlers = getRouteHandlers(
+      auditRoutes,
+      "/security/failed-logins",
+      "get",
+    );
+
+    expect(failedLoginHandlers).toContain(verifyToken);
+    expect(failedLoginHandlers).toContain(verifyOwner);
+    expect(failedLoginHandlers).not.toContain(verifyAdmin);
+    expect(
+      failedLoginHandlers.some(
+        (handler) => handler.requiredPermission === "viewReports",
+      ),
+    ).toBe(false);
+  });
+
+  test("branch summary route stays owner-only", () => {
+    const handlers = getRouteHandlers(branchSummaryRoutes, "/summary", "get");
+
+    expect(handlers).toContain(verifyToken);
+    expect(handlers).toContain(verifyOwner);
+    expect(handlers).not.toContain(verifyAdmin);
+    expect(
+      handlers.some((handler) => handler.requiredPermission),
+    ).toBe(false);
   });
 
   test("maintenance admin routes enforce manageMaintenance", () => {

@@ -11,6 +11,7 @@
  * Usage:
  *   node scripts/repair_billing_cycles.mjs
  *   node scripts/repair_billing_cycles.mjs --write
+ *   node scripts/repair_billing_cycles.mjs --bill=<billId>
  *   node scripts/repair_billing_cycles.mjs --reservation=<reservationId>
  *   node scripts/repair_billing_cycles.mjs --branch=<gil-puyat|guadalupe>
  * ============================================================================
@@ -20,18 +21,21 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { Bill, Reservation } from "../models/index.js";
 import {
-  buildBillingCycle,
+  buildRentBillingCycle,
   roundMoney,
   sumBillCharges,
   syncBillAmounts,
 } from "../utils/billingPolicy.js";
+import { readMoveInDate } from "../utils/lifecycleNaming.js";
 
 dotenv.config();
 
 const args = process.argv.slice(2);
 const isWrite = args.includes("--write");
+const billArg = args.find((arg) => arg.startsWith("--bill="));
 const reservationArg = args.find((arg) => arg.startsWith("--reservation="));
 const branchArg = args.find((arg) => arg.startsWith("--branch="));
+const billId = billArg ? billArg.split("=")[1] : null;
 const reservationId = reservationArg ? reservationArg.split("=")[1] : null;
 const branch = branchArg ? branchArg.split("=")[1] : null;
 
@@ -108,6 +112,9 @@ async function main() {
   console.log(isWrite ? "Mode: WRITE" : "Mode: DRY RUN");
 
   const billFilter = { isArchived: false };
+  if (billId) {
+    billFilter._id = billId;
+  }
   if (reservationId) {
     billFilter.reservationId = reservationId;
   }
@@ -237,11 +244,13 @@ async function main() {
       reservation.paymentStatus === "paid"
         ? roundMoney(reservation.reservationFeeAmount || 0)
         : 0;
+    const moveInDate = readMoveInDate(reservation);
 
     let creditedBill = null;
+    let rentCycleIndex = 0;
 
-    for (const [cycleIndex, bill] of sortedBills.entries()) {
-      const cycle = buildBillingCycle(reservation.checkInDate, cycleIndex);
+    for (const bill of sortedBills) {
+      const hasRentCharge = roundMoney(bill.charges?.rent || 0) > 0;
       const original = {
         grossAmount: bill.grossAmount,
         reservationCreditApplied: bill.reservationCreditApplied,
@@ -260,15 +269,22 @@ async function main() {
       const originalPaymentDate = bill.paymentDate;
       const expectedGrossAmount = sumBillCharges(bill.charges);
       const expectedCredit =
-        cycleIndex === 0
+        hasRentCharge && rentCycleIndex === 0
           ? Math.min(baseReservationCredit, expectedGrossAmount)
           : 0;
 
-      bill.billingMonth = cycle.billingMonth;
-      bill.billingCycleStart = cycle.billingCycleStart;
-      bill.billingCycleEnd = cycle.billingCycleEnd;
-      bill.dueDate = cycle.dueDate;
-      bill.isFirstCycleBill = cycleIndex === 0;
+      if (hasRentCharge && moveInDate) {
+        const cycle = buildRentBillingCycle(moveInDate, rentCycleIndex);
+        bill.billingMonth = cycle.billingMonth;
+        bill.billingCycleStart = cycle.billingCycleStart;
+        bill.billingCycleEnd = cycle.billingCycleEnd;
+        bill.dueDate = cycle.dueDate;
+        bill.isFirstCycleBill = rentCycleIndex === 0;
+        rentCycleIndex += 1;
+      } else if (!hasRentCharge) {
+        bill.isFirstCycleBill = false;
+      }
+
       bill.reservationCreditApplied = expectedCredit;
 
       syncBillAmounts(bill);
@@ -277,7 +293,7 @@ async function main() {
         bill.paymentDate = null;
       }
 
-      if (expectedCredit > 0) {
+      if (hasRentCharge && expectedCredit > 0) {
         creditedBill = bill;
       }
 

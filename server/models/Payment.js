@@ -50,7 +50,18 @@ const paymentSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: ["bank", "gcash", "card", "check", "cash", "paymongo"],
+      enum: [
+        "bank",
+        "gcash",
+        "card",
+        "check",
+        "cash",
+        "paymongo",
+        "paymaya",
+        "grab_pay",
+        "maya",
+        "online",
+      ],
       required: true,
     },
     source: {

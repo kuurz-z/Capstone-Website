@@ -5,9 +5,9 @@ import {
   sendUtilityChargeAvailableEmail,
 } from "../config/email.js";
 import {
-  buildBillingCycle,
   getUtilityDispatchEntry,
   getReservationCreditAvailable,
+  resolveCurrentBillingCycle,
   getUtilityCycleFromPeriod,
   getUtilityDueDate,
   getUtilityIssueDate,
@@ -79,7 +79,10 @@ async function countReservationRentCycles(reservationId, excludeBillId = null) {
   });
 }
 
-export async function getReservationBillingContextForUser(userId) {
+export async function getReservationBillingContextForUser(
+  userId,
+  referenceDate = new Date(),
+) {
   const reservation = await Reservation.findOne({
     userId,
     status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
@@ -93,13 +96,16 @@ export async function getReservationBillingContextForUser(userId) {
   return {
     reservation,
     existingCount,
-    cycle: buildBillingCycle(readMoveInDate(reservation), existingCount),
+    cycle: resolveCurrentBillingCycle(readMoveInDate(reservation), referenceDate),
     isFirstCycleBill: existingCount === 0,
     creditAvailable: getReservationCreditAvailable(reservation),
   };
 }
 
-export async function getReservationBillingContextForBill(bill) {
+export async function getReservationBillingContextForBill(
+  bill,
+  referenceDate = null,
+) {
   if (!bill?.reservationId) return null;
 
   const reservation = await Reservation.findById(bill.reservationId);
@@ -114,7 +120,16 @@ export async function getReservationBillingContextForBill(bill) {
   return {
     reservation,
     existingCount,
-    cycle: buildBillingCycle(moveInDate, existingCount),
+    cycle: resolveCurrentBillingCycle(
+      moveInDate,
+      referenceDate ||
+        bill?.billingCycleStart ||
+        bill?.billingMonth ||
+        bill?.utilityCycleEnd ||
+        bill?.utilityCycleStart ||
+        bill?.createdAt ||
+        new Date(),
+    ),
     isFirstCycleBill: existingCount === 0,
     creditAvailable: getReservationCreditAvailable(reservation),
   };
@@ -133,6 +148,7 @@ export async function upsertDraftBillsForUtility({
   for (const summary of tenantSummaries || []) {
     const billingContext = await getReservationBillingContextForUser(
       summary.tenantId,
+      period?.endDate || period?.startDate || new Date(),
     );
     const billingMonth =
       billingContext?.cycle?.billingMonth || period.startDate;
@@ -267,7 +283,10 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
 
   for (const bill of populatedBills) {
     const billingContext = bill.reservationId
-      ? await getReservationBillingContextForBill(bill)
+      ? await getReservationBillingContextForBill(
+          bill,
+          utilityCycle.utilityCycleEnd || issuedAt,
+        )
       : null;
     const reservationCreditApplied = Math.min(
       bill.grossAmount || bill.totalAmount || 0,

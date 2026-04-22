@@ -1,7 +1,6 @@
-import React, { useRef } from "react";
+import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { showNotification } from "../utils/notification";
 import GlobalLoading from "./GlobalLoading";
 import { USER_ROLES } from "../utils/constants";
 
@@ -32,7 +31,6 @@ import { USER_ROLES } from "../utils/constants";
 const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
   const { isAuthenticated, loading, isAdmin, isOwner, getDefaultRoute } =
     useAuth();
-  const notificationShown = useRef(false);
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -41,20 +39,20 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
 
   // Check authentication requirement
   if (requireAuth && !isAuthenticated) {
-    // Show notification to prompt login (only once)
-    if (!notificationShown.current) {
-      notificationShown.current = true;
-      showNotification(
-        "Sign in to discover available rooms and reserve your space",
-        "info",
-        3500,
-      );
-    }
-
-    // User routes redirect to landing page "/"
-    // Admin routes redirect to sign-in page "/signin"
     const redirectPath = requiredRole === "applicant" ? "/" : "/signin";
-    return <Navigate to={redirectPath} replace />;
+    return (
+      <Navigate
+        to={redirectPath}
+        replace
+        state={{
+          flash: {
+            type: "info",
+            message:
+              "Sign in to discover available rooms and reserve your space",
+          },
+        }}
+      />
+    );
   }
 
   // Check role requirements using custom claims from ID token
@@ -63,13 +61,11 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
       if (!isAdmin()) {
         return <Navigate to={getDefaultRoute()} replace />;
       }
-    }
-    else if (requiredRole === USER_ROLES.OWNER) {
+    } else if (requiredRole === USER_ROLES.OWNER) {
       if (!isOwner()) {
         return <Navigate to={getDefaultRoute()} replace />;
       }
-    }
-    else if (requiredRole === USER_ROLES.APPLICANT) {
+    } else if (requiredRole === USER_ROLES.APPLICANT) {
       if (isAdmin()) {
         return <Navigate to="/admin/dashboard" replace />;
       }

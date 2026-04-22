@@ -20,11 +20,15 @@ function ActionButton({
 }
 
 export default function AccountRowActions({
+  canViewAccess,
+  canManagePermissions,
   canEdit,
   canBlock,
   canUnblock,
   canRestore,
   canHardDelete,
+  onViewAccess,
+  onManagePermissions,
   onEdit,
   onBlock,
   onUnblock,
@@ -33,6 +37,20 @@ export default function AccountRowActions({
 }) {
   return (
     <div className="account-row-actions" onClick={(event) => event.stopPropagation()}>
+      {canViewAccess && (
+        <ActionButton
+          label="Access"
+          variant="primary"
+          onPress={onViewAccess}
+        />
+      )}
+      {canManagePermissions && (
+        <ActionButton
+          label="Permissions"
+          variant="primary"
+          onPress={onManagePermissions}
+        />
+      )}
       {canEdit && <ActionButton label="Edit" onPress={onEdit} />}
       {canBlock && (
         <ActionButton

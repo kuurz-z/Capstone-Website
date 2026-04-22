@@ -22,13 +22,16 @@ import {
   sendPaymentApprovedEmail,
   sendPaymentRejectedEmail,
 } from "../config/email.js";
+import { applyBillPayment } from "../utils/paymentLedger.js";
+import { ensureCurrentCycleRentBill } from "../utils/rentGenerator.js";
 import {
-  buildBillingCycle,
   getBillRemainingAmount,
+  getReservationRecurringFees,
   getVisibleBillCharges,
   getVisibleBillSnapshot,
   isUtilityChargeVisible,
   getReservationCreditAvailable,
+  resolveCurrentRentBillingCycle,
   resolveBillStatus,
   roundMoney,
   syncBillAmounts,
@@ -43,6 +46,73 @@ import {
 import { resolveAdminAccessContext } from "../utils/adminAccess.js";
 
 const getAdminInfo = resolveAdminAccessContext;
+
+function resolveManualPaymentMethod(note = "") {
+  const normalized = String(note || "").trim().toLowerCase();
+
+  if (normalized.includes("gcash")) return "gcash";
+  if (normalized.includes("maya") || normalized.includes("paymaya")) return "paymaya";
+  if (normalized.includes("grab")) return "grab_pay";
+  if (normalized.includes("bank")) return "bank";
+  if (normalized.includes("card") || normalized.includes("credit") || normalized.includes("debit")) {
+    return "card";
+  }
+  if (normalized.includes("check") || normalized.includes("cheque")) return "check";
+
+  return "cash";
+}
+
+function resolveProofPaymentMethod(bill) {
+  const existingMethod = String(bill?.paymentMethod || "").trim().toLowerCase();
+  if (
+    ["bank", "gcash", "card", "check", "cash", "paymongo", "paymaya", "grab_pay", "maya", "online"].includes(
+      existingMethod,
+    )
+  ) {
+    return existingMethod;
+  }
+
+  return "bank";
+}
+
+function isPaymentValidationError(error) {
+  return (
+    error?.message === "Bill has no remaining balance." ||
+    error?.message === "Payment amount must be greater than zero."
+  );
+}
+
+function buildBillPaymentFlow(bill, visibleSnapshot = null) {
+  const visible = visibleSnapshot || getVisibleBillSnapshot(bill);
+  const proofStatus = bill?.paymentProof?.verificationStatus || "none";
+
+  let tenantMessage = "Use online checkout from the Billing page to pay this statement.";
+  let adminMessage =
+    "Use manual settlement only for branch-assisted offline payments such as cash or bank transfer.";
+
+  if (proofStatus === "pending-verification") {
+    tenantMessage =
+      "A previously submitted offline payment proof is awaiting staff review. New proof uploads are disabled; use online checkout for future payments.";
+    adminMessage =
+      "Review this proof only because it was submitted before online checkout became the standard monthly-billing flow.";
+  } else if (proofStatus === "approved" || proofStatus === "rejected") {
+    tenantMessage =
+      "Offline payment proof uploads are no longer used for monthly bills. Use online checkout for future payments.";
+    adminMessage =
+      "This proof record is legacy billing history. New monthly payments should go through online checkout or an assisted offline settlement.";
+  }
+
+  return {
+    primary: "online_checkout",
+    onlineCheckoutEligible:
+      Number(visible?.remainingAmount || 0) > 0 && visible?.status !== "paid",
+    manualProofSubmissionEnabled: false,
+    legacyProofStatus: proofStatus === "none" ? null : proofStatus,
+    adminManualSettlementScope: "offline-only",
+    tenantMessage,
+    adminMessage,
+  };
+}
 
 /* ─── shared helpers ─────────────────────────────── */
 
@@ -81,6 +151,7 @@ const formatBill = (bill) => {
     utilityCycleStart: bill.utilityCycleStart || null,
     utilityCycleEnd: bill.utilityCycleEnd || null,
     utilityReadingDate: bill.utilityReadingDate || null,
+    additionalCharges: bill.additionalCharges || [],
     charges: visible.charges,
     grossAmount: visible.grossAmount,
     reservationCreditApplied: bill.reservationCreditApplied || 0,
@@ -89,12 +160,18 @@ const formatBill = (bill) => {
     remainingAmount: visible.remainingAmount,
     isFirstCycleBill: !!bill.isFirstCycleBill,
     status: visible.status,
+    paymentProof: bill.paymentProof || { verificationStatus: "none" },
+    paymentFlow: buildBillPaymentFlow(bill, visible),
     notes: bill.notes,
     createdAt: bill.createdAt,
   };
 };
 
-async function getReservationBillingContext(reservationId, currentBillId = null) {
+async function getReservationBillingContext(
+  reservationId,
+  currentBillId = null,
+  referenceDate = new Date(),
+) {
   const reservation = await Reservation.findById(reservationId);
   const moveInDate = readMoveInDate(reservation);
   if (!reservation || !moveInDate) return null;
@@ -106,7 +183,7 @@ async function getReservationBillingContext(reservationId, currentBillId = null)
     ...(currentBillId ? { _id: { $ne: currentBillId } } : {}),
   });
 
-  const cycle = buildBillingCycle(moveInDate, existingCount);
+  const cycle = resolveCurrentRentBillingCycle(moveInDate, referenceDate);
   const creditAvailable = getReservationCreditAvailable(reservation);
 
   return {
@@ -116,6 +193,57 @@ async function getReservationBillingContext(reservationId, currentBillId = null)
     isFirstCycleBill: existingCount === 0,
     creditAvailable,
   };
+}
+
+function sortReservationsByMoveIn(reservations = []) {
+  return [...reservations].sort((left, right) => {
+    const leftMoveIn = readMoveInDate(left)
+      ? dayjs(readMoveInDate(left)).valueOf()
+      : 0;
+    const rightMoveIn = readMoveInDate(right)
+      ? dayjs(readMoveInDate(right)).valueOf()
+      : 0;
+    return rightMoveIn - leftMoveIn;
+  });
+}
+
+async function getActiveReservationForUser(userId, { populateBilling = false } = {}) {
+  let activeReservationsQuery = Reservation.find({
+    userId,
+    status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
+    isArchived: { $ne: true },
+  });
+
+  if (populateBilling) {
+    activeReservationsQuery = activeReservationsQuery
+      .populate("userId", "firstName lastName email")
+      .populate("roomId", "name roomNumber branch price monthlyPrice type");
+  } else {
+    activeReservationsQuery = activeReservationsQuery.lean();
+  }
+
+  const activeReservations = await activeReservationsQuery;
+
+  if (activeReservations.length === 0) return null;
+
+  return sortReservationsByMoveIn(activeReservations)[0];
+}
+
+async function ensureTenantCurrentRentBill(userId, referenceDate = new Date()) {
+  const activeStay = await getActiveReservationForUser(userId, {
+    populateBilling: true,
+  });
+  if (!activeStay) return null;
+
+  await ensureCurrentCycleRentBill({
+    reservation: activeStay,
+    referenceDate,
+    dryRun: false,
+    notifyTenant: false,
+    requireGenerationDateMatch: false,
+  });
+
+  return activeStay;
 }
 
 async function getTenantBillForRequest(req, billId) {
@@ -427,27 +555,32 @@ const suggestRent = (reservation, room, moveInDate) => {
 
 export const getCurrentBilling = async (req, res, next) => {
   try {
-    const { uid, branch } = req.user;
+    const { uid } = req.user;
     const dbUser = await User.findOne({ firebaseUid: uid }).lean();
     if (!dbUser) return res.status(404).json({ error: "User not found" });
-    const activeStay = await Reservation.findOne({
-      userId: dbUser._id,
-      branch,
-      status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
-    });
+    const activeStay = await ensureTenantCurrentRentBill(dbUser._id);
     if (!activeStay)
       return res.status(404).json({ error: "No active stay found" });
 
     const now = dayjs();
-    const currentBill = await Bill.findOne({
+    let currentBill = await Bill.findOne({
       reservationId: activeStay._id,
-      branch,
       status: { $ne: "draft" },
-      billingMonth: {
-        $gte: now.startOf("month").toDate(),
-        $lt: now.add(1, "month").startOf("month").toDate(),
+      isArchived: false,
+      billingCycleStart: {
+        $lte: now.startOf("day").toDate(),
       },
-    });
+      billingCycleEnd: {
+        $gt: now.startOf("day").toDate(),
+      },
+    }).sort({ billingCycleStart: -1, createdAt: -1 });
+    if (!currentBill) {
+      currentBill = await Bill.findOne({
+        reservationId: activeStay._id,
+        status: { $ne: "draft" },
+        isArchived: false,
+      }).sort({ billingCycleStart: -1, billingMonth: -1, createdAt: -1 });
+    }
     if (!currentBill)
       return res.status(404).json({ error: "No current bill found" });
 
@@ -466,8 +599,11 @@ export const getCurrentBilling = async (req, res, next) => {
       utilityCycleStart: currentBill.utilityCycleStart || null,
       utilityCycleEnd: currentBill.utilityCycleEnd || null,
       utilityReadingDate: currentBill.utilityReadingDate || null,
+      additionalCharges: currentBill.additionalCharges || [],
       status: visible.status,
       charges: visible.charges,
+      paymentProof: currentBill.paymentProof || { verificationStatus: "none" },
+      paymentFlow: buildBillPaymentFlow(currentBill, visible),
     });
   } catch (error) {
     next(error);
@@ -476,21 +612,17 @@ export const getCurrentBilling = async (req, res, next) => {
 
 export const getBillingHistory = async (req, res, next) => {
   try {
-    const { uid, branch } = req.user;
+    const { uid } = req.user;
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const dbUser = await User.findOne({ firebaseUid: uid }).lean();
     if (!dbUser) return res.status(404).json({ error: "User not found" });
-    const stayIds = (await Reservation.find({ userId: dbUser._id, branch })).map(
-      (s) => s._id,
-    );
 
     const bills = await Bill.find({
-      reservationId: { $in: stayIds },
-      branch,
+      userId: dbUser._id,
       status: { $ne: "draft" },
       isArchived: false,
     })
-      .sort({ billingMonth: -1 })
+      .sort({ billingCycleStart: -1, billingMonth: -1, createdAt: -1 })
       .limit(limit);
     res.json({
       count: bills.length,
@@ -503,15 +635,20 @@ export const getBillingHistory = async (req, res, next) => {
           issuedAt: visible.issuedAt,
           amount: visible.totalAmount,
           grossAmount: visible.grossAmount,
+          billingCycleStart: b.billingCycleStart,
+          billingCycleEnd: b.billingCycleEnd,
           reservationCreditApplied: b.reservationCreditApplied || 0,
           paidAmount: b.paidAmount || 0,
           remainingAmount: visible.remainingAmount,
           utilityCycleStart: b.utilityCycleStart || null,
           utilityCycleEnd: b.utilityCycleEnd || null,
           utilityReadingDate: b.utilityReadingDate || null,
+          additionalCharges: b.additionalCharges || [],
           status: visible.status,
           charges: visible.charges,
           paymentDate: b.paymentDate,
+          paymentProof: b.paymentProof || { verificationStatus: "none" },
+          paymentFlow: buildBillPaymentFlow(b, visible),
         };
       }),
     });
@@ -551,18 +688,27 @@ export const markBillAsPaid = async (req, res, next) => {
     const appliedAmount = Number(
       amount ?? bill.remainingAmount ?? bill.totalAmount,
     );
-    bill.paidAmount = roundMoney(Number(bill.paidAmount || 0) + appliedAmount);
-    syncBillAmounts(bill);
-    if (bill.paidAmount > 0 && !bill.paymentDate) {
-      bill.paymentDate = new Date();
-    }
-    await bill.save();
+    await applyBillPayment({
+      bill,
+      amount: appliedAmount,
+      method: resolveManualPaymentMethod(note),
+      source: "admin-manual",
+      actorId: admin._id || null,
+      notes: note || "",
+      metadata: {
+        action: "markBillAsPaid",
+      },
+      now: new Date(),
+    });
     if (note) {
       bill.notes = note;
       await bill.save();
     }
     res.json({ success: true, bill: bill.toObject() });
   } catch (error) {
+    if (isPaymentValidationError(error)) {
+      return res.status(400).json({ error: error.message });
+    }
     next(error);
   }
 };
@@ -648,7 +794,7 @@ export const getRoomsWithTenants = async (req, res, next) => {
               email: r.userId.email || "",
               moveInDate: readMoveInDate(r),
               monthlyRent: suggestRent(r, room, readMoveInDate(r)),
-              customCharges: r.customCharges || [],
+              customCharges: getReservationRecurringFees(r).additionalCharges,
               bedPosition: bed?.position || null,
             };
           });
@@ -681,13 +827,15 @@ export const getMyBills = async (req, res, next) => {
     const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
     if (!dbUser) return res.status(404).json({ error: "User not found" });
 
+    await ensureTenantCurrentRentBill(dbUser._id);
+
     const bills = await Bill.find({
       userId: dbUser._id,
       status: { $ne: "draft" },
       isArchived: false,
     })
       .populate("roomId", "name branch type")
-      .sort({ billingMonth: -1 })
+      .sort({ billingCycleStart: -1, billingMonth: -1, createdAt: -1 })
       .lean();
 
     const billResponses = await Promise.all(
@@ -715,6 +863,7 @@ export const getMyBills = async (req, res, next) => {
           utilityCycleEnd: b.utilityCycleEnd || null,
           utilityReadingDate: b.utilityReadingDate || null,
           utilityPeriodId: null,
+          additionalCharges: b.additionalCharges || [],
           charges: visible.charges,
           totalAmount: visible.totalAmount,
           grossAmount: visible.grossAmount,
@@ -727,6 +876,7 @@ export const getMyBills = async (req, res, next) => {
           room: b.roomId?.name || "N/A",
           branch: b.branch,
           paymentProof: b.paymentProof || { verificationStatus: "none" },
+          paymentFlow: buildBillPaymentFlow(b, visible),
           penaltyDetails: b.penaltyDetails || { daysLate: 0 },
           createdAt: b.createdAt,
           utilityBreakdowns,
@@ -743,20 +893,12 @@ export const getMyBills = async (req, res, next) => {
 };
 
 // ============================================================================
-// TENANT: Submit payment proof
+// TENANT: Legacy proof-upload compatibility endpoint
 // ============================================================================
 
 export const submitPaymentProof = async (req, res, next) => {
   try {
     const { billId } = req.params;
-    const { imageUrl, amount } = req.body;
-
-    if (!imageUrl)
-      return res.status(400).json({ error: "Proof image is required" });
-    if (!amount || amount <= 0)
-      return res
-        .status(400)
-        .json({ error: "Valid payment amount is required" });
 
     const dbUser = await User.findOne({ firebaseUid: req.user.uid }).lean();
     if (!dbUser) return res.status(404).json({ error: "User not found" });
@@ -767,27 +909,21 @@ export const submitPaymentProof = async (req, res, next) => {
       return res
         .status(403)
         .json({ error: "You can only submit proof for your own bills" });
-    if (getVisibleBillSnapshot(bill).status === "paid")
+    const visible = getVisibleBillSnapshot(bill);
+    if (visible.status === "paid")
       return res.status(400).json({ error: "Bill is already paid" });
     if (bill.paymentProof?.verificationStatus === "pending-verification")
       return res.status(400).json({
         error: "Payment proof already submitted and pending verification",
       });
-
-    bill.paymentProof = {
-      imageUrl,
-      submittedAmount: amount,
-      submittedAt: new Date(),
-      verificationStatus: "pending-verification",
-      rejectionReason: null,
-      verifiedBy: null,
-      verifiedAt: null,
-    };
-    await bill.save();
-
-    res.json({
-      message: "Payment proof submitted successfully",
-      bill: { id: bill._id, paymentProof: bill.paymentProof },
+    return res.status(409).json({
+      error:
+        "Monthly bill proof uploads are no longer supported. Use online checkout from Billing or contact the branch for an assisted offline payment.",
+      bill: {
+        id: bill._id,
+        paymentProof: bill.paymentProof || { verificationStatus: "none" },
+        paymentFlow: buildBillPaymentFlow(bill, visible),
+      },
     });
   } catch (error) {
     next(error);
@@ -795,7 +931,7 @@ export const submitPaymentProof = async (req, res, next) => {
 };
 
 // ============================================================================
-// ADMIN: Verify payment proof
+// ADMIN: Verify legacy payment proof
 // ============================================================================
 
 export const verifyPayment = async (req, res, next) => {
@@ -839,17 +975,26 @@ export const verifyPayment = async (req, res, next) => {
         .json({ error: "No pending payment proof to verify" });
 
     if (action === "approve") {
+      const approvedAmount = Number(
+        bill.paymentProof.submittedAmount || bill.totalAmount || 0,
+      );
+      await applyBillPayment({
+        bill,
+        amount: approvedAmount,
+        method: resolveProofPaymentMethod(bill),
+        source: "tenant-proof",
+        actorId: admin._id || null,
+        notes: "Approved tenant payment proof",
+        metadata: {
+          action: "verifyPayment",
+          verificationAction: "approve",
+        },
+        proofImageUrl: bill.paymentProof?.imageUrl || null,
+        now: new Date(),
+      });
       bill.paymentProof.verificationStatus = "approved";
       bill.paymentProof.verifiedBy = admin._id;
       bill.paymentProof.verifiedAt = new Date();
-      bill.paidAmount = roundMoney(
-        Number(bill.paidAmount || 0) +
-          Number(bill.paymentProof.submittedAmount || bill.totalAmount || 0),
-      );
-      syncBillAmounts(bill);
-      if (bill.paidAmount > 0) {
-        bill.paymentDate = new Date();
-      }
     } else {
       bill.paymentProof.verificationStatus = "rejected";
       bill.paymentProof.rejectionReason =
@@ -899,6 +1044,9 @@ export const verifyPayment = async (req, res, next) => {
       },
     });
   } catch (error) {
+    if (isPaymentValidationError(error)) {
+      return res.status(400).json({ error: error.message });
+    }
     next(error);
   }
 };
@@ -924,20 +1072,24 @@ export const getPendingVerifications = async (req, res, next) => {
 
     res.json({
       count: bills.length,
-      bills: bills.map((b) => ({
-        id: b._id,
-        tenant: b.userId
-          ? {
-              name: `${b.userId.firstName || ""} ${b.userId.lastName || ""}`.trim(),
-              email: b.userId.email,
-            }
-          : null,
-        room: b.roomId?.name || "N/A",
-        branch: b.branch,
-        billingMonth: b.billingMonth,
-        totalAmount: getVisibleBillSnapshot(b).totalAmount,
-        paymentProof: b.paymentProof,
-      })),
+      bills: bills.map((b) => {
+        const visible = getVisibleBillSnapshot(b);
+        return {
+          id: b._id,
+          tenant: b.userId
+            ? {
+                name: `${b.userId.firstName || ""} ${b.userId.lastName || ""}`.trim(),
+                email: b.userId.email,
+              }
+            : null,
+          room: b.roomId?.name || "N/A",
+          branch: b.branch,
+          billingMonth: b.billingMonth,
+          totalAmount: visible.totalAmount,
+          paymentProof: b.paymentProof,
+          paymentFlow: buildBillPaymentFlow(b, visible),
+        };
+      }),
     });
   } catch (error) {
     next(error);
@@ -1154,7 +1306,8 @@ export const generateBulkBills = async (req, res, next) => {
 
         const moveInDate = readMoveInDate(reservation) || monthStart;
         const rent = suggestRent(reservation, room, moveInDate);
-        const customCharges = reservation.customCharges || [];
+        const customCharges =
+          getReservationRecurringFees(reservation).additionalCharges;
         const tenantStart = dayjs(
           Math.max(dayjs(moveInDate).valueOf(), dayjs(monthStart).valueOf()),
         );
@@ -1200,10 +1353,20 @@ export const generateBulkBills = async (req, res, next) => {
 
         for (const tenant of tenantInfos) {
           const share = tenant.daysInRoom / totalOccupantDays;
+          const billingContext = tenant.reservationId
+            ? await getReservationBillingContext(
+                tenant.reservationId,
+                null,
+                monthStart,
+              )
+            : null;
+          const cycleBillingMonth =
+            billingContext?.cycle?.billingMonth || monthStart;
+
           // Skip if bill already exists for this tenant+month
           const dupeFilter = {
             userId: tenant.userId,
-            billingMonth: monthStart,
+            billingMonth: cycleBillingMonth,
             isArchived: false,
           };
           if (tenant.reservationId)
@@ -1225,9 +1388,6 @@ export const generateBulkBills = async (req, res, next) => {
             0,
           );
           const grossAmount = roundMoney(tenant.rent + utilityShare + customChargesTotal);
-          const billingContext = tenant.reservationId
-            ? await getReservationBillingContext(tenant.reservationId)
-            : null;
           const reservationCreditApplied = Math.min(
             grossAmount,
             billingContext?.creditAvailable || 0,

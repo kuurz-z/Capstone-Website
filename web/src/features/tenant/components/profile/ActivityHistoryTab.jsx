@@ -40,7 +40,7 @@ const formatMethod = (m) => {
 };
 
 /* ── Build timeline from a single reservation ───── */
-const buildTimeline = (r) => {
+const buildTimeline = (r, direction = "desc") => {
   if (!r) return [];
   const events = [];
 
@@ -247,7 +247,7 @@ const buildTimeline = (r) => {
     const timeDiff = new Date(a.date) - new Date(b.date);
     return timeDiff !== 0 ? timeDiff : getOrder(a.id) - getOrder(b.id);
   });
-  return events;
+  return direction === "desc" ? [...events].reverse() : events;
 };
 
 /* ── Derive granular stage from reservation fields ── */
@@ -280,10 +280,10 @@ const deriveStage = (r) => {
 };
 
 /* ── Single accordion card ───────────────────────── */
-const ReservationCard = ({ reservation, isOpen, onToggle }) => {
+const ReservationCard = ({ reservation, isOpen, onToggle, timelineSort, onTimelineSortChange }) => {
   const r = reservation;
   const room = r.roomId || {};
-  const timeline = useMemo(() => buildTimeline(r), [r]);
+  const timeline = useMemo(() => buildTimeline(r, timelineSort), [r, timelineSort]);
   const statusCfg = deriveStage(r);
   const branchDisplay =
     room.branch === "gil-puyat" ? "Gil Puyat"
@@ -373,6 +373,35 @@ const ReservationCard = ({ reservation, isOpen, onToggle }) => {
       {/* ── Expanded Timeline ── */}
       {isOpen && (
         <div style={{ borderTop: "1px solid var(--border-subtle, #F1F5F9)", padding: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12,
+                color: "var(--text-secondary, #6B7280)",
+              }}
+            >
+              <span>Order</span>
+              <select
+                value={timelineSort}
+                onChange={(e) => onTimelineSortChange(e.target.value)}
+                style={{
+                  border: "1px solid var(--border-card, #E8EBF0)",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  fontSize: 12,
+                  color: "var(--text-heading, #0A1628)",
+                  background: "var(--surface-card, #fff)",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="desc">Newest first</option>
+                <option value="asc">Oldest first</option>
+              </select>
+            </label>
+          </div>
           {timeline.length === 0 ? (
             <p style={{ fontSize: 13, color: "var(--text-muted, #94A3B8)", margin: 0 }}>No activity recorded yet.</p>
           ) : (
@@ -441,6 +470,7 @@ const ActivityHistoryTab = ({ reservations = [] }) => {
   );
 
   const [openId, setOpenId] = useState(null);
+  const [timelineSort, setTimelineSort] = useState("desc");
   useEffect(() => {
     if (sorted.length > 0 && !openId) setOpenId(sorted[0]._id);
   }, [sorted]);
@@ -513,6 +543,8 @@ const ActivityHistoryTab = ({ reservations = [] }) => {
             reservation={r}
             isOpen={openId === r._id}
             onToggle={() => toggle(r._id)}
+            timelineSort={timelineSort}
+            onTimelineSortChange={setTimelineSort}
           />
         ))}
       </div>

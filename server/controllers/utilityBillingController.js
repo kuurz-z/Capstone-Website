@@ -29,6 +29,10 @@ import {
   deriveUtilityPeriodBillingState,
   getUtilityDiagnostics,
 } from "../utils/utilityDiagnostics.js";
+import {
+  resolveReferencedUser,
+  UNKNOWN_TENANT_LABEL,
+} from "../utils/userReference.js";
 
 import {
   buildTenantEventsForPeriod,
@@ -1283,6 +1287,16 @@ export const getUtilityReadings = async (req, res, next) => {
 
     res.json({
       readings: readings.map((r) => ({
+        ...(function buildTenant() {
+          const tenant = resolveReferencedUser(r.tenantId, {
+            unknownLabel: UNKNOWN_TENANT_LABEL,
+          });
+          return {
+            tenant: tenant.name === UNKNOWN_TENANT_LABEL ? null : tenant.name,
+            tenantEmail: tenant.email,
+            tenantId: tenant.id,
+          };
+        })(),
         utilityPeriodId: r.utilityPeriodId || null,
         utilityPeriodStatus: r.utilityPeriodId
           ? periodStatusMap.get(String(r.utilityPeriodId)) || null
@@ -1300,11 +1314,6 @@ export const getUtilityReadings = async (req, res, next) => {
             ["closed", "revised"].includes(
               periodStatusMap.get(String(r.utilityPeriodId)) || "",
             )),
-        tenant: r.tenantId
-          ? `${r.tenantId.firstName || ""} ${r.tenantId.lastName || ""}`.trim()
-          : null,
-        tenantEmail: r.tenantId?.email || null,
-        tenantId: r.tenantId?._id || null,
         activeTenantCount: r.activeTenantIds?.length || 0,
         recordedBy: r.recordedBy
           ? `${r.recordedBy.firstName || ""} ${r.recordedBy.lastName || ""}`.trim()
@@ -1529,9 +1538,14 @@ export const getUtilityResult = async (req, res, next) => {
       const tenant = summary.tenantId
         ? tenantById.get(String(summary.tenantId))
         : null;
+      const resolvedTenant = resolveReferencedUser(
+        reservation?.userId || tenant || summary.tenantId || null,
+        { unknownLabel: UNKNOWN_TENANT_LABEL },
+      );
 
       return {
         ...summary,
+        tenantName: summary.tenantName || resolvedTenant.name,
         durationRange: reservation
           ? formatDurationRange(
               readMoveInDate(reservation),
@@ -1540,9 +1554,8 @@ export const getUtilityResult = async (req, res, next) => {
           : summary.durationRange || "Ongoing",
         tenantEmail:
           summary.tenantEmail ||
-          reservation?.userId?.email ||
+          resolvedTenant.email ||
           reservation?.billingEmail ||
-          tenant?.email ||
           null,
       };
     });
@@ -1622,7 +1635,10 @@ export const getRoomHistory = async (req, res, next) => {
 
     const now = new Date();
     const history = reservations.map((res) => {
-      const tenantId = res.userId?._id?.toString();
+      const tenant = resolveReferencedUser(res.userId, {
+        unknownLabel: UNKNOWN_TENANT_LABEL,
+      });
+      const tenantId = tenant.id;
       const moveInReading = tenantId ? readingMap[`${tenantId}_moveIn`] : null;
       const moveOutReading = tenantId
         ? readingMap[`${tenantId}_moveOut`]
@@ -1644,10 +1660,8 @@ export const getRoomHistory = async (req, res, next) => {
 
       return {
         id: res._id,
-        tenantName: res.userId
-          ? `${res.userId.firstName || ""} ${res.userId.lastName || ""}`.trim()
-          : "Unknown",
-        tenantEmail: res.userId?.email || res.billingEmail || null,
+        tenantName: tenant.name,
+        tenantEmail: tenant.email || res.billingEmail || null,
         tenantId: tenantId || null,
         bedName,
         bedId: bedId || null,
