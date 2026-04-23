@@ -95,12 +95,16 @@ export const validateTargetMoveInDate = (date) => {
   if (!date) return { valid: false, error: "This field is required" };
 
   const selectedDate = new Date(date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const minimumAllowedDate = new Date();
+  minimumAllowedDate.setHours(0, 0, 0, 0);
+  minimumAllowedDate.setDate(minimumAllowedDate.getDate() + 3);
 
-  // Date must be in the future
-  if (selectedDate <= today) {
-    return { valid: false, error: "Date must be in the future" };
+  // Date must be at least 3 days from today
+  if (selectedDate < minimumAllowedDate) {
+    return {
+      valid: false,
+      error: "Date must be at least 3 days from today",
+    };
   }
 
   // Must be within 3 months

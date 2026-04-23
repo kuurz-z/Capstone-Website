@@ -9,6 +9,8 @@
     "dev": "nodemon server.js",
     "kill-port": "node scripts/kill-port.js",
     "restart": "node scripts/kill-port.js && node server.js",
+    "billing:backfill-anniversary-rent": "node scripts/backfill_anniversary_rent_bills.mjs",
+    "billing:backfill-anniversary-rent:write": "node scripts/backfill_anniversary_rent_bills.mjs --write",
     "reservation:backfill-codes": "node scripts/backfill_reservation_codes.mjs",
     "reservation:backfill-codes:write": "node scripts/backfill_reservation_codes.mjs --write",
     "utility:repair-bill-cycles": "node scripts/repair_utility_only_bill_cycles.mjs",
@@ -17,6 +19,8 @@
     "utility:repair": "node scripts/repair_utility_sync.mjs",
     "utility:cleanup-zero-segments": "node scripts/cleanup_zero_consumption_segments.mjs",
     "utility:cleanup-zero-segments:write": "node scripts/cleanup_zero_consumption_segments.mjs --write",
+    "maintenance:backfill-contract": "node scripts/backfill_maintenance_contract.mjs",
+    "maintenance:backfill-contract:write": "node scripts/backfill_maintenance_contract.mjs --write",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [

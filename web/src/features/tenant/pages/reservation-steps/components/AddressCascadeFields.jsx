@@ -296,11 +296,13 @@ const AddressCascadeFields = ({
           }
           style={{ border: errBorder(showValidationErrors, addressUnitHouseNo) || "1.5px solid #999" }}
         />
-        {fieldErrors.addressUnitHouseNo && (
+        {(showValidationErrors && !addressUnitHouseNo) || fieldErrors.addressUnitHouseNo ? (
           <div className="rf-field-error">
-            {fieldErrors.addressUnitHouseNo}
+            {showValidationErrors && !addressUnitHouseNo
+              ? "Unit / House No. is required"
+              : fieldErrors.addressUnitHouseNo}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Street */}
@@ -323,11 +325,13 @@ const AddressCascadeFields = ({
           }
           style={{ border: errBorder(showValidationErrors, addressStreet) || "1.5px solid #999" }}
         />
-        {fieldErrors.addressStreet && (
+        {(showValidationErrors && !addressStreet) || fieldErrors.addressStreet ? (
           <div className="rf-field-error">
-            {fieldErrors.addressStreet}
+            {showValidationErrors && !addressStreet
+              ? "Street is required"
+              : fieldErrors.addressStreet}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Region */}

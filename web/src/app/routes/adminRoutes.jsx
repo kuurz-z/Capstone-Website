@@ -8,17 +8,23 @@ import {
   AdminDashboardPage,
   ReservationsPage,
   RoomAvailabilityPage,
-  TenantsPage,
+  TenantsWorkspacePage,
   AuditLogsPage,
   UserManagementPage,
   AdminBillingPage,
   AdminAnnouncementsPage,
   MaintenancePage,
   InquiriesPage,
+  AnalyticsPage,
+  AnalyticsDetailsPage,
   BranchManagementPage,
   RolePermissionsPage,
   SystemSettingsPage,
 } from "../lazyPages";
+import {
+  ANALYTICS_DETAILS_PATH,
+  LEGACY_ANALYTICS_REDIRECTS,
+} from "../../features/admin/pages/analyticsNavigation.mjs";
 
 export function AdminRoutes() {
   return (
@@ -61,7 +67,7 @@ export function AdminRoutes() {
         path="tenants"
         element={
           <RouteShell name="Tenants">
-            <TenantsPage />
+            <TenantsWorkspacePage />
           </RouteShell>
         }
       />
@@ -106,12 +112,40 @@ export function AdminRoutes() {
         }
       />
       <Route
+        path="analytics"
+        element={
+          <RouteShell name="Analytics">
+            <AnalyticsPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="analytics/details"
+        element={
+          <RouteShell name="AnalyticsDetails">
+            <AnalyticsDetailsPage />
+          </RouteShell>
+        }
+      />
+      <Route
         path="inquiries"
         element={
           <RouteShell name="Inquiries">
             <InquiriesPage />
           </RouteShell>
         }
+      />
+      <Route
+        path="reports/occupancy"
+        element={<Navigate to={LEGACY_ANALYTICS_REDIRECTS.occupancy} replace />}
+      />
+      <Route
+        path="reports/billing"
+        element={<Navigate to={LEGACY_ANALYTICS_REDIRECTS.billing} replace />}
+      />
+      <Route
+        path="reports/operations"
+        element={<Navigate to={LEGACY_ANALYTICS_REDIRECTS.operations} replace />}
       />
       <Route
         path="room-configuration"
@@ -131,7 +165,15 @@ export function AdminRoutes() {
       />
       <Route
         path="financial"
-        element={<Navigate to="/admin/dashboard" replace />}
+        element={<Navigate to={LEGACY_ANALYTICS_REDIRECTS.financials} replace />}
+      />
+      <Route
+        path="financials"
+        element={<Navigate to={LEGACY_ANALYTICS_REDIRECTS.financials} replace />}
+      />
+      <Route
+        path="analytics/reports"
+        element={<Navigate to={ANALYTICS_DETAILS_PATH} replace />}
       />
       <Route
         path="branches"

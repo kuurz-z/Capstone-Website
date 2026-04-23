@@ -1,44 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
-import Sidebar from "./Sidebar";
+import Sidebar from "./AdminSidebar";
 import NotificationBell from "../../../shared/components/NotificationBell";
+import RouteTransitionBoundary from "../../../shared/components/RouteTransitionBoundary";
 import useSocketClient from "../../../shared/hooks/useSocketClient";
+import { useRouteFlash } from "../../../shared/hooks/useRouteFlash";
+import { getPageMeta } from "./adminShellMeta.mjs";
 import "../styles/admin-layout.css";
 import "../styles/admin-common.css";
-
-const PAGE_TITLES = {
-  "/admin/dashboard": "Dashboard",
-  "/admin/reservations": "Reservations",
-  "/admin/tenants": "Tenants",
-  "/admin/users": "Accounts",
-  "/admin/room-availability": "Room Management",
-  "/admin/audit-logs": "Activity Log",
-  "/admin/billing": "Billing",
-  "/admin/announcements": "Announcements",
-  "/admin/branches": "Branches",
-  "/admin/roles": "Permissions",
-  "/admin/settings": "Settings",
-};
-
-function getPageTitle(location) {
-  if (location.pathname === "/admin/room-availability") {
-    const params = new URLSearchParams(location.search);
-    const tab = params.get("tab") || "rooms";
-    if (tab === "occupancy") return "Room Occupancy";
-    if (tab === "forecast") return "Vacancy Forecast";
-    return "Room Management";
-  }
-
-  return PAGE_TITLES[location.pathname] || "Admin";
-}
 
 const COLLAPSE_STORAGE_KEY = "sidebar-collapsed";
 
 export default function AdminLayout() {
   useSocketClient();
   const location = useLocation();
+  useRouteFlash();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const contentRef = useRef(null);
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSE_STORAGE_KEY) === "true";
@@ -47,15 +26,21 @@ export default function AdminLayout() {
     }
   });
 
-  const pageTitle = getPageTitle(location);
+  const pageMeta = getPageMeta(location.pathname, location.search);
 
   const handleToggleCollapse = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      try { localStorage.setItem(COLLAPSE_STORAGE_KEY, String(next)); } catch {}
+      try {
+        localStorage.setItem(COLLAPSE_STORAGE_KEY, String(next));
+      } catch {}
       return next;
     });
   };
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [location.pathname, location.search]);
 
   return (
     <div className={`admin-layout ${collapsed ? "admin-layout--collapsed" : ""}`}>
@@ -77,7 +62,10 @@ export default function AdminLayout() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="admin-topbar-title">{pageTitle}</h1>
+            <div className="admin-topbar-copy">
+              <h1 className="admin-topbar-title">{pageMeta.title}</h1>
+              <p className="admin-topbar-subtitle">{pageMeta.description}</p>
+            </div>
           </div>
           <div className="admin-topbar-right">
             <NotificationBell />
@@ -93,8 +81,15 @@ export default function AdminLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="admin-content">
-          <Outlet />
+        <main
+          ref={contentRef}
+          className="admin-content"
+        >
+          <RouteTransitionBoundary
+            routeKey={`${location.pathname}${location.search}`}
+          >
+            <Outlet />
+          </RouteTransitionBoundary>
         </main>
       </div>
 

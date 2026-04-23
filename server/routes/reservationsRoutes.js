@@ -32,6 +32,7 @@ import {
   getCurrentResidents,
   getTenantWorkspace,
   getTenantWorkspaceById,
+  getTenantActionContext,
   getReservationById,
   createReservation,
   updateReservation,
@@ -89,6 +90,15 @@ router.get(
   verifyAdmin,
   requireAnyPermission(["manageReservations", "manageTenants"]),
   getTenantWorkspaceById,
+);
+
+router.get(
+  "/:reservationId/tenant-actions/context",
+  verifyToken,
+  verifyAdmin,
+  filterByBranch,
+  requireAnyPermission(["manageReservations", "manageTenants"]),
+  getTenantActionContext,
 );
 
 /**

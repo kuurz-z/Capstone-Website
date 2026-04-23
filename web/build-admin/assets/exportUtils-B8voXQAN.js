@@ -1,0 +1,3 @@
+function a(n,e,i="export"){if(!n||n.length===0)return;const s=e.map(o=>d(o.label)).join(","),r=n.map(o=>e.map(c=>{const l=c.formatter?c.formatter(o[c.key],o):o[c.key];return d(l)}).join(",")),t=[s,...r].join(`
+`);u(t,`${i}.csv`,"text/csv;charset=utf-8;")}function d(n){if(n==null)return"";const e=String(n);return e.includes(",")||e.includes('"')||e.includes(`
+`)?`"${e.replace(/"/g,'""')}"`:e}function u(n,e,i){const s=new Blob([n],{type:i}),r=URL.createObjectURL(s),t=document.createElement("a");t.href=r,t.download=e,document.body.appendChild(t),t.click(),document.body.removeChild(t),URL.revokeObjectURL(r)}export{a as e};

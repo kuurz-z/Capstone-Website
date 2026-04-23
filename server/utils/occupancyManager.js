@@ -25,11 +25,26 @@ import {
   hasReservationStatus,
   normalizeReservationStatus,
 } from "./lifecycleNaming.js";
+import { resolveReferencedUser } from "./userReference.js";
 
 const ACTIVE_OCCUPANCY_STATUSES = ACTIVE_OCCUPANCY_STATUS_QUERY;
 
 const getDisplayStatusForReservation = (status) =>
   hasReservationStatus(status, "moveIn") ? "occupied" : "reserved";
+
+const buildOccupantSnapshot = (userRef, reservation, occupiedSince = null) => {
+  if (!userRef) return null;
+  const occupant = resolveReferencedUser(userRef);
+  return {
+    _id: occupant.id,
+    name: occupant.name,
+    email: occupant.email,
+    phone: userRef?.phone || null,
+    reservationId: reservation?._id || null,
+    reservationStatus: reservation?.status || null,
+    occupiedSince,
+  };
+};
 
 const getRoomAvailabilityFromBeds = (room, beds, currentOccupancy) => {
   if (Array.isArray(beds) && beds.length > 0) {
@@ -93,17 +108,11 @@ export const deriveRoomOccupancyState = (room, reservations = []) => {
       status,
       lockExpiresAt: bed.lockExpiresAt || null,
       lockedBy: bed.lockedBy || null,
-      occupant: matchedReservation?.userId
-        ? {
-            _id: matchedReservation.userId?._id || matchedReservation.userId,
-            name: `${matchedReservation.userId?.firstName || ""} ${matchedReservation.userId?.lastName || ""}`.trim(),
-            email: matchedReservation.userId?.email || null,
-            phone: matchedReservation.userId?.phone || null,
-            reservationId: matchedReservation._id,
-            reservationStatus: matchedReservation.status,
-            occupiedSince: bed.occupiedBy?.occupiedSince || null,
-          }
-        : null,
+      occupant: buildOccupantSnapshot(
+        matchedReservation?.userId,
+        matchedReservation,
+        bed.occupiedBy?.occupiedSince || null,
+      ),
     };
   });
 
@@ -123,17 +132,7 @@ export const deriveRoomOccupancyState = (room, reservations = []) => {
     if (!freeBed) break;
 
     freeBed.status = getDisplayStatusForReservation(reservation.status);
-    freeBed.occupant = reservation.userId
-      ? {
-          _id: reservation.userId?._id || reservation.userId,
-          name: `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim(),
-          email: reservation.userId?.email || null,
-          phone: reservation.userId?.phone || null,
-          reservationId: reservation._id,
-          reservationStatus: reservation.status,
-          occupiedSince: null,
-        }
-      : null;
+    freeBed.occupant = buildOccupantSnapshot(reservation.userId, reservation);
   }
 
   const occupiedBeds = beds.filter((bed) => bed.status === "occupied");
@@ -469,22 +468,31 @@ export const getRoomOccupancyStatus = async (roomId) => {
  * @param {string} branch - Branch name ('gil-puyat' or 'guadalupe')
  * @returns {Promise<Object>} - Statistics with room occupancy info
  */
-export const getBranchOccupancyStats = async (branch = null) => {
+export const getBranchOccupancyStats = async (
+  branch = null,
+  { includeUserDetails = true } = {},
+) => {
   try {
     const filter = { isArchived: false };
     if (branch) filter.branch = branch;
 
     const rooms = await Room.find(filter).lean();
     const roomIds = rooms.map((room) => room._id);
-    const reservations = roomIds.length > 0
-      ? await Reservation.find({
-          roomId: { $in: roomIds },
-          isArchived: false,
-          status: { $in: ACTIVE_OCCUPANCY_STATUSES },
-        })
-          .populate("userId", "firstName lastName email phone")
-          .lean()
-      : [];
+    let reservations = [];
+
+    if (roomIds.length > 0) {
+      const reservationQuery = Reservation.find({
+        roomId: { $in: roomIds },
+        isArchived: false,
+        status: { $in: ACTIVE_OCCUPANCY_STATUSES },
+      });
+
+      if (includeUserDetails) {
+        reservationQuery.populate("userId", "firstName lastName email phone");
+      }
+
+      reservations = await reservationQuery.lean();
+    }
 
     const reservationsByRoom = new Map();
     for (const reservation of reservations) {

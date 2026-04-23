@@ -49,6 +49,7 @@ import WaterBillingRecord from "./WaterBillingRecord.js";
 import UtilityPeriod from "./UtilityPeriod.js";
 import UtilityReading from "./UtilityReading.js";
 import BedHistory from "./BedHistory.js";
+import Stay from "./Stay.js";
 import {
   CANONICAL_RESERVATION_STATUSES,
   USER_ROLE_NAMES,
@@ -86,6 +87,7 @@ export {
   UtilityPeriod,
   UtilityReading,
   BedHistory,
+  Stay,
 };
 
 // ============================================================================
@@ -112,6 +114,7 @@ export const TENANT_STATUSES = [
   "none",
   "active",
   "inactive",
+  "moved_out",
   "evicted",
   "blacklisted",
 ];
@@ -182,6 +185,7 @@ export default {
   UtilityPeriod,
   UtilityReading,
   BedHistory,
+  Stay,
   Notification,
   Payment,
   LoginLog,

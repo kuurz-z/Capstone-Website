@@ -1,352 +1,224 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import {
-  MessageSquare,
-  CalendarCheck,
-  Clock,
-  Users,
-  Bed,
-  DollarSign,
-  TrendingUp,
-  ArrowUpRight,
-} from "lucide-react";
-import {
-  hasReservationStatus,
-  readMoveInDate,
-} from "../../../shared/utils/lifecycleNaming";
+import { MessageSquare, CalendarCheck, Clock, CheckCircle2 } from "lucide-react";
 import {
   formatRoomType,
   formatBranch,
   formatDate,
   formatRelativeTime,
 } from "../utils/formatters";
-
 import { useDashboardData } from "../../../shared/hooks/queries/useDashboard";
-import { useBillingStats } from "../../../shared/hooks/queries/useBilling";
-import { StatusBadge } from "../components/shared";
+import {
+  PageShell,
+  StatusBadge,
+  ReportChartPanel,
+  ReportMetricCard,
+} from "../components/shared";
 import ReservationStatusChart from "../components/dashboard/ReservationStatusChart";
 import "../styles/design-tokens.css";
 import "../styles/admin-dashboard.css";
 
 export default function Dashboard() {
-  const {
-    occupancy,
-    inquiryStats,
-    userStats,
-    reservations: reservationsQuery,
-    inquiries: inquiriesQuery,
-    isLoading,
-    isError,
-  } = useDashboardData();
+  const { data, isLoading, isError } = useDashboardData();
 
-  const { data: billingStats } = useBillingStats();
+  const reservations = data?.recentReservations || [];
+  const inquiryItems = data?.recentInquiries || [];
+  const reservationStatus = data?.reservationStatus || {
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+  };
+  const kpis = data?.kpis || {};
+  const occupancy = data?.occupancy || {};
 
-  // ── Derive dashboard data ──
-  const occupancyStats = occupancy.data?.statistics || occupancy.data;
-  const inquiryStatsData = inquiryStats.data;
-  const userStatsData = userStats.data;
-  const reservations = reservationsQuery.data || [];
-  const inquiryItems = (() => {
-    const raw = inquiriesQuery.data;
-    if (Array.isArray(raw)) return raw;
-    return raw?.inquiries || [];
-  })();
-
-  // ── Summary bar pills ──
-  const summaryItems = useMemo(() => {
-    const totalInquiries = inquiryStatsData?.total || 0;
-    const availableBeds =
-      (occupancyStats?.totalCapacity || 0) -
-      (occupancyStats?.totalOccupancy || 0);
-    const registeredUsers = userStatsData?.total || 0;
-    const activeBookings = (reservations || []).filter(
-      (r) =>
-        r.status === "confirmed" ||
-        r.status === "reserved" ||
-        hasReservationStatus(r.status, "moveIn"),
-    ).length;
-    const revenue = billingStats?.totalCollected
-      ? `₱${Number(billingStats.totalCollected).toLocaleString()}`
-      : "₱0";
-
-    return [
-      {
-        label: "Total Inquiries",
-        value: totalInquiries,
-        trend: inquiryStatsData?.recentCount
-          ? `${inquiryStatsData.recentCount} last 7d`
-          : null,
-        color: "blue",
-      },
-      {
-        label: "Available Beds",
-        value: Math.max(availableBeds, 0),
-        trend: occupancyStats?.overallOccupancyRate
-          ? `${String(occupancyStats.overallOccupancyRate).replace("%", "")}% occ.`
-          : null,
-        color: "green",
-      },
-      {
-        label: "Registered Users",
-        value: registeredUsers,
-        trend: userStatsData?.activeCount
-          ? `${userStatsData.activeCount} active`
-          : null,
-        color: "purple",
-      },
-      {
-        label: "Active Bookings",
-        value: activeBookings,
-        color: "orange",
-      },
-      {
-        label: "Total Revenue",
-        value: revenue,
-        trend: billingStats?.overdueCount
-          ? `${billingStats.overdueCount} overdue`
-          : null,
-        color: "blue",
-      },
-    ];
-  }, [
-    occupancyStats,
-    inquiryStatsData,
-    userStatsData,
-    reservations,
-    billingStats,
-  ]);
-
-  // ── Recent items ──
-  const recentInquiries = useMemo(
+  const unresolvedInquiryCount = useMemo(
     () =>
-      (inquiryItems || []).slice(0, 4).map((item) => ({
-        id: item._id,
-        name:
-          `${item.firstName || ""} ${item.lastName || ""}`.trim() ||
-          item.name ||
-          "Unknown",
-        email: item.email || "—",
-        branch: formatBranch(item.branch),
-        time: formatRelativeTime(item.createdAt),
-        status:
-          item.status === "resolved" || item.status === "closed"
-            ? "responded"
-            : "new",
-      })),
+      inquiryItems.filter((item) => !["resolved", "closed"].includes(item.status)).length,
     [inquiryItems],
   );
 
-  const recentReservations = useMemo(() => {
-    const sorted = (reservations || [])
-      .slice()
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return sorted.slice(0, 4).map((item) => ({
-      id: item._id,
-      roomType: formatRoomType(item.roomId?.type || item.preferredRoomType),
-      guestName:
-        `${item.userId?.firstName || ""} ${item.userId?.lastName || ""}`.trim() ||
-        item.guestName ||
-        "Unknown",
-      branch: formatBranch(item.roomId?.branch || item.branch),
-      date: formatDate(readMoveInDate(item) || item.createdAt),
-      status: item.status || "pending",
-    }));
-  }, [reservations]);
+  const summaryItems = useMemo(
+    () => [
+      {
+        label: "Total Inquiries",
+        value: kpis.inquiries || 0,
+        trend: `${unresolvedInquiryCount} awaiting response`,
+        tone: "blue",
+      },
+      {
+        label: "Available Beds",
+        value: kpis.availableBeds || 0,
+        trend: `${occupancy.totalOccupancy || 0} currently occupied (${occupancy.totalCapacity || 0} total)`,
+        tone: "green",
+      },
+      {
+        label: "Active Maintenance",
+        value: kpis.activeTickets || 0,
+        trend:
+          (kpis.activeTickets || 0) === 0
+            ? "All facilities currently operational"
+            : `${kpis.activeTickets || 0} issue${(kpis.activeTickets || 0) === 1 ? "" : "s"} requiring attention`,
+        tone: "violet",
+      },
+      {
+        label: "Pending Reservations",
+        value: reservationStatus.pending || 0,
+        trend: "Awaiting admin approval",
+        tone: "amber",
+      },
+      {
+        label: "Active Bookings",
+        value: kpis.activeBookings || 0,
+        trend: `${kpis.activeBookings || 0} active tenant account${(kpis.activeBookings || 0) === 1 ? "" : "s"}`,
+        tone: "rose",
+      },
+    ],
+    [kpis, occupancy, reservationStatus, unresolvedInquiryCount],
+  );
 
-  const reservationStatus = useMemo(() => {
-    const approved = (reservations || []).filter(
-      (r) =>
-        r.status === "confirmed" ||
-        r.status === "reserved" ||
-        hasReservationStatus(r.status, "moveIn"),
-    ).length;
-    const pending = (reservations || []).filter(
-      (r) => r.status === "pending",
-    ).length;
-    const rejected = (reservations || []).filter((r) =>
-      ["cancelled", "rejected"].includes(r.status),
-    ).length;
-    return { approved, pending, rejected };
-  }, [reservations]);
+  const recentInquiries = useMemo(
+    () =>
+      inquiryItems.slice(0, 4).map((item) => {
+        const isResponded = item.status === "resolved" || item.status === "closed";
+        return {
+          id: item.id,
+          name: item.name || "Unknown",
+          email: item.email || "-",
+          branch: formatBranch(item.branch),
+          time: formatRelativeTime(item.createdAt),
+          status: isResponded ? "responded" : "new",
+          followUp: isResponded ? "Responded" : "Needs reply",
+        };
+      }),
+    [inquiryItems],
+  );
+
+  const recentReservations = useMemo(
+    () =>
+      reservations.slice(0, 4).map((item) => ({
+        id: item.id,
+        roomType: formatRoomType(item.roomType),
+        guestName: item.guestName || "Unknown",
+        branch: formatBranch(item.branch),
+        date: formatDate(item.moveInDate || item.createdAt),
+        status: item.status || "pending",
+      })),
+    [reservations],
+  );
 
   const error = isError
     ? "Some dashboard data failed to load. Showing partial data."
     : null;
 
-  const summaryIcons = {
-    "Total Inquiries": MessageSquare,
-    "Available Beds": Bed,
-    "Registered Users": Users,
-    "Active Bookings": CalendarCheck,
-    "Total Revenue": DollarSign,
-  };
-
-  const colorClasses = {
-    blue: "from-blue-50 to-blue-100/50 text-blue-600",
-    green: "from-green-50 to-green-100/50 text-green-600",
-    purple: "from-violet-50 to-violet-100/50 text-violet-600",
-    orange: "from-orange-50 to-orange-100/50 text-orange-600",
-    emerald: "from-emerald-50 to-emerald-100/50 text-emerald-600",
-  };
-
   return (
-    <div className="min-h-screen w-full bg-slate-50/70">
-      <div className="w-full px-3 py-4 sm:px-4 lg:px-6">
-        {error && (
-          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </div>
-        )}
-        {isLoading && (
-          <div className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-            Loading dashboard...
-          </div>
-        )}
-
-        <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
-          {summaryItems.map((stat) => {
-            const Icon = summaryIcons[stat.label] || TrendingUp;
-            const palette = colorClasses[stat.color] || colorClasses.blue;
-            const [bgFrom, bgTo, iconText] = palette.split(" ");
-
-            return (
-              <div
-                key={stat.label}
-                className="group min-h-[190px] rounded-2xl border border-slate-200/70 bg-white p-8 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60"
-              >
-                <div className="mb-5 flex items-start justify-between">
-                  <div
-                    className={`rounded-xl bg-gradient-to-br p-3 ${bgFrom} ${bgTo}`}
-                  >
-                    <Icon className={`h-6 w-6 ${iconText}`} />
-                  </div>
-                  <TrendingUp className="h-5 w-5 text-slate-400 transition-colors group-hover:text-slate-600" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-slate-600">{stat.label}</p>
-                  <p className="text-2xl font-semibold leading-tight text-slate-900">{stat.value}</p>
-                  {stat.trend && <p className="text-xs text-slate-500">{stat.trend}</p>}
-                </div>
-              </div>
-            );
-          })}
+    <PageShell>
+      <PageShell.Summary>
+        {error && <div className="bg-rose-50 text-rose-600 px-4 py-3 rounded-xl mb-6 text-sm font-medium border border-rose-100">{error}</div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6 mb-8 w-full">
+          {summaryItems.map((item) => (
+            <ReportMetricCard
+              key={item.label}
+              label={item.label}
+              value={item.value}
+              trend={item.trend}
+              tone={item.tone}
+            />
+          ))}
         </div>
+      </PageShell.Summary>
 
-        <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <div className="h-full rounded-2xl border border-slate-200/70 bg-white p-8 transition-all duration-200 hover:shadow-lg hover:shadow-slate-200/60">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Recent Inquiries
-                </h2>
-                <p className="mt-0.5 text-sm text-slate-500">
-                  Latest customer inquiries
-                </p>
-              </div>
-              <Link
-                to="/admin/reservations"
-                className="group inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-              >
-                View All
-                <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+      <PageShell.Content>
+        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6 mb-8">
+          <ReportChartPanel
+            title="Recent Inquiries"
+            subtitle={`${kpis.inquiries || 0} in the active range • newest items first`}
+            actions={
+              <Link to="/admin/analytics/details?tab=operations" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+                View All →
               </Link>
-            </div>
-
-            <div className="space-y-1">
+            }
+          >
+            <div className="flex flex-col gap-3 py-2">
               {recentInquiries.length > 0 ? (
                 recentInquiries.map((inq) => (
-                  <div
-                    key={inq.id}
-                    className="group flex cursor-pointer items-start gap-3 rounded-xl p-4 transition-colors hover:bg-slate-50"
-                  >
-                    <div className="rounded-lg bg-blue-50 p-2.5 text-blue-600 transition-colors group-hover:bg-blue-100">
-                      <MessageSquare className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium text-slate-900">
-                          {inq.name}
-                        </p>
-                        <StatusBadge status={inq.status} />
-                      </div>
-                      <p className="mb-1 truncate text-sm text-slate-600">{inq.email}</p>
-                      <div className="flex items-center gap-3 text-xs text-slate-500">
-                        <span className="font-medium text-slate-600">{inq.branch}</span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" />
-                          {inq.time}
+                  <div key={inq.id} className="relative bg-slate-50 border border-slate-100 rounded-xl p-4 flex justify-between items-start gap-4 hover:bg-slate-100 transition-colors group">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <MessageSquare size={13} className="text-slate-400 group-hover:text-blue-500 transition-colors" /> {inq.name}
+                      </span>
+                      <div className="text-sm font-semibold text-slate-800">{inq.email}</div>
+                      <p className="flex items-center gap-2 text-xs text-slate-500 mt-1 font-medium">
+                        <span>{inq.branch}</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock size={12} className="text-slate-400" /> {inq.time}
                         </span>
-                      </div>
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <StatusBadge status={inq.status} />
+                      <span className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">
+                        {inq.followUp}
+                      </span>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="py-12 text-center">
-                  <MessageSquare className="mx-auto mb-3 h-12 w-12 text-slate-300" />
-                  <p className="text-sm text-slate-500">No recent inquiries.</p>
+                <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                  <CheckCircle2 size={32} className="mb-2 text-emerald-400 opacity-50" />
+                  <p className="text-sm font-medium">No recent inquiries.</p>
                 </div>
               )}
             </div>
-          </div>
+          </ReportChartPanel>
 
-          <div className="h-full rounded-2xl border border-slate-200/70 bg-white p-8 transition-all duration-200 hover:shadow-lg hover:shadow-slate-200/60">
-            <ReservationStatusChart reservationStatus={reservationStatus} />
-          </div>
+          <ReportChartPanel
+            title="Reservation Status"
+            subtitle={`${reservationStatus.pending || 0} pending • ${reservationStatus.approved || 0} approved • ${reservationStatus.rejected || 0} rejected`}
+          >
+            <ReservationStatusChart reservationStatus={reservationStatus} showHeading={false} />
+          </ReportChartPanel>
         </div>
 
-        <div className="rounded-2xl border border-slate-200/70 bg-white p-8 transition-all duration-200 hover:shadow-lg hover:shadow-slate-200/60">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Recent Reservations
-              </h2>
-              <p className="mt-0.5 text-sm text-slate-500">Latest booking activity</p>
-            </div>
-            <Link
-              to="/admin/reservations"
-              className="group inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              View All
-              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        <ReportChartPanel
+          title="Recent Reservations"
+          subtitle={`${reservationStatus.pending || 0} pending review • ${kpis.activeBookings || 0} active bookings in current scope`}
+          actions={
+            <Link to="/admin/reservations" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+              View All →
             </Link>
-          </div>
-
-          <div className="space-y-1">
+          }
+        >
+          <div className="flex flex-col gap-3 py-2">
             {recentReservations.length > 0 ? (
-              recentReservations.map((res) => (
-                <div
-                  key={res.id}
-                  className="group flex cursor-pointer items-start gap-3 rounded-xl p-4 transition-colors hover:bg-slate-50"
-                >
-                  <div className="rounded-lg bg-violet-50 p-2.5 text-violet-600 transition-colors group-hover:bg-violet-100">
-                    <CalendarCheck className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {res.roomType}
+              recentReservations.map((reservation) => (
+                <div key={reservation.id} className="relative bg-slate-50 border border-slate-100 rounded-xl p-4 flex justify-between items-start gap-4 hover:bg-slate-100 transition-colors group">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                      <CalendarCheck size={16} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="text-sm font-semibold text-slate-800">{reservation.roomType}</div>
+                      <p className="text-sm text-slate-600 font-medium">{reservation.guestName}</p>
+                      <p className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                        <span>{reservation.branch}</span>
+                        <span>•</span>
+                        <span>{reservation.date}</span>
                       </p>
-                      <StatusBadge status={res.status} />
-                    </div>
-                    <p className="mb-1 truncate text-sm text-slate-600">
-                      {res.guestName}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span className="font-medium text-slate-600">{res.branch}</span>
-                      <span>{res.date}</span>
                     </div>
                   </div>
+                  <StatusBadge status={reservation.status} />
                 </div>
               ))
             ) : (
-              <div className="py-12 text-center">
-                <CalendarCheck className="mx-auto mb-3 h-12 w-12 text-slate-300" />
-                <p className="text-sm text-slate-500">No recent reservations.</p>
+              <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                <CheckCircle2 size={32} className="mb-2 text-emerald-400 opacity-50" />
+                <p className="text-sm font-medium">No recent reservations.</p>
               </div>
             )}
           </div>
-        </div>
-      </div>
-    </div>
+        </ReportChartPanel>
+      </PageShell.Content>
+    </PageShell>
   );
 }

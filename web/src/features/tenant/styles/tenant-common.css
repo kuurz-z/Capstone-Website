@@ -11,38 +11,41 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 1rem;
   margin-bottom: 2rem;
 }
 
 .page-header h1 {
   font-size: 1.875rem;
-  color: #0f172a;
+  color: var(--text-heading);
   margin: 0 0 0.5rem 0;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .page-header p {
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.96rem;
+  max-width: 720px;
 }
 
 /* Section Cards */
 .section-card {
-  background: white;
-  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 1rem;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(10, 22, 40, 0.08);
+  box-shadow: 0 14px 28px rgba(10, 22, 40, 0.05);
 }
 
 .section-card h2 {
   font-size: 1.25rem;
-  color: #0f172a;
+  color: var(--text-heading);
   margin: 0 0 1rem 0;
   display: flex;
   align-items: center;
@@ -95,12 +98,12 @@
   display: flex;
   justify-content: space-between;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-card);
   font-size: 1rem;
 }
 
 .breakdown-item.penalty {
-  color: #dc2626;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
@@ -117,7 +120,7 @@
 .payment-history-table td {
   padding: 1rem;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-card);
 }
 
 .payment-history-table th {
@@ -144,25 +147,52 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  transition: background 0.3s;
+  border: 1px solid rgba(10, 22, 40, 0.08);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.76);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .maintenance-item:hover {
-  background: #f9fafb;
+  background: var(--surface-card);
+  border-color: rgba(10, 22, 40, 0.12);
+  transform: translateY(-1px);
 }
 
 .maintenance-info h3 {
   font-size: 1.125rem;
-  color: #1f2937;
+  color: var(--text-heading);
   margin: 0 0 0.5rem 0;
 }
 
 .maintenance-info p {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
   font-size: 0.875rem;
+}
+
+.maintenance-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px dashed rgba(10, 22, 40, 0.14);
+  border-radius: 16px;
+  color: var(--text-secondary);
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.maintenance-empty-state strong {
+  display: block;
+  color: var(--text-heading);
+  margin-bottom: 0.25rem;
+}
+
+.maintenance-empty-state p {
+  margin: 0;
 }
 
 /* Announcements Styles */
@@ -176,7 +206,7 @@
 .filter-tabs .tab {
   padding: 0.75rem 1.5rem;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-card);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s;
@@ -185,7 +215,7 @@
 }
 
 .filter-tabs .tab.active {
-  background: linear-gradient(135deg, #0A1628 0%, #1E3A5F 100%);
+  background: none 0%, #1E3A5F 100%);
   color: white;
   border-color: transparent;
 }
@@ -251,7 +281,7 @@
 }
 
 .category-maintenance {
-  background: #dbeafe;
+  background: var(--color-info-bg);
   color: #1e40af;
 }
 
@@ -293,7 +323,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 0;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-card);
 }
 
 .settings-item:last-child {
@@ -350,7 +380,7 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background: #0A1628;
+  background: var(--text-heading);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -371,16 +401,18 @@
 
 .form-control {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(10, 22, 40, 0.12);
+  border-radius: 12px;
   font-size: 1rem;
+  color: var(--text-body);
+  background: rgba(248, 250, 252, 0.7);
 }
 
 .form-control:focus {
   outline: none;
-  border-color: #0A1628;
-  box-shadow: 0 0 0 1.5px rgba(10, 22, 40, 0.08);
+  border-color: rgba(212, 175, 55, 0.7);
+  box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.12);
 }
 
 .form-actions {
@@ -395,12 +427,16 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.96rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .btn-sm {
@@ -409,23 +445,24 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #0A1628 0%, #1E3A5F 100%);
+  background: none 0%, #1E3A5F 100%);
   color: white;
+  box-shadow: 0 12px 24px rgba(10, 22, 40, 0.16);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(10, 22, 40, 0.3);
+  box-shadow: 0 16px 28px rgba(10, 22, 40, 0.22);
 }
 
 .btn-secondary {
-  background: white;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text-secondary);
+  border-color: rgba(10, 22, 40, 0.12);
 }
 
 .btn-secondary:hover {
-  background: #f3f4f6;
+  background: rgba(248, 250, 252, 1);
 }
 
 /* Badges */
@@ -442,7 +479,7 @@
 }
 
 .badge-info {
-  background: #dbeafe;
+  background: var(--color-info-bg);
   color: #1e40af;
 }
 
@@ -501,6 +538,11 @@
     font-size: 2rem;
   }
 
+  .maintenance-empty-state {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .settings-item {
     flex-direction: column;
     align-items: flex-start;
@@ -543,6 +585,10 @@ html[data-theme="dark"] .maintenance-item { border-color: var(--border-card); }
 html[data-theme="dark"] .maintenance-item:hover { background: var(--surface-hover); }
 html[data-theme="dark"] .maintenance-info h3 { color: var(--text-heading); }
 html[data-theme="dark"] .maintenance-info p  { color: var(--text-secondary); }
+html[data-theme="dark"] .maintenance-empty-state {
+  border-color: var(--border-card);
+  background: var(--surface-card);
+}
 
 html[data-theme="dark"] .filter-tabs .tab {
   background: var(--surface-card);

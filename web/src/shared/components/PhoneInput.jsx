@@ -75,6 +75,7 @@ const detectCountryFromE164 = (e164) => {
 const PhoneInput = ({
   value = "",
   onChange,
+  onBlur,
   error,
   required,
   hasError,
@@ -308,6 +309,7 @@ const PhoneInput = ({
               type="tel" inputMode="numeric"
               value={localNumber}
               onChange={handleLocalChange}
+              onBlur={onBlur}
               maxLength={localNumber.startsWith("+") ? 16 : expectedLength}
               placeholder={getPlaceholder()}
               style={{
@@ -399,6 +401,7 @@ const PhoneInput = ({
           type="tel" inputMode="numeric"
           value={localNumber}
           onChange={handleLocalChange}
+          onBlur={onBlur}
           maxLength={localNumber.startsWith("+") ? 16 : expectedLength}
           placeholder={getPlaceholder()}
           style={{

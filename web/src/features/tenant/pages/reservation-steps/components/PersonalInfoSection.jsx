@@ -2,6 +2,9 @@ import React from "react";
 import FileUploadField from "./FileUploadField";
 import AddressCascadeFields from "./AddressCascadeFields";
 import PhoneInput from "../../../../../shared/components/PhoneInput";
+import {
+  validateBirthday,
+} from "../../../utils/reservationValidation";
 
 const errBorder = (show, value) =>
   show && !value ? "1.5px solid #dc2626" : undefined;
@@ -25,6 +28,7 @@ const PersonalInfoSection = ({
   validIDFront, setValidIDFront,
   validIDBack, setValidIDBack,
   nbiClearance, setNbiClearance,
+  nbiReason, setNbiReason,
   personalNotes, setPersonalNotes,
   handleNameInput, handlePhoneInput, handleGeneralInput,
   validateField, fieldErrors,
@@ -70,6 +74,15 @@ const PersonalInfoSection = ({
         <PhoneInput
           value={mobileNumber}
           onChange={(e164) => setMobileNumber(e164)}
+          onBlur={() =>
+            validateField("mobileNumber", mobileNumber, (value) => {
+              const valid = /^\+\d{10,15}$/.test(value || "");
+              return {
+                valid,
+                error: valid ? null : "Please enter a valid mobile number",
+              };
+            })
+          }
           hasError={showValidationErrors && !mobileNumber}
           required
         />
@@ -93,10 +106,7 @@ const PersonalInfoSection = ({
           max={birthdayMax}
           onChange={(e) => {
             setBirthday(e.target.value);
-            validateField("birthday", e.target.value, (v) => {
-              const valid = Boolean(v);
-              return { valid, error: valid ? null : "Birthday is required" };
-            });
+            validateField("birthday", e.target.value, validateBirthday);
           }}
           style={{ cursor: "pointer", border: errBorder(showValidationErrors, birthday) }}
         />
@@ -214,16 +224,35 @@ const PersonalInfoSection = ({
       />
     </div>
 
-    <div className="form-group">
-      <label className="form-label">
-        NBI Clearance (If unable, upload another valid ID) *
-      </label>
+    <div data-field="nbiClearance">
       <FileUploadField
-        label=""
+        label="NBI Clearance (If unable, upload another valid ID)"
         value={nbiClearance}
         onChange={setNbiClearance}
         hint="NBI Clearance or additional valid ID"
+        hasError={showValidationErrors && !nbiClearance && !nbiReason}
       />
+    </div>
+
+    <div className="form-group" data-field="nbiReason">
+      <label className="form-label">
+        If not yet available, please indicate reason below{" "}
+        <span className="rf-required">*</span>
+      </label>
+      <textarea
+        className="form-textarea"
+        value={nbiReason}
+        onChange={(e) => setNbiReason(e.target.value)}
+        placeholder="N/A if NBI Clearance has been submitted"
+        style={{
+          border: !nbiClearance
+            ? errBorder(showValidationErrors, nbiReason)
+            : undefined,
+        }}
+      />
+      {showValidationErrors && !nbiClearance && !nbiReason && (
+        <FieldError error="Please upload NBI Clearance or provide a reason" />
+      )}
     </div>
 
     {/* Notes */}

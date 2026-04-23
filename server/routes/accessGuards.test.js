@@ -47,6 +47,7 @@ await jest.unstable_mockModule("../validation/schemas.js", () => ({
   setRoleSchema: {},
   updateBranchSchema: {},
   createAnnouncementSchema: {},
+  updateAnnouncementSchema: {},
 }));
 await jest.unstable_mockModule("../middleware/rateLimiter.js", () => ({
   publicLimiter: noop,
@@ -70,6 +71,9 @@ await jest.unstable_mockModule("../controllers/authController.js", () => ({
 await jest.unstable_mockModule("../controllers/reservationsController.js", () => ({
   getReservations: noop,
   getCurrentResidents: noop,
+  getTenantWorkspace: noop,
+  getTenantWorkspaceById: noop,
+  getTenantActionContext: noop,
   getReservationById: noop,
   createReservation: noop,
   updateReservation: noop,
@@ -95,6 +99,10 @@ await jest.unstable_mockModule("../controllers/roomsController.js", () => ({
   createRoom: noop,
   updateRoom: noop,
   deleteRoom: noop,
+  addBed: noop,
+  updateBed: noop,
+  reorderBeds: noop,
+  deleteBed: noop,
   updateBedStatus: noop,
 }));
 await jest.unstable_mockModule("../controllers/billingController.js", () => ({
@@ -123,6 +131,8 @@ await jest.unstable_mockModule("../controllers/announcementsController.js", () =
   acknowledgeAnnouncement: noop,
   getUserEngagementStats: noop,
   createAnnouncement: noop,
+  updateAnnouncement: noop,
+  deleteAnnouncement: noop,
 }));
 await jest.unstable_mockModule("../controllers/auditController.js", () => ({
   getAuditLogs: noop,
@@ -137,6 +147,26 @@ await jest.unstable_mockModule("../controllers/digitalTwinController.js", () => 
   getSnapshot: noop,
   getRoomDetail: noop,
 }));
+await jest.unstable_mockModule("../controllers/maintenanceController.js", () => ({
+  getMyRequests: noop,
+  getAdminAll: noop,
+  getByBranch: noop,
+  createRequest: noop,
+  createRequestCompat: noop,
+  getRequest: noop,
+  getRequestById: noop,
+  updateMyRequest: noop,
+  cancelMyRequest: noop,
+  reopenMyRequest: noop,
+  updateRequest: noop,
+  updateAdminRequestStatus: noop,
+  updateAdminRequestStatusCompat: noop,
+  getCompletionStats: noop,
+  getIssueFrequency: noop,
+}));
+await jest.unstable_mockModule("../controllers/branchSummaryController.js", () => ({
+  getOwnerBranchSummaries: noop,
+}));
 
 const authRoutes = (await import("./authRoutes.js")).default;
 const reservationsRoutes = (await import("./reservationsRoutes.js")).default;
@@ -144,7 +174,9 @@ const roomsRoutes = (await import("./roomsRoutes.js")).default;
 const billingRoutes = (await import("./billingRoutes.js")).default;
 const announcementRoutes = (await import("./announcementRoutes.js")).default;
 const auditRoutes = (await import("./auditRoutes.js")).default;
+const branchSummaryRoutes = (await import("./branchSummaryRoutes.js")).default;
 const digitalTwinRoutes = (await import("./digitalTwinRoutes.js")).default;
+const maintenanceRoutes = (await import("./maintenanceContractRoutes.js")).default;
 
 function getRouteHandlers(router, path, method) {
   const layer = router.stack.find(
@@ -218,6 +250,66 @@ describe("route access guards", () => {
     ).toBe(true);
     expect(
       twinHandlers.some((handler) => handler.requiredPermission === "viewReports"),
+    ).toBe(true);
+  });
+
+  test("audit security signals stay owner-only", () => {
+    const failedLoginHandlers = getRouteHandlers(
+      auditRoutes,
+      "/security/failed-logins",
+      "get",
+    );
+
+    expect(failedLoginHandlers).toContain(verifyToken);
+    expect(failedLoginHandlers).toContain(verifyOwner);
+    expect(failedLoginHandlers).not.toContain(verifyAdmin);
+    expect(
+      failedLoginHandlers.some(
+        (handler) => handler.requiredPermission === "viewReports",
+      ),
+    ).toBe(false);
+  });
+
+  test("branch summary route stays owner-only", () => {
+    const handlers = getRouteHandlers(branchSummaryRoutes, "/summary", "get");
+
+    expect(handlers).toContain(verifyToken);
+    expect(handlers).toContain(verifyOwner);
+    expect(handlers).not.toContain(verifyAdmin);
+    expect(
+      handlers.some((handler) => handler.requiredPermission),
+    ).toBe(false);
+  });
+
+  test("maintenance admin routes enforce manageMaintenance", () => {
+    const adminListHandlers = getRouteHandlers(maintenanceRoutes, "/admin/all", "get");
+    const adminUpdateHandlers = getRouteHandlers(
+      maintenanceRoutes,
+      "/admin/:requestId/status",
+      "patch",
+    );
+    const legacyBranchHandlers = getRouteHandlers(maintenanceRoutes, "/branch", "get");
+
+    expect(adminListHandlers).toContain(verifyAdmin);
+    expect(adminListHandlers).toContain(filterByBranch);
+    expect(
+      adminListHandlers.some(
+        (handler) => handler.requiredPermission === "manageMaintenance",
+      ),
+    ).toBe(true);
+
+    expect(adminUpdateHandlers).toContain(verifyAdmin);
+    expect(adminUpdateHandlers).toContain(filterByBranch);
+    expect(
+      adminUpdateHandlers.some(
+        (handler) => handler.requiredPermission === "manageMaintenance",
+      ),
+    ).toBe(true);
+
+    expect(
+      legacyBranchHandlers.some(
+        (handler) => handler.requiredPermission === "manageMaintenance",
+      ),
     ).toBe(true);
   });
 });

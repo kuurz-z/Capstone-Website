@@ -1,0 +1,1 @@
+import{a as t}from"./httpClient-COiljsEo.js";const n={getBusinessSettings:()=>t("/settings/business"),updateBusinessSettings:s=>t("/settings/business",{method:"PATCH",body:JSON.stringify(s)}),updateBranchSettings:(s,e)=>t(`/settings/branch/${s}`,{method:"PATCH",body:JSON.stringify(e)})};export{n as s};

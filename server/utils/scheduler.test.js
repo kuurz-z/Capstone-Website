@@ -8,8 +8,18 @@ const syncReservationUserLifecycle = jest.fn();
 const updateOccupancyOnReservationChange = jest.fn();
 const resolveBillStatus = jest.fn((bill) => bill.status);
 const syncBillAmounts = jest.fn();
+const getLifecyclePolicySettings = jest.fn(async () => ({
+  noShowGraceDays: 7,
+  stalePendingHours: 2,
+  staleVisitPendingHours: 336,
+  visitPendingWarnDays: 12,
+  staleVisitApprovedHours: 48,
+  stalePaymentPendingHours: 48,
+  archiveCancelledAfterDays: 7,
+}));
 const getPenaltyRatePerDay = jest.fn(async () => 50);
 const resolvePenaltyRatePerDay = jest.fn((rate) => rate || 50);
+const dispatchDueScheduledAnnouncements = jest.fn();
 const notify = {
   reservationExpired: jest.fn(),
   reservationNoShow: jest.fn(),
@@ -64,20 +74,6 @@ await jest.unstable_mockModule("../middleware/logger.js", () => ({
   },
 }));
 
-await jest.unstable_mockModule("../config/constants.js", () => ({
-  BUSINESS: {
-    DEPOSIT_AMOUNT: 2000,
-    PENALTY_RATE_PER_DAY: 50,
-    NOSHOW_GRACE_DAYS: 7,
-    STALE_PENDING_HOURS: 2,
-    STALE_VISIT_PENDING_HOURS: 336,
-    VISIT_PENDING_WARN_DAYS: 12,
-    STALE_VISIT_APPROVED_HOURS: 48,
-    STALE_PAYMENT_PENDING_HOURS: 48,
-    ARCHIVE_CANCELLED_AFTER_DAYS: 7,
-  },
-}));
-
 await jest.unstable_mockModule("../config/firebase.js", () => ({
   getAuth: jest.fn(() => null),
 }));
@@ -88,12 +84,17 @@ await jest.unstable_mockModule("./billingPolicy.js", () => ({
 }));
 
 await jest.unstable_mockModule("./businessSettings.js", () => ({
+  getLifecyclePolicySettings,
   getPenaltyRatePerDay,
   resolvePenaltyRatePerDay,
 }));
 
 await jest.unstable_mockModule("./rentGenerator.js", () => ({
   generateAutomatedRentBills: jest.fn(),
+}));
+
+await jest.unstable_mockModule("./announcementDispatch.js", () => ({
+  dispatchDueScheduledAnnouncements,
 }));
 
 await jest.unstable_mockModule("./lifecycleNaming.js", () => ({
@@ -132,10 +133,21 @@ describe("scheduler jobs", () => {
     resolveBillStatus.mockReset();
     resolveBillStatus.mockImplementation((bill) => bill.status);
     syncBillAmounts.mockReset();
+    getLifecyclePolicySettings.mockReset();
+    getLifecyclePolicySettings.mockResolvedValue({
+      noShowGraceDays: 7,
+      stalePendingHours: 2,
+      staleVisitPendingHours: 336,
+      visitPendingWarnDays: 12,
+      staleVisitApprovedHours: 48,
+      stalePaymentPendingHours: 48,
+      archiveCancelledAfterDays: 7,
+    });
     getPenaltyRatePerDay.mockReset();
     getPenaltyRatePerDay.mockResolvedValue(50);
     resolvePenaltyRatePerDay.mockReset();
     resolvePenaltyRatePerDay.mockImplementation((rate) => rate || 50);
+    dispatchDueScheduledAnnouncements.mockReset();
     notify.reservationExpired.mockReset();
     notify.reservationNoShow.mockReset();
     notify.penaltyApplied.mockReset();
@@ -165,6 +177,7 @@ describe("scheduler jobs", () => {
 
     await scheduler.expireStaleReservations();
 
+    expect(getLifecyclePolicySettings).toHaveBeenCalledTimes(1);
     expect(reservation.status).toBe("cancelled");
     expect(reservation.save).toHaveBeenCalledTimes(1);
     expect(updateOccupancyOnReservationChange).toHaveBeenCalledTimes(1);
@@ -179,6 +192,41 @@ describe("scheduler jobs", () => {
       }),
     );
     expect(notify.reservationExpired).toHaveBeenCalledTimes(1);
+  });
+
+  test("expireStaleReservations uses configured lifecycle thresholds from business settings", async () => {
+    reservationFind
+      .mockReturnValueOnce(makePopulateChain([]))
+      .mockReturnValueOnce(makePopulateChain([]))
+      .mockReturnValueOnce(makePopulateChain([]))
+      .mockReturnValueOnce(makePopulateChain([]));
+    getLifecyclePolicySettings.mockResolvedValue({
+      noShowGraceDays: 7,
+      stalePendingHours: 9,
+      staleVisitPendingHours: 240,
+      visitPendingWarnDays: 12,
+      staleVisitApprovedHours: 72,
+      stalePaymentPendingHours: 60,
+      archiveCancelledAfterDays: 14,
+    });
+
+    await scheduler.expireStaleReservations();
+
+    const pendingCutoff = reservationFind.mock.calls[0][0].createdAt.$lt;
+    const visitPendingCutoff = reservationFind.mock.calls[1][0].createdAt.$lt;
+    const approvedCutoff = reservationFind.mock.calls[2][0].visitDate.$lt;
+    const paymentCutoff = reservationFind.mock.calls[3][0].updatedAt.$lt;
+
+    const diffHours = (date) => (Date.now() - date.getTime()) / (1000 * 60 * 60);
+
+    expect(diffHours(pendingCutoff)).toBeGreaterThan(8.5);
+    expect(diffHours(pendingCutoff)).toBeLessThan(9.5);
+    expect(diffHours(visitPendingCutoff)).toBeGreaterThan(239.5);
+    expect(diffHours(visitPendingCutoff)).toBeLessThan(240.5);
+    expect(diffHours(approvedCutoff)).toBeGreaterThan(71.5);
+    expect(diffHours(approvedCutoff)).toBeLessThan(72.5);
+    expect(diffHours(paymentCutoff)).toBeGreaterThan(59.5);
+    expect(diffHours(paymentCutoff)).toBeLessThan(60.5);
   });
 
   test("cancelNoShowReservations cancels overdue reserved reservations and syncs lifecycle", async () => {
@@ -201,6 +249,7 @@ describe("scheduler jobs", () => {
 
     await scheduler.cancelNoShowReservations();
 
+    expect(getLifecyclePolicySettings).toHaveBeenCalledTimes(1);
     expect(reservation.status).toBe("cancelled");
     expect(reservation.save).toHaveBeenCalledTimes(1);
     expect(updateOccupancyOnReservationChange).toHaveBeenCalledTimes(1);
@@ -215,6 +264,38 @@ describe("scheduler jobs", () => {
       }),
     );
     expect(notify.reservationNoShow).toHaveBeenCalledTimes(1);
+  });
+
+  test("cancelNoShowReservations respects the configured no-show grace days", async () => {
+    const reservation = createReservation({
+      status: "reserved",
+      userId: { _id: "user-4" },
+      roomId: { _id: "room-4", name: "Room 4" },
+      targetMoveInDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      save: jest.fn(async function save() {
+        return this;
+      }),
+      populate: jest.fn(async function populate() {
+        return this;
+      }),
+    });
+
+    reservationFind.mockReturnValue(makePopulateChain([reservation]));
+    getLifecyclePolicySettings.mockResolvedValue({
+      noShowGraceDays: 10,
+      stalePendingHours: 2,
+      staleVisitPendingHours: 336,
+      visitPendingWarnDays: 12,
+      staleVisitApprovedHours: 48,
+      stalePaymentPendingHours: 48,
+      archiveCancelledAfterDays: 7,
+    });
+
+    await scheduler.cancelNoShowReservations();
+
+    expect(reservation.status).toBe("reserved");
+    expect(reservation.save).not.toHaveBeenCalled();
+    expect(notify.reservationNoShow).not.toHaveBeenCalled();
   });
 
   test("markOverdueBills only marks records with due dates in the past", async () => {
@@ -252,5 +333,16 @@ describe("scheduler jobs", () => {
     expect(noDueDateBill.save).not.toHaveBeenCalled();
     expect(syncBillAmounts).not.toHaveBeenCalled();
     expect(notify.penaltyApplied).not.toHaveBeenCalled();
+  });
+
+  test("dispatchScheduledAnnouncements runs the scheduled announcement dispatcher", async () => {
+    dispatchDueScheduledAnnouncements.mockResolvedValue({
+      dueCount: 2,
+      dispatchedCount: 1,
+    });
+
+    await scheduler.dispatchScheduledAnnouncements();
+
+    expect(dispatchDueScheduledAnnouncements).toHaveBeenCalledTimes(1);
   });
 });

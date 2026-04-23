@@ -47,7 +47,7 @@ router.get("/:billId/utility-breakdown/:utilityType", billingController.getMyUti
 
 /**
  * POST /api/billing/:billId/submit-proof
- * Tenant submits payment proof (image + amount)
+ * Legacy compatibility route. New monthly bill payments must use online checkout.
  */
 router.post("/:billId/submit-proof", billingController.submitPaymentProof);
 

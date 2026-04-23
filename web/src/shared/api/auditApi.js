@@ -17,6 +17,16 @@ export const auditApi = {
   },
 
   /**
+   * Get audit logs with pagination metadata preserved
+   */
+  getLogsPage: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return authFetch(`/audit-logs${query ? `?${query}` : ""}`, {
+      preserveEnvelope: true,
+    });
+  },
+
+  /**
    * Get audit log statistics
    */
   getStats: (branch = null) => {

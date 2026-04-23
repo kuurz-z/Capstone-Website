@@ -9,11 +9,22 @@ import { ROOM_BRANCHES, ROOM_BRANCH_LABELS } from "../config/branches.js";
 import { sendSuccess, AppError } from "../middleware/errorHandler.js";
 import { clean } from "../utils/sanitize.js";
 import auditLogger from "../utils/auditLogger.js";
-import { createNotification } from "../utils/notificationService.js";
-import { emitToUser } from "../utils/socket.js";
+import {
+  buildRecipientQuery,
+  dispatchAnnouncementNotifications,
+  fetchAnnouncementRecipients,
+  isAnnouncementLive,
+  upsertAnnouncementAcknowledgmentAudience,
+} from "../utils/announcementDispatch.js";
 
 const TENANT_VISIBLE_VISIBILITY = ["public", "tenants-only"];
-const ANNOUNCEMENT_NOTIFICATION_URL = "/applicant/announcements";
+const ADMIN_VISIBLE_PUBLICATION_STATUSES = new Set([
+  "draft",
+  "scheduled",
+  "published",
+  "superseded",
+]);
+const LIVE_PUBLICATION_STATUSES = ["scheduled", "published"];
 
 const getDbUserOrThrow = async (firebaseUid, select = "") => {
   let query = User.findOne({ firebaseUid });
@@ -29,6 +40,85 @@ const getDbUserOrThrow = async (firebaseUid, select = "") => {
   return user;
 };
 
+const toOptionalText = (value) => {
+  if (value == null) return null;
+  const sanitized = clean(String(value)).trim();
+  return sanitized ? sanitized : null;
+};
+
+const parseOptionalDate = (value, fieldName) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new AppError(
+      `Invalid ${fieldName} value`,
+      400,
+      "INVALID_ANNOUNCEMENT_DATE",
+      { field: fieldName },
+    );
+  }
+
+  return parsed;
+};
+
+const normalizeContentType = (value, fallbackCategory = null) => {
+  const normalized = String(
+    value || (fallbackCategory === "policy" ? "policy" : "announcement"),
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!["announcement", "policy"].includes(normalized)) {
+    throw new AppError(
+      "Invalid announcement contentType",
+      400,
+      "INVALID_ANNOUNCEMENT_TYPE",
+    );
+  }
+
+  return normalized;
+};
+
+const normalizePublicationStatus = (value, startsAt) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  const now = new Date();
+
+  if (!normalized) {
+    return startsAt && startsAt > now ? "scheduled" : "published";
+  }
+
+  if (!ADMIN_VISIBLE_PUBLICATION_STATUSES.has(normalized)) {
+    throw new AppError(
+      "Invalid publication status",
+      400,
+      "INVALID_PUBLICATION_STATUS",
+    );
+  }
+
+  if (normalized === "superseded") {
+    return "published";
+  }
+
+  if (normalized === "scheduled" && startsAt && startsAt <= now) {
+    return "published";
+  }
+
+  return normalized;
+};
+
+const getDerivedPublicationState = (announcement) => {
+  const now = new Date();
+  if (announcement.isArchived) return "archived";
+  if (announcement.publicationStatus === "draft") return "draft";
+  if (announcement.publicationStatus === "superseded") return "superseded";
+  if (announcement.endsAt && announcement.endsAt <= now) return "expired";
+  if (announcement.startsAt && announcement.startsAt > now) return "scheduled";
+  return "published";
+};
+
 const buildActiveAnnouncementQuery = (branch, options = {}) => {
   const { category, visibilities = TENANT_VISIBLE_VISIBILITY, requiresAcknowledgment = null } = options;
   const now = new Date();
@@ -39,6 +129,7 @@ const buildActiveAnnouncementQuery = (branch, options = {}) => {
     ],
     startsAt: { $lte: now },
     isArchived: false,
+    publicationStatus: { $in: LIVE_PUBLICATION_STATUSES },
   };
 
   if (category) {
@@ -61,7 +152,14 @@ const serializeTenantAnnouncement = (announcement, engagement) => ({
   title: announcement.title,
   content: announcement.content,
   category: announcement.category,
-  date: announcement.publishedAt,
+  contentType: announcement.contentType || "announcement",
+  publicationStatus: getDerivedPublicationState(announcement),
+  date: announcement.publishedAt || announcement.startsAt || announcement.createdAt,
+  startsAt: announcement.startsAt || null,
+  endsAt: announcement.endsAt || null,
+  effectiveDate: announcement.effectiveDate || null,
+  version: announcement.version || 1,
+  policyKey: announcement.policyKey || null,
   requiresAck: Boolean(announcement.requiresAcknowledgment),
   isPinned: Boolean(announcement.isPinned),
   unread: !engagement?.isRead,
@@ -69,7 +167,7 @@ const serializeTenantAnnouncement = (announcement, engagement) => ({
   acknowledgedAt: engagement?.acknowledgedAt || null,
 });
 
-const serializeAdminAnnouncement = (announcement) => {
+const serializeAdminAnnouncement = (announcement, stats = {}) => {
   const publisher = announcement.publishedBy;
   const publishedByName =
     publisher && typeof publisher === "object"
@@ -83,41 +181,111 @@ const serializeAdminAnnouncement = (announcement) => {
     title: announcement.title,
     content: announcement.content,
     category: announcement.category,
+    contentType: announcement.contentType || "announcement",
     targetBranch: announcement.targetBranch,
     requiresAcknowledgment: Boolean(announcement.requiresAcknowledgment),
     publishedAt: announcement.publishedAt,
+    startsAt: announcement.startsAt || null,
+    endsAt: announcement.endsAt || null,
+    publicationStatus: getDerivedPublicationState(announcement),
+    effectiveDate: announcement.effectiveDate || null,
+    policyKey: announcement.policyKey || null,
+    version: announcement.version || 1,
+    previousVersionId: announcement.previousVersionId
+      ? String(announcement.previousVersionId)
+      : null,
+    supersededById: announcement.supersededById
+      ? String(announcement.supersededById)
+      : null,
+    notificationDispatchedAt: announcement.notificationDispatchedAt || null,
+    isPinned: Boolean(announcement.isPinned),
+    viewCount: announcement.viewCount || 0,
+    acknowledgmentCount: announcement.acknowledgmentCount || 0,
+    recipientCount: stats.recipientCount || 0,
+    acknowledgmentCompletionPercent: stats.recipientCount
+      ? Math.round(
+          ((announcement.acknowledgmentCount || 0) / stats.recipientCount) * 100,
+        )
+      : 0,
     publishedBy:
       publisher && typeof publisher === "object"
-        ? String(publisher._id)
-        : String(announcement.publishedBy),
+        ? String(publisher._id || "")
+        : String(announcement.publishedBy || ""),
     publishedByName,
   };
 };
 
-const buildNotificationPayload = (notification) => {
-  const payload = notification?.toObject ? notification.toObject() : notification;
-  return {
-    ...payload,
-    _id: String(payload._id),
-    userId: String(payload.userId),
-    isRead: Boolean(payload.isRead),
-  };
+const assertAdminAnnouncementScope = (user, announcement) => {
+  if (user.role === "owner") {
+    return;
+  }
+
+  if (!user.branch) {
+    throw new AppError(
+      "Branch admin is missing a branch assignment",
+      400,
+      "ADMIN_BRANCH_NOT_CONFIGURED",
+    );
+  }
+
+  if (announcement.targetBranch !== user.branch) {
+    throw new AppError(
+      "Not authorized to manage announcements outside your branch",
+      403,
+      "FORBIDDEN",
+    );
+  }
 };
 
-const buildAnnouncementNotificationMessage = (content) => {
-  const normalized = String(content || "")
-    .replace(/\s+/g, " ")
-    .trim();
+const populateAnnouncementAudience = async (announcements) => {
+  const targetBranches = [...new Set(announcements.map((entry) => entry.targetBranch))];
+  const audienceCounts = new Map();
 
-  if (!normalized) {
-    return "A new announcement is available.";
+  await Promise.all(
+    targetBranches.map(async (targetBranch) => {
+      const recipientCount = await User.countDocuments(buildRecipientQuery(targetBranch));
+      audienceCounts.set(targetBranch, recipientCount);
+    }),
+  );
+
+  return audienceCounts;
+};
+
+const syncPolicyVersionLinks = async (announcement) => {
+  if (announcement.contentType !== "policy" || !announcement.policyKey) {
+    announcement.previousVersionId = null;
+    return;
   }
 
-  if (normalized.length <= 160) {
-    return normalized;
+  if ((announcement.version || 1) <= 1) {
+    announcement.previousVersionId = null;
+    return;
   }
 
-  return `${normalized.slice(0, 157)}...`;
+  const previousPolicy = await Announcement.findOne({
+    _id: { $ne: announcement._id },
+    contentType: "policy",
+    policyKey: announcement.policyKey,
+    targetBranch: announcement.targetBranch,
+    version: { $lt: announcement.version || 1 },
+    isArchived: false,
+  }).sort({ version: -1 });
+
+  announcement.previousVersionId = previousPolicy?._id || null;
+
+  if (!previousPolicy || announcement.publicationStatus === "draft") {
+    return;
+  }
+
+  previousPolicy.supersededById = announcement._id;
+  if ((announcement.effectiveDate || announcement.startsAt || null) > new Date()) {
+    previousPolicy.endsAt = announcement.effectiveDate || announcement.startsAt;
+  } else {
+    previousPolicy.publicationStatus = "superseded";
+    previousPolicy.endsAt =
+      announcement.effectiveDate || announcement.startsAt || previousPolicy.endsAt;
+  }
+  await previousPolicy.save();
 };
 
 const resolveAnnouncementForTenant = async (user, announcementId) =>
@@ -143,7 +311,7 @@ export const getAnnouncements = async (req, res, next) => {
     const announcements = await Announcement.find(
       buildActiveAnnouncementQuery(dbUser.branch, { category }),
     )
-      .sort({ isPinned: -1, publishedAt: -1 })
+      .sort({ isPinned: -1, startsAt: -1, createdAt: -1 })
       .limit(Math.min(parseInt(limit, 10) || 50, 100))
       .lean();
 
@@ -193,7 +361,7 @@ export const getUnacknowledged = async (req, res, next) => {
         requiresAcknowledgment: true,
       }),
     )
-      .sort({ isPinned: -1, publishedAt: -1 })
+      .sort({ isPinned: -1, startsAt: -1, createdAt: -1 })
       .limit(100)
       .lean();
 
@@ -385,18 +553,23 @@ export const getAdminAnnouncements = async (req, res, next) => {
           "ADMIN_BRANCH_NOT_CONFIGURED",
         );
       }
-      query.$or = [{ targetBranch: "both" }, { targetBranch: dbUser.branch }];
+      query.targetBranch = dbUser.branch;
     }
 
     const announcements = await Announcement.find(query)
-      .sort({ publishedAt: -1 })
+      .sort({ startsAt: -1, createdAt: -1 })
       .limit(Math.min(parseInt(limit, 10) || 20, 100))
       .populate("publishedBy", "firstName lastName email")
       .lean();
+    const audienceCounts = await populateAnnouncementAudience(announcements);
 
     sendSuccess(res, {
       count: announcements.length,
-      announcements: announcements.map(serializeAdminAnnouncement),
+      announcements: announcements.map((announcement) =>
+        serializeAdminAnnouncement(announcement, {
+          recipientCount: audienceCounts.get(announcement.targetBranch) || 0,
+        }),
+      ),
     });
   } catch (error) {
     next(error);
@@ -411,18 +584,33 @@ export const createAnnouncement = async (req, res, next) => {
   try {
     const dbUser = await getDbUserOrThrow(
       req.user.uid,
-      "_id role branch firstName lastName",
+      "_id role branch firstName lastName email",
     );
-    const title = clean(req.body.title).trim();
-    const content = clean(req.body.content).trim();
+    const title = toOptionalText(req.body.title);
+    const content = toOptionalText(req.body.content);
     const category = req.body.category;
     const requiresAcknowledgment = Boolean(req.body.requiresAcknowledgment);
+    const startsAt = parseOptionalDate(req.body.startsAt, "startsAt") || new Date();
+    const endsAt = parseOptionalDate(req.body.endsAt, "endsAt");
+    const effectiveDate = parseOptionalDate(req.body.effectiveDate, "effectiveDate");
+    const publicationStatus = normalizePublicationStatus(
+      req.body.publicationStatus,
+      startsAt,
+    );
+    const contentType = normalizeContentType(req.body.contentType, category);
 
     if (!title || !content || !category) {
       throw new AppError(
         "Missing required fields: title, content, category",
         400,
         "MISSING_REQUIRED_FIELDS",
+      );
+    }
+    if (endsAt && startsAt && endsAt <= startsAt) {
+      throw new AppError(
+        "Announcement end date must be after start date.",
+        400,
+        "INVALID_ANNOUNCEMENT_DATE_RANGE",
       );
     }
 
@@ -443,59 +631,49 @@ export const createAnnouncement = async (req, res, next) => {
       title,
       content,
       category,
+      contentType,
       targetBranch,
       publishedBy: dbUser._id,
       requiresAcknowledgment,
       visibility: "tenants-only",
-      publishedAt: new Date(),
-      startsAt: new Date(),
-      isPinned: false,
+      publicationStatus,
+      publishedAt: publicationStatus === "published" ? new Date() : null,
+      startsAt,
+      endsAt,
+      effectiveDate:
+        contentType === "policy" ? effectiveDate || startsAt : null,
+      policyKey:
+        contentType === "policy"
+          ? toOptionalText(req.body.policyKey) ||
+            String(title).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
+          : null,
+      version:
+        contentType === "policy"
+          ? Math.max(1, Number.parseInt(req.body.version, 10) || 1)
+          : 1,
+      isPinned: Boolean(req.body.isPinned),
       isArchived: false,
     });
 
+    await syncPolicyVersionLinks(announcement);
     await announcement.save();
 
-    const recipientQuery = {
-      role: "tenant",
-      isArchived: false,
-      accountStatus: "active",
-      branch:
-        targetBranch === "both"
-          ? { $in: ROOM_BRANCHES }
-          : targetBranch,
-    };
+    const recipients =
+      announcement.requiresAcknowledgment || isAnnouncementLive(announcement)
+        ? await fetchAnnouncementRecipients(targetBranch)
+        : [];
 
-    const recipients = await User.find(recipientQuery)
-      .select("_id")
-      .lean();
-
-    if (requiresAcknowledgment && recipients.length > 0) {
-      await AcknowledgmentAccount.createForAnnouncement(
-        announcement._id,
-        recipients.map((recipient) => recipient._id),
-      );
+    if (
+      requiresAcknowledgment &&
+      recipients.length > 0 &&
+      !isAnnouncementLive(announcement)
+    ) {
+      await upsertAnnouncementAcknowledgmentAudience(announcement, recipients);
     }
 
-    const notifications = await Promise.all(
-      recipients.map(async (recipient) => {
-        const notification = await createNotification(
-          recipient._id,
-          "announcement",
-          announcement.title,
-          buildAnnouncementNotificationMessage(announcement.content),
-          { actionUrl: ANNOUNCEMENT_NOTIFICATION_URL },
-        );
-
-        if (notification) {
-          emitToUser(
-            String(recipient._id),
-            "notification:new",
-            buildNotificationPayload(notification),
-          );
-        }
-
-        return notification;
-      }),
+    const dispatchResult = await dispatchAnnouncementNotifications(
+      announcement,
+      { recipients },
     );
 
     const plainAnnouncement = announcement.toObject();
@@ -505,7 +683,7 @@ export const createAnnouncement = async (req, res, next) => {
       announcement._id,
       null,
       plainAnnouncement,
-      `Published announcement for ${
+      `${contentType === "policy" ? "Saved policy" : "Saved announcement"} for ${
         targetBranch === "both"
           ? "all branches"
           : ROOM_BRANCH_LABELS[targetBranch] || targetBranch
@@ -520,18 +698,194 @@ export const createAnnouncement = async (req, res, next) => {
           title: plainAnnouncement.title,
           content: plainAnnouncement.content,
           category: plainAnnouncement.category,
+          contentType: plainAnnouncement.contentType,
           targetBranch: plainAnnouncement.targetBranch,
           requiresAcknowledgment: plainAnnouncement.requiresAcknowledgment,
           publishedAt: plainAnnouncement.publishedAt,
+          startsAt: plainAnnouncement.startsAt,
+          endsAt: plainAnnouncement.endsAt,
+          publicationStatus: getDerivedPublicationState(plainAnnouncement),
+          effectiveDate: plainAnnouncement.effectiveDate || null,
+          policyKey: plainAnnouncement.policyKey || null,
+          version: plainAnnouncement.version || 1,
+          notificationDispatchedAt:
+            plainAnnouncement.notificationDispatchedAt || null,
           publishedBy: String(plainAnnouncement.publishedBy),
         },
         recipientCount: recipients.length,
-        notificationCount: notifications.filter(Boolean).length,
+        notificationCount: dispatchResult.notificationCount,
       },
       201,
     );
   } catch (error) {
     await auditLogger.logError(req, error, "Failed to publish announcement");
+    next(error);
+  }
+};
+
+/**
+ * Update an existing announcement.
+ * @route PUT /api/announcements/:id
+ */
+export const updateAnnouncement = async (req, res, next) => {
+  try {
+    const dbUser = await getDbUserOrThrow(
+      req.user.uid,
+      "_id role branch firstName lastName email"
+    );
+    const { id } = req.params;
+    
+    const announcement = await Announcement.findById(id);
+    if (!announcement) {
+      throw new AppError("Announcement not found", 404, "NOT_FOUND");
+    }
+
+    assertAdminAnnouncementScope(dbUser, announcement);
+
+    if (req.body.title !== undefined) {
+      announcement.title = toOptionalText(req.body.title) || announcement.title;
+    }
+    if (req.body.content !== undefined) {
+      announcement.content = toOptionalText(req.body.content) || announcement.content;
+    }
+    if (req.body.category) announcement.category = req.body.category;
+    if (req.body.contentType !== undefined) {
+      announcement.contentType = normalizeContentType(
+        req.body.contentType,
+        announcement.category,
+      );
+    } else {
+      announcement.contentType = normalizeContentType(
+        announcement.contentType,
+        announcement.category,
+      );
+    }
+    if (req.body.targetBranch && dbUser.role === "owner") {
+      announcement.targetBranch = req.body.targetBranch;
+    }
+    if (req.body.requiresAcknowledgment !== undefined) {
+      announcement.requiresAcknowledgment = Boolean(req.body.requiresAcknowledgment);
+    }
+    if (req.body.isPinned !== undefined) {
+      announcement.isPinned = Boolean(req.body.isPinned);
+    }
+    if (req.body.startsAt !== undefined) {
+      announcement.startsAt =
+        parseOptionalDate(req.body.startsAt, "startsAt") || announcement.startsAt;
+    }
+    if (req.body.endsAt !== undefined) {
+      announcement.endsAt = parseOptionalDate(req.body.endsAt, "endsAt");
+    }
+    if (req.body.publicationStatus !== undefined || req.body.startsAt !== undefined) {
+      announcement.publicationStatus = normalizePublicationStatus(
+        req.body.publicationStatus || announcement.publicationStatus,
+        announcement.startsAt,
+      );
+      announcement.publishedAt =
+        announcement.publicationStatus === "published"
+          ? announcement.publishedAt || new Date()
+          : null;
+    }
+    if (announcement.endsAt && announcement.startsAt && announcement.endsAt <= announcement.startsAt) {
+      throw new AppError(
+        "Announcement end date must be after start date.",
+        400,
+        "INVALID_ANNOUNCEMENT_DATE_RANGE",
+      );
+    }
+
+    if (announcement.contentType === "policy") {
+      if (req.body.policyKey !== undefined) {
+        announcement.policyKey =
+          toOptionalText(req.body.policyKey) || announcement.policyKey;
+      }
+      if (req.body.version !== undefined) {
+        announcement.version = Math.max(
+          1,
+          Number.parseInt(req.body.version, 10) || announcement.version || 1,
+        );
+      }
+      if (req.body.effectiveDate !== undefined) {
+        announcement.effectiveDate =
+          parseOptionalDate(req.body.effectiveDate, "effectiveDate") ||
+          announcement.effectiveDate;
+      }
+    } else {
+      announcement.policyKey = null;
+      announcement.version = 1;
+      announcement.effectiveDate = null;
+      announcement.previousVersionId = null;
+      announcement.supersededById = null;
+    }
+
+    await syncPolicyVersionLinks(announcement);
+    await announcement.save();
+    const recipients =
+      announcement.requiresAcknowledgment || isAnnouncementLive(announcement)
+        ? await fetchAnnouncementRecipients(announcement.targetBranch)
+        : [];
+
+    if (
+      announcement.requiresAcknowledgment &&
+      recipients.length > 0 &&
+      !isAnnouncementLive(announcement)
+    ) {
+      await upsertAnnouncementAcknowledgmentAudience(announcement, recipients);
+    }
+
+    await dispatchAnnouncementNotifications(announcement, { recipients });
+
+    await auditLogger.logModification(
+      req,
+      "announcement",
+      announcement._id,
+      null,
+      announcement.toObject(),
+      `Updated announcement: ${announcement.title}`,
+    );
+
+    sendSuccess(res, {
+      announcement: serializeAdminAnnouncement(announcement.toObject(), {
+        recipientCount: recipients.length,
+      }),
+    });
+  } catch (error) {
+    await auditLogger.logError(req, error, "Failed to update announcement");
+    next(error);
+  }
+};
+
+/**
+ * Delete an announcement.
+ * @route DELETE /api/announcements/:id
+ */
+export const deleteAnnouncement = async (req, res, next) => {
+  try {
+    const dbUser = await getDbUserOrThrow(req.user.uid, "_id role branch");
+    const { id } = req.params;
+
+    const announcement = await Announcement.findById(id);
+    if (!announcement) {
+      throw new AppError("Announcement not found", 404, "NOT_FOUND");
+    }
+
+    assertAdminAnnouncementScope(dbUser, announcement);
+
+    announcement.isArchived = true;
+    await announcement.save();
+
+    await auditLogger.logModification(
+      req,
+      "announcement",
+      announcement._id,
+      null,
+      announcement.toObject(),
+      `Archived announcement: ${announcement.title}`,
+    );
+
+    sendSuccess(res, { message: "Announcement archived successfully" });
+  } catch (error) {
+    await auditLogger.logError(req, error, "Failed to delete announcement");
     next(error);
   }
 };
@@ -544,4 +898,6 @@ export default {
   getUserEngagementStats,
   getAdminAnnouncements,
   createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
 };

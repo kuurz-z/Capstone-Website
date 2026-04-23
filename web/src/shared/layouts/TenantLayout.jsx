@@ -1,21 +1,26 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import useSocketClient from "../hooks/useSocketClient";
 import Sidebar from "../components/Sidebar";
-import NotificationBell from "../components/NotificationBell";
+import RouteTransitionBoundary from "../components/RouteTransitionBoundary";
 import AccountBlockedBanner from "../components/AccountBlockedBanner";
+import { useRouteFlash } from "../hooks/useRouteFlash";
 import "./TenantLayout.css";
 
 /**
- * TenantLayout - Layout wrapper for tenant pages
- * Provides sidebar navigation, top bar, and main content area
- * Responsive design with mobile menu toggle
+ * TenantLayout - Layout wrapper for tenant portal pages
+ * Provides the restored resident sidebar shell and route content area
  */
 const TenantLayout = ({ children }) => {
   const { user } = useAuth();
+  const location = useLocation();
   useSocketClient();
+  useRouteFlash();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const content = children ?? <Outlet />;
+  const contentRef = useRef(null);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -24,6 +29,10 @@ const TenantLayout = ({ children }) => {
   const toggleCollapse = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [location.pathname, location.search]);
 
   return (
     <div className="tenant-layout">
@@ -39,51 +48,18 @@ const TenantLayout = ({ children }) => {
           sidebarCollapsed ? "sidebar-collapsed" : ""
         }`}
       >
-        {/* Top Navigation Bar */}
-        <header className="tenant-topbar">
-          <button className="tenant-menu-toggle" onClick={toggleSidebar}>
-            <i className="fas fa-bars"></i>
-          </button>
-
-          <div className="tenant-topbar-title">
-            <h1>LilyCrest Dormitory</h1>
-          </div>
-
-          <div className="tenant-topbar-user">
-            <NotificationBell />
-            <div className="tenant-topbar-avatar">
-              {user?.profileImage ? (
-                <>
-                  <img
-                    src={user.profileImage}
-                    alt="Profile"
-                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex'); }}
-                  />
-                  <div className="tenant-topbar-initials" style={{ display: 'none' }}>
-                    {user?.firstName?.[0]}
-                    {user?.lastName?.[0]}
-                  </div>
-                </>
-              ) : (
-                <div className="tenant-topbar-initials">
-                  {user?.firstName?.[0]}
-                  {user?.lastName?.[0]}
-                </div>
-              )}
-            </div>
-            <span className="tenant-topbar-name">
-              {user?.firstName} {user?.lastName}
-            </span>
-          </div>
-        </header>
-
-        {/* Account Status Banner */}
-        {(user?.accountStatus === "suspended" || user?.accountStatus === "banned") && (
-          <AccountBlockedBanner accountStatus={user.accountStatus} />
-        )}
-
-        {/* Main Content */}
-        <main className="tenant-content">{children}</main>
+        <main ref={contentRef} className="tenant-content">
+          {(user?.accountStatus === "suspended" ||
+            user?.accountStatus === "banned") && (
+            <AccountBlockedBanner accountStatus={user.accountStatus} />
+          )}
+          <RouteTransitionBoundary
+            routeKey={`${location.pathname}${location.search}`}
+            className="tenant-route-transition"
+          >
+            {content}
+          </RouteTransitionBoundary>
+        </main>
       </div>
     </div>
   );

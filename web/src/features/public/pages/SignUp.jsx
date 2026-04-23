@@ -26,6 +26,7 @@ import { auth } from "../../../firebase/config";
 import { showNotification } from "../../../shared/utils/notification";
 import { authApi } from "../../../shared/api/apiClient";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import {
   validateEmail,
   validatePassword,
@@ -51,6 +52,7 @@ const SIGNUP_IMAGE = hero1;
 
 function SignUp() {
   const navigate = useNavigate();
+  const appNavigate = useAppNavigation();
   const {
     login: loginBackend,
     setGlobalLoading,
@@ -301,18 +303,17 @@ function SignUp() {
             6000,
           );
         }
-        showNotification(
-          "Account created! Please check your email and verify before logging in.",
-          "success",
-          6000,
-        );
         // Save email so sign-in page can pre-fill it after verification
         localStorage.setItem("lilycrest_pending_email", formData.email);
         await auth.signOut();
-        setTimeout(() => {
-          setGlobalLoading(true);
-          navigate("/signin");
-        }, 2500);
+        appNavigate("/signin", {
+          replace: true,
+          flash: {
+            type: "success",
+            message:
+              "Account created! Please check your email and verify before logging in.",
+          },
+        });
       } catch (backendError) {
         if (firebaseUser) await firebaseUser.delete();
         throw backendError;
@@ -355,10 +356,10 @@ function SignUp() {
         // User already exists — sign out and redirect to sign-in
         await auth.signOut();
         socialAuthRef.current = false;
-        navigate("/signin", {
-          state: {
-            notification:
-              "This email is already registered. Please sign in instead.",
+        appNavigate("/signin", {
+          flash: {
+            type: "info",
+            message: "This email is already registered. Please sign in instead.",
           },
           replace: true,
         });
@@ -390,8 +391,12 @@ function SignUp() {
             } catch (e) {
               /* proceed anyway */
             }
-            showNotification(`Welcome to Lilycrest, ${firstName}!`, "success");
-            setTimeout(() => navigate("/applicant/check-availability"), 2000);
+            appNavigate("/applicant/check-availability", {
+              flash: {
+                type: "success",
+                message: `Welcome to Lilycrest, ${firstName}!`,
+              },
+            });
           } catch (regError) {
             const errMsg =
               regError.response?.data?.error || regError.message || "";
@@ -406,9 +411,10 @@ function SignUp() {
             ) {
               await auth.signOut();
               socialAuthRef.current = false;
-              navigate("/signin", {
-                state: {
-                  notification:
+              appNavigate("/signin", {
+                flash: {
+                  type: "info",
+                  message:
                     "This email is already registered. Please sign in instead.",
                 },
                 replace: true,

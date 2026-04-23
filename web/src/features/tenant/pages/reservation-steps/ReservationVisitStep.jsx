@@ -88,7 +88,11 @@ const ReservationVisitStep = ({
       }
     } catch (err) {
       console.error("Failed to save visit:", err);
-      showNotification("Failed to confirm your visit. Please try again.", "error", 3000);
+      // Fallback message ensures we don't dump raw technical errors
+      const errorMessage =
+        err?.response?.data?.error ||
+        "We encountered an unexpected issue while scheduling your visit. Please try again.";
+      showNotification(errorMessage, "error", 5000);
     } finally {
       setIsSaving(false);
     }

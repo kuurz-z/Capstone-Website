@@ -18,11 +18,16 @@ import Reservation from "../models/Reservation.js";
 import Bill from "../models/Bill.js";
 import MaintenanceRequest from "../models/MaintenanceRequest.js";
 import BillingPeriod from "../models/BillingPeriod.js";
+import {
+  OPEN_MAINTENANCE_STATUSES,
+  formatMaintenanceTypeLabel,
+} from "../config/maintenance.js";
 import { deriveRoomOccupancyState } from "../utils/occupancyManager.js";
 import {
   ACTIVE_OCCUPANCY_STATUS_QUERY,
   hasReservationStatus,
 } from "../utils/lifecycleNaming.js";
+import { resolveReferencedUser } from "../utils/userReference.js";
 
 // ============================================================================
 // HEALTH SCORE CALCULATION
@@ -44,7 +49,7 @@ function computeHealthScore(maintenanceRequests, bills) {
 
   // Maintenance penalties
   const openRequests = maintenanceRequests.filter((r) =>
-    ["pending", "in-progress", "on-hold"].includes(r.status),
+    OPEN_MAINTENANCE_STATUSES.includes(r.status),
   );
   score -= openRequests.length * 15;
 
@@ -103,7 +108,7 @@ export const getSnapshot = async (req, res) => {
         .populate("userId", "firstName lastName email")
         .lean(),
       MaintenanceRequest.find({
-        status: { $in: ["pending", "in-progress", "on-hold"] },
+        status: { $in: OPEN_MAINTENANCE_STATUSES },
         isArchived: false,
         ...(branch && branch !== "all" ? { branch } : {}),
       }).lean(),
@@ -275,11 +280,11 @@ export const getSnapshot = async (req, res) => {
           ).length,
           items: roomMaintenance.map((m) => ({
             _id: m._id,
-            title: m.title,
-            category: m.category,
+            title: `${formatMaintenanceTypeLabel(m.request_type)} Request`,
+            category: m.request_type,
             urgency: m.urgency,
             status: m.status,
-            createdAt: m.createdAt,
+            createdAt: m.created_at,
           })),
         },
         billing: {
@@ -434,7 +439,7 @@ export const getRoomDetail = async (req, res) => {
 
     // Health score
     const openMaintenance = maintenance.filter((m) =>
-      ["pending", "in-progress", "on-hold"].includes(m.status),
+      OPEN_MAINTENANCE_STATUSES.includes(m.status),
     );
     const healthScore = computeHealthScore(openMaintenance, bills);
     const healthTier = getHealthTier(healthScore);
@@ -552,18 +557,19 @@ export const getRoomDetail = async (req, res) => {
         },
         beds: occupancy.beds,
         maintenance: maintenance.map((m) => ({
+          ...(function buildMaintenanceUser() {
+            const submittedBy = resolveReferencedUser(m.userId);
+            return { submittedBy: submittedBy.name };
+          })(),
           _id: m._id,
-          title: m.title,
-          category: m.category,
+          title: `${formatMaintenanceTypeLabel(m.request_type)} Request`,
+          category: m.request_type,
           urgency: m.urgency,
           status: m.status,
           description: m.description,
-          createdAt: m.createdAt,
-          resolvedAt: m.resolvedAt,
-          completionNote: m.completionNote,
-          submittedBy: m.userId
-            ? `${m.userId.firstName || ""} ${m.userId.lastName || ""}`.trim()
-            : "Unknown",
+          createdAt: m.created_at,
+          resolvedAt: m.resolved_at,
+          completionNote: m.notes,
         })),
         billing: Object.values(tenantBills),
         health: {

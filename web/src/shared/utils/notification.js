@@ -14,6 +14,8 @@
  * - Uses custom CSS classes for animations and styling
  */
 
+import { publishNotification } from "./notificationBus";
+
 /**
  * Show notification toast
  *
@@ -34,77 +36,34 @@
  * showNotification('Invalid credentials', 'error', 5000);
  */
 
-// Track last notification to prevent duplicates from StrictMode double-renders
 let lastNotification = { message: "", timestamp: 0 };
-const DEBOUNCE_MS = 100; // Prevent same notification within 100ms
+const DEBOUNCE_MS = 200; // Prevent duplicate consecutive notifications
 
-export const showNotification = (message, type = "info", duration = 3000) => {
-  try {
-    // DEBOUNCE: Prevent duplicate notifications from StrictMode or rapid calls
-    const now = Date.now();
-    if (
-      message === lastNotification.message &&
-      now - lastNotification.timestamp < DEBOUNCE_MS
-    ) {
-      return;
-    }
-    lastNotification = { message, timestamp: now };
-
-    // Remove any existing notifications to avoid duplicates
-    const existing = document.getElementById("app-notification");
-    if (existing) {
-      existing.remove();
-    }
-
-    // Create notification element
-    const notification = document.createElement("div");
-    notification.id = "app-notification";
-    notification.className = `notification notification-${type}`;
-
-    // Icon SVGs based on notification type
-    const icons = {
-      success:
-        '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 0C4.48 0 0 4.48 0 10C0 15.52 4.48 20 10 20C15.52 20 20 15.52 20 10C20 4.48 15.52 0 10 0ZM8 15L3 10L4.41 8.59L8 12.17L15.59 4.58L17 6L8 15Z" fill="currentColor"/></svg>',
-      error:
-        '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 0C4.48 0 0 4.48 0 10C0 15.52 4.48 20 10 20C15.52 20 20 15.52 20 10C20 4.48 15.52 0 10 0ZM11 15H9V13H11V15ZM11 11H9V5H11V11Z" fill="currentColor"/></svg>',
-      warning:
-        '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M1 17H19L10 2L1 17ZM11 14H9V12H11V14ZM11 10H9V6H11V10Z" fill="currentColor"/></svg>',
-      info: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 0C4.48 0 0 4.48 0 10C0 15.52 4.48 20 10 20C15.52 20 20 15.52 20 10C20 4.48 15.52 0 10 0ZM11 15H9V9H11V15ZM11 7H9V5H11V7Z" fill="currentColor"/></svg>',
-    };
-
-    // Build notification HTML
-    notification.innerHTML = `
-      <div class="notification-icon">${icons[type] || icons.info}</div>
-      <div class="notification-message">${message}</div>
-      <button class="notification-close" onclick="this.parentElement.remove()">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M14 1.41L12.59 0L7 5.59L1.41 0L0 1.41L5.59 7L0 12.59L1.41 14L7 8.41L12.59 14L14 12.59L8.41 7L14 1.41Z" fill="currentColor"/>
-        </svg>
-      </button>
-    `;
-
-    // Add notification to document
-    document.body.appendChild(notification);
-
-    // Auto remove after specified duration with fade-out animation
-    setTimeout(() => {
-      try {
-        if (notification.parentElement) {
-          notification.classList.add("notification-fade-out");
-          setTimeout(() => {
-            if (notification.parentElement) {
-              notification.remove();
-            }
-          }, 300); // Wait for fade-out animation
-        }
-      } catch (error) {
-        console.error("❌ Error removing notification:", error);
-      }
-    }, duration);
-  } catch (error) {
-    // Fallback to console if notification fails
-    console.error("❌ Failed to show notification:", error);
+export const showNotification = (
+  message,
+  type = "info",
+  duration = 3000,
+  options = {},
+) => {
+  if (!message) {
+    return null;
   }
+
+  const now = Date.now();
+  if (
+    message === lastNotification.message &&
+    now - lastNotification.timestamp < DEBOUNCE_MS
+  ) {
+    return null;
+  }
+  lastNotification = { message, timestamp: now };
+
+  return publishNotification({
+    message,
+    type,
+    duration,
+    ...options,
+  });
 };
 
 /**
@@ -179,7 +138,7 @@ export const showConfirmation = (
             resolve(false);
           }
         } catch (error) {
-          console.error("❌ Error handling confirmation action:", error);
+          console.error("Error handling confirmation action:", error);
           overlay.remove();
           resolve(false);
         }
@@ -189,7 +148,7 @@ export const showConfirmation = (
       document.body.appendChild(overlay);
     } catch (error) {
       // Fallback to browser confirm if custom dialog fails
-      console.error("❌ Failed to show confirmation dialog:", error);
+      console.error("Failed to show confirmation dialog:", error);
       resolve(window.confirm(message));
     }
   });

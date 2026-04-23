@@ -38,8 +38,7 @@ html:has(.admin-layout) body {
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  height: 54px;
-  min-height: 54px;
+  min-height: 74px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -52,8 +51,9 @@ html:has(.admin-layout) body {
 
 .admin-topbar-left {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
 }
 
 .admin-menu-toggle {
@@ -73,11 +73,22 @@ html:has(.admin-layout) body {
 }
 
 .admin-topbar-title {
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+}
+
+.admin-topbar-copy {
+  min-width: 0;
+}
+
+.admin-topbar-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  max-width: 720px;
 }
 
 .admin-topbar-right {
@@ -94,12 +105,18 @@ html:has(.admin-layout) body {
 
 /* ── Content area ─────────────────────────────────────────────────────────── */
 .admin-content {
+  --admin-topbar-height: 74px;
+  --admin-content-padding: var(--spacing-page);
+  --admin-content-viewport-budget: calc(100dvh - var(--admin-topbar-height));
+  --admin-content-inner-height: calc(
+    var(--admin-content-viewport-budget) - (var(--admin-content-padding) * 2)
+  );
   flex: 1;
-  padding: var(--spacing-page);
+  padding: var(--admin-content-padding);
   overflow-y: scroll;
   scrollbar-gutter: stable;
   background: var(--bg-page);
-  min-height: calc(100vh - 54px);
+  min-height: calc(100vh - 74px);
 }
 
 /* Subtle custom scrollbar for the content area */
@@ -118,20 +135,6 @@ html:has(.admin-layout) body {
 }
 
 /* ── Page entry animation ─────────────────────────────────────────────────── */
-@keyframes adminPageFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.admin-content > * {
-  animation: adminPageFadeIn 0.35s var(--ease-out) both;
-}
 
 /* ── Mobile ───────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -147,13 +150,18 @@ html:has(.admin-layout) body {
 
   .admin-topbar {
     padding: 0 16px;
-    height: 48px;
-    min-height: 48px;
+    min-height: 62px;
   }
 
   .admin-content {
-    padding: 16px;
-    min-height: calc(100vh - 48px);
+    --admin-topbar-height: 62px;
+    --admin-content-padding: 16px;
+    padding: var(--admin-content-padding);
+    min-height: calc(100vh - 62px);
+  }
+
+  .admin-topbar-subtitle {
+    display: none;
   }
 
   .admin-topbar-date {
@@ -168,7 +176,8 @@ html:has(.admin-layout) body {
   }
 
   .admin-content {
-    padding: 20px;
+    --admin-content-padding: 20px;
+    padding: var(--admin-content-padding);
   }
 }
 

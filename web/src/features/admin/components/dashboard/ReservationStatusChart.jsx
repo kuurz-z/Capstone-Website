@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 
-export default function ReservationStatusChart({ reservationStatus }) {
+export default function ReservationStatusChart({
+  reservationStatus,
+  showHeading = true,
+}) {
   const total = useMemo(
     () =>
       reservationStatus.approved +
@@ -9,90 +12,74 @@ export default function ReservationStatusChart({ reservationStatus }) {
     [reservationStatus],
   );
 
-  const approvedPercent = total
-    ? ((reservationStatus.approved / total) * 100).toFixed(0)
-    : "0";
-  const pendingPercent = total
-    ? ((reservationStatus.pending / total) * 100).toFixed(0)
-    : "0";
-  const rejectedPercent = total
-    ? ((reservationStatus.rejected / total) * 100).toFixed(0)
-    : "0";
-
-  const donutStyle = {
-    background: `conic-gradient(
-      #10b981 0% ${approvedPercent}%,
-      #f59e0b ${approvedPercent}% ${Number(approvedPercent) + Number(pendingPercent)}%,
-      #ef4444 ${Number(approvedPercent) + Number(pendingPercent)}% 100%
-    )`,
-  };
+  const seg = (count) => (total ? (count / total) * 439.8 : 0);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-slate-900">Reservation Status</h3>
-        <p className="mt-1 text-sm text-slate-500">Overview of all reservations</p>
+    <div className="admin-dashboard-reservation-status-section">
+      {showHeading ? (
+        <h2 className="admin-dashboard-section-title">Reservation Status</h2>
+      ) : null}
+      <div className="admin-dashboard-donut-container">
+        <svg className="admin-dashboard-donut-chart" viewBox="0 0 200 200">
+          <circle
+            cx="100"
+            cy="100"
+            r="70"
+            fill="none"
+            stroke="#10B981"
+            strokeWidth="40"
+            strokeDasharray={`${seg(reservationStatus.approved)} 439.8`}
+            transform="rotate(-90 100 100)"
+          />
+          <circle
+            cx="100"
+            cy="100"
+            r="70"
+            fill="none"
+            stroke="#F59E0B"
+            strokeWidth="40"
+            strokeDasharray={`${seg(reservationStatus.pending)} 439.8`}
+            strokeDashoffset={`-${seg(reservationStatus.approved)}`}
+            transform="rotate(-90 100 100)"
+          />
+          <circle
+            cx="100"
+            cy="100"
+            r="70"
+            fill="none"
+            stroke="#EF4444"
+            strokeWidth="40"
+            strokeDasharray={`${seg(reservationStatus.rejected)} 439.8`}
+            strokeDashoffset={`-${seg(reservationStatus.approved + reservationStatus.pending)}`}
+            transform="rotate(-90 100 100)"
+          />
+        </svg>
       </div>
-
-      <div className="grid grid-cols-1 items-center gap-6 sm:grid-cols-[180px_1fr]">
-        <div className="mx-auto">
+      <div className="admin-dashboard-reservation-legend">
+        {[
+          {
+            cls: "green",
+            label: "Approved",
+            value: reservationStatus.approved,
+          },
+          { cls: "orange", label: "Pending", value: reservationStatus.pending },
+          { cls: "red", label: "Rejected", value: reservationStatus.rejected },
+        ].map((item) => (
           <div
-            className="relative h-40 w-40 rounded-full"
-            style={donutStyle}
-            role="img"
-            aria-label={`Reservation status chart: ${approvedPercent}% approved, ${pendingPercent}% pending, ${rejectedPercent}% rejected`}
+            key={item.cls}
+            className="admin-dashboard-reservation-legend-item"
           >
-            <div className="absolute inset-4 flex items-center justify-center rounded-full bg-white">
-              <div className="text-center">
-                <p className="text-2xl font-semibold text-slate-900">{total}</p>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Total
-                </p>
-              </div>
-            </div>
+            <span
+              className={`admin-dashboard-reservation-legend-dot ${item.cls}`}
+            ></span>
+            <span className="admin-dashboard-reservation-legend-label">
+              {item.label}
+            </span>
+            <span className="admin-dashboard-reservation-legend-value">
+              ({item.value})
+            </span>
           </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-            <div className="flex items-center gap-2.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <span className="text-sm font-medium text-slate-700">Approved</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold text-slate-900">
-                {reservationStatus.approved}
-              </span>
-              <span className="text-xs text-slate-500">{approvedPercent}%</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-            <div className="flex items-center gap-2.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-              <span className="text-sm font-medium text-slate-700">Pending</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold text-slate-900">
-                {reservationStatus.pending}
-              </span>
-              <span className="text-xs text-slate-500">{pendingPercent}%</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-            <div className="flex items-center gap-2.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-              <span className="text-sm font-medium text-slate-700">Rejected</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold text-slate-900">
-                {reservationStatus.rejected}
-              </span>
-              <span className="text-xs text-slate-500">{rejectedPercent}%</span>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );

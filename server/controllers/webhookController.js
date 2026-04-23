@@ -32,6 +32,7 @@ import { Reservation, Bill, User } from "../models/index.js";
 import { sendPaymentReceiptEmail } from "../config/email.js";
 import { updateOccupancyOnReservationChange } from "../utils/occupancyManager.js";
 import { notify } from "../utils/notificationService.js";
+import { settlePaymongoBill } from "../utils/billSettlement.js";
 import logger from "../middleware/logger.js";
 import { BUSINESS } from "../config/constants.js";
 import { getReservationFeeAmount } from "../utils/businessSettings.js";
@@ -194,28 +195,25 @@ async function handleBillPayment(metadata, eventData) {
   }
 
   const paymentId = extractPaymentId(eventData);
+  const settlement = await settlePaymongoBill({
+    bill,
+    paymentReference: paymentId,
+    settledAmount: extractPaidAmount(eventData),
+    source: "paymongo-webhook",
+    metadata: {
+      eventType: "checkout_session.payment.paid",
+      provider: "paymongo",
+    },
+  });
 
   // Idempotent — skip if already paid OR same PayMongo payment was processed.
-  if (bill.status === "paid" || (bill.paymongoPaymentId && bill.paymongoPaymentId === paymentId)) {
-    logger.info({ billId, paymentId }, "Webhook: Bill payment already processed, skipping");
+  if (!settlement.applied) {
+    logger.info(
+      { billId, paymentId, reason: settlement.reason },
+      "Webhook: Bill payment already processed, skipping",
+    );
     return;
   }
-
-  // Update payment fields
-  bill.paidAmount = bill.totalAmount;
-  bill.remainingAmount = 0;
-  bill.status = "paid";
-  bill.paymentDate = new Date();
-  bill.paymentMethod = "paymongo";
-  bill.paymongoPaymentId = paymentId;
-  bill.paymentProof = {
-    verificationStatus: "approved",
-    verifiedAt: new Date(),
-    submittedAmount: bill.totalAmount,
-  };
-
-  await bill.save();
-
   logger.info({ billId, paymentId }, "Webhook: Bill payment confirmed");
 
   // Notify tenant
@@ -242,7 +240,7 @@ async function handleBillPayment(metadata, eventData) {
       await sendPaymentReceiptEmail({
         to: tenant.email,
         tenantName: `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
-        amount: bill.totalAmount,
+        amount: settlement.appliedAmount,
         description: `Lilycrest Dormitory — Monthly Bill (${monthStr})`,
         billedTo: `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
         paymentMethod: "GCash / Online Payment",

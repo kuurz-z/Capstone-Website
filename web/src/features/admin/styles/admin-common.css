@@ -151,9 +151,15 @@
   white-space: nowrap;
 }
 
-.admin-btn-primary:hover {
+.admin-btn-primary:hover:not(:disabled) {
   background: #2468d6;
   box-shadow: 0 2px 8px rgba(46, 124, 246, 0.2);
+}
+
+.admin-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .admin-btn-secondary {

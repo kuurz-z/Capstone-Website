@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+/*
+import { ClipboardList, Plus, Wrench } from "lucide-react";
 import TenantLayout from "../../../shared/layouts/TenantLayout";
 import { useMyMaintenanceRequests, useCreateMaintenanceRequest } from "../../../shared/hooks/queries/useMaintenance";
 import MaintenancePageSkeleton from "../components/maintenance/MaintenancePageSkeleton";
@@ -49,15 +50,15 @@ const MaintenancePage = () => {
         <div className="page-header">
           <div>
             <h1>
-              <i className="fas fa-tools"></i> Maintenance Requests
+              <Wrench size={22} /> Maintenance Requests
             </h1>
-            <p>Submit and track your maintenance requests</p>
+            <p>Submit issues, monitor progress, and keep a record of completed work.</p>
           </div>
           <button
             className="btn btn-primary"
             onClick={() => setShowForm(!showForm)}
           >
-            <i className="fas fa-plus"></i> New Request
+            <Plus size={16} /> {showForm ? "Close Form" : "New Request"}
           </button>
         </div>
 
@@ -128,13 +129,13 @@ const MaintenancePage = () => {
         <div className="section-card">
           <h2>Request History</h2>
           <div className="maintenance-list">
-            {requests.map((request) => (
-              <div key={request.id} className="maintenance-item">
-                <div className="maintenance-info">
-                  <h3>{request.title}</h3>
-                  <p>
+            {requests.length === 0 ? (
+              <div className="maintenance-empty-state">
+                <ClipboardList size={30} />
+                <div>
+                  <strong>No maintenance requests yet</strong>
                     {request.category} •{" "}
-                    {new Date(request.date).toLocaleDateString()}
+                    Use the new request button when you need help with repairs,
                   </p>
                 </div>
                 <span className={`badge ${getStatusClass(request.status)}`}>
@@ -149,4 +150,5 @@ const MaintenancePage = () => {
   );
 };
 
-export default MaintenancePage;
+*/
+export { default } from "./MaintenanceWorkspacePage";

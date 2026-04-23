@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "../../../shared/styles/notification.css";
 import "../styles/profile-page.css";
 import "../styles/profile-dark-overrides.css";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import ProfilePageSkeleton from "../components/profile/ProfilePageSkeleton";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
@@ -12,89 +12,42 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getReservationProgress,
   getNextAction,
-  DEFAULT_STEPS,
 } from "../utils/reservationProgress";
 import { useCurrentUser } from "../../../shared/hooks/queries/useUsers";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import { billingApi } from "../../../shared/api/billingApi";
-import { ThemeProvider } from "../../../features/public/context/ThemeContext";
 import { hasReservationStatus } from "../../../shared/utils/lifecycleNaming";
-
-// Sub-components
+import TenantMaintenanceWorkspace from "../components/maintenance/TenantMaintenanceWorkspace";
 import {
-  ProfileSidebar,
   ReceiptModal,
   DashboardTab,
-  BillingTab,
   PersonalDetailsTab,
   ActivityHistoryTab,
   NotificationsTab,
   SettingsTab,
-  ProfileCompletionCard,
   ContractTab,
   ReservationAgreementPage,
-  MaintenanceTab,
   AnnouncementsTab,
 } from "../components/profile";
 
-// ─────────────────────────────────────────────────────────────
-// ProfilePage — thin orchestrator
-// ─────────────────────────────────────────────────────────────
 const ProfilePage = () => {
-  const { user: authUser, updateUser, logout } = useAuth();
+  const { user: authUser, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const canViewAnnouncements = authUser?.role === "tenant";
-  const [isDark, setIsDark] = useState(() => {
-    const root = document.documentElement;
-    return root.getAttribute("data-theme") === "dark" || root.classList.contains("dark");
-  });
 
-  // ── UI state ───────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(
     location.state?.tab === "announcements" && !canViewAnnouncements
       ? "dashboard"
-      : location.state?.tab || "dashboard"
+      : location.state?.tab || "dashboard",
   );
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [pendingTab, setPendingTab] = useState(null);
   const [receiptModal, setReceiptModal] = useState({ open: false, step: null });
   const [selectedReservationId, setSelectedReservationId] = useState(null);
-
-  // Mobile detection for layout
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
-  useEffect(() => {
-    const h = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener("resize", h);
-    return () => window.removeEventListener("resize", h);
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "announcements" && !canViewAnnouncements) {
-      setActiveTab("dashboard");
-    }
-  }, [activeTab, canViewAnnouncements]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const syncTheme = () => {
-      setIsDark(root.getAttribute("data-theme") === "dark" || root.classList.contains("dark"));
-    };
-
-    const observer = new MutationObserver(syncTheme);
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ["data-theme", "class"],
-    });
-
-    syncTheme();
-    return () => observer.disconnect();
-  }, []);
 
   const [profileData, setProfileData] = useState({
     firstName: "",
@@ -121,8 +74,6 @@ const ProfilePage = () => {
     emergencyRelationship: "",
   });
 
-  // editData: ONLY the fields PersonalDetailsTab can write.
-  // phone/address/emergency are collected by the reservation application form.
   const [editData, setEditData] = useState({
     firstName: "",
     lastName: "",
@@ -134,19 +85,14 @@ const ProfilePage = () => {
     occupation: "",
   });
 
-  // ── TanStack Query data fetching ──────────────────────────
   const { data: profile, isLoading: profileLoading } = useCurrentUser();
   const { data: reservationsData, isLoading: reservationsLoading } = useReservations();
-
-  // Only show full-screen loader on FIRST load (no cached data yet).
-  // Refetches happen silently in background — no stutter/flash.
   const loading = (!profile && profileLoading) || (!reservationsData && reservationsLoading);
 
-  // Sync profile data when query resolves
   useEffect(() => {
     if (!profile) return;
+
     setProfileData(profile);
-    // Only sync editable identity fields into editData
     setEditData({
       firstName: profile.firstName || "",
       lastName: profile.lastName || "",
@@ -159,7 +105,21 @@ const ProfilePage = () => {
     });
   }, [profile]);
 
-  // ── Payment redirect handler (success OR cancelled) ────────
+  useEffect(() => {
+    const nextTab =
+      location.state?.tab === "announcements" && !canViewAnnouncements
+        ? "dashboard"
+        : location.state?.tab || "dashboard";
+
+    setActiveTab(nextTab);
+  }, [canViewAnnouncements, location.state]);
+
+  useEffect(() => {
+    if (activeTab === "announcements" && !canViewAnnouncements) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab, canViewAnnouncements]);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const paymentStatus = params.get("payment");
@@ -167,9 +127,12 @@ const ProfilePage = () => {
 
     if (!paymentStatus) return;
 
-    // INSTANT: If reservation already paid, skip everything — prevents blue flash
-    const alreadyPaid = (Array.isArray(reservationsData) ? reservationsData : [])
-      .find(r => r.status !== "cancelled" && (r.paymentStatus === "paid" || r.status === "reserved"));
+    const alreadyPaid = (Array.isArray(reservationsData) ? reservationsData : []).find(
+      (reservation) =>
+        reservation.status !== "cancelled" &&
+        (reservation.paymentStatus === "paid" || reservation.status === "reserved"),
+    );
+
     if (alreadyPaid) {
       navigate(location.pathname, { replace: true });
       navigate("/applicant/reservation", {
@@ -179,22 +142,16 @@ const ProfilePage = () => {
       return;
     }
 
-    // PayMongo back button doesn't replace {id} placeholder — detect it
     const urlSessionId = rawSessionId && rawSessionId !== "{id}" ? rawSessionId : null;
-
-    // If we need the fallback (no valid URL session ID), wait for reservationsData
     if (!urlSessionId && !reservationsData) return;
 
-    // Clean URL only AFTER we have what we need
     navigate(location.pathname, { replace: true });
 
     const verifyPayment = async () => {
-      // 1. Try URL session ID first (works on proper success redirect)
-      // 2. Fall back to active reservation's stored paymongoSessionId
       let sessionId = urlSessionId;
-
-      const active = (Array.isArray(reservationsData) ? reservationsData : [])
-        .find(r => r.paymongoSessionId && r.status !== "cancelled");
+      const active = (Array.isArray(reservationsData) ? reservationsData : []).find(
+        (reservation) => reservation.paymongoSessionId && reservation.status !== "cancelled",
+      );
 
       if (!sessionId && active?.paymongoSessionId) {
         sessionId = active.paymongoSessionId;
@@ -204,25 +161,25 @@ const ProfilePage = () => {
         try {
           const result = await billingApi.checkPaymentStatus(sessionId);
           if (result?.status === "paid") {
-            showNotification("Payment successful! Your reservation is confirmed.", "success", 5000);
+            showNotification(
+              "Payment successful! Your reservation is confirmed.",
+              "success",
+              5000,
+            );
             queryClient.invalidateQueries({ queryKey: ["reservations"] });
-            // Navigate to confirmation step so user sees reservation code + receipt
-            // Use replace:true to prevent back-button loops through PayMongo URLs
             navigate("/applicant/reservation", {
               state: { step: 5, continueFlow: true, reservationId: active?._id },
               replace: true,
             });
             return;
           }
-        } catch (err) {
-          console.error("Payment verification failed:", err);
+        } catch (error) {
+          console.error("Payment verification failed:", error);
         }
       }
 
-      // Could not verify — check if reservation is already paid before showing cancelled
       queryClient.invalidateQueries({ queryKey: ["reservations"] });
 
-      // If the reservation is already paid/reserved, skip cancelled flash and go to confirmation
       if (active && (active.paymentStatus === "paid" || active.status === "reserved")) {
         navigate("/applicant/reservation", {
           state: { step: 5, continueFlow: true, reservationId: active._id },
@@ -232,27 +189,43 @@ const ProfilePage = () => {
       }
 
       if (paymentStatus === "cancelled") {
-        showNotification("Payment was cancelled. You can try again from your profile.", "warning", 5000);
+        showNotification(
+          "Payment was cancelled. You can try again from your profile.",
+          "warning",
+          5000,
+        );
       } else {
-        showNotification("Payment is being processed. Please wait a moment.", "info", 5000);
+        showNotification(
+          "Payment is being processed. Please wait a moment.",
+          "info",
+          5000,
+        );
       }
     };
-    verifyPayment();
-  }, [location.search, reservationsData]);
 
-  // ── Derive reservations, visits, activity from cached data ─
+    verifyPayment();
+  }, [location.pathname, location.search, navigate, queryClient, reservationsData]);
+
   const reservations = useMemo(() => reservationsData || [], [reservationsData]);
 
   const activeReservation = useMemo(() => {
-    const activeOnes =
-      reservations.filter((r) => {
-        const status = r.reservationStatus || r.status;
-        return !hasReservationStatus(status, "moveOut", "cancelled");
-      }) || [];
+    const activeOnes = reservations.filter((reservation) => {
+      const status = reservation.reservationStatus || reservation.status;
+      return !hasReservationStatus(status, "moveOut", "cancelled");
+    });
+
     return activeOnes[0] || null;
   }, [reservations]);
 
-  // Set initial selected reservation
+  const activeReservations = useMemo(
+    () =>
+      reservations.filter((reservation) => {
+        const status = reservation.reservationStatus || reservation.status;
+        return !hasReservationStatus(status, "moveOut", "cancelled");
+      }),
+    [reservations],
+  );
+
   useEffect(() => {
     if (activeReservation && !selectedReservationId) {
       setSelectedReservationId(activeReservation._id);
@@ -262,17 +235,17 @@ const ProfilePage = () => {
   const visits = useMemo(
     () =>
       reservations
-        .filter((r) => r.visitDate)
-        .map((r) => ({
-          id: r._id,
-          roomNumber: r.roomId?.name || "N/A",
-          location: r.roomId?.branch || "N/A",
-          floor: r.roomId?.floor || 1,
-          date: r.visitDate,
-          time: r.visitTime || "TBD",
-          status: r.visitCompleted
+        .filter((reservation) => reservation.visitDate)
+        .map((reservation) => ({
+          id: reservation._id,
+          roomNumber: reservation.roomId?.name || "N/A",
+          location: reservation.roomId?.branch || "N/A",
+          floor: reservation.roomId?.floor || 1,
+          date: reservation.visitDate,
+          time: reservation.visitTime || "TBD",
+          status: reservation.visitCompleted
             ? "Completed"
-            : new Date(r.visitDate) < new Date()
+            : new Date(reservation.visitDate) < new Date()
               ? "Missed"
               : "Scheduled",
           specialInstructions:
@@ -281,34 +254,31 @@ const ProfilePage = () => {
     [reservations],
   );
 
-
-  // ── Profile editing handlers ───────────────────────────────
-  const queryClient = useQueryClient();
-
   const handleSaveProfile = async () => {
     setSaving(true);
-    setError(null);
-    setSuccess(null);
-    const imageChanged = editData.profileImage && editData.profileImage !== profileData.profileImage;
+    const imageChanged =
+      editData.profileImage && editData.profileImage !== profileData.profileImage;
+
     try {
       const updatedUser = await authFetch("/auth/profile", {
         method: "PUT",
         body: JSON.stringify(editData),
       });
+
       setProfileData((prev) => ({ ...prev, ...updatedUser.user }));
-      setSuccess("Profile updated successfully!");
       setIsEditingProfile(false);
       if (updateUser) updateUser(updatedUser.user);
-      // Invalidate cache so sidebar/header reflect new data immediately
       queryClient.invalidateQueries({ queryKey: ["users", "currentUser"] });
-      if (imageChanged) {
-        showNotification("Profile photo updated successfully!", "success", 3000);
-      } else {
-        showNotification("Profile updated successfully!", "success", 3000);
-      }
-    } catch (err) {
-      console.error("Error updating profile:", err);
-      setError("Failed to update profile. Please try again.");
+
+      showNotification(
+        imageChanged
+          ? "Profile photo updated successfully!"
+          : "Profile updated successfully!",
+        "success",
+        3000,
+      );
+    } catch (error) {
+      console.error("Error updating profile:", error);
       showNotification("Failed to update profile. Please try again.", "error", 4000);
     } finally {
       setSaving(false);
@@ -319,75 +289,58 @@ const ProfilePage = () => {
     setEditData({
       firstName: profileData.firstName || "",
       lastName: profileData.lastName || "",
-      phone: profileData.phone || "",
       profileImage: profileData.profileImage || "",
-      address: profileData.address || "",
-      city: profileData.city || "",
       dateOfBirth: profileData.dateOfBirth || "",
-      emergencyContact: profileData.emergencyContact || "",
-      emergencyPhone: profileData.emergencyPhone || "",
-
+      gender: profileData.gender || "",
+      civilStatus: profileData.civilStatus || "",
+      nationality: profileData.nationality || "",
+      occupation: profileData.occupation || "",
     });
     setIsEditingProfile(false);
   };
 
-  // ── Logout handlers ────────────────────────────────────────
-  const handleLogout = (event) => {
-    event.preventDefault();
-    setShowLogoutConfirm(true);
-  };
+  const hasUnsavedChanges =
+    isEditingProfile &&
+    (editData.firstName !== (profileData.firstName || "") ||
+      editData.lastName !== (profileData.lastName || "") ||
+      editData.profileImage !== (profileData.profileImage || "") ||
+      editData.dateOfBirth !== (profileData.dateOfBirth || "") ||
+      editData.gender !== (profileData.gender || "") ||
+      editData.civilStatus !== (profileData.civilStatus || "") ||
+      editData.nationality !== (profileData.nationality || "") ||
+      editData.occupation !== (profileData.occupation || ""));
 
-  const confirmLogout = async () => {
-    setShowLogoutConfirm(false);
-    try {
-      await logout();
-      showNotification("You have been signed out successfully.", "success", 3000);
-      navigate("/signin");
-    } catch (err) {
-      console.error("Logout failed:", err);
-      showNotification("Logout failed. Please try again.", "error", 3000);
-    }
-  };
-
-  // ── Unsaved changes warning ────────────────────────────────
-  const hasUnsavedChanges = isEditingProfile && (
-    editData.firstName !== (profileData.firstName || "") ||
-    editData.lastName !== (profileData.lastName || "") ||
-    editData.phone !== (profileData.phone || "") ||
-    editData.address !== (profileData.address || "") ||
-    editData.city !== (profileData.city || "") ||
-    editData.dateOfBirth !== (profileData.dateOfBirth || "") ||
-    editData.emergencyContact !== (profileData.emergencyContact || "") ||
-    editData.emergencyPhone !== (profileData.emergencyPhone || "")
-  );
-
-  const handleTabChange = (newTab) => {
+  const handleTabChange = (nextTab) => {
     if (hasUnsavedChanges) {
-      setPendingTab(newTab);
+      setPendingTab(nextTab);
       setShowUnsavedWarning(true);
-    } else {
-      setActiveTab(newTab);
-      setIsEditingProfile(false);
+      return;
     }
+
+    setActiveTab(nextTab);
+    setIsEditingProfile(false);
+    navigate("/applicant/profile", {
+      replace: true,
+      state: { tab: nextTab },
+    });
   };
 
   const confirmDiscardChanges = () => {
     setShowUnsavedWarning(false);
     handleCancelEdit();
+
     if (pendingTab) {
       setActiveTab(pendingTab);
+      navigate("/applicant/profile", {
+        replace: true,
+        state: { tab: pendingTab },
+      });
       setPendingTab(null);
     }
   };
 
-  // ── Derived values ─────────────────────────────────────────
-  const activeReservations = reservations.filter((r) => {
-    const status = r.reservationStatus || r.status;
-    return !hasReservationStatus(status, "moveOut", "cancelled");
-  });
-
   const selectedReservation = selectedReservationId
-    ? activeReservations.find((r) => r._id === selectedReservationId) ||
+    ? activeReservations.find((reservation) => reservation._id === selectedReservationId) ||
       activeReservations[0]
     : activeReservations[0];
 
@@ -400,162 +353,84 @@ const ProfilePage = () => {
       selectedReservation.status === "reserved" ||
       selectedReservation.paymentStatus === "paid");
 
-  // My Reservation page only shows confirmed (paid/reserved) reservations.
-  // Pending stages show the empty state instead.
   const confirmedReservation = isReservationConfirmed
-    ? (selectedReservation || activeReservation)
+    ? selectedReservation || activeReservation
     : null;
 
-  // Prevent browser back button when reservation is confirmed — silently block, no toast
   useEffect(() => {
     if (!isReservationConfirmed) return;
+
     window.history.pushState(null, "", window.location.href);
     const handlePopState = () => {
       window.history.pushState(null, "", window.location.href);
     };
+
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [isReservationConfirmed]);
 
   const fullName =
-    `${profileData.firstName || ""} ${profileData.lastName || ""}`.trim() ||
-    "User";
-  const activeStatusLabel =
-    activeReservation?.reservationStatus ||
-    activeReservation?.status ||
-    "pending";
-  const selectedRoom = selectedReservation?.roomId
-    ? {
-        roomNumber: selectedReservation.roomId.name,
-        location: selectedReservation.roomId.branch,
-        floor: selectedReservation.roomId.floor,
-        roomType: selectedReservation.roomId.type,
-        price: selectedReservation.roomId.price,
-      }
-    : null;
-
-    const profileThemeVars = isDark
-      ? {
-          "--surface-page": "#0B1524",
-          "--surface-card": "#0F1B2D",
-          "--surface-muted": "#1A2B43",
-          "--surface-hover": "#21314A",
-          "--border-card": "#2A3B57",
-          "--border-subtle": "#2A3B57",
-          "--text-heading": "#F8F5EC",
-          "--text-body": "#D9E3F2",
-          "--text-secondary": "#AFC0D8",
-          "--text-muted": "#8FA4C2",
-          "--color-primary": "#E0B84C",
-        }
-      : {
-          "--surface-page": "#ffffff",
-          "--surface-card": "#ffffff",
-          "--surface-muted": "#F8F1DC",
-          "--surface-hover": "#FFF4D6",
-          "--border-card": "#E8DDBA",
-          "--border-subtle": "#E8DDBA",
-          "--text-heading": "#0C375F",
-          "--text-body": "#1F2937",
-          "--text-secondary": "#5A6982",
-          "--text-muted": "#8A99B0",
-          "--color-primary": "#D4AF37",
-        };
-
-  // ── Tab title map ──────────────────────────────────────────
+    `${profileData.firstName || ""} ${profileData.lastName || ""}`.trim() || "User";
 
   if (loading) return <ProfilePageSkeleton />;
 
-  // ── Render ─────────────────────────────────────────────────
   return (
-    <ThemeProvider>
     <>
-      <div className="min-h-screen flex" style={{ ...profileThemeVars, backgroundColor: "var(--surface-page)" }}>
-        <ProfileSidebar
-          activeTab={activeTab}
-          setActiveTab={handleTabChange}
+      {activeTab === "dashboard" && (
+        <DashboardTab
           profileData={profileData}
+          activeReservation={activeReservation}
+          selectedReservation={selectedReservation}
+          visits={visits}
+          nextAction={nextAction}
+          onGoToPersonal={() => handleTabChange("personal")}
+        />
+      )}
+
+      {activeTab === "personal" && (
+        <PersonalDetailsTab
+          profileData={profileData}
+          editData={editData}
+          setEditData={setEditData}
           fullName={fullName}
-          hasActiveReservation={Boolean(activeReservation)}
-          canViewAnnouncements={canViewAnnouncements}
-          onLogout={handleLogout}
+          isEditingProfile={isEditingProfile}
+          setIsEditingProfile={setIsEditingProfile}
+          saving={saving}
+          onSave={handleSaveProfile}
+          onCancel={handleCancelEdit}
         />
+      )}
 
-        <div className="flex-1 flex flex-col" style={{ minWidth: 0, overflowX: "hidden" }}>
-
-          <main className="flex-1 overflow-auto">
-            <div style={{ padding: isMobile ? '16px 16px 16px' : 32, paddingTop: isMobile ? 72 : 32 }}>
-              {activeTab === "dashboard" && (
-                <DashboardTab
-                  profileData={profileData}
-                  activeReservation={activeReservation}
-                  selectedReservation={selectedReservation}
-                  visits={visits}
-                  nextAction={nextAction}
-                  onGoToPersonal={() => setActiveTab("personal")}
-                  onGoToBilling={() => handleTabChange("billing")}
-                />
-              )}
-
-              {activeTab === "personal" && (
-                <PersonalDetailsTab
-                  profileData={profileData}
-                  editData={editData}
-                  setEditData={setEditData}
-                  fullName={fullName}
-                  isEditingProfile={isEditingProfile}
-                  setIsEditingProfile={setIsEditingProfile}
-                  saving={saving}
-                  onSave={handleSaveProfile}
-                  onCancel={handleCancelEdit}
-                />
-              )}
-
-              {activeTab === "billing" && <BillingTab />}
-
-              {activeTab === "reservation" && (
-                <ReservationAgreementPage
-                  reservation={confirmedReservation}
-                  onBack={() => setActiveTab("dashboard")}
-                />
-              )}
-
-              {activeTab === "contract" && <ContractTab />}
-
-              {activeTab === "history" && (
-                <ActivityHistoryTab reservations={reservations} />
-              )}
-
-              {activeTab === "maintenance" && <MaintenanceTab />}
-              {activeTab === "announcements" && canViewAnnouncements && <AnnouncementsTab />}
-              {activeTab === "notifications" && <NotificationsTab />}
-              {activeTab === "settings" && <SettingsTab />}
-            </div>
-          </main>
-        </div>
-
-        <ReceiptModal
-          isOpen={receiptModal.open}
-          step={receiptModal.step}
-          reservation={activeReservation}
-          onClose={() => setReceiptModal({ open: false, step: null })}
+      {activeTab === "reservation" && (
+        <ReservationAgreementPage
+          reservation={confirmedReservation}
+          onBack={() => handleTabChange("dashboard")}
         />
-      </div>
+      )}
 
-      <ConfirmModal
-        isOpen={showLogoutConfirm}
-        onClose={() => setShowLogoutConfirm(false)}
-        onConfirm={confirmLogout}
-        title="Sign Out"
-        message="Are you sure you want to sign out of your account?"
-        variant="warning"
-        confirmText="Sign Out"
-        cancelText="Cancel"
+      {activeTab === "history" && (
+        <ActivityHistoryTab reservations={reservations} />
+      )}
+
+      {activeTab === "maintenance" && <TenantMaintenanceWorkspace embedded />}
+      {activeTab === "announcements" && canViewAnnouncements && <AnnouncementsTab />}
+      {activeTab === "notifications" && <NotificationsTab />}
+      {activeTab === "settings" && <SettingsTab />}
+      {activeTab === "contract" && <ContractTab />}
+
+      <ReceiptModal
+        isOpen={receiptModal.open}
+        step={receiptModal.step}
+        reservation={activeReservation}
+        onClose={() => setReceiptModal({ open: false, step: null })}
       />
 
       <ConfirmModal
         isOpen={showUnsavedWarning}
-        onClose={() => { setShowUnsavedWarning(false); setPendingTab(null); }}
+        onClose={() => {
+          setShowUnsavedWarning(false);
+          setPendingTab(null);
+        }}
         onConfirm={confirmDiscardChanges}
         title="Unsaved Changes"
         message="You have unsaved changes. Are you sure you want to leave this tab? Your changes will be lost."
@@ -564,7 +439,6 @@ const ProfilePage = () => {
         cancelText="Keep Editing"
       />
     </>
-    </ThemeProvider>
   );
 };
 

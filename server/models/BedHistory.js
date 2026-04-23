@@ -40,6 +40,17 @@ const bedHistorySchema = new mongoose.Schema(
       ref: "Reservation",
       default: null,
     },
+    stayId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Stay",
+      default: null,
+      index: true,
+    },
+    branch: {
+      type: String,
+      default: "",
+      index: true,
+    },
     moveInDate: {
       type: Date,
       required: true,
@@ -55,6 +66,33 @@ const bedHistorySchema = new mongoose.Schema(
     checkOutDate: {
       type: Date,
       default: null,
+    },
+    effectiveStartDate: {
+      type: Date,
+      default: null,
+    },
+    effectiveEndDate: {
+      type: Date,
+      default: null,
+    },
+    status: {
+      type: String,
+      enum: ["active", "transferred", "completed"],
+      default: "active",
+      index: true,
+    },
+    closedByAction: {
+      type: String,
+      enum: ["transfer", "move_out", "correction", ""],
+      default: "",
+    },
+    reason: {
+      type: String,
+      default: "",
+    },
+    notes: {
+      type: String,
+      default: "",
     },
   },
   {
@@ -83,7 +121,13 @@ bedHistorySchema.statics.recordMoveIn = async function (data) {
     roomId: data.roomId,
     tenantId: data.tenantId,
     reservationId: data.reservationId || null,
+    stayId: data.stayId || null,
+    branch: data.branch || "",
     moveInDate,
+    effectiveStartDate: data.effectiveStartDate || moveInDate,
+    status: data.status || "active",
+    reason: data.reason || "",
+    notes: data.notes || "",
   });
 };
 
@@ -100,6 +144,9 @@ bedHistorySchema.statics.recordMoveOut = async function (bedId, tenantId) {
   if (record) {
     const moveOutDate = new Date();
     record.moveOutDate = moveOutDate;
+    record.effectiveEndDate = moveOutDate;
+    record.status = "completed";
+    record.closedByAction = "move_out";
     await record.save();
   }
   return record;
@@ -123,6 +170,12 @@ bedHistorySchema.pre("validate", function (next) {
   }
   if (!this.moveOutDate && this.checkOutDate) {
     this.moveOutDate = this.checkOutDate;
+  }
+  if (!this.effectiveStartDate && this.moveInDate) {
+    this.effectiveStartDate = this.moveInDate;
+  }
+  if (!this.effectiveEndDate && this.moveOutDate) {
+    this.effectiveEndDate = this.moveOutDate;
   }
 
   next();

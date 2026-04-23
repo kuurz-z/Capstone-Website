@@ -2,18 +2,22 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { showNotification } from "../../../shared/utils/notification";
+import { buildSignOutSuccessFlash } from "../../../shared/utils/authToasts";
 import LilycrestLogo from "../../../shared/components/LilycrestLogo";
 import {
   LayoutDashboard,
   CalendarCheck,
   Users,
   BedDouble,
+  Wrench,
   Receipt,
   Megaphone,
   UserCog,
   FileText,
+  BarChart3,
   Building2,
   Settings,
   LogOut,
@@ -35,8 +39,10 @@ const NAV_ITEMS = [
   { to: "/admin/reservations",       icon: CalendarCheck,   text: "Reservations",    group: "workspace", priority: 2 },
   { to: "/admin/room-availability",  icon: BedDouble,       text: "Room Management", group: "workspace", priority: 3 },
   { to: "/admin/tenants",            icon: Users,           text: "Tenants",         group: "workspace", priority: 4 },
-  { to: "/admin/billing",            icon: Receipt,         text: "Billing",         group: "workspace", priority: 5 },
-  { to: "/admin/announcements",      icon: Megaphone,       text: "Announcements",   group: "workspace", priority: 6, permission: "manageAnnouncements" },
+  { to: "/admin/maintenance",        icon: Wrench,          text: "Maintenance",     group: "workspace", priority: 5, permission: "manageMaintenance" },
+  { to: "/admin/billing",            icon: Receipt,         text: "Billing",         group: "workspace", priority: 6 },
+  { to: "/admin/analytics",          icon: BarChart3,       text: "Analytics",       group: "workspace", priority: 7 },
+  { to: "/admin/announcements",      icon: Megaphone,       text: "Announcements",   group: "workspace", priority: 8, permission: "manageAnnouncements" },
   // SYSTEM group
   { to: "/admin/users",              icon: UserCog,         text: "Accounts",     group: "system", priority: 1 },
   { to: "/admin/audit-logs",         icon: FileText,        text: "Activity Log", group: "system", priority: 2 },
@@ -46,6 +52,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout, globalLoading } = useAuth();
+  const appNavigate = useAppNavigation();
   const { can } = usePermissions();
   const isOwner = user?.role === "owner";
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -75,12 +82,10 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
     try {
       const result = await logout();
       if (result?.success) {
-        setTimeout(() => {
-          showNotification("You have been logged out successfully", "success");
-          setTimeout(() => {
-            window.location.href = "/signin";
-          }, 300);
-        }, 400);
+        appNavigate("/signin", {
+          replace: true,
+          ...buildSignOutSuccessFlash(),
+        });
       }
     } catch (error) {
       console.error("Admin logout error:", error);

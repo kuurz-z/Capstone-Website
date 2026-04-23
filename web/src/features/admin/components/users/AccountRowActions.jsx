@@ -20,47 +20,65 @@ function ActionButton({
 }
 
 export default function AccountRowActions({
+  canViewAccess,
+  canManagePermissions,
   canEdit,
-  canSuspend,
-  canReactivate,
-  canBan,
-  canDelete,
+  canBlock,
+  canUnblock,
+  canRestore,
+  canHardDelete,
+  onViewAccess,
+  onManagePermissions,
   onEdit,
-  onSuspend,
-  onReactivate,
-  onBan,
-  onDelete,
+  onBlock,
+  onUnblock,
+  onRestore,
+  onHardDelete,
 }) {
   return (
     <div className="account-row-actions" onClick={(event) => event.stopPropagation()}>
-      {canEdit && <ActionButton label="Edit" onPress={onEdit} />}
-      {canSuspend && (
+      {canViewAccess && (
         <ActionButton
-          label="Suspend"
-          variant="warn"
-          onPress={onSuspend}
-        />
-      )}
-      {canReactivate && (
-        <ActionButton
-          label="Activate"
+          label="Access"
           variant="primary"
-          onPress={onReactivate}
+          onPress={onViewAccess}
         />
       )}
-      {canBan && (
+      {canManagePermissions && (
         <ActionButton
-          label="Ban"
-          variant="warn"
-          onPress={onBan}
+          label="Permissions"
+          variant="primary"
+          onPress={onManagePermissions}
         />
       )}
-      {canDelete && (
+      {canEdit && <ActionButton label="Edit" onPress={onEdit} />}
+      {canBlock && (
+        <ActionButton
+          label="Block"
+          variant="warn"
+          onPress={onBlock}
+        />
+      )}
+      {canUnblock && (
+        <ActionButton
+          label="Unblock"
+          variant="primary"
+          onPress={onUnblock}
+        />
+      )}
+      {canRestore && (
+        <ActionButton
+          label="Restore"
+          variant="primary"
+          onPress={onRestore}
+        />
+      )}
+      {canHardDelete && (
         <ActionButton
           label="Delete"
           variant="danger"
-          ariaLabel="Delete user"
-          onPress={onDelete}
+          ariaLabel="Hard Delete user"
+          onPress={onHardDelete}
         />
       )}
     </div>

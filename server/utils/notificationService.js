@@ -14,6 +14,10 @@
  */
 
 import Notification from "../models/Notification.js";
+import {
+  buildMaintenanceNotificationBody,
+  buildMaintenanceNotificationTitle,
+} from "../config/maintenance.js";
 
 /**
  * Create a notification (generic)
@@ -197,6 +201,21 @@ const notify = {
    */
   general: (userId, title, message, options = {}) =>
     createNotification(userId, "general", title, message, options),
+
+  /**
+   * Maintenance request status update
+   */
+  maintenanceUpdated: (userId, requestType, status, requestId) =>
+    createNotification(
+      userId,
+      "maintenance_update",
+      buildMaintenanceNotificationTitle(requestType),
+      buildMaintenanceNotificationBody(requestType, status),
+      {
+        entityType: "maintenance",
+        entityId: requestId || null,
+      },
+    ),
 };
 
 export { createNotification, notify };

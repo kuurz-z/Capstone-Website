@@ -50,6 +50,9 @@ export const reservationApi = {
   getTenantWorkspaceById: (reservationId) =>
     authFetch(`/reservations/tenant-workspace/${reservationId}`),
 
+  getTenantActionContext: (reservationId) =>
+    authFetch(`/reservations/${reservationId}/tenant-actions/context`),
+
   /**
    * Get reservation by ID
    */

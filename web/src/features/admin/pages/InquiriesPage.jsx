@@ -7,11 +7,18 @@ import {
   MessageSquare,
   Search,
 } from "lucide-react";
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { inquiryApi } from "../../../shared/api/apiClient";
+import { useAuth } from "../../../shared/hooks/useAuth";
 import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useInquiries, useInquiryStats } from "../../../shared/hooks/queries/useInquiries";
+import {
+  normalizeBranchFilterValue,
+  syncBranchSearchParam,
+} from "../../../shared/utils/branchFilterQuery.mjs";
 import InquiryDetailsModal from "../components/InquiryDetailsModal";
 import { StatusBadge } from "../components/shared";
 import "../styles/design-tokens.css";
@@ -49,7 +56,10 @@ function fmtDate(value) {
 }
 
 export default function InquiriesPage({ isEmbedded = false }) {
+  const { user } = useAuth();
+  const isOwner = user?.role === "owner";
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [confirmModal, setConfirmModal] = useState({
     open: false,
@@ -60,10 +70,38 @@ export default function InquiriesPage({ isEmbedded = false }) {
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [branchFilter, setBranchFilter] = useState("");
+  const requestedBranch = searchParams.get("branch");
+  const [branchFilter, setBranchFilter] = useState(() =>
+    normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      allValue: "",
+    }),
+  );
   const [sortBy, setSortBy] = useState("recent");
   const [page, setPage] = useState(1);
   const LIMIT = 10;
+
+  useEffect(() => {
+    const nextBranch = normalizeBranchFilterValue({
+      requestedBranch: isOwner ? requestedBranch : null,
+      allValue: "",
+    });
+
+    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
+  }, [isOwner, requestedBranch]);
+
+  useEffect(() => {
+    if (isEmbedded) return;
+    if (!user?.role) return;
+
+    const nextParams = syncBranchSearchParam(searchParams, branchFilter, {
+      enabled: isOwner,
+      allValue: "",
+    });
+
+    if (nextParams.toString() === searchParams.toString()) return;
+    setSearchParams(nextParams, { replace: true });
+  }, [branchFilter, isEmbedded, isOwner, searchParams, setSearchParams, user?.role]);
 
   const params = useMemo(() => {
     const nextParams = { page, limit: LIMIT };

@@ -39,6 +39,40 @@ const getClientIP = (req) => {
   );
 };
 
+const resolveAuditBranch = (req, requestedBranch) => {
+  if (req.branchFilter !== undefined) {
+    return req.branchFilter || requestedBranch;
+  }
+
+  return requestedBranch;
+};
+
+const normalizeAuditFilters = (req, rawFilters = {}) => {
+  const filters = {
+    type: rawFilters.type,
+    severity: rawFilters.severity,
+    user: rawFilters.user,
+    role: rawFilters.role,
+    branch: resolveAuditBranch(req, rawFilters.branch),
+    startDate: rawFilters.startDate,
+    endDate: rawFilters.endDate,
+    search: rawFilters.search,
+  };
+
+  Object.keys(filters).forEach((key) => {
+    if (filters[key] === undefined || filters[key] === null || filters[key] === "") {
+      delete filters[key];
+    }
+  });
+
+  return filters;
+};
+
+const parseAuditPagination = ({ limit, offset }) => ({
+  limit: Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100),
+  offset: Math.max(parseInt(offset, 10) || 0, 0),
+});
+
 // ============================================================================
 // CONTROLLERS
 // ============================================================================
@@ -50,28 +84,8 @@ const getClientIP = (req) => {
  */
 export const getAuditLogs = async (req, res, next) => {
   try {
-    const {
-      type, severity, user, role, branch,
-      startDate, endDate, search, limit, offset,
-    } = req.query;
-
-    const filters = {
-      type, severity, user, role,
-      // If req.branchFilter is set (regular admin), it overrides the client-sent branch.
-      // If req.branchFilter is null (owner), use the client-sent branch param.
-      branch: req.branchFilter !== undefined ? (req.branchFilter || branch) : branch,
-      startDate, endDate, search,
-    };
-
-    // Remove undefined filters
-    Object.keys(filters).forEach(
-      (key) => filters[key] === undefined && delete filters[key],
-    );
-
-    const options = {
-      limit: parseInt(limit) || 100,
-      offset: parseInt(offset) || 0,
-    };
+    const filters = normalizeAuditFilters(req, req.query);
+    const options = parseAuditPagination(req.query);
 
     const result = await AuditLog.getLogs(filters, options);
 
@@ -106,7 +120,12 @@ export const getAuditStats = async (req, res, next) => {
  */
 export const getAuditLogById = async (req, res, next) => {
   try {
-    const log = await AuditLog.findOne({ logId: req.params.id }).lean();
+    const query = { logId: req.params.id };
+    if (req.branchFilter) {
+      query.branch = req.branchFilter;
+    }
+
+    const log = await AuditLog.findOne(query).lean();
     if (!log) throw new AppError("Audit log not found", 404, "AUDIT_LOG_NOT_FOUND");
     sendSuccess(res, log);
   } catch (error) {
@@ -134,7 +153,13 @@ export const createAuditLog = async (req, res, next) => {
       );
     }
 
-    const validTypes = ["login", "data_modification", "data_deletion", "error"];
+    const validTypes = [
+      "login",
+      "registration",
+      "data_modification",
+      "data_deletion",
+      "error",
+    ];
     const validSeverities = ["info", "warning", "high", "critical"];
 
     if (!validTypes.includes(type)) {
@@ -167,7 +192,7 @@ export const createAuditLog = async (req, res, next) => {
  */
 export const exportAuditLogs = async (req, res, next) => {
   try {
-    const filters = req.body.filters || {};
+    const filters = normalizeAuditFilters(req, req.body.filters || {});
     const result = await AuditLog.getLogs(filters, { limit: 10000, offset: 0 });
 
     const filename = `audit-logs-${new Date().toISOString().split("T")[0]}.json`;

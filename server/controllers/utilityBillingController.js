@@ -29,6 +29,10 @@ import {
   deriveUtilityPeriodBillingState,
   getUtilityDiagnostics,
 } from "../utils/utilityDiagnostics.js";
+import {
+  resolveReferencedUser,
+  UNKNOWN_TENANT_LABEL,
+} from "../utils/userReference.js";
 
 import {
   buildTenantEventsForPeriod,
@@ -125,6 +129,104 @@ function assertBoundaryReadings({ startReading, endReading }) {
     error.statusCode = 400;
     throw error;
   }
+}
+
+function normalizeBillingComputationError(error) {
+  if (!error) return error;
+
+  const message = String(error.message || "");
+  if (
+    message.includes("Invalid reading sequence:") ||
+    message.includes("has consumption but no active tenants") ||
+    message.includes(
+      "Cannot compute segmented billing without at least two ordered meter events",
+    )
+  ) {
+    error.statusCode = error.statusCode || 400;
+  }
+
+  return error;
+}
+
+async function syncElectricityBoundaryReadings({
+  period,
+  room,
+  adminId,
+  shouldPersistEndReading = false,
+}) {
+  const startDate = dayjs(period.startDate).startOf("day").toDate();
+
+  let startBoundaryReading = await UtilityReading.findOne({
+    utilityPeriodId: period._id,
+    utilityType: "electricity",
+    eventType: "periodStart",
+    isArchived: false,
+  });
+
+  if (!startBoundaryReading) {
+    startBoundaryReading = new UtilityReading({
+      utilityType: "electricity",
+      roomId: room._id,
+      branch: room.branch,
+      eventType: "periodStart",
+      readingStatus: "locked",
+      recordedBy: adminId,
+      utilityPeriodId: period._id,
+      activeTenantIds: [],
+    });
+  }
+
+  startBoundaryReading.roomId = room._id;
+  startBoundaryReading.branch = room.branch;
+  startBoundaryReading.reading = Number(period.startReading);
+  startBoundaryReading.date = startDate;
+  if (!startBoundaryReading.recordedBy) {
+    startBoundaryReading.recordedBy = adminId;
+  }
+  await startBoundaryReading.save();
+
+  let endBoundaryReading = await UtilityReading.findOne({
+    utilityPeriodId: period._id,
+    utilityType: "electricity",
+    eventType: "periodEnd",
+    isArchived: false,
+  });
+
+  const hasEndBoundary =
+    shouldPersistEndReading &&
+    period.endDate &&
+    period.endReading !== undefined &&
+    period.endReading !== null;
+
+  if (!hasEndBoundary) {
+    if (endBoundaryReading) {
+      endBoundaryReading.isArchived = true;
+      await endBoundaryReading.save();
+    }
+    return;
+  }
+
+  if (!endBoundaryReading) {
+    endBoundaryReading = new UtilityReading({
+      utilityType: "electricity",
+      roomId: room._id,
+      branch: room.branch,
+      eventType: "periodEnd",
+      readingStatus: "locked",
+      recordedBy: adminId,
+      utilityPeriodId: period._id,
+      activeTenantIds: [],
+    });
+  }
+
+  endBoundaryReading.roomId = room._id;
+  endBoundaryReading.branch = room.branch;
+  endBoundaryReading.reading = Number(period.endReading);
+  endBoundaryReading.date = dayjs(period.endDate).startOf("day").toDate();
+  if (!endBoundaryReading.recordedBy) {
+    endBoundaryReading.recordedBy = adminId;
+  }
+  await endBoundaryReading.save();
 }
 
 function getUtilitySummaryBillIds(period) {
@@ -316,15 +418,20 @@ async function closePeriodAndGenerateDrafts({
     });
   }
 
-  const computationResult = computeBilling({
-    utilityPeriod: cyclePeriod,
-    readings: cycleReadings,
-    reservations: billableReservations,
-    tenantEvents: mappedTenantEvents,
-    forceSegmented: utilityType === "electricity",
-    utilityType,
-    roomType: room.type,
-  });
+  let computationResult;
+  try {
+    computationResult = computeBilling({
+      utilityPeriod: cyclePeriod,
+      readings: cycleReadings,
+      reservations: billableReservations,
+      tenantEvents: mappedTenantEvents,
+      forceSegmented: utilityType === "electricity",
+      utilityType,
+      roomType: room.type,
+    });
+  } catch (error) {
+    throw normalizeBillingComputationError(error);
+  }
 
   period.endDate = closingDate;
   period.endReading =
@@ -433,7 +540,9 @@ export const openUtilityPeriod = async (req, res, next) => {
       await startBaselineReading.save();
     }
 
-    res.status(201).json({ success: true, period: serializeUtilityPeriod(period) });
+    res
+      .status(201)
+      .json({ success: true, period: serializeUtilityPeriod(period) });
   } catch (err) {
     next(err);
   }
@@ -561,27 +670,11 @@ export const deleteUtilityPeriod = async (req, res, next) => {
     const { utilityType, id } = req.params;
 
     const period = await UtilityPeriod.findById(id);
-    if (!period || period.isArchived)
+    if (!period)
       return res.status(404).json({ error: "Period not found" });
 
-    // Ensure no published bills depend on this period
+    // Reset charges for associated bills and hard delete if empty
     if (period.tenantSummaries && period.tenantSummaries.length > 0) {
-      for (const summary of period.tenantSummaries) {
-        if (summary.billId) {
-          const bill = await Bill.findById(summary.billId);
-          if (
-            bill &&
-            getUtilityDispatchEntry(bill, utilityType).state === "sent"
-          ) {
-            return res.status(400).json({
-              error:
-                "Cannot delete billing period because bills have already been published.",
-            });
-          }
-        }
-      }
-
-      // Reset charges for associated draft bills
       const chargeField = utilityType === "water" ? "water" : "electricity";
       for (const summary of period.tenantSummaries) {
         if (summary.billId) {
@@ -602,10 +695,11 @@ export const deleteUtilityPeriod = async (req, res, next) => {
               bill.charges.water === 0 &&
               bill.charges.rent === 0
             ) {
-              bill.isArchived = true;
+              await Bill.findByIdAndDelete(bill._id);
+            } else {
+              syncBillAmounts(bill, { preserveStatus: bill.status === "draft" });
+              await bill.save();
             }
-            syncBillAmounts(bill, { preserveStatus: bill.status === "draft" });
-            await bill.save();
           }
         }
       }
@@ -621,8 +715,8 @@ export const deleteUtilityPeriod = async (req, res, next) => {
       { $set: { utilityPeriodId: null } },
     );
 
-    // Soft delete only boundary/checkpoint readings that belong to this period.
-    await UtilityReading.updateMany(
+    // Hard delete boundary/checkpoint readings that belong to this period.
+    await UtilityReading.deleteMany(
       {
         utilityPeriodId: period._id,
         eventType: {
@@ -632,14 +726,12 @@ export const deleteUtilityPeriod = async (req, res, next) => {
             "regularBilling",
           ),
         },
-      },
-      { $set: { isArchived: true } },
+      }
     );
 
-    period.isArchived = true;
-    await period.save();
+    await period.deleteOne();
 
-    res.json({ success: true, message: "Billing period deleted successfully" });
+    res.json({ success: true, message: "Billing period and related items permanently deleted" });
   } catch (err) {
     next(err);
   }
@@ -676,18 +768,14 @@ export const updateUtilityPeriod = async (req, res, next) => {
       period.startDate = dayjs(startDate).startOf("day").toDate();
     }
     if (endDate !== undefined) {
-      period.endDate = endDate
-        ? dayjs(endDate).startOf("day").toDate()
-        : null;
+      period.endDate = endDate ? dayjs(endDate).startOf("day").toDate() : null;
     }
     if (startReading !== undefined) {
       period.startReading = Number(startReading);
     }
     if (endReading !== undefined) {
       period.endReading =
-        endReading === null || endReading === ""
-          ? null
-          : Number(endReading);
+        endReading === null || endReading === "" ? null : Number(endReading);
     }
 
     if (ratePerUnit !== undefined) {
@@ -712,6 +800,15 @@ export const updateUtilityPeriod = async (req, res, next) => {
       assertBoundaryReadings({
         startReading: period.startReading,
         endReading: period.endReading,
+      });
+    }
+
+    if (utilityType === "electricity") {
+      await syncElectricityBoundaryReadings({
+        period,
+        room,
+        adminId: admin._id,
+        shouldPersistEndReading: period.status !== "open",
       });
     }
 
@@ -778,15 +875,20 @@ export const updateUtilityPeriod = async (req, res, next) => {
         });
       }
 
-      const computationResult = computeBilling({
-        utilityPeriod: cyclePeriod,
-        readings: allReadings,
-        reservations: billableReservations,
-        tenantEvents: mappedTenantEvents,
-        forceSegmented: utilityType === "electricity",
-        utilityType,
-        roomType: room.type,
-      });
+      let computationResult;
+      try {
+        computationResult = computeBilling({
+          utilityPeriod: cyclePeriod,
+          readings: allReadings,
+          reservations: billableReservations,
+          tenantEvents: mappedTenantEvents,
+          forceSegmented: utilityType === "electricity",
+          utilityType,
+          roomType: room.type,
+        });
+      } catch (error) {
+        throw normalizeBillingComputationError(error);
+      }
 
       period.computedTotalUsage = computationResult.computedTotalUsage;
       period.computedTotalCost = computationResult.computedTotalCost;
@@ -808,7 +910,25 @@ export const updateUtilityPeriod = async (req, res, next) => {
 
     await period.save();
 
-    res.json({ success: true, period: serializeUtilityPeriod(period) });
+    const serializedPeriod = serializeUtilityPeriod(period);
+    const serializedResult =
+      period.status !== "open"
+        ? {
+            id: period._id,
+            computedTotalUsage: period.computedTotalUsage,
+            totalRoomCost: period.computedTotalCost,
+            ratePerUnit: period.ratePerUnit,
+            verified: period.verified,
+            segments: period.segments || [],
+            tenantSummaries: period.tenantSummaries || [],
+          }
+        : null;
+
+    res.json({
+      success: true,
+      period: serializedPeriod,
+      result: serializedResult,
+    });
   } catch (err) {
     next(err);
   }
@@ -1167,6 +1287,16 @@ export const getUtilityReadings = async (req, res, next) => {
 
     res.json({
       readings: readings.map((r) => ({
+        ...(function buildTenant() {
+          const tenant = resolveReferencedUser(r.tenantId, {
+            unknownLabel: UNKNOWN_TENANT_LABEL,
+          });
+          return {
+            tenant: tenant.name === UNKNOWN_TENANT_LABEL ? null : tenant.name,
+            tenantEmail: tenant.email,
+            tenantId: tenant.id,
+          };
+        })(),
         utilityPeriodId: r.utilityPeriodId || null,
         utilityPeriodStatus: r.utilityPeriodId
           ? periodStatusMap.get(String(r.utilityPeriodId)) || null
@@ -1184,11 +1314,6 @@ export const getUtilityReadings = async (req, res, next) => {
             ["closed", "revised"].includes(
               periodStatusMap.get(String(r.utilityPeriodId)) || "",
             )),
-        tenant: r.tenantId
-          ? `${r.tenantId.firstName || ""} ${r.tenantId.lastName || ""}`.trim()
-          : null,
-        tenantEmail: r.tenantId?.email || null,
-        tenantId: r.tenantId?._id || null,
         activeTenantCount: r.activeTenantIds?.length || 0,
         recordedBy: r.recordedBy
           ? `${r.recordedBy.firstName || ""} ${r.recordedBy.lastName || ""}`.trim()
@@ -1413,9 +1538,14 @@ export const getUtilityResult = async (req, res, next) => {
       const tenant = summary.tenantId
         ? tenantById.get(String(summary.tenantId))
         : null;
+      const resolvedTenant = resolveReferencedUser(
+        reservation?.userId || tenant || summary.tenantId || null,
+        { unknownLabel: UNKNOWN_TENANT_LABEL },
+      );
 
       return {
         ...summary,
+        tenantName: summary.tenantName || resolvedTenant.name,
         durationRange: reservation
           ? formatDurationRange(
               readMoveInDate(reservation),
@@ -1424,9 +1554,8 @@ export const getUtilityResult = async (req, res, next) => {
           : summary.durationRange || "Ongoing",
         tenantEmail:
           summary.tenantEmail ||
-          reservation?.userId?.email ||
+          resolvedTenant.email ||
           reservation?.billingEmail ||
-          tenant?.email ||
           null,
       };
     });
@@ -1506,14 +1635,19 @@ export const getRoomHistory = async (req, res, next) => {
 
     const now = new Date();
     const history = reservations.map((res) => {
-      const tenantId = res.userId?._id?.toString();
+      const tenant = resolveReferencedUser(res.userId, {
+        unknownLabel: UNKNOWN_TENANT_LABEL,
+      });
+      const tenantId = tenant.id;
       const moveInReading = tenantId ? readingMap[`${tenantId}_moveIn`] : null;
       const moveOutReading = tenantId
         ? readingMap[`${tenantId}_moveOut`]
         : null;
 
       const moveIn = readMoveInDate(res) ? new Date(readMoveInDate(res)) : null;
-      const moveOut = readMoveOutDate(res) ? new Date(readMoveOutDate(res)) : null;
+      const moveOut = readMoveOutDate(res)
+        ? new Date(readMoveOutDate(res))
+        : null;
       const endDate = moveOut || now;
       const durationDays = moveIn
         ? Math.max(1, Math.ceil((endDate - moveIn) / 86_400_000))
@@ -1526,10 +1660,8 @@ export const getRoomHistory = async (req, res, next) => {
 
       return {
         id: res._id,
-        tenantName: res.userId
-          ? `${res.userId.firstName || ""} ${res.userId.lastName || ""}`.trim()
-          : "Unknown",
-        tenantEmail: res.userId?.email || res.billingEmail || null,
+        tenantName: tenant.name,
+        tenantEmail: tenant.email || res.billingEmail || null,
         tenantId: tenantId || null,
         bedName,
         bedId: bedId || null,

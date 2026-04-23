@@ -58,4 +58,21 @@ export const announcementApi = {
       method: "POST",
       body: JSON.stringify(announcementData),
     }),
+
+  /**
+   * Update announcement (admin only)
+   */
+  update: (id, announcementData) =>
+    authFetch(`/announcements/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(announcementData),
+    }),
+
+  /**
+   * Delete announcement (admin only)
+   */
+  delete: (id) =>
+    authFetch(`/announcements/${id}`, {
+      method: "DELETE",
+    }),
 };

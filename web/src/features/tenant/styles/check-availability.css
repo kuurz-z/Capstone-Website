@@ -49,7 +49,7 @@
   transform: translateY(-50%);
   width: 18px;
   height: 18px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   pointer-events: none;
 }
 
@@ -66,11 +66,11 @@
 }
 
 .ca-filter-bar .ca-search-input::placeholder {
-  color: #9CA3AF;
+  color: var(--text-muted);
 }
 
 .ca-filter-bar .ca-search-input:focus {
-  border-color: #0A1628;
+  border-color: var(--text-heading);
   box-shadow: 0 0 0 1.5px rgba(10, 22, 40, 0.07);
 }
 
@@ -78,7 +78,7 @@
 .ca-filter-select {
   appearance: none;
   padding: 10px 32px 10px 14px;
-  border: 1.5px solid #E5E7EB;
+  border: 1.5px solid var(--border-card);
   border-radius: 10px;
   background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 12px center;
   font-size: 13px;
@@ -91,20 +91,20 @@
 }
 
 .ca-filter-select:hover {
-  border-color: #9CA3AF;
+  border-color: var(--text-muted);
 }
 
 .ca-filter-select:focus {
-  border-color: #0A1628;
+  border-color: var(--text-heading);
 }
 
 /* Clear button */
 .ca-clear-btn {
   background: none;
-  border: 1.5px solid #E5E7EB;
+  border: 1.5px solid var(--border-card);
   font-size: 13px;
   font-weight: 500;
-  color: #9CA3AF;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 8px 16px;
   border-radius: 10px;
@@ -114,7 +114,7 @@
 
 .ca-clear-btn:hover {
   color: #EF4444;
-  background: #FEF2F2;
+  background: var(--color-danger-bg);
   border-color: #FECACA;
 }
 
@@ -143,7 +143,7 @@
   width: 100%;
   height: 4px;
   border-radius: 2px;
-  background: #E5E7EB;
+  background: var(--border-card);
   outline: none;
   cursor: pointer;
 }
@@ -159,7 +159,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #0A1628;
+  background: var(--text-heading);
   cursor: pointer;
   margin-top: -7px;
   box-shadow: 0 1px 4px rgba(10, 22, 40, 0.3);
@@ -173,7 +173,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #0A1628;
+  background: var(--text-heading);
   cursor: pointer;
   border: none;
   box-shadow: 0 1px 4px rgba(10, 22, 40, 0.3);
@@ -182,13 +182,13 @@
 .ca-price-slider::-moz-range-track {
   height: 4px;
   border-radius: 2px;
-  background: #E5E7EB;
+  background: var(--border-card);
 }
 
 /* ── Room Count ──────────────────────────────────────────────────── */
 .ca-room-count {
   font-size: 13px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   margin: 16px 0 24px;
   font-weight: 500;
 }
@@ -311,7 +311,7 @@
 .ca-card-title {
   font-size: 15px;
   font-weight: 700;
-  color: #0A1628;
+  color: var(--text-heading);
   margin: 0 0 6px;
   display: flex;
   align-items: center;
@@ -369,7 +369,7 @@
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   margin-bottom: 10px;
 }
 
@@ -383,13 +383,13 @@
 .ca-card-price {
   font-size: 17px;
   font-weight: 700;
-  color: #0A1628;
+  color: var(--text-heading);
 }
 
 .ca-card-price span {
   font-size: 13px;
   font-weight: 400;
-  color: #9CA3AF;
+  color: var(--text-muted);
 }
 
 /* ── Empty State ─────────────────────────────────────────────────── */
@@ -419,7 +419,7 @@
 
 .ca-empty p {
   font-size: 14px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   margin: 0 0 20px;
 }
 
@@ -447,7 +447,7 @@
   margin-top: 28px;
   padding: 14px 20px;
   background: #fff;
-  border: 1px solid #E5E7EB;
+  border: 1px solid var(--border-card);
   border-radius: 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -471,7 +471,7 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  border: 1.5px solid #E5E7EB;
+  border: 1.5px solid var(--border-card);
   background: #fff;
   color: #374151;
   cursor: pointer;
@@ -480,8 +480,8 @@
 
 .ca-pagination__btn:hover:not(:disabled) {
   background: #F3F4F6;
-  border-color: #9CA3AF;
-  color: #0A1628;
+  border-color: var(--text-muted);
+  color: var(--text-heading);
 }
 
 .ca-pagination__btn:disabled {
@@ -534,20 +534,20 @@
 .ca-section-title {
   font-size: 22px;
   font-weight: 700;
-  color: #0A1628;
+  color: var(--text-heading);
   margin: 0 0 4px;
 }
 
 .ca-section-subtitle {
   font-size: 14px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   margin: 0 0 24px;
 }
 
 /* ── Sign-in prompt ──────────────────────────────────────────────── */
 .ca-signin-prompt {
   font-size: 13px;
-  color: #9CA3AF;
+  color: var(--text-muted);
   margin-top: 6px;
 }
 
@@ -632,8 +632,8 @@ html[data-theme="dark"] .ca-clear-btn {
 }
 
 html[data-theme="dark"] .ca-clear-btn:hover {
-  color: #f1f5f9;
-  border-color: #64748b;
+  color: var(--surface-hover);
+  border-color: var(--text-secondary);
   background: rgba(148, 163, 184, 0.1);
 }
 

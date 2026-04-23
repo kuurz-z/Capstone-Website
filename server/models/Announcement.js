@@ -49,6 +49,12 @@ const announcementSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    contentType: {
+      type: String,
+      enum: ["announcement", "policy"],
+      default: "announcement",
+      index: true,
+    },
 
     // --- Targeting & Visibility ---
     targetBranch: {
@@ -72,7 +78,13 @@ const announcementSchema = new mongoose.Schema(
     },
     publishedAt: {
       type: Date,
-      default: Date.now,
+      default: null,
+      index: true,
+    },
+    publicationStatus: {
+      type: String,
+      enum: ["draft", "scheduled", "published", "superseded"],
+      default: "published",
       index: true,
     },
 
@@ -90,6 +102,45 @@ const announcementSchema = new mongoose.Schema(
     endsAt: {
       type: Date,
       default: null,
+    },
+    effectiveDate: {
+      type: Date,
+      default: null,
+    },
+    policyKey: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+    version: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+    previousVersionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Announcement",
+      default: null,
+    },
+    supersededById: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Announcement",
+      default: null,
+    },
+    notificationDispatchedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    notificationDispatchErrorAt: {
+      type: Date,
+      default: null,
+    },
+    notificationDispatchAttemptCount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     isPinned: {
       type: Boolean,
@@ -124,6 +175,8 @@ const announcementSchema = new mongoose.Schema(
 // For filtering active announcements by branch
 announcementSchema.index({ targetBranch: 1, isArchived: 1, publishedAt: -1 });
 announcementSchema.index({ category: 1, targetBranch: 1, isArchived: 1 });
+announcementSchema.index({ contentType: 1, policyKey: 1, version: -1 });
+announcementSchema.index({ publicationStatus: 1, startsAt: 1, endsAt: 1 });
 
 // For pinned announcements
 announcementSchema.index({ isPinned: -1, publishedAt: -1 });
@@ -149,6 +202,7 @@ announcementSchema.methods.incrementAcknowledgmentCount = function () {
 announcementSchema.methods.isActive = function () {
   const now = new Date();
   return (
+    ["published", "scheduled"].includes(this.publicationStatus) &&
     this.startsAt <= now &&
     (!this.endsAt || this.endsAt > now) &&
     !this.isArchived
@@ -169,6 +223,7 @@ announcementSchema.statics.findForBranch = function (branch, options = {}) {
     ],
     startsAt: { $lte: now },
     isArchived: false,
+    publicationStatus: { $in: ["scheduled", "published"] },
   };
 
   if (options.category) {

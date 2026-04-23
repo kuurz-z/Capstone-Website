@@ -209,11 +209,35 @@ describe("applyBillPayment", () => {
     expect(result.payment.amount).toBe(500);
   });
 
+  test("persists proof image metadata when supplied for proof-based payments", async () => {
+    const bill = buildBillFixture();
+    const paymentModel = {
+      create: jest.fn(async (payload) => ({ ...payload, deleteOne: jest.fn() })),
+    };
+
+    const result = await applyBillPayment({
+      bill,
+      amount: 500,
+      method: "bank",
+      source: "tenant-proof",
+      actorId: "admin-1",
+      proofImageUrl: "https://example.com/proof.png",
+      paymentModel,
+      now: new Date("2026-04-03T10:00:00.000Z"),
+    });
+
+    expect(result.payment.proofImageUrl).toBe("https://example.com/proof.png");
+  });
+
   test("exposes ledger fields and idempotency index on the payment schema", () => {
     expect(Payment.schema.path("source")).toBeDefined();
     expect(Payment.schema.path("externalPaymentId")).toBeDefined();
     expect(Payment.schema.path("processedAt")).toBeDefined();
     expect(Payment.schema.path("metadata")).toBeDefined();
+    expect(Payment.schema.path("proofImageUrl")).toBeDefined();
+    expect(Payment.schema.path("method").enumValues).toEqual(
+      expect.arrayContaining(["paymaya", "grab_pay", "maya", "online"]),
+    );
 
     const indexedFields = Payment.schema
       .indexes()

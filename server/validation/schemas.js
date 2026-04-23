@@ -68,6 +68,49 @@ export const createAnnouncementSchema = {
   requiresAcknowledgment: {
     type: "boolean",
   },
+  contentType: {
+    type: "string",
+    enum: ["announcement", "policy"],
+  },
+  publicationStatus: {
+    type: "string",
+    enum: ["draft", "scheduled", "published"],
+  },
+  startsAt: { type: "string" },
+  endsAt: { type: "string" },
+  effectiveDate: { type: "string" },
+  policyKey: { type: "string" },
+};
+
+/**
+ * Validation schema for updating announcements.
+ */
+export const updateAnnouncementSchema = {
+  title: { type: "string" },
+  content: { type: "string" },
+  category: {
+    type: "string",
+    enum: ANNOUNCEMENT_CATEGORIES,
+  },
+  targetBranch: {
+    type: "string",
+    enum: ANNOUNCEMENT_TARGET_BRANCHES,
+  },
+  requiresAcknowledgment: {
+    type: "boolean",
+  },
+  contentType: {
+    type: "string",
+    enum: ["announcement", "policy"],
+  },
+  publicationStatus: {
+    type: "string",
+    enum: ["draft", "scheduled", "published"],
+  },
+  startsAt: { type: "string" },
+  endsAt: { type: "string" },
+  effectiveDate: { type: "string" },
+  policyKey: { type: "string" },
 };
 
 /**

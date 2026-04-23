@@ -41,6 +41,7 @@ import {
   deleteUser,
   suspendUser,
   reactivateUser,
+  restoreUser,
   banUser,
   updatePermissions,
   getMyStays,
@@ -137,6 +138,20 @@ router.patch(
   requirePermission("manageUsers"),
   filterByBranch,
   reactivateUser,
+);
+
+/**
+ * PATCH /api/users/:userId/restore
+ * Restore an archived account.
+ * Access: Admin | Owner
+ */
+router.patch(
+  "/:userId/restore",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  restoreUser,
 );
 
 /**
@@ -243,10 +258,17 @@ router.put(
 /**
  * DELETE /api/users/:userId
  *
- * Delete a user permanently.
+ * Archive a user by default. Hard delete remains owner-only.
  *
- * Access: Owner only
+ * Access: Admin | Owner
  */
-router.delete("/:userId", verifyToken, verifyOwner, deleteUser);
+router.delete(
+  "/:userId",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  deleteUser,
+);
 
 export default router;

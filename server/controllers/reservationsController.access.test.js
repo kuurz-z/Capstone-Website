@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const reservationFindById = jest.fn();
 const utilityReadingFindOne = jest.fn();
+const ensureCurrentCycleRentBill = jest.fn();
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   Reservation: { findById: reservationFindById },
@@ -9,6 +10,8 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   Room: {},
   Bill: { countDocuments: jest.fn(), deleteMany: jest.fn() },
   UtilityReading: { findOne: utilityReadingFindOne },
+  BedHistory: {},
+  Stay: {},
   ROOM_BRANCHES: ["gil-puyat", "guadalupe"],
 }));
 
@@ -24,6 +27,9 @@ await jest.unstable_mockModule("../utils/auditLogger.js", () => ({
 await jest.unstable_mockModule("../utils/occupancyManager.js", () => ({
   updateOccupancyOnReservationChange: jest.fn(),
 }));
+await jest.unstable_mockModule("../utils/rentGenerator.js", () => ({
+  ensureCurrentCycleRentBill,
+}));
 await jest.unstable_mockModule("../utils/reservationHelpers.js", () => ({
   isValidObjectId: jest.fn(() => true),
   invalidIdResponse: jest.fn(),
@@ -32,6 +38,7 @@ await jest.unstable_mockModule("../utils/reservationHelpers.js", () => ({
   validateMoveInDate: jest.fn(() => true),
   handleStatusTransition: jest.fn(),
   syncReservationUserLifecycle: jest.fn(),
+  reconcileTenantUsersForScope: jest.fn(async () => []),
   buildUserUpdatePayload: jest.fn(() => ({})),
   getMoveInBlockers: jest.fn(() => []),
 }));
@@ -85,6 +92,7 @@ describe("reservationsController.updateReservation access hardening", () => {
   beforeEach(() => {
     reservationFindById.mockReset();
     utilityReadingFindOne.mockReset();
+    ensureCurrentCycleRentBill.mockReset();
   });
 
   test("rejects invalid lifecycle jumps before mutating reservation", async () => {

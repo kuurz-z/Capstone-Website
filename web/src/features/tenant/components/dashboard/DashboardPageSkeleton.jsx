@@ -1,13 +1,11 @@
 import React from "react";
 import SkeletonPulse from "../../../../shared/components/SkeletonPulse";
-import TenantLayout from "../../../../shared/layouts/TenantLayout";
 
 /**
  * DashboardPageSkeleton — shimmer skeleton that mirrors the DashboardPage layout.
  */
 export default function DashboardPageSkeleton() {
   return (
-    <TenantLayout>
       <div className="dashboard-page">
         {/* Welcome Header */}
         <div className="dashboard-header">
@@ -59,6 +57,5 @@ export default function DashboardPageSkeleton() {
           </div>
         </div>
       </div>
-    </TenantLayout>
   );
 }

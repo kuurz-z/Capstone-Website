@@ -244,6 +244,22 @@ export const serializeReservation = (
     plain.status ||
     plain.reservationStatus ||
     null;
+  const userRef = plain.userId;
+  const hasResolvedUser =
+    Boolean(userRef) &&
+    typeof userRef === "object" &&
+    (userRef.firstName || userRef.lastName || userRef.email);
+  const hasUserReference = Boolean(
+    (hasResolvedUser && userRef._id) ||
+      (!hasResolvedUser && userRef),
+  );
+  const customerName = hasResolvedUser
+    ? `${userRef.firstName || ""} ${userRef.lastName || ""}`.trim() ||
+      userRef.email ||
+      "Unknown"
+    : hasUserReference
+      ? "Deleted account"
+      : "Unknown";
 
   const serialized = {
     ...plain,
@@ -251,6 +267,11 @@ export const serializeReservation = (
     reservationStatus: status,
     moveInDate,
     moveOutDate,
+    customer: plain.customer || customerName,
+    guestName: plain.guestName || customerName,
+    email:
+      plain.email ||
+      (hasResolvedUser ? userRef.email || plain.billingEmail || null : plain.billingEmail || null),
   };
 
   if (includeLegacyDates) {
