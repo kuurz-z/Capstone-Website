@@ -1,13 +1,8 @@
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { createPortal } from "react-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
-import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
-import { showNotification } from "../../../shared/utils/notification";
-import { buildSignOutSuccessFlash } from "../../../shared/utils/authToasts";
-import LilycrestLogo from "../../../shared/components/LilycrestLogo";
-import { LogOut, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   NAV_GROUPS,
   getSidebarBrandMeta,
@@ -21,13 +16,9 @@ export default function AdminSidebar({
   collapsed,
   onToggleCollapse,
 }) {
-  const { user, logout, globalLoading } = useAuth();
+  const { user } = useAuth();
   const { can } = usePermissions();
-  const appNavigate = useAppNavigation();
   const isOwner = user?.role === "owner";
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [logoutInProgress, setLogoutInProgress] = useState(false);
-  const logoutCalledRef = React.useRef(false);
   const [hoveredItem, setHoveredItem] = useState(null);
 
   const visibleItems = getVisibleNavItems({ isOwner, can });
@@ -36,45 +27,6 @@ export default function AdminSidebar({
     acc[item.group].push(item);
     return acc;
   }, {});
-
-  const handleLogout = async () => {
-    if (logoutCalledRef.current) return;
-    logoutCalledRef.current = true;
-    try {
-      const result = await logout();
-      if (result?.success) {
-        appNavigate("/signin", {
-          replace: true,
-          ...buildSignOutSuccessFlash(),
-        });
-      }
-    } catch (error) {
-      console.error("Admin logout error:", error);
-      showNotification("Logout failed. Please try again.", "error");
-      logoutCalledRef.current = false;
-    }
-  };
-
-  const confirmLogout = () => {
-    logoutCalledRef.current = false;
-    setShowLogoutConfirm(true);
-  };
-
-  const cancelLogout = () => {
-    setShowLogoutConfirm(false);
-    logoutCalledRef.current = false;
-  };
-
-  const proceedLogout = () => {
-    if (logoutInProgress || logoutCalledRef.current) return;
-    setLogoutInProgress(true);
-    setShowLogoutConfirm(false);
-    requestAnimationFrame(() => {
-      handleLogout().finally(() => {
-        setLogoutInProgress(false);
-      });
-    });
-  };
 
   const displayName = user
     ? `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
@@ -87,57 +39,48 @@ export default function AdminSidebar({
     ? `${(user.firstName || "A")[0]}${(user.lastName || "")[0] || ""}`.toUpperCase()
     : "A";
 
-  const renderGroup = (group) => {
-    const items = groupedItems[group.id] || [];
-    if (items.length === 0) return null;
-
-    return (
-      <div className="sb-group" key={group.id}>
-        {!collapsed && <span className="sb-group-label">{group.label}</span>}
-        <ul className="sb-menu">
-          {items.map((item) => (
-            <li key={item.to} className="sb-menu-item">
-              <NavLink
-                to={item.to}
-                className={({ isActive }) =>
-                  `sb-link ${isActive ? "active" : ""}`
-                }
-                onClick={onClose}
-                onMouseEnter={() => collapsed && setHoveredItem(item.to)}
-                onMouseLeave={() => setHoveredItem(null)}
-              >
-                <span className="sb-link-indicator" />
-                <item.icon className="sb-link-icon" />
-                {!collapsed && (
-                  <span className="sb-link-text">{item.text}</span>
-                )}
-                {collapsed && hoveredItem === item.to && (
-                  <span className="sb-tooltip">{item.text}</span>
-                )}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  };
+  const shellWidthClass = collapsed ? "w-16" : "w-64";
+  const shellVisibilityClass = isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0";
+  const sectionLabelClass = "px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]";
+  const navButtonBase =
+    "group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-0";
+  const navButtonActive =
+    "bg-[#d1b23d] text-[#0f1a2f]";
+  const navButtonIdle =
+    "text-[var(--text-primary)] hover:bg-[rgba(209,178,61,0.14)] hover:text-[var(--text-primary)] dark:hover:bg-[rgba(209,178,61,0.2)]";
 
   return (
     <aside
-      className={`sb ${isOpen ? "sb--open" : ""} ${collapsed ? "sb--collapsed" : ""}`}
+      className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--border-subtle,var(--border-light))] bg-[var(--surface-sidebar,var(--bg-sidebar))] transition-all duration-300 ease-out ${shellWidthClass} ${shellVisibilityClass}`}
     >
-      <div className="sb-header">
-        <div className="sb-brand">
-          <LilycrestLogo className="sb-logo" aria-label="Lilycrest Logo" />
+      <div className="flex min-h-[74px] items-center justify-between gap-3 border-b border-[var(--border-subtle,var(--border-light))] px-4 py-4">
+        <div className={`flex min-w-0 items-center gap-3 whitespace-nowrap ${collapsed ? "justify-center" : ""}`}>
+          <span
+            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#d1b23d] text-base font-semibold text-[#0f1a2f]"
+            aria-label="Lilycrest Logo"
+          >
+            L
+          </span>
           {!collapsed && (
-            <div className="sb-brand-text">
-              <span className="sb-title">{brandMeta.title}</span>
-              <span className="sb-subtitle">{brandMeta.subtitle}</span>
+            <div className="flex min-w-0 flex-col leading-none">
+              <span className="truncate text-[30px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
+                {brandMeta.title}
+              </span>
             </div>
           )}
         </div>
         <button
-          className="sb-close"
+          className="hidden h-8 w-8 items-center justify-center rounded-md text-[var(--text-primary)] transition-colors duration-200 hover:bg-[rgba(209,178,61,0.12)] md:inline-flex"
+          type="button"
+          onClick={onToggleCollapse}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
+        <button
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-primary)] transition-colors duration-200 hover:bg-[rgba(209,178,61,0.12)] md:hidden"
+          type="button"
           onClick={onClose}
           aria-label="Close sidebar"
         >
@@ -145,98 +88,63 @@ export default function AdminSidebar({
         </button>
       </div>
 
-      <nav className="sb-nav">
+      <nav
+        className="sidebar-scroll flex-1 overflow-y-auto overflow-x-hidden py-2"
+        aria-label="Admin navigation"
+      >
         {NAV_GROUPS.slice()
           .sort((a, b) => a.priority - b.priority)
-          .map((group) => renderGroup(group))}
+          .map((group) => {
+            const items = groupedItems[group.id] || [];
+            if (items.length === 0) return null;
+
+            return (
+              <div
+                key={group.id}
+                className={group.id === "system" ? "mt-6 pt-2" : ""}
+              >
+                {!collapsed && group.id === "system" && (
+                  <div className={sectionLabelClass}>{group.label}</div>
+                )}
+                {collapsed && group.id === "system" && (
+                  <div className="mx-2 mb-3 border-t border-[var(--border-subtle,var(--border-light))]" />
+                )}
+                <div className="space-y-1.5 px-2">
+                  {items.map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        className={({ isActive }) =>
+                          `${navButtonBase} ${isActive ? navButtonActive : navButtonIdle} ${collapsed ? "justify-center px-2" : ""}`
+                        }
+                        title={collapsed ? item.text : undefined}
+                        aria-label={item.text}
+                        onClick={onClose}
+                        onMouseEnter={() => collapsed && setHoveredItem(item.to)}
+                        onMouseLeave={() => setHoveredItem(null)}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <Icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-[#0f1a2f]" : "text-[var(--text-primary)]"}`} />
+                            {!collapsed && (
+                              <span className="truncate leading-tight">{item.text}</span>
+                            )}
+                            {collapsed && hoveredItem === item.to && (
+                              <span className="sb-tooltip">{item.text}</span>
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
       </nav>
-
-      <div className="sb-footer">
-        <button
-          className="sb-collapse-toggle"
-          onClick={onToggleCollapse}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? (
-            <PanelLeftOpen size={16} />
-          ) : (
-            <PanelLeftClose size={16} />
-          )}
-          {!collapsed && <span>Collapse</span>}
-        </button>
-
-        <div className="sb-profile">
-          <div
-            className="sb-avatar"
-            onMouseEnter={() => collapsed && setHoveredItem("__profile")}
-            onMouseLeave={() => setHoveredItem(null)}
-          >
-            {initials}
-          </div>
-          {!collapsed && (
-            <div className="sb-profile-info">
-              <span className="sb-profile-name">{displayName}</span>
-              <span className="sb-profile-role">{roleLabel}</span>
-            </div>
-          )}
-          {collapsed && hoveredItem === "__profile" && (
-            <span className="sb-tooltip">
-              {displayName} · {roleLabel}
-            </span>
-          )}
-        </div>
-
-        <button
-          className="sb-signout"
-          onClick={confirmLogout}
-          onMouseEnter={() => collapsed && setHoveredItem("__signout")}
-          onMouseLeave={() => setHoveredItem(null)}
-        >
-          <LogOut size={16} />
-          {!collapsed && <span>Sign Out</span>}
-          {collapsed && hoveredItem === "__signout" && (
-            <span className="sb-tooltip">Sign Out</span>
-          )}
-        </button>
-      </div>
-
-      {showLogoutConfirm &&
-        createPortal(
-          <div className="sb-logout-overlay" onClick={cancelLogout}>
-            <div
-              className="sb-logout-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sb-logout-modal-icon">
-                <LogOut size={22} />
-              </div>
-              <h3 className="sb-logout-modal-title">Sign Out</h3>
-              <p className="sb-logout-modal-text">
-                You will be signed out and redirected to the login page. Are you
-                sure?
-              </p>
-              <div className="sb-logout-modal-actions">
-                <button
-                  className="sb-logout-modal-cancel"
-                  onClick={cancelLogout}
-                  disabled={logoutInProgress || globalLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="sb-logout-modal-confirm"
-                  onClick={proceedLogout}
-                  disabled={logoutInProgress || globalLoading}
-                >
-                  {logoutInProgress || globalLoading
-                    ? "Signing out..."
-                    : "Sign Out"}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
     </aside>
   );
 }
