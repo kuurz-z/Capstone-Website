@@ -10,12 +10,15 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch } from "./reportCommon";
 import {
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
   buildBranchControl,
   ExportButtons,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
   RANGE_OPTIONS_SHORT,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const INVENTORY_COLUMNS = [
@@ -81,11 +84,19 @@ export default function AnalyticsOccupancyTab({
     months: 3,
     ...(isOwner ? { branch } : {}),
   });
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "occupancy",
+    range,
+    branch: isOwner ? branch : undefined,
+  });
 
   const inventory = data?.tables?.inventory || [];
   const roomTypes = data?.tables?.roomTypes || [];
   const trend = data?.series?.occupancyTrend || [];
-  const pagedInventory = inventory.slice((page - 1) * 10, page * 10);
   const forecast = forecastData?.forecast || {};
   const forecastSeries = (forecast.projected || []).map((item) => ({
     label: item.label,
@@ -124,6 +135,7 @@ export default function AnalyticsOccupancyTab({
       filename: `occupancy-report-${range}.pdf`,
       kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
       sections: [
+        ...buildInsightPdfSections(insightData, "AI Occupancy Summary"),
         {
           title: "Room Type Summary",
           rows: roomTypes.map(
@@ -160,6 +172,14 @@ export default function AnalyticsOccupancyTab({
       }
     >
       <MetricGrid items={metricCards} />
+
+      <AnalyticsInsightSection
+        reportLabel="occupancy"
+        summaryTitle="Occupancy Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
 
       <div className="admin-reports__grid">
         <ReportChartPanel title="Occupancy trend" subtitle="Daily occupancy rate over the selected period">
@@ -207,7 +227,7 @@ export default function AnalyticsOccupancyTab({
       <ReportChartPanel title="Inventory table" subtitle="Current room capacity, occupancy, and unavailable inventory">
         <DataTable
           columns={INVENTORY_COLUMNS}
-          data={pagedInventory}
+          data={inventory}
           loading={isLoading}
           pagination={{
             page,

@@ -19,6 +19,7 @@ export function exportReportPdf({
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
+  const contentWidth = pageWidth - margin * 2;
   let y = margin;
 
   const ensureSpace = (needed = 12) => {
@@ -27,18 +28,35 @@ export function exportReportPdf({
     y = margin;
   };
 
+  const toLines = (text, width = contentWidth) => doc.splitTextToSize(String(text ?? ""), width);
+
+  const writeLines = (lines, { x = margin, lineHeight = 4.5, font = "normal", size = 9, color } = {}) => {
+    const normalizedLines = Array.isArray(lines) ? lines : [String(lines ?? "")];
+    if (normalizedLines.length === 0) return;
+    ensureSpace(normalizedLines.length * lineHeight + 1);
+    doc.setFont("helvetica", font);
+    doc.setFontSize(size);
+    if (color) {
+      doc.setTextColor(...color);
+    }
+    doc.text(normalizedLines, x, y);
+    if (color) {
+      doc.setTextColor(0, 0, 0);
+    }
+    y += normalizedLines.length * lineHeight;
+  };
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.text(title || "Analytics Report", margin, y);
   y += 7;
 
   if (subtitle) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(subtitle, margin, y);
-    y += 8;
-    doc.setTextColor(0, 0, 0);
+    writeLines(toLines(subtitle), {
+      size: 10,
+      color: [100, 100, 100],
+    });
+    y += 3.5;
   }
 
   if (kpis.length > 0) {
@@ -77,27 +95,23 @@ export function exportReportPdf({
     y += 6;
 
     if (section.description) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(100, 100, 100);
-      doc.text(section.description, margin, y);
-      doc.setTextColor(0, 0, 0);
-      y += 5;
+      writeLines(toLines(section.description), {
+        size: 9,
+        color: [100, 100, 100],
+      });
+      y += 1;
     }
 
     if (Array.isArray(section.rows) && section.rows.length > 0) {
       section.rows.forEach((row) => {
-        ensureSpace(6);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.text(row, margin, y);
-        y += 4.5;
+        const rowLines = toLines(row);
+        writeLines(rowLines, {
+          size: 9,
+          lineHeight: 4.5,
+        });
       });
     } else {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text("No rows available.", margin, y);
-      y += 4.5;
+      writeLines("No rows available.", { size: 9 });
     }
   });
 

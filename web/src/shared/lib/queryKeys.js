@@ -94,6 +94,7 @@ export const queryKeys = {
     occupancyForecast: (params) => ["analytics", "occupancy-forecast", params || {}],
     financials: (params) => ["analytics", "financials", params || {}],
     audit: (params) => ["analytics", "audit", params || {}],
+    insights: (params) => ["analytics", "insights", params || {}],
   },
 
   settings: {
