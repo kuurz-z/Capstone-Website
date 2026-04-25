@@ -15,6 +15,7 @@ import { sendSuccess, AppError } from "../middleware/errorHandler.js";
 import { getUserBranchInfo } from "../middleware/branchAccess.js";
 import { getBranchOccupancyStats } from "../utils/occupancyManager.js";
 import { ACTIVE_OCCUPANCY_STATUS_QUERY } from "../utils/lifecycleNaming.js";
+import { generateAnalyticsInsight } from "../services/analyticsInsightsService.js";
 
 const DASHBOARD_RANGE_DAYS = Object.freeze({
   "7d": 7,
@@ -971,12 +972,12 @@ const buildSuspiciousIpRows = (failedLogins) => {
   return [...grouped.values()]
     .filter((entry) => entry.count >= 3)
     .map((entry) => ({
-      ip: entry.ip,
-      count: entry.count,
-      lastAttemptAt: entry.lastAttemptAt,
+      ipAddress: entry.ip,
+      attempts: entry.count,
+      lastSeenAt: entry.lastAttemptAt,
       targetedEmails: [...entry.emails],
     }))
-    .sort((left, right) => right.count - left.count)
+    .sort((left, right) => right.attempts - left.attempts)
     .slice(0, 10);
 };
 
@@ -1043,6 +1044,341 @@ const buildBranchComparison = async (scope, sinceDate) => {
 
   return comparisons;
 };
+
+const buildOccupancyReportData = async (scope, rangeKey) => {
+  const rangeDays = parseReportDays(rangeKey);
+  const sinceDate = dayjs().subtract(rangeDays - 1, "day").startOf("day").toDate();
+
+  const rooms = await Room.find({
+    isArchived: false,
+    branch: { $in: scope.branchesIncluded },
+  })
+    .select("_id name roomNumber branch type floor capacity currentOccupancy available beds")
+    .lean();
+
+  const roomIds = rooms.map((room) => room._id);
+  const reservations = roomIds.length
+    ? await fetchScopedReservations(roomIds, {
+        moveInDate: { $lte: dayjs().endOf("day").toDate() },
+        $or: [
+          { moveOutDate: null },
+          { moveOutDate: { $gte: sinceDate } },
+          { checkOutDate: null },
+          { checkOutDate: { $gte: sinceDate } },
+        ],
+      })
+    : [];
+
+  const inventory = buildRoomInventoryRows(rooms);
+  const roomTypes = buildRoomTypeSummary(rooms);
+  const totalCapacity = inventory.reduce((sum, row) => sum + row.capacity, 0);
+  const occupiedBeds = inventory.reduce((sum, row) => sum + row.occupiedBeds, 0);
+  const unavailableBeds = inventory.reduce((sum, row) => sum + row.unavailableBeds, 0);
+  const availableBeds = inventory.reduce((sum, row) => sum + row.availableBeds, 0);
+  const occupancyRate =
+    totalCapacity > 0 ? Math.round((occupiedBeds / totalCapacity) * 100) : 0;
+
+  return {
+    ...buildRangeEnvelope(scope, {
+      range: rangeKey,
+      since: sinceDate.toISOString(),
+    }),
+    kpis: {
+      totalRooms: rooms.length,
+      totalCapacity,
+      occupiedBeds,
+      availableBeds,
+      unavailableBeds,
+      occupancyRate,
+      occupancyRateLabel: `${occupancyRate}%`,
+    },
+    series: {
+      occupancyTrend: buildOccupancyTrend({
+        rooms,
+        reservations,
+        days: rangeDays,
+      }),
+    },
+    tables: {
+      inventory,
+      roomTypes,
+    },
+  };
+};
+
+const buildBillingReportData = async (scope, rangeKey) => {
+  const rangeMonths = parseReportMonths(rangeKey);
+  const sinceMonth = dayjs()
+    .subtract(rangeMonths - 1, "month")
+    .startOf("month")
+    .toDate();
+
+  const [periodBills, openBills] = await Promise.all([
+    fetchScopedBills(scope.branchesIncluded, {
+      billingMonth: { $gte: sinceMonth },
+    }),
+    fetchScopedBills(scope.branchesIncluded, {
+      status: { $in: ["pending", "overdue", "partially-paid"] },
+    }),
+  ]);
+
+  const billedAmount = periodBills.reduce(
+    (sum, bill) => sum + toNumber(bill.totalAmount),
+    0,
+  );
+  const collectedRevenue = periodBills.reduce(
+    (sum, bill) => sum + toNumber(bill.paidAmount),
+    0,
+  );
+  const outstandingBalance = openBills.reduce(
+    (sum, bill) => sum + getRemainingBalance(bill),
+    0,
+  );
+  const overdueBills = openBills.filter(
+    (bill) => bill.dueDate && dayjs(bill.dueDate).isBefore(dayjs(), "day"),
+  );
+  const overdueAmount = overdueBills.reduce(
+    (sum, bill) => sum + getRemainingBalance(bill),
+    0,
+  );
+  const collectionRate =
+    billedAmount > 0 ? Math.round((collectedRevenue / billedAmount) * 100) : 0;
+
+  const overdueRows = overdueBills
+    .map(buildBillingTableRow)
+    .sort((left, right) => right.daysOverdue - left.daysOverdue)
+    .slice(0, 15);
+  const unpaidRows = openBills
+    .map(buildBillingTableRow)
+    .sort((left, right) => right.balance - left.balance)
+    .slice(0, 15);
+
+  return {
+    ...buildRangeEnvelope(scope, {
+      range: rangeKey,
+      since: sinceMonth.toISOString(),
+    }),
+    kpis: {
+      billedAmount,
+      billedAmountLabel: formatCurrency(billedAmount),
+      collectedRevenue,
+      collectedRevenueLabel: formatCurrency(collectedRevenue),
+      outstandingBalance,
+      outstandingBalanceLabel: formatCurrency(outstandingBalance),
+      overdueAmount,
+      overdueAmountLabel: formatCurrency(overdueAmount),
+      collectionRate,
+      collectionRateLabel: `${collectionRate}%`,
+    },
+    series: {
+      revenueByMonth: buildBillingMonthSeries(periodBills, rangeMonths),
+      statusDistribution: buildBillingStatusDistribution(periodBills),
+      overdueAging: buildOverdueAging(openBills),
+    },
+    tables: {
+      overdueAccounts: overdueRows,
+      unpaidBalances: unpaidRows,
+    },
+  };
+};
+
+const buildOperationsReportData = async (scope, rangeKey) => {
+  const rangeDays = parseReportDays(rangeKey);
+  const sinceDate = dayjs().subtract(rangeDays - 1, "day").startOf("day").toDate();
+
+  const rooms = await fetchScopedRooms(scope.branchesIncluded);
+  const roomIds = rooms.map((room) => room._id);
+
+  const [reservations, inquiries, maintenanceRequests, resolvedRequests] =
+    await Promise.all([
+      roomIds.length
+        ? fetchScopedReservations(roomIds, { createdAt: { $gte: sinceDate } })
+        : [],
+      fetchScopedInquiries(scope.branchesIncluded, { createdAt: { $gte: sinceDate } }),
+      fetchScopedMaintenanceRequests(scope.branchesIncluded, { created_at: { $gte: sinceDate } }),
+      fetchScopedMaintenanceRequests(scope.branchesIncluded, { resolved_at: { $gte: sinceDate } }),
+    ]);
+
+  const resolutionSummary = buildResolutionSummary(resolvedRequests);
+  const inquiryWindows = buildInquiryHourWindows(inquiries)
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 6);
+  const maintenanceRows = maintenanceRequests
+    .map((request) => {
+      const slaState = getMaintenanceSlaState(request);
+      const resolutionHours =
+        request.resolved_at && request.created_at
+          ? Number(
+              dayjs(request.resolved_at).diff(
+                dayjs(request.created_at),
+                "hour",
+                true,
+              ).toFixed(1),
+            )
+          : null;
+
+      return {
+        id: String(request._id),
+        requestId: request.request_id,
+        type: request.request_type,
+        typeLabel: formatBranchLabel(request.request_type || "other"),
+        urgency: request.urgency,
+        status: request.status,
+        branch: request.branch,
+        createdAt: request.created_at,
+        resolvedAt: request.resolved_at,
+        resolutionHours,
+        slaState: slaState.label,
+      };
+    })
+    .slice(0, 15);
+  const reservationRows = reservations.slice(0, 15).map((reservation) => ({
+    id: String(reservation._id),
+    reservationCode: reservation.reservationCode || reservation.visitCode || "Pending",
+    guestName:
+      `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
+      "Unknown Guest",
+    roomName:
+      reservation.roomId?.name ||
+      reservation.roomId?.roomNumber ||
+      "Unknown Room",
+    branch: reservation.roomId?.branch || null,
+    status: reservation.status,
+    createdAt: reservation.createdAt,
+    moveInDate: reservation.moveInDate || reservation.targetMoveInDate || null,
+  }));
+
+  return {
+    ...buildRangeEnvelope(scope, {
+      range: rangeKey,
+      since: sinceDate.toISOString(),
+    }),
+    kpis: {
+      reservations: reservations.length,
+      inquiries: inquiries.length,
+      maintenanceRequests: maintenanceRequests.length,
+      avgResolutionHours: resolutionSummary.avgResolutionHours,
+      avgResolutionHoursLabel: `${resolutionSummary.avgResolutionHours} hrs`,
+      slaComplianceRate: resolutionSummary.slaComplianceRate,
+      slaComplianceRateLabel: `${resolutionSummary.slaComplianceRate}%`,
+    },
+    series: {
+      reservationsByPeriod: buildReservationSeries(reservations, rangeDays),
+      inquiriesByWeekday: buildInquiryWeekdaySeries(inquiries),
+      peakInquiryWindows: buildInquiryHourWindows(inquiries),
+      maintenanceByType: buildMaintenanceTypeSeries(maintenanceRequests),
+      maintenanceResolution: resolutionSummary.series,
+    },
+    tables: {
+      peakInquiryWindows: inquiryWindows,
+      maintenanceIssues: maintenanceRows,
+      reservations: reservationRows,
+    },
+  };
+};
+
+const buildAuditSummaryData = async (scope, rangeKey) => {
+  if (!scope.isOwner) {
+    throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
+  }
+
+  const rangeDays = parseRangeDays(rangeKey);
+  const sinceDate = dayjs().subtract(rangeDays, "day").startOf("day").toDate();
+
+  const [logs, failedLogins] = await Promise.all([
+    AuditLog.find({
+      timestamp: { $gte: sinceDate },
+      ...(scope.branch === "all"
+        ? {}
+        : {
+            $or: [
+              { branch: scope.branch },
+              { branch: "" },
+              { branch: "general" },
+            ],
+          }),
+    })
+      .sort({ timestamp: -1 })
+      .lean(),
+    LoginLog.find({
+      success: false,
+      createdAt: { $gte: sinceDate },
+    })
+      .sort({ createdAt: -1 })
+      .lean(),
+  ]);
+
+  const suspiciousIps = buildSuspiciousIpRows(failedLogins);
+  const highSeverityCount = logs.filter((log) =>
+    ["high", "critical"].includes(String(log.severity || "")),
+  ).length;
+  const accessOverrideCount = logs.filter((log) =>
+    /override|permission|role/i.test(`${log.action || ""} ${log.details || ""}`),
+  ).length;
+  const criticalEvents = logs.filter((log) => log.severity === "critical").length;
+  const branchSummary = buildAuditBranchSummary(logs, scope.branchesIncluded);
+  const recentSecurityEvents = logs
+    .filter(
+      (log) =>
+        ["warning", "high", "critical"].includes(String(log.severity || "")) ||
+        log.type === "login",
+    )
+    .slice(0, 20)
+    .map((log) => ({
+      id: log.logId,
+      branch: log.branch || "general",
+      type: log.type,
+      action: log.action,
+      severity: log.severity,
+      user: log.user,
+      timestamp: log.timestamp,
+    }));
+
+  return {
+    ...buildRangeEnvelope(scope, {
+      range: rangeKey,
+      since: sinceDate.toISOString(),
+    }),
+    kpis: {
+      failedLogins: failedLogins.length,
+      suspiciousIpCount: suspiciousIps.length,
+      highSeverityActions: highSeverityCount,
+      highSeverityActionsLabel: String(highSeverityCount),
+      accessOverrides: accessOverrideCount,
+      criticalEvents,
+      uniqueFailedLoginIps: suspiciousIps.length,
+    },
+    series: {
+      severityDistribution: buildAuditSeveritySeries(logs),
+      branchSummary,
+    },
+    tables: {
+      suspiciousIps,
+      recentSecurityEvents,
+    },
+  };
+};
+
+const resolveInsightScope = async (req, branchOverride) => {
+  if (!branchOverride) {
+    return resolveAnalyticsScope(req);
+  }
+
+  return resolveAnalyticsScope({
+    ...req,
+    query: {
+      ...(req.query || {}),
+      branch: branchOverride,
+    },
+  });
+};
+
+const REPORT_BUILDERS = Object.freeze({
+  occupancy: { defaultRange: "30d", build: buildOccupancyReportData },
+  billing: { defaultRange: "3m", build: buildBillingReportData },
+  operations: { defaultRange: "30d", build: buildOperationsReportData },
+  audit: { defaultRange: "30d", build: buildAuditSummaryData },
+});
 
 export const getDashboardAnalytics = async (req, res, next) => {
   try {
@@ -1173,64 +1509,7 @@ export const getOccupancyReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
     const rangeKey = String(req.query.range || "30d").trim().toLowerCase();
-    const rangeDays = parseReportDays(rangeKey);
-    const sinceDate = dayjs().subtract(rangeDays - 1, "day").startOf("day").toDate();
-
-    const rooms = await Room.find({
-      isArchived: false,
-      branch: { $in: scope.branchesIncluded },
-    })
-      .select("_id name roomNumber branch type floor capacity currentOccupancy available beds")
-      .lean();
-
-    const roomIds = rooms.map((room) => room._id);
-    const reservations = roomIds.length
-      ? await fetchScopedReservations(roomIds, {
-          moveInDate: { $lte: dayjs().endOf("day").toDate() },
-          $or: [
-            { moveOutDate: null },
-            { moveOutDate: { $gte: sinceDate } },
-            { checkOutDate: null },
-            { checkOutDate: { $gte: sinceDate } },
-          ],
-        })
-      : [];
-
-    const inventory = buildRoomInventoryRows(rooms);
-    const roomTypes = buildRoomTypeSummary(rooms);
-    const totalCapacity = inventory.reduce((sum, row) => sum + row.capacity, 0);
-    const occupiedBeds = inventory.reduce((sum, row) => sum + row.occupiedBeds, 0);
-    const unavailableBeds = inventory.reduce((sum, row) => sum + row.unavailableBeds, 0);
-    const availableBeds = inventory.reduce((sum, row) => sum + row.availableBeds, 0);
-    const occupancyRate =
-      totalCapacity > 0 ? Math.round((occupiedBeds / totalCapacity) * 100) : 0;
-
-    sendSuccess(res, {
-      ...buildRangeEnvelope(scope, {
-        range: rangeKey,
-        since: sinceDate.toISOString(),
-      }),
-      kpis: {
-        totalRooms: rooms.length,
-        totalCapacity,
-        occupiedBeds,
-        availableBeds,
-        unavailableBeds,
-        occupancyRate,
-        occupancyRateLabel: `${occupancyRate}%`,
-      },
-      series: {
-        occupancyTrend: buildOccupancyTrend({
-          rooms,
-          reservations,
-          days: rangeDays,
-        }),
-      },
-      tables: {
-        inventory,
-        roomTypes,
-      },
-    });
+    sendSuccess(res, await buildOccupancyReportData(scope, rangeKey));
   } catch (error) {
     next(error);
   }
@@ -1240,79 +1519,7 @@ export const getBillingReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
     const rangeKey = String(req.query.range || "3m").trim().toLowerCase();
-    const rangeMonths = parseReportMonths(rangeKey);
-    const sinceMonth = dayjs()
-      .subtract(rangeMonths - 1, "month")
-      .startOf("month")
-      .toDate();
-
-    const [periodBills, openBills] = await Promise.all([
-      fetchScopedBills(scope.branchesIncluded, {
-        billingMonth: { $gte: sinceMonth },
-      }),
-      fetchScopedBills(scope.branchesIncluded, {
-        status: { $in: ["pending", "overdue", "partially-paid"] },
-      }),
-    ]);
-
-    const billedAmount = periodBills.reduce(
-      (sum, bill) => sum + toNumber(bill.totalAmount),
-      0,
-    );
-    const collectedRevenue = periodBills.reduce(
-      (sum, bill) => sum + toNumber(bill.paidAmount),
-      0,
-    );
-    const outstandingBalance = openBills.reduce(
-      (sum, bill) => sum + getRemainingBalance(bill),
-      0,
-    );
-    const overdueBills = openBills.filter(
-      (bill) => bill.dueDate && dayjs(bill.dueDate).isBefore(dayjs(), "day"),
-    );
-    const overdueAmount = overdueBills.reduce(
-      (sum, bill) => sum + getRemainingBalance(bill),
-      0,
-    );
-    const collectionRate =
-      billedAmount > 0 ? Math.round((collectedRevenue / billedAmount) * 100) : 0;
-
-    const overdueRows = overdueBills
-      .map(buildBillingTableRow)
-      .sort((left, right) => right.daysOverdue - left.daysOverdue)
-      .slice(0, 15);
-    const unpaidRows = openBills
-      .map(buildBillingTableRow)
-      .sort((left, right) => right.balance - left.balance)
-      .slice(0, 15);
-
-    sendSuccess(res, {
-      ...buildRangeEnvelope(scope, {
-        range: rangeKey,
-        since: sinceMonth.toISOString(),
-      }),
-      kpis: {
-        billedAmount,
-        billedAmountLabel: formatCurrency(billedAmount),
-        collectedRevenue,
-        collectedRevenueLabel: formatCurrency(collectedRevenue),
-        outstandingBalance,
-        outstandingBalanceLabel: formatCurrency(outstandingBalance),
-        overdueAmount,
-        overdueAmountLabel: formatCurrency(overdueAmount),
-        collectionRate,
-        collectionRateLabel: `${collectionRate}%`,
-      },
-      series: {
-        revenueByMonth: buildBillingMonthSeries(periodBills, rangeMonths),
-        statusDistribution: buildBillingStatusDistribution(periodBills),
-        overdueAging: buildOverdueAging(openBills),
-      },
-      tables: {
-        overdueAccounts: overdueRows,
-        unpaidBalances: unpaidRows,
-      },
-    });
+    sendSuccess(res, await buildBillingReportData(scope, rangeKey));
   } catch (error) {
     next(error);
   }
@@ -1322,98 +1529,7 @@ export const getOperationsReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
     const rangeKey = String(req.query.range || "30d").trim().toLowerCase();
-    const rangeDays = parseReportDays(rangeKey);
-    const sinceDate = dayjs().subtract(rangeDays - 1, "day").startOf("day").toDate();
-
-    const rooms = await fetchScopedRooms(scope.branchesIncluded);
-    const roomIds = rooms.map((room) => room._id);
-
-    const [reservations, inquiries, maintenanceRequests, resolvedRequests] =
-      await Promise.all([
-        roomIds.length
-          ? fetchScopedReservations(roomIds, { createdAt: { $gte: sinceDate } })
-          : [],
-        fetchScopedInquiries(scope.branchesIncluded, { createdAt: { $gte: sinceDate } }),
-        fetchScopedMaintenanceRequests(scope.branchesIncluded, { created_at: { $gte: sinceDate } }),
-        fetchScopedMaintenanceRequests(scope.branchesIncluded, { resolved_at: { $gte: sinceDate } }),
-      ]);
-
-    const resolutionSummary = buildResolutionSummary(resolvedRequests);
-    const inquiryWindows = buildInquiryHourWindows(inquiries)
-      .sort((left, right) => right.count - left.count)
-      .slice(0, 6);
-    const maintenanceRows = maintenanceRequests
-      .map((request) => {
-        const slaState = getMaintenanceSlaState(request);
-        const resolutionHours =
-          request.resolved_at && request.created_at
-            ? Number(
-                dayjs(request.resolved_at).diff(
-                  dayjs(request.created_at),
-                  "hour",
-                  true,
-                ).toFixed(1),
-              )
-            : null;
-
-        return {
-          id: String(request._id),
-          requestId: request.request_id,
-          type: request.request_type,
-          typeLabel: formatBranchLabel(request.request_type || "other"),
-          urgency: request.urgency,
-          status: request.status,
-          branch: request.branch,
-          createdAt: request.created_at,
-          resolvedAt: request.resolved_at,
-          resolutionHours,
-          slaState: slaState.label,
-        };
-      })
-      .slice(0, 15);
-    const reservationRows = reservations.slice(0, 15).map((reservation) => ({
-      id: String(reservation._id),
-      reservationCode: reservation.reservationCode || reservation.visitCode || "Pending",
-      guestName:
-        `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
-        "Unknown Guest",
-      roomName:
-        reservation.roomId?.name ||
-        reservation.roomId?.roomNumber ||
-        "Unknown Room",
-      branch: reservation.roomId?.branch || null,
-      status: reservation.status,
-      createdAt: reservation.createdAt,
-      moveInDate: reservation.moveInDate || reservation.targetMoveInDate || null,
-    }));
-
-    sendSuccess(res, {
-      ...buildRangeEnvelope(scope, {
-        range: rangeKey,
-        since: sinceDate.toISOString(),
-      }),
-      kpis: {
-        reservations: reservations.length,
-        inquiries: inquiries.length,
-        maintenanceRequests: maintenanceRequests.length,
-        avgResolutionHours: resolutionSummary.avgResolutionHours,
-        avgResolutionHoursLabel: `${resolutionSummary.avgResolutionHours} hrs`,
-        slaComplianceRate: resolutionSummary.slaComplianceRate,
-        slaComplianceRateLabel: `${resolutionSummary.slaComplianceRate}%`,
-      },
-      series: {
-        reservationsByPeriod: buildReservationSeries(reservations, rangeDays),
-        inquiriesByWeekday: buildInquiryWeekdaySeries(inquiries),
-        peakInquiryWindows: buildInquiryHourWindows(inquiries),
-        maintenanceByType: buildMaintenanceTypeSeries(maintenanceRequests),
-        maintenanceResolution: resolutionSummary.series,
-      },
-      tables: {
-        peakInquiryWindows: inquiryWindows,
-        maintenanceIssues: maintenanceRows,
-        reservations: reservationRows,
-      },
-    });
+    sendSuccess(res, await buildOperationsReportData(scope, rangeKey));
   } catch (error) {
     next(error);
   }
@@ -1510,84 +1626,48 @@ export const getFinancialsReport = async (req, res, next) => {
 export const getAuditSummary = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
-    if (!scope.isOwner) {
-      throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
+    const rangeKey = String(req.query.range || "30d").trim().toLowerCase();
+    sendSuccess(res, await buildAuditSummaryData(scope, rangeKey));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAnalyticsInsights = async (req, res, next) => {
+  try {
+    const reportType = String(req.body?.reportType || "").trim().toLowerCase();
+    const reportConfig = REPORT_BUILDERS[reportType];
+
+    if (!reportConfig) {
+      throw new AppError(
+        "Invalid analytics insight report type",
+        400,
+        "INVALID_ANALYTICS_REPORT_TYPE",
+      );
     }
 
-    const rangeKey = String(req.query.range || "30d").trim().toLowerCase();
-    const rangeDays = parseRangeDays(rangeKey);
-    const sinceDate = dayjs().subtract(rangeDays, "day").startOf("day").toDate();
-
-    const [logs, failedLogins] = await Promise.all([
-      AuditLog.find({
-        timestamp: { $gte: sinceDate },
-        ...(scope.branch === "all"
-          ? {}
-          : {
-              $or: [
-                { branch: scope.branch },
-                { branch: "" },
-                { branch: "general" },
-              ],
-            }),
-      })
-        .sort({ timestamp: -1 })
-        .lean(),
-      LoginLog.find({
-        success: false,
-        createdAt: { $gte: sinceDate },
-      })
-        .sort({ createdAt: -1 })
-        .lean(),
-    ]);
-
-    const suspiciousIps = buildSuspiciousIpRows(failedLogins);
-    const highSeverityCount = logs.filter((log) =>
-      ["high", "critical"].includes(String(log.severity || "")),
-    ).length;
-    const accessOverrideCount = logs.filter((log) =>
-      /override|permission|role/i.test(`${log.action || ""} ${log.details || ""}`),
-    ).length;
-    const criticalEvents = logs.filter((log) => log.severity === "critical").length;
-    const branchSummary = buildAuditBranchSummary(logs, scope.branchesIncluded);
-    const recentSecurityEvents = logs
-      .filter(
-        (log) =>
-          ["warning", "high", "critical"].includes(String(log.severity || "")) ||
-          log.type === "login",
-      )
-      .slice(0, 20)
-      .map((log) => ({
-        id: log.logId,
-        branch: log.branch || "general",
-        type: log.type,
-        action: log.action,
-        severity: log.severity,
-        user: log.user,
-        timestamp: log.timestamp,
-      }));
+    const branchOverride = req.body?.branch
+      ? String(req.body.branch).trim().toLowerCase()
+      : undefined;
+    const scope = await resolveInsightScope(req, branchOverride);
+    const rangeKey = String(req.body?.range || reportConfig.defaultRange)
+      .trim()
+      .toLowerCase();
+    const question = String(req.body?.question || "").trim();
+    const reportData = await reportConfig.build(scope, rangeKey);
+    const { snapshotMeta, insight } = await generateAnalyticsInsight({
+      reportType,
+      scope,
+      filters: reportData.filters,
+      reportData,
+      question,
+    });
 
     sendSuccess(res, {
-      ...buildRangeEnvelope(scope, {
-        range: rangeKey,
-        since: sinceDate.toISOString(),
-      }),
-      kpis: {
-        failedLogins: failedLogins.length,
-        suspiciousIpCount: suspiciousIps.length,
-        highSeverityActions: highSeverityCount,
-        highSeverityActionsLabel: String(highSeverityCount),
-        accessOverrides: accessOverrideCount,
-        criticalEvents,
-      },
-      series: {
-        bySeverity: buildAuditSeveritySeries(logs),
-        branchSummary,
-      },
-      tables: {
-        suspiciousIps,
-        recentSecurityEvents,
-      },
+      scope: reportData.scope,
+      filters: reportData.filters,
+      snapshotMeta,
+      insight,
     });
   } catch (error) {
     next(error);
@@ -1641,5 +1721,6 @@ export default {
   getOperationsReport,
   getFinancialsReport,
   getAuditSummary,
+  getAnalyticsInsights,
   getOccupancyForecast,
 };

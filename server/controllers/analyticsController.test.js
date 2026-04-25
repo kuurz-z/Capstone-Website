@@ -80,6 +80,7 @@ await jest.unstable_mockModule("../middleware/errorHandler.js", () => ({
 
 const {
   getAuditSummary,
+  getAnalyticsInsights,
   getBillingReport,
   getDashboardAnalytics,
   getFinancialsReport,
@@ -609,11 +610,90 @@ describe("analyticsController", () => {
         }),
         tables: expect.objectContaining({
           suspiciousIps: expect.arrayContaining([
-            expect.objectContaining({ ip: "203.0.113.10", count: 3 }),
+            expect.objectContaining({ ipAddress: "203.0.113.10", attempts: 3 }),
           ]),
         }),
       }),
     );
+  });
+
+  test("builds AI insights from a sanitized billing snapshot", async () => {
+    getUserBranchInfo.mockResolvedValue({
+      role: "owner",
+      branch: "gil-puyat",
+      isOwner: true,
+    });
+    billFind
+      .mockReturnValueOnce(
+        createLeanChain([
+          {
+            _id: "bill-a",
+            branch: "gil-puyat",
+            status: "paid",
+            totalAmount: 10000,
+            paidAmount: 8000,
+            remainingAmount: 2000,
+            billingMonth: "2026-03-01T00:00:00.000Z",
+            paymentDate: "2026-03-12T00:00:00.000Z",
+            dueDate: "2026-03-10T00:00:00.000Z",
+            userId: { firstName: "Ana", lastName: "Dela Cruz", email: "ana@example.com" },
+            roomId: { name: "Room 101", branch: "gil-puyat" },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(
+        createLeanChain([
+          {
+            _id: "bill-b",
+            branch: "gil-puyat",
+            status: "overdue",
+            totalAmount: 9000,
+            paidAmount: 4000,
+            remainingAmount: 5000,
+            dueDate: "2026-03-05T00:00:00.000Z",
+            userId: { firstName: "Mia", lastName: "Santos", email: "mia@example.com" },
+            roomId: { name: "Room 102", branch: "gil-puyat" },
+          },
+        ]),
+      );
+
+    const req = {
+      user: { uid: "owner-ai-1", owner: true },
+      query: {},
+      body: {
+        reportType: "billing",
+        range: "3m",
+        question: "Why is cash collection slowing?",
+      },
+    };
+    const res = { req };
+
+    const next = jest.fn();
+    await getAnalyticsInsights(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+
+    expect(sendSuccess).toHaveBeenCalledWith(
+      res,
+      expect.objectContaining({
+        snapshotMeta: expect.objectContaining({
+          reportType: "billing",
+          provider: "heuristic-fallback",
+          usedFallback: true,
+        }),
+        insight: expect.objectContaining({
+          headline: expect.any(String),
+          summary: expect.stringContaining("You asked"),
+          keyFindings: expect.any(Array),
+          recommendedActions: expect.any(Array),
+          disclaimer: expect.stringContaining("AI summary"),
+        }),
+      }),
+    );
+
+    const [, payload] = sendSuccess.mock.calls.at(-1);
+    expect(JSON.stringify(payload.snapshotMeta)).not.toContain("ana@example.com");
+    expect(JSON.stringify(payload.snapshotMeta)).not.toContain("mia@example.com");
   });
 
   test("returns deterministic occupancy forecast when enough history exists", async () => {

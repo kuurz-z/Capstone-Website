@@ -91,7 +91,6 @@ export default function OccupancyReportPage() {
   const trend = data?.series?.occupancyTrend || [];
   const forecast = forecastData?.forecast || {};
   const projectedMonths = forecast.projected || [];
-  const pagedInventory = inventory.slice((page - 1) * 10, page * 10);
   const latestTrend = trend.slice(-10).map((item) => ({
     label: item.label,
     value: item.totalRate,
@@ -267,7 +266,7 @@ export default function OccupancyReportPage() {
         >
           <DataTable
             columns={INVENTORY_COLUMNS}
-            data={pagedInventory}
+            data={inventory}
             loading={isLoading}
             pagination={{
               page,

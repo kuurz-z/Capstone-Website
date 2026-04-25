@@ -54,3 +54,13 @@ export function useAuditAnalytics(params) {
     ...DEFAULT_OPTIONS,
   });
 }
+
+export function useAnalyticsInsights(params, options = {}) {
+  return useQuery({
+    queryKey: queryKeys.analytics.insights(params),
+    queryFn: () => analyticsApi.getInsights(params),
+    enabled: Boolean(params?.reportType) && (options.enabled ?? true),
+    ...DEFAULT_OPTIONS,
+    ...options,
+  });
+}

@@ -2,6 +2,7 @@ import express from "express";
 import { verifyAdmin, verifyOwner, verifyToken } from "../middleware/auth.js";
 import {
   getAuditSummary,
+  getAnalyticsInsights,
   getBillingReport,
   getDashboardAnalytics,
   getFinancialsReport,
@@ -19,6 +20,7 @@ router.get("/reports/occupancy", getOccupancyReport);
 router.get("/reports/billing", getBillingReport);
 router.get("/reports/operations", getOperationsReport);
 router.get("/forecast/occupancy", getOccupancyForecast);
+router.post("/insights", getAnalyticsInsights);
 router.get("/financials", verifyOwner, getFinancialsReport);
 router.get("/audit", verifyOwner, getAuditSummary);
 
