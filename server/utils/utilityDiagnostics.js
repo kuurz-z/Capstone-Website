@@ -9,6 +9,7 @@ import {
   getUtilityDispatchEntry,
   getUtilityTargetCloseDate,
 } from "./billingPolicy.js";
+import { buildElectricityReview } from "./electricityReviewRules.js";
 import { getRoomLabel } from "./roomLabel.js";
 import {
   BILLABLE_RESERVATION_STATUS_QUERY,
@@ -207,6 +208,16 @@ function buildRoomDiagnostic({
     }
   }
 
+  const electricityReview =
+    utilityType === "electricity" && (openPeriod || latestPeriod)
+      ? buildElectricityReview({
+          period: openPeriod || latestPeriod,
+          periods,
+          readings,
+          reservations,
+        })
+      : null;
+
   return {
     entityType: `${utilityType}_room`,
     entityId: room._id,
@@ -241,6 +252,7 @@ function buildRoomDiagnostic({
     issueCodes: issues.map((i) => i.issueCode),
     missingMoveInAnchors: missingAnchors,
     issues,
+    electricityReview,
   };
 }
 

@@ -7,10 +7,11 @@ const utilityReadingDistinct = jest.fn();
 const utilityPeriodFind = jest.fn();
 const utilityReadingFind = jest.fn();
 const reservationFind = jest.fn();
+const billFind = jest.fn();
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   Bill: {
-    find: jest.fn(),
+    find: billFind,
   },
   Room: {
     find: roomFind,
@@ -62,9 +63,11 @@ describe("getUtilityDiagnostics", () => {
     utilityPeriodFind.mockReset();
     utilityReadingFind.mockReset();
     reservationFind.mockReset();
+    billFind.mockReset();
 
     utilityPeriodFind.mockReturnValue(mockSortedLeanResult([]));
     utilityReadingFind.mockReturnValue(mockSortedLeanResult([]));
+    billFind.mockReturnValue(mockSelectLeanResult([]));
     reservationFind.mockReturnValue({
       populate: jest.fn().mockReturnValue(mockLeanResult([])),
     });
@@ -225,5 +228,79 @@ describe("getUtilityDiagnostics", () => {
     await getUtilityDiagnostics({ branch: "gil-puyat" });
 
     expect(selectedFields).toContain("_id name roomNumber branch type capacity");
+  });
+
+  test("adds tenant-aware electricity review data for rooms with periods", async () => {
+    const room = {
+      _id: "room-review",
+      name: "Room Review",
+      roomNumber: "R-101",
+      branch: "gil-puyat",
+      type: "private",
+      capacity: 1,
+    };
+    roomFind.mockReturnValueOnce(mockSelectLeanResult([room]));
+    utilityPeriodFind.mockReturnValue(
+      mockSortedLeanResult([
+        {
+          _id: "period-review-old",
+          utilityType: "electricity",
+          roomId: "room-review",
+          status: "closed",
+          startDate: "2025-12-01T00:00:00.000Z",
+          endDate: "2025-12-31T00:00:00.000Z",
+          startReading: 900,
+          endReading: 990,
+          ratePerUnit: 12,
+          computedTotalUsage: 90,
+          verified: true,
+          tenantSummaries: [
+            {
+              tenantId: "tenant-1",
+              tenantName: "Ana Santos",
+              totalUsage: 90,
+              coveredDays: 30,
+              billAmount: 1080,
+            },
+          ],
+        },
+        {
+          _id: "period-review-current",
+          utilityType: "electricity",
+          roomId: "room-review",
+          status: "closed",
+          startDate: "2026-01-01T00:00:00.000Z",
+          endDate: "2026-01-31T00:00:00.000Z",
+          startReading: 990,
+          endReading: 1200,
+          ratePerUnit: 12,
+          computedTotalUsage: 210,
+          verified: true,
+          tenantSummaries: [
+            {
+              tenantId: "tenant-1",
+              tenantName: "Ana Santos",
+              totalUsage: 210,
+              coveredDays: 30,
+              billAmount: 2520,
+            },
+          ],
+        },
+      ]),
+    );
+
+    const result = await getUtilityDiagnostics({ branch: "gil-puyat" });
+
+    expect(result.electricityRooms[0].electricityReview).toMatchObject({
+      validationState: "ok",
+      reviewRequired: true,
+      canSendBill: true,
+      anomalyReview: expect.objectContaining({
+        riskLevel: expect.any(String),
+        reasons: expect.arrayContaining([
+          expect.objectContaining({ code: "tenant_spike" }),
+        ]),
+      }),
+    });
   });
 });

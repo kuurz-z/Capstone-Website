@@ -13,11 +13,14 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatDate, formatDateTime } from "./reportCommon";
 import {
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
   ExportButtons,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
   RANGE_OPTIONS_SHORT,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const EVENT_COLUMNS = [
@@ -39,15 +42,21 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
   const [ipPage, setIpPage] = useState(1);
   const params = useMemo(() => ({ branch, range }), [branch, range]);
   const { data, isLoading, isError } = useAuditAnalytics(params);
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "audit",
+    range,
+    branch,
+  });
 
   const kpis = data?.kpis || {};
   const branchSummary = data?.series?.branchSummary || [];
   const severityDistribution = data?.series?.severityDistribution || [];
   const recentSecurityEvents = data?.tables?.recentSecurityEvents || [];
   const suspiciousIps = data?.tables?.suspiciousIps || [];
-
-  const pagedEvents = recentSecurityEvents.slice((eventPage - 1) * 10, eventPage * 10);
-  const pagedIps = suspiciousIps.slice((ipPage - 1) * 10, ipPage * 10);
 
   const metricCards = [
     { label: "Failed Logins", value: kpis.failedLogins || 0, tone: "rose" },
@@ -77,6 +86,7 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
       filename: `system-monitoring-${range}.pdf`,
       kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
       sections: [
+        ...buildInsightPdfSections(insightData, "AI Security Summary"),
         {
           title: "Branch Security Summary",
           rows: branchSummary.map(
@@ -128,6 +138,14 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
     >
       <MetricGrid items={metricCards} />
 
+      <AnalyticsInsightSection
+        reportLabel="security"
+        summaryTitle="Security Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
+
       <div className="admin-reports__grid">
         <ReportChartPanel title="Severity distribution" subtitle="Security and audit events by severity">
           <AnalyticsDonutChart
@@ -160,12 +178,12 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
 
       <div className="admin-reports__grid">
         <ReportChartPanel title="Recent security events" subtitle="Latest owner-level security and audit activity">
-          <DataTable
-            columns={EVENT_COLUMNS}
-            data={pagedEvents}
-            loading={isLoading}
-            pagination={{
-              page: eventPage,
+        <DataTable
+          columns={EVENT_COLUMNS}
+          data={recentSecurityEvents}
+          loading={isLoading}
+          pagination={{
+            page: eventPage,
               pageSize: 10,
               total: recentSecurityEvents.length,
               onPageChange: setEventPage,
@@ -191,7 +209,7 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
         >
           <DataTable
             columns={SUSPICIOUS_IP_COLUMNS}
-            data={pagedIps}
+            data={suspiciousIps}
             loading={isLoading}
             pagination={{
               page: ipPage,

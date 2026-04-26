@@ -12,6 +12,7 @@ export { default as ReportFilterBar } from "./ReportFilterBar";
 export { default as AnalyticsEmptyState } from "./AnalyticsEmptyState";
 export { default as AnalyticsToolbar } from "./AnalyticsToolbar";
 export { default as AnalyticsTabLayout } from "./AnalyticsTabLayout";
+export { default as AnalyticsInsightPanel } from "./AnalyticsInsightPanel";
 export { default as AnalyticsLineChart } from "./AnalyticsLineChart";
 export { default as AnalyticsBarChart } from "./AnalyticsBarChart";
 export { default as AnalyticsDonutChart } from "./AnalyticsDonutChart";

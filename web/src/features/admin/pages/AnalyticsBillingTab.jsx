@@ -10,12 +10,15 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatDate, formatPeso } from "./reportCommon";
 import {
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
   buildBranchControl,
   ExportButtons,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
   RANGE_OPTIONS_LONG,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const OVERDUE_COLUMNS = [
@@ -44,12 +47,20 @@ export default function AnalyticsBillingTab({
     [branch, isOwner, range],
   );
   const { data, isLoading, isError } = useBillingReport(params);
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "billing",
+    range,
+    branch: isOwner ? branch : undefined,
+  });
   const overdueAccounts = data?.tables?.overdueAccounts || [];
   const unpaidBalances = data?.tables?.unpaidBalances || [];
   const revenueByMonth = data?.series?.revenueByMonth || [];
   const statusDistribution = data?.series?.statusDistribution || [];
   const overdueAging = data?.series?.overdueAging || [];
-  const pagedRows = overdueAccounts.slice((page - 1) * 10, page * 10);
 
   const metricCards = [
     { label: "Collected Revenue", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
@@ -82,6 +93,7 @@ export default function AnalyticsBillingTab({
       filename: `billing-report-${range}.pdf`,
       kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
       sections: [
+        ...buildInsightPdfSections(insightData, "AI Billing Summary"),
         {
           title: "Monthly Revenue",
           rows: revenueByMonth.map(
@@ -118,6 +130,14 @@ export default function AnalyticsBillingTab({
       }
     >
       <MetricGrid items={metricCards} />
+
+      <AnalyticsInsightSection
+        reportLabel="billing"
+        summaryTitle="Billing Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
 
       <div className="admin-reports__grid">
         <ReportChartPanel title="Monthly revenue" subtitle="Collected and billed revenue in the selected window">
@@ -182,7 +202,7 @@ export default function AnalyticsBillingTab({
       <ReportChartPanel title="Overdue and unpaid tables" subtitle="Bills past due date and still carrying an outstanding balance">
         <DataTable
           columns={OVERDUE_COLUMNS}
-          data={pagedRows}
+          data={overdueAccounts}
           loading={isLoading}
           pagination={{
             page,

@@ -12,12 +12,15 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatDate, formatDateTime } from "./reportCommon";
 import {
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
   buildBranchControl,
   ExportButtons,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
   RANGE_OPTIONS_SHORT,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const MAINTENANCE_COLUMNS = [
@@ -51,13 +54,21 @@ export default function AnalyticsOperationsTab({
     [branch, isOwner, range],
   );
   const { data, isLoading, isError } = useOperationsReport(params);
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "operations",
+    range,
+    branch: isOwner ? branch : undefined,
+  });
   const maintenanceIssues = data?.tables?.maintenanceIssues || [];
   const reservations = data?.tables?.reservations || [];
   const inquiryWindows = data?.tables?.peakInquiryWindows || [];
   const reservationsByPeriod = data?.series?.reservationsByPeriod || [];
   const maintenanceByType = data?.series?.maintenanceByType || [];
   const maintenanceResolution = data?.series?.maintenanceResolution || [];
-  const pagedMaintenance = maintenanceIssues.slice((page - 1) * 10, page * 10);
 
   const metricCards = [
     { label: "Reservations", value: data?.kpis?.reservations || 0, tone: "blue" },
@@ -91,6 +102,7 @@ export default function AnalyticsOperationsTab({
       filename: `operations-report-${range}.pdf`,
       kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
       sections: [
+        ...buildInsightPdfSections(insightData, "AI Operations Summary"),
         {
           title: "Peak Inquiry Windows",
           rows: inquiryWindows.map((item) => `${item.label}: ${item.count} inquiries`),
@@ -125,6 +137,14 @@ export default function AnalyticsOperationsTab({
       }
     >
       <MetricGrid items={metricCards} />
+
+      <AnalyticsInsightSection
+        reportLabel="operations"
+        summaryTitle="Operations Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
 
       <div className="admin-reports__grid">
         <ReportChartPanel title="Reservation trend" subtitle="Reservation volume over the selected period">
@@ -170,7 +190,7 @@ export default function AnalyticsOperationsTab({
       <ReportChartPanel title="Maintenance and reservation tables" subtitle="Most recent branch-scoped maintenance tickets">
         <DataTable
           columns={MAINTENANCE_COLUMNS}
-          data={pagedMaintenance}
+          data={maintenanceIssues}
           loading={isLoading}
           pagination={{
             page,

@@ -29,4 +29,12 @@ export const analyticsApi = {
     const query = new URLSearchParams(params).toString();
     return authFetch(`/analytics/audit${query ? `?${query}` : ""}`);
   },
+  getInsights: (payload = {}) =>
+    authFetch("/analytics/insights", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }),
 };
