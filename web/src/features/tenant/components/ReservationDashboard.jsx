@@ -298,6 +298,9 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
   const queryClient = useQueryClient();
   const { data: profile } = useCurrentUser();
   const currentStage = resolveCurrentStage(reservation);
+  const totalSegments = Math.max(STEPS.length - 1, 1);
+  const progressSegments = Math.max(0, Math.min(totalSegments, currentStage - 1));
+  const stepperProgressPercent = (progressSegments / totalSegments) * 100;
   const action = getNextAction(reservation, currentStage);
   const [showCancelModal, setShowCancelModal] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
@@ -328,11 +331,11 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
             You don't have a reservation yet. Start by browsing available rooms.
           </p>
           <button
-            onClick={() => navigate("/applicant/rooms")}
+            onClick={() => navigate("/applicant/check-availability")}
             style={styles.primaryButton}
           >
             Browse Rooms
-            <ArrowRight size={16} style={{ marginLeft: 8 }} />
+            <ArrowRight size={16} style={{ marginLeft: 8, color: "var(--color-primary, #D4AF37)" }} />
           </button>
         </div>
       </div>
@@ -382,15 +385,27 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
 
       {/* ── Step Indicator ────────────────────────────────────────────────── */}
       <div style={styles.stepperWrapper}>
+        <div style={styles.stepperProgressRail}>
+          <div
+            style={{
+              ...styles.stepperTrackProgress,
+              width: `${stepperProgressPercent}%`,
+            }}
+          />
+        </div>
+        <div style={styles.stepperInner}>
         {STEPS.map((step, i) => {
           const status = getStepStatus(step.stage, currentStage, reservation);
           const Icon = step.icon;
+          const isFirst = i === 0;
           const isLast = i === STEPS.length - 1;
           return (
-            <React.Fragment key={step.key}>
               <div
+                key={step.key}
                 style={{
                   ...styles.stepItem,
+                  ...(isFirst ? styles.stepItemFirst : {}),
+                  ...(isLast ? styles.stepItemLast : {}),
                   cursor:
                     status === "complete" || status === "current" || status === "waiting" || status === "rejected"
                       ? "pointer"
@@ -429,13 +444,13 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
                   }}
                 >
                   {status === "complete" ? (
-                    <CheckCircle size={16} color="#fff" />
+                    <CheckCircle size={20} color="#fff" />
                   ) : status === "waiting" ? (
-                    <Clock size={16} color="#fff" />
+                    <Clock size={20} color="#fff" />
                   ) : status === "rejected" ? (
-                    <AlertCircle size={16} color="#fff" />
+                    <AlertCircle size={20} color="#fff" />
                   ) : (
-                    <Icon size={16} color={status === "current" ? "#fff" : "#94A3B8"} />
+                    <Icon size={20} color={status === "current" ? "#fff" : "#94A3B8"} />
                   )}
                 </div>
                 <span
@@ -445,7 +460,7 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
                       status === "complete"
                         ? "#059669"
                         : status === "current"
-                          ? "#FF8C42"
+                          ? "var(--color-primary, #D4AF37)"
                           : status === "waiting"
                             ? "#2563EB"
                             : status === "rejected"
@@ -463,7 +478,7 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
                       status === "complete"
                         ? "#6EE7B7"
                         : status === "current"
-                          ? "#FDBA74"
+                          ? "#E7CF87"
                           : status === "rejected"
                             ? "#FCA5A5"
                             : "#CBD5E1",
@@ -472,17 +487,9 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
                   {getStepDesc(step, status, reservation)}
                 </span>
               </div>
-              {!isLast && (
-                <div
-                  style={{
-                    ...styles.connector,
-                    backgroundColor: status === "complete" ? "#10B981" : "#E2E8F0",
-                  }}
-                />
-              )}
-            </React.Fragment>
           );
         })}
+        </div>
       </div>
 
       {/* ── Next Action Row ──────────────────────────────────────────────── */}
@@ -494,18 +501,18 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
           gap: 12,
           padding: "12px 16px",
           borderRadius: 8,
-          background: action.isRejected ? "rgba(220, 38, 38, 0.08)" : action.isWaiting ? "rgba(37, 99, 235, 0.06)" : "rgba(255, 140, 66, 0.06)",
-          border: `1px solid ${action.isRejected ? "rgba(220, 38, 38, 0.2)" : action.isWaiting ? "rgba(37, 99, 235, 0.15)" : "rgba(255, 140, 66, 0.2)"}`,
+          background: action.isRejected ? "rgba(220, 38, 38, 0.08)" : action.isWaiting ? "rgba(37, 99, 235, 0.06)" : "rgba(15, 23, 42, 0.08)",
+          border: `1px solid ${action.isRejected ? "rgba(220, 38, 38, 0.2)" : action.isWaiting ? "rgba(37, 99, 235, 0.15)" : "rgba(15, 23, 42, 0.2)"}`,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-              background: action.isRejected ? "#DC2626" : action.isWaiting ? "#2563EB" : "#FF8C42",
+              background: action.isRejected ? "#DC2626" : action.isWaiting ? "#2563EB" : "var(--text-heading, #0F172A)",
             }} />
             <div>
               <span style={{
                 fontSize: 13, fontWeight: 600,
-                color: action.isRejected ? "#DC2626" : action.isWaiting ? "#1D4ED8" : "#C2611B",
+                color: action.isRejected ? "#DC2626" : action.isWaiting ? "#1D4ED8" : "#0F172A",
                 marginRight: 6,
               }}>
                 {action.title}
@@ -521,7 +528,7 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
               style={{
                 flexShrink: 0,
                 padding: "6px 14px",
-                background: action.isRejected ? "#DC2626" : "#FF8C42",
+                background: action.isRejected ? "#DC2626" : "var(--text-heading, #0F172A)",
                 color: "#fff",
                 border: "none",
                 borderRadius: 6,
@@ -704,16 +711,15 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     padding: "10px 24px",
-    background: "#FF8C42",
-    color: "#fff",
-    border: "none",
+    background: "#FFFFFF",
+    color: "var(--color-primary, #D4AF37)",
+    border: "1px solid var(--color-primary, #D4AF37)",
     borderRadius: 8,
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
     transition: "background 0.2s",
   },
-
   /* header */
   header: {
     marginBottom: 20,
@@ -742,8 +748,8 @@ const styles = {
   pendingBadge: {
     fontSize: 12,
     fontWeight: 500,
-    color: "#FF8C42",
-    background: "rgba(255, 140, 66, 0.1)",
+    color: "var(--color-primary, #D4AF37)",
+    background: "rgba(212, 175, 55, 0.14)",
     padding: "3px 10px",
     borderRadius: 999,
   },
@@ -788,23 +794,61 @@ const styles = {
 
   /* stepper */
   stepperWrapper: {
+    position: "relative",
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "center",
+    width: "min(100%, 980px)",
+    margin: "0 auto 20px",
     padding: "16px 0",
     gap: 0,
-    marginBottom: 20,
+  },
+  stepperProgressRail: {
+    position: "absolute",
+    top: 42,
+    left: "calc(10% - 18px)",
+    right: "calc(10% - 18px)",
+    height: 2,
+    borderRadius: 999,
+    overflow: "hidden",
+    zIndex: 0,
+  },
+  stepperTrackProgress: {
+    height: "100%",
+    borderRadius: 999,
+    background: "#10B981",
+    transition: "width 0.25s ease",
+  },
+  stepperInner: {
+    position: "relative",
+    zIndex: 1,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 0,
+    width: "100%",
+    padding: "0 8px",
   },
   stepItem: {
+    position: "relative",
+    zIndex: 2,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    gap: 6,
-    minWidth: 72,
+    gap: 8,
+    flex: "1 1 0",
+    minWidth: 0,
+    padding: "0 8px",
+  },
+  stepItemFirst: {
+    transform: "translateX(-18px)",
+  },
+  stepItemLast: {
+    transform: "translateX(18px)",
   },
   stepCircle: {
-    width: 36,
-    height: 36,
+    width: 52,
+    height: 52,
     borderRadius: "50%",
     display: "flex",
     alignItems: "center",
@@ -816,9 +860,9 @@ const styles = {
     boxShadow: "0 0 0 3px rgba(16, 185, 129, 0.2)",
   },
   stepCurrent: {
-    background: "linear-gradient(135deg, #FF8C42 0%, #FF8C2E 100%)",
+    background: "linear-gradient(135deg, var(--color-primary, #D4AF37) 0%, #c49a1f 100%)",
     boxShadow:
-      "0 0 0 4px rgba(255, 140, 66, 0.25), 0 0 12px rgba(255, 140, 66, 0.3)",
+      "0 0 0 4px rgba(212, 175, 55, 0.25), 0 0 12px rgba(212, 175, 55, 0.3)",
   },
   stepWaiting: {
     background: "#2563EB",
@@ -833,24 +877,19 @@ const styles = {
     border: "1px solid var(--border-card, #E2E8F0)",
   },
   stepLabel: {
-    fontSize: 12,
+    fontSize: 14,
     textAlign: "center",
-    whiteSpace: "nowrap",
+    whiteSpace: "normal",
+    lineHeight: 1.3,
+    maxWidth: 170,
   },
   stepDesc: {
-    fontSize: 10,
+    fontSize: 12,
     textAlign: "center",
-    whiteSpace: "nowrap",
-    marginTop: -2,
-  },
-  connector: {
-    flex: 1,
-    height: 2,
-    minWidth: 32,
-    maxWidth: 80,
-    borderRadius: 1,
-    alignSelf: "flex-start",
-    marginTop: 18,
+    whiteSpace: "normal",
+    lineHeight: 1.3,
+    maxWidth: 190,
+    marginTop: 0,
   },
 
   /* action card */
@@ -885,7 +924,7 @@ const styles = {
   },
   actionButton: {
     padding: "8px 20px",
-    background: "#FF8C42",
+    background: "var(--text-heading, #0F172A)",
     color: "#fff",
     border: "none",
     borderRadius: 6,

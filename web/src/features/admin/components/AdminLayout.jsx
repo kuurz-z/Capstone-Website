@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { Menu } from "lucide-react";
 import Sidebar from "./AdminSidebar";
-import NotificationBell from "../../../shared/components/NotificationBell";
 import RouteTransitionBoundary from "../../../shared/components/RouteTransitionBoundary";
 import useSocketClient from "../../../shared/hooks/useSocketClient";
 import { useRouteFlash } from "../../../shared/hooks/useRouteFlash";
 import { getPageMeta } from "./adminShellMeta.mjs";
+import { useTheme } from "../../public/context/ThemeContext";
+import TopBar from "./TopBar";
 import "../styles/admin-layout.css";
 import "../styles/admin-common.css";
 
@@ -16,6 +16,7 @@ export default function AdminLayout() {
   useSocketClient();
   const location = useLocation();
   useRouteFlash();
+  const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const contentRef = useRef(null);
   const [collapsed, setCollapsed] = useState(() => {
@@ -42,6 +43,8 @@ export default function AdminLayout() {
     contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, [location.pathname, location.search]);
 
+  const breadcrumbs = ["Admin", pageMeta.title];
+
   return (
     <div className={`admin-layout ${collapsed ? "admin-layout--collapsed" : ""}`}>
       <Sidebar
@@ -52,33 +55,12 @@ export default function AdminLayout() {
       />
 
       <div className="admin-layout-main">
-        {/* Top Bar */}
-        <header className="admin-topbar">
-          <div className="admin-topbar-left">
-            <button
-              className="admin-menu-toggle"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="admin-topbar-copy">
-              <h1 className="admin-topbar-title">{pageMeta.title}</h1>
-              <p className="admin-topbar-subtitle">{pageMeta.description}</p>
-            </div>
-          </div>
-          <div className="admin-topbar-right">
-            <NotificationBell />
-            <span className="admin-topbar-date">
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-        </header>
+        <TopBar
+          darkMode={theme === "dark"}
+          onToggleDarkMode={toggleTheme}
+          breadcrumbs={breadcrumbs}
+          onOpenSidebar={() => setSidebarOpen(true)}
+        />
 
         {/* Page Content */}
         <main

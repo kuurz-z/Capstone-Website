@@ -3,6 +3,13 @@
    ============================================================================= */
 @import "design-tokens.css";
 
+.reservations-page-bg {
+  min-height: 100%;
+  background: #ffffff;
+  margin: calc(var(--admin-content-padding, 24px) * -1);
+  padding: var(--admin-content-padding, 24px);
+}
+
 /* ── Applicant cell ── */
 .res-applicant-cell {
   display: flex;

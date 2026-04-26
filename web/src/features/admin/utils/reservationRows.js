@@ -27,6 +27,7 @@ export function mapReservationAdminRow(reservation) {
       `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
       "Unknown",
     email: reservation.userId?.email || "-",
+    phone: reservation.mobileNumber || reservation.phone || "-",
     room: reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
     roomType: reservation.roomId?.type || "",
     branchCode,

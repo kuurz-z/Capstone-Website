@@ -1,10 +1,12 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
   MailCheck,
   MessageSquare,
+  Search,
+  MoreVertical,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,27 +21,23 @@ import {
   syncBranchSearchParam,
 } from "../../../shared/utils/branchFilterQuery.mjs";
 import InquiryDetailsModal from "../components/InquiryDetailsModal";
-import { ActionBar, StatusBadge, SummaryBar } from "../components/shared";
+import { StatusBadge } from "../components/shared";
 import "../styles/design-tokens.css";
 import "../styles/admin-inquiries.css";
 
-const AVATAR_COLORS = [
-  "#f97316",
-  "#8b5cf6",
-  "#0ea5e9",
-  "#10b981",
-  "#ef4444",
-  "#f59e0b",
-  "#6366f1",
-  "#ec4899",
-  "#14b8a6",
-  "#84cc16",
-];
-
-function avatarColor(name = "") {
-  const code = (name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0);
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
+const getAvatarColor = (initials = "") => {
+  const colors = [
+    "bg-[#ec4899] text-white",
+    "bg-[#22c55e] text-white",
+    "bg-[#8b5cf6] text-white",
+    "bg-[#ef4444] text-white",
+    "bg-[#3b82f6] text-white",
+    "bg-[#f59e0b] text-white",
+  ];
+  const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
+  const index = charCode % colors.length;
+  return colors[index];
+};
 
 function initial(name = "") {
   return (name.trim()[0] || "?").toUpperCase();
@@ -172,159 +170,249 @@ export default function InquiriesPage({ isEmbedded = false }) {
     [stats.new, stats.responded],
   );
 
-  const filters = useMemo(
-    () => [
-      {
-        key: "branch",
-        options: [
-          { value: "", label: "All Branches" },
-          { value: "gil-puyat", label: "Gil Puyat" },
-          { value: "guadalupe", label: "Guadalupe" },
-        ],
-        value: branchFilter,
-        onChange: (value) => {
-          setBranchFilter(value);
-          setPage(1);
-        },
-      },
-      {
-        key: "status",
-        options: [
-          { value: "", label: "All Status" },
-          { value: "pending", label: "Pending" },
-          { value: "resolved", label: "Resolved" },
-        ],
-        value: statusFilter,
-        onChange: (value) => {
-          setStatusFilter(value);
-          setPage(1);
-        },
-      },
-      {
-        key: "sort",
-        options: [
-          { value: "recent", label: "Most Recent" },
-          { value: "oldest", label: "Oldest First" },
-          { value: "name-az", label: "Name A-Z" },
-          { value: "name-za", label: "Name Z-A" },
-        ],
-        value: sortBy,
-        onChange: (value) => setSortBy(value),
-      },
-    ],
-    [branchFilter, sortBy, statusFilter],
-  );
+  const summaryColorClasses = {
+    blue: {
+      base: "border-blue-100 bg-blue-50/60",
+      active: "border-blue-300 bg-blue-100/80 shadow-sm ring-1 ring-blue-200",
+      icon: "text-blue-600",
+      label: "text-blue-700",
+      value: "text-blue-900",
+    },
+    orange: {
+      base: "border-amber-100 bg-amber-50/60",
+      active: "border-amber-300 bg-amber-100/80 shadow-sm ring-1 ring-amber-200",
+      icon: "text-amber-600",
+      label: "text-amber-700",
+      value: "text-amber-900",
+    },
+    green: {
+      base: "border-emerald-100 bg-emerald-50/60",
+      active: "border-emerald-300 bg-emerald-100/80 shadow-sm ring-1 ring-emerald-200",
+      icon: "text-emerald-600",
+      label: "text-emerald-700",
+      value: "text-emerald-900",
+    },
+    red: {
+      base: "border-red-100 bg-red-50/60",
+      active: "border-red-300 bg-red-100/80 shadow-sm ring-1 ring-red-200",
+      icon: "text-red-600",
+      label: "text-red-700",
+      value: "text-red-900",
+    },
+  };
+
+  const summaryFilterValues = ["", "resolved", "pending"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-lg)" }}>
-      {!isEmbedded && <SummaryBar items={summaryItems} />}
+    <div className={isEmbedded ? "" : "min-h-screen w-full"}>
+      <div className={isEmbedded ? "" : "w-full px-4 py-4 sm:px-6 lg:px-8"}>
+        {!isEmbedded && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
+            {summaryItems.map((item, index) => {
+              const Icon = item.icon;
+              const isActive = statusFilter === summaryFilterValues[index];
+              const palette = summaryColorClasses[item.color] || summaryColorClasses.orange;
 
-      <ActionBar
-        search={{
-          value: searchTerm,
-          onChange: (value) => {
-            setSearchTerm(value);
-            setPage(1);
-          },
-          placeholder: "Search inquiries...",
-        }}
-        filters={filters}
-      />
-
-      <div className="inquiry-list">
-        {loading ? (
-          [1, 2, 3].map((index) => (
-            <div key={index} className="inquiry-card inquiry-card--skeleton">
-              <div className="inquiry-card__avatar" style={{ background: "#e5e7eb" }} />
-              <div className="inquiry-card__body">
-                <div className="inquiry-skeleton-line" style={{ width: "40%" }} />
-                <div className="inquiry-skeleton-line" style={{ width: "70%", marginTop: 6 }} />
-              </div>
-            </div>
-          ))
-        ) : inquiries.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: 40,
-              color: "var(--text-muted)",
-              fontSize: "var(--font-size-base)",
-            }}
-          >
-            No inquiries found
-          </div>
-        ) : (
-          inquiries.map((inquiry) => {
-            const name =
-              inquiry.name ||
-              `${inquiry.firstName || ""} ${inquiry.lastName || ""}`.trim() ||
-              "Unknown";
-            const status = inquiry.status || "pending";
-            return (
-              <div
-                key={inquiry._id}
-                className="inquiry-card"
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedInquiry(inquiry)}
-                onKeyDown={(event) => event.key === "Enter" && setSelectedInquiry(inquiry)}
-              >
-                <div className="inquiry-card__avatar" style={{ background: avatarColor(name) }}>
-                  {initial(name)}
-                </div>
-
-                <div className="inquiry-card__body">
-                  <div className="inquiry-card__top">
-                    <span className="inquiry-card__name">{name}</span>
-                    <span className="inquiry-card__meta">
-                      {inquiry.email || "-"} · {fmtDate(inquiry.createdAt)}
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => {
+                    setStatusFilter(summaryFilterValues[index]);
+                    setPage(1);
+                  }}
+                  className={`bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer ${
+                    isActive ? "ring-2 ring-primary" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <Icon
+                      strokeWidth={1.5}
+                      className={`w-5 h-5 ${
+                        item.color === "blue"
+                          ? "text-blue-600"
+                          : item.color === "orange"
+                            ? "text-amber-500"
+                            : item.color === "green"
+                              ? "text-green-600"
+                              : "text-red-600"
+                      }`}
+                    />
+                    <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
+                      {item.label}
                     </span>
                   </div>
-                  {inquiry.message && <p className="inquiry-card__message">{inquiry.message}</p>}
-                </div>
-
-                <div className="inquiry-card__tags" onClick={(event) => event.stopPropagation()}>
-                  {(inquiry.subject || inquiry.inquiryType) && (
-                    <span className="inquiry-type-badge">{inquiry.subject || inquiry.inquiryType}</span>
-                  )}
-                  <StatusBadge status={status} />
-                </div>
-              </div>
-            );
-          })
+                  <div
+                    className={`text-[32px] font-medium leading-none ${
+                      item.color === "blue"
+                        ? "text-blue-600"
+                        : item.color === "orange"
+                          ? "text-amber-500"
+                          : item.color === "green"
+                            ? "text-green-600"
+                            : "text-red-600"
+                    }`}
+                  >
+                    {item.value}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         )}
-      </div>
 
-      {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, paddingTop: 4 }}>
-          <button
-            className="res-icon-btn"
-            disabled={page <= 1}
-            onClick={() => setPage((previous) => Math.max(1, previous - 1))}
-            title="Previous page"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span
-            style={{
-              fontSize: "var(--font-size-sm)",
-              color: "var(--text-muted)",
-              minWidth: 48,
-              textAlign: "center",
-            }}
-          >
-            {page} / {totalPages}
-          </span>
-          <button
-            className="res-icon-btn"
-            disabled={page >= totalPages}
-            onClick={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-            title="Next page"
-          >
-            <ChevronRight size={16} />
-          </button>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search inquiries..."
+                className="w-full pl-10 pr-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <select
+                value={branchFilter}
+                onChange={(event) => {
+                  setBranchFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">All Branches</option>
+                <option value="gil-puyat">Gil Puyat</option>
+                <option value="guadalupe">Guadalupe</option>
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="resolved">Resolved</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="recent">Most Recent</option>
+                <option value="oldest">Oldest First</option>
+                <option value="name-az">Name A-Z</option>
+                <option value="name-za">Name Z-A</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {loading ? (
+              <div className="p-12 text-center">
+                <p className="text-sm text-muted-foreground">Loading inquiries...</p>
+              </div>
+            ) : inquiries.length === 0 ? (
+              <div className="p-12 text-center">
+                <MessageSquare className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
+                <p className="text-base font-medium text-foreground">No inquiries found</p>
+                <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters.</p>
+              </div>
+            ) : (
+              inquiries.map((inquiry) => {
+                const name =
+                  inquiry.name ||
+                  `${inquiry.firstName || ""} ${inquiry.lastName || ""}`.trim() ||
+                  "Unknown";
+                const status = inquiry.status || "pending";
+
+                return (
+                  <div
+                    key={inquiry._id}
+                    onClick={() => setSelectedInquiry(inquiry)}
+                    className="flex items-start justify-between p-5 bg-card border border-border rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start gap-4 flex-1">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center font-medium ${getAvatarColor(initial(name))}`}
+                      >
+                        {initial(name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{name}</h3>
+                            <p className="text-sm text-muted-foreground">{inquiry.email || "-"}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {fmtDate(inquiry.createdAt)}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedInquiry(inquiry);
+                              }}
+                              className="p-1 hover:bg-muted rounded-md transition-colors"
+                            >
+                              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                          </div>
+                        </div>
+                        {inquiry.message && (
+                          <p className="text-sm text-foreground mb-2 line-clamp-2">
+                            {inquiry.message}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3">
+                          {(inquiry.subject || inquiry.inquiryType) && (
+                            <span className="text-xs px-3 py-1 bg-muted text-foreground rounded-md">
+                              {inquiry.subject || inquiry.inquiryType}
+                            </span>
+                          )}
+                          <StatusBadge status={status} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
-      )}
+
+        {totalPages > 1 && (
+          <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-border">
+            <button
+              className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={page <= 1}
+              onClick={() => setPage((previous) => Math.max(1, previous - 1))}
+              title="Previous page"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1 text-sm text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={page >= totalPages}
+              onClick={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+              title="Next page"
+            >
+              Next
+            </button>
+          </div>
+        )}
 
       {selectedInquiry && (
         <InquiryDetailsModal
@@ -347,6 +435,7 @@ export default function InquiriesPage({ isEmbedded = false }) {
         confirmText={confirmModal.confirmText || "Confirm"}
       />
       {!isEmbedded && stats.total > 0 && <div className="sr-only">{stats.total}</div>}
+      </div>
     </div>
   );
 }

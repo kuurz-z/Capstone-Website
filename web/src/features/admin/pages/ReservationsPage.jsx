@@ -1,13 +1,14 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
-  CalendarCheck,
+  AlertCircle,
+  Calendar,
   CheckCircle,
   Clock,
   Eye,
-  FileDown,
+  Download,
   Trash2,
-  UserCheck,
+  User,
+  Search,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,6 +27,7 @@ import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import {
   CANONICAL_RESERVATION_STATUSES,
   RESERVATION_STATUS_LABELS,
+  getReservationStatusLabel,
   hasReservationStatus,
   readMoveInDate,
 } from "../../../shared/utils/lifecycleNaming";
@@ -49,23 +51,19 @@ import {
 import "../styles/design-tokens.css";
 import "../styles/admin-reservations.css";
 
-const AVATAR_COLORS = [
-  "#f97316",
-  "#8b5cf6",
-  "#0ea5e9",
-  "#10b981",
-  "#ef4444",
-  "#f59e0b",
-  "#6366f1",
-  "#ec4899",
-  "#14b8a6",
-  "#84cc16",
-];
-
-function avatarColor(name = "") {
-  const code = (name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0);
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
+const getAvatarColor = (initials = "") => {
+  const colors = [
+    "bg-[#ec4899] text-white",
+    "bg-[#22c55e] text-white",
+    "bg-[#8b5cf6] text-white",
+    "bg-[#ef4444] text-white",
+    "bg-[#3b82f6] text-white",
+    "bg-[#f59e0b] text-white",
+  ];
+  const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
+  const index = charCode % colors.length;
+  return colors[index];
+};
 
 function initials(name = "") {
   const parts = name.trim().split(" ");
@@ -153,6 +151,7 @@ function ReservationsPage() {
         reservation.room.toLowerCase().includes(query);
       const matchStatus =
         statusFilter === "all"
+  
           ? true
           : statusFilter === "overdue"
             ? checkOverdueReservation(reservation)
@@ -226,11 +225,11 @@ function ReservationsPage() {
 
   const summaryItems = useMemo(
     () => [
-      { label: "Total", value: counts.total, icon: CalendarCheck, color: "blue" },
+      { label: "All", value: counts.total, icon: Calendar, color: "blue" },
       { label: "Pending", value: counts.inProgress, icon: Clock, color: "orange" },
-      { label: "Reserved", value: counts.reserved, icon: CheckCircle, color: "green" },
-      { label: "Checked In", value: counts.movedIn, icon: UserCheck, color: "blue" },
-      { label: "Overdue", value: counts.overdue, icon: AlertTriangle, color: "red" },
+      { label: "Approved", value: counts.reserved, icon: CheckCircle, color: "green" },
+      { label: "Check-in", value: counts.movedIn, icon: User, color: "blue" },
+      { label: "Overdue", value: counts.overdue, icon: AlertCircle, color: "red" },
     ],
     [counts],
   );
@@ -268,7 +267,7 @@ function ReservationsPage() {
           { value: "overdue", label: "Overdue" },
           ...CANONICAL_RESERVATION_STATUSES.map((status) => ({
             value: status,
-            label: RESERVATION_STATUS_LABELS[status] || status,
+            label: getReservationStatusLabel(status),
           })),
         ],
         value: statusFilter,
@@ -447,22 +446,24 @@ function ReservationsPage() {
         sortKey: "customer",
         label: "Applicant",
         sortable: true,
-        render: (row) => (
-          <div className="res-applicant-cell">
-            <div
-              className="res-avatar"
-              style={{ background: avatarColor(row.customer) }}
-              aria-label={row.customer}
-            >
-              {initials(row.customer)}
+        render: (row) => {
+          const rowInitials = initials(row.customer);
+          return (
+            <div className="res-applicant-cell">
+              <div
+                className={`res-avatar ${getAvatarColor(rowInitials)}`}
+                aria-label={row.customer}
+              >
+                {rowInitials}
+              </div>
+              <div className="res-applicant-info">
+                <span className="res-applicant-name">{row.customer}</span>
+                <span className="res-applicant-email">{row.email}</span>
+                <span className="res-applicant-code">{row.phone}</span>
+              </div>
             </div>
-            <div className="res-applicant-info">
-              <span className="res-applicant-name">{row.customer}</span>
-              <span className="res-applicant-email">{row.email}</span>
-              <span className="res-applicant-code">{row.reservationCode}</span>
-            </div>
-          </div>
-        ),
+          );
+        },
       },
       {
         key: "room",
@@ -472,7 +473,7 @@ function ReservationsPage() {
           <div className="res-room-cell">
             <span className="res-room-name">{row.room}</span>
             <span className="res-room-meta">
-              {row.roomType || "Room"} · {row.branch}
+              {row.roomType || "Room"}, {row.branch}
             </span>
           </div>
         ),
@@ -527,100 +528,288 @@ function ReservationsPage() {
   );
 
   return (
-    <>
-      <PageShell tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
-        <PageShell.Content>
-          {activeTab === "reservations" && (
-            <section
-              id="page-shell-panel-reservations"
-              className="page-shell__panel reservations-workspace"
-              role="tabpanel"
-              aria-labelledby="page-shell-tab-reservations"
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground mb-1">Reservations</h1>
+        <p className="text-sm text-muted-foreground">
+          Review applications, confirm documents, and move accepted residents toward assignment.
+        </p>
+      </div>
+
+      <div className="border-b border-border">
+        <div className="flex gap-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`pb-3 px-1 text-sm font-medium transition-colors relative ${
+                activeTab === tab.key
+                  ? "text-[#eab308]"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <div className="reservations-workspace__summary">
-                <SummaryBar
-                  items={summaryItems}
-                  activeIndex={activeSummaryIndex}
-                  onItemClick={(index) => {
-                    const nextFilter = index < 0 ? "all" : SUMMARY_FILTERS[index];
-                    setStatusFilter(nextFilter);
+              {tab.label}
+              {activeTab === tab.key && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#eab308]" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "reservations" && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {summaryItems.map((item, idx) => (
+              <div
+                key={item.label}
+                onClick={() => {
+                  const nextFilter = idx < 0 ? "all" : SUMMARY_FILTERS[idx];
+                  setStatusFilter(nextFilter);
+                  setCurrentPage(1);
+                }}
+                className={`bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer ${
+                  activeSummaryIndex === idx ? "ring-2 ring-primary" : ""
+                }`}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <item.icon
+                    strokeWidth={1.5}
+                    className={`w-5 h-5 ${
+                      item.color === "blue"
+                        ? "text-blue-600"
+                        : item.color === "orange"
+                          ? "text-amber-500"
+                          : item.color === "green"
+                            ? "text-green-600"
+                            : "text-red-600"
+                    }`}
+                  />
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
+                    {item.label}
+                  </span>
+                </div>
+                <div
+                  className={`text-[32px] font-medium leading-none ${
+                    item.color === "blue"
+                      ? "text-blue-600"
+                      : item.color === "orange"
+                        ? "text-amber-500"
+                        : item.color === "green"
+                          ? "text-green-600"
+                          : "text-red-600"
+                  }`}
+                >
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search by name, email, code, or room..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
                     setCurrentPage(1);
                   }}
+                  className="w-full pl-10 pr-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
-              <div className="reservations-workspace__toolbar">
-                <ActionBar
-                  search={{
-                    value: searchTerm,
-                    onChange: (value) => {
-                      setSearchTerm(value);
+              <div className="flex gap-2">
+                {isOwner && (
+                  <select
+                    value={branchFilter}
+                    onChange={(e) => {
+                      setBranchFilter(e.target.value);
                       setCurrentPage(1);
-                    },
-                    placeholder: "Search by name, email, code, or room...",
+                    }}
+                    className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {OWNER_BRANCH_FILTER_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
                   }}
-                  filters={filters}
-                  actions={[
-                    {
-                      label: "Export CSV",
-                      icon: FileDown,
-                      onClick: handleExportReservations,
-                    },
-                  ]}
-                />
+                  className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {filters
+                    .find((f) => f.key === "status")
+                    ?.options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={handleExportReservations}
+                  className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center gap-2 text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </button>
               </div>
-              <div className="reservations-workspace__table">
-                <DataTable
-                  columns={columns}
-                  data={sortedReservations}
-                  loading={loading}
-                  disableRowInteraction
-                  sorting="external"
-                  sortKey={sortState.key}
-                  sortDir={sortState.dir}
-                  onSortChange={(key, dir) => setSortState({ key, dir })}
-                  onRowHover={(row) => {
-                    prefetchReservationDetail(row.id).catch(() => {});
-                  }}
-                  onRowFocus={(row) => {
-                    prefetchReservationDetail(row.id).catch(() => {});
-                  }}
-                  pagination={{
-                    page: currentPage,
-                    pageSize: itemsPerPage,
-                    total: totalFiltered,
-                    onPageChange: setCurrentPage,
-                  }}
-                  emptyState={{
-                    icon: CalendarCheck,
-                    title: "No reservations found",
-                    description: "Try adjusting your filters.",
-                  }}
-                />
-              </div>
-            </section>
-          )}
-          {activeTab === "visits" && (
-            <section
-              id="page-shell-panel-visits"
-              className="page-shell__panel"
-              role="tabpanel"
-              aria-labelledby="page-shell-tab-visits"
-            >
-              <VisitSchedulesTab />
-            </section>
-          )}
-          {activeTab === "inquiries" && (
-            <section
-              id="page-shell-panel-inquiries"
-              className="page-shell__panel"
-              role="tabpanel"
-              aria-labelledby="page-shell-tab-inquiries"
-            >
-              <InquiriesPage isEmbedded />
-            </section>
-          )}
-        </PageShell.Content>
-      </PageShell>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    {columns.slice(0, 5).map((col) => (
+                      <th
+                        key={col.key}
+                        className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground"
+                        onClick={() => {
+                          if (col.sortable) {
+                            setSortState((prev) => ({
+                              key: col.sortKey || col.key,
+                              dir:
+                                prev.key === (col.sortKey || col.key) && prev.dir === "asc"
+                                  ? "desc"
+                                  : "asc",
+                            }));
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-1">
+                          {col.label}
+                          {col.sortable &&
+                            sortState.key === (col.sortKey || col.key) &&
+                            (sortState.dir === "asc" ? "↑" : "↓")}
+                        </div>
+                      </th>
+                    ))}
+                    <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedReservations
+                    .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                    .map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-b border-border hover:bg-gray-50 transition-colors cursor-pointer"
+                        onMouseEnter={() => prefetchReservationDetail(row.id).catch(() => {})}
+                      >
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm ${getAvatarColor(initials(row.customer))}`}
+                            >
+                              {initials(row.customer)}
+                            </div>
+                            <div>
+                              <div className="font-medium text-foreground">{row.customer}</div>
+                              <div className="text-xs text-muted-foreground">{row.email}</div>
+                              <div className="text-xs text-muted-foreground">{row.phone}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="font-medium text-foreground">{row.room}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.roomType || "Room"}, {row.branch}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <StatusBadge
+                            status={checkOverdueReservation(row) ? "overdue" : row.status}
+                          />
+                        </td>
+                        <td className="py-4 px-4 text-sm text-foreground">
+                          {formatShortDate(row.moveInDate)}
+                        </td>
+                        <td className="py-4 px-4 text-sm text-foreground">
+                          {formatShortDate(row.createdAt)}
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleView(row.id);
+                              }}
+                              className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                              title="View details"
+                            >
+                              <Eye className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                            {can("manageReservations") && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(row.id);
+                                }}
+                                className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-600 rounded-md transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  {sortedReservations.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                        No reservations found. Try adjusting your filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              {totalFiltered > itemsPerPage && (
+                <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-border">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                    className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 text-sm text-muted-foreground">
+                    Page {currentPage} of {Math.ceil(totalFiltered / itemsPerPage)}
+                  </span>
+                  <button
+                    disabled={currentPage === Math.ceil(totalFiltered / itemsPerPage)}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === "visits" && (
+        <div className="mt-2">
+          <VisitSchedulesTab />
+        </div>
+      )}
+      {activeTab === "inquiries" && (
+        <div className="mt-2">
+          <InquiriesPage isEmbedded />
+        </div>
+      )}
 
       {selectedReservation && (
         <ReservationDetailsModal
@@ -639,7 +828,7 @@ function ReservationsPage() {
         confirmText={confirmModal.confirmText || "Confirm"}
       />
       {error && <div className="sr-only">{error}</div>}
-    </>
+    </div>
   );
 }
 
