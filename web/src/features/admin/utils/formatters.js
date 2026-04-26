@@ -15,5 +15,7 @@ export {
   formatRoomType,
 } from "../../../shared/utils/formatDate.js";
 
+export { getReservationStatusLabel } from "../../../shared/utils/lifecycleNaming.js";
+
 /** Admin-specific: formatRelativeTime alias using same logic */
 export { getRelativeTime as formatRelativeTime } from "../../../shared/utils/formatDate.js";

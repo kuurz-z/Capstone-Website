@@ -2,7 +2,7 @@
 
 .sidebar-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+  scrollbar-color: #e5e7eb transparent;
 }
 
 .sidebar-scroll::-webkit-scrollbar {
@@ -14,16 +14,18 @@
 }
 
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.36);
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background-clip: content-box;
+  background: #e5e7eb;
+  border-radius: 2px;
 }
 
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.58);
-  border: 2px solid transparent;
-  background-clip: content-box;
+  background: #d9dde3;
+}
+
+.sidebar-scroll::-webkit-scrollbar-button {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .sb-tooltip {

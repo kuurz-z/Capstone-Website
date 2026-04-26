@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCheck,
   ChevronLeft,
@@ -6,6 +6,7 @@ import {
   MailCheck,
   MessageSquare,
   Search,
+  MoreVertical,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,23 +25,19 @@ import { StatusBadge } from "../components/shared";
 import "../styles/design-tokens.css";
 import "../styles/admin-inquiries.css";
 
-const AVATAR_COLORS = [
-  "#f97316",
-  "#8b5cf6",
-  "#0ea5e9",
-  "#10b981",
-  "#ef4444",
-  "#f59e0b",
-  "#6366f1",
-  "#ec4899",
-  "#14b8a6",
-  "#84cc16",
-];
-
-function avatarColor(name = "") {
-  const code = (name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0);
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
+const getAvatarColor = (initials = "") => {
+  const colors = [
+    "bg-[#ec4899] text-white",
+    "bg-[#22c55e] text-white",
+    "bg-[#8b5cf6] text-white",
+    "bg-[#ef4444] text-white",
+    "bg-[#3b82f6] text-white",
+    "bg-[#f59e0b] text-white",
+  ];
+  const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
+  const index = charCode % colors.length;
+  return colors[index];
+};
 
 function initial(name = "") {
   return (name.trim()[0] || "?").toUpperCase();
@@ -207,10 +204,10 @@ export default function InquiriesPage({ isEmbedded = false }) {
   const summaryFilterValues = ["", "resolved", "pending"];
 
   return (
-    <div className="min-h-screen w-full bg-gray-50/50">
-      <div className="w-full px-4 py-4 sm:px-6 lg:px-8">
+    <div className={isEmbedded ? "" : "min-h-screen w-full"}>
+      <div className={isEmbedded ? "" : "w-full px-4 py-4 sm:px-6 lg:px-8"}>
         {!isEmbedded && (
-          <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
             {summaryItems.map((item, index) => {
               const Icon = item.icon;
               const isActive = statusFilter === summaryFilterValues[index];
@@ -223,15 +220,38 @@ export default function InquiriesPage({ isEmbedded = false }) {
                     setStatusFilter(summaryFilterValues[index]);
                     setPage(1);
                   }}
-                  className={`min-h-[132px] rounded-xl border p-5 text-left transition-all ${
-                    isActive ? palette.active : `${palette.base} hover:shadow-sm`
+                  className={`bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer ${
+                    isActive ? "ring-2 ring-primary" : ""
                   }`}
                 >
-                  <div className="mb-3 flex items-center gap-2.5">
-                    <Icon className={`h-5 w-5 ${palette.icon}`} />
-                    <span className={`text-sm font-medium ${palette.label}`}>{item.label}</span>
+                  <div className="flex items-start justify-between mb-4">
+                    <Icon
+                      strokeWidth={1.5}
+                      className={`w-5 h-5 ${
+                        item.color === "blue"
+                          ? "text-blue-600"
+                          : item.color === "orange"
+                            ? "text-amber-500"
+                            : item.color === "green"
+                              ? "text-green-600"
+                              : "text-red-600"
+                      }`}
+                    />
+                    <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
+                      {item.label}
+                    </span>
                   </div>
-                  <div className={`text-3xl font-semibold leading-none ${palette.value}`}>
+                  <div
+                    className={`text-[32px] font-medium leading-none ${
+                      item.color === "blue"
+                        ? "text-blue-600"
+                        : item.color === "orange"
+                          ? "text-amber-500"
+                          : item.color === "green"
+                            ? "text-green-600"
+                            : "text-red-600"
+                    }`}
+                  >
                     {item.value}
                   </div>
                 </button>
@@ -240,10 +260,10 @@ export default function InquiriesPage({ isEmbedded = false }) {
           </div>
         )}
 
-        <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="relative w-full md:max-w-lg">
-              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+        <div className="bg-card border border-border rounded-lg p-6">
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
                 value={searchTerm}
@@ -252,63 +272,63 @@ export default function InquiriesPage({ isEmbedded = false }) {
                   setPage(1);
                 }}
                 placeholder="Search inquiries..."
-                className="w-full rounded-lg border border-gray-300 py-2.5 pl-11 pr-4 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
-            <select
-              value={branchFilter}
-              onChange={(event) => {
-                setBranchFilter(event.target.value);
-                setPage(1);
-              }}
-              className="rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Branches</option>
-              <option value="gil-puyat">Gil Puyat</option>
-              <option value="guadalupe">Guadalupe</option>
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={branchFilter}
+                onChange={(event) => {
+                  setBranchFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">All Branches</option>
+                <option value="gil-puyat">Gil Puyat</option>
+                <option value="guadalupe">Guadalupe</option>
+              </select>
 
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
-                setPage(1);
-              }}
-              className="rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="resolved">Resolved</option>
-            </select>
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="resolved">Resolved</option>
+              </select>
 
-            <select
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2.5 text-base focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="recent">Most Recent</option>
-              <option value="oldest">Oldest First</option>
-              <option value="name-az">Name A-Z</option>
-              <option value="name-za">Name Z-A</option>
-            </select>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="recent">Most Recent</option>
+                <option value="oldest">Oldest First</option>
+                <option value="name-az">Name A-Z</option>
+                <option value="name-za">Name Z-A</option>
+              </select>
+            </div>
           </div>
-        </div>
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          {loading ? (
-            <div className="p-12 text-center">
-              <p className="text-base text-gray-500">Loading inquiries...</p>
-            </div>
-          ) : inquiries.length === 0 ? (
-            <div className="p-12 text-center">
-              <MessageSquare className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-              <p className="text-base font-medium text-gray-900">No inquiries found</p>
-              <p className="mt-1 text-base text-gray-500">Try adjusting your filters.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {inquiries.map((inquiry) => {
+          <div className="space-y-4">
+            {loading ? (
+              <div className="p-12 text-center">
+                <p className="text-sm text-muted-foreground">Loading inquiries...</p>
+              </div>
+            ) : inquiries.length === 0 ? (
+              <div className="p-12 text-center">
+                <MessageSquare className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
+                <p className="text-base font-medium text-foreground">No inquiries found</p>
+                <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters.</p>
+              </div>
+            ) : (
+              inquiries.map((inquiry) => {
                 const name =
                   inquiry.name ||
                   `${inquiry.firstName || ""} ${inquiry.lastName || ""}`.trim() ||
@@ -318,66 +338,79 @@ export default function InquiriesPage({ isEmbedded = false }) {
                 return (
                   <div
                     key={inquiry._id}
-                    className="group flex cursor-pointer items-start gap-3 p-4 transition-colors hover:bg-gray-50/50"
-                    role="button"
-                    tabIndex={0}
                     onClick={() => setSelectedInquiry(inquiry)}
-                    onKeyDown={(event) => event.key === "Enter" && setSelectedInquiry(inquiry)}
+                    className="flex items-start justify-between p-5 bg-card border border-border rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
                   >
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-                      style={{ background: avatarColor(name) }}
-                    >
-                      {initial(name)}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="truncate text-base font-medium text-gray-900">{name}</p>
-                        <StatusBadge status={status} />
+                    <div className="flex items-start gap-4 flex-1">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center font-medium ${getAvatarColor(initial(name))}`}
+                      >
+                        {initial(name)}
                       </div>
-                      <p className="mb-1 truncate text-sm text-gray-500">
-                        {inquiry.email || "-"} · {fmtDate(inquiry.createdAt)}
-                      </p>
-                      {inquiry.message && <p className="line-clamp-2 text-sm text-gray-700">{inquiry.message}</p>}
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-end gap-2" onClick={(event) => event.stopPropagation()}>
-                      {(inquiry.subject || inquiry.inquiryType) && (
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
-                          {inquiry.subject || inquiry.inquiryType}
-                        </span>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{name}</h3>
+                            <p className="text-sm text-muted-foreground">{inquiry.email || "-"}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {fmtDate(inquiry.createdAt)}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedInquiry(inquiry);
+                              }}
+                              className="p-1 hover:bg-muted rounded-md transition-colors"
+                            >
+                              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                          </div>
+                        </div>
+                        {inquiry.message && (
+                          <p className="text-sm text-foreground mb-2 line-clamp-2">
+                            {inquiry.message}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3">
+                          {(inquiry.subject || inquiry.inquiryType) && (
+                            <span className="text-xs px-3 py-1 bg-muted text-foreground rounded-md">
+                              {inquiry.subject || inquiry.inquiryType}
+                            </span>
+                          )}
+                          <StatusBadge status={status} />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
+              })
+            )}
+          </div>
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
-            <div className="text-base text-gray-500">
+          <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-border">
+            <button
+              className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={page <= 1}
+              onClick={() => setPage((previous) => Math.max(1, previous - 1))}
+              title="Previous page"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1 text-sm text-muted-foreground">
               Page {page} of {totalPages}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                className="rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={page <= 1}
-                onClick={() => setPage((previous) => Math.max(1, previous - 1))}
-                title="Previous page"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                className="rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={page >= totalPages}
-                onClick={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-                title="Next page"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+            </span>
+            <button
+              className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={page >= totalPages}
+              onClick={() => setPage((previous) => Math.min(totalPages, previous + 1))}
+              title="Next page"
+            >
+              Next
+            </button>
           </div>
         )}
 

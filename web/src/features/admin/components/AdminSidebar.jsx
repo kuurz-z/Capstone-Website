@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
+import LilycrestLogo from "../../../shared/components/LilycrestLogo";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   NAV_GROUPS,
@@ -41,55 +42,55 @@ export default function AdminSidebar({
 
   const shellWidthClass = collapsed ? "w-16" : "w-64";
   const shellVisibilityClass = isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0";
-  const sectionLabelClass = "px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]";
+  const sectionLabelClass = "px-3 mb-2 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]";
   const navButtonBase =
-    "group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-offset-0";
+    "group relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-outline)] focus-visible:ring-offset-0";
   const navButtonActive =
     "bg-[#d1b23d] text-[#0f1a2f]";
   const navButtonIdle =
-    "text-[var(--text-primary)] hover:bg-[rgba(209,178,61,0.14)] hover:text-[var(--text-primary)] dark:hover:bg-[rgba(209,178,61,0.2)]";
+    "text-[var(--text-primary)] hover:bg-[rgba(209,178,61,0.14)] hover:text-[var(--text-primary)]";
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--border-subtle,var(--border-light))] bg-[var(--surface-sidebar,var(--bg-sidebar))] transition-all duration-300 ease-out ${shellWidthClass} ${shellVisibilityClass}`}
+      className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--border-subtle,var(--border-light))] bg-white transition-all duration-300 ease-out ${shellWidthClass} ${shellVisibilityClass}`}
     >
-      <div className="flex min-h-[74px] items-center justify-between gap-3 border-b border-[var(--border-subtle,var(--border-light))] px-4 py-4">
-        <div className={`flex min-w-0 items-center gap-3 whitespace-nowrap ${collapsed ? "justify-center" : ""}`}>
-          <span
-            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#d1b23d] text-base font-semibold text-[#0f1a2f]"
-            aria-label="Lilycrest Logo"
-          >
-            L
-          </span>
-          {!collapsed && (
+      <div className="flex items-center justify-between border-b border-[var(--border-subtle,var(--border-light))] p-4">
+        {!collapsed && (
+          <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+            <span
+              className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
+              aria-label="Lilycrest Logo"
+            >
+              <LilycrestLogo className="h-7 w-7" aria-hidden="true" />
+            </span>
             <div className="flex min-w-0 flex-col leading-none">
-              <span className="truncate text-[30px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
+              <span className="truncate text-[20px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
                 {brandMeta.title}
               </span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
         <button
-          className="hidden h-8 w-8 items-center justify-center rounded-md text-[var(--text-primary)] transition-colors duration-200 hover:bg-[rgba(209,178,61,0.12)] md:inline-flex"
+          className="hidden rounded-md p-1.5 text-[var(--text-primary)] transition-colors duration-200 hover:bg-[rgba(209,178,61,0.12)] md:inline-flex"
           type="button"
           onClick={onToggleCollapse}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </button>
         <button
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-primary)] transition-colors duration-200 hover:bg-[rgba(209,178,61,0.12)] md:hidden"
+          className="inline-flex rounded-md p-1.5 text-[var(--text-primary)] transition-colors duration-200 hover:bg-[rgba(209,178,61,0.12)] md:hidden"
           type="button"
           onClick={onClose}
           aria-label="Close sidebar"
         >
-          <X size={18} />
+          <X className="h-5 w-5" />
         </button>
       </div>
 
       <nav
-        className="sidebar-scroll flex-1 overflow-y-auto overflow-x-hidden py-2"
+        className={`flex-1 overflow-x-hidden py-4 ${collapsed ? "overflow-y-hidden" : "sidebar-scroll overflow-y-auto"}`}
         aria-label="Admin navigation"
       >
         {NAV_GROUPS.slice()
@@ -101,15 +102,15 @@ export default function AdminSidebar({
             return (
               <div
                 key={group.id}
-                className={group.id === "system" ? "mt-6 pt-2" : ""}
+                className={group.id === "system" ? "mt-6" : ""}
               >
-                {!collapsed && group.id === "system" && (
+                {!collapsed && (
                   <div className={sectionLabelClass}>{group.label}</div>
                 )}
                 {collapsed && group.id === "system" && (
-                  <div className="mx-2 mb-3 border-t border-[var(--border-subtle,var(--border-light))]" />
+                  <div className="mx-2 my-4 border-t border-[var(--border-subtle,var(--border-light))]" />
                 )}
-                <div className="space-y-1.5 px-2">
+                <div className="space-y-1 px-2">
                   {items.map((item) => {
                     const Icon = item.icon;
 
@@ -130,7 +131,7 @@ export default function AdminSidebar({
                           <>
                             <Icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-[#0f1a2f]" : "text-[var(--text-primary)]"}`} />
                             {!collapsed && (
-                              <span className="truncate leading-tight">{item.text}</span>
+                              <span className="truncate text-sm leading-tight">{item.text}</span>
                             )}
                             {collapsed && hoveredItem === item.to && (
                               <span className="sb-tooltip">{item.text}</span>
