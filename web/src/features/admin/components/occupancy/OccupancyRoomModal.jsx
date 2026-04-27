@@ -36,67 +36,110 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
     bed.occupiedBy?.occupiedSince ||
     bed.occupant?.since ||
     null;
+
+  const getBedTone = (kind) => {
+    switch (kind) {
+      case "occupied":
+        return {
+          card: "bg-blue-50 border-blue-200 border-l-blue-500",
+          icon: "text-blue-600",
+          accent: "text-blue-700",
+        };
+      case "reserved":
+        return {
+          card: "bg-amber-50 border-amber-200 border-l-amber-500",
+          icon: "text-amber-600",
+          accent: "text-amber-700",
+        };
+      case "locked":
+        return {
+          card: "bg-slate-100 border-slate-300 border-l-slate-500",
+          icon: "text-slate-600",
+          accent: "text-slate-700",
+        };
+      case "maintenance":
+        return {
+          card: "bg-orange-50 border-orange-200 border-l-orange-500",
+          icon: "text-orange-600",
+          accent: "text-orange-700",
+        };
+      default:
+        return {
+          card: "bg-emerald-50 border-emerald-200 border-l-emerald-500",
+          icon: "text-emerald-600",
+          accent: "text-emerald-700",
+        };
+    }
+  };
+
+  const occupiedTone = getBedTone("occupied");
+  const reservedTone = getBedTone("reserved");
+  const lockedTone = getBedTone("locked");
+  const maintenanceTone = getBedTone("maintenance");
+  const availableTone = getBedTone("available");
+
   const modal = (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{title} - Bed Assignment Details</h2>
-          <button className="close-btn" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-transparent backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-3xl bg-white border border-border rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">{title} - Bed Assignment Details</h2>
+          <button className="p-2 rounded-lg hover:bg-muted text-muted-foreground transition-colors" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
-        <div className="modal-body">
+
+        <div className="p-4 sm:p-5 space-y-4">
           {loadingDetails ? (
-            <div className="modal-loading">
+            <div className="text-center py-10 text-sm text-muted-foreground">
               <p>Loading bed details...</p>
             </div>
           ) : (
             <>
-              <div className="details-grid">
-                <div className="detail-item">
-                  <label>Room Type:</label>
-                  <span>{formatRoomType(roomInfo.type || roomInfo.roomType)}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground font-semibold mb-1">Room Type</div>
+                  <div className="text-sm font-medium text-foreground">{formatRoomType(roomInfo.type || roomInfo.roomType)}</div>
                 </div>
-                <div className="detail-item">
-                  <label>Capacity:</label>
-                  <span>{roomInfo.capacity || 0} beds</span>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground font-semibold mb-1">Capacity</div>
+                  <div className="text-sm font-medium text-foreground">{roomInfo.capacity || 0} beds</div>
                 </div>
-                <div className="detail-item">
-                  <label>Committed Occupancy:</label>
-                  <span>{roomInfo.currentOccupancy || roomInfo.occupancy || 0}</span>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground font-semibold mb-1">Committed Occupancy</div>
+                  <div className="text-sm font-medium text-foreground">{roomInfo.currentOccupancy || roomInfo.occupancy || 0}</div>
                 </div>
-                <div className="detail-item">
-                  <label>Occupancy Rate:</label>
-                  <span>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground font-semibold mb-1">Occupancy Rate</div>
+                  <div className="text-sm font-medium text-foreground">
                     {Math.round(
                       ((roomInfo.currentOccupancy || roomInfo.occupancy || 0) /
                         (roomInfo.capacity || 1)) *
                         100,
                     )}
                     %
-                  </span>
+                  </div>
                 </div>
               </div>
 
               {occupiedBeds?.length > 0 && (
-                <div className="occupied-beds-section">
-                  <h3>Occupied Beds</h3>
-                  <div className="beds-list">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Occupied Beds</h3>
+                  <div className="space-y-2">
                     {occupiedBeds.map((bed, idx) => (
-                      <div key={idx} className="bed-item occupied">
-                        <div className="bed-icon">
+                      <div key={idx} className={`flex items-start gap-3 p-3 rounded-lg border border-l-4 ${occupiedTone.card}`}>
+                        <div className={`${occupiedTone.icon} mt-0.5`}>
                           <BedDouble size={22} />
                         </div>
-                        <div className="bed-info">
-                          <h4>{formatBedLabel(bed)}</h4>
-                          <p>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-foreground mb-1">{formatBedLabel(bed)}</h4>
+                          <p className="text-sm text-foreground">
                             Resident: {formatOccupantName(bed)}
                           </p>
                           {formatOccupantEmail(bed) && (
-                            <p>Email: {formatOccupantEmail(bed)}</p>
+                            <p className="text-sm text-muted-foreground">Email: {formatOccupantEmail(bed)}</p>
                           )}
                           {formatOccupiedSince(bed) && (
-                            <p className="small-text">
+                            <p className="text-xs text-muted-foreground">
                               Since:{" "}
                               {new Date(
                                 formatOccupiedSince(bed),
@@ -111,17 +154,17 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
               )}
 
               {reservedBeds?.length > 0 && (
-                <div className="occupied-beds-section">
-                  <h3>Reserved Beds</h3>
-                  <div className="beds-list">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Reserved Beds</h3>
+                  <div className="space-y-2">
                     {reservedBeds.map((bed, idx) => (
-                      <div key={idx} className="bed-item occupied">
-                        <div className="bed-icon">
+                      <div key={idx} className={`flex items-start gap-3 p-3 rounded-lg border border-l-4 ${reservedTone.card}`}>
+                        <div className={`${reservedTone.icon} mt-0.5`}>
                           <Lock size={22} />
                         </div>
-                        <div className="bed-info">
-                          <h4>{formatBedLabel(bed)}</h4>
-                          <p>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-foreground mb-1">{formatBedLabel(bed)}</h4>
+                          <p className="text-sm text-foreground">
                             Reserved by: {bed.reservedBy?.userName || bed.occupant?.name || "Unknown"}
                           </p>
                         </div>
@@ -132,19 +175,19 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
               )}
 
               {lockedBeds?.length > 0 && (
-                <div className="occupied-beds-section">
-                  <h3>Locked Beds</h3>
-                  <div className="beds-list">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Locked Beds</h3>
+                  <div className="space-y-2">
                     {lockedBeds.map((bed, idx) => (
-                      <div key={idx} className="bed-item occupied">
-                        <div className="bed-icon">
+                      <div key={idx} className={`flex items-start gap-3 p-3 rounded-lg border border-l-4 ${lockedTone.card}`}>
+                        <div className={`${lockedTone.icon} mt-0.5`}>
                           <Lock size={22} />
                         </div>
-                        <div className="bed-info">
-                          <h4>{formatBedLabel(bed)}</h4>
-                          <p>Temporarily held</p>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-foreground mb-1">{formatBedLabel(bed)}</h4>
+                          <p className="text-sm text-foreground">Temporarily held</p>
                           {bed.lockExpiresAt && (
-                            <p className="small-text">
+                            <p className="text-xs text-muted-foreground">
                               Expires: {new Date(bed.lockExpiresAt).toLocaleString()}
                             </p>
                           )}
@@ -156,17 +199,17 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
               )}
 
               {maintenanceBeds?.length > 0 && (
-                <div className="occupied-beds-section">
-                  <h3>Maintenance Beds</h3>
-                  <div className="beds-list">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Maintenance Beds</h3>
+                  <div className="space-y-2">
                     {maintenanceBeds.map((bed, idx) => (
-                      <div key={idx} className="bed-item occupied">
-                        <div className="bed-icon">
+                      <div key={idx} className={`flex items-start gap-3 p-3 rounded-lg border border-l-4 ${maintenanceTone.card}`}>
+                        <div className={`${maintenanceTone.icon} mt-0.5`}>
                           <Settings size={22} />
                         </div>
-                        <div className="bed-info">
-                          <h4>{formatBedLabel(bed)}</h4>
-                          <p>Unavailable due to maintenance</p>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-foreground mb-1">{formatBedLabel(bed)}</h4>
+                          <p className="text-sm text-foreground">Unavailable due to maintenance</p>
                         </div>
                       </div>
                     ))}
@@ -175,17 +218,17 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
               )}
 
               {availableBeds?.length > 0 && (
-                <div className="available-beds-section">
-                  <h3>Available Beds ({availableBeds.length})</h3>
-                  <div className="beds-list">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Available Beds ({availableBeds.length})</h3>
+                  <div className="space-y-2">
                     {availableBeds.map((bed, idx) => (
-                      <div key={idx} className="bed-item available">
-                        <div className="bed-icon">
+                      <div key={idx} className={`flex items-start gap-3 p-3 rounded-lg border border-l-4 ${availableTone.card}`}>
+                        <div className={`${availableTone.icon} mt-0.5`}>
                           <Unlock size={22} />
                         </div>
-                        <div className="bed-info">
-                          <h4>{formatBedLabel(bed)}</h4>
-                          <p className="available-text">
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-foreground mb-1">{formatBedLabel(bed)}</h4>
+                          <p className={`text-sm ${availableTone.accent}`}>
                             Available for booking
                           </p>
                         </div>
@@ -196,15 +239,16 @@ export default function OccupancyRoomModal({ room, loadingDetails, onClose }) {
               )}
 
               {!occupiedBeds.length && !reservedBeds.length && !availableBeds.length && !lockedBeds.length && !maintenanceBeds.length && (
-                <p className="info-text">
+                <p className="text-center text-sm text-muted-foreground py-6">
                   No detailed bed information available for this room.
                 </p>
               )}
             </>
           )}
         </div>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={onClose}>
+
+        <div className="px-4 sm:px-5 py-3 border-t border-border bg-muted/20">
+          <button className="w-full px-4 py-2 bg-foreground text-background rounded-md hover:opacity-90 transition-opacity text-sm font-medium" onClick={onClose}>
             Close
           </button>
         </div>

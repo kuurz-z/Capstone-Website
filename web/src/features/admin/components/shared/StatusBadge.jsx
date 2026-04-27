@@ -1,8 +1,3 @@
-import {
-  normalizeReservationStatus,
-  getReservationStatusLabel,
-} from "../../../../shared/utils/lifecycleNaming";
-
 /**
  * StatusBadge — Consistent status chip with dot + label.
  *
