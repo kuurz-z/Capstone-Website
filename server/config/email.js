@@ -923,4 +923,48 @@ export const sendPaymentReceiptEmail = async ({
   }
 };
 
+export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    console.log("Login OTP email not sent - email not configured");
+    return { success: false, message: "Email service not configured" };
+  }
+
+  const displayName = name || "there";
+  const mailOptions = {
+    from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+    to,
+    subject: "Your Lilycrest login OTP",
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f6f7fb;font-family:Arial,sans-serif;color:#111827;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;">
+    <tr><td style="padding:32px 16px;">
+      <table role="presentation" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #eef0f4;overflow:hidden;">
+        <tr><td style="background:#0A1628;padding:24px 28px;color:#ffffff;">
+          <div style="font-size:20px;font-weight:700;">Lilycrest Dormitory</div>
+          <div style="font-size:13px;color:#D4AF37;margin-top:4px;">Login verification</div>
+        </td></tr>
+        <tr><td style="padding:28px;">
+          <p style="margin:0 0 16px;font-size:15px;">Hi ${displayName},</p>
+          <p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#374151;">Use this 6-digit code to finish signing in to your Lilycrest account.</p>
+          <div style="letter-spacing:8px;font-size:32px;font-weight:700;color:#0A1628;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:18px;text-align:center;">${otp}</div>
+          <p style="margin:20px 0 0;font-size:13px;color:#6B7280;">This code expires in ${expiresInMinutes} minutes. If you did not request it, you can ignore this email.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`,
+    text: `Hi ${displayName}, your Lilycrest login OTP is ${otp}. It expires in ${expiresInMinutes} minutes.`,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Login OTP email sent to ${to} - ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`Login OTP email failed for ${to}:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 export default transporter;

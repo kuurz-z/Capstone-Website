@@ -49,6 +49,11 @@ import "../../../shared/styles/notification.css";
 import hero1 from "../../../assets/images/hero1.jpg";
 
 const SIGNUP_IMAGE = hero1;
+const getWebBaseUrl = () => {
+  const configured = import.meta.env.VITE_WEB_BASE_URL;
+  if (configured && configured.trim()) return configured.trim().replace(/\/$/, "");
+  return window.location.origin;
+};
 
 function SignUp() {
   const navigate = useNavigate();
@@ -292,7 +297,8 @@ function SignUp() {
         );
         try {
           const actionCodeSettings = {
-            url: `${window.location.origin}/verify-email`,
+            url: `${getWebBaseUrl()}/auth-action`,
+            handleCodeInApp: true,
           };
           await sendEmailVerification(firebaseUser, actionCodeSettings);
         } catch (emailError) {

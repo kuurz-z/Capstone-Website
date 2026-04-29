@@ -18,12 +18,18 @@ export const SignUp = React.lazy(
 export const VerifyEmail = React.lazy(
   () => import("../features/public/pages/VerifyEmail.jsx"),
 );
+export const AuthAction = React.lazy(
+  () => import("../features/tenant/pages/AuthAction.jsx"),
+);
 
 export const SignIn = React.lazy(
   () => import("../features/tenant/pages/SignIn.jsx"),
 );
 export const ForgotPassword = React.lazy(
   () => import("../features/tenant/pages/ForgotPassword.jsx"),
+);
+export const ResetPassword = React.lazy(
+  () => import("../features/tenant/pages/ResetPassword.jsx"),
 );
 export const CheckAvailabilityPage = React.lazy(
   () => import("../features/tenant/pages/CheckAvailabilityPage"),

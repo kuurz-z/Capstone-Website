@@ -12,6 +12,8 @@ import {
   SignUp,
   ForgotPassword,
   VerifyEmail,
+  AuthAction,
+  ResetPassword,
 } from "../lazyPages";
 
 export function PublicRoutes() {
@@ -70,6 +72,24 @@ export function PublicRoutes() {
             <RequireNonAdmin>
               <RouteShell name="ForgotPassword">
                 <ForgotPassword />
+              </RouteShell>
+            </RequireNonAdmin>
+          }
+        />
+        <Route
+          path="/auth-action"
+          element={
+            <RouteShell name="AuthAction">
+              <AuthAction />
+            </RouteShell>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <RequireNonAdmin>
+              <RouteShell name="ResetPassword">
+                <ResetPassword />
               </RouteShell>
             </RequireNonAdmin>
           }

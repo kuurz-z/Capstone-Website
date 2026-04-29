@@ -20,6 +20,12 @@ import "../../../shared/styles/notification.css";
 import Lounge from "../../../assets/images/facilities/RD Lounge Area.jpg"; 
 
 const RESET_IMAGE = Lounge; 
+const getWebBaseUrl = () => {
+  const configured = import.meta.env.VITE_WEB_BASE_URL;
+  if (configured && configured.trim()) return configured.trim().replace(/\/$/, "");
+  return window.location.origin;
+};
+
 function ForgotPassword() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -30,7 +36,7 @@ function ForgotPassword() {
   const [fieldValid, setFieldValid] = useState(false);
 
   const handleChange = (e) => {
-    const value = e.target.value;
+    const value = e.target.value.replace(/\s/g, "").toLowerCase();
     setEmail(value);
     setTouched(true);
     const error = validateEmail(value);
@@ -52,9 +58,12 @@ function ForgotPassword() {
 
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email, {
+        url: `${getWebBaseUrl()}/auth-action`,
+        handleCodeInApp: true,
+      });
       setEmailSent(true);
-      showNotification("Password reset email sent!", "success");
+      showNotification("If an account exists, a reset link has been sent.", "success");
       // Log successful password reset attempt for security auditing
       try {
         await fetch("/api/auth/log-password-reset", {
@@ -66,17 +75,14 @@ function ForgotPassword() {
         /* non-critical */
       }
     } catch (error) {
-      let msg = "Failed to send reset email. ";
-      if (error.code === "auth/user-not-found")
-        msg = "No account found with this email address.";
-      else if (error.code === "auth/invalid-email")
-        msg = "Invalid email address format.";
-      else if (error.code === "auth/too-many-requests")
-        msg = "Too many requests. Please try again later.";
-      else if (error.code === "auth/network-request-failed")
-        msg = "Network error. Please check your connection.";
-      else msg += error.message || "Please try again.";
-      showNotification(msg, "error");
+      if (error.code === "auth/too-many-requests") {
+        showNotification("Too many requests. Please try again later.", "error");
+      } else if (error.code === "auth/network-request-failed") {
+        showNotification("Network error. Please check your connection.", "error");
+      } else {
+        setEmailSent(true);
+        showNotification("If an account exists, a reset link has been sent.", "success");
+      }
       // Log failed password reset attempt
       try {
         await fetch("/api/auth/log-password-reset", {
@@ -125,7 +131,7 @@ function ForgotPassword() {
                   Reset password
                 </h1>
                 <p className="text-gray-600 font-light">
-                  Enter the email associated with your account and we'll send a
+                  Enter the email associated with your account and we&apos;ll send a
                   link to reset your password.
                 </p>
               </div>
@@ -230,26 +236,14 @@ function ForgotPassword() {
                 className="text-gray-600 font-light mb-2"
                 style={{ lineHeight: "1.6" }}
               >
-                We've sent a password reset link to
-              </p>
-              <p
-                className="mb-8"
-                style={{
-                  fontWeight: "500",
-                  color: "#0A1628",
-                  fontSize: "15px",
-                }}
-              >
-                {email}
+                If an account exists, a reset link has been sent.
               </p>
 
               <p
                 className="text-gray-500 font-light mb-8"
                 style={{ fontSize: "13px", lineHeight: "1.6" }}
               >
-                Click the link in the email to create a new password.
-                <br />
-                Don't forget to check your spam folder.
+                Please check your inbox or spam folder.
               </p>
 
               <div className="space-y-3">

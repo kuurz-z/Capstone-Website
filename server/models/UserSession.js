@@ -39,6 +39,11 @@ const userSessionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    deviceId: {
+      type: String,
+      default: null,
+      index: true,
+    },
 
     // --- Device & Network ---
     device: {
@@ -67,6 +72,32 @@ const userSessionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    expiresAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    otpVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+    otpHash: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    otpExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    otpLastSentAt: {
+      type: Date,
+      default: null,
+    },
+    otpAttempts: {
+      type: Number,
+      default: 0,
+    },
 
     // --- Status ---
     isActive: {
@@ -86,6 +117,7 @@ const userSessionSchema = new mongoose.Schema(
 
 userSessionSchema.index({ userId: 1, isActive: 1 });
 userSessionSchema.index({ userId: 1, loginTime: -1 });
+userSessionSchema.index({ userId: 1, deviceId: 1, isActive: 1 });
 
 // TTL: auto-delete inactive sessions after 30 days
 userSessionSchema.index(
@@ -113,14 +145,50 @@ userSessionSchema.methods.endSession = async function () {
 /**
  * Create a new session
  */
-userSessionSchema.statics.createSession = async function (userId, req) {
+userSessionSchema.statics.createSession = async function (userId, req, options = {}) {
+  const now = new Date();
+  const durationMs = options.durationMs || 24 * 60 * 60 * 1000;
   const session = new this({
     userId,
+    deviceId: options.deviceId || req.headers["x-device-id"] || null,
     device: req.headers["x-device-name"] || parseDevice(req.headers["user-agent"]),
     ipAddress: req.ip || req.headers["x-forwarded-for"] || req.connection?.remoteAddress,
     userAgent: req.headers["user-agent"],
+    expiresAt: new Date(now.getTime() + durationMs),
+    otpVerifiedAt: options.otpVerified ? now : null,
   });
   return session.save();
+};
+
+/**
+ * Find an active, non-expired OTP-verified session.
+ */
+userSessionSchema.statics.findValidOtpSession = function (userId, deviceId, sessionId) {
+  if (!deviceId || !sessionId) return null;
+  return this.findOne({
+    userId,
+    deviceId,
+    sessionId,
+    isActive: true,
+    otpVerifiedAt: { $ne: null },
+    expiresAt: { $gt: new Date() },
+  });
+};
+
+/**
+ * Find the newest pending OTP challenge for this user/device.
+ */
+userSessionSchema.statics.findPendingOtp = function (userId, deviceId) {
+  if (!deviceId) return null;
+  return this.findOne({
+    userId,
+    deviceId,
+    isActive: false,
+    otpHash: { $ne: null },
+    otpExpiresAt: { $gt: new Date() },
+  })
+    .select("+otpHash")
+    .sort({ otpLastSentAt: -1 });
 };
 
 /**

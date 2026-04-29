@@ -27,6 +27,8 @@ import { setRoleSchema, updateBranchSchema } from "../validation/schemas.js";
 import {
   register,
   login,
+  verifyLoginOtp,
+  resendLoginOtp,
   logout,
   getProfile,
   updateProfile,
@@ -82,6 +84,10 @@ router.post(
  * @returns { user, message }
  */
 router.post("/login", verifyToken, login);
+
+router.post("/verify-otp", verifyToken, verifyLoginOtp);
+
+router.post("/resend-otp", verifyToken, resendLoginOtp);
 
 /**
  * POST /api/auth/logout
