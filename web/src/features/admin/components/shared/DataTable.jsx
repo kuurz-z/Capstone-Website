@@ -34,6 +34,11 @@ export default function DataTable({
   onSortChange,
   serverPagination = false,
   disableRowInteraction = false,
+  // Row selection (opt-in) — pass selectable={true} to enable checkboxes
+  selectable = false,
+  selectedIds = null,   // Set of row IDs currently selected
+  getRowId = (row) => row.request_id || row.id || row._id,
+  onSelectionChange = null, // (nextSet: Set) => void
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
@@ -68,6 +73,28 @@ export default function DataTable({
     });
   }, [data, sortKey, sortDir, sorting]);
 
+  // Selection helpers (only active when selectable=true)
+  const activeSelectedIds = selectable && selectedIds instanceof Set ? selectedIds : null;
+
+  const toggleRow = (row) => {
+    if (!selectable || !onSelectionChange) return;
+    const id = getRowId(row);
+    const next = new Set(activeSelectedIds || []);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onSelectionChange(next);
+  };
+
+  const togglePageAll = (pageRows) => {
+    if (!selectable || !onSelectionChange) return;
+    const next = new Set(activeSelectedIds || []);
+    const pageIds = pageRows.map(getRowId);
+    const allSelected = pageIds.every((id) => next.has(id));
+    if (allSelected) pageIds.forEach((id) => next.delete(id));
+    else pageIds.forEach((id) => next.add(id));
+    onSelectionChange(next);
+  };
+
   // Pagination
   const pageSize = pagination?.pageSize || data.length || 1;
   const currentPage = pagination?.page || 1;
@@ -97,6 +124,20 @@ export default function DataTable({
         <table className="data-table">
           <thead>
             <tr>
+              {selectable && (
+                <th className="data-table__th data-table__th--checkbox">
+                  <input
+                    type="checkbox"
+                    className="data-table__checkbox"
+                    aria-label="Select all on this page"
+                    checked={
+                      pagedData.length > 0 &&
+                      pagedData.every((row) => activeSelectedIds?.has(getRowId(row)))
+                    }
+                    onChange={() => togglePageAll(pagedData)}
+                  />
+                </th>
+              )}
               {columns.map((col) => {
                 const sortField = col.sortKey || col.key;
                 return (
@@ -135,15 +176,18 @@ export default function DataTable({
                     ))}
                   </tr>
                 ))
-              : pagedData.map((row, i) => (
+              : pagedData.map((row, i) => {
+                  const rowId = selectable ? getRowId(row) : null;
+                  const isSelected = selectable && activeSelectedIds?.has(rowId);
+                  return (
                   <tr
                     key={row.id || row._id || i}
-                    className={`data-table__row ${onRowClick ? "data-table__row--clickable" : ""} ${disableRowInteraction ? "data-table__row--static" : ""}`}
+                    className={`data-table__row ${onRowClick ? "data-table__row--clickable" : ""} ${disableRowInteraction ? "data-table__row--static" : ""} ${isSelected ? "data-table__row--selected" : ""}`}
                     onMouseEnter={() => onRowHover?.(row)}
                     onFocus={() => onRowFocus?.(row)}
                     onClickCapture={(e) => {
                       if (!disableRowInteraction) return;
-                      const target = e.target;
+                      const { target } = e;
                       if (!(target instanceof Element)) return;
                       if (target.closest("[data-action-cell], [data-action-portal='true']")) return;
                       e.stopPropagation();
@@ -152,17 +196,31 @@ export default function DataTable({
                       if (disableRowInteraction) return;
                       if (!onRowClick) return;
 
-                      const target = e.target;
+                      const { target } = e;
                       if (!(target instanceof Element)) {
                         onRowClick(row);
                         return;
                       }
 
+                      // Checkbox clicks toggle selection; never open the detail drawer
+                      if (target.closest("[data-table-checkbox]")) return;
                       // Don't fire row click if the event came from an action cell
                       if (target.closest("[data-action-cell]")) return;
                       onRowClick(row);
                     }}
                   >
+                    {selectable && (
+                      <td className="data-table__td data-table__td--checkbox" data-table-checkbox>
+                        <input
+                          type="checkbox"
+                          className="data-table__checkbox"
+                          aria-label={`Select row ${rowId}`}
+                          checked={isSelected}
+                          onChange={() => toggleRow(row)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </td>
+                    )}
                     {columns.map((col) => (
                       <td
                         key={col.key}
@@ -175,7 +233,8 @@ export default function DataTable({
                       </td>
                     ))}
                   </tr>
-                ))}
+                  );
+                })}
           </tbody>
         </table>
       </div>

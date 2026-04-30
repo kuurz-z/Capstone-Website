@@ -143,9 +143,9 @@ async function buildActionAvailability({ reservation, stay, billingSummary }) {
       ? { ...disabled("Only active stays can be transferred.", "NO_ACTIVE_STAY"), hasAvailableBedsInBranch }
       : tenantIsInactive
         ? { ...disabled("Inactive or moved-out tenants cannot be transferred.", "TENANT_INACTIVE"), hasAvailableBedsInBranch }
-        : !hasAvailableBedsInBranch
-          ? { ...disabled("No available same-branch bed is available for transfer.", "NO_AVAILABLE_BED"), hasAvailableBedsInBranch }
-          : { enabled: true, reason: "", blockingCodes: [], hasAvailableBedsInBranch },
+        : hasAvailableBedsInBranch
+          ? { enabled: true, reason: "", blockingCodes: [], hasAvailableBedsInBranch }
+          : { ...disabled("No available same-branch bed is available for transfer.", "NO_AVAILABLE_BED"), hasAvailableBedsInBranch },
     moveOut: !activeStay
       ? disabled("Only active stays can be moved out.", "NO_ACTIVE_STAY")
       : tenantIsInactive
@@ -529,6 +529,28 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
         isArchived: { $ne: true },
       }).session(session).lean();
       const billingSummary = buildBillingSummary(bills);
+
+      // ── Move-out billing blocker ──────────────────────────────────────────
+      // Block move-out when the tenant has an outstanding balance unless the
+      // admin explicitly sets forceOverride: true after reviewing the balance.
+      // This prevents accidental move-outs that leave uncollectable debt.
+      if (billingSummary.hasOutstanding && !payload.forceOverride) {
+        const formattedBalance = Number(billingSummary.currentBalance).toLocaleString("en-PH", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        throw Object.assign(
+          new Error(
+            `Tenant has ₱${formattedBalance} in outstanding balance. Settle all bills before processing move-out, or acknowledge and force-proceed.`,
+          ),
+          {
+            statusCode: 409,
+            code: "OUTSTANDING_BILLS_BLOCKING_MOVEOUT",
+            outstandingBalance: billingSummary.currentBalance,
+            paymentStatus: billingSummary.paymentStatus,
+          },
+        );
+      }
 
       const room = await Room.findById(activeStay.roomId).session(session);
       if (room) {

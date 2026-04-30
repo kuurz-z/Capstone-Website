@@ -11,31 +11,33 @@
  */
 
 import mongoose from "mongoose";
-import { MaintenanceRequest, Reservation, User } from "../models/index.js";
-import { clean } from "../utils/sanitize.js";
-import { notify } from "../utils/notificationService.js";
 import {
-  sendSuccess,
-  AppError,
-} from "../middleware/errorHandler.js";
-import {
-  CURRENT_RESIDENT_STATUS_QUERY,
-} from "../utils/lifecycleNaming.js";
-import {
-  ADMIN_MAINTENANCE_STATUSES,
-  MAINTENANCE_REQUEST_TYPES,
-  MAINTENANCE_URGENCY_LEVELS,
-  REOPENABLE_MAINTENANCE_STATUSES,
-  canAdminTransitionMaintenanceStatus,
-  formatMaintenanceTypeLabel,
-  getResolutionEstimate,
-  isAdminMutableMaintenanceStatus,
-  isValidMaintenanceStatus,
-  normalizeMaintenanceStatus,
-  normalizeMaintenanceType,
-  normalizeMaintenanceUrgency,
+    ADMIN_MAINTENANCE_STATUSES,
+    MAINTENANCE_REQUEST_TYPES,
+    MAINTENANCE_URGENCY_LEVELS,
+    MIN_MAINTENANCE_DESCRIPTION_LENGTH,
+    OPEN_MAINTENANCE_STATUSES,
+    REOPENABLE_MAINTENANCE_STATUSES,
+    canAdminTransitionMaintenanceStatus,
+    formatMaintenanceTypeLabel,
+    getResolutionEstimate,
+    isAdminMutableMaintenanceStatus,
+    isValidMaintenanceStatus,
+    normalizeMaintenanceStatus,
+    normalizeMaintenanceType,
+    normalizeMaintenanceUrgency,
 } from "../config/maintenance.js";
+import {
+    AppError,
+    sendSuccess,
+} from "../middleware/errorHandler.js";
+import { MaintenanceRequest, Reservation, User } from "../models/index.js";
+import {
+    CURRENT_RESIDENT_STATUS_QUERY,
+} from "../utils/lifecycleNaming.js";
 import { buildLegacyDescription } from "../utils/maintenanceMigration.js";
+import { notify } from "../utils/notificationService.js";
+import { clean } from "../utils/sanitize.js";
 import { DELETED_ACCOUNT_LABEL } from "../utils/userReference.js";
 
 const USER_SELECT_FIELDS =
@@ -47,11 +49,13 @@ const SLA_TARGET_HOURS = Object.freeze({
   normal: 48,
   high: 24,
 });
+const DUPLICATE_REQUEST_WINDOW_HOURS = 12;
 const CLOSED_MAINTENANCE_STATUSES = new Set([
   "resolved",
   "completed",
   "rejected",
   "cancelled",
+  "closed",
 ]);
 
 const parseLimit = (value, fallback = 100) => {
@@ -102,19 +106,21 @@ const getSlaState = (request) => {
   );
   const isDelayed =
     Boolean(targetAt) && !isClosed && Date.now() > targetAt.getTime();
+  let label = "on_track";
+  if (isClosed) {
+    label = "closed";
+  } else if (isDelayed) {
+    label = "delayed";
+  } else if (urgency === "high") {
+    label = "priority";
+  }
 
   return {
     targetHours,
     targetAt,
     isDelayed,
     isHighPriorityUnresolved: urgency === "high" && !isClosed,
-    label: isClosed
-      ? "closed"
-      : isDelayed
-        ? "delayed"
-        : urgency === "high"
-          ? "priority"
-          : "on_track",
+    label,
   };
 };
 
@@ -220,6 +226,7 @@ const serializeMaintenanceRequest = (request, tenant = null) => ({
   cancelled_at: request.cancelled_at ?? null,
   reopened_at: request.reopened_at ?? null,
   resolved_at: request.resolved_at ?? null,
+  closed_at: request.closed_at ?? null,
   estimated_resolution: getResolutionEstimate(request.urgency),
   tenant,
   branch: request.branch || null,
@@ -264,6 +271,162 @@ const resolveAdminBranchFilter = (req) => {
   }
 
   return req.branchFilter || null;
+};
+
+const ensureMinimumDescriptionLength = (description) =>
+  String(description || "").trim().length >= MIN_MAINTENANCE_DESCRIPTION_LENGTH;
+
+const buildAdminDisplayName = (adminUser) =>
+  `${adminUser?.firstName || ""} ${adminUser?.lastName || ""}`.trim() ||
+  adminUser?.email ||
+  adminUser?.user_id ||
+  "Admin";
+
+const normalizeAdminUpdatePayload = (payload = {}) => {
+  const hasAssignedField = Object.prototype.hasOwnProperty.call(payload, "assigned_to");
+
+  return {
+    nextStatus: normalizeMaintenanceStatus(payload.status),
+    nextNotes: payload.notes !== undefined ? toOptionalText(payload.notes) : undefined,
+    nextAssignedTo: hasAssignedField ? toOptionalText(payload.assigned_to) : undefined,
+    hasAssignedField,
+    workLogNote: toOptionalText(
+      payload.work_log_note !== undefined ? payload.work_log_note : payload.workLogNote,
+    ),
+  };
+};
+
+const applyAdminUpdateToRequest = ({ request, adminUser, payload }) => {
+  if (normalizeMaintenanceStatus(request.status) === "closed") {
+    throw new AppError(
+      "Closed maintenance requests cannot be updated",
+      409,
+      "REQUEST_CLOSED",
+    );
+  }
+
+  const {
+    nextStatus,
+    nextNotes,
+    nextAssignedTo,
+    hasAssignedField,
+    workLogNote,
+  } = normalizeAdminUpdatePayload(payload);
+
+  if (hasAssignedField && nextAssignedTo && nextAssignedTo.length < 2) {
+    throw new AppError("Assigned staff name is too short", 400, "INVALID_ASSIGNEE");
+  }
+
+  if (!nextStatus || !isAdminMutableMaintenanceStatus(nextStatus)) {
+    throw new AppError(
+      `Status must be one of: ${ADMIN_MAINTENANCE_STATUSES.join(", ")}`,
+      400,
+      "INVALID_ADMIN_STATUS",
+    );
+  }
+
+  if (!canAdminTransitionMaintenanceStatus(request.status, nextStatus)) {
+    throw new AppError(
+      `Invalid maintenance status transition: ${request.status} -> ${nextStatus}`,
+      409,
+      "INVALID_STATUS_TRANSITION",
+    );
+  }
+
+  const requiresNotes = [
+    "resolved",
+    "completed",
+    "rejected",
+    "waiting_tenant",
+    "closed",
+  ].includes(nextStatus);
+  if (requiresNotes && !nextNotes) {
+    throw new AppError(
+      "Admin response is required for this status update",
+      400,
+      "ADMIN_RESPONSE_REQUIRED",
+    );
+  }
+
+  const statusChanged = request.status !== nextStatus;
+  let assignmentChanged =
+    hasAssignedField && request.assigned_to !== nextAssignedTo;
+  const notesChanged = nextNotes !== undefined && request.notes !== nextNotes;
+  const eventTimestamp = new Date();
+
+  request.status = nextStatus;
+
+  // Reset SLA breach notification flag on any status change so the job
+  // can re-alert if the request becomes delayed again after being actioned.
+  if (statusChanged) {
+    request.slaBreachNotified = false;
+  }
+
+  if (nextNotes !== undefined) {
+    request.notes = nextNotes;
+  }
+  if (hasAssignedField) {
+    request.assigned_to = nextAssignedTo;
+    request.assigned_at = nextAssignedTo ? eventTimestamp : null;
+  }
+
+  if (statusChanged && nextStatus === "in_progress" && !request.work_started_at) {
+    request.work_started_at = eventTimestamp;
+  }
+
+  if (statusChanged && ["resolved", "completed", "closed"].includes(nextStatus)) {
+    request.resolved_at = eventTimestamp;
+    request.resolution_note = nextNotes ?? request.notes ?? null;
+    if (nextStatus === "closed") {
+      request.closed_at = eventTimestamp;
+    }
+  }
+
+  if (statusChanged && ["pending", "viewed", "in_progress", "waiting_tenant"].includes(nextStatus)) {
+    request.cancelled_at = null;
+    request.closed_at = null;
+    if (!["resolved", "completed"].includes(nextStatus)) {
+      request.resolved_at = null;
+      request.resolution_note = null;
+    }
+  }
+
+  if (statusChanged && nextStatus === "rejected") {
+    request.resolved_at = eventTimestamp;
+    request.resolution_note = nextNotes ?? request.notes ?? null;
+  }
+
+  if (statusChanged && nextStatus === "in_progress" && !request.assigned_to) {
+    request.assigned_to = buildAdminDisplayName(adminUser);
+    request.assigned_at = eventTimestamp;
+    assignmentChanged = true;
+  }
+
+  if (statusChanged || assignmentChanged || notesChanged) {
+    appendStatusHistory(request, {
+      event: statusChanged
+        ? "status_changed"
+        : assignmentChanged
+          ? "assignment_updated"
+          : "note_updated",
+      status: request.status,
+      ...buildActorSnapshot(adminUser),
+      note: nextNotes ?? workLogNote ?? null,
+      timestamp: eventTimestamp,
+    });
+  }
+
+  if (workLogNote) {
+    appendWorkLogEntry(request, {
+      note: workLogNote,
+      ...buildActorSnapshot(adminUser),
+      logged_at: eventTimestamp,
+    });
+  }
+
+  return {
+    statusChanged,
+  };
 };
 
 /**
@@ -435,8 +598,40 @@ export const createRequest = async (req, res, next) => {
     if (!description) {
       throw new AppError("Description is required", 400, "MISSING_DESCRIPTION");
     }
+    if (!ensureMinimumDescriptionLength(description)) {
+      throw new AppError(
+        `Description must be at least ${MIN_MAINTENANCE_DESCRIPTION_LENGTH} characters`,
+        400,
+        "DESCRIPTION_TOO_SHORT",
+      );
+    }
     if (!MAINTENANCE_URGENCY_LEVELS.includes(urgency)) {
       throw new AppError("Invalid maintenance urgency", 400, "INVALID_URGENCY");
+    }
+
+    const duplicateCutoff = new Date(
+      Date.now() - DUPLICATE_REQUEST_WINDOW_HOURS * 60 * 60 * 1000,
+    );
+    const existingRequest = await MaintenanceRequest.findOne({
+      user_id: dbUser.user_id,
+      request_type: requestType,
+      description,
+      status: { $in: OPEN_MAINTENANCE_STATUSES },
+      created_at: { $gte: duplicateCutoff },
+      isArchived: false,
+    })
+      .sort({ created_at: -1 })
+      .lean();
+
+    if (existingRequest) {
+      return res.status(409).json({
+        error: "A similar maintenance request is already open.",
+        code: "DUPLICATE_REQUEST",
+        request: serializeMaintenanceRequest(
+          existingRequest,
+          serializeTenantSummary(dbUser, existingRequest),
+        ),
+      });
     }
 
     const reservation = await Reservation.findOne({
@@ -555,6 +750,13 @@ export const updateMyRequest = async (req, res, next) => {
     }
     if (!description) {
       throw new AppError("Description is required", 400, "MISSING_DESCRIPTION");
+    }
+    if (!ensureMinimumDescriptionLength(description)) {
+      throw new AppError(
+        `Description must be at least ${MIN_MAINTENANCE_DESCRIPTION_LENGTH} characters`,
+        400,
+        "DESCRIPTION_TOO_SHORT",
+      );
     }
     if (!urgency || !MAINTENANCE_URGENCY_LEVELS.includes(urgency)) {
       throw new AppError("Invalid maintenance urgency", 400, "INVALID_URGENCY");
@@ -685,87 +887,11 @@ export const updateAdminRequestStatus = async (req, res, next) => {
     ensureAdminAccess(request, req);
     const adminUser = await getDbUser(req.user.uid);
 
-    const nextStatus = normalizeMaintenanceStatus(req.body.status);
-    const nextNotes =
-      req.body.notes !== undefined ? toOptionalText(req.body.notes) : undefined;
-    const nextAssignedTo =
-      req.body.assigned_to !== undefined
-        ? toOptionalText(req.body.assigned_to)
-        : undefined;
-    const workLogNote = toOptionalText(
-      req.body.work_log_note !== undefined
-        ? req.body.work_log_note
-        : req.body.workLogNote,
-    );
-
-    if (!nextStatus || !isAdminMutableMaintenanceStatus(nextStatus)) {
-      throw new AppError(
-        `Status must be one of: ${ADMIN_MAINTENANCE_STATUSES.join(", ")}`,
-        400,
-        "INVALID_ADMIN_STATUS",
-      );
-    }
-
-    if (!canAdminTransitionMaintenanceStatus(request.status, nextStatus)) {
-      throw new AppError(
-        `Invalid maintenance status transition: ${request.status} -> ${nextStatus}`,
-        409,
-        "INVALID_STATUS_TRANSITION",
-      );
-    }
-
-    const statusChanged = request.status !== nextStatus;
-    const assignmentChanged =
-      nextAssignedTo !== undefined && request.assigned_to !== nextAssignedTo;
-    const notesChanged = nextNotes !== undefined && request.notes !== nextNotes;
-    const eventTimestamp = new Date();
-
-    request.status = nextStatus;
-
-    if (nextNotes !== undefined) {
-      request.notes = nextNotes;
-    }
-    if (nextAssignedTo !== undefined) {
-      request.assigned_to = nextAssignedTo;
-      request.assigned_at = nextAssignedTo ? eventTimestamp : null;
-    }
-
-    if (statusChanged && (nextStatus === "resolved" || nextStatus === "completed")) {
-      request.resolved_at = eventTimestamp;
-      request.resolution_note = nextNotes ?? request.notes ?? null;
-    }
-    if (statusChanged && ["pending", "viewed", "in_progress"].includes(nextStatus)) {
-      request.cancelled_at = null;
-    }
-    if (statusChanged && nextStatus === "in_progress" && !request.work_started_at) {
-      request.work_started_at = eventTimestamp;
-    }
-    if (statusChanged && ["pending", "viewed", "rejected"].includes(nextStatus)) {
-      if (nextStatus !== "rejected") {
-        request.resolved_at = null;
-        request.resolution_note = null;
-      }
-    }
-    if (statusChanged || assignmentChanged || notesChanged) {
-      appendStatusHistory(request, {
-        event: statusChanged
-          ? "status_changed"
-          : assignmentChanged
-            ? "assignment_updated"
-            : "note_updated",
-        status: request.status,
-        ...buildActorSnapshot(adminUser),
-        note: nextNotes ?? workLogNote ?? null,
-        timestamp: eventTimestamp,
-      });
-    }
-    if (workLogNote) {
-      appendWorkLogEntry(request, {
-        note: workLogNote,
-        ...buildActorSnapshot(adminUser),
-        logged_at: eventTimestamp,
-      });
-    }
+    const { statusChanged } = applyAdminUpdateToRequest({
+      request,
+      adminUser,
+      payload: req.body,
+    });
 
     await request.save();
 
@@ -807,6 +933,93 @@ export const updateAdminRequestStatusCompat = async (req, res, next) => {
   };
 
   return updateAdminRequestStatus(req, res, next);
+};
+
+/**
+ * PATCH /api/m/maintenance/admin/bulk
+ * Bulk update maintenance requests (status, assignment, notes).
+ */
+export const updateAdminBulkRequests = async (req, res, next) => {
+  try {
+    const adminUser = await getDbUser(req.user.uid);
+    const requestIds = Array.isArray(req.body.requestIds)
+      ? req.body.requestIds
+      : Array.isArray(req.body.requests)
+        ? req.body.requests
+        : [];
+    const payload = {
+      status: req.body.status,
+      notes: req.body.notes,
+      assigned_to: req.body.assigned_to,
+      work_log_note: req.body.work_log_note,
+    };
+
+    if (requestIds.length === 0) {
+      throw new AppError("No maintenance requests selected", 400, "MISSING_REQUESTS");
+    }
+    if (requestIds.length > 50) {
+      throw new AppError("Bulk updates are limited to 50 requests", 400, "BULK_LIMIT");
+    }
+
+    const hasPayload =
+      payload.status !== undefined ||
+      payload.notes !== undefined ||
+      payload.assigned_to !== undefined ||
+      payload.work_log_note !== undefined;
+    if (!hasPayload) {
+      throw new AppError("No update values provided", 400, "MISSING_UPDATE_VALUES");
+    }
+
+    const results = {
+      updated: [],
+      failed: [],
+    };
+
+    for (const requestId of requestIds) {
+      try {
+        const request = await findAccessibleRequest(requestId);
+        ensureAdminAccess(request, req);
+
+        const { statusChanged } = applyAdminUpdateToRequest({
+          request,
+          adminUser,
+          payload,
+        });
+
+        await request.save();
+
+        if (statusChanged) {
+          const tenantUser = await User.findOne({ user_id: request.user_id })
+            .select("_id")
+            .lean();
+          if (tenantUser?._id) {
+            await notify.maintenanceUpdated(
+              tenantUser._id,
+              request.request_type,
+              request.status,
+              request.request_id,
+            );
+          }
+        }
+
+        results.updated.push(request.request_id);
+      } catch (error) {
+        results.failed.push({
+          requestId,
+          error: error?.message || "Update failed",
+          code: error?.code || error?.errorCode || "UPDATE_FAILED",
+        });
+      }
+    }
+
+    sendSuccess(res, {
+      updatedCount: results.updated.length,
+      failedCount: results.failed.length,
+      ...results,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 /**
@@ -912,6 +1125,7 @@ export default {
   updateRequest,
   updateAdminRequestStatus,
   updateAdminRequestStatusCompat,
+  updateAdminBulkRequests,
   getCompletionStats,
   getIssueFrequency,
 };

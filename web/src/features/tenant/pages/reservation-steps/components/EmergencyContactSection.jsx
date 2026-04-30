@@ -1,5 +1,5 @@
 import React from "react";
-import PhoneInput from "../../../../../shared/components/PhoneInput";
+import { validatePHPhoneLocal } from "../../../utils/reservationValidation";
 
 const errBorder = (show, value) =>
   show && !value ? "1.5px solid #dc2626" : undefined;
@@ -67,26 +67,21 @@ const EmergencyContactSection = ({
           Contact Number{" "}
           <span className="rf-required">*</span>
         </label>
-        <PhoneInput
+        <input
+          type="tel"
+          inputMode="numeric"
+          className={`form-input${(showValidationErrors && !emergencyContactNumber) || fieldErrors.emergencyContactNumber ? " rf-input--error" : ""}`}
+          placeholder="09123456789"
           value={emergencyContactNumber}
-          onChange={(e164) => setEmergencyContactNumber(e164)}
-          onBlur={() =>
-            validateField("emergencyContactNumber", emergencyContactNumber, (value) => {
-              const valid = /^\+\d{10,15}$/.test(value || "");
-              return {
-                valid,
-                error: valid ? null : "Please enter a valid contact number",
-              };
-            })
-          }
-          hasError={showValidationErrors && !emergencyContactNumber}
-          required
+          maxLength={11}
+          onChange={(e) => handlePhoneInput(e.target.value, setEmergencyContactNumber, "emergencyContactNumber")}
+          onBlur={() => validateField("emergencyContactNumber", emergencyContactNumber, validatePHPhoneLocal)}
+          style={{ border: (showValidationErrors && !emergencyContactNumber) || fieldErrors.emergencyContactNumber ? "1.5px solid #dc2626" : undefined }}
         />
         <FieldError
           error={
-            showValidationErrors && !emergencyContactNumber
-              ? "Contact number is required"
-              : fieldErrors.emergencyContactNumber
+            fieldErrors.emergencyContactNumber ||
+            (showValidationErrors && !emergencyContactNumber ? "Enter a valid mobile number (e.g. 09123456789)" : null)
           }
         />
       </div>

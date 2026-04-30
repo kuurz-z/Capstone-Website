@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Calendar, ClipboardList, CreditCard, Eye } from "lucide-react";
+import { AlertTriangle, Calendar, ClipboardList, CreditCard, Eye } from "lucide-react";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { reservationApi } from "../../../shared/api/apiClient";
 import useBodyScrollLock from "../../../shared/hooks/useBodyScrollLock";
@@ -36,12 +36,26 @@ const fmt = (value) =>
 
 const fmtDate = (value) => {
   if (!value) return "\u2014";
-
   try {
     return new Date(value).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
+    });
+  } catch {
+    return value;
+  }
+};
+
+const fmtDateTime = (value) => {
+  if (!value) return "\u2014";
+  try {
+    return new Date(value).toLocaleString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     });
   } catch {
     return value;
@@ -54,6 +68,11 @@ const openImage = (url, title) => {
     return;
   }
 
+  if (/\.pdf($|\?)/i.test(url)) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
   const preview = window.open("", "_blank");
   preview?.document.write(
     `<html><head><title>${title}</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#111;"><img src="${url}" style="max-width:100%;max-height:100vh;object-fit:contain;" alt="${title}"/></body></html>`,
@@ -63,7 +82,11 @@ const openImage = (url, title) => {
 const buildDocs = (reservation) => [
   { label: "Selfie Photo", url: reservation.selfiePhotoUrl },
   {
-    label: `Valid ID Front${reservation.validIDType ? ` (${reservation.validIDType})` : ""}`,
+    label: `Valid ID Front${
+      reservation.idType || reservation.validIDType
+        ? ` (${ID_TYPE_LABELS[reservation.idType || reservation.validIDType] || reservation.idType || reservation.validIDType})`
+        : ""
+    }`,
     url: reservation.validIDFrontUrl,
   },
   { label: "Valid ID Back", url: reservation.validIDBackUrl },
@@ -125,6 +148,24 @@ const STAGE_GUIDANCE = {
   },
 };
 
+const ID_TYPE_LABELS = {
+  national_id: "National ID",
+  drivers_license: "Driver's License",
+  passport: "Passport",
+  sss_id: "SSS ID",
+  umid: "UMID",
+  school_id: "School ID",
+  other: "Other",
+};
+
+const ID_STATUS_LABELS = {
+  passed: "Passed",
+  warning: "Warning",
+  failed: "Failed",
+  manual_review: "Manual Review",
+  not_validated: "Not Checked",
+};
+
 export default function ReservationDetailsModal({
   reservation,
   onClose,
@@ -165,6 +206,11 @@ export default function ReservationDetailsModal({
     : 0;
   const docs = buildDocs(reservation);
   const guestName = reservation.customer ?? "Unknown";
+  const applicantInputName =
+    [reservation.firstName, reservation.middleName, reservation.lastName]
+      .filter(Boolean)
+      .join(" ") || guestName;
+  const idStatus = reservation.idValidationStatus || "not_validated";
   const guestInitials = getInitials(guestName);
   const stageGuide = STAGE_GUIDANCE[status];
   const bookingDetails = [
@@ -305,6 +351,54 @@ export default function ReservationDetailsModal({
                 ))}
               </div>
             </div>
+
+            {/* ── Cancellation detail banner — visible to admins when applicant self-cancelled ── */}
+            {status === "cancelled" && reservation.cancellationSource === "applicant" && (
+              <div style={{
+                margin: "12px 0 0",
+                padding: "14px 16px",
+                borderRadius: "10px",
+                background: "#fff7ed",
+                border: "1px solid #fed7aa",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <AlertTriangle size={16} style={{ color: "#ea580c", flexShrink: 0 }} />
+                  <span style={{ fontWeight: 700, fontSize: "13px", color: "#9a3412" }}>
+                    Cancelled by Applicant
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: "12px" }}>
+                  <div>
+                    <span style={{ color: "#c2410c", fontWeight: 600 }}>Cancelled on</span>
+                    <div style={{ color: "#9a3412" }}>{fmtDateTime(reservation.cancelledAt)}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: "#c2410c", fontWeight: 600 }}>Reason</span>
+                    <div style={{ color: "#9a3412" }}>{reservation.cancellationReason || "Not provided"}</div>
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "#c2410c", fontWeight: 600 }}>Reservation fee</span>
+                    <div style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      marginLeft: "8px",
+                      background: reservation.reservationFeeForfeited ? "#fee2e2" : "#dcfce7",
+                      color: reservation.reservationFeeForfeited ? "#991b1b" : "#166534",
+                      borderRadius: "999px",
+                      padding: "2px 9px",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                    }}>
+                      {reservation.reservationFeeForfeited ? "Forfeited (non-refundable)" : "Refundable"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {status !== "cancelled" && !isMovedOut && (
               <div className="rdm-actions-card rdm-actions-card-dark">
@@ -469,6 +563,64 @@ export default function ReservationDetailsModal({
             </button>
             {showDocs && (
               <div className="rdm-expand-content">
+                <div className="rdm-id-review">
+                  <div className="rdm-id-review__header">
+                    <div>
+                      <div className="rdm-id-review__eyebrow">AI-assisted ID check</div>
+                      <div className="rdm-id-review__title">
+                        {ID_TYPE_LABELS[reservation.idType || reservation.validIDType] ||
+                          reservation.idType ||
+                          reservation.validIDType ||
+                          "ID type not provided"}
+                      </div>
+                    </div>
+                    <span className={`rdm-id-status rdm-id-status--${idStatus}`}>
+                      {ID_STATUS_LABELS[idStatus] || idStatus}
+                    </span>
+                  </div>
+                  <div className="rdm-id-review__grid">
+                    <div>
+                      <span>Applicant input</span>
+                      <strong>{fmt(applicantInputName)}</strong>
+                    </div>
+                    <div>
+                      <span>Extracted name</span>
+                      <strong>{fmt(reservation.idExtractedName)}</strong>
+                    </div>
+                    <div>
+                      <span>Extracted ID number</span>
+                      <strong>{fmt(reservation.idExtractedNumber)}</strong>
+                    </div>
+                    <div>
+                      <span>Name match</span>
+                      <strong>
+                        {typeof reservation.idNameMatchScore === "number"
+                          ? `${Math.round(reservation.idNameMatchScore * 100)}%`
+                          : "\u2014"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Validated at</span>
+                      <strong>{fmtDateTime(reservation.idValidatedAt)}</strong>
+                    </div>
+                    <div>
+                      <span>Provider</span>
+                      <strong>{fmt(reservation.idValidationProvider)}</strong>
+                    </div>
+                  </div>
+                  {reservation.idMismatchFlag && (
+                    <div className="rdm-id-review__warning">
+                      Name mismatch detected. Please manually review before approval.
+                    </div>
+                  )}
+                  {Array.isArray(reservation.idValidationNotes) && reservation.idValidationNotes.length > 0 && (
+                    <ul className="rdm-id-review__notes">
+                      {reservation.idValidationNotes.slice(0, 4).map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 {docs.map((doc, index) => (
                   <div key={`${doc.label}-${index}`} className="rdm-doc-row">
                     <span className="rdm-doc-label">{doc.label}</span>

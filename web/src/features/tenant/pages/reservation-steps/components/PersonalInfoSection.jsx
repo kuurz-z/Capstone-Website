@@ -1,13 +1,31 @@
 import React from "react";
 import FileUploadField from "./FileUploadField";
 import AddressCascadeFields from "./AddressCascadeFields";
-import PhoneInput from "../../../../../shared/components/PhoneInput";
 import {
   validateBirthday,
+  validatePHPhoneLocal,
 } from "../../../utils/reservationValidation";
 
 const errBorder = (show, value) =>
   show && !value ? "1.5px solid #dc2626" : undefined;
+
+const ID_TYPE_OPTIONS = [
+  { value: "national_id", label: "National ID" },
+  { value: "drivers_license", label: "Driver's License" },
+  { value: "passport", label: "Passport" },
+  { value: "sss_id", label: "SSS ID" },
+  { value: "umid", label: "UMID" },
+  { value: "school_id", label: "School ID" },
+  { value: "other", label: "Other" },
+];
+
+const ID_VALIDATION_MESSAGES = {
+  validating: "Validating ID...",
+  passed: "ID verified successfully.",
+  warning: "Name mismatch detected. Please review your information or upload a clearer ID.",
+  failed: "ID image is unclear. Please upload a clearer photo.",
+  manual_review: "ID uploaded. It will be manually reviewed by admin.",
+};
 
 /**
  * Section 2: Personal Information — names, phone, birthday, marital status,
@@ -27,6 +45,10 @@ const PersonalInfoSection = ({
   addressProvince, setAddressProvince,
   validIDFront, setValidIDFront,
   validIDBack, setValidIDBack,
+  validIDType, setValidIDType,
+  idValidationResult,
+  isValidatingId,
+  onValidateIdDocument,
   nbiClearance, setNbiClearance,
   nbiReason, setNbiReason,
   personalNotes, setPersonalNotes,
@@ -71,26 +93,21 @@ const PersonalInfoSection = ({
         <label className="form-label">
           Mobile Number <span className="rf-required">*</span>
         </label>
-        <PhoneInput
+        <input
+          type="tel"
+          inputMode="numeric"
+          className={`form-input${(showValidationErrors && !mobileNumber) || fieldErrors.mobileNumber ? " rf-input--error" : ""}`}
+          placeholder="09123456789"
           value={mobileNumber}
-          onChange={(e164) => setMobileNumber(e164)}
-          onBlur={() =>
-            validateField("mobileNumber", mobileNumber, (value) => {
-              const valid = /^\+\d{10,15}$/.test(value || "");
-              return {
-                valid,
-                error: valid ? null : "Please enter a valid mobile number",
-              };
-            })
-          }
-          hasError={showValidationErrors && !mobileNumber}
-          required
+          maxLength={11}
+          onChange={(e) => handlePhoneInput(e.target.value, setMobileNumber, "mobileNumber")}
+          onBlur={() => validateField("mobileNumber", mobileNumber, validatePHPhoneLocal)}
+          style={{ border: (showValidationErrors && !mobileNumber) || fieldErrors.mobileNumber ? "1.5px solid #dc2626" : undefined }}
         />
         <FieldError
           error={
-            showValidationErrors && !mobileNumber
-              ? "Mobile number is required"
-              : fieldErrors.mobileNumber
+            fieldErrors.mobileNumber ||
+            (showValidationErrors && !mobileNumber ? "Enter a valid mobile number (e.g. 09123456789)" : null)
           }
         />
       </div>
@@ -203,14 +220,54 @@ const PersonalInfoSection = ({
     />
 
     {/* ID & document uploads */}
+    <div className="form-group" data-field="validIDType">
+      <label className="form-label">
+        ID Type <span className="rf-required">*</span>
+      </label>
+      <select
+        className="form-select"
+        value={validIDType}
+        onChange={(e) => {
+          const nextType = e.target.value;
+          setValidIDType(nextType);
+          if (typeof validIDFront === "string" && validIDFront.startsWith("http") && nextType) {
+            onValidateIdDocument?.({ documentUrl: validIDFront, idType: nextType });
+          }
+        }}
+        style={{ border: errBorder(showValidationErrors, validIDType) }}
+      >
+        <option value="">Select ID type...</option>
+        {ID_TYPE_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <FieldError error={showValidationErrors && !validIDType ? "ID type is required" : null} />
+    </div>
+
     <div data-field="validIDFront">
       <FileUploadField
         label="Valid ID (Front)"
         value={validIDFront}
-        onChange={setValidIDFront}
+        onChange={(url) => {
+          setValidIDFront(url);
+          if (typeof url === "string" && url.startsWith("http") && validIDType) {
+            onValidateIdDocument?.({ documentUrl: url, idType: validIDType });
+          }
+        }}
         hint="Government-issued ID (Front side)"
-        hasError={showValidationErrors && !validIDFront}
+        disabled={!validIDType || isValidatingId}
+        disabledMessage={!validIDType ? "Select an ID type before uploading." : "Validating ID..."}
+        hasError={
+          (showValidationErrors && !validIDFront) ||
+          idValidationResult?.validationStatus === "failed"
+        }
         required
+      />
+      <IdValidationFeedback
+        result={idValidationResult}
+        isValidating={isValidatingId}
       />
     </div>
     <div data-field="validIDBack">
@@ -219,6 +276,8 @@ const PersonalInfoSection = ({
         value={validIDBack}
         onChange={setValidIDBack}
         hint="Government-issued ID (Back side)"
+        disabled={!validIDType}
+        disabledMessage="Select an ID type before uploading."
         hasError={showValidationErrors && !validIDBack}
         required
       />
@@ -271,6 +330,40 @@ const PersonalInfoSection = ({
 );
 
 // ─── Shared sub-components ───────────────────────────────────
+
+const IdValidationFeedback = ({ result, isValidating }) => {
+  const status = isValidating ? "validating" : result?.validationStatus;
+  if (!status) return null;
+
+  const message =
+    result?.message ||
+    ID_VALIDATION_MESSAGES[status] ||
+    "ID uploaded. It will be manually reviewed by admin.";
+  const notes = Array.isArray(result?.notes) ? result.notes.filter(Boolean) : [];
+
+  return (
+    <div className={`rf-id-validation rf-id-validation--${status}`}>
+      <div className="rf-id-validation__title">{message}</div>
+      {result?.extractedName && (
+        <div className="rf-id-validation__meta">
+          Extracted name: {result.extractedName}
+        </div>
+      )}
+      {typeof result?.matchScore === "number" && status !== "validating" && (
+        <div className="rf-id-validation__meta">
+          Name match score: {Math.round(result.matchScore * 100)}%
+        </div>
+      )}
+      {notes.length > 0 && (
+        <ul className="rf-id-validation__notes">
+          {notes.slice(0, 3).map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const FieldError = ({ error }) => {
   if (!error) return null;

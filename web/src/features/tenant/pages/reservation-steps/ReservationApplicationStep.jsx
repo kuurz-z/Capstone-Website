@@ -58,6 +58,8 @@ const ReservationApplicationStep = ({
   addressProvince, setAddressProvince,
   validIDFront, setValidIDFront,
   validIDBack, setValidIDBack,
+  validIDType, setValidIDType,
+  idValidationResult, isValidatingId, onValidateIdDocument,
   nbiClearance, setNbiClearance,
   nbiReason, setNbiReason,
   personalNotes, setPersonalNotes,
@@ -111,10 +113,22 @@ const ReservationApplicationStep = ({
   }, [scrollToSection, onClearScrollToSection]);
 
   const handleNameInput = (value, setter) => setter(value.replace(/\d+/g, ""));
-  const handlePhoneInput = (value, setter) => {
-    let cleaned = value.replace(/[^0-9+]/g, "");
-    if (!cleaned.startsWith("+63")) cleaned = "+63" + cleaned.replace(/^\+?63?/, "");
-    if (cleaned.length <= 13) setter(cleaned);
+
+  // Enforce digits-only, 09XXXXXXXXX format (max 11 chars).
+  // Strips any non-digit characters; does NOT allow +63 prefix in the input.
+  const handlePhoneInput = (value, setter, fieldName) => {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    setter(digits);
+    // Show inline error immediately while user is typing
+    if (digits && digits.length > 0) {
+      const isValid = digits.startsWith("09") && digits.length === 11;
+      setFieldErrors((prev) => ({
+        ...prev,
+        [fieldName]: isValid ? undefined : "Enter a valid mobile number (e.g. 09123456789)",
+      }));
+    } else {
+      setFieldErrors((prev) => ({ ...prev, [fieldName]: undefined }));
+    }
   };
   const handleGeneralInput = (value, setter, maxLength = 100) => {
     if (value.length <= maxLength) setter(value);
@@ -164,18 +178,19 @@ const ReservationApplicationStep = ({
 
   const devAutoFill = () => {
     setFirstName("Juan"); setLastName("Dela Cruz"); setMiddleName("Santos"); setNickname("JD");
-    setMobileNumber("+639171234567"); setBirthday("2000-05-15");
+    setMobileNumber("09171234567"); setBirthday("2000-05-15");
     setMaritalStatus("single"); setNationality("Filipino"); setEducationLevel("college");
     setAddressUnitHouseNo("Unit 12-B"); setAddressStreet("Rizal Avenue");
     setPersonalNotes("Test applicant - dev auto-fill");
     setNbiReason(""); setCompanyIDReason("");
-    setEmergencyContactName("Maria Dela Cruz"); setEmergencyRelationship("parent"); setEmergencyContactNumber("+639181234567");
+    setEmergencyContactName("Maria Dela Cruz"); setEmergencyRelationship("parent"); setEmergencyContactNumber("09181234567");
     setHealthConcerns("None"); setEmployerSchool("University of the Philippines");
-    setEmployerAddress("Diliman, Quezon City"); setEmployerContact("+639191234567");
+    setEmployerAddress("Diliman, Quezon City"); setEmployerContact("09191234567");
     setStartDate("2024-06-01"); setOccupation("Software Developer"); setPreviousEmployment("Accenture Philippines");
     setReferralSource("facebook"); setReferrerName("Google Search");
     setTargetMoveInDate(moveInMin); setEstimatedMoveInTime("08:00"); setWorkSchedule("day"); setWorkScheduleOther("");
     setLeaseDuration("12");
+    setValidIDType("national_id");
     setAgreedToPrivacy(true); setAgreedToCertification(true);
   };
 
@@ -242,6 +257,8 @@ const ReservationApplicationStep = ({
             addressProvince, setAddressProvince,
             validIDFront, setValidIDFront,
             validIDBack, setValidIDBack,
+            validIDType, setValidIDType,
+            idValidationResult, isValidatingId, onValidateIdDocument,
             nbiClearance, setNbiClearance,
             nbiReason, setNbiReason,
             personalNotes, setPersonalNotes,

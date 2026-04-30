@@ -14,14 +14,14 @@
  */
 
 import express from "express";
+import * as maintenanceController from "../controllers/maintenanceController.js";
 import {
-  verifyApplicant,
-  verifyToken,
-  verifyAdmin,
+    verifyAdmin,
+    verifyApplicant,
+    verifyToken,
 } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import { requirePermission } from "../middleware/permissions.js";
-import * as maintenanceController from "../controllers/maintenanceController.js";
 
 const router = express.Router();
 
@@ -56,6 +56,13 @@ router.patch(
   filterByBranch,
   requirePermission("manageMaintenance"),
   maintenanceController.updateAdminRequestStatus,
+);
+router.patch(
+  "/admin/bulk",
+  verifyAdmin,
+  filterByBranch,
+  requirePermission("manageMaintenance"),
+  maintenanceController.updateAdminBulkRequests,
 );
 
 // Compatibility aliases for legacy repo callers

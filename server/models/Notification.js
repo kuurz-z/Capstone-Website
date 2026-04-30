@@ -56,6 +56,8 @@ const notificationSchema = new mongoose.Schema(
         "account_reactivated",
         "maintenance_update",
         "announcement",
+        "sla_breach",
+        "chat_unresponded",
         "general",
       ],
       index: true,
@@ -89,7 +91,7 @@ const notificationSchema = new mongoose.Schema(
     // --- Optional Entity Reference ---
     entityType: {
       type: String,
-      enum: ["reservation", "bill", "room", "user", "maintenance", ""],
+      enum: ["reservation", "bill", "room", "user", "maintenance", "chat", ""],
       default: "",
     },
     entityId: {

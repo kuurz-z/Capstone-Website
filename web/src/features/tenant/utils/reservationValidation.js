@@ -39,6 +39,22 @@ export const validatePhoneNumber = (phone) => {
   return { valid: true };
 };
 
+/**
+ * Validate Philippine local mobile number format: 09XXXXXXXXX (11 digits).
+ * Used for all phone fields in the reservation flow.
+ * Accepts digits-only input (no +63 prefix).
+ */
+export const validatePHPhoneLocal = (phone) => {
+  if (!phone || !phone.trim())
+    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
+  const digits = phone.replace(/\D/g, "");
+  if (!digits.startsWith("09"))
+    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
+  if (digits.length !== 11)
+    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
+  return { valid: true };
+};
+
 export const validateBirthday = (birthday) => {
   if (!birthday) return { valid: false, error: "Birthday is required" };
   const birthDate = new Date(birthday);

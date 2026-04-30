@@ -80,6 +80,9 @@ export const AdminBillingPage = React.lazy(
 export const AdminAnnouncementsPage = React.lazy(
   () => import("../features/admin/pages/AdminAnnouncementsPage"),
 );
+export const AdminChatPage = React.lazy(
+  () => import("../features/admin/pages/AdminChatPage.jsx"),
+);
 export const InquiriesPage = React.lazy(
   () => import("../features/admin/pages/InquiriesPage"),
 );
@@ -103,4 +106,7 @@ export const RolePermissionsPage = React.lazy(
 );
 export const SystemSettingsPage = React.lazy(
   () => import("../features/super-admin/pages/SystemSettingsPage"),
+);
+export const AdminNotificationsPage = React.lazy(
+  () => import("../features/admin/pages/AdminNotificationsPage"),
 );

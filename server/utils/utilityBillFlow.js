@@ -390,6 +390,21 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
       notificationError = error.message;
     }
 
+    bill.delivery = {
+      ...(bill.delivery || {}),
+      email: {
+        status: emailError ? "failed" : tenant?.email ? "sent" : "not_attempted",
+        sentAt: emailError || !tenant?.email ? null : new Date(),
+        error: emailError || "",
+      },
+      notification: {
+        status: notificationError ? "failed" : "sent",
+        sentAt: notificationError ? null : new Date(),
+        error: notificationError || "",
+      },
+    };
+    await bill.save();
+
     deliveries.push({
       billId: bill._id,
       tenantId: bill.userId?._id || bill.userId,
@@ -510,6 +525,21 @@ export async function sendUtilityPeriodBills({
         notificationError =
           notificationResult.reason?.message || "Notification delivery failed";
       }
+
+      bill.delivery = {
+        ...(bill.delivery || {}),
+        email: {
+          status: emailError ? "failed" : tenant?.email ? "sent" : "not_attempted",
+          sentAt: emailError || !tenant?.email ? null : new Date(),
+          error: emailError || "",
+        },
+        notification: {
+          status: notificationError ? "failed" : "sent",
+          sentAt: notificationError ? null : new Date(),
+          error: notificationError || "",
+        },
+      };
+      await bill.save();
 
       return {
         billId: bill._id,

@@ -243,6 +243,11 @@ function ReservationFlowPage() {
                   setValidIDFront: flow.setValidIDFront,
                   validIDBack: flow.validIDBack,
                   setValidIDBack: flow.setValidIDBack,
+                  validIDType: flow.validIDType,
+                  setValidIDType: flow.setValidIDType,
+                  idValidationResult: flow.idValidationResult,
+                  isValidatingId: flow.isValidatingId,
+                  onValidateIdDocument: flow.validateApplicantIdDocument,
                   nbiClearance: flow.nbiClearance,
                   setNbiClearance: flow.setNbiClearance,
                   nbiReason: flow.nbiReason,
@@ -343,6 +348,8 @@ function ReservationFlowPage() {
                 setFinalMoveInDate: flow.setFinalMoveInDate,
                 isLoading: flow.isLoading,
                 payingOnline: flow.payingOnline,
+                agreedToFeePolicy: flow.agreedToFeePolicy,
+                setAgreedToFeePolicy: flow.setAgreedToFeePolicy,
               }}
               onMoveInDateUpdate={() =>
                 showNotification(

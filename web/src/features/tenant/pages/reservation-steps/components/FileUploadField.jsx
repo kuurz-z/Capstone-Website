@@ -26,8 +26,11 @@ function truncateName(name, max = 28) {
  */
 const FileUploadField = ({
   label, value, onChange,
-  accept = "image/*,.pdf", hint, userId,
+  // Restricted to JPEG, PNG, PDF only — HEIC and WebP are not accepted.
+  accept = "image/jpeg,image/png,application/pdf", hint, userId,
   hasError, required,
+  disabled = false,
+  disabledMessage = "Upload unavailable",
 }) => {
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -39,10 +42,10 @@ const FileUploadField = ({
   const isFile = value instanceof File;
   const showFieldError = hasError && !isUploaded && !isFile;
 
-  const handleClick = () => { if (!uploading) inputRef.current?.click(); };
+  const handleClick = () => { if (!uploading && !disabled) inputRef.current?.click(); };
 
   const processFile = async (file) => {
-    if (!file) return;
+    if (!file || disabled) return;
     const check = validateFile(file);
     if (!check.valid) { setError(check.error); return; }
     setFileMeta({ name: file.name, size: file.size });
@@ -58,7 +61,12 @@ const FileUploadField = ({
   };
 
   const handleChange = (e) => { const file = e.target.files?.[0] || null; processFile(file); e.target.value = ""; };
-  const handleDrop = (e) => { e.preventDefault(); const file = e.dataTransfer.files?.[0] || null; if (file) processFile(file); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (disabled) return;
+    const file = e.dataTransfer.files?.[0] || null;
+    if (file) processFile(file);
+  };
   const handleDragOver = (e) => e.preventDefault();
 
   /* Determine state-based CSS class modifiers */
@@ -68,6 +76,7 @@ const FileUploadField = ({
     error ? "rf-upload-zone--error" : "",
     isUploaded ? "rf-upload-zone--success" : "",
     uploading ? "rf-upload-zone--uploading" : "",
+    disabled ? "rf-upload-zone--disabled" : "",
   ].filter(Boolean).join(" ");
 
   return (
@@ -76,10 +85,15 @@ const FileUploadField = ({
         {label}
         {required && <span className="rf-required"> *</span>}
       </label>
-      <input ref={inputRef} type="file" accept={accept} onChange={handleChange} className="rf-file-input-hidden" />
+      <input ref={inputRef} type="file" accept={accept} onChange={handleChange} className="rf-file-input-hidden" disabled={disabled} />
       <div className={zoneClass} onClick={handleClick} onDrop={handleDrop} onDragOver={handleDragOver}>
 
-        {uploading ? (
+        {disabled && !isUploaded ? (
+          <>
+            <div className="rf-upload-icon"><Upload size={20} /></div>
+            <div className="rf-upload-cta">{disabledMessage}</div>
+          </>
+        ) : uploading ? (
           <>
             <div className="rf-upload-status rf-upload-status--uploading">
               Uploading… {progress}%
@@ -103,6 +117,15 @@ const FileUploadField = ({
             ) : (
               <div className="rf-upload-hint">File uploaded</div>
             )}
+            <a
+              className="rf-upload-preview"
+              href={value}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+            >
+              Preview file
+            </a>
             <div className="rf-upload-replace-hint">Click to replace</div>
           </div>
         ) : isFile ? (
@@ -125,7 +148,7 @@ const FileUploadField = ({
         {hint && !error && <div className="rf-upload-hint">{hint}</div>}
 
         {!isUploaded && !isFile && !uploading && !error && (
-          <div className="rf-upload-limit">Max 5MB · JPEG, PNG, or PDF</div>
+          <div className="rf-upload-limit">Max 5MB · JPEG, PNG, or PDF only</div>
         )}
       </div>
     </div>

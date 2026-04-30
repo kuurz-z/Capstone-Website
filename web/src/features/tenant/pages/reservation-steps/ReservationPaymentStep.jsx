@@ -20,6 +20,8 @@ const ReservationPaymentStep = ({
   onPayOnline,
   payingOnline,
   readOnly,
+  agreedToFeePolicy = false,
+  setAgreedToFeePolicy,
 }) => {
   const room = reservationData?.room || {};
   const roomName = room.name || room.roomNumber || room.title || room.id || "N/A";
@@ -128,6 +130,35 @@ const ReservationPaymentStep = ({
           </div>
         </div>
 
+        {/* Non-Refundable Fee Policy Notice */}
+        {!readOnly && (
+          <div className="content-card" style={{ border: "1px solid #fed7aa", background: "#fff7ed" }}>
+            <div className="card-section-title" style={{ color: "#9a3412" }}>
+              <div className="icon"></div>
+              Reservation Fee Policy
+            </div>
+            <div style={{ fontSize: "14px", color: "#9a3412", lineHeight: 1.6, marginBottom: "14px" }}>
+              <strong>Reservation fee is ₱{reservationFeeAmount.toLocaleString()}.</strong>
+              <br />
+              This will be <strong>deducted from your first monthly rent</strong> once you move in.
+              <br />
+              If you cancel your reservation, the reservation fee is <strong>non-refundable</strong>.
+            </div>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "13px", color: "#7c2d12" }}>
+              <input
+                type="checkbox"
+                checked={agreedToFeePolicy}
+                onChange={(e) => setAgreedToFeePolicy?.(e.target.checked)}
+                style={{ marginTop: "2px", accentColor: "#ea580c", width: "16px", height: "16px", flexShrink: 0 }}
+              />
+              <span>
+                I understand that the reservation fee of ₱{reservationFeeAmount.toLocaleString()} is{" "}
+                <strong>non-refundable</strong> if I cancel my reservation.
+              </span>
+            </label>
+          </div>
+        )}
+
         {/* Payment Info */}
         <div className="content-card">
           <div className="card-section-title">
@@ -150,10 +181,15 @@ const ReservationPaymentStep = ({
       {/* Pay Online Button */}
       {!readOnly && (
         <div className="stage-buttons" style={{ justifyContent: "flex-end", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+          {!agreedToFeePolicy && (
+            <p style={{ fontSize: "12px", color: "#9a3412", margin: 0, textAlign: "right" }}>
+              Please acknowledge the fee policy above before paying.
+            </p>
+          )}
           <button
             onClick={onPayOnline}
             className="btn btn-primary btn-pay-online-reservation"
-            disabled={isLoading || payingOnline}
+            disabled={isLoading || payingOnline || !agreedToFeePolicy}
           >
             {payingOnline
               ? "Redirecting to PayMongo…"

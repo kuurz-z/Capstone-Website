@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Droplets, Zap } from "lucide-react";
+import { Droplets, Home, Zap } from "lucide-react";
 import UtilityBillingTab from "../components/billing/UtilityBillingTab";
+import RentBillingTab from "../components/billing/RentBillingTab";
 import "./AdminBillingPage.css";
 
 const tabs = [
   { id: "electricity", label: "Electricity", icon: Zap },
   { id: "water", label: "Water", icon: Droplets },
+  { id: "rent", label: "Rent", icon: Home },
 ];
 
 const AdminBillingPage = () => {
@@ -80,6 +82,15 @@ const AdminBillingPage = () => {
             utilityType="water"
             isActive={activeTab === "water"}
           />
+        </section>
+        <section
+          role="tabpanel"
+          id="billing-panel-rent"
+          aria-labelledby="billing-tab-rent"
+          className={`admin-billing-page__workspace-panel ${activeTab === "rent" ? "is-active" : ""}`}
+          style={{ display: activeTab === "rent" ? "grid" : "none" }}
+        >
+          <RentBillingTab isActive={activeTab === "rent"} />
         </section>
       </div>
     </div>

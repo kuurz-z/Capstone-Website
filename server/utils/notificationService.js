@@ -103,10 +103,20 @@ const notify = {
   /**
    * Bill generated
    */
-  billGenerated: (userId, billingMonth, totalAmount, dueDate) =>
-    createNotification(userId, "bill_generated", "New Bill Generated",
-      `Your bill for ${billingMonth} is ₱${totalAmount}. Due by ${dueDate}.`,
-      { entityType: "bill" }),
+  billGenerated: (userId, billingMonth, totalAmount, dueDate, options = {}) =>
+    createNotification(
+      userId,
+      "bill_generated",
+      "New Bill Available",
+      options.billType === "rent"
+        ? "Your rent bill is now available"
+        : `Your bill for ${billingMonth} is ₱${totalAmount}. Due by ${dueDate}.`,
+      {
+        entityType: "bill",
+        entityId: options.billId || null,
+        actionUrl: options.actionUrl || null,
+      },
+    ),
 
   utilityChargeAvailable: (
     userId,
@@ -195,6 +205,31 @@ const notify = {
     createNotification(adminUserId, "general", "Unactioned Visit Request",
       `${tenantName} has a visit request for ${roomName} pending for ${daysPending} days. It will auto-expire in ${14 - daysPending} day${(14 - daysPending) === 1 ? "" : "s"} if not acted on.`,
       { entityType: "reservation" }),
+
+  /**
+   * SLA breach alert — sent to branch admins when requests exceed their SLA window.
+   * One notification per admin per branch batch (not per request) to reduce noise.
+   */
+  slaBreachAlert: (adminUserId, branch, delayedCount, urgencyBreakdown) =>
+    createNotification(
+      adminUserId,
+      "sla_breach",
+      `SLA Breach — ${delayedCount} Request${delayedCount > 1 ? "s" : ""} Overdue`,
+      `${delayedCount} maintenance request${delayedCount > 1 ? "s" : ""} in ${branch} ${delayedCount > 1 ? "have" : "has"} breached SLA. (${urgencyBreakdown}). Immediate attention required.`,
+      { actionUrl: "/admin/maintenance?quickFilter=delayed", entityType: "maintenance" },
+    ),
+
+  /**
+   * Chat SLA alert — sent to branch admins when a conversation goes unresponded past threshold.
+   */
+  chatUnresponded: (adminUserId, branch, conversationCount) =>
+    createNotification(
+      adminUserId,
+      "chat_unresponded",
+      `${conversationCount} Chat${conversationCount > 1 ? "s" : ""} Awaiting Response`,
+      `${conversationCount} open conversation${conversationCount > 1 ? "s" : ""} in ${branch} ${conversationCount > 1 ? "have" : "has"} not received an admin reply in over 4 hours.`,
+      { actionUrl: "/admin/chat", entityType: "chat" },
+    ),
 
   /**
    * General notification

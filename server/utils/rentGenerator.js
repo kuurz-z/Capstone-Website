@@ -9,6 +9,7 @@ import {
 } from "./billingPolicy.js";
 import logger from "../middleware/logger.js";
 import notify from "./notificationService.js";
+import { sendBillGeneratedEmail } from "../config/email.js";
 import {
   CURRENT_RESIDENT_STATUS_QUERY,
   readMoveInDate,
@@ -151,10 +152,52 @@ export async function ensureCurrentCycleRentBill({
     await reservation.save();
   }
 
-  if (notifyTenant && reservation.userId?.email) {
+  if (notifyTenant) {
     const monthLabel = dayjs(billingMonthStartDate).format("MMMM YYYY");
     const dueDateLabel = dayjs(dueDateValue).format("MMMM D, YYYY");
-    notify.billGenerated(userId, monthLabel, bill.totalAmount, dueDateLabel);
+    const delivery = {
+      email: { status: "not_attempted", sentAt: null, error: "" },
+      notification: { status: "not_attempted", sentAt: null, error: "" },
+    };
+
+    if (reservation.userId?.email) {
+      const tenantName =
+        [reservation.userId?.firstName, reservation.userId?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || "Tenant";
+      const emailResult = await sendBillGeneratedEmail({
+        to: reservation.userId.email,
+        tenantName,
+        billingMonth: monthLabel,
+        totalAmount: bill.totalAmount,
+        dueDate: dueDateLabel,
+        branchName: reservation.roomId?.branch || bill.branch || "Lilycrest",
+        billType: "rent",
+        roomName: reservation.roomId?.name || reservation.roomId?.roomNumber || "",
+      });
+
+      if (emailResult?.success) {
+        delivery.email.status = "sent";
+        delivery.email.sentAt = new Date();
+      } else {
+        delivery.email.status = "failed";
+        delivery.email.error =
+          emailResult?.error || emailResult?.message || "Email delivery failed";
+      }
+    }
+
+    try {
+      await notify.billGenerated(userId, monthLabel, bill.totalAmount, dueDateLabel);
+      delivery.notification.status = "sent";
+      delivery.notification.sentAt = new Date();
+    } catch (error) {
+      delivery.notification.status = "failed";
+      delivery.notification.error = error.message || "Notification failed";
+    }
+
+    bill.delivery = delivery;
+    await bill.save();
   }
 
   return {

@@ -19,7 +19,7 @@ import {
 } from "../../../shared/hooks/queries/useReservations";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
 import { reservationApi } from "../../../shared/api/apiClient";
-import { showNotification } from "../../../shared/utils/notification";
+import { showConfirmation, showNotification } from "../../../shared/utils/notification";
 import {
   DataTable,
   DetailDrawer,
@@ -1190,9 +1190,12 @@ export default function TenantsWorkspacePage() {
                   actionTenantDetail?.leaseInfo?.leaseEndDate;
                 const defaultStart = new Date(currentLeaseEnd || Date.now());
                 defaultStart.setDate(defaultStart.getDate() + 1);
-                if (!window.confirm("Confirm lease renewal? This will preserve the current stay history and create a new lease term.")) {
-                  return null;
-                }
+                const confirmed = await showConfirmation(
+                  "Confirm lease renewal? This will preserve the current stay history and create a new lease term.",
+                  "Confirm Renewal",
+                  "Cancel",
+                );
+                if (!confirmed) return null;
                 return reservationApi.renew(actionState.tenant.reservationId, {
                   newLeaseStartDate: payload.newLeaseStartDate || toDateInputValue(defaultStart),
                   newLeaseEndDate: payload.newLeaseEndDate,
@@ -1218,9 +1221,12 @@ export default function TenantsWorkspacePage() {
             onClose={() => setActionState({ type: null, tenant: null })}
             onSubmit={(payload) =>
               runAction("transfer", async () => {
-                if (!window.confirm("Confirm room transfer? This will close the current room history and create a new room assignment.")) {
-                  return null;
-                }
+                const confirmed = await showConfirmation(
+                  "Confirm room transfer? This will close the current room history and create a new room assignment.",
+                  "Confirm Transfer",
+                  "Cancel",
+                );
+                if (!confirmed) return null;
                 return reservationApi.transfer(actionState.tenant.reservationId, {
                   targetRoomId: payload.roomId,
                   targetBedId: payload.bedId,
@@ -1243,10 +1249,14 @@ export default function TenantsWorkspacePage() {
             onClose={() => setActionState({ type: null, tenant: null })}
             onSubmit={(payload) =>
               runAction("moveOut", async () => {
-                if (!window.confirm("Confirm move-out? This will end the active stay and release the assigned bed while preserving tenant history.")) {
-                  return null;
-                }
-                const response = await reservationApi.moveOut(actionState.tenant.reservationId, {
+                const confirmed = await showConfirmation(
+                  "Confirm move-out? This will end the active stay and release the assigned bed while preserving tenant history.",
+                  "Confirm Move-Out",
+                  "Cancel",
+                );
+                if (!confirmed) return null;
+
+                const moveOutPayload = {
                   moveOutDate: payload.moveOutDate,
                   actualVacateDate: payload.actualVacateDate || payload.moveOutDate,
                   reason: payload.reason || "move_out",
@@ -1258,14 +1268,46 @@ export default function TenantsWorkspacePage() {
                     actionTenantDetail?.paymentInfo?.currentBalance ??
                     0,
                   finalUtilityReading:
-                    payload.finalUtilityReading ??
-                    payload.meterReading,
+                    payload.finalUtilityReading ?? payload.meterReading,
                   confirm: true,
-                });
-                if (selectedReservationId === actionState.tenant.reservationId) {
-                  setSelectedReservationId(null);
+                };
+
+                try {
+                  const response = await reservationApi.moveOut(
+                    actionState.tenant.reservationId,
+                    moveOutPayload,
+                  );
+                  if (selectedReservationId === actionState.tenant.reservationId) {
+                    setSelectedReservationId(null);
+                  }
+                  return response;
+                } catch (moveOutError) {
+                  // Outstanding bills blocker — offer admin an explicit override
+                  const errorCode = moveOutError?.response?.data?.code;
+                  if (errorCode === "OUTSTANDING_BILLS_BLOCKING_MOVEOUT") {
+                    const balance = moveOutError?.response?.data?.outstandingBalance;
+                    const formattedBalance = balance != null
+                      ? `₱${Number(balance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                      : "an outstanding amount";
+
+                    const override = await showConfirmation(
+                      `This tenant has ${formattedBalance} in unsettled bills. Proceeding will move out the tenant without settling the balance. This should only be used when billing will be handled separately. Force proceed?`,
+                      "Force Move-Out with Balance",
+                      "Cancel — Settle Bills First",
+                    );
+                    if (!override) return null;
+
+                    const response = await reservationApi.moveOut(
+                      actionState.tenant.reservationId,
+                      { ...moveOutPayload, forceOverride: true },
+                    );
+                    if (selectedReservationId === actionState.tenant.reservationId) {
+                      setSelectedReservationId(null);
+                    }
+                    return response;
+                  }
+                  throw moveOutError;
                 }
-                return response;
               })
             }
           />

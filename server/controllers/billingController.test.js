@@ -10,9 +10,13 @@ const billCountDocuments = jest.fn();
 const utilityPeriodFindOne = jest.fn();
 const ensureCurrentCycleRentBill = jest.fn();
 const userFindById = jest.fn();
+const sendBillGeneratedEmail = jest.fn();
 const sendPaymentApprovedEmail = jest.fn();
 const sendPaymentRejectedEmail = jest.fn();
 const applyBillPayment = jest.fn();
+const generateBillPdf = jest.fn();
+const logBillingAudit = jest.fn();
+const notifyBillGenerated = jest.fn();
 
 const getVisibleBillSnapshot = jest.fn((bill) => ({
   charges: bill.charges || {},
@@ -76,6 +80,7 @@ await jest.unstable_mockModule("../middleware/errorHandler.js", () => ({
 }));
 
 await jest.unstable_mockModule("../config/email.js", () => ({
+  sendBillGeneratedEmail,
   sendPaymentApprovedEmail,
   sendPaymentRejectedEmail,
 }));
@@ -86,6 +91,20 @@ await jest.unstable_mockModule("../utils/paymentLedger.js", () => ({
 
 await jest.unstable_mockModule("../utils/billingPolicy.js", () => ({
   getBillRemainingAmount: jest.fn((bill) => bill.remainingAmount ?? bill.totalAmount ?? 0),
+  buildRentBillingCycle: jest.fn((moveInDate, cycleIndex = 0) => {
+    const start = new Date(moveInDate);
+    start.setMonth(start.getMonth() + cycleIndex);
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+    return {
+      billingMonth: start,
+      billingCycleStart: start,
+      billingCycleEnd: end,
+      dueDate: end,
+      generationDate: start,
+      cycleIndex,
+    };
+  }),
   getReservationRecurringFees: jest.fn(() => ({
     applianceFees: 0,
     additionalCharges: [],
@@ -107,10 +126,26 @@ await jest.unstable_mockModule("../utils/billingPolicy.js", () => ({
 
 await jest.unstable_mockModule("../utils/businessSettings.js", () => ({
   getPenaltyRatePerDay: jest.fn(async () => 50),
+  getMaxPenaltyCapPercent: jest.fn(async () => 100),
+  resolvePenaltyRatePerDay: jest.fn((rate) => rate || 50),
+}));
+
+await jest.unstable_mockModule("../utils/notificationService.js", () => ({
+  default: {
+    billGenerated: notifyBillGenerated,
+  },
 }));
 
 await jest.unstable_mockModule("../utils/utilityBillFlow.js", () => ({
   sendDraftUtilityBills: jest.fn(),
+}));
+
+await jest.unstable_mockModule("../utils/pdfGenerator.js", () => ({
+  generateBillPdf,
+}));
+
+await jest.unstable_mockModule("../utils/billingAudit.js", () => ({
+  logBillingAudit,
 }));
 
 await jest.unstable_mockModule("../utils/rentGenerator.js", () => ({
@@ -167,11 +202,18 @@ describe("billingController tenant endpoints", () => {
     utilityPeriodFindOne.mockReset();
     ensureCurrentCycleRentBill.mockReset();
     userFindById.mockReset();
+    sendBillGeneratedEmail.mockReset();
     sendPaymentApprovedEmail.mockReset();
     sendPaymentRejectedEmail.mockReset();
     applyBillPayment.mockReset();
+    generateBillPdf.mockReset();
+    logBillingAudit.mockReset();
+    notifyBillGenerated.mockReset();
+    sendBillGeneratedEmail.mockResolvedValue({ success: true });
     sendPaymentApprovedEmail.mockResolvedValue({ success: true });
     sendPaymentRejectedEmail.mockResolvedValue({ success: true });
+    generateBillPdf.mockResolvedValue("uploads/bills/bill-1.pdf");
+    notifyBillGenerated.mockResolvedValue({});
     getVisibleBillSnapshot.mockClear();
     getVisibleBillCharges.mockClear();
   });

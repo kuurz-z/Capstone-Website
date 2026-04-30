@@ -46,6 +46,8 @@ import LoginLog from "./LoginLog.js";
 import UserSession from "./UserSession.js";
 import AcknowledgmentAccount from "./AcknowledgmentAccount.js";
 import BusinessSettings from "./BusinessSettings.js";
+import ChatConversation from "./ChatConversation.js";
+import ChatMessage from "./ChatMessage.js";
 import WaterBillingRecord from "./WaterBillingRecord.js";
 import UtilityPeriod from "./UtilityPeriod.js";
 import UtilityReading from "./UtilityReading.js";
@@ -85,6 +87,8 @@ export {
   UserSession,
   AcknowledgmentAccount,
   BusinessSettings,
+  ChatConversation,
+  ChatMessage,
   WaterBillingRecord,
   UtilityPeriod,
   UtilityReading,
@@ -183,6 +187,8 @@ export default {
   MaintenanceRequest,
   AcknowledgmentAccount,
   BusinessSettings,
+  ChatConversation,
+  ChatMessage,
   WaterBillingRecord,
   UtilityPeriod,
   UtilityReading,
