@@ -4,71 +4,71 @@ import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function DeleteUserModal({ user, onDelete, onClose }) {
-  const [hardDelete, setHardDelete] = useState(false);
+ const [hardDelete, setHardDelete] = useState(false);
 
-  useBodyScrollLock(true);
-  useEscapeClose(true, onClose);
+ useBodyScrollLock(true);
+ useEscapeClose(true, onClose);
 
-  if (typeof document === "undefined") return null;
+ if (typeof document === "undefined") return null;
 
-  return createPortal(
-    <div
-      className="modal-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="modal-content modal-small"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Delete user"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-header">
-          <h2>Archive User</h2>
-          <button onClick={onClose} className="modal-close" aria-label="Close">
-            ×
-          </button>
-        </div>
-        <div className="modal-body">
-          <p>
-            This action will archive user{" "}
-            <strong>
-              {user?.firstName} {user?.lastName}
-            </strong>
-            . Archived users cannot use their account, but financial and reservation records are preserved.
-          </p>
-          <label
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "flex-start",
-              marginTop: 12,
-              fontSize: 14,
-              color: "var(--text-secondary)",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={hardDelete}
-              onChange={(e) => setHardDelete(e.target.checked)}
-            />
-            <span>
-              Permanently delete instead (owner-only, blocked when active reservations or issued bills exist).
-            </span>
-          </label>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onClose} className="btn-cancel">
-            Cancel
-          </button>
-          <button onClick={() => onDelete({ hardDelete })} className="btn-delete-confirm">
-            {hardDelete ? "Permanently Delete" : "Archive User"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
+ return createPortal(
+ <div
+ className="modal-overlay"
+ onClick={(e) => {
+ if (e.target === e.currentTarget) onClose();
+ }}
+ >
+ <div
+ className="modal-content modal-small"
+ role="dialog"
+ aria-modal="true"
+ aria-label="Delete user"
+ onClick={(e) => e.stopPropagation()}
+ >
+ <div className="modal-header">
+ <h2>Archive User</h2>
+ <button onClick={onClose} className="modal-close" aria-label="Close">
+ ×
+ </button>
+ </div>
+ <div className="modal-body">
+ <p>
+ This action will archive user{" "}
+ <strong>
+ {user?.firstName} {user?.lastName}
+ </strong>
+ . Archived users cannot use their account, but financial and reservation records are preserved.
+ </p>
+ <label
+ style={{
+ display: "flex",
+ gap: 8,
+ alignItems: "flex-start",
+ marginTop: 12,
+ fontSize: 14,
+ color: "var(--text-secondary)",
+ }}
+ >
+ <input
+ type="checkbox"
+ checked={hardDelete}
+ onChange={(e) => setHardDelete(e.target.checked)}
+ />
+ <span>
+ Permanently delete instead (owner-only, blocked when active reservations or issued bills exist).
+ </span>
+ </label>
+ </div>
+ <div className="modal-footer">
+ <button onClick={onClose} className="btn-cancel">
+ Cancel
+ </button>
+ <button onClick={() => onDelete({ hardDelete })} className="btn-delete-confirm">
+ {hardDelete ? "Permanently Delete" : "Archive User"}
+ </button>
+ </div>
+ </div>
+ </div>,
+ document.body,
+ );
 }
