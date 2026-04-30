@@ -3,24 +3,22 @@
  * Extracted from routes for cleaner separation.
  */
 
-import { getAuth } from "../config/firebase.js";
 import crypto from "crypto";
-import { User, LoginLog, UserSession } from "../models/index.js";
+import { getDefaultPermissionsForRole } from "../config/accessControl.js";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import { sendLoginOtpEmail } from "../config/email.js";
-import logger from "../middleware/logger.js";
-import auditLogger from "../utils/auditLogger.js";
-import { getDefaultPermissionsForRole } from "../config/accessControl.js";
+import { getAuth } from "../config/firebase.js";
 import {
-  sendSuccess,
-  sendError,
-  AppError,
+  AppError
 } from "../middleware/errorHandler.js";
+import logger from "../middleware/logger.js";
 import {
   sanitizeName,
   sanitizePhone,
   sanitizeText,
 } from "../middleware/validation.js";
+import { LoginLog, User, UserSession } from "../models/index.js";
+import auditLogger from "../utils/auditLogger.js";
 
 
 const VALID_BRANCHES = ROOM_BRANCHES;
@@ -130,12 +128,7 @@ export const register = async (req, res, next) => {
     // Sanitize and validate input
     const data = req.sanitizedData;
 
-    const username = data.username;
-    const firstName = data.firstName;
-    const lastName = data.lastName;
-    const phone = data.phone; // may be undefined
-    const branch = data.branch; // may be undefined
-    const email = data.email; // may be undefined (for Gmail users)
+    const { username, firstName, lastName, phone, branch, email } = data;
 
     // Validate required fields
     if (!username || !firstName || !lastName) {
@@ -862,15 +855,27 @@ export const setRole = async (req, res, next) => {
       });
     }
 
-    await auth.setCustomUserClaims(user.firebaseUid, claims);
-
-    // Update role in MongoDB database
+    // Persist to MongoDB first — if this fails we never touch Firebase,
+    // so the two stores stay in sync.
+    const previousRole = user.role;
+    const previousPermissions = [...(user.permissions || [])];
     user.role = role;
     user.permissions =
       role === "branch_admin" || role === "owner"
         ? getDefaultPermissionsForRole(role)
         : [];
     await user.save();
+
+    // Propagate to Firebase claims.  On failure, roll back MongoDB so the
+    // stores don't diverge.
+    try {
+      await auth.setCustomUserClaims(user.firebaseUid, claims);
+    } catch (firebaseErr) {
+      user.role = previousRole;
+      user.permissions = previousPermissions;
+      await user.save();
+      throw firebaseErr;
+    }
 
     res.json({
       message: "User role updated successfully",

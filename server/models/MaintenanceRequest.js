@@ -17,9 +17,9 @@ import crypto from "crypto";
 import mongoose from "mongoose";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import {
-  MAINTENANCE_REQUEST_TYPES,
-  MAINTENANCE_STATUSES,
-  MAINTENANCE_URGENCY_LEVELS,
+    MAINTENANCE_REQUEST_TYPES,
+    MAINTENANCE_STATUSES,
+    MAINTENANCE_URGENCY_LEVELS,
 } from "../config/maintenance.js";
 
 const attachmentSchema = new mongoose.Schema(
@@ -215,6 +215,10 @@ const maintenanceRequestSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    closed_at: {
+      type: Date,
+      default: null,
+    },
     resolution_note: {
       type: String,
       default: null,
@@ -258,6 +262,13 @@ const maintenanceRequestSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    // Prevents duplicate SLA breach notifications for the same unresolved breach.
+    // Reset to false whenever status changes so re-escalation fires correctly.
+    // Covered by the compound index { status, urgency, created_at, slaBreachNotified }.
+    slaBreachNotified: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     collection: "maintenance_requests",
@@ -275,11 +286,28 @@ maintenanceRequestSchema.pre("validate", function ensureRequestId(next) {
   next();
 });
 
+// Prevent unbounded array growth — keep the most recent entries.
+const MAINTENANCE_ARRAY_CAPS = {
+  work_log: 200,
+  statusHistory: 200,
+  reopen_history: 30,
+};
+
+maintenanceRequestSchema.pre("save", function (next) {
+  for (const [field, cap] of Object.entries(MAINTENANCE_ARRAY_CAPS)) {
+    if (Array.isArray(this[field]) && this[field].length > cap) {
+      this[field] = this[field].slice(-cap);
+    }
+  }
+  next();
+});
+
 maintenanceRequestSchema.index({ branch: 1, status: 1, created_at: -1 });
 maintenanceRequestSchema.index({ branch: 1, request_type: 1, created_at: -1 });
 maintenanceRequestSchema.index({ user_id: 1, created_at: -1 });
 maintenanceRequestSchema.index({ roomId: 1, status: 1, created_at: -1 });
-maintenanceRequestSchema.index({ status: 1, urgency: 1, created_at: -1 });
+// Covers the SLA breach detection query in slaAlertJob.js
+maintenanceRequestSchema.index({ status: 1, urgency: 1, created_at: -1, slaBreachNotified: 1 });
 
 const MaintenanceRequest = mongoose.model(
   "MaintenanceRequest",

@@ -17,8 +17,8 @@
  * Jobs:
  *   1. Overdue move-in detection — daily at 08:30
  *   2. Bed lock cleanup         — every 2 min
- *   3. Overdue bill marking     — daily at midnight
- *   4. Auto-compute penalties   — daily at 00:10
+ *   3. Overdue bill marking     — daily at 01:00
+ *   4. Auto-compute penalties   — daily at 01:10
  *   5. Payment due reminders    — daily at 08:00
  *   6. Contract expiration      — daily at 09:00
  *   7. Firebase ↔ MongoDB sync  — daily at 03:00
@@ -45,11 +45,49 @@ import { syncReservationUserLifecycle } from "./reservationHelpers.js";
 import { resolveBillStatus, syncBillAmounts } from "./billingPolicy.js";
 import {
   getLifecyclePolicySettings,
-  getPenaltyRatePerDay,
-  resolvePenaltyRatePerDay,
 } from "./businessSettings.js";
+import { computePenalty, fetchPenaltySettings } from "./penaltyCalculator.js";
+
+// ─── Shared helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Attempt `fn` once. On failure, retry once more. If the retry also fails,
+ * log the error and optionally alert branch admins so the failure surfaces
+ * to the operations team rather than disappearing silently.
+ */
+async function retryJobOperation(fn, { label, branch = null } = {}) {
+  try {
+    await fn();
+  } catch (firstErr) {
+    logger.warn({ err: firstErr }, `${label}: attempt 1 failed — retrying`);
+    try {
+      await fn();
+    } catch (secondErr) {
+      logger.error({ err: secondErr }, `${label}: retry failed — alerting admins`);
+      try {
+        const adminQuery = {
+          role: { $in: ["branch_admin", "owner"] },
+          isArchived: false,
+          accountStatus: "active",
+        };
+        if (branch) adminQuery.branch = branch;
+        const admins = await User.find(adminQuery).select("_id").lean();
+        for (const admin of admins) {
+          notify.general(
+            admin._id,
+            "Scheduler Error — Manual Action Required",
+            `A background job failed after retry: ${label}. Please check the server logs and resolve manually.`,
+          );
+        }
+      } catch {
+        // notification failure must never crash the scheduler
+      }
+    }
+  }
+}
 import { generateAutomatedRentBills } from "./rentGenerator.js";
 import { dispatchDueScheduledAnnouncements } from "./announcementDispatch.js";
+import { detectSlaBreaches } from "./slaAlertJob.js";
 
 // ─── Job 1: Overdue Move-In Detection (daily at 08:30) ──────────────────────────
 
@@ -61,7 +99,8 @@ async function detectOverdueMoveIns() {
     // Find reserved reservations past their move-in deadline
     const overdueReservations = await Reservation.findOverdueMoveIns()
       .populate("userId", "firstName lastName")
-      .populate("roomId", "name branch");
+      .populate("roomId", "name branch")
+      .lean();
 
     for (const reservation of overdueReservations) {
       const deadline = reservation.moveInExtendedTo || reservation.targetMoveInDate;
@@ -122,17 +161,32 @@ async function cleanupExpiredBedLocks() {
 async function markOverdueBills() {
   try {
     const now = dayjs().toDate();
-    const result = await Bill.updateMany(
+
+    // Collect bill IDs before the bulk update so we can notify tenants afterwards.
+    const billsToMark = await Bill.find(
       {
         status: { $in: ["pending", "partially-paid"] },
         dueDate: { $ne: null, $lt: now },
         isArchived: false,
       },
-      { $set: { status: "overdue" } },
-    );
+      { _id: 1, userId: 1, billingMonth: 1 },
+    ).lean();
 
-    if (result.modifiedCount > 0) {
-      logger.info({ count: result.modifiedCount }, "Bills marked overdue");
+    if (billsToMark.length === 0) return;
+
+    const ids = billsToMark.map((b) => b._id);
+    await Bill.updateMany({ _id: { $in: ids } }, { $set: { status: "overdue" } });
+
+    logger.info({ count: billsToMark.length }, "Bills marked overdue");
+
+    for (const bill of billsToMark) {
+      if (!bill.userId) continue;
+      const month = dayjs(bill.billingMonth).format("MMMM YYYY");
+      notify.general(
+        bill.userId,
+        "Bill Overdue",
+        `Your bill for ${month} is now overdue. Please settle it as soon as possible to avoid additional penalties.`,
+      );
     }
   } catch (error) {
     logger.error({ err: error }, "Overdue bill marking failed");
@@ -144,7 +198,7 @@ async function markOverdueBills() {
 async function computeOverduePenalties() {
   try {
     const now = dayjs();
-    const penaltyRatePerDay = await getPenaltyRatePerDay();
+    const settings = await fetchPenaltySettings();
     const overdueBills = await Bill.find({
       status: "overdue",
       isArchived: false,
@@ -155,14 +209,8 @@ async function computeOverduePenalties() {
     for (const bill of overdueBills) {
       if (!bill?.dueDate) continue;
 
-      const daysLate = now.diff(dayjs(bill.dueDate), "day");
-      if (!Number.isFinite(daysLate) || daysLate <= 0) continue;
-
-      const ratePerDay = resolvePenaltyRatePerDay(
-        bill.penaltyDetails?.ratePerDay,
-        penaltyRatePerDay,
-      );
-      const newPenalty = daysLate * ratePerDay;
+      const { penalty: newPenalty, daysLate, ratePerDay } = await computePenalty(bill, settings, now);
+      if (daysLate <= 0) continue;
       const oldPenalty = bill.charges?.penalty || 0;
 
       // Only update if penalty changed (avoid spamming notifications)
@@ -170,6 +218,7 @@ async function computeOverduePenalties() {
 
       bill.charges.penalty = newPenalty;
       bill.penaltyDetails.daysLate = daysLate;
+      bill.penaltyDetails.ratePerDay = ratePerDay;
       bill.penaltyDetails.appliedAt = now.toDate();
       syncBillAmounts(bill);
       bill.status = resolveBillStatus(bill, now.toDate());
@@ -208,7 +257,7 @@ async function sendPaymentReminders() {
         status: { $in: ["pending", "partially-paid"] },
         dueDate: { $gte: targetDate.toDate(), $lt: nextDay.toDate() },
         isArchived: false,
-      });
+      }).lean();
 
       for (const bill of bills) {
         // Skip the 5-day reminder if the bill was literally just generated in the last 24 hours 
@@ -240,11 +289,11 @@ async function checkContractExpirations() {
     const alertDays = [30, 15, 7, 1];
     let sent = 0;
 
-    // Get all moved-in reservations
+    // Get all moved-in reservations (read-only — notify only, no saves)
     const activeReservations = await Reservation.find({
       status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
       isArchived: false,
-    }).populate("roomId", "name");
+    }).populate("roomId", "name").lean();
 
     for (const reservation of activeReservations) {
       const moveInDate = readMoveInDate(reservation);
@@ -289,7 +338,7 @@ async function cleanupOrphanedAccounts() {
     } while (nextPageToken);
 
     // 2. Fetch all MongoDB users
-    const mongoUsers = await User.find({}, "firebaseUid email role").lean();
+    const mongoUsers = await User.find({}, "firebaseUid email role tenantStatus _id").lean();
 
     const firebaseUids = new Set(firebaseUsers.map((u) => u.uid));
     const mongoByUid = new Map(mongoUsers.map((u) => [u.firebaseUid, u]));
@@ -311,13 +360,31 @@ async function cleanupOrphanedAccounts() {
     }
 
     // 4. Delete orphaned MongoDB records (in MongoDB but NOT in Firebase)
-    //    Skip admin and superAdmin to prevent accidental deletion
+    //    Skip admins, owners, and any user with an active or past tenancy.
     for (const [uid, mgUser] of mongoByUid) {
       if (!firebaseUids.has(uid)) {
         if (mgUser.role === "branch_admin" || mgUser.role === "owner") {
           logger.warn({ email: mgUser.email }, "Sync: skipping orphaned admin record — manual review required");
           continue;
         }
+
+        // Never delete a user who has (or had) a tenancy — their bills and
+        // reservation records would become orphaned.
+        if (mgUser.tenantStatus && mgUser.tenantStatus !== "applicant") {
+          logger.warn({ email: mgUser.email, tenantStatus: mgUser.tenantStatus }, "Sync: skipping orphaned user with active/past tenancy");
+          continue;
+        }
+
+        const activeReservationCount = await Reservation.countDocuments({
+          userId: mgUser._id,
+          status: { $in: CURRENT_RESIDENT_STATUS_QUERY },
+          isArchived: { $ne: true },
+        });
+        if (activeReservationCount > 0) {
+          logger.warn({ email: mgUser.email }, "Sync: skipping orphaned user with active reservation");
+          continue;
+        }
+
         try {
           await User.deleteOne({ firebaseUid: uid });
           deletedMongo++;
@@ -402,25 +469,27 @@ async function expireStaleReservations() {
         reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-expired from "${oldStatus}" — ${now.format("MMM D, YYYY h:mm A")}`;
         await reservation.save();
 
-        // Release the bed
-        try {
-          await updateOccupancyOnReservationChange(reservation, { status: oldStatus });
-        } catch (err) {
-          logger.error({ err, reservationId: String(reservation._id) }, "Stale expiry: bed release failed");
-        }
+        const branch = reservation.roomId?.branch || null;
+        const resId = String(reservation._id);
 
-        try {
-          await syncReservationUserLifecycle({
+        // Release the bed — retry once, alert admins on persistent failure
+        await retryJobOperation(
+          () => updateOccupancyOnReservationChange(reservation, { status: oldStatus }),
+          { label: `Stale expiry bed-release [${resId}]`, branch },
+        );
+
+        // Sync user lifecycle role/status — retry once
+        await retryJobOperation(
+          () => syncReservationUserLifecycle({
             status: reservation.status,
             previousStatus: oldStatus,
             userId: reservation.userId?._id || reservation.userId,
             roomId: reservation.roomId?._id || reservation.roomId,
             reservationId: reservation._id,
             force: true,
-          });
-        } catch (err) {
-          logger.error({ err, reservationId: String(reservation._id) }, "Stale expiry: user lifecycle sync failed");
-        }
+          }),
+          { label: `Stale expiry lifecycle-sync [${resId}]`, branch },
+        );
 
         // Notify tenant
         const code = reservation.reservationCode || reservation._id.toString().slice(-6);
@@ -468,25 +537,25 @@ async function cancelNoShowReservations() {
       reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-cancelled: no-show ${daysOverdue} days past move-in — ${now.format("MMM D, YYYY")}`;
       await reservation.save();
 
-      // Release the bed
-      try {
-        await updateOccupancyOnReservationChange(reservation, { status: "reserved" });
-      } catch (err) {
-        logger.error({ err, reservationId: String(reservation._id) }, "No-show cancel: bed release failed");
-      }
+      const nsBranch = reservation.roomId?.branch || null;
+      const nsId = String(reservation._id);
 
-      try {
-        await syncReservationUserLifecycle({
+      await retryJobOperation(
+        () => updateOccupancyOnReservationChange(reservation, { status: "reserved" }),
+        { label: `No-show bed-release [${nsId}]`, branch: nsBranch },
+      );
+
+      await retryJobOperation(
+        () => syncReservationUserLifecycle({
           status: reservation.status,
           previousStatus: "reserved",
           userId: reservation.userId?._id || reservation.userId,
           roomId: reservation.roomId?._id || reservation.roomId,
           reservationId: reservation._id,
           force: true,
-        });
-      } catch (err) {
-        logger.error({ err, reservationId: String(reservation._id) }, "No-show cancel: user lifecycle sync failed");
-      }
+        }),
+        { label: `No-show lifecycle-sync [${nsId}]`, branch: nsBranch },
+      );
 
       // Notify tenant
       const code = reservation.reservationCode || reservation._id.toString().slice(-6);
@@ -522,7 +591,8 @@ async function warnStaleVisitPending() {
       createdAt: { $lt: cutoff },
     })
       .populate("userId", "firstName lastName")
-      .populate("roomId", "name branch");
+      .populate("roomId", "name branch")
+      .lean();
 
     for (const reservation of staleVisits) {
       const branch = reservation.roomId?.branch;
@@ -669,17 +739,17 @@ export function startScheduler(options = {}) {
     }),
   );
 
-  // Job 3: Overdue bill marking — daily at 00:05 (5 min after midnight)
+  // Job 3: Overdue bill marking — daily at 01:00 (1 hour after midnight rent generation)
   scheduledJobs.push(
-    cron.schedule("5 0 * * *", markOverdueBills, {
+    cron.schedule("0 1 * * *", markOverdueBills, {
       scheduled: true,
       name: "overdue-bill-marking",
     }),
   );
 
-  // Job 4: Auto-compute penalties — daily at 00:10 (after overdue marking)
+  // Job 4: Auto-compute penalties — daily at 01:10 (after overdue marking)
   scheduledJobs.push(
-    cron.schedule("10 0 * * *", computeOverduePenalties, {
+    cron.schedule("10 1 * * *", computeOverduePenalties, {
       scheduled: true,
       name: "overdue-penalty-computation",
     }),
@@ -748,6 +818,16 @@ export function startScheduler(options = {}) {
       name: "scheduled-announcement-dispatch",
     }),
   );
+
+  // Job 13: SLA breach detection — daily at 06:00
+  // Groups alerts per branch (not per request) to minimise admin notification noise.
+  scheduledJobs.push(
+    cron.schedule("0 6 * * *", detectSlaBreaches, {
+      scheduled: true,
+      name: "sla-breach-detection",
+    }),
+  );
+
   return scheduledJobs.length;
 }
 
@@ -772,6 +852,7 @@ export {
   warnStaleVisitPending,
   archiveStaleCancelled,
   dispatchScheduledAnnouncements,
+  detectSlaBreaches,
 };
 
 export default { startScheduler, stopScheduler };

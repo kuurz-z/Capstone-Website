@@ -29,6 +29,13 @@ import crypto from "crypto";
 import { User, UserSession } from "../models/index.js";
 
 import { CACHE } from "../config/constants.js";
+import {
+  getCachedAccountStatus as _getCachedAccountStatus,
+  setCachedAccountStatus as _setCachedAccountStatus,
+  invalidateAccountStatusCache,
+} from "../utils/accountStatusCache.js";
+
+export { invalidateAccountStatusCache };
 
 /* ─── In-memory token verification cache (avoids hitting Firebase each request) ── */
 const tokenCache = new Map();
@@ -65,30 +72,10 @@ function setCachedToken(token, decoded) {
   tokenCache.set(key, { decoded, ts: Date.now(), lastAccess: Date.now() });
 }
 
-/* ─── In-memory account status cache (avoids hitting MongoDB each request) ── */
-const accountStatusCache = new Map();
-const ACCOUNT_STATUS_CACHE_TTL = CACHE.ACCOUNT_STATUS_TTL_MS;
-
-function getCachedAccountStatus(uid) {
-  const entry = accountStatusCache.get(uid);
-  if (!entry) return undefined;
-  if (Date.now() - entry.ts > ACCOUNT_STATUS_CACHE_TTL) {
-    accountStatusCache.delete(uid);
-    return undefined;
-  }
-  return entry.status;
-}
-
-function setCachedAccountStatus(uid, status) {
-  accountStatusCache.set(uid, { status, ts: Date.now() });
-  if (accountStatusCache.size > CACHE.MAX_ACCOUNT_STATUS_ENTRIES) {
-    const oldest = accountStatusCache.keys().next().value;
-    accountStatusCache.delete(oldest);
-  }
-}
-
-/** Invalidate a user's cached account status (call when admin suspends/bans) */
-export const invalidateAccountStatusCache = (uid) => accountStatusCache.delete(uid);
+/* ─── Account status cache — backed by shared module so User post-save hooks
+       can invalidate it without creating a circular import. ─────────────────── */
+const getCachedAccountStatus = _getCachedAccountStatus;
+const setCachedAccountStatus = _setCachedAccountStatus;
 
 const OTP_SESSION_EXEMPT_PATHS = [
   "/api/auth/login",

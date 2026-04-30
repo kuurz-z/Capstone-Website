@@ -1,1 +1,0 @@
-@keyframes skeleton-pulse{0%,to{opacity:1}50%{opacity:.45}}.skeleton-pulse{background:#e5e7eb;animation:skeleton-pulse 2.2s ease-in-out infinite}html[data-theme=dark] .skeleton-pulse{background:#1e293b}

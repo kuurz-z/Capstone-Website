@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtShortDate as formatShortDate } from "../../../shared/utils/dateFormat";
 import {
   AlertTriangle,
   CalendarCheck,
@@ -74,13 +75,30 @@ function initials(name = "") {
     : (parts[0]?.[0] || "?").toUpperCase();
 }
 
-function formatShortDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+// formatShortDate moved to shared/utils/dateFormat — imported at top of file
+
+function getIdValidationLabel(status) {
+  switch (status) {
+    case "passed":
+      return "ID Passed";
+    case "warning":
+      return "ID Warning";
+    case "failed":
+      return "ID Failed";
+    case "manual_review":
+      return "Manual Review";
+    default:
+      return "Not Checked";
+  }
+}
+
+function IdValidationPill({ status }) {
+  const normalized = status || "not_validated";
+  return (
+    <span className={`res-id-pill res-id-pill--${normalized}`}>
+      {getIdValidationLabel(normalized)}
+    </span>
+  );
 }
 
 const SUMMARY_FILTERS = ["all", "in_progress", "reserved", "moveIn", "overdue"];
@@ -88,7 +106,7 @@ function ReservationsPage() {
   const { user } = useAuth();
   const { can } = usePermissions();
   const queryClient = useQueryClient();
-  const isOwner = user?.role === "owner";
+  const isOwner = user?.role === "owner" || user?.role === "superadmin";
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("reservations");
   const [searchTerm, setSearchTerm] = useState("");
@@ -363,6 +381,16 @@ function ReservationsPage() {
         validIDFrontUrl: reservation.validIDFrontUrl,
         validIDBackUrl: reservation.validIDBackUrl,
         validIDType: reservation.validIDType,
+        idType: reservation.idType,
+        idValidationStatus: reservation.idValidationStatus,
+        idExtractedName: reservation.idExtractedName,
+        idExtractedNumber: reservation.idExtractedNumber,
+        idNameMatchScore: reservation.idNameMatchScore,
+        idMismatchFlag: reservation.idMismatchFlag,
+        idValidationNotes: reservation.idValidationNotes,
+        idValidatedAt: reservation.idValidatedAt,
+        idValidationProvider: reservation.idValidationProvider,
+        idValidationDocumentUrl: reservation.idValidationDocumentUrl,
         nbiClearanceUrl: reservation.nbiClearanceUrl,
         nbiReason: reservation.nbiReason,
         companyIDUrl: reservation.companyIDUrl,
@@ -483,6 +511,11 @@ function ReservationsPage() {
         render: (row) => (
           <StatusBadge status={checkOverdueReservation(row) ? "overdue" : row.status} />
         ),
+      },
+      {
+        key: "idValidationStatus",
+        label: "ID Check",
+        render: (row) => <IdValidationPill status={row.idValidationStatus} />,
       },
       {
         key: "moveInDate",

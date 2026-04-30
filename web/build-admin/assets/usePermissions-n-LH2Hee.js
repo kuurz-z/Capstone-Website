@@ -1,1 +1,0 @@
-import{b as e,a as t}from"./admin-CAQmUedE.js";function u(){const{user:s}=e(),n=(s==null?void 0:s.role)==="owner",o=(s==null?void 0:s.permissions)||[];return{can:t.useMemo(()=>n?()=>!0:r=>o.includes(r),[n,o]),isOwner:n,permissions:o}}export{u};
