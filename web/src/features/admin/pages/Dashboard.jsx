@@ -1,4 +1,4 @@
-﻿import { useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
  MessageSquare,
@@ -123,15 +123,16 @@ export default function Dashboard() {
  (reservationStatus.rejected || 0);
 
  const reservationSegment = (count) =>
- reservationTotal ? (count / reservationTotal) * 439.8 : 0;
+ reservationTotal ? (count / reservationTotal) * 502.6 : 0;
 
- const metricValueClass = {
- blue: "text-[#2563eb]",
- green: "text-[#16a34a]",
- violet: "text-[#2563eb]",
- amber: "text-[#2563eb]",
- rose: "text-[#16a34a]",
- };
+  const metricValueClass = {
+    blue: "text-[#2563eb] dark:text-blue-500",
+    green: "text-[#16a34a] dark:text-emerald-500",
+    violet: "text-[#2563eb] dark:text-blue-500",
+    amber: "text-[#2563eb] dark:text-blue-500",
+    rose: "text-[#16a34a] dark:text-emerald-500",
+  };
+
 
  const error = isError
  ? "Some dashboard data failed to load. Showing partial data."
@@ -163,231 +164,240 @@ export default function Dashboard() {
  </div>
  )}
 
- <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
- {summaryItems.map((item) => {
- const Icon = item.icon;
- return (
- <article
- key={item.label}
- className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-border"
- >
- <div className="mb-2 flex items-start justify-between">
- <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
- {item.label}
- </span>
- <Icon className="h-5 w-5 text-muted-foreground" />
- </div>
- <p className={`text-3xl font-semibold leading-tight ${metricValueClass[item.tone] || "text-foreground"}`}>
- {item.value}
- </p>
- <p className="mt-2 text-xs text-muted-foreground">{item.trend}</p>
- </article>
- );
- })}
- </div>
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {summaryItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article
+              key={item.label}
+              className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] p-5 shadow-sm transition-all hover:shadow-md"
+            >
+              <div className="mb-3 flex items-start justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                  {item.label}
+                </span>
+                <Icon className="h-4 w-4 text-[var(--text-muted)]/70" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <p className={`text-3xl font-bold leading-none tracking-tight ${metricValueClass[item.tone] || "text-[var(--text-primary)]"}`}>
+                  {item.value}
+                </p>
+                <p className="text-[11px] font-medium text-[var(--text-muted)]/80">{item.trend}</p>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
  </PageShell.Summary>
 
  <PageShell.Content>
- <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
- <section className="rounded-lg border border-border bg-card p-6 lg:col-span-2">
- <div className="mb-4 flex items-center justify-between">
- <div>
- <h2 className="mb-1 text-lg font-semibold text-foreground">Recent Inquiries</h2>
- <p className="text-sm text-muted-foreground">
- {kpis.inquiries || 0} on the active range • newest items first
- </p>
- </div>
- <Link
- to="/admin/analytics/details?tab=operations"
- className="inline-flex items-center gap-1 text-sm font-medium text-warning-dark transition-colors hover:text-warning-dark"
- >
- View All
- <ChevronRight className="h-4 w-4" />
- </Link>
- </div>
+        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <section className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 lg:col-span-2 shadow-sm">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Recent Inquiries</h2>
+                <p className="text-xs font-medium text-[var(--text-muted)] mt-0.5">
+                  {kpis.inquiries || 0} on the active range • newest items first
+                </p>
+              </div>
+              <Link
+                to="/admin/inquiries"
+                className="inline-flex items-center gap-1 text-[13px] font-bold text-[var(--color-accent)] hover:opacity-80 transition-opacity"
+              >
+                View All
+                <ChevronRight className="h-4 w-4" />
+              </Link>
 
- <div className="space-y-3">
- {recentInquiries.length > 0 ? (
- recentInquiries.map((inq) => (
- <article
- key={inq.id}
- className="flex items-start justify-between rounded-lg bg-muted px-4 py-3 transition-colors hover:bg-muted"
- >
- <div className="flex min-w-0 flex-1 items-start gap-3">
- <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning-light text-warning-dark">
- <Mail className="h-4 w-4" />
- </span>
- <div className="min-w-0">
- <h3 className="truncate text-sm font-medium text-foreground">{inq.name}</h3>
- <p className="truncate text-sm text-muted-foreground">{inq.email}</p>
- <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
- <span className="inline-flex items-center gap-1">
- <MapPin className="h-3 w-3" />
- {inq.branch}
- </span>
- <span className="inline-flex items-center gap-1">
- <Calendar className="h-3 w-3" />
- {inq.date || inq.time}
- </span>
- </div>
- </div>
- </div>
- <span
- className={`ml-4 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
- inq.status === "responded"
- ? "bg-info-light text-info-dark"
- : "bg-success-light text-success-dark"
- }`}
- >
- {inq.followUp}
- </span>
- </article>
- ))
- ) : (
- <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
- <CheckCircle2 className="mb-2 h-8 w-8 text-emerald-400/70" />
- <p className="text-sm font-medium">No recent inquiries.</p>
- </div>
- )}
- </div>
- </section>
+            </div>
 
- <section className="rounded-lg border border-border bg-card p-6">
- <div className="mb-4">
- <h2 className="mb-1 text-lg font-semibold text-foreground">Reservation Status</h2>
- <p className="text-sm text-muted-foreground">
- {reservationStatus.pending || 0} pending • {reservationStatus.approved || 0} approved • {reservationStatus.rejected || 0} rejected
- </p>
- </div>
+            <div className="space-y-3">
+              {recentInquiries.length > 0 ? (
+                recentInquiries.map((inq) => (
+                  <article
+                    key={inq.id}
+                    className="group flex items-center justify-between rounded-xl bg-[var(--bg-inset)]/50 p-4 border border-transparent hover:border-[var(--border-light)] hover:bg-[var(--bg-card)] transition-all"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
+                        <Mail className="h-5 w-5" />
+                      </div>
 
- <div className="mb-4 flex justify-center py-3">
- <svg className="h-[200px] w-[200px]" viewBox="0 0 200 200" aria-label="Reservation status chart">
- <circle
- cx="100"
- cy="100"
- r="70"
- fill="none"
- stroke="#16A34A"
- strokeWidth="24"
- strokeDasharray={`${reservationSegment(reservationStatus.approved || 0)} 439.8`}
- transform="rotate(-90 100 100)"
- />
- <circle
- cx="100"
- cy="100"
- r="70"
- fill="none"
- stroke="#F59E0B"
- strokeWidth="24"
- strokeDasharray={`${reservationSegment(reservationStatus.pending || 0)} 439.8`}
- strokeDashoffset={`-${reservationSegment(reservationStatus.approved || 0)}`}
- transform="rotate(-90 100 100)"
- />
- <circle
- cx="100"
- cy="100"
- r="70"
- fill="none"
- stroke="#DC2626"
- strokeWidth="24"
- strokeDasharray={`${reservationSegment(reservationStatus.rejected || 0)} 439.8`}
- strokeDashoffset={`-${reservationSegment((reservationStatus.approved || 0) + (reservationStatus.pending || 0))}`}
- transform="rotate(-90 100 100)"
- />
- </svg>
- </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-[15px] font-bold text-[var(--text-primary)]">{inq.name}</h3>
+                        <p className="truncate text-sm font-medium text-[var(--text-muted)]">{inq.email}</p>
+                        <div className="mt-1.5 flex items-center gap-3 text-[12px] font-medium text-[var(--text-muted)]/70">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {inq.branch}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {inq.date || inq.time}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center rounded-lg px-3 py-1 text-[11px] font-medium ${
+                        inq.status === "responded"
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                          : "bg-green-100 text-green-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      }`}
+                    >
+                      {inq.followUp}
+                    </span>
 
- <div className="space-y-2">
- <div className="flex items-center justify-between text-sm">
- <span className="inline-flex items-center gap-2 text-card-foreground">
- <span className="h-2.5 w-2.5 rounded-full bg-green-600" />
- Approved
- </span>
- <strong className="font-medium text-foreground">{reservationStatus.approved || 0}</strong>
- </div>
- <div className="flex items-center justify-between text-sm">
- <span className="inline-flex items-center gap-2 text-card-foreground">
- <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
- Pending
- </span>
- <strong className="font-medium text-foreground">{reservationStatus.pending || 0}</strong>
- </div>
- <div className="flex items-center justify-between text-sm">
- <span className="inline-flex items-center gap-2 text-card-foreground">
- <span className="h-2.5 w-2.5 rounded-full bg-red-600" />
- Rejected
- </span>
- <strong className="font-medium text-foreground">{reservationStatus.rejected || 0}</strong>
- </div>
- </div>
- </section>
- </div>
+                  </article>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-[var(--text-muted)]">
+                  <CheckCircle2 className="mb-2 h-10 w-10 opacity-20" />
+                  <p className="text-sm font-medium">No recent inquiries.</p>
+                </div>
+              )}
+            </div>
+          </section>
 
- <section className="rounded-lg border border-border bg-card p-6">
- <div className="mb-4 flex items-center justify-between">
- <div>
- <h2 className="mb-1 text-lg font-semibold text-foreground">Recent Reservations</h2>
- <p className="text-sm text-muted-foreground">
- {reservationStatus.pending || 0} pending review • {kpis.activeBookings || 0} active bookings • {recentReservations.length} current scope
- </p>
- </div>
- <Link
- to="/admin/reservations"
- className="inline-flex items-center gap-1 text-sm font-medium text-warning-dark transition-colors hover:text-warning-dark"
- >
- View All
- <ChevronRight className="h-4 w-4" />
- </Link>
- </div>
+          <section className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Reservation Status</h2>
+              <p className="text-xs font-medium text-[var(--text-muted)] mt-0.5">
+                {reservationStatus.pending || 0} pending • {reservationStatus.approved || 0} approved • {reservationStatus.rejected || 0} rejected
+              </p>
+            </div>
 
- {recentReservations.length > 0 ? (
- <div className="overflow-x-auto">
- <table className="w-full min-w-[760px]">
- <thead>
- <tr className="border-b border-border">
- <th className="px-3 py-3 text-left text-sm font-medium text-muted-foreground">Room Type</th>
- <th className="px-3 py-3 text-left text-sm font-medium text-muted-foreground">Tenant</th>
- <th className="px-3 py-3 text-left text-sm font-medium text-muted-foreground">Branch</th>
- <th className="px-3 py-3 text-left text-sm font-medium text-muted-foreground">Date</th>
- <th className="px-3 py-3 text-right text-sm font-medium text-muted-foreground">Status</th>
- </tr>
- </thead>
- <tbody>
- {recentReservations.map((reservation) => (
- <tr key={reservation.id} className="border-b border-border transition-colors hover:bg-muted">
- <td className="px-3 py-3.5">
- <div className="flex items-center gap-2">
- <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-warning-light text-warning-dark">
- <DoorOpen className="h-4 w-4" />
- </span>
- <span className="text-sm font-medium text-foreground">{reservation.roomType}</span>
- </div>
- </td>
- <td className="px-3 py-3.5 text-sm text-foreground">{reservation.guestName}</td>
- <td className="px-3 py-3.5">
- <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
- <MapPin className="h-3 w-3" />
- {reservation.branch}
- </span>
- </td>
- <td className="px-3 py-3.5 text-sm text-muted-foreground">{reservation.date}</td>
- <td className="px-3 py-3.5 text-right">
- <span className="inline-flex rounded-full bg-info-light px-3 py-1 text-xs font-medium text-info-dark">
- {getReservationStatusLabel(reservation.status)}
- </span>
- </td>
- </tr>
- ))}
- </tbody>
- </table>
- </div>
- ) : (
- <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
- <CheckCircle2 className="mb-2 h-8 w-8 text-emerald-400/70" />
- <p className="text-sm font-medium">No recent reservations.</p>
- </div>
- )}
- </section>
+            <div className="mb-6 flex justify-center py-4">
+              <svg className="h-[180px] w-[180px]" viewBox="0 0 200 200" aria-label="Reservation status chart">
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="none"
+                  stroke="#16a34a"
+                  strokeWidth="20"
+                  strokeDasharray={`${reservationSegment(reservationStatus.approved || 0)} 502.6`}
+                  transform="rotate(-90 100 100)"
+                />
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="none"
+                  stroke="#f59e0b"
+                  strokeWidth="20"
+                  strokeDasharray={`${reservationSegment(reservationStatus.pending || 0)} 502.6`}
+                  strokeDashoffset={`-${reservationSegment(reservationStatus.approved || 0)}`}
+                  transform="rotate(-90 100 100)"
+                />
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="none"
+                  stroke="#dc2626"
+                  strokeWidth="20"
+                  strokeDasharray={`${reservationSegment(reservationStatus.rejected || 0)} 502.6`}
+                  strokeDashoffset={`-${reservationSegment((reservationStatus.approved || 0) + (reservationStatus.pending || 0))}`}
+                  transform="rotate(-90 100 100)"
+                />
+              </svg>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="flex items-center gap-2 font-medium text-[var(--text-secondary)]">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#16a34a]" />
+                  Approved
+                </span>
+                <span className="font-bold text-[var(--text-primary)]">{reservationStatus.approved || 0}</span>
+              </div>
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="flex items-center gap-2 font-medium text-[var(--text-secondary)]">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#f59e0b]" />
+                  Pending
+                </span>
+                <span className="font-bold text-[var(--text-pending)]">{reservationStatus.pending || 0}</span>
+              </div>
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="flex items-center gap-2 font-medium text-[var(--text-secondary)]">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#dc2626]" />
+                  Rejected
+                </span>
+                <span className="font-bold text-[var(--text-primary)]">{reservationStatus.rejected || 0}</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      <section className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Recent Reservations</h2>
+            <p className="text-xs font-medium text-[var(--text-muted)] mt-0.5">
+              {reservationStatus.pending || 0} pending review • {kpis.activeBookings || 0} active bookings • {recentReservations.length} current scope
+            </p>
+          </div>
+          <Link
+            to="/admin/reservations"
+            className="inline-flex items-center gap-1 text-[13px] font-bold text-[var(--color-accent)] hover:opacity-80 transition-opacity"
+          >
+            View All
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+
+        </div>
+
+        {recentReservations.length > 0 ? (
+          <div className="overflow-x-auto -mx-6">
+            <table className="w-full min-w-[800px]">
+              <thead>
+                <tr className="border-b border-[var(--border-light)] bg-[var(--bg-inset)]/30">
+                  <th className="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Room Type</th>
+                  <th className="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Tenant</th>
+                  <th className="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Branch</th>
+                  <th className="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Date</th>
+                  <th className="px-6 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-light)]">
+                {recentReservations.map((reservation) => (
+                  <tr key={reservation.id} className="group transition-colors hover:bg-[var(--bg-inset)]/40">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
+                          <DoorOpen className="h-4 w-4" />
+                        </div>
+                        <span className="text-[14px] font-bold text-[var(--text-primary)]">{reservation.roomType}</span>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 text-[14px] font-medium text-[var(--text-primary)]">{reservation.guestName}</td>
+                    <td className="px-6 py-4">
+                      <span className="flex items-center gap-1 text-[13px] font-medium text-[var(--text-muted)]">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {reservation.branch}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-[13px] font-medium text-[var(--text-muted)]">{reservation.date}</td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="inline-flex rounded-lg bg-blue-100 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        {getReservationStatusLabel(reservation.status)}
+                      </span>
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-10 text-[var(--text-muted)]">
+            <CheckCircle2 className="mb-2 h-10 w-10 opacity-20" />
+            <p className="text-sm font-medium">No recent reservations.</p>
+          </div>
+        )}
+      </section>
  </PageShell.Content>
  </PageShell>
  </div>
