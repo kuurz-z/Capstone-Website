@@ -444,10 +444,17 @@ export const sendBillGeneratedEmail = async ({
   totalAmount,
   dueDate,
   branchName = "Lilycrest",
+  billType = "bill",
+  roomName = "",
 }) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     return { success: false, message: "Email service not configured" };
   }
+  const normalizedBillType = String(billType || "bill").trim().toLowerCase();
+  const billTypeLabel =
+    normalizedBillType === "rent"
+      ? "Monthly Rent"
+      : normalizedBillType.charAt(0).toUpperCase() + normalizedBillType.slice(1);
   const html = `
 <!DOCTYPE html>
 <html>
@@ -468,8 +475,15 @@ export const sendBillGeneratedEmail = async ({
           </div>
           <h2 style="color: #111827; margin: 0 0 20px; font-size: 22px; text-align: center;">New Bill Generated</h2>
           <p style="color: #555; font-size: 16px; line-height: 1.6;">Hello <strong>${tenantName}</strong>,</p>
-          <p style="color: #555; font-size: 16px; line-height: 1.6;">Your monthly bill has been generated:</p>
+          <p style="color: #555; font-size: 16px; line-height: 1.6;">Your ${billTypeLabel.toLowerCase()} bill has been generated:</p>
           <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+            <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Bill Type</p>
+            <p style="color: #111827; font-size: 18px; font-weight: 600; margin: 0 0 16px;">${billTypeLabel}</p>
+            ${
+              roomName
+                ? `<p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Room / Bed</p><p style="color: #111827; font-size: 16px; font-weight: 600; margin: 0 0 16px;">${roomName}</p>`
+                : ""
+            }
             <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Billing Month</p>
             <p style="color: #111827; font-size: 18px; font-weight: 600; margin: 0 0 16px;">${billingMonth}</p>
             <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Total Amount</p>
@@ -477,7 +491,7 @@ export const sendBillGeneratedEmail = async ({
             <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Due Date</p>
             <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 0;">${dueDate}</p>
           </div>
-          <p style="color: #555; font-size: 14px; line-height: 1.6;">Please log in to the dormitory portal to view the full breakdown and make your payment.</p>
+          <p style="color: #555; font-size: 14px; line-height: 1.6;">Please log in to the dormitory portal to view the full breakdown and make your payment. If you use bank transfer, proof of payment may be required by branch staff before the payment is considered settled.</p>
         </td></tr>
         <tr><td style="background-color: #f8f9fa; padding: 25px 40px; text-align: center; border-top: 1px solid #eee;">
           <p style="color: #888; font-size: 14px; margin: 0;">Best regards,<br><strong style="color: #0C375F;">Lilycrest Dormitory Team</strong></p>
@@ -491,9 +505,9 @@ export const sendBillGeneratedEmail = async ({
     const info = await transporter.sendMail({
       from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
       to,
-      subject: `Bill for ${billingMonth} — ₱${Number(totalAmount).toLocaleString()} | Lilycrest Dormitory`,
+      subject: `${billTypeLabel} bill for ${billingMonth} | Lilycrest Dormitory`,
       html,
-      text: `Hello ${tenantName}, your bill for ${billingMonth} is ₱${totalAmount}. Due: ${dueDate}. Log in to view details. — Lilycrest Dormitory`,
+      text: `Hello ${tenantName}, your ${billTypeLabel} bill for ${billingMonth} is PHP ${totalAmount}. Due: ${dueDate}. Log in to view details and payment instructions. If you use bank transfer, proof of payment may be required. - Lilycrest Dormitory`,
     });
     console.log(`✅ Bill generated email sent to ${to}`);
     return { success: true, messageId: info.messageId };
