@@ -224,7 +224,10 @@ export async function generateBillPdf({ bill, billingResult, period, room, tenan
     "Tenant";
 
   // 3. Resolve room identity
-  const roomLabel = room?.name || room?.roomNumber || String(room?._id || "—");
+  const roomLabel = room?.name || room?.roomNumber || "Unknown Room";
+  const billReference =
+    bill.billReference ||
+    `LC-RB-${new Date(bill.billingMonth || Date.now()).toISOString().slice(0, 7).replace("-", "")}-${billId.slice(-6).toUpperCase()}`;
 
   // 4. Resolve bill charges (fall back to 0)
   const ch = bill.charges || {};
@@ -235,6 +238,7 @@ export async function generateBillPdf({ bill, billingResult, period, room, tenan
   const corkageFees  = Number(ch.corkageFees  || 0);
   const penalty      = Number(ch.penalty      || 0);
   const discount     = Number(ch.discount     || 0);
+  const reservationCreditApplied = Number(bill.reservationCreditApplied || 0);
 
   // 5. Identify this tenant's electricity summary from billingResult
   const tenantId = String(bill.userId);
@@ -329,10 +333,16 @@ export async function generateBillPdf({ bill, billingResult, period, room, tenan
     .text(formatDate(bill.dueDate), rightCol + 75, doc.y)
     .fillColor("#1a1a2e");
 
+  doc
+    .font("Helvetica-Bold")
+    .text("Reference:", rightCol, doc.y)
+    .font("Helvetica")
+    .text(billReference, rightCol + 75, doc.y);
+
   doc.y = infoY;
   doc
     .font("Helvetica-Bold")
-    .text("Billing Period:", L, doc.y + 22);
+    .text("Billing Period:", L, doc.y + 34);
   doc
     .font("Helvetica")
     .text(
@@ -440,6 +450,9 @@ export async function generateBillPdf({ bill, billingResult, period, room, tenan
   if (corkageFees > 0)   chargeRows.push(["Corkage Fees",   formatPeso(corkageFees)]);
   if (penalty > 0)       chargeRows.push(["Penalty",        formatPeso(penalty)]);
   if (discount > 0)      chargeRows.push(["Discount",       `-${formatPeso(discount)}`]);
+  if (reservationCreditApplied > 0) {
+    chargeRows.push(["Reservation Credit Applied", `-${formatPeso(reservationCreditApplied)}`]);
+  }
 
   drawTable(doc, {
     headers: ["Charge",  "Amount"],
@@ -475,6 +488,7 @@ export async function generateBillPdf({ bill, billingResult, period, room, tenan
     "• Late payments incur a ₱50/day penalty after the due date.",
     "• Contact your branch administrator for accepted payment methods.",
     "• You may also pay via the Lilycrest tenant mobile app.",
+    "• If you pay by bank transfer or another offline method, keep proof of payment for branch verification.",
     "• Keep this document for your records.",
   ].forEach((line) => {
     doc.text(line, { indent: 10 });

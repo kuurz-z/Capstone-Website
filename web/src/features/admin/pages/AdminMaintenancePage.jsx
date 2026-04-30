@@ -1,74 +1,56 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
-  ClipboardList,
-  Clock3,
-  FileDown,
-  Filter,
-  Image as ImageIcon,
-  Loader2,
-  RefreshCcw,
-  Search,
-  UserRound,
-  Wrench,
-  XCircle,
+    AlertTriangle,
+    CheckCircle2,
+    ClipboardList,
+    Clock3,
+    FileDown,
+    Filter,
+    Image as ImageIcon,
+    Loader2,
+    RefreshCcw,
+    Search,
+    UserRound,
+    Wrench,
+    XCircle,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { fmtDate, fmtDateTime } from "../../../shared/utils/dateFormat";
 import { useSearchParams } from "react-router-dom";
+import {
+    useAdminMaintenanceRequests,
+    useBulkMaintenanceUpdate,
+    useMaintenanceRequest,
+    useUpdateMaintenanceRequest,
+} from "../../../shared/hooks/queries/useMaintenance";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
-  useAdminMaintenanceRequests,
-  useMaintenanceRequest,
-  useUpdateMaintenanceRequest,
-} from "../../../shared/hooks/queries/useMaintenance";
-import { showNotification } from "../../../shared/utils/notification";
-import {
-  ADMIN_MAINTENANCE_STATUS_OPTIONS,
-  MAINTENANCE_REQUEST_TYPES,
-  MAINTENANCE_URGENCY_LEVELS,
-  formatMaintenanceStatus,
-  getMaintenanceTypeMeta,
-  getMaintenanceUrgencyMeta,
-} from "../../../shared/utils/maintenanceConfig";
-import { exportToCSV } from "../../../shared/utils/exportUtils";
-import { BRANCH_OPTIONS, BRANCH_DISPLAY_NAMES } from "../../../shared/utils/constants";
-import {
-  normalizeBranchFilterValue,
-  syncBranchSearchParam,
+    normalizeBranchFilterValue,
+    syncBranchSearchParam,
 } from "../../../shared/utils/branchFilterQuery.mjs";
+import { BRANCH_DISPLAY_NAMES, BRANCH_OPTIONS } from "../../../shared/utils/constants";
+import { exportToCSV } from "../../../shared/utils/exportUtils";
 import {
-  DataTable,
-  DetailDrawer,
-  PageShell,
-  StatusBadge,
-  SummaryBar,
+    ADMIN_MAINTENANCE_STATUS_OPTIONS,
+    formatMaintenanceStatus,
+    getAllowedAdminMaintenanceStatuses,
+    getMaintenanceTypeMeta,
+    getMaintenanceUrgencyMeta,
+    isAdminTerminalMaintenanceStatus,
+    MAINTENANCE_REQUEST_TYPES,
+    MAINTENANCE_URGENCY_LEVELS,
+} from "../../../shared/utils/maintenanceConfig";
+import { showConfirmation, showNotification } from "../../../shared/utils/notification";
+import {
+    DataTable,
+    DetailDrawer,
+    PageShell,
+    StatusBadge,
+    SummaryBar,
 } from "../components/shared";
-import "../styles/design-tokens.css";
 import "../styles/admin-maintenance.css";
+import "../styles/design-tokens.css";
 
 const ITEMS_PER_PAGE = 10;
-
-const fmtDate = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown date";
-  return date.toLocaleDateString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
-
-const fmtDateTime = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown date";
-  return date.toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
 
 const formatSlaState = (slaState) => {
   if (!slaState) return "No SLA";
@@ -105,10 +87,38 @@ const SUMMARY_STATUSES = [
   { key: "pending", label: "Pending", icon: Clock3, color: "orange" },
   { key: "viewed", label: "Viewed", icon: Filter, color: "orange" },
   { key: "in_progress", label: "In Progress", icon: RefreshCcw, color: "blue" },
+  { key: "waiting_tenant", label: "Waiting for Tenant", icon: Clock3, color: "blue" },
   { key: "resolved", label: "Resolved", icon: CheckCircle2, color: "green" },
   { key: "completed", label: "Completed", icon: CheckCircle2, color: "green" },
   { key: "rejected", label: "Rejected", icon: XCircle, color: "red" },
   { key: "cancelled", label: "Cancelled", icon: AlertTriangle, color: "neutral" },
+  { key: "closed", label: "Closed", icon: CheckCircle2, color: "neutral" },
+];
+
+const QUICK_FILTERS = [
+  { key: "needs_action", label: "Needs Action" },
+  { key: "unassigned", label: "Unassigned" },
+  { key: "high_priority", label: "High Priority" },
+  { key: "delayed", label: "Delayed" },
+  { key: "waiting_tenant", label: "Waiting for Tenant" },
+];
+
+const ADMIN_RESPONSE_TEMPLATES = [
+  "We have received your request.",
+  "Assigned to maintenance staff.",
+  "Work is in progress.",
+  "Issue has been resolved.",
+  "Please provide more details.",
+];
+
+const QUICK_STATUS_ACTIONS = [
+  { status: "viewed", label: "Mark Viewed" },
+  { status: "in_progress", label: "Start Work" },
+  { status: "waiting_tenant", label: "Waiting for Tenant" },
+  { status: "resolved", label: "Resolve" },
+  { status: "completed", label: "Complete" },
+  { status: "rejected", label: "Reject" },
+  { status: "closed", label: "Close" },
 ];
 
 const createFilterPayload = ({
@@ -150,8 +160,14 @@ export default function AdminMaintenancePage() {
   );
   const [sortMode, setSortMode] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
+  const [quickFilter, setQuickFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [selectedRequestIds, setSelectedRequestIds] = useState(() => new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkAssignedTo, setBulkAssignedTo] = useState("");
+  const [bulkNotes, setBulkNotes] = useState("");
+  const [bulkFailures, setBulkFailures] = useState([]);
   const [draftStatus, setDraftStatus] = useState("viewed");
   const [draftNotes, setDraftNotes] = useState("");
   const [draftAssignedTo, setDraftAssignedTo] = useState("");
@@ -195,6 +211,8 @@ export default function AdminMaintenancePage() {
     isLoading,
     isError,
     error,
+    refetch,
+    refresh,
   } = useAdminMaintenanceRequests(listFilters);
   const { data: summaryData } = useAdminMaintenanceRequests(summaryFilters);
   const {
@@ -202,10 +220,72 @@ export default function AdminMaintenancePage() {
     isLoading: isDetailLoading,
   } = useMaintenanceRequest(selectedRequestId);
   const updateRequestMutation = useUpdateMaintenanceRequest();
+  const bulkUpdateMutation = useBulkMaintenanceUpdate();
+  const [quickActionStatus, setQuickActionStatus] = useState("");
 
   const requests = requestsData?.requests || [];
   const summaryRequests = summaryData?.requests || requests;
   const selectedRequest = requestDetailData?.request || null;
+  const selectedRequestIsTerminal = isAdminTerminalMaintenanceStatus(
+    selectedRequest?.status,
+  );
+  const allowedDraftStatuses = useMemo(() => {
+    if (!selectedRequest) return [];
+    const allowed = getAllowedAdminMaintenanceStatuses(selectedRequest.status);
+    return allowed.length ? allowed : [selectedRequest.status].filter(Boolean);
+  }, [selectedRequest]);
+  const normalizedDraft = useMemo(
+    () => ({
+      status: draftStatus,
+      notes: draftNotes.trim(),
+      assigned_to: draftAssignedTo.trim(),
+      work_log_note: draftWorkLogNote.trim(),
+    }),
+    [draftAssignedTo, draftNotes, draftStatus, draftWorkLogNote],
+  );
+  const updateValidationErrors = useMemo(() => {
+    if (!selectedRequest || selectedRequestIsTerminal) return {};
+
+    const errors = {};
+    const hasAdminResponse = normalizedDraft.notes.length > 0;
+    const hasWorkLogNote = normalizedDraft.work_log_note.length > 0;
+
+    if (["rejected", "waiting_tenant", "closed"].includes(normalizedDraft.status) && !hasAdminResponse) {
+      errors.notes = "Add an admin response before updating this status.";
+    }
+    if (
+      ["resolved", "completed"].includes(normalizedDraft.status) &&
+      !hasAdminResponse &&
+      !hasWorkLogNote
+    ) {
+      errors.resolution = "Add an admin response or work log note before resolving.";
+    }
+
+    return errors;
+  }, [normalizedDraft, selectedRequest, selectedRequestIsTerminal]);
+  const hasUpdateValidationErrors = Object.keys(updateValidationErrors).length > 0;
+  const hasAdminDraftChanges = useMemo(() => {
+    if (!selectedRequest || selectedRequestIsTerminal) return false;
+
+    return (
+      normalizedDraft.status !== selectedRequest.status ||
+      normalizedDraft.notes !== (selectedRequest.notes || "").trim() ||
+      normalizedDraft.assigned_to !== (selectedRequest.assigned_to || "").trim() ||
+      normalizedDraft.work_log_note.length > 0
+    );
+  }, [normalizedDraft, selectedRequest, selectedRequestIsTerminal]);
+
+  const hasActiveFilters = useMemo(() => (
+    statusFilter !== "all" ||
+    requestTypeFilter !== "all" ||
+    urgencyFilter !== "all" ||
+    dateFrom !== "" ||
+    dateTo !== "" ||
+    (isOwner && branchFilter !== "all") ||
+    sortMode !== "newest" ||
+    searchQuery.trim() !== "" ||
+    quickFilter !== "all"
+  ), [statusFilter, requestTypeFilter, urgencyFilter, dateFrom, dateTo, isOwner, branchFilter, sortMode, searchQuery, quickFilter]);
 
   const summaryItems = useMemo(() => {
     const counts = summaryRequests.reduce((acc, request) => {
@@ -245,9 +325,28 @@ export default function AdminMaintenancePage() {
 
   const filteredRequests = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return sortedRequests;
+    const quickFiltered = sortedRequests.filter((request) => {
+      if (quickFilter === "needs_action") {
+        return ["pending", "viewed", "in_progress", "waiting_tenant"].includes(request.status);
+      }
+      if (quickFilter === "unassigned") {
+        return !String(request.assigned_to || "").trim();
+      }
+      if (quickFilter === "high_priority") {
+        return request.urgency === "high";
+      }
+      if (quickFilter === "delayed") {
+        return request.slaState?.label === "delayed";
+      }
+      if (quickFilter === "waiting_tenant") {
+        return request.status === "waiting_tenant";
+      }
+      return true;
+    });
 
-    return sortedRequests.filter((request) => {
+    if (!query) return quickFiltered;
+
+    return quickFiltered.filter((request) => {
       const haystack = [
         request.request_id,
         request.description,
@@ -263,7 +362,7 @@ export default function AdminMaintenancePage() {
 
       return haystack.includes(query);
     });
-  }, [searchQuery, sortedRequests]);
+  }, [quickFilter, searchQuery, sortedRequests]);
 
   const activeFilterChips = useMemo(() => {
     const chips = [];
@@ -323,7 +422,6 @@ export default function AdminMaintenancePage() {
         label: `Search: ${searchQuery.trim()}`,
       });
     }
-
     return chips;
   }, [
     branchFilter,
@@ -344,10 +442,19 @@ export default function AdminMaintenancePage() {
     dateFrom,
     dateTo,
     requestTypeFilter,
+    quickFilter,
     sortMode,
     statusFilter,
     urgencyFilter,
   ]);
+
+  useEffect(() => {
+    setSelectedRequestIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(filteredRequests.map((request) => request.request_id));
+      return new Set([...prev].filter((id) => visibleIds.has(id)));
+    });
+  }, [filteredRequests]);
 
   useEffect(() => {
     const nextBranch = normalizeBranchFilterValue({
@@ -373,9 +480,8 @@ export default function AdminMaintenancePage() {
   useEffect(() => {
     if (!selectedRequest) return;
 
-    const initialStatus = ADMIN_MAINTENANCE_STATUS_OPTIONS.includes(selectedRequest.status)
-      ? selectedRequest.status
-      : "viewed";
+    const allowedStatuses = getAllowedAdminMaintenanceStatuses(selectedRequest.status);
+    const initialStatus = allowedStatuses[0] || selectedRequest.status || "viewed";
 
     setDraftStatus(initialStatus);
     setDraftNotes(selectedRequest.notes || "");
@@ -392,6 +498,8 @@ export default function AdminMaintenancePage() {
     setBranchFilter("all");
     setSortMode("newest");
     setSearchQuery("");
+    setQuickFilter("all");
+    setSelectedRequestIds(new Set());
   };
 
   const handleExport = () => {
@@ -437,15 +545,27 @@ export default function AdminMaintenancePage() {
   const handleSubmitUpdate = async (event) => {
     event.preventDefault();
     if (!selectedRequest) return;
+    if (isAdminTerminalMaintenanceStatus(selectedRequest.status)) {
+      showNotification("Terminal maintenance requests cannot be updated.", "error");
+      return;
+    }
+    if (!hasAdminDraftChanges) {
+      showNotification("No changes to save.", "info");
+      return;
+    }
+    if (hasUpdateValidationErrors) {
+      showNotification("Please complete the required admin notes.", "error");
+      return;
+    }
 
     try {
       await updateRequestMutation.mutateAsync({
         requestId: selectedRequest.request_id,
         payload: {
-          status: draftStatus,
-          notes: draftNotes,
-          assigned_to: draftAssignedTo,
-          work_log_note: draftWorkLogNote,
+          status: normalizedDraft.status,
+          notes: normalizedDraft.notes,
+          assigned_to: normalizedDraft.assigned_to,
+          work_log_note: normalizedDraft.work_log_note,
         },
       });
       showNotification("Maintenance request updated.", "success");
@@ -456,6 +576,117 @@ export default function AdminMaintenancePage() {
         "error",
       );
     }
+  };
+
+  const handleBulkUpdate = async (overrideStatus) => {
+    if (selectedRequestIds.size === 0) {
+      showNotification("Select at least one request.", "info");
+      return;
+    }
+
+    const targetStatus = overrideStatus || bulkStatus || undefined;
+    const assignedTo = bulkAssignedTo.trim() || undefined;
+    const notes = bulkNotes.trim() || undefined;
+
+    if (!targetStatus && !assignedTo && !notes) {
+      showNotification("Choose a status, assignee, or admin response.", "error");
+      return;
+    }
+
+    const count = selectedRequestIds.size;
+    const label = overrideStatus
+      ? `"${formatMaintenanceStatus(overrideStatus)}"`
+      : "this update";
+
+    const confirmed = await showConfirmation(
+      `Apply ${label} to ${count} request${count > 1 ? "s" : ""}?`,
+      "Apply Bulk Update",
+      "Cancel",
+    );
+    if (!confirmed) return;
+
+    const payload = {
+      requestIds: Array.from(selectedRequestIds),
+      ...(targetStatus && { status: targetStatus }),
+      ...(assignedTo && { assigned_to: assignedTo }),
+      ...(notes && { notes }),
+    };
+
+    try {
+      const result = await bulkUpdateMutation.mutateAsync(payload);
+      if (result?.failedCount > 0) {
+        showNotification(
+          `${result.updatedCount} updated, ${result.failedCount} failed — check details below.`,
+          "warning",
+        );
+        setBulkFailures(result.failed || []);
+      } else {
+        showNotification(
+          `${result?.updatedCount ?? count} request${count > 1 ? "s" : ""} updated.`,
+          "success",
+        );
+        setSelectedRequestIds(new Set());
+        setBulkStatus("");
+        setBulkAssignedTo("");
+        setBulkNotes("");
+        setBulkFailures([]);
+      }
+    } catch (bulkError) {
+      showNotification(
+        bulkError?.message || "Failed to apply bulk update.",
+        "error",
+      );
+    }
+  };
+
+  const handleQuickStatusAction = async (status) => {
+    if (!selectedRequest || selectedRequestIsTerminal) return;
+    if (!allowedDraftStatuses.includes(status)) return;
+
+    const nextDraft = {
+      ...normalizedDraft,
+      status,
+    };
+    const hasAdminResponse = nextDraft.notes.length > 0;
+    const hasWorkLogNote = nextDraft.work_log_note.length > 0;
+
+    if (["rejected", "waiting_tenant", "closed"].includes(status) && !hasAdminResponse) {
+      setDraftStatus(status);
+      showNotification("Add an admin response before updating this status.", "error");
+      return;
+    }
+    if (["resolved", "completed"].includes(status) && !hasAdminResponse && !hasWorkLogNote) {
+      setDraftStatus(status);
+      showNotification("Add an admin response or work log note before closing.", "error");
+      return;
+    }
+
+    setQuickActionStatus(status);
+    try {
+      await updateRequestMutation.mutateAsync({
+        requestId: selectedRequest.request_id,
+        payload: nextDraft,
+      });
+      showNotification("Maintenance request updated.", "success");
+      setDraftStatus(status);
+      setDraftWorkLogNote("");
+    } catch (submitError) {
+      showNotification(
+        submitError.message || "Failed to update maintenance request.",
+        "error",
+      );
+    } finally {
+      setQuickActionStatus("");
+    }
+  };
+
+  const applyResponseTemplate = (template) => {
+    setDraftNotes((current) => {
+      const trimmed = current.trim();
+      if (!trimmed) return template;
+      if (trimmed.includes(template)) return current;
+      return `${trimmed}\n\n${template}`;
+    });
   };
 
   const columns = useMemo(
@@ -608,12 +839,50 @@ export default function AdminMaintenancePage() {
         <PageShell.Actions>
           <section className="admin-maintenance__filters">
             <div className="admin-maintenance__filters-header">
-              <div>
+              <div className="admin-maintenance__filters-title-group">
                 <h2 className="admin-maintenance__filters-title">Find requests quickly</h2>
+                <span className="admin-maintenance__result-count">
+                  {filteredRequests.length} of {summaryRequests.length} requests
+                </span>
               </div>
-              <p className="admin-maintenance__result-count">
-                Showing {filteredRequests.length} of {summaryRequests.length} requests
-              </p>
+              <div className="admin-maintenance__filters-actions">
+                <button
+                  type="button"
+                  className="admin-maintenance__icon-btn"
+                  title="Refresh"
+                  aria-label="Refresh"
+                  onClick={() => refetch()}
+                  disabled={isLoading}
+                >
+                  <RefreshCcw size={14} />
+                </button>
+                <select
+                  className="admin-maintenance__sort-select"
+                  value={sortMode}
+                  onChange={(event) => setSortMode(event.target.value)}
+                  aria-label="Sort requests"
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="urgency">Urgency first</option>
+                </select>
+                <button
+                  type="button"
+                  className="admin-maintenance__header-btn"
+                  onClick={handleExport}
+                  disabled={filteredRequests.length === 0}
+                >
+                  <FileDown size={14} />
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  className="admin-maintenance__header-btn admin-maintenance__header-btn--ghost"
+                  onClick={handleResetFilters}
+                  disabled={!hasActiveFilters}
+                >
+                  Reset Filters
+                </button>
+              </div>
             </div>
 
             <div className="admin-maintenance__filters-grid">
@@ -674,23 +943,24 @@ export default function AdminMaintenancePage() {
               </select>
             </label>
 
-            <label className="admin-maintenance__field">
-              <span>Date From</span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(event) => setDateFrom(event.target.value)}
-              />
-            </label>
-
-            <label className="admin-maintenance__field">
-              <span>Date To</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(event) => setDateTo(event.target.value)}
-              />
-            </label>
+            <div className="admin-maintenance__field admin-maintenance__field--daterange">
+              <span>Date Range</span>
+              <div className="admin-maintenance__daterange-wrap">
+                <input
+                  type="date"
+                  aria-label="Date from"
+                  value={dateFrom}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                />
+                <span className="admin-maintenance__daterange-sep" aria-hidden>—</span>
+                <input
+                  type="date"
+                  aria-label="Date to"
+                  value={dateTo}
+                  onChange={(event) => setDateTo(event.target.value)}
+                />
+              </div>
+            </div>
 
             {isOwner ? (
               <label className="admin-maintenance__field">
@@ -709,53 +979,153 @@ export default function AdminMaintenancePage() {
               </label>
             ) : null}
 
-            <label className="admin-maintenance__field">
-              <span>Sort By</span>
-              <select
-                value={sortMode}
-                onChange={(event) => setSortMode(event.target.value)}
-              >
-                <option value="newest">Newest first</option>
-                <option value="urgency">Urgency high first</option>
-              </select>
-            </label>
-
-              <div className="admin-maintenance__field admin-maintenance__field--actions">
-                <button
-                  type="button"
-                  className="admin-maintenance__secondary-btn"
-                  onClick={handleExport}
-                  disabled={filteredRequests.length === 0}
-                >
-                  <FileDown size={14} />
-                  Export CSV
-                </button>
-                <button
-                  type="button"
-                  className="admin-maintenance__secondary-btn"
-                  onClick={handleResetFilters}
-                >
-                  Reset Filters
-                </button>
-              </div>
             </div>
 
             <div className="admin-maintenance__filters-footer">
-              {activeFilterChips.length ? (
+              <div className="admin-maintenance__quick-filters" aria-label="Quick filters">
+                <button
+                  type="button"
+                  className={quickFilter === "all" ? "is-active" : ""}
+                  onClick={() => setQuickFilter("all")}
+                >
+                  All
+                </button>
+                {QUICK_FILTERS.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    className={quickFilter === filter.key ? "is-active" : ""}
+                    onClick={() => setQuickFilter(filter.key)}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+              {activeFilterChips.length > 0 && (
                 <div className="admin-maintenance__active-filters" aria-live="polite">
+                  <span className="admin-maintenance__chips-label">Filtered by:</span>
                   {activeFilterChips.map((chip) => (
                     <span key={chip.key} className="admin-maintenance__chip">
                       {chip.label}
                     </span>
                   ))}
                 </div>
-              ) : (
-                <p className="admin-maintenance__active-filters-empty">
-                  No active filters. Showing all requests.
-                </p>
               )}
             </div>
           </section>
+
+          {selectedRequestIds.size > 0 && (
+            <section className="admin-maintenance__bulk">
+              <div className="admin-maintenance__bulk-header">
+                <span className="admin-maintenance__bulk-count">
+                  <strong>{selectedRequestIds.size}</strong> request{selectedRequestIds.size > 1 ? "s" : ""} selected
+                </span>
+                <button
+                  type="button"
+                  className="admin-maintenance__bulk-clear"
+                  onClick={() => { setSelectedRequestIds(new Set()); setBulkFailures([]); }}
+                >
+                  Deselect all
+                </button>
+              </div>
+
+              {/* Quick-action one-click status buttons */}
+              <div className="admin-maintenance__bulk-quick">
+                {[
+                  { status: "viewed", label: "Mark Viewed" },
+                  { status: "in_progress", label: "Start Work" },
+                  { status: "waiting_tenant", label: "Waiting" },
+                  { status: "resolved", label: "Resolve" },
+                  { status: "completed", label: "Complete" },
+                  { status: "rejected", label: "Reject" },
+                ].map((action) => (
+                  <button
+                    key={action.status}
+                    type="button"
+                    className={`admin-maintenance__bulk-quick-btn admin-maintenance__bulk-quick-btn--${action.status}`}
+                    onClick={() => handleBulkUpdate(action.status)}
+                    disabled={bulkUpdateMutation.isPending}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom status / assign / notes for non-quick updates */}
+              <div className="admin-maintenance__bulk-grid">
+                <label className="admin-maintenance__field">
+                  <span>Custom Status</span>
+                  <select
+                    value={bulkStatus}
+                    onChange={(event) => setBulkStatus(event.target.value)}
+                    disabled={bulkUpdateMutation.isPending}
+                  >
+                    <option value="">No change</option>
+                    {ADMIN_MAINTENANCE_STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {formatMaintenanceStatus(status)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="admin-maintenance__field">
+                  <span>Assign To</span>
+                  <input
+                    type="text"
+                    placeholder="Staff member or team"
+                    value={bulkAssignedTo}
+                    onChange={(event) => setBulkAssignedTo(event.target.value)}
+                    disabled={bulkUpdateMutation.isPending}
+                  />
+                </label>
+                <label className="admin-maintenance__field admin-maintenance__field--bulk-notes">
+                  <span>Admin Response</span>
+                  <textarea
+                    rows="2"
+                    placeholder="Optional note for all selected requests"
+                    value={bulkNotes}
+                    onChange={(event) => setBulkNotes(event.target.value)}
+                    disabled={bulkUpdateMutation.isPending}
+                  />
+                </label>
+              </div>
+              <div className="admin-maintenance__bulk-actions">
+                <button
+                  type="button"
+                  className="admin-maintenance__primary-btn"
+                  onClick={() => handleBulkUpdate()}
+                  disabled={bulkUpdateMutation.isPending || !bulkStatus}
+                  title={bulkStatus ? undefined : "Select a status to apply"}
+                >
+                  {bulkUpdateMutation.isPending
+                    ? "Applying…"
+                    : `Apply to ${selectedRequestIds.size} request${selectedRequestIds.size > 1 ? "s" : ""}`}
+                </button>
+              </div>
+
+              {/* Failure detail panel — shows which IDs failed and why */}
+              {bulkFailures.length > 0 && (
+                <div className="admin-maintenance__bulk-failures">
+                  <strong>{bulkFailures.length} request{bulkFailures.length > 1 ? "s" : ""} could not be updated:</strong>
+                  <ul>
+                    {bulkFailures.map((f) => (
+                      <li key={f.requestId}>
+                        <code>{f.requestId}</code>
+                        {f.error ? ` — ${f.error}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className="admin-maintenance__bulk-clear"
+                    onClick={() => setBulkFailures([])}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
         </PageShell.Actions>
 
         <PageShell.Content>
@@ -763,6 +1133,10 @@ export default function AdminMaintenancePage() {
             columns={columns}
             data={filteredRequests}
             loading={isLoading}
+            selectable
+            selectedIds={selectedRequestIds}
+            getRowId={(row) => row.request_id}
+            onSelectionChange={setSelectedRequestIds}
             onRowClick={(row) => setSelectedRequestId(row.request_id)}
             pagination={{
               page: currentPage,
@@ -808,7 +1182,14 @@ export default function AdminMaintenancePage() {
                   className="admin-maintenance__primary-btn"
                   disabled={
                     updateRequestMutation.isPending ||
-                    selectedRequest.status === "cancelled"
+                    selectedRequestIsTerminal ||
+                    !hasAdminDraftChanges ||
+                    hasUpdateValidationErrors
+                  }
+                  title={
+                    !hasAdminDraftChanges && !selectedRequestIsTerminal
+                      ? "No changes to save."
+                      : undefined
                   }
                 >
                   {updateRequestMutation.isPending ? "Saving..." : "Save Update"}
@@ -1014,12 +1395,51 @@ export default function AdminMaintenancePage() {
               </DetailDrawer.Section>
 
               <DetailDrawer.Section label="Admin Response">
-                {selectedRequest.status === "cancelled" ? (
+                {selectedRequestIsTerminal ? (
                   <div className="admin-maintenance__callout">
-                    Cancelled requests are tenant-only terminal records. Admin notes,
-                    assignments, and status changes are disabled.
+                    This request is in a terminal state. Admin notes,
+                    assignments, work logs, and status changes are disabled.
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    <div className="admin-maintenance__quick-actions">
+                      {QUICK_STATUS_ACTIONS.map((action) => {
+                        const allowed = allowedDraftStatuses.includes(action.status);
+                        const isLoadingAction =
+                          updateRequestMutation.isPending &&
+                          quickActionStatus === action.status;
+
+                        return (
+                          <button
+                            key={action.status}
+                            type="button"
+                            className="admin-maintenance__secondary-btn"
+                            disabled={
+                              !allowed ||
+                              updateRequestMutation.isPending ||
+                              selectedRequestIsTerminal
+                            }
+                            onClick={() => handleQuickStatusAction(action.status)}
+                          >
+                            {isLoadingAction ? "Working..." : action.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="admin-maintenance__templates">
+                      {ADMIN_RESPONSE_TEMPLATES.map((template) => (
+                        <button
+                          key={template}
+                          type="button"
+                          className="admin-maintenance__template-btn"
+                          onClick={() => applyResponseTemplate(template)}
+                        >
+                          {template}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
 
                 <form
                   id="maintenance-admin-form"
@@ -1027,13 +1447,13 @@ export default function AdminMaintenancePage() {
                   onSubmit={handleSubmitUpdate}
                 >
                   <label className="admin-maintenance__field">
-                    <span>Status</span>
+                    <span>Next Status</span>
                     <select
                       value={draftStatus}
                       onChange={(event) => setDraftStatus(event.target.value)}
-                      disabled={selectedRequest.status === "cancelled"}
+                      disabled={selectedRequestIsTerminal}
                     >
-                      {ADMIN_MAINTENANCE_STATUS_OPTIONS.map((status) => (
+                      {allowedDraftStatuses.map((status) => (
                         <option key={status} value={status}>
                           {formatMaintenanceStatus(status)}
                         </option>
@@ -1048,7 +1468,8 @@ export default function AdminMaintenancePage() {
                       placeholder="Staff member or team"
                       value={draftAssignedTo}
                       onChange={(event) => setDraftAssignedTo(event.target.value)}
-                      disabled={selectedRequest.status === "cancelled"}
+                      onBlur={() => setDraftAssignedTo((current) => current.trim())}
+                      disabled={selectedRequestIsTerminal}
                     />
                   </label>
 
@@ -1059,8 +1480,13 @@ export default function AdminMaintenancePage() {
                       placeholder="This note is shown to the tenant in the mobile app."
                       value={draftNotes}
                       onChange={(event) => setDraftNotes(event.target.value)}
-                      disabled={selectedRequest.status === "cancelled"}
+                      disabled={selectedRequestIsTerminal}
                     />
+                    {updateValidationErrors.notes ? (
+                      <p className="admin-maintenance__field-error">
+                        {updateValidationErrors.notes}
+                      </p>
+                    ) : null}
                   </label>
 
                   <label className="admin-maintenance__field">
@@ -1070,9 +1496,19 @@ export default function AdminMaintenancePage() {
                       placeholder="Optional internal progress note for the status timeline and work log."
                       value={draftWorkLogNote}
                       onChange={(event) => setDraftWorkLogNote(event.target.value)}
-                      disabled={selectedRequest.status === "cancelled"}
+                      disabled={selectedRequestIsTerminal}
                     />
+                    {updateValidationErrors.resolution ? (
+                      <p className="admin-maintenance__field-error">
+                        {updateValidationErrors.resolution}
+                      </p>
+                    ) : null}
                   </label>
+                  {!selectedRequestIsTerminal && !hasAdminDraftChanges ? (
+                    <p className="admin-maintenance__helper-text">
+                      No changes to save.
+                    </p>
+                  ) : null}
                 </form>
               </DetailDrawer.Section>
             </>

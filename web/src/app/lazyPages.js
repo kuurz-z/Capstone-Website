@@ -18,12 +18,18 @@ export const SignUp = React.lazy(
 export const VerifyEmail = React.lazy(
   () => import("../features/public/pages/VerifyEmail.jsx"),
 );
+export const AuthAction = React.lazy(
+  () => import("../features/tenant/pages/AuthAction.jsx"),
+);
 
 export const SignIn = React.lazy(
   () => import("../features/tenant/pages/SignIn.jsx"),
 );
 export const ForgotPassword = React.lazy(
   () => import("../features/tenant/pages/ForgotPassword.jsx"),
+);
+export const ResetPassword = React.lazy(
+  () => import("../features/tenant/pages/ResetPassword.jsx"),
 );
 export const CheckAvailabilityPage = React.lazy(
   () => import("../features/tenant/pages/CheckAvailabilityPage"),
@@ -74,6 +80,9 @@ export const AdminBillingPage = React.lazy(
 export const AdminAnnouncementsPage = React.lazy(
   () => import("../features/admin/pages/AdminAnnouncementsPage"),
 );
+export const AdminChatPage = React.lazy(
+  () => import("../features/admin/pages/AdminChatPage.jsx"),
+);
 export const InquiriesPage = React.lazy(
   () => import("../features/admin/pages/InquiriesPage"),
 );
@@ -97,4 +106,7 @@ export const RolePermissionsPage = React.lazy(
 );
 export const SystemSettingsPage = React.lazy(
   () => import("../features/super-admin/pages/SystemSettingsPage"),
+);
+export const AdminNotificationsPage = React.lazy(
+  () => import("../features/admin/pages/AdminNotificationsPage"),
 );

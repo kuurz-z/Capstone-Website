@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { fmtDateTime as formatDateTime } from "../../../shared/utils/dateFormat";
 import {
   AlertTriangle,
   Download,
@@ -50,17 +51,7 @@ const SECURITY_WINDOW_OPTIONS = [
   { value: "168", label: "Last 7 days" },
 ];
 
-const formatDateTime = (value) => {
-  if (!value) return "Not available";
-
-  return new Date(value).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+// formatDateTime imported from shared/utils/dateFormat
 
 const renderMetadata = (metadata) => {
   if (!metadata || Object.keys(metadata).length === 0) {

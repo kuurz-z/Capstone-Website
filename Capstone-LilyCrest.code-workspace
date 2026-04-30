@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "Capstone Website",
+      "path": "."
+    },
+    {
+      "name": "LilyCrest Mobile",
+      "path": "../LilyCrest/LilyCrest-Clean/frontend"
+    }
+  ],
+  "settings": {}
+}

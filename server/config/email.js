@@ -444,10 +444,17 @@ export const sendBillGeneratedEmail = async ({
   totalAmount,
   dueDate,
   branchName = "Lilycrest",
+  billType = "bill",
+  roomName = "",
 }) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     return { success: false, message: "Email service not configured" };
   }
+  const normalizedBillType = String(billType || "bill").trim().toLowerCase();
+  const billTypeLabel =
+    normalizedBillType === "rent"
+      ? "Monthly Rent"
+      : normalizedBillType.charAt(0).toUpperCase() + normalizedBillType.slice(1);
   const html = `
 <!DOCTYPE html>
 <html>
@@ -468,8 +475,15 @@ export const sendBillGeneratedEmail = async ({
           </div>
           <h2 style="color: #111827; margin: 0 0 20px; font-size: 22px; text-align: center;">New Bill Generated</h2>
           <p style="color: #555; font-size: 16px; line-height: 1.6;">Hello <strong>${tenantName}</strong>,</p>
-          <p style="color: #555; font-size: 16px; line-height: 1.6;">Your monthly bill has been generated:</p>
+          <p style="color: #555; font-size: 16px; line-height: 1.6;">Your ${billTypeLabel.toLowerCase()} bill has been generated:</p>
           <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+            <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Bill Type</p>
+            <p style="color: #111827; font-size: 18px; font-weight: 600; margin: 0 0 16px;">${billTypeLabel}</p>
+            ${
+              roomName
+                ? `<p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Room / Bed</p><p style="color: #111827; font-size: 16px; font-weight: 600; margin: 0 0 16px;">${roomName}</p>`
+                : ""
+            }
             <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Billing Month</p>
             <p style="color: #111827; font-size: 18px; font-weight: 600; margin: 0 0 16px;">${billingMonth}</p>
             <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Total Amount</p>
@@ -477,7 +491,7 @@ export const sendBillGeneratedEmail = async ({
             <p style="color: #6B7280; font-size: 12px; text-transform: uppercase; margin: 0 0 6px;">Due Date</p>
             <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 0;">${dueDate}</p>
           </div>
-          <p style="color: #555; font-size: 14px; line-height: 1.6;">Please log in to the dormitory portal to view the full breakdown and make your payment.</p>
+          <p style="color: #555; font-size: 14px; line-height: 1.6;">Please log in to the dormitory portal to view the full breakdown and make your payment. If you use bank transfer, proof of payment may be required by branch staff before the payment is considered settled.</p>
         </td></tr>
         <tr><td style="background-color: #f8f9fa; padding: 25px 40px; text-align: center; border-top: 1px solid #eee;">
           <p style="color: #888; font-size: 14px; margin: 0;">Best regards,<br><strong style="color: #0C375F;">Lilycrest Dormitory Team</strong></p>
@@ -491,9 +505,9 @@ export const sendBillGeneratedEmail = async ({
     const info = await transporter.sendMail({
       from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
       to,
-      subject: `Bill for ${billingMonth} — ₱${Number(totalAmount).toLocaleString()} | Lilycrest Dormitory`,
+      subject: `${billTypeLabel} bill for ${billingMonth} | Lilycrest Dormitory`,
       html,
-      text: `Hello ${tenantName}, your bill for ${billingMonth} is ₱${totalAmount}. Due: ${dueDate}. Log in to view details. — Lilycrest Dormitory`,
+      text: `Hello ${tenantName}, your ${billTypeLabel} bill for ${billingMonth} is PHP ${totalAmount}. Due: ${dueDate}. Log in to view details and payment instructions. If you use bank transfer, proof of payment may be required. - Lilycrest Dormitory`,
     });
     console.log(`✅ Bill generated email sent to ${to}`);
     return { success: true, messageId: info.messageId };
@@ -919,6 +933,50 @@ export const sendPaymentReceiptEmail = async ({
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`❌ Receipt email failed for ${to}:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    console.log("Login OTP email not sent - email not configured");
+    return { success: false, message: "Email service not configured" };
+  }
+
+  const displayName = name || "there";
+  const mailOptions = {
+    from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+    to,
+    subject: "Your Lilycrest login OTP",
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f6f7fb;font-family:Arial,sans-serif;color:#111827;">
+  <table role="presentation" style="width:100%;border-collapse:collapse;">
+    <tr><td style="padding:32px 16px;">
+      <table role="presentation" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #eef0f4;overflow:hidden;">
+        <tr><td style="background:#0A1628;padding:24px 28px;color:#ffffff;">
+          <div style="font-size:20px;font-weight:700;">Lilycrest Dormitory</div>
+          <div style="font-size:13px;color:#D4AF37;margin-top:4px;">Login verification</div>
+        </td></tr>
+        <tr><td style="padding:28px;">
+          <p style="margin:0 0 16px;font-size:15px;">Hi ${displayName},</p>
+          <p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#374151;">Use this 6-digit code to finish signing in to your Lilycrest account.</p>
+          <div style="letter-spacing:8px;font-size:32px;font-weight:700;color:#0A1628;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:18px;text-align:center;">${otp}</div>
+          <p style="margin:20px 0 0;font-size:13px;color:#6B7280;">This code expires in ${expiresInMinutes} minutes. If you did not request it, you can ignore this email.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`,
+    text: `Hi ${displayName}, your Lilycrest login OTP is ${otp}. It expires in ${expiresInMinutes} minutes.`,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Login OTP email sent to ${to} - ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`Login OTP email failed for ${to}:`, error.message);
     return { success: false, error: error.message };
   }
 };

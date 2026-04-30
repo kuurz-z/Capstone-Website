@@ -20,28 +20,35 @@ export const MAINTENANCE_URGENCY_LEVELS = Object.freeze([
   "high",
 ]);
 
+export const MIN_MAINTENANCE_DESCRIPTION_LENGTH = 10;
+
 export const MAINTENANCE_STATUSES = Object.freeze([
   "pending",
   "viewed",
   "in_progress",
+  "waiting_tenant",
   "resolved",
   "completed",
   "rejected",
   "cancelled",
+  "closed",
 ]);
 
 export const ADMIN_MAINTENANCE_STATUSES = Object.freeze([
   "viewed",
   "in_progress",
+  "waiting_tenant",
   "resolved",
   "completed",
   "rejected",
+  "closed",
 ]);
 
 export const OPEN_MAINTENANCE_STATUSES = Object.freeze([
   "pending",
   "viewed",
   "in_progress",
+  "waiting_tenant",
 ]);
 
 export const REOPENABLE_MAINTENANCE_STATUSES = Object.freeze([
@@ -64,10 +71,12 @@ export const MAINTENANCE_STATUS_LABELS = Object.freeze({
   pending: "Pending",
   viewed: "Viewed",
   in_progress: "In Progress",
+  waiting_tenant: "Waiting for Tenant",
   resolved: "Resolved",
   completed: "Completed",
   rejected: "Rejected",
   cancelled: "Cancelled",
+  closed: "Closed",
 });
 
 export const MAINTENANCE_RESOLUTION_ESTIMATES = Object.freeze({
@@ -91,13 +100,15 @@ export const LEGACY_MAINTENANCE_STATUS_MAP = Object.freeze({
 });
 
 const ADMIN_STATUS_TRANSITIONS = Object.freeze({
-  pending: ["viewed", "in_progress", "rejected"],
-  viewed: ["in_progress", "rejected"],
-  in_progress: ["resolved", "completed", "rejected"],
-  resolved: [],
-  completed: [],
-  rejected: [],
+  pending: ["viewed", "in_progress", "rejected", "waiting_tenant"],
+  viewed: ["in_progress", "rejected", "waiting_tenant"],
+  in_progress: ["waiting_tenant", "resolved", "completed", "rejected"],
+  waiting_tenant: ["in_progress", "resolved", "completed", "rejected"],
+  resolved: ["closed"],
+  completed: ["closed"],
+  rejected: ["closed"],
   cancelled: [],
+  closed: [],
 });
 
 export const normalizeMaintenanceType = (value) => {

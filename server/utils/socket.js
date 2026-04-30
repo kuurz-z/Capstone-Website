@@ -17,8 +17,19 @@
 
 import { Server } from "socket.io";
 import logger from "../middleware/logger.js";
+import { getAuth } from "../config/firebase.js";
+import { User } from "../models/index.js";
+import { ROOM_BRANCHES } from "../config/branches.js";
 
 let io = null;
+
+const ADMIN_ROLES = new Set(["branch_admin", "owner", "superadmin"]);
+
+const adminBranchRoom = (branch) => `admins:branch:${branch}`;
+const isOwnerLike = (role, claims = {}) =>
+  role === "owner" ||
+  role === "superadmin" ||
+  Boolean(claims.owner || claims.superadmin);
 
 /**
  * Initialize Socket.IO on an existing HTTP server
@@ -34,18 +45,54 @@ export function initSocket(httpServer, allowedOrigins = []) {
     transports: ["websocket", "polling"],
   });
 
-  io.on("connection", (socket) => {
-    const userId = socket.handshake.auth?.userId;
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token;
+      if (!token) {
+        return next(new Error("Authentication required"));
+      }
 
-    // Join a personal room so we can target specific users
+      const auth = getAuth();
+      if (!auth) {
+        return next(new Error("Authentication unavailable"));
+      }
+
+      const decoded = await auth.verifyIdToken(token);
+      const dbUser = await User.findOne({ firebaseUid: decoded.uid })
+        .select("_id role branch accountStatus isArchived")
+        .lean();
+
+      if (!dbUser || dbUser.isArchived || dbUser.accountStatus !== "active") {
+        return next(new Error("User not allowed"));
+      }
+
+      socket.data.user = dbUser;
+      socket.data.claims = decoded;
+      return next();
+    } catch (error) {
+      logger.warn({ err: error }, "Socket authentication failed");
+      return next(new Error("Authentication failed"));
+    }
+  });
+
+  io.on("connection", (socket) => {
+    const dbUser = socket.data.user;
+    const claims = socket.data.claims || {};
+    const userId = dbUser?._id ? String(dbUser._id) : "";
+    const role = String(dbUser?.role || "").toLowerCase();
+
     if (userId) {
       socket.join(`user:${userId}`);
     }
 
-    // Join role-based rooms
-    const role = socket.handshake.auth?.role;
-    if (role === "branch_admin" || role === "owner") {
+    if (ADMIN_ROLES.has(role) || claims.branch_admin || claims.owner || claims.superadmin) {
       socket.join("admins");
+
+      if (isOwnerLike(role, claims)) {
+        socket.join("admins:all");
+      } else if (ROOM_BRANCHES.includes(dbUser.branch)) {
+        socket.join(adminBranchRoom(dbUser.branch));
+      }
     }
 
     socket.on("disconnect", () => {
@@ -84,6 +131,16 @@ export function emitToUser(userId, event, payload) {
 export function emitToAdmins(event, payload) {
   if (io) {
     io.to("admins").emit(event, payload);
+  }
+}
+
+/**
+ * Emit a sensitive admin event to only the conversation branch plus owners.
+ * Branch admins receive only their assigned branch; owner-like users receive all.
+ */
+export function emitToChatAdmins(branch, event, payload) {
+  if (io && ROOM_BRANCHES.includes(branch)) {
+    io.to(adminBranchRoom(branch)).to("admins:all").emit(event, payload);
   }
 }
 

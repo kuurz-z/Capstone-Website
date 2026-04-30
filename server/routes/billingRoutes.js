@@ -15,6 +15,7 @@ import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import * as billingController from "../controllers/billingController.js";
 import { requirePermission } from "../middleware/permissions.js";
+import { apiLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
@@ -42,6 +43,13 @@ router.get("/history", billingController.getBillingHistory);
  * Get all bills for logged-in tenant with full breakdown
  */
 router.get("/my-bills", billingController.getMyBills);
+
+/**
+ * GET /api/billing/:billId/pdf
+ * Download a generated bill PDF. Tenants may download their own bills; admins
+ * may download bills in their branch.
+ */
+router.get("/:billId/pdf", billingController.downloadBillPdf);
 
 router.get("/:billId/utility-breakdown/:utilityType", billingController.getMyUtilityBreakdownByBillId);
 
@@ -115,7 +123,77 @@ router.get(
   billingController.getBillingReport,
 );
 
+/**
+ * GET /api/billing/rent
+ * List monthly rent bills (Admin only)
+ */
+router.get(
+  "/rent",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getRentBills,
+);
 
+/**
+ * GET /api/billing/rent/tenants
+ * List active tenants/contracts eligible for rent billing (Admin only)
+ */
+router.get(
+  "/rent/tenants",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getRentBillableTenants,
+);
+
+/**
+ * POST /api/billing/rent/preview
+ * Preview one monthly rent bill before final generation (Admin only)
+ */
+router.post(
+  "/rent/preview",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.getRentBillPreview,
+);
+
+/**
+ * POST /api/billing/rent/generate
+ * Generate one monthly rent bill for an active reservation (Admin only)
+ */
+router.post(
+  "/rent/generate",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.generateRentBill,
+);
+
+/**
+ * POST /api/billing/rent/generate-all
+ * Generate all ready monthly rent bills for a branch + billing month (Admin only)
+ */
+router.post(
+  "/rent/generate-all",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.generateAllRentBills,
+);
+
+/**
+ * POST /api/billing/rent/:billId/send
+ * Send or resend an existing monthly rent bill (Admin only)
+ */
+router.post(
+  "/rent/:billId/send",
+  verifyAdmin,
+  requirePermission("manageBilling"),
+  filterByBranch,
+  billingController.sendRentBill,
+);
 
 /**
  * POST /api/billing/:billId/verify
@@ -160,6 +238,7 @@ router.delete(
  */
 router.post(
   "/apply-penalties",
+  apiLimiter,
   verifyAdmin,
   requirePermission("manageBilling"),
   filterByBranch,
@@ -186,6 +265,7 @@ router.get(
  */
 router.post(
   "/publish/:roomId",
+  apiLimiter,
   verifyAdmin,
   requirePermission("manageBilling"),
   filterByBranch,
@@ -205,6 +285,10 @@ router.get("/export", verifyAdmin, requirePermission("manageBilling"), filterByB
     // Owners: branch may optionally come from the query param
     const branch = req.branchFilter || req.query.branch;
     const { status, month } = req.query;
+
+    if (month && !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: "Invalid month format — use YYYY-MM", code: "INVALID_MONTH" });
+    }
 
     const filter = { isArchived: { $ne: true } };
     if (branch) filter.branch = branch;

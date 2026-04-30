@@ -3,10 +3,14 @@ node_modules/
 server/node_modules/
 web/node_modules/
 
-# Environment variables
+# Environment variables (secrets — never commit)
 .env
 *.env
 .env.*
+server/config/google-vision-key.json
+# Allow deployment example templates
+!*.example
+!**/*.example
 
 # Python venv
 .venv/
@@ -14,3 +18,11 @@ web/node_modules/
 # Build outputs
 web/dist/
 web/build/
+web/build-admin/
+
+# Runtime logs
+.codex-run-logs/
+
+# Editor / tool state
+.claude/
+.vscode/

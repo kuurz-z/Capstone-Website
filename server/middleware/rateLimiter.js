@@ -107,6 +107,19 @@ export const apiLimiter = rateLimit({
 });
 
 /**
+ * Reservation creation limiter — prevent bed-lock exhaustion attacks.
+ * 5 new reservations per minute per IP.
+ */
+export const reservationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitResponse,
+  skip: skipInDev,
+});
+
+/**
  * Inquiry limiter — strict limits on public inquiry form submissions.
  * 5 submissions per 15-minute window per IP.
  */

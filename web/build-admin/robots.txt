@@ -1,9 +1,0 @@
-# Lilycrest Dormitory — robots.txt
-User-agent: *
-Allow: /
-Disallow: /admin/
-Disallow: /tenant/
-Disallow: /applicant/
-Disallow: /api/
-
-Sitemap: https://lilycrest.com/sitemap.xml

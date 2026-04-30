@@ -34,6 +34,12 @@ import {
   buildAuthSuccessFlash,
   buildAuthSuccessMessage,
 } from "../../../shared/utils/authToasts";
+import {
+  clearLoginInProgress,
+  clearSessionId,
+  setLoginInProgress,
+  setOtpPending,
+} from "../../../shared/api/authSession";
 import AuthBrandingPanel from "../../../shared/components/AuthBrandingPanel";
 import SocialAuthButtons from "../../../shared/components/SocialAuthButtons";
 import FloatingInput from "../../../shared/components/FloatingInput";
@@ -44,6 +50,11 @@ import "../../../shared/styles/notification.css";
 import hero3 from "../../../assets/images/hero3.jpg";
 
 const SIGNIN_IMAGE = hero3;
+const getWebBaseUrl = () => {
+  const configured = import.meta.env.VITE_WEB_BASE_URL;
+  if (configured && configured.trim()) return configured.trim().replace(/\/$/, "");
+  return window.location.origin;
+};
 
 function SignIn() {
   const navigate = useNavigate();
@@ -152,10 +163,12 @@ function SignIn() {
   // ── Form handling ──────────────────────────────────────────
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    const nextValue =
+      name === "email" ? value.replace(/\s/g, "").toLowerCase() : value;
+    setFormData({ ...formData, [name]: nextValue });
     setTouched({ ...touched, [name]: true });
     if (debounceTimer) clearTimeout(debounceTimer);
-    setDebounceTimer(setTimeout(() => validateField(name, value), 300));
+    setDebounceTimer(setTimeout(() => validateField(name, nextValue), 300));
   };
 
   const validateField = (fieldName, value) => {
@@ -246,11 +259,13 @@ function SignIn() {
     }
     setSubmitting(true);
     setGlobalLoading(true);
+    setLoginInProgress();
+    const loginEmail = formData.email.trim().toLowerCase();
 
     try {
       const userCredential = await signInWithEmailAndPassword(
         auth,
-        formData.email,
+        loginEmail,
         formData.password,
       );
       const firebaseUser = userCredential.user;
@@ -265,12 +280,13 @@ function SignIn() {
         sessionStorage.setItem("resendInProgress", "1");
         try {
           await sendEmailVerification(firebaseUser, {
-            url: `${window.location.origin}/verify-email`,
+            url: `${getWebBaseUrl()}/auth-action`,
+            handleCodeInApp: true,
           });
         } catch (e) {
           console.warn("Could not auto-send verification email:", e.message);
         }
-        setUnverifiedEmail(formData.email);
+        setUnverifiedEmail(loginEmail);
         await auth.signOut();
         sessionStorage.removeItem("resendInProgress");
         showNotification(
@@ -278,42 +294,57 @@ function SignIn() {
           "warning",
           6000,
         );
+        clearLoginInProgress();
         setGlobalLoading(false);
         return;
       }
 
       // Save or clear remembered email
       if (rememberMe) {
-        localStorage.setItem("lilycrest_remember_email", formData.email);
+        localStorage.setItem("lilycrest_remember_email", loginEmail);
       } else {
         localStorage.removeItem("lilycrest_remember_email");
       }
 
       try {
+        clearSessionId();
         const loginResponse = await login();
+        if (loginResponse?.requiresOtp) {
+          setOtpPending({
+            email: firebaseUser.email || loginEmail,
+            name: firebaseUser.displayName || "",
+          });
+          clearLoginInProgress();
+          navigate("/verify-email?mode=otp", {
+            replace: true,
+            state: { email: firebaseUser.email || loginEmail },
+          });
+          return;
+        }
+        clearLoginInProgress();
         navigateAfterAuth(loginResponse.user, firebaseUser.displayName || "there");
       } catch (backendError) {
+        clearLoginInProgress();
         await auth.signOut();
         const isNotRegistered =
           backendError.response?.status === 404 ||
           /not found|not registered|register first/i.test(backendError.message);
+        const code = backendError.response?.data?.code;
         if (isNotRegistered)
           showNotification(
-            "User is not registered. Please sign up first.",
+            "Account profile not found. Please contact support.",
             "warning",
           );
-        else if (backendError.response?.status === 403)
-          showNotification(
-            "Your account is inactive. Please contact support.",
-            "error",
-          );
-        else
-          showNotification(
-            "Login failed. Please try again or contact support.",
-            "error",
-          );
+        else if (code === "ACCOUNT_INACTIVE")
+          showNotification("Account is inactive. Please contact support.", "error");
+        else if (code === "EMAIL_NOT_VERIFIED")
+          showNotification("Please verify your email before logging in.", "warning");
+        else if (code === "OTP_EMAIL_SEND_FAILED")
+          showNotification("Unable to send OTP. Please contact support.", "error");
+        else showNotification(backendError.message || "Login failed. Please try again.", "error");
       }
     } catch (error) {
+      clearLoginInProgress();
       recordFailedAttempt();
       showNotification(getFirebaseErrorMessage(error, "login"), "error");
     } finally {
@@ -344,7 +375,19 @@ function SignIn() {
       }
 
       try {
+        clearSessionId();
         const loginResponse = await login();
+        if (loginResponse?.requiresOtp) {
+          setOtpPending({
+            email: firebaseUser.email || "",
+            name: firebaseUser.displayName || "",
+          });
+          navigate("/verify-email?mode=otp", {
+            replace: true,
+            state: { email: firebaseUser.email || "" },
+          });
+          return;
+        }
         handlePostAuthFlow(loginResponse, firebaseUser.displayName || "there");
       } catch (loginError) {
         // Delete the auto-created Firebase account to keep Firebase ↔ MongoDB in sync
@@ -526,7 +569,8 @@ function SignIn() {
                       formData.password,
                     );
                     await sendEmailVerification(cred.user, {
-                      url: `${window.location.origin}/verify-email`,
+                      url: `${getWebBaseUrl()}/auth-action`,
+                      handleCodeInApp: true,
                     });
                     setResendCooldownEnd(Date.now() + 60_000);
                     showNotification(
@@ -637,7 +681,7 @@ function SignIn() {
               ) : submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 auth-spinner" />
-                  Signing in...
+                  Checking account...
                 </>
               ) : (
                 "Sign in"

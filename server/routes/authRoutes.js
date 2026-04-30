@@ -15,7 +15,7 @@
 import express from "express";
 import { getAuth } from "../config/firebase.js";
 import { verifyToken, verifyOwner } from "../middleware/auth.js";
-import { publicLimiter } from "../middleware/rateLimiter.js";
+import { publicLimiter, authLimiter } from "../middleware/rateLimiter.js";
 import auditLogger from "../utils/auditLogger.js";
 import {
   validateRegisterInput,
@@ -27,6 +27,8 @@ import { setRoleSchema, updateBranchSchema } from "../validation/schemas.js";
 import {
   register,
   login,
+  verifyLoginOtp,
+  resendLoginOtp,
   logout,
   getProfile,
   updateProfile,
@@ -62,6 +64,7 @@ const router = express.Router();
  */
 router.post(
   "/register",
+  authLimiter,
   verifyToken,
   createValidationMiddleware(validateRegisterInput),
   register,
@@ -81,7 +84,11 @@ router.post(
  * @requires Firebase token in Authorization header
  * @returns { user, message }
  */
-router.post("/login", verifyToken, login);
+router.post("/login", authLimiter, verifyToken, login);
+
+router.post("/verify-otp", authLimiter, verifyToken, verifyLoginOtp);
+
+router.post("/resend-otp", authLimiter, verifyToken, resendLoginOtp);
 
 /**
  * POST /api/auth/logout

@@ -36,6 +36,7 @@ export { utilityApi } from "./utilityApi.js";
 export { settingsApi } from "./settingsApi.js";
 export { financialApi } from "./financialApi.js";
 export { analyticsApi } from "./analyticsApi.js";
+export { chatApi } from "./chatApi.js";
 
 // =============================================================================
 // DEFAULT EXPORT (backward compatibility)
@@ -55,6 +56,7 @@ import { utilityApi } from "./utilityApi.js";
 import { settingsApi } from "./settingsApi.js";
 import { financialApi } from "./financialApi.js";
 import { analyticsApi } from "./analyticsApi.js";
+import { chatApi } from "./chatApi.js";
 import { useApiClient } from "./httpClient.js";
 
 const apiClient = {
@@ -72,6 +74,7 @@ const apiClient = {
   settingsApi,
   financialApi,
   analyticsApi,
+  chatApi,
   useApiClient,
 };
 

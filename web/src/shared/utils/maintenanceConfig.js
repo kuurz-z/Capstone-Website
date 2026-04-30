@@ -1,12 +1,12 @@
 import {
-  BedDouble,
-  Bug,
-  Droplets,
-  MoreHorizontal,
-  Snowflake,
-  Sparkles,
-  Wrench,
-  Zap,
+    BedDouble,
+    Bug,
+    Droplets,
+    MoreHorizontal,
+    Snowflake,
+    Sparkles,
+    Wrench,
+    Zap,
 } from "lucide-react";
 
 export const MAINTENANCE_REQUEST_TYPE_META = Object.freeze({
@@ -49,6 +49,35 @@ export const MAINTENANCE_URGENCY_LEVELS = Object.freeze(
   Object.keys(MAINTENANCE_URGENCY_META),
 );
 
+export const MIN_MAINTENANCE_DESCRIPTION_LENGTH = 10;
+
+export const ACTIVE_MAINTENANCE_STATUSES = Object.freeze([
+  "pending",
+  "viewed",
+  "in_progress",
+  "waiting_tenant",
+]);
+
+export const RESOLVED_MAINTENANCE_STATUSES = Object.freeze([
+  "resolved",
+  "completed",
+  "rejected",
+  "closed",
+]);
+
+export const REOPENABLE_MAINTENANCE_STATUSES = Object.freeze([
+  "resolved",
+  "completed",
+]);
+
+export const TERMINAL_ADMIN_MAINTENANCE_STATUSES = Object.freeze([
+  "resolved",
+  "completed",
+  "rejected",
+  "cancelled",
+  "closed",
+]);
+
 export const MAINTENANCE_STATUS_META = Object.freeze({
   pending: {
     label: "Pending",
@@ -66,6 +95,12 @@ export const MAINTENANCE_STATUS_META = Object.freeze({
     label: "In Progress",
     bg: "#DBEAFE",
     color: "#3B82F6",
+    variant: "info",
+  },
+  waiting_tenant: {
+    label: "Waiting for Tenant",
+    bg: "#E0F2FE",
+    color: "#0284C7",
     variant: "info",
   },
   resolved: {
@@ -92,15 +127,35 @@ export const MAINTENANCE_STATUS_META = Object.freeze({
     color: "#9CA3AF",
     variant: "neutral",
   },
+  closed: {
+    label: "Closed",
+    bg: "#E2E8F0",
+    color: "#475569",
+    variant: "neutral",
+  },
 });
 
 export const ADMIN_MAINTENANCE_STATUS_OPTIONS = Object.freeze([
   "viewed",
   "in_progress",
+  "waiting_tenant",
   "resolved",
   "completed",
   "rejected",
+  "closed",
 ]);
+
+export const ADMIN_MAINTENANCE_STATUS_TRANSITIONS = Object.freeze({
+  pending: ["viewed", "in_progress", "rejected", "waiting_tenant"],
+  viewed: ["in_progress", "rejected", "waiting_tenant"],
+  in_progress: ["waiting_tenant", "resolved", "completed", "rejected"],
+  waiting_tenant: ["in_progress", "resolved", "completed", "rejected"],
+  resolved: ["closed"],
+  completed: ["closed"],
+  rejected: ["closed"],
+  cancelled: [],
+  closed: [],
+});
 
 export const getMaintenanceTypeMeta = (requestType) =>
   MAINTENANCE_REQUEST_TYPE_META[requestType] ||
@@ -116,6 +171,21 @@ export const getMaintenanceStatusMeta = (status) =>
     color: "#9CA3AF",
     variant: "neutral",
   };
+
+export const getAllowedAdminMaintenanceStatuses = (currentStatus) => {
+  const current = String(currentStatus || "").toLowerCase();
+  const nextStatuses = ADMIN_MAINTENANCE_STATUS_TRANSITIONS[current] || [];
+
+  return [
+    ...(ADMIN_MAINTENANCE_STATUS_OPTIONS.includes(current) ? [current] : []),
+    ...nextStatuses,
+  ];
+};
+
+export const isAdminTerminalMaintenanceStatus = (status) =>
+  TERMINAL_ADMIN_MAINTENANCE_STATUSES.includes(
+    String(status || "").toLowerCase(),
+  );
 
 export const formatMaintenanceType = (requestType) =>
   getMaintenanceTypeMeta(requestType).label;

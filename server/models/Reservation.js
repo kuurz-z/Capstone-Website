@@ -30,7 +30,9 @@ import mongoose from "mongoose";
 import {
   CANONICAL_RESERVATION_STATUSES,
   normalizeReservationStatus,
+  canTransitionReservationStatus,
 } from "../utils/lifecycleNaming.js";
+import { PAYMENT_METHODS } from "../config/paymentMethods.js";
 
 const CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const RESERVATION_CODE_PREFIX = "RES-";
@@ -122,6 +124,11 @@ const reservationSchema = new mongoose.Schema(
       default: null,
     },
     isOutOfTown: Boolean,
+    // Admin must approve the out-of-town claim before it waives the visit requirement
+    isOutOfTownApproved: {
+      type: Boolean,
+      default: false,
+    },
     currentLocation: String,
     scheduleApproved: {
       type: Boolean,
@@ -206,6 +213,63 @@ const reservationSchema = new mongoose.Schema(
     validIDFrontUrl: String,
     validIDBackUrl: String,
     validIDType: String,
+    idType: {
+      type: String,
+      enum: [
+        "national_id",
+        "drivers_license",
+        "passport",
+        "sss_id",
+        "umid",
+        "school_id",
+        "other",
+        null,
+      ],
+      default: null,
+    },
+    idValidationStatus: {
+      type: String,
+      enum: ["not_validated", "passed", "warning", "failed", "manual_review"],
+      default: "not_validated",
+    },
+    idExtractedText: {
+      type: String,
+      default: "",
+    },
+    idExtractedName: {
+      type: String,
+      default: "",
+    },
+    idExtractedNumber: {
+      type: String,
+      default: "",
+    },
+    idNameMatchScore: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0,
+    },
+    idMismatchFlag: {
+      type: Boolean,
+      default: false,
+    },
+    idValidationNotes: {
+      type: [String],
+      default: [],
+    },
+    idValidatedAt: {
+      type: Date,
+      default: null,
+    },
+    idValidationProvider: {
+      type: String,
+      default: null,
+    },
+    idValidationDocumentUrl: {
+      type: String,
+      default: null,
+    },
     nbiClearanceUrl: String,
     nbiReason: String,
     companyIDUrl: String,
@@ -260,7 +324,7 @@ const reservationSchema = new mongoose.Schema(
     finalMoveInDate: Date,
     paymentMethod: {
       type: String,
-      enum: ["bank", "gcash", "card", "check", "cash", "paymongo", "paymaya", "grab_pay", "maya", "online"],
+      enum: PAYMENT_METHODS,
       default: "bank",
     },
     proofOfPaymentUrl: String,
@@ -385,6 +449,37 @@ const reservationSchema = new mongoose.Schema(
       default: [],
     },
 
+    // --- Applicant Cancellation ---
+    // Set when a tenant cancels their own reservation pre-move-in.
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    // 'applicant' | 'admin' | 'system'
+    cancellationSource: {
+      type: String,
+      enum: ["applicant", "admin", "system"],
+      default: null,
+    },
+    cancellationReason: {
+      type: String,
+      default: null,
+    },
+    // Fee policy: once an applicant cancels, the reservation fee is forfeited.
+    reservationFeeRefundable: {
+      type: Boolean,
+      default: true,
+    },
+    reservationFeeForfeited: {
+      type: Boolean,
+      default: false,
+    },
+
     // --- Soft Delete ---
     isArchived: {
       type: Boolean,
@@ -438,6 +533,45 @@ reservationSchema.pre("save", async function (next) {
     }
   }
 
+  next();
+});
+
+// Capture the status as it exists in the DB so the pre-save hook can
+// compare "from → to" transitions.
+reservationSchema.post("init", function () {
+  this._original_status = this.status;
+});
+
+// Prevent unbounded array growth that would bloat documents and slow reads.
+const ARRAY_CAPS = {
+  visitHistory: 30,
+  leaseExtensions: 50,
+  customCharges: 100,
+};
+
+reservationSchema.pre("save", function (next) {
+  for (const [field, cap] of Object.entries(ARRAY_CAPS)) {
+    if (Array.isArray(this[field]) && this[field].length > cap) {
+      // Keep the most recent entries
+      this[field] = this[field].slice(-cap);
+    }
+  }
+  next();
+});
+
+// Enforce valid status transitions at the schema level so no code path —
+// direct saves, migrations, or admin tools — can produce impossible states.
+// new documents (isNew) and same-status saves are always allowed.
+reservationSchema.pre("save", function (next) {
+  if (!this.isNew && this.isModified("status")) {
+    const from = this._original_status;
+    const to = this.status;
+    if (from && from !== to && !canTransitionReservationStatus(from, to)) {
+      return next(
+        new Error(`Invalid reservation status transition: "${from}" → "${to}"`),
+      );
+    }
+  }
   next();
 });
 

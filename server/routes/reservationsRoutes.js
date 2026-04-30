@@ -22,6 +22,7 @@ import {
   verifyAdmin,
   verifyApplicant,
 } from "../middleware/auth.js";
+import { reservationLimiter } from "../middleware/rateLimiter.js";
 import { filterByBranch } from "../middleware/branchAccess.js";
 import {
   requireAnyPermission,
@@ -37,6 +38,8 @@ import {
   createReservation,
   updateReservation,
   updateReservationByUser,
+  cancelReservationByUser,
+  validateReservationIdByUser,
   deleteReservation,
   extendReservation,
   releaseSlot,
@@ -133,7 +136,7 @@ router.get("/:reservationId", verifyToken, getReservationById);
  * @body {Object} Reservation data (roomId, moveInDate, moveOutDate, legacy aliases, etc.)
  * @returns {Object} Created reservation with success message
  */
-router.post("/", verifyToken, verifyApplicant, createReservation);
+router.post("/", reservationLimiter, verifyToken, verifyApplicant, createReservation);
 
 /**
  * PUT /api/reservations/:reservationId
@@ -171,6 +174,37 @@ router.put(
   verifyToken,
   verifyApplicant,
   updateReservationByUser,
+);
+
+/**
+ * POST /api/reservations/:reservationId/id-validation
+ *
+ * Applicant-owned ID OCR validation. AI is assistive only; failed IDs block
+ * applicant submission, while warnings/manual review remain visible to admin.
+ */
+router.post(
+  "/:reservationId/id-validation",
+  verifyToken,
+  verifyApplicant,
+  validateReservationIdByUser,
+);
+
+/**
+ * PATCH /api/reservations/:reservationId/cancel
+ *
+ * Applicant self-cancellation — proper endpoint replacing the unsafe
+ * cancelReservation=true flag on updateReservationByUser.
+ *
+ * - Verifies ownership.
+ * - Only allows cancellation from pre-move-in statuses.
+ * - Marks fee as forfeited, syncs occupancy + user lifecycle.
+ * - Fires cancellation notification.
+ */
+router.patch(
+  "/:reservationId/cancel",
+  verifyToken,
+  verifyApplicant,
+  cancelReservationByUser,
 );
 
 /**

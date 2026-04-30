@@ -16,6 +16,8 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
+import { ROOM_BRANCHES } from "../config/branches.js";
+import { PAYMENT_METHODS } from "../config/paymentMethods.js";
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -50,18 +52,7 @@ const paymentSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: [
-        "bank",
-        "gcash",
-        "card",
-        "check",
-        "cash",
-        "paymongo",
-        "paymaya",
-        "grab_pay",
-        "maya",
-        "online",
-      ],
+      enum: PAYMENT_METHODS,
       required: true,
     },
     source: {
@@ -117,7 +108,7 @@ const paymentSchema = new mongoose.Schema(
     // --- Branch ---
     branch: {
       type: String,
-      enum: ["gil-puyat", "guadalupe"],
+      enum: ROOM_BRANCHES,
       required: true,
       index: true,
     },

@@ -106,7 +106,8 @@ export const getMoveInBlockers = (reservation) => {
     );
   }
 
-  const visitWaived = reservation.isOutOfTown === true;
+  const visitWaived =
+    reservation.isOutOfTown === true && reservation.isOutOfTownApproved === true;
   if (!reservation.visitApproved && !visitWaived) {
     blockers.push(
       "Site visit must be completed and approved by admin before move-in."
@@ -429,6 +430,7 @@ export const USER_UPDATE_FLAT_FIELDS = [
   "validIDFrontUrl",
   "validIDBackUrl",
   "validIDType",
+  "idType",
   "nbiClearanceUrl",
   "nbiReason",
   "companyIDUrl",
@@ -481,15 +483,40 @@ export const USER_UPDATE_RENAMES = {
 };
 
 /**
+ * Normalize a Philippine mobile number to the local 09XXXXXXXXX format.
+ * Accepts +639XXXXXXXXX and 09XXXXXXXXX.
+ * Returns null if the value is not a recognizable PH mobile number.
+ */
+export const normalizePHPhone = (raw) => {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, "");
+
+  // E.164: +639XXXXXXXXX → strip country code → 09XXXXXXXXX
+  if (digits.startsWith("639") && digits.length === 12) {
+    return "0" + digits.slice(2); // 639... → 09...
+  }
+  // Local format: 09XXXXXXXXX (11 digits starting with 09)
+  if (digits.startsWith("09") && digits.length === 11) {
+    return digits;
+  }
+  // Fallback: return raw to let Mongoose validation surface the problem
+  return raw;
+};
+
+/**
  * Build the $set update object from req.body using the config arrays above.
  * Replaces ~50 manual setField() calls.
+ * Phone fields are normalized to local 09 format on the way in.
  */
 export const buildUserUpdatePayload = (body) => {
   const updates = {};
 
   // Flat fields
   for (const key of USER_UPDATE_FLAT_FIELDS) {
-    if (body[key] !== undefined) updates[key] = body[key];
+    if (body[key] !== undefined) {
+      // Normalize phone numbers stored in flat fields.
+      updates[key] = key === "mobileNumber" ? normalizePHPhone(body[key]) ?? body[key] : body[key];
+    }
   }
 
   // Renamed fields
@@ -497,9 +524,12 @@ export const buildUserUpdatePayload = (body) => {
     if (body[bodyKey] !== undefined) updates[schemaKey] = body[bodyKey];
   }
 
-  // Nested fields
+  // Nested fields — normalize emergency contact phone
   for (const [bodyKey, path] of Object.entries(USER_UPDATE_NESTED_FIELDS)) {
-    if (body[bodyKey] !== undefined) updates[path] = body[bodyKey];
+    if (body[bodyKey] !== undefined) {
+      const isPhone = bodyKey === "emergencyContactNumber" || bodyKey === "visitorPhone";
+      updates[path] = isPhone ? normalizePHPhone(body[bodyKey]) ?? body[bodyKey] : body[bodyKey];
+    }
   }
 
   return updates;

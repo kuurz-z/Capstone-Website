@@ -27,6 +27,10 @@ export const BUSINESS = {
    *  Electricity Billing UI. Override via DEFAULT_ELECTRICITY_RATE env var. */
   DEFAULT_ELECTRICITY_RATE_PER_KWH: Number(process.env.DEFAULT_ELECTRICITY_RATE) || 16,
 
+  /** Maximum penalty as a percentage of the original rent amount (e.g. 30 = 30%).
+   *  Prevents unlimited compounding that creates legally unrecoverable debt. */
+  MAX_PENALTY_CAP_PERCENT: Number(process.env.MAX_PENALTY_CAP_PERCENT) || 30,
+
   /** Grace period in days before a no-show reserved reservation is auto-cancelled. */
   NOSHOW_GRACE_DAYS: 7,
 

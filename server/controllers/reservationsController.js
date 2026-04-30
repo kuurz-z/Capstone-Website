@@ -73,6 +73,10 @@ import {
   transferStayWorkflow,
 } from "../utils/tenantActionService.js";
 import { ensureCurrentCycleRentBill } from "../utils/rentGenerator.js";
+import {
+  ID_TYPES,
+  validateReservationIdDocument as runIdValidation,
+} from "../services/idValidationService.js";
 
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
@@ -98,6 +102,20 @@ const ADMIN_LIST_FIELDS = [
   "isOutOfTown",
   "currentLocation",
   "visitHistory",
+  "cancelledAt",
+  "cancelledBy",
+  "cancellationSource",
+  "cancellationReason",
+  "reservationFeeRefundable",
+  "reservationFeeForfeited",
+  "idType",
+  "validIDType",
+  "idValidationStatus",
+  "idMismatchFlag",
+  "idNameMatchScore",
+  "idValidatedAt",
+  "idValidationProvider",
+  "idValidationNotes",
 ].join(" ");
 const POPULATE_USER = ["userId", "firstName lastName email phone"];
 const POPULATE_ROOM = ["roomId", "name branch type price capacity beds floor"];
@@ -407,8 +425,8 @@ export const getReservations = async (req, res, next) => {
         .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
 
     let query;
-    if (dbUser.role === "owner") {
-      // Owner: see all branches
+    if (dbUser.role === "owner" || dbUser.role === "superadmin") {
+      // Owner/superadmin: see all branches
       query = { isArchived: { $ne: true } };
     } else if (dbUser.role === "branch_admin") {
       const roomIds = (
@@ -730,6 +748,7 @@ export const getReservationById = async (req, res, next) => {
     if (
       dbUser.role !== "branch_admin" &&
       dbUser.role !== "owner" &&
+      dbUser.role !== "superadmin" &&
       String(reservation.userId?._id) !== String(dbUser._id)
     ) {
       return res.status(403).json({
@@ -887,6 +906,7 @@ export const createReservation = async (req, res, next) => {
       validIDFrontUrl: b.validIDFrontUrl || null,
       validIDBackUrl: b.validIDBackUrl || null,
       validIDType: b.validIDType || null,
+      idType: b.idType || b.validIDType || null,
       nbiClearanceUrl: b.nbiClearanceUrl || null,
       nbiReason: b.nbiReason || null,
       companyIDUrl: b.companyIDUrl || null,
@@ -1434,6 +1454,245 @@ export const updateReservation = async (req, res, next) => {
   }
 };
 
+/* ─── CANCEL reservation (applicant self-cancel) ───── */
+// Statuses the applicant is allowed to cancel from.
+const APPLICANT_CANCELLABLE_STATUSES = new Set([
+  "pending",
+  "visit_pending",
+  "visit_approved",
+  "payment_pending",
+  "reserved",
+]);
+
+const ID_VALIDATION_ACCEPTED_STATUSES = new Set([
+  "passed",
+  "warning",
+  "manual_review",
+]);
+
+const buildIdValidationUpdate = (result, documentUrl) => ({
+  idType: result.idType || null,
+  validIDType: result.idType || null,
+  idValidationStatus: result.status,
+  idExtractedText: result.extractedText || "",
+  idExtractedName: result.extractedName || "",
+  idExtractedNumber: result.extractedIdNumber || "",
+  idNameMatchScore: result.matchScore || 0,
+  idMismatchFlag: result.status === "warning" && (result.matchScore || 0) < 0.67,
+  idValidationNotes: Array.isArray(result.validationNotes)
+    ? result.validationNotes
+    : result.validationNotes
+      ? [String(result.validationNotes)]
+      : [],
+  idValidatedAt: new Date(),
+  idValidationProvider: result.provider || "google_vision",
+  idValidationDocumentUrl: documentUrl || null,
+});
+
+export const cancelReservationByUser = async (req, res, next) => {
+  try {
+    const { reservationId } = req.params;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
+
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser)
+      return res.status(404).json({ error: "User not found.", code: "USER_NOT_FOUND" });
+
+    const reservation = await Reservation.findById(reservationId);
+    if (!reservation)
+      return res.status(404).json({ error: "Reservation not found.", code: "RESERVATION_NOT_FOUND" });
+
+    // Ownership check — applicant can only cancel their own reservation.
+    if (String(reservation.userId) !== String(dbUser._id))
+      return res.status(403).json({
+        error: "You can only cancel your own reservation.",
+        code: "RESERVATION_ACCESS_DENIED",
+      });
+
+    // Idempotent: already cancelled → return current state without error.
+    if (normalizeReservationStatus(reservation.status) === "cancelled") {
+      return res.status(409).json({
+        error: "This reservation is already cancelled.",
+        code: "ALREADY_CANCELLED",
+      });
+    }
+
+    // Block if status is not cancellable by applicant.
+    if (!APPLICANT_CANCELLABLE_STATUSES.has(normalizeReservationStatus(reservation.status))) {
+      return res.status(409).json({
+        error: `A reservation with status "${reservation.status}" cannot be cancelled by the applicant.`,
+        code: "CANCELLATION_NOT_ALLOWED",
+      });
+    }
+
+    const now = new Date();
+
+    // Archive any active visit to history before cancelling.
+    const visitHistoryUpdate = [];
+    if (reservation.visitDate) {
+      visitHistoryUpdate.push(...(reservation.visitHistory || []), {
+        visitDate: reservation.visitDate,
+        visitTime: reservation.visitTime,
+        viewingType: reservation.viewingType || "inperson",
+        status: "cancelled",
+        scheduledAt: reservation.visitScheduledAt || reservation.createdAt,
+      });
+    }
+
+    const updates = {
+      status: "cancelled",
+      cancelledAt: now,
+      cancelledBy: dbUser._id,
+      cancellationSource: "applicant",
+      cancellationReason: req.body.reason || null,
+      // Reservation fee is non-refundable on applicant cancellation.
+      reservationFeeRefundable: false,
+      reservationFeeForfeited: true,
+      ...(visitHistoryUpdate.length > 0 && { visitHistory: visitHistoryUpdate }),
+    };
+
+    const updated = await Reservation.findByIdAndUpdate(
+      reservationId,
+      { $set: updates },
+      { new: true, runValidators: true },
+    )
+      .populate("userId", "firstName lastName email")
+      .populate("roomId", "name branch type");
+
+    // Release occupancy if a bed was locked/reserved for this applicant.
+    try {
+      await updateOccupancyOnReservationChange(updated, { status: reservation.status });
+    } catch (occupancyErr) {
+      logger.warn({ err: occupancyErr, reservationId }, "Cancel: occupancy update failed (non-fatal)");
+    }
+
+    // Sync user lifecycle (e.g. revert tenantStatus to applicant).
+    try {
+      await syncReservationUserLifecycle({
+        status: "cancelled",
+        previousStatus: reservation.status,
+        userId: dbUser._id,
+        roomId: reservation.roomId,
+        reservationId: reservation._id,
+      });
+    } catch (lifecycleErr) {
+      logger.warn({ err: lifecycleErr, reservationId }, "Cancel: lifecycle sync failed (non-fatal)");
+    }
+
+    // Fire notification — placed BEFORE the response so it is never unreachable.
+    const notifCode = updated.reservationCode || "N/A";
+    const { notify: notifySvc } = await import("../utils/notificationService.js").catch(() => ({ notify: null }));
+    if (notifySvc) {
+      notifySvc
+        .reservationCancelled(dbUser._id, notifCode, req.body.reason || "Cancelled by applicant")
+        .catch((e) => logger.warn({ err: e }, "Cancel notification failed (non-fatal)"));
+    }
+
+    return res.json({
+      message: "Reservation cancelled. The reservation fee is non-refundable.",
+      reservation: updated,
+      feeForfeited: true,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* ─── VALIDATE reservation ID (user self-update) ───── */
+export const validateReservationIdByUser = async (req, res, next) => {
+  try {
+    const { reservationId } = req.params;
+    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
+
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found.", code: "USER_NOT_FOUND" });
+    }
+
+    const reservation = await Reservation.findById(reservationId).populate(
+      "userId",
+      "firstName lastName email",
+    );
+    if (!reservation) {
+      return res.status(404).json({
+        error: "Reservation not found.",
+        code: "RESERVATION_NOT_FOUND",
+      });
+    }
+
+    if (String(reservation.userId?._id || reservation.userId) !== String(dbUser._id)) {
+      return res.status(403).json({
+        error: "You can only validate your own reservation ID.",
+        code: "RESERVATION_ACCESS_DENIED",
+      });
+    }
+
+    if (
+      hasReservationStatus(reservation.status, "cancelled", "moveIn", "moveOut") ||
+      reservation.isArchived
+    ) {
+      return res.status(409).json({
+        error: "ID validation is not available for this reservation state.",
+        code: "ID_VALIDATION_NOT_ALLOWED",
+      });
+    }
+
+    const idType = String(req.body.idType || req.body.validIDType || "").trim();
+    const documentUrl = String(
+      req.body.documentUrl || req.body.validIDFrontUrl || "",
+    ).trim();
+
+    if (!idType || !ID_TYPES.includes(idType)) {
+      return res.status(422).json({
+        error: "ID type is required.",
+        code: "ID_TYPE_REQUIRED",
+      });
+    }
+
+    if (!documentUrl) {
+      return res.status(422).json({
+        error: "Valid ID front image is required.",
+        code: "ID_DOCUMENT_REQUIRED",
+      });
+    }
+
+    const result = await runIdValidation({
+      reservation,
+      idType,
+      documentUrl,
+      applicantPayload: req.body,
+    });
+    const update = buildIdValidationUpdate(result, documentUrl);
+
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+      reservationId,
+      {
+        $set: {
+          ...update,
+          validIDFrontUrl: documentUrl,
+        },
+      },
+      { new: true, runValidators: true },
+    )
+      .populate(...POPULATE_USER)
+      .populate(...POPULATE_ROOM);
+
+    return res.json({
+      validationStatus: result.status,
+      message: result.message,
+      extractedName: result.extractedName || "",
+      extractedIdNumber: result.extractedIdNumber || "",
+      matchScore: result.matchScore || 0,
+      notes: result.validationNotes || [],
+      reservation: serializeReservation(updatedReservation),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /* ─── UPDATE reservation (user self-update) ──────── */
 export const updateReservationByUser = async (req, res, next) => {
   try {
@@ -1461,61 +1720,18 @@ export const updateReservationByUser = async (req, res, next) => {
     // Build update payload from config-driven field mapping
     const updates = buildUserUpdatePayload(req.body);
 
-    // ── Soft-cancel: preserve history, mark as cancelled ─────
+    // ── Legacy soft-cancel path: redirect to dedicated cancel endpoint ─────
+    // The new PATCH /:id/cancel endpoint is the canonical path.
+    // This legacy branch is kept for backward compatibility but routes cleanly.
     if (req.body.cancelReservation === true) {
-      // Log current visit to history as "cancelled" if there's an active visit
-      if (reservation.visitDate) {
-        const existingHistory = reservation.visitHistory || [];
-        updates.visitHistory = [
-          ...existingHistory,
-          {
-            visitDate: reservation.visitDate,
-            visitTime: reservation.visitTime,
-            viewingType: reservation.viewingType || "inperson",
-            status: "cancelled",
-            scheduledAt: reservation.createdAt,
-            cancelledAt: new Date(),
-            attemptNumber: existingHistory.length + 1,
-          },
-        ];
-      }
-      updates.status = "cancelled";
-
-      const updated = await Reservation.findByIdAndUpdate(
-        reservationId,
-        { $set: updates },
-        { new: true, runValidators: true },
-      )
-        .populate("userId", "firstName lastName email phone")
-        .populate("roomId", "roomNumber roomType floor branch priceMonthly");
-
-      return res.json({
-        message: "Reservation cancelled",
-        reservation: updated,
-      });
-
-      // In-app notification — reservation cancelled (fire-and-forget after response)
-      if (updated?.userId) {
-        const { notify } =
-          await import("../utils/notificationService.js").catch(() => ({
-            notify: null,
-          }));
-        if (notify) {
-          notify
-            .reservationCancelled(
-              updated.userId,
-              updated.reservationCode || "N/A",
-              updates.cancellationReason || "",
-            )
-            .catch((e) =>
-              logger.warn(
-                { err: e, requestId: req.id },
-                "Cancel notification failed (non-fatal)",
-              ),
-            );
-        }
-      }
+      // Delegate to the dedicated cancel handler logic rather than duplicating it.
+      // Re-use req/res so the response format stays consistent.
+      req.params.reservationId = reservationId;
+      return cancelReservationByUser(req, res, next);
     }
+
+    // Notification for cancellation now fires inside cancelReservationByUser,
+    // which is called above when cancelReservation=true. No dead code here.
 
     // Generate visitCode when visitDate is first set (bypassed by findByIdAndUpdate)
     if (updates.visitDate) {
@@ -1623,18 +1839,92 @@ export const updateReservationByUser = async (req, res, next) => {
       req.body.submitApplication === true ||
       normalizeReservationStatus(updates.status) === "payment_pending";
 
-    if (
-      isApplicationSubmission &&
-      updates.firstName &&
-      updates.lastName &&
-      updates.mobileNumber
-    ) {
-      if (hasReservationStatus(reservation.status, "visit_approved")) {
-        updates.status = "payment_pending";
+    if (isApplicationSubmission) {
+      // Enforce minimum required fields before accepting the application.
+      // These match the client-side validation in useReservationFlow stage 3
+      // and prevent bypassing the form via direct API calls.
+      const missingRequired = [];
+      const hasVal = (v) => v != null && String(v).trim().length > 0;
+
+      if (!hasVal(updates.selfiePhotoUrl))          missingRequired.push("profile photo");
+      if (!hasVal(updates.emergencyContactName))    missingRequired.push("emergency contact name");
+      if (!hasVal(updates.emergencyContactNumber))  missingRequired.push("emergency contact phone");
+      if (!hasVal(updates.validIDFrontUrl))         missingRequired.push("valid ID (front)");
+      const submittedIdType =
+        updates.idType ||
+        updates.validIDType ||
+        reservation.idType ||
+        reservation.validIDType;
+      if (!hasVal(submittedIdType))                  missingRequired.push("ID type");
+
+      if (missingRequired.length > 0) {
+        return res.status(422).json({
+          error: `Application cannot be submitted. The following required fields are missing: ${missingRequired.join(", ")}.`,
+          code: "APPLICATION_INCOMPLETE",
+          missingFields: missingRequired,
+        });
       }
-      // Stamp submission time if not already set (first-time application)
-      if (!reservation.applicationSubmittedAt) {
-        updates.applicationSubmittedAt = new Date();
+
+      const nextIdDocumentUrl = updates.validIDFrontUrl || reservation.validIDFrontUrl;
+      const validationStatus = reservation.idValidationStatus || "not_validated";
+      const validationAlreadyCurrent =
+        nextIdDocumentUrl &&
+        reservation.idValidationDocumentUrl === nextIdDocumentUrl &&
+        ID_VALIDATION_ACCEPTED_STATUSES.has(validationStatus);
+
+      if (
+        validationStatus === "failed" &&
+        (!reservation.idValidationDocumentUrl ||
+          reservation.idValidationDocumentUrl === nextIdDocumentUrl)
+      ) {
+        return res.status(422).json({
+          error: "ID image is unclear. Please upload a clearer photo.",
+          code: "ID_VALIDATION_FAILED",
+        });
+      }
+
+      if (nextIdDocumentUrl && submittedIdType && !validationAlreadyCurrent) {
+        const validation = await runIdValidation({
+          reservation,
+          idType: submittedIdType,
+          documentUrl: nextIdDocumentUrl,
+          applicantPayload: {
+            ...req.body,
+            firstName: updates.firstName || reservation.firstName,
+            middleName: updates.middleName || reservation.middleName,
+            lastName: updates.lastName || reservation.lastName,
+          },
+        });
+
+        if (validation.status === "failed") {
+          const validationUpdate = buildIdValidationUpdate(validation, nextIdDocumentUrl);
+          Object.assign(updates, validationUpdate);
+          await Reservation.findByIdAndUpdate(
+            reservationId,
+            { $set: { ...validationUpdate, validIDFrontUrl: nextIdDocumentUrl } },
+            { runValidators: true },
+          );
+          return res.status(422).json({
+            error: validation.message || "ID image is unclear. Please upload a clearer photo.",
+            code: "ID_VALIDATION_FAILED",
+            validationStatus: validation.status,
+            notes: validation.validationNotes || [],
+          });
+        }
+
+        Object.assign(updates, buildIdValidationUpdate(validation, nextIdDocumentUrl));
+      } else if (validationAlreadyCurrent) {
+        updates.idType = submittedIdType;
+        updates.validIDType = submittedIdType;
+      }
+
+      if (updates.firstName && updates.lastName && updates.mobileNumber) {
+        if (hasReservationStatus(reservation.status, "visit_approved")) {
+          updates.status = "payment_pending";
+        }
+        if (!reservation.applicationSubmittedAt) {
+          updates.applicationSubmittedAt = new Date();
+        }
       }
     }
 
@@ -2271,7 +2561,16 @@ export const moveOutReservation = async (req, res, next) => {
     logger.error({ err: error, requestId: req.id }, "Move-out error");
     await auditLogger.logError(req, error, "Failed to move out reservation");
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "MOVEOUT_FAILED" });
+      return res.status(error.statusCode).json({
+        error: error.message,
+        code: error.code || "MOVEOUT_FAILED",
+        // Include billing context so the frontend can show the balance
+        // and offer an admin override without a separate API call.
+        ...(error.outstandingBalance !== undefined && {
+          outstandingBalance: error.outstandingBalance,
+          paymentStatus: error.paymentStatus,
+        }),
+      });
     }
     handleReservationError(res, error, "move out");
   }

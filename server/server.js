@@ -45,6 +45,7 @@ import announcementRoutes from "./routes/announcementRoutes.js";
 import maintenanceRoutes from "./routes/maintenanceContractRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
 import digitalTwinRoutes from "./routes/digitalTwinRoutes.js";
@@ -181,7 +182,7 @@ app.options("*", (req, res) => {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type,Authorization,X-Request-Id",
+      "Content-Type,Authorization,X-Request-Id,X-Device-Id,X-Session-Id",
     );
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
@@ -244,6 +245,7 @@ app.use("/api/m/maintenance", maintenanceRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/chat", chatRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/digital-twin", digitalTwinRoutes);
 app.use("/api/utilities", utilityBillingRoutes);

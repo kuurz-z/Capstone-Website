@@ -10,8 +10,10 @@ import {
   FileText,
   TrendingUp,
   Building2,
+  MessageSquareText,
   Shield,
   Settings,
+  Bell,
 } from "lucide-react";
 
 export const NAV_GROUPS = [
@@ -25,9 +27,11 @@ export const NAV_ITEMS = [
   { to: "/admin/room-availability", icon: DoorOpen, text: "Room Management", group: "workspace", priority: 3 },
   { to: "/admin/tenants", icon: Users, text: "Tenants", group: "workspace", priority: 4 },
   { to: "/admin/maintenance", icon: Wrench, text: "Maintenance", group: "workspace", priority: 5, permission: "manageMaintenance" },
-  { to: "/admin/billing", icon: CreditCard, text: "Billing", group: "workspace", priority: 6 },
-  { to: "/admin/analytics", icon: TrendingUp, text: "Analytics", group: "workspace", priority: 7 },
-  { to: "/admin/announcements", icon: Megaphone, text: "Announcements", group: "workspace", priority: 8, permission: "manageAnnouncements" },
+  { to: "/admin/chat", icon: MessageSquareText, text: "Support Chat", group: "workspace", priority: 6 },
+  { to: "/admin/billing", icon: CreditCard, text: "Billing", group: "workspace", priority: 7 },
+  { to: "/admin/analytics", icon: TrendingUp, text: "Analytics", group: "workspace", priority: 8 },
+  { to: "/admin/announcements", icon: Megaphone, text: "Announcements", group: "workspace", priority: 9, permission: "manageAnnouncements" },
+  { to: "/admin/notifications", icon: Bell, text: "Notifications", group: "workspace", priority: 10 },
   { to: "/admin/users", icon: UserCog, text: "Accounts", group: "system", priority: 1 },
   { to: "/admin/roles", icon: Shield, text: "Roles & Permissions", group: "system", priority: 2, saOnly: true },
   { to: "/admin/audit-logs", icon: FileText, text: "Audit & Security", group: "system", priority: 3 },

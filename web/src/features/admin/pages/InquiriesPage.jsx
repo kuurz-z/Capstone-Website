@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { fmtDate } from "../../../shared/utils/dateFormat";
 import {
   CheckCheck,
   ChevronLeft,
@@ -43,14 +44,7 @@ function initial(name = "") {
   return (name.trim()[0] || "?").toUpperCase();
 }
 
-function fmtDate(value) {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// fmtDate imported from shared/utils/dateFormat
 
 export default function InquiriesPage({ isEmbedded = false }) {
   const { user } = useAuth();

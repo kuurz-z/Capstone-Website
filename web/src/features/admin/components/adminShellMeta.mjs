@@ -49,10 +49,20 @@ const PAGE_META = {
     description:
       "Review tenant repair requests, assign work, and keep the tenant-visible admin response up to date.",
   },
+  "/admin/chat": {
+    title: "Support Chat",
+    description:
+      "View tenant conversations, respond from the dashboard, and keep branch messages moving.",
+  },
   "/admin/announcements": {
     title: "Announcements",
     description:
       "Publish notices with clearer targeting and follow-up visibility.",
+  },
+  "/admin/notifications": {
+    title: "Notifications",
+    description:
+      "Review SLA breaches, billing alerts, maintenance updates, and all system events in one place.",
   },
   "/admin/branches": {
     title: "Branches",

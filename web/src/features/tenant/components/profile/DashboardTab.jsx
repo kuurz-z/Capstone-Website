@@ -112,6 +112,7 @@ const DashboardTab = ({
         <div style={isMobile ? {} : S.leftTop}>
           <ProfileCompletionCard
             profileData={profileData}
+            activeReservation={selectedReservation}
             onGoToPersonal={onGoToPersonal}
           />
         </div>

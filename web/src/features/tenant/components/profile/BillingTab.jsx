@@ -477,9 +477,16 @@ const MonthlyPaymentView = ({ bills, filter, setFilter }) => {
 
 const MonthlyBillCard = ({ bill }) => {
   const [open, setOpen] = useState((bill.remainingAmount ?? bill.totalAmount) > 0);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const status = STATUS_STYLES[bill.status] || STATUS_STYLES.pending;
   const charges = bill.charges || {};
   const summary = getBillChargeSummary(bill);
+  const cycleText = fmtCycle(bill);
+  const createdAtTime = bill.createdAt ? new Date(bill.createdAt).getTime() : 0;
+  const isNewBill =
+    !isPaidBill(bill) &&
+    Number.isFinite(createdAtTime) &&
+    Date.now() - createdAtTime < 7 * 24 * 60 * 60 * 1000;
 
   // Compute the strictly Rent-focused total for this separated tab
   const rentBase =
@@ -496,11 +503,14 @@ const MonthlyBillCard = ({ bill }) => {
       <button onClick={() => setOpen(!open)} style={s.billHeader}>
         <Package size={16} color="#64748b" />
         <div style={{ flex: 1, marginLeft: 10, textAlign: "left" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-heading)" }}>
-            {fmtMonth(bill.billingMonth)}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-heading)" }}>
+              Monthly Rent - {fmtMonth(bill.billingMonth)}
+            </span>
+            {isNewBill && <span style={s.newBadge}>New</span>}
           </div>
           <div style={{ fontSize: 12, color: "#94a3b8" }}>
-            Cycle: {fmtCycle(bill) || "—"}
+            Cycle: {cycleText || "—"}
           </div>
           <div style={{ fontSize: 12, color: "#94a3b8" }}>
             Due: {bill.dueDate ? fmtDate(bill.dueDate) : "â€”"}
@@ -519,6 +529,11 @@ const MonthlyBillCard = ({ bill }) => {
 
       {open && (
         <div style={s.breakdown}>
+          {cycleText && (
+            <div style={s.coverageNote}>
+              This bill covers {cycleText}.
+            </div>
+          )}
           <div style={{ ...elecS.segmentCard, marginBottom: 16 }}>
             <div style={elecS.segmentHeader}>
               <span>Statement Breakdown</span>
@@ -570,11 +585,22 @@ const MonthlyBillCard = ({ bill }) => {
           <button
             style={s.downloadBtn}
             onClick={async () => {
-              const { generateBillingPDF } = await import("../../../../shared/utils/pdfUtils");
-              generateBillingPDF(bill);
+              try {
+                setDownloadingPdf(true);
+                await billingApi.downloadBillPdf(
+                  bill.id || bill._id,
+                  `${bill.billReference || bill.id || "billing-statement"}.pdf`,
+                );
+                showNotification("PDF downloaded successfully.", "success");
+              } catch (error) {
+                showNotification(error?.message || "Failed to download PDF.", "error");
+              } finally {
+                setDownloadingPdf(false);
+              }
             }}
+            disabled={downloadingPdf}
           >
-            <Download size={13} /> Download Statement
+            <Download size={13} /> {downloadingPdf ? "Downloading..." : "Download PDF"}
           </button>
 
           {summary.isCombinedStatement && (
@@ -1417,6 +1443,27 @@ const s = {
   },
 
   breakdown: { padding: "0 20px 20px", borderTop: "1px solid #f1f5f9" },
+  coverageNote: {
+    margin: "14px 0",
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+  newBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "2px 8px",
+    borderRadius: 999,
+    background: "#EFF6FF",
+    color: "#2563EB",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+  },
   chargeRow: {
     display: "flex",
     justifyContent: "space-between",

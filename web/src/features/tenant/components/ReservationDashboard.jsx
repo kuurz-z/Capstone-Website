@@ -623,40 +623,64 @@ export default function ReservationDashboard({ reservation, visits = [] }) {
             </div>
             <h3 style={styles.modalTitle}>Cancel reservation?</h3>
             <p style={styles.modalDesc}>
-              This will permanently remove your reservation for{" "}
-              <strong>{roomName}</strong>. This action cannot be undone.
+              You are about to cancel your reservation for{" "}
+              <strong>{roomName}</strong>.
             </p>
+
+            {/* Non-refundable fee warning */}
+            <div style={{
+              background: "#fff7ed",
+              border: "1px solid #fed7aa",
+              borderRadius: "10px",
+              padding: "14px 16px",
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "#9a3412",
+              lineHeight: 1.55,
+              textAlign: "left",
+            }}>
+              <strong>⚠ Reservation fee will NOT be refunded.</strong>
+              <br />
+              Cancelling means your <strong>₱2,000 reservation fee is forfeited</strong>.
+              This action cannot be undone.
+            </div>
+
             <div style={styles.modalActions}>
               <button
+                onClick={() => setShowCancelModal(false)}
+                disabled={isCancelling}
+                style={styles.modalBtnSecondary}
+              >
+                Keep my reservation
+              </button>
+              <button
                 onClick={async () => {
+                  if (isCancelling) return;
                   setIsCancelling(true);
                   try {
                     const { reservationApi } =
                       await import("../../../shared/api/reservationApi");
-                    await reservationApi.updateByUser(reservation._id, { cancelReservation: true });
+                    await reservationApi.cancelByUser(reservation._id);
                     setShowCancelModal(false);
-                    showNotification("Reservation cancelled successfully.", "success", 3000);
+                    showNotification("Reservation cancelled.", "success", 3000);
                     queryClient.invalidateQueries({ queryKey: ["reservations"] });
                   } catch (err) {
-                    console.error("Cancel failed:", err);
+                    const errMsg =
+                      err?.response?.data?.error ||
+                      err?.message ||
+                      "Failed to cancel reservation. Please try again.";
                     setIsCancelling(false);
-                    setShowCancelModal(false);
-                    showNotification("Failed to cancel reservation. Please try again.", "error", 4000);
+                    showNotification(errMsg, "error", 5000);
                   }
                 }}
                 disabled={isCancelling}
                 style={{
                   ...styles.modalBtnDanger,
                   opacity: isCancelling ? 0.6 : 1,
+                  cursor: isCancelling ? "not-allowed" : "pointer",
                 }}
               >
-                {isCancelling ? "Cancelling..." : "Cancel reservation"}
-              </button>
-              <button
-                onClick={() => setShowCancelModal(false)}
-                style={styles.modalBtnSecondary}
-              >
-                Keep it
+                {isCancelling ? "Cancelling…" : "Confirm cancellation"}
               </button>
             </div>
             <p style={styles.modalHint}>Press Esc or click outside to dismiss</p>
