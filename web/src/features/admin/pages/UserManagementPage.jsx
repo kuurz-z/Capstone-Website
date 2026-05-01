@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Users, UserPlus, Search, Key, Shield, Edit2, Lock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
@@ -647,199 +647,190 @@ function UserManagementPage() {
  return (
   <div className="space-y-6">
    {/* Header */}
-    <div>
-     <h1 className="mb-2 text-2xl font-semibold text-[var(--color-text-primary)]">Accounts</h1>
-     <p className="text-sm text-[var(--color-text-secondary)]">Manage access, verify account states, and resolve sign-in or lifecycle issues</p>
-    </div>
+	<div>
+	 <h1 className="mb-2 text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>Accounts</h1>
+	 <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Manage access, verify account states, and resolve sign-in or lifecycle issues</p>
+	</div>
 
    {/* Stats Grid */}
    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-    {summaryItems.map((item) => (
-    <div
-     key={item.label}
-     className="rounded-lg p-6 bg-[var(--color-bg-surface)] border border-[var(--color-border-default)]"
-    >
-     <div
-      className="text-4xl mb-2 font-semibold"
-      style={{
-       color:
-        item.color === "blue"
-         ? "var(--color-info)"
-         : item.color === "green"
-         ? "var(--color-success)"
-         : item.color === "orange"
-         ? "var(--color-warning)"
-         : item.color === "red"
-         ? "var(--color-danger)"
-         : "var(--color-text-primary)",
-      }}
-     >
-      {item.value}
-     </div>
-     <div className="text-sm uppercase tracking-wide text-[var(--color-text-secondary)]">{item.label}</div>
-    </div>
-    ))}
+	{summaryItems.map((item) => (
+	 <div
+	  key={item.label}
+	  className="rounded-lg p-6"
+	  style={{ backgroundColor: "var(--card)", border: "1px solid var(--color-border-default)" }}
+	 >
+	  <div className="text-4xl mb-2 font-semibold" style={{ color: "var(--color-text-primary)" }}>{item.value}</div>
+	  <div className="text-sm uppercase tracking-wide" style={{ color: "var(--color-text-secondary)" }}>{item.label}</div>
+	 </div>
+	))}
    </div>
 
    {/* Filters and Search */}
-   {/* Filters and Search */}
-   <div className="rounded-lg p-6 space-y-4 bg-[var(--color-bg-surface)] border border-[var(--color-border-default)]">
-    <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-    <div className="relative flex-1 max-w-md w-full">
-    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-muted)]" />
-    <input
-      value={searchQuery}
-      onChange={(e) => {
-       setSearchQuery(e.target.value);
-       setCurrentPage(1);
-      }}
-      placeholder="Search users..."
-    className="w-full pl-10 pr-4 py-2.5 rounded-lg focus:outline-none h-11 bg-[var(--color-bg-primary)] border border-[var(--color-border-default)] text-[var(--color-text-primary)]"
-     />
-    </div>
+	<div className="rounded-lg p-6 space-y-4" style={{ backgroundColor: "var(--card)", border: "1px solid var(--color-border-default)" }}>
+	<div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+	<div className="relative flex-1 max-w-md w-full">
+	 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--muted-foreground)" }} />
+	 <input
+	  value={searchQuery}
+	  onChange={(e) => {
+	   setSearchQuery(e.target.value);
+	   setCurrentPage(1);
+	  }}
+	  placeholder="Search users..."
+	  className="w-full pl-10 pr-4 py-2.5 rounded-lg focus:outline-none h-11"
+	  style={{ backgroundColor: "var(--input-background)", border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }}
+	 />
+	</div>
 
-    <div className="flex items-center gap-3">
-     <button
-      onClick={() => { setIsAddModalOpen(true); }}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-accent)] text-[#1F2937] hover:opacity-90 transition-opacity"
-     >
-      <UserPlus className="h-4 w-4" />
-      Add User
-     </button>
-    </div>
-    </div>
+	<div className="flex items-center gap-3">
+	 <button
+	  onClick={() => { setIsAddModalOpen(true); }}
+	  className="flex items-center gap-2 px-4 py-2.5 rounded-lg"
+	  style={{ backgroundColor: "var(--primary)", color: "var(--primary-foreground)" }}
+	 >
+	  <UserPlus className="h-4 w-4" />
+	  Add User
+	 </button>
+	</div>
+	</div>
 
-    <div className="flex flex-wrap gap-3">
-     {filters.map((f) => (
-      <div key={f.key}>
-       {f.component || (
-        <select value={f.value || 'all'} onChange={(e) => f.onChange(e.target.value)} className="px-4 py-2 rounded-lg bg-[var(--color-bg-surface)] border border-[var(--color-border-default)] text-[var(--color-text-primary)]">
-         {f.options?.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-         ))}
-        </select>
-       )}
-      </div>
-     ))}
-    </div>
+	<div className="flex flex-wrap gap-3">
+	 {filters.map((f) => (
+	  <div key={f.key}>
+	   {f.component || (
+		<select value={f.value || 'all'} onChange={(e) => f.onChange(e.target.value)} className="px-4 py-2 rounded-lg"
+		 style={{ backgroundColor: "var(--card)", border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }}>
+		 {f.options?.map((o) => (
+		  <option key={o.value} value={o.value}>{o.label}</option>
+		 ))}
+		</select>
+	   )}
+	  </div>
+	 ))}
+	</div>
    </div>
 
    {/* Table */}
-   <div className="rounded-lg overflow-hidden bg-[var(--color-bg-surface)] border border-[var(--color-border-default)]">
-    <div className="overflow-x-auto">
-     <table className="w-full table-fixed">
-      <thead>
-       <tr className="bg-[var(--color-bg-primary)] border-b border-[var(--color-border-default)]">
-        <th className="text-left px-6 py-4 text-sm uppercase tracking-wider text-[var(--color-text-secondary)]">User</th>
-        <th className="text-left px-6 py-4 text-sm uppercase tracking-wider text-[var(--color-text-secondary)]">Role</th>
-        <th className="text-left px-6 py-4 text-sm uppercase tracking-wider text-[var(--color-text-secondary)]">Branch</th>
-        <th className="text-left px-6 py-4 text-sm uppercase tracking-wider text-[var(--color-text-secondary)]">Status</th>
-        <th className="text-right px-6 py-4 text-sm uppercase tracking-wider text-[var(--color-text-secondary)]">Actions</th>
-       </tr>
-      </thead>
-      <tbody className="divide-y divide-[var(--color-border-default)]">
-       {users.map((u) => (
-        <tr key={u._id || u.id} className="hover:bg-[var(--color-bg-elevated)] transition-colors" onClick={() => setAccessDrawerUser(u)}>
-         <td className="px-6 py-4">
-          <div className="flex items-center gap-3">
-           <div
-            className="w-10 h-10 flex-none aspect-square rounded-full overflow-hidden flex items-center justify-center text-white text-sm font-semibold leading-none ring-1 ring-[var(--color-border-subtle)]"
-            style={{ backgroundColor: u.color || "var(--color-text-muted)" }}
-           >
-            {((u.firstName && u.lastName) ? `${u.firstName[0]}${u.lastName[0]}` : (u.initials || "NA")).toUpperCase()}
-           </div>
-           <div>
-                <div className="text-sm font-medium text-[var(--color-text-primary)]">{u.fullName || `${u.firstName} ${u.lastName}` || u.username}</div>
-                <div className="text-xs text-[var(--color-text-secondary)]">{u.email}</div>
-           </div>
-          </div>
-         </td>
-         <td className="px-6 py-4">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)]">{u.role}</span>
-         </td>
-     <td className="px-6 py-4 text-[var(--color-text-secondary)]">{u.branch || '—'}</td>
-         <td className="px-6 py-4">
-          <span className="inline-flex items-center gap-2 text-sm text-[var(--color-success)]">
-           <span className="w-2.5 h-2.5 rounded-full inline-block bg-[var(--color-success)]" />
-           <span className="leading-none text-[var(--color-success)]">{u.isActive ? "Active" : "Inactive"}</span>
-          </span>
-         </td>
-         <td className="px-6 py-4">
-          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-            {u.role === "branch_admin" && (
-             <button
-              className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg bg-[var(--color-bg-surface)] border border-[var(--color-border-default)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)]"
-              onClick={() => handleOpenPermissions(u)}
-             >
-              <Key className="h-4 w-4" />
-              Permissions
-             </button>
-            )}
-            <button
-             onClick={() => setAccessDrawerUser(u)}
-             className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg bg-[var(--color-bg-surface)] border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-bg-elevated)]"
-            >
-             <Shield className="h-4 w-4" />
-             Access
-            </button>
-            <button
-             onClick={() => {
-              setSelectedUser(u);
-              setIsEditModalOpen(true);
-             }}
-             className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg bg-[var(--color-bg-surface)] border border-[var(--color-border-default)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)]"
-            >
-             <Edit2 className="h-4 w-4" />
-             Edit
-            </button>
-            <button
-             onClick={() => {
-              setSelectedUser(u);
-              setAccountAction({ type: "ban", user: u });
-             }}
-             className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg bg-[var(--color-bg-surface)] border border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-bg-elevated)]"
-            >
-             <Lock className="h-4 w-4" />
-             Block
-            </button>
-          </div>
-         </td>
-        </tr>
-       ))}
-      </tbody>
-     </table>
-    </div>
+	<div className="rounded-lg overflow-hidden" style={{ backgroundColor: "var(--card)", border: "1px solid var(--color-border-default)" }}>
+	<div className="overflow-x-auto">
+	 <table className="w-full table-fixed">
+	  <thead>
+	<tr style={{ borderBottom: "1px solid #E6EEF3", backgroundColor: "#FBFDFF" }}>
+	 <th className="text-left px-6 py-4 text-sm uppercase tracking-wider" style={{ color: "#6B7280" }}>User</th>
+	 <th className="text-left px-6 py-4 text-sm uppercase tracking-wider" style={{ color: "#6B7280" }}>Role</th>
+	 <th className="text-left px-6 py-4 text-sm uppercase tracking-wider" style={{ color: "#6B7280" }}>Branch</th>
+	 <th className="text-left px-6 py-4 text-sm uppercase tracking-wider" style={{ color: "#6B7280" }}>Status</th>
+	 <th className="text-right px-6 py-4 text-sm uppercase tracking-wider" style={{ color: "#6B7280" }}>Actions</th>
+	</tr>
+	  </thead>
+	  <tbody className="divide-y divide-border">
+	   {users.map((u) => (
+		<tr key={u._id || u.id} className="hover:bg-muted/10 transition-colors" onClick={() => setAccessDrawerUser(u)}>
+		 <td className="px-6 py-4">
+		  <div className="flex items-center gap-3">
+		   <div
+			className="w-10 h-10 flex-none rounded-full overflow-hidden flex items-center justify-center text-white text-sm font-semibold leading-none"
+			style={{ backgroundColor: u.color || "#64748b" }}
+		   >
+			{((u.firstName && u.lastName) ? `${u.firstName[0]}${u.lastName[0]}` : (u.initials || "NA")).toUpperCase()}
+		   </div>
+		   <div>
+					<div className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{u.fullName || `${u.firstName} ${u.lastName}` || u.username}</div>
+					<div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{u.email}</div>
+		   </div>
+		  </div>
+		 </td>
+		 <td className="px-6 py-4">
+		  <span className="inline-flex items-center px-3 py-1 rounded-full bg-muted text-foreground text-sm">{u.role}</span>
+		 </td>
+		 <td className="px-6 py-4 text-muted-foreground">{u.branch || '—'}</td>
+		 <td className="px-6 py-4">
+		  <span className="inline-flex items-center gap-2 text-sm">
+		  <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: "var(--color-success)" }} />
+		  <span className="leading-none" style={{ color: "var(--color-success)" }}>{u.isActive ? "Active" : "Inactive"}</span>
+		  </span>
+		 </td>
+		 <td className="px-6 py-4">
+		  <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+			{u.role === "branch_admin" && (
+			 <button
+			  className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
+			  onClick={() => handleOpenPermissions(u)}
+			  style={{ border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)", backgroundColor: "var(--card)" }}
+			 >
+			  <Key className="h-4 w-4" />
+			  Permissions
+			 </button>
+			)}
+			<button
+			 onClick={() => setAccessDrawerUser(u)}
+			 className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
+			 style={{ border: `1px solid var(--primary)`, color: "var(--primary)", backgroundColor: "var(--card)" }}
+			>
+			 <Shield className="h-4 w-4" />
+			 Access
+			</button>
+			<button
+			 onClick={() => {
+			  setSelectedUser(u);
+			  setIsEditModalOpen(true);
+			 }}
+			 className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
+			 style={{ border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)", backgroundColor: "var(--card)" }}
+			>
+			 <Edit2 className="h-4 w-4" />
+			 Edit
+			</button>
+			<button
+			 onClick={() => {
+			  setSelectedUser(u);
+			  setAccountAction({ type: "ban", user: u });
+			 }}
+			 className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
+			 style={{ border: "1px solid var(--danger-light)", color: "var(--color-danger)", backgroundColor: "var(--card)" }}
+			>
+			 <Lock className="h-4 w-4" />
+			 Block
+			</button>
+		  </div>
+		 </td>
+		</tr>
+	   ))}
+	  </tbody>
+	 </table>
+	</div>
 
-    {/* Pagination */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--color-border-default)]">
-         <div className="text-sm text-[var(--color-text-secondary)]">{totalUsers || users.length} results</div>
-     <div className="flex items-center gap-2">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} className="p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-[var(--color-border-default)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)]">
-       <ChevronLeft className="h-4 w-4" />
-      </button>
-            <span className="text-sm px-3 text-[var(--color-text-primary)]">{currentPage} / {Math.max(1, Math.ceil((totalUsers || users.length) / ITEMS_PER_PAGE))}</span>
-            <button disabled={currentPage >= Math.ceil((totalUsers || users.length) / ITEMS_PER_PAGE)} onClick={() => setCurrentPage((p) => p + 1)} className="p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-[var(--color-border-default)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)]">
-       <ChevronRight className="h-4 w-4" />
-      </button>
-     </div>
-    </div>
+	{/* Pagination */}
+		<div className="flex items-center justify-between px-6 py-4" style={{ borderTop: "1px solid var(--color-border-default)" }}>
+		 <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>{totalUsers || users.length} results</div>
+	 <div className="flex items-center gap-2">
+			<button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} className="p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-foreground" style={{ border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }}>
+	   <ChevronLeft className="h-4 w-4" />
+	  </button>
+			<span className="text-sm px-3" style={{ color: "var(--color-text-primary)" }}>{currentPage} / {Math.max(1, Math.ceil((totalUsers || users.length) / ITEMS_PER_PAGE))}</span>
+			<button disabled={currentPage >= Math.ceil((totalUsers || users.length) / ITEMS_PER_PAGE)} onClick={() => setCurrentPage((p) => p + 1)} className="p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-foreground" style={{ border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }}>
+	   <ChevronRight className="h-4 w-4" />
+	  </button>
+	 </div>
+	</div>
    </div>
 
    {/* Modals & drawers (preserve existing logic) */}
    {isEditModalOpen && (
-    <EditUserModal editForm={editForm} isOwner={isOwner} onFormChange={setEditForm} onSubmit={handleUpdateUser} onClose={() => setIsEditModalOpen(false)} />
+	<EditUserModal editForm={editForm} isOwner={isOwner} onFormChange={setEditForm} onSubmit={handleUpdateUser} onClose={() => setIsEditModalOpen(false)} />
    )}
    {isAddModalOpen && (
-    <AddUserModal addForm={addForm} addFormErrors={addFormErrors} isCreating={isCreating} isOwner={isOwner} onFormChange={handleAddFormChange} onSubmit={handleCreateUser} onClose={() => setIsAddModalOpen(false)} />
+	<AddUserModal addForm={addForm} addFormErrors={addFormErrors} isCreating={isCreating} isOwner={isOwner} onFormChange={handleAddFormChange} onSubmit={handleCreateUser} onClose={() => setIsAddModalOpen(false)} />
    )}
    {isHardDeleteModalOpen && (
-    <HardDeleteUserModal user={selectedUser} isOwner={isOwner} onDelete={handleDeleteUser} onClose={() => setIsHardDeleteModalOpen(false)} />
+	<HardDeleteUserModal user={selectedUser} isOwner={isOwner} onDelete={handleDeleteUser} onClose={() => setIsHardDeleteModalOpen(false)} />
    )}
    {accountAction.type === 'restore' && (
-    <RestoreUserModal user={accountAction.user} onConfirm={async () => { try { await handleAccountAction('restore', accountAction.user?._id, ''); } finally { setAccountAction({ type: null, user: null }); } }} onClose={() => setAccountAction({ type: null, user: null })} />
+	<RestoreUserModal user={accountAction.user} onConfirm={async () => { try { await handleAccountAction('restore', accountAction.user?._id, ''); } finally { setAccountAction({ type: null, user: null }); } }} onClose={() => setAccountAction({ type: null, user: null })} />
    )}
    {accountAction.type && accountAction.type !== 'restore' && (
-    <AccountActionModal action={accountAction.type} user={accountAction.user} onConfirm={handleAccountAction} onClose={() => setAccountAction({ type: null, user: null })} />
+	<AccountActionModal action={accountAction.type} user={accountAction.user} onConfirm={handleAccountAction} onClose={() => setAccountAction({ type: null, user: null })} />
    )}
    <AccountAccessDrawer open={Boolean(accessDrawerUser)} userSummary={accessDrawerUser} onClose={() => setAccessDrawerUser(null)} canViewReports={canViewReports} canManagePermissions={isOwner} onOpenPermissions={handleOpenPermissions} />
   </div>

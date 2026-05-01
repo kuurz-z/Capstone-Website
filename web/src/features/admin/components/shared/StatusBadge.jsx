@@ -5,42 +5,44 @@
  * active, moveIn, confirmed, pending, overdue, cancelled,
  * paid, partial, rejected, suspended, banned, maintenance, new
  */
+import "./StatusBadge.css";
 
 export default function StatusBadge({ status, label: customLabel }) {
- const statusStyles = {
- month: "bg-green-50 text-green-700",
- moveIn: "bg-green-50 text-green-700",
- reserved: "bg-blue-50 text-info-dark",
- "aced-pending": "bg-amber-50 text-warning-dark",
- cancelled: "bg-red-50 text-red-700",
- approved: "bg-green-50 text-green-700",
- completed: "bg-green-50 text-green-700",
- "no-show": "bg-red-50 text-red-700",
- missed: "bg-amber-50 text-warning-dark",
- resolved: "bg-green-50 text-green-700",
- pending: "bg-amber-50 text-warning-dark",
- visit_pending: "bg-amber-50 text-warning-dark",
- rejected: "bg-red-50 text-red-700",
- responded: "bg-blue-50 text-info-dark",
- overdue: "bg-red-50 text-red-700",
- };
+  const getStatusVariant = (s) => {
+    const successStatuses = ["month", "moveIn", "approved", "completed", "resolved", "active", "paid", "confirmed"];
+    const warningStatuses = ["pending", "visit_pending", "partial", "aced-pending", "missed"];
+    const errorStatuses = ["cancelled", "rejected", "overdue", "no-show", "banned", "suspended"];
+    const infoStatuses = ["reserved", "responded", "new"];
 
- const getLabel = (s) => {
- if (customLabel) return customLabel;
- if (s === "aced-pending") return "Aced-Pending";
- if (s === "no-show") return "No-Show";
- if (s === "month" || s === "moveIn") return "Move In";
- if (s === "visit_pending") return "Visit Pending";
- if (!s) return "Pending";
- return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g," ");
- };
+    if (successStatuses.includes(s)) return "success";
+    if (warningStatuses.includes(s)) return "warning";
+    if (errorStatuses.includes(s)) return "error";
+    if (infoStatuses.includes(s)) return "info";
+    return "neutral";
+  };
 
- const cssClass = statusStyles[status] || statusStyles.pending;
- const displayLabel = getLabel(status);
+  const getLabel = (s) => {
+    if (customLabel) return customLabel;
+    if (s === "aced-pending") return "Aced Pending";
+    if (s === "no-show") return "No Show";
+    if (s === "month" || s === "moveIn") return "Move In";
+    if (s === "visit_pending") return "Visit Pending";
+    if (!s) return "Pending";
+    
+    // Convert to proper case: capitalize each word
+    return s
+      .replace(/_/g, " ")
+      .split(" ")
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+  };
 
- return (
- <span className={`px-3 py-1 text-xs rounded-full font-medium ${cssClass}`}>
- {displayLabel}
- </span>
- );
+  const variant = getStatusVariant(status);
+  const displayLabel = getLabel(status);
+
+  return (
+    <span className={`status-badge status-badge--${variant}`}>
+      {displayLabel}
+    </span>
+  );
 }

@@ -46,7 +46,7 @@ export default function AdminSidebar({
   const navButtonBase =
     "group relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-outline)] focus-visible:ring-offset-0";
   const navButtonActive =
-    "bg-[#d1b23d] text-[#0f1a2f]";
+    "bg-[color:var(--primary)] text-[color:var(--primary-foreground)]";
   const navButtonIdle =
     "text-[var(--text-primary)] hover:bg-[rgba(209,178,61,0.14)] hover:text-[var(--text-primary)]";
 

@@ -859,7 +859,11 @@ export default function AdminMaintenancePage() {
  <button
  type="submit"
  form="maintenance-admin-form"
- className="inline-flex h-10 items-center justify-center rounded-lg bg-[#E3B341] px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90"
+ className="inline-flex h-10 items-center justify-center rounded-lg px-5 text-sm font-semibold shadow-sm hover:opacity-90"
+ style={{
+   backgroundColor: "var(--primary)",
+   color: "var(--primary-foreground)",
+ }}
  disabled={
  updateRequestMutation.isPending ||
  selectedRequest.status === "cancelled"

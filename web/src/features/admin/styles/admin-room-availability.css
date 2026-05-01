@@ -108,7 +108,7 @@
   width: 10px;
   height: 10px;
   border-radius: 4px;
-  border: 1px solid transparent;
+  border: px solid transparent;
 }
 
 .rooms-redesign-legend-dot.tone-available {
@@ -224,7 +224,7 @@
   padding: 3px 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--border);
   align-self: flex-start;
 }
 
@@ -366,9 +366,9 @@
   align-items: center;
   gap: 12px;
   padding: 16px 18px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-light);
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
 }
 
 .forecast-highlight__eyebrow {
@@ -422,8 +422,8 @@
 .forecast-card {
   padding: 16px;
   border-radius: 14px;
-  border: 1px solid var(--border-default);
-  background: #fff;
+  border: 1px solid var(--border-light);
+  background: var(--card);
   box-shadow: none;
 }
 
@@ -478,7 +478,7 @@
   gap: 10px;
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  border-top: 1px solid var(--border-light);
 }
 
 .forecast-card__label {
@@ -508,7 +508,7 @@
   height: 6px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--muted);
 }
 
 .forecast-card__occupancy-fill {
@@ -553,11 +553,11 @@
 
 .forecast-bed-row__badge {
   padding: 3px 7px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-light);
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 600;
-  background: #fff;
+  background: var(--muted);
 }
 
 .forecast-pagination {
@@ -579,10 +579,10 @@
   justify-content: center;
   gap: 10px;
   min-height: 260px;
-  border: 1px dashed var(--border-default);
+  border: 1px dashed var(--border-light);
   border-radius: 14px;
   color: var(--text-muted);
-  background: #fff;
+  background: var(--card);
 }
 
 @media (max-width: 768px) {
