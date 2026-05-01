@@ -46,6 +46,15 @@ export function validateStartupConfig() {
     failures.push("email: EMAIL_USER/EMAIL_PASSWORD or SMTP_USER/SMTP_PASS");
   }
 
+  const hasResendCredentials = Boolean(
+    String(process.env.RESEND_API_KEY || "").trim() &&
+    String(process.env.RESEND_FROM_EMAIL || "").trim(),
+  );
+
+  if (!hasResendCredentials) {
+    failures.push("resend: RESEND_API_KEY and RESEND_FROM_EMAIL required for OTP emails");
+  }
+
   if (!hasCorsConfig) {
     failures.push("cors: CORS_ORIGINS or FRONTEND_URL");
   }

@@ -107,14 +107,15 @@ transporter.verify((error) => {
 // =============================================================================
 
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
-const OTP_FROM = String(process.env.RESEND_FROM || "onboarding@resend.dev").trim();
+const OTP_FROM = String(process.env.RESEND_FROM_EMAIL || "").trim();
 
 const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
-if (resendClient) {
+if (resendClient && OTP_FROM) {
   console.log("[EMAIL CONFIG] Resend configured.", { from: OTP_FROM });
 } else {
-  console.log("[EMAIL CONFIG] RESEND_API_KEY not set — OTP email will fail.");
+  if (!RESEND_API_KEY) console.log("[EMAIL CONFIG] RESEND_API_KEY not set — OTP email will fail.");
+  if (!OTP_FROM) console.log("[EMAIL CONFIG] RESEND_FROM_EMAIL not set — OTP email will fail.");
 }
 
 // =============================================================================
@@ -1003,8 +1004,8 @@ export const sendPaymentReceiptEmail = async ({
 };
 
 export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }) => {
-  if (!resendClient) {
-    console.log("[OTP EMAIL] Not sent — RESEND_API_KEY is not configured");
+  if (!resendClient || !OTP_FROM) {
+    console.error("[OTP EMAIL ERROR] Not sent — RESEND_API_KEY or RESEND_FROM_EMAIL is not configured");
     return { success: false, message: "Email service not configured" };
   }
 

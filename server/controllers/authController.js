@@ -65,10 +65,10 @@ const buildUserPayload = (user) => ({
 });
 
 const storeOtpChallenge = async (user, req, deviceId) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
     logger.error(
       { userId: String(user._id), email: user.email },
-      "Login OTP email cannot be sent because email credentials are missing",
+      "Login OTP email cannot be sent because RESEND_API_KEY or RESEND_FROM_EMAIL is missing",
     );
     throw new AppError(
       "Failed to send OTP email",
@@ -119,14 +119,7 @@ const storeOtpChallenge = async (user, req, deviceId) => {
   );
 
   const name = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username;
-  logger.info(
-    {
-      userId: String(user._id),
-      email: user.email,
-      from: process.env.EMAIL_USER,
-    },
-    "Login OTP email send attempt started",
-  );
+  console.log("[OTP EMAIL] Sending", { to: user.email });
 
   const emailResult = await sendLoginOtpEmail({
     to: user.email,
@@ -136,14 +129,22 @@ const storeOtpChallenge = async (user, req, deviceId) => {
   });
 
   if (!emailResult?.success) {
+    console.error("[OTP EMAIL ERROR]", {
+      userId: String(user._id),
+      email: user.email,
+      emailError: emailResult?.error,
+      emailCode: emailResult?.code,
+      emailProvider: "resend",
+      emailStatusCode: emailResult?.statusCode,
+    });
     logger.error(
       {
         userId: String(user._id),
         email: user.email,
-        smtpError: emailResult?.error,
-        smtpCode: emailResult?.code,
-        smtpCommand: emailResult?.command,
-        smtpResponse: emailResult?.response,
+        emailError: emailResult?.error,
+        emailCode: emailResult?.code,
+        emailProvider: "resend",
+        emailStatusCode: emailResult?.statusCode,
       },
       "Failed to send login OTP email",
     );
@@ -160,6 +161,7 @@ const storeOtpChallenge = async (user, req, deviceId) => {
     );
   }
 
+  console.log("[OTP EMAIL] Sent successfully", { to: user.email, messageId: emailResult.messageId });
   logger.info(
     {
       userId: String(user._id),
