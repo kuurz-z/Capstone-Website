@@ -808,6 +808,13 @@ export const createReservation = async (req, res, next) => {
         code: "MOVEIN_DATE_OUT_OF_RANGE",
       });
 
+    // Enforce 3-day minimum gap (matches frontend constraint)
+    if (dayjs(moveInDate).isBefore(dayjs().add(3, "day").startOf("day")))
+      return res.status(400).json({
+        error: "Move-in date must be at least 3 days from today.",
+        code: "MOVEIN_DATE_TOO_SOON",
+      });
+
     // Verify room
     let room = null;
     if (roomId) {
@@ -881,7 +888,7 @@ export const createReservation = async (req, res, next) => {
         ? new Date(b.targetMoveInDate)
         : null,
       leaseDuration: b.leaseDuration || null,
-      billingEmail: b.billingEmail || dbUser.email,
+      billingEmail: ((b.billingEmail || dbUser.email) ?? "").toLowerCase().trim() || null,
       viewingType: b.viewingType || null,
       isOutOfTown: b.isOutOfTown || false,
       currentLocation: b.currentLocation || null,
@@ -1761,6 +1768,18 @@ export const updateReservationByUser = async (req, res, next) => {
       updates.visitScheduledAt = new Date();
     }
 
+    // ── Visit date: reject past dates ───────────────────────
+    if (updates.visitDate) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      if (new Date(updates.visitDate) < todayStart) {
+        return res.status(400).json({
+          error: "Visit date cannot be in the past. Please select a future date.",
+          code: "VISIT_DATE_IN_PAST",
+        });
+      }
+    }
+
     // ── Visit time-slot collision check ─────────────────────
     // Prevent two applicants from booking the same room at the same date/time
     if (updates.visitDate) {
@@ -1841,25 +1860,91 @@ export const updateReservationByUser = async (req, res, next) => {
 
     if (isApplicationSubmission) {
       // Enforce minimum required fields before accepting the application.
-      // These match the client-side validation in useReservationFlow stage 3
-      // and prevent bypassing the form via direct API calls.
+      // Mirrors client-side validation in useReservationFlow stage 3 so direct
+      // API calls cannot bypass the form.
+      //
+      // Each check uses (updates.<field> ?? reservation.<field>) so partial
+      // auto-saves are tolerated — only the final merged value is validated.
+      //
+      // NOTE: buildUserUpdatePayload stores emergency contact under dot-notation
+      // keys ("emergencyContact.name") for MongoDB $set — NOT as flat JS props.
       const missingRequired = [];
       const hasVal = (v) => v != null && String(v).trim().length > 0;
+      const isValidPHPhone = (v) => v != null && /^09\d{9}$/.test(String(v));
 
-      if (!hasVal(updates.selfiePhotoUrl))          missingRequired.push("profile photo");
-      if (!hasVal(updates.emergencyContactName))    missingRequired.push("emergency contact name");
-      if (!hasVal(updates.emergencyContactNumber))  missingRequired.push("emergency contact phone");
-      if (!hasVal(updates.validIDFrontUrl))         missingRequired.push("valid ID (front)");
+      // — Profile photo
+      if (!hasVal(updates.selfiePhotoUrl ?? reservation.selfiePhotoUrl))
+        missingRequired.push("profile photo");
+
+      // — Names
+      if (!hasVal(updates.firstName ?? reservation.firstName))
+        missingRequired.push("first name");
+      if (!hasVal(updates.lastName ?? reservation.lastName))
+        missingRequired.push("last name");
+
+      // — Mobile number (must be normalized to 09XXXXXXXXX)
+      const effectiveMobile = updates.mobileNumber ?? reservation.mobileNumber;
+      if (!isValidPHPhone(effectiveMobile))
+        missingRequired.push("mobile number (must be in 09XXXXXXXXX format)");
+
+      // — Birthday: required and applicant must be at least 18
+      const effectiveBirthday = updates.birthday ?? reservation.birthday;
+      if (!effectiveBirthday) {
+        missingRequired.push("birthday");
+      } else {
+        const ageYears = dayjs().diff(dayjs(effectiveBirthday), "year");
+        if (isNaN(ageYears) || ageYears < 18)
+          missingRequired.push("birthday (applicant must be at least 18 years old)");
+      }
+
+      // — Emergency contact (dot-notation keys from buildUserUpdatePayload)
+      const effectiveEmergencyName =
+        updates["emergencyContact.name"] ?? reservation.emergencyContact?.name;
+      const effectiveEmergencyPhone =
+        updates["emergencyContact.contactNumber"] ?? reservation.emergencyContact?.contactNumber;
+      if (!hasVal(effectiveEmergencyName))
+        missingRequired.push("emergency contact name");
+      if (!isValidPHPhone(effectiveEmergencyPhone))
+        missingRequired.push("emergency contact phone (must be in 09XXXXXXXXX format)");
+
+      // — Valid ID: both sides required
+      if (!hasVal(updates.validIDFrontUrl ?? reservation.validIDFrontUrl))
+        missingRequired.push("valid ID (front)");
+      if (!hasVal(updates.validIDBackUrl ?? reservation.validIDBackUrl))
+        missingRequired.push("valid ID (back)");
+
+      // — ID type
       const submittedIdType =
         updates.idType ||
         updates.validIDType ||
         reservation.idType ||
         reservation.validIDType;
-      if (!hasVal(submittedIdType))                  missingRequired.push("ID type");
+      if (!hasVal(submittedIdType))
+        missingRequired.push("ID type");
+
+      // — NBI clearance: upload or written reason required
+      const effectiveNbiUrl = updates.nbiClearanceUrl ?? reservation.nbiClearanceUrl;
+      const effectiveNbiReason = updates.nbiReason ?? reservation.nbiReason;
+      if (!hasVal(effectiveNbiUrl) && !hasVal(effectiveNbiReason))
+        missingRequired.push("NBI clearance (upload or provide a reason)");
+
+      // — Company ID: upload or written reason required
+      const effectiveCompanyUrl = updates.companyIDUrl ?? reservation.companyIDUrl;
+      const effectiveCompanyReason = updates.companyIDReason ?? reservation.companyIDReason;
+      if (!hasVal(effectiveCompanyUrl) && !hasVal(effectiveCompanyReason))
+        missingRequired.push("company ID (upload or provide a reason)");
+
+      // — Agreements must be explicitly true
+      const effectivePrivacy = updates.agreedToPrivacy ?? reservation.agreedToPrivacy;
+      const effectiveCert = updates.agreedToCertification ?? reservation.agreedToCertification;
+      if (effectivePrivacy !== true)
+        missingRequired.push("privacy policy agreement");
+      if (effectiveCert !== true)
+        missingRequired.push("certification agreement");
 
       if (missingRequired.length > 0) {
         return res.status(422).json({
-          error: `Application cannot be submitted. The following required fields are missing: ${missingRequired.join(", ")}.`,
+          error: `Application cannot be submitted. The following required fields are missing or invalid: ${missingRequired.join(", ")}.`,
           code: "APPLICATION_INCOMPLETE",
           missingFields: missingRequired,
         });

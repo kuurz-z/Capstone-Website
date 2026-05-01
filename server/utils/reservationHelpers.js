@@ -499,8 +499,8 @@ export const normalizePHPhone = (raw) => {
   if (digits.startsWith("09") && digits.length === 11) {
     return digits;
   }
-  // Fallback: return raw to let Mongoose validation surface the problem
-  return raw;
+  // Unrecognized format — return null so callers can skip or reject
+  return null;
 };
 
 /**
@@ -514,8 +514,16 @@ export const buildUserUpdatePayload = (body) => {
   // Flat fields
   for (const key of USER_UPDATE_FLAT_FIELDS) {
     if (body[key] !== undefined) {
-      // Normalize phone numbers stored in flat fields.
-      updates[key] = key === "mobileNumber" ? normalizePHPhone(body[key]) ?? body[key] : body[key];
+      if (key === "mobileNumber") {
+        // Strict: normalize to 09XXXXXXXXX — skip entirely if format is unrecognized
+        // so an incomplete/invalid input never overwrites a previously valid saved number.
+        const normalized = normalizePHPhone(body[key]);
+        if (normalized !== null) updates[key] = normalized;
+      } else if (key === "billingEmail") {
+        updates[key] = typeof body[key] === "string" ? body[key].toLowerCase().trim() : body[key];
+      } else {
+        updates[key] = body[key];
+      }
     }
   }
 
@@ -524,11 +532,23 @@ export const buildUserUpdatePayload = (body) => {
     if (body[bodyKey] !== undefined) updates[schemaKey] = body[bodyKey];
   }
 
-  // Nested fields — normalize emergency contact phone
+  // Nested fields — normalize phone numbers
   for (const [bodyKey, path] of Object.entries(USER_UPDATE_NESTED_FIELDS)) {
     if (body[bodyKey] !== undefined) {
-      const isPhone = bodyKey === "emergencyContactNumber" || bodyKey === "visitorPhone";
-      updates[path] = isPhone ? normalizePHPhone(body[bodyKey]) ?? body[bodyKey] : body[bodyKey];
+      // Strict phone fields: skip if normalization fails (emergency contact, visitor)
+      const isStrictPhone = bodyKey === "emergencyContactNumber" || bodyKey === "visitorPhone";
+      // Soft phone field: normalize if PH mobile, otherwise save trimmed raw (supports landlines)
+      const isSoftPhone = bodyKey === "employerContact";
+
+      if (isStrictPhone) {
+        const normalized = normalizePHPhone(body[bodyKey]);
+        if (normalized !== null) updates[path] = normalized;
+      } else if (isSoftPhone) {
+        const normalized = normalizePHPhone(body[bodyKey]);
+        updates[path] = normalized !== null ? normalized : String(body[bodyKey]).trim();
+      } else {
+        updates[path] = body[bodyKey];
+      }
     }
   }
 
