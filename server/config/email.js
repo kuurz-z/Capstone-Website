@@ -27,28 +27,77 @@ dotenv.config();
 // TRANSPORTER CONFIGURATION
 // =============================================================================
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
+const resolveEmailConfig = () => {
+  const user = String(process.env.EMAIL_USER || process.env.SMTP_USER || "").trim();
+  const pass = String(process.env.EMAIL_PASSWORD || process.env.SMTP_PASS || "").trim();
+  const host = String(process.env.SMTP_HOST || "").trim();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure =
+    String(process.env.SMTP_SECURE || "").trim().toLowerCase() === "true" ||
+    port === 465;
+
+  if (!process.env.EMAIL_USER && user) process.env.EMAIL_USER = user;
+  if (!process.env.EMAIL_PASSWORD && pass) process.env.EMAIL_PASSWORD = pass;
+
+  return { user, pass, host, port, secure };
+};
+
+const emailConfig = resolveEmailConfig();
+const transporterOptions = emailConfig.host
+  ? {
+      host: emailConfig.host,
+      port: emailConfig.port,
+      secure: emailConfig.secure,
+      auth: {
+        user: emailConfig.user,
+        pass: emailConfig.pass,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    }
+  : {
+      service: "gmail",
+      auth: {
+        user: emailConfig.user,
+        pass: emailConfig.pass,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    };
+
+const transporter = nodemailer.createTransport(transporterOptions);
+
+const isEmailConfigured = Boolean(emailConfig.user && emailConfig.pass);
+
+console.log("[EMAIL CONFIG]", {
+  configured: isEmailConfigured,
+  host: emailConfig.host || "gmail (service)",
+  port: emailConfig.port,
+  secure: emailConfig.secure,
+  sender: emailConfig.user || "(none)",
 });
 
-const isEmailConfigured = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD);
 if (!isEmailConfigured || process.env.NODE_ENV === "test") {
   transporter.verify = () => {};
 }
 
 // Verify connection on startup
-transporter.verify((error, success) => {
+transporter.verify((error) => {
   if (error) {
-    console.log("⚠️ Email service not configured:", error.message);
-    console.log(
-      "📧 To enable email notifications, add EMAIL_USER and EMAIL_PASSWORD to .env",
-    );
+    console.log("[EMAIL CONFIG] SMTP verification failed:", {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+    });
+    console.log("[EMAIL CONFIG] Set EMAIL_USER/EMAIL_PASSWORD or SMTP_USER/SMTP_PASS to enable emails.");
   } else {
-    console.log("✅ Email service ready");
+    console.log("[EMAIL CONFIG] SMTP connection verified and ready.", {
+      host: emailConfig.host || "gmail",
+      sender: emailConfig.user,
+    });
   }
 });
 
@@ -938,14 +987,14 @@ export const sendPaymentReceiptEmail = async ({
 };
 
 export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    console.log("Login OTP email not sent - email not configured");
+  if (!emailConfig.user || !emailConfig.pass) {
+    console.log("[OTP EMAIL] Not sent — email not configured (no sender credentials)");
     return { success: false, message: "Email service not configured" };
   }
 
   const displayName = name || "there";
   const mailOptions = {
-    from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+    from: { name: "Lilycrest Dormitory", address: emailConfig.user },
     to,
     subject: "Your Lilycrest login OTP",
     html: `<!DOCTYPE html>
@@ -972,12 +1021,37 @@ export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }
   };
 
   try {
+    console.log("[OTP EMAIL] Sending", {
+      to,
+      from: emailConfig.user,
+      host: emailConfig.host || "gmail",
+      port: emailConfig.port,
+    });
     const info = await transporter.sendMail(mailOptions);
-    console.log(`Login OTP email sent to ${to} - ${info.messageId}`);
+    console.log("[OTP EMAIL] Sent successfully", {
+      to,
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`Login OTP email failed for ${to}:`, error.message);
-    return { success: false, error: error.message };
+    console.error("[OTP EMAIL ERROR]", {
+      to,
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+    });
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+    };
   }
 };
 

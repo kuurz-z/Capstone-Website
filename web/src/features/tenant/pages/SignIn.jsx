@@ -329,7 +329,9 @@ function SignIn() {
         const isNotRegistered =
           backendError.response?.status === 404 ||
           /not found|not registered|register first/i.test(backendError.message);
-        const code = backendError.response?.data?.code;
+        const code =
+          backendError.response?.data?.code ||
+          backendError.response?.data?.error?.code;
         if (isNotRegistered)
           showNotification(
             "Account profile not found. Please contact support.",
@@ -406,6 +408,9 @@ function SignIn() {
 
         const status = loginError.response?.status;
         const errMsg = loginError.message || "";
+        const code =
+          loginError.response?.data?.code ||
+          loginError.response?.data?.error?.code;
 
         if (
           status === 404 ||
@@ -416,18 +421,21 @@ function SignIn() {
             "warning",
           );
         } else if (status === 403) {
-          const code = loginError.response?.data?.code;
           if (code === "EMAIL_NOT_VERIFIED") {
             showNotification(
               "Please verify your email before logging in.",
               "warning",
             );
+          } else if (code === "OTP_EMAIL_SEND_FAILED") {
+            showNotification("Unable to send OTP. Please contact support.", "error");
           } else {
             showNotification(
               "Your account is inactive. Please contact support.",
               "error",
             );
           }
+        } else if (code === "OTP_EMAIL_SEND_FAILED") {
+          showNotification("Unable to send OTP. Please contact support.", "error");
         } else {
           showNotification(
             "Login failed. Please try again or contact support.",

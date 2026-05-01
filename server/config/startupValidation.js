@@ -11,7 +11,6 @@ const ENV_GROUPS = Object.freeze({
     "FIREBASE_CLIENT_CERT_URL",
   ],
   paymongo: ["PAYMONGO_SECRET_KEY", "PAYMONGO_WEBHOOK_SECRET"],
-  email: ["EMAIL_USER", "EMAIL_PASSWORD"],
 });
 
 const getMissingEnv = (keys = []) =>
@@ -35,6 +34,17 @@ export function validateStartupConfig() {
   const failures = Object.entries(missingByGroup)
     .filter(([, missing]) => missing.length > 0)
     .map(([group, missing]) => `${group}: ${missing.join(", ")}`);
+
+  const hasEmailCredentials = Boolean(
+    (String(process.env.EMAIL_USER || "").trim() &&
+      String(process.env.EMAIL_PASSWORD || "").trim()) ||
+      (String(process.env.SMTP_USER || "").trim() &&
+        String(process.env.SMTP_PASS || "").trim()),
+  );
+
+  if (!hasEmailCredentials) {
+    failures.push("email: EMAIL_USER/EMAIL_PASSWORD or SMTP_USER/SMTP_PASS");
+  }
 
   if (!hasCorsConfig) {
     failures.push("cors: CORS_ORIGINS or FRONTEND_URL");

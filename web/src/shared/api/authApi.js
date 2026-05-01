@@ -63,14 +63,20 @@ const authRequest = async (url, options = {}, _isRetry = false) => {
   });
 
   if (!response.ok) {
-    if (response.status === 401 && !_isRetry) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorCode = errorData.code || errorData.error?.code;
+    const shouldRetryAuth =
+      response.status === 401 &&
+      !_isRetry &&
+      !["OTP_SESSION_REQUIRED", "OTP_SESSION_INVALID"].includes(errorCode);
+
+    if (shouldRetryAuth) {
       const refreshedToken = await getFreshToken(true);
       if (refreshedToken) {
         return authRequest(url, options, true);
       }
     }
 
-    const errorData = await response.json().catch(() => ({}));
     const errorMessage =
       typeof errorData.error === "string"
         ? errorData.error

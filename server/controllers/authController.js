@@ -66,8 +66,12 @@ const buildUserPayload = (user) => ({
 
 const storeOtpChallenge = async (user, req, deviceId) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    logger.error(
+      { userId: String(user._id), email: user.email },
+      "Login OTP email cannot be sent because email credentials are missing",
+    );
     throw new AppError(
-      "Unable to send OTP. Please contact support.",
+      "Failed to send OTP email",
       503,
       "OTP_EMAIL_SEND_FAILED",
     );
@@ -75,6 +79,11 @@ const storeOtpChallenge = async (user, req, deviceId) => {
 
   const otp = createOtp();
   const now = new Date();
+  logger.info(
+    { userId: String(user._id), email: user.email, deviceId },
+    "Login OTP generated",
+  );
+
   const pending = await UserSession.findOneAndUpdate(
     {
       userId: user._id,
@@ -99,25 +108,66 @@ const storeOtpChallenge = async (user, req, deviceId) => {
     { new: true, upsert: true, setDefaultsOnInsert: true },
   );
 
+  logger.info(
+    {
+      userId: String(user._id),
+      email: user.email,
+      deviceId,
+      otpExpiresAt: pending.otpExpiresAt,
+    },
+    "Login OTP stored",
+  );
+
   const name = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username;
-  sendLoginOtpEmail({
+  logger.info(
+    {
+      userId: String(user._id),
+      email: user.email,
+      from: process.env.EMAIL_USER,
+    },
+    "Login OTP email send attempt started",
+  );
+
+  const emailResult = await sendLoginOtpEmail({
     to: user.email,
     name,
     otp,
     expiresInMinutes: OTP_EXPIRES_MINUTES,
-  }).then((emailResult) => {
-    if (!emailResult?.success) {
-      logger.error(
-        { userId: String(user._id), email: user.email },
-        "Failed to send login OTP email",
-      );
-    }
-  }).catch((error) => {
+  });
+
+  if (!emailResult?.success) {
     logger.error(
-      { err: error, userId: String(user._id), email: user.email },
+      {
+        userId: String(user._id),
+        email: user.email,
+        smtpError: emailResult?.error,
+        smtpCode: emailResult?.code,
+        smtpCommand: emailResult?.command,
+        smtpResponse: emailResult?.response,
+      },
       "Failed to send login OTP email",
     );
-  });
+
+    pending.otpHash = null;
+    pending.otpExpiresAt = null;
+    pending.otpAttempts = 0;
+    await pending.save();
+
+    throw new AppError(
+      "Failed to send OTP email",
+      503,
+      "OTP_EMAIL_SEND_FAILED",
+    );
+  }
+
+  logger.info(
+    {
+      userId: String(user._id),
+      email: user.email,
+      messageId: emailResult.messageId,
+    },
+    "Login OTP email sent",
+  );
 
   return pending;
 };
