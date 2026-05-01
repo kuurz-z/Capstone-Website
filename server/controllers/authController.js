@@ -370,8 +370,13 @@ export const login = async (req, res, next) => {
       });
     }
 
+    const signInProvider = req.user.firebase?.sign_in_provider;
+    const isOAuthUser = Boolean(signInProvider && signInProvider !== "password");
+
     let session = null;
-    if (adminUser) {
+    if (adminUser || isOAuthUser) {
+      // Admins and OAuth users (Google, Facebook, etc.) skip OTP.
+      // OAuth providers already verify identity; no second factor needed.
       session = await UserSession.createSession(user._id, req, {
         deviceId: getDeviceId(req) || null,
         durationMs: SESSION_DURATION_MS,
@@ -396,6 +401,7 @@ export const login = async (req, res, next) => {
         await storeOtpChallenge(user, req, deviceId);
         return res.status(200).json({
           requiresOtp: true,
+          code: "OTP_REQUIRED",
           message: "OTP verification required",
         });
       }

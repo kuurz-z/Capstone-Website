@@ -379,17 +379,7 @@ function SignIn() {
       try {
         clearSessionId();
         const loginResponse = await login();
-        if (loginResponse?.requiresOtp) {
-          setOtpPending({
-            email: firebaseUser.email || "",
-            name: firebaseUser.displayName || "",
-          });
-          navigate("/verify-email?mode=otp", {
-            replace: true,
-            state: { email: firebaseUser.email || "" },
-          });
-          return;
-        }
+        // OAuth users never require OTP — navigate directly.
         handlePostAuthFlow(loginResponse, firebaseUser.displayName || "there");
       } catch (loginError) {
         // Delete the auto-created Firebase account to keep Firebase ↔ MongoDB in sync
