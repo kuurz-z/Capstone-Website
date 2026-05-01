@@ -377,10 +377,12 @@ export const login = async (req, res, next) => {
     if (adminUser || isOAuthUser) {
       // Admins and OAuth users (Google, Facebook, etc.) skip OTP.
       // OAuth providers already verify identity; no second factor needed.
+      // isOAuthUser sessions must have otpVerifiedAt set so verifyToken
+      // middleware's findValidOtpSession check passes for protected routes.
       session = await UserSession.createSession(user._id, req, {
         deviceId: getDeviceId(req) || null,
         durationMs: SESSION_DURATION_MS,
-        otpVerified: false,
+        otpVerified: isOAuthUser,
       });
     } else {
       const deviceId = getDeviceId(req);
