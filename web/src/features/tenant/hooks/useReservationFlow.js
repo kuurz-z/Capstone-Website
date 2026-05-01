@@ -1375,6 +1375,63 @@ export default function useReservationFlow() {
         navigate("/applicant/profile");
       }
     } catch (error) {
+      const errorMsg = error?.message || "";
+      if (errorMsg.includes("The following required fields are missing:")) {
+        const match = errorMsg.match(/missing:\s*(.*)/i);
+        if (match && match[1]) {
+          const fieldsStr = match[1].replace(/\.$/, "");
+          const fields = fieldsStr.split(",").map((s) => s.trim());
+          const firstFieldStr = fields[0];
+          
+          let fieldKey = null;
+          const lowerField = firstFieldStr.toLowerCase();
+          if (lowerField.includes("first name")) fieldKey = "firstName";
+          else if (lowerField.includes("last name")) fieldKey = "lastName";
+          else if (lowerField.includes("middle name")) fieldKey = "middleName";
+          else if (lowerField.includes("mobile number")) fieldKey = "mobileNumber";
+          else if (lowerField.includes("birthday")) fieldKey = "birthday";
+          else if (lowerField.includes("marital status")) fieldKey = "maritalStatus";
+          else if (lowerField.includes("nationality")) fieldKey = "nationality";
+          else if (lowerField.includes("education level")) fieldKey = "educationLevel";
+          else if (lowerField.includes("address unit") || lowerField.includes("house no")) fieldKey = "addressUnitHouseNo";
+          else if (lowerField.includes("address street")) fieldKey = "addressStreet";
+          else if (lowerField.includes("address region")) fieldKey = "addressRegion";
+          else if (lowerField.includes("address barangay")) fieldKey = "addressBarangay";
+          else if (lowerField.includes("address city")) fieldKey = "addressCity";
+          else if (lowerField.includes("address province")) fieldKey = "addressProvince";
+          else if (lowerField.includes("emergency contact name")) fieldKey = "emergencyContactName";
+          else if (lowerField.includes("emergency phone") || lowerField.includes("emergency contact phone") || lowerField.includes("emergency contact number")) fieldKey = "emergencyContactNumber";
+          else if (lowerField.includes("emergency relationship")) fieldKey = "emergencyRelationship";
+          else if (lowerField.includes("health concerns")) fieldKey = "healthConcerns";
+          else if (lowerField.includes("employer") || lowerField.includes("school")) fieldKey = "employerSchool";
+          else if (lowerField.includes("occupation")) fieldKey = "occupation";
+          else if (lowerField.includes("referral")) fieldKey = "referralSource";
+          else if (lowerField.includes("target move-in date")) fieldKey = "targetMoveInDate";
+          else if (lowerField.includes("estimated time") || lowerField.includes("move-in time")) fieldKey = "estimatedMoveInTime";
+          else if (lowerField.includes("work schedule")) fieldKey = "workSchedule";
+          else if (lowerField.includes("company id")) fieldKey = "companyID";
+          else if (lowerField.includes("valid id front")) fieldKey = "validIDFront";
+          else if (lowerField.includes("valid id back")) fieldKey = "validIDBack";
+          else if (lowerField.includes("selfie photo")) fieldKey = "selfiePhoto";
+
+          showNotification(
+            `"${firstFieldStr.charAt(0).toUpperCase() + firstFieldStr.slice(1)}" is required. Please fill it in to continue.`,
+            "error",
+            5000,
+          );
+          
+          if (fieldKey || firstFieldStr) {
+            setTimeout(() => {
+              const selector = fieldKey ? `[data-field="${fieldKey}"]` : `[data-field="${firstFieldStr}"]`;
+              const el = document.querySelector(selector);
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 300);
+          }
+          setIsLoading(false);
+          return;
+        }
+      }
+
       showNotification(
         getFriendlyError(error, "Failed to process reservation. Please try again."),
         "error",
