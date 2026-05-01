@@ -42,6 +42,7 @@ import {
   suspendUser,
   reactivateUser,
   restoreUser,
+  archiveUser,
   banUser,
   updatePermissions,
   getMyStays,
@@ -152,6 +153,20 @@ router.patch(
   requirePermission("manageUsers"),
   filterByBranch,
   restoreUser,
+);
+
+/**
+ * PATCH /api/users/:userId/archive
+ * Soft-delete (archive) a user account.
+ * Access: Admin | Owner
+ */
+router.patch(
+  "/:userId/archive",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageUsers"),
+  filterByBranch,
+  archiveUser,
 );
 
 /**

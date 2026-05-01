@@ -8,6 +8,7 @@ export default function HardDeleteUserModal({
   isOwner = false,
   onDelete,
   onClose,
+  loading = false,
 }) {
   const [forceDelete, setForceDelete] = useState(false);
   const [confirmationText, setConfirmationText] = useState("");
@@ -98,9 +99,9 @@ export default function HardDeleteUserModal({
               onDelete({ hardDelete: true, forceDelete, confirmationText })
             }
             className="btn-delete-confirm"
-            disabled={forceDelete && confirmationText !== "DELETE"}
+            disabled={loading || (forceDelete && confirmationText !== "DELETE")}
           >
-            {forceDelete ? "Force Delete" : "Permanently Delete"}
+            {loading ? "Deleting…" : forceDelete ? "Force Delete" : "Permanently Delete"}
           </button>
         </div>
       </div>

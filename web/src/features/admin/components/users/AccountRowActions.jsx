@@ -3,15 +3,17 @@ function ActionButton({
   variant = "default",
   onPress,
   ariaLabel,
+  disabled = false,
 }) {
   return (
     <button
       type="button"
       className={`account-row-action account-row-action--${variant}`}
       aria-label={ariaLabel || label}
+      disabled={disabled}
       onClick={(event) => {
         event.stopPropagation();
-        onPress();
+        if (!disabled) onPress();
       }}
     >
       {label}
@@ -25,6 +27,7 @@ export default function AccountRowActions({
   canEdit,
   canBlock,
   canUnblock,
+  canArchive,
   canRestore,
   canHardDelete,
   onViewAccess,
@@ -32,8 +35,10 @@ export default function AccountRowActions({
   onEdit,
   onBlock,
   onUnblock,
+  onArchive,
   onRestore,
   onHardDelete,
+  disabled = false,
 }) {
   return (
     <div className="account-row-actions" onClick={(event) => event.stopPropagation()}>
@@ -42,6 +47,7 @@ export default function AccountRowActions({
           label="Access"
           variant="primary"
           onPress={onViewAccess}
+          disabled={disabled}
         />
       )}
       {canManagePermissions && (
@@ -49,14 +55,16 @@ export default function AccountRowActions({
           label="Permissions"
           variant="primary"
           onPress={onManagePermissions}
+          disabled={disabled}
         />
       )}
-      {canEdit && <ActionButton label="Edit" onPress={onEdit} />}
+      {canEdit && <ActionButton label="Edit" onPress={onEdit} disabled={disabled} />}
       {canBlock && (
         <ActionButton
           label="Block"
           variant="warn"
           onPress={onBlock}
+          disabled={disabled}
         />
       )}
       {canUnblock && (
@@ -64,6 +72,15 @@ export default function AccountRowActions({
           label="Unblock"
           variant="primary"
           onPress={onUnblock}
+          disabled={disabled}
+        />
+      )}
+      {canArchive && (
+        <ActionButton
+          label="Archive"
+          variant="warn"
+          onPress={onArchive}
+          disabled={disabled}
         />
       )}
       {canRestore && (
@@ -71,14 +88,16 @@ export default function AccountRowActions({
           label="Restore"
           variant="primary"
           onPress={onRestore}
+          disabled={disabled}
         />
       )}
       {canHardDelete && (
         <ActionButton
           label="Delete"
           variant="danger"
-          ariaLabel="Hard Delete user"
+          ariaLabel="Permanently delete user"
           onPress={onHardDelete}
+          disabled={disabled}
         />
       )}
     </div>

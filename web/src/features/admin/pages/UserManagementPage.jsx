@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useUsers, useUserStats } from "../../../shared/hooks/queries/useUsers";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
+import ArchiveUserModal from "../components/users/ArchiveUserModal";
 import HardDeleteUserModal from "../components/users/HardDeleteUserModal";
 import RestoreUserModal from "../components/users/RestoreUserModal";
 import AccountActionModal from "../components/users/AccountActionModal";
@@ -42,8 +43,10 @@ function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [accessDrawerUser, setAccessDrawerUser] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isHardDeleteModalOpen, setIsHardDeleteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [accountAction, setAccountAction] = useState({
     type: null,
     user: null,
@@ -270,6 +273,35 @@ function UserManagementPage() {
     }
   };
 
+  const handleArchiveClick = (userData) => {
+    setSelectedUser(userData);
+    setIsArchiveModalOpen(true);
+  };
+
+  const handleArchiveUser = async ({ hardDelete = false } = {}) => {
+    setActionLoading(true);
+    try {
+      const userLabel = formatUserLabel(selectedUser);
+      if (hardDelete) {
+        await authFetch(`/users/${selectedUser._id}?hardDelete=true`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        showNotification(`${userLabel} was permanently deleted.`, "success", 3000);
+      } else {
+        await authFetch(`/users/${selectedUser._id}/archive`, { method: "PATCH" });
+        showNotification(`${userLabel} was archived successfully.`, "success", 3000);
+      }
+      setIsArchiveModalOpen(false);
+      refetchAll();
+    } catch (error) {
+      showNotification(error.message || "Failed to archive user", "error", 3000);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleHardDeleteClick = (userData) => {
     setSelectedUser(userData);
     setIsHardDeleteModalOpen(true);
@@ -280,6 +312,7 @@ function UserManagementPage() {
     forceDelete = false,
     confirmationText = "",
   } = {}) => {
+    setActionLoading(true);
     try {
       const queryParams = new URLSearchParams();
       if (hardDelete) queryParams.set("hardDelete", "true");
@@ -302,7 +335,6 @@ function UserManagementPage() {
         showNotification(`${userLabel} was permanently deleted.`, "success", 3000);
       }
 
-      setIsDeleteModalOpen(false);
       setIsHardDeleteModalOpen(false);
       refetchAll();
     } catch (error) {
@@ -327,6 +359,8 @@ function UserManagementPage() {
       } else {
         showNotification(error.message || "Failed to delete user", "error", 3000);
       }
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -588,6 +622,9 @@ function UserManagementPage() {
           !isCurrentUser &&
           !isArchived &&
           ["suspended", "banned"].includes(status);
+        const canArchive =
+          canManageUsers && !isCurrentUser && !isArchived &&
+          (isOwner || !isPrivilegedAccount);
         const canRestore =
           canManageUsers &&
           !isCurrentUser &&
@@ -602,8 +639,10 @@ function UserManagementPage() {
             canEdit={canManageUsers && !isArchived && (isOwner || !isPrivilegedAccount)}
             canBlock={canBlock}
             canUnblock={canUnblock}
+            canArchive={canArchive}
             canRestore={canRestore}
             canHardDelete={canHardDelete}
+            disabled={actionLoading}
             onViewAccess={() => setAccessDrawerUser(row)}
             onManagePermissions={() => handleOpenPermissions(row)}
             onEdit={() => handleEditClick(row)}
@@ -611,6 +650,7 @@ function UserManagementPage() {
             onUnblock={() =>
               setAccountAction({ type: "reactivate", user: row })
             }
+            onArchive={() => handleArchiveClick(row)}
             onRestore={() =>
               setAccountAction({ type: "restore", user: row })
             }
@@ -722,12 +762,22 @@ function UserManagementPage() {
           onClose={() => setIsAddModalOpen(false)}
         />
       )}
+      {isArchiveModalOpen && (
+        <ArchiveUserModal
+          user={selectedUser}
+          isOwner={isOwner}
+          onDelete={handleArchiveUser}
+          onClose={() => !actionLoading && setIsArchiveModalOpen(false)}
+          loading={actionLoading}
+        />
+      )}
       {isHardDeleteModalOpen && (
         <HardDeleteUserModal
           user={selectedUser}
           isOwner={isOwner}
           onDelete={handleDeleteUser}
-          onClose={() => setIsHardDeleteModalOpen(false)}
+          onClose={() => !actionLoading && setIsHardDeleteModalOpen(false)}
+          loading={actionLoading}
         />
       )}
       {accountAction.type === "restore" && (

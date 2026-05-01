@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
-export default function ArchiveUserModal({ user, isOwner, onDelete, onClose }) {
+export default function ArchiveUserModal({ user, isOwner, onDelete, onClose, loading = false }) {
   const [hardDelete, setHardDelete] = useState(false);
 
   useBodyScrollLock(true);
@@ -74,8 +74,9 @@ export default function ArchiveUserModal({ user, isOwner, onDelete, onClose }) {
           <button
             onClick={() => onDelete({ hardDelete })}
             className="btn-delete-confirm"
+            disabled={loading}
           >
-            {hardDelete ? "Permanently Delete" : "Archive User"}
+            {loading ? "Processing…" : hardDelete ? "Permanently Delete" : "Archive User"}
           </button>
         </div>
       </div>
