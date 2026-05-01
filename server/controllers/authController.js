@@ -308,7 +308,38 @@ export const login = async (req, res, next) => {
     const isCheckOnly = req.query.checkOnly === "true";
 
     // Find user in database using Firebase UID from verified token
-    const user = await User.findOne({ firebaseUid: req.user.uid });
+    let user = await User.findOne({ firebaseUid: req.user.uid });
+
+    if (!user && req.user.email) {
+      // UID not found — fall back to email lookup.
+      // Handles: Google sign-in to an account originally created with
+      // email/password (Firebase may issue a different UID for the OAuth
+      // credential), or admin-provisioned records with no UID yet.
+      const provider = req.user.firebase?.sign_in_provider || "unknown";
+      const byEmail = await User.findOne({
+        email: req.user.email.toLowerCase().trim(),
+      });
+
+      if (byEmail) {
+        logger.info(
+          {
+            email: req.user.email,
+            provider,
+            previousUid: byEmail.firebaseUid || "(none)",
+            newUid: req.user.uid,
+          },
+          "Login: user found by email — linking Firebase UID to existing account",
+        );
+        byEmail.firebaseUid = req.user.uid;
+        await byEmail.save();
+        user = byEmail;
+      } else {
+        logger.info(
+          { uid: req.user.uid, email: req.user.email, provider },
+          "Login: user not found by UID or email",
+        );
+      }
+    }
 
     if (!user) {
       // Only log if this is a real login attempt, not a check
