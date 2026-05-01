@@ -14,12 +14,18 @@ import BedSelector from "../components/BedSelector";
 import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 
 function getAvailabilityLabel(room) {
+  if (room.status === "maintenance" || room.status === "Maintenance") return "Maintenance";
+
   const beds = room.beds || [];
   const totalBeds = beds.length || 0;
   const availableBeds = beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available)).length;
+  const lockedBeds = beds.filter((bed) => bed.status === "locked" || bed.status === "maintenance").length;
 
   if (!totalBeds) return "Available";
-  if (availableBeds === 0) return "Full";
+  if (availableBeds === 0) {
+    if (lockedBeds === totalBeds && totalBeds > 0) return "Maintenance";
+    return "Full";
+  }
   if (availableBeds <= Math.max(1, Math.ceil(totalBeds * 0.25))) {
     return "Limited";
   }
@@ -28,6 +34,7 @@ function getAvailabilityLabel(room) {
 
 function getAvailabilityColor(room) {
   const label = getAvailabilityLabel(room);
+  if (label === "Maintenance") return "#9CA3AF"; // Gray
   if (label === "Full") return "#EF4444";
   if (label === "Limited") return "#D4AF37";
   return "#10B981";

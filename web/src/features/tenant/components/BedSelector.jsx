@@ -19,7 +19,8 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
 
   const getStatus = (bed) => {
     if (!bed) return "empty";
-    if (bed.status) return bed.status; // available, occupied, reserved, locked, maintenance
+    if (bed.status === 'maintenance') return 'locked';
+    if (bed.status) return bed.status; // available, occupied, reserved, locked
     return bed.available === false ? "occupied" : "available";
   };
 
@@ -70,10 +71,8 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
                 : status === "reserved"
                   ? "🔒 Reserved"
                   : status === "locked"
-                    ? "🔧 Locked"
-                    : status === "maintenance"
-                      ? "Locked"
-                      : "Available"}
+                    ? "� Locked"
+                    : "Available"}
           </div>
         </div>
       </div>

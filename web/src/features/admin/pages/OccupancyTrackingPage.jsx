@@ -311,6 +311,9 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         columns={columns}
         data={rooms}
         loading={loading}
+        exportable={true}
+        exportFilename="Occupancy_Tracking"
+        exportTitle="Occupancy Tracking Export"
         emptyState={{
           icon: BarChart3,
           title: "No rooms found",

@@ -17,16 +17,18 @@ const RoomCard = React.memo(({ room, onClick }) => {
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
-  // Bed availability — prefer currentOccupancy/capacity (kept in sync by
-  // auto-heal logic) over the beds[].status array which can drift out of sync
   const totalBeds = room.capacity || room.beds?.length || parseInt(room.occupancy?.split("/")[1]) || 0;
-  const occupied = room.currentOccupancy ?? (
-    room.beds
-      ? room.beds.filter((b) => b.status === "occupied" || b.available === false).length
-      : parseInt(room.occupancy?.split("/")[0]) || 0
-  );
-  const availableBeds = Math.max(0, totalBeds - occupied);
-  const takenBeds = totalBeds - availableBeds;
+  
+  // Calculate available beds consistently with RoomDetailsModal
+  const availableBeds = room.beds
+    ? room.beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available)).length
+    : Math.max(0, totalBeds - (room.currentOccupancy || parseInt(room.occupancy?.split("/")[0]) || 0));
+
+  const lockedBeds = room.beds
+    ? room.beds.filter((bed) => bed.status === "locked" || bed.status === "maintenance").length
+    : 0;
+
+  const takenBeds = Math.max(0, totalBeds - availableBeds - lockedBeds);
 
   return (
     <div className="ca-card" onClick={onClick}>
@@ -91,10 +93,14 @@ const RoomCard = React.memo(({ room, onClick }) => {
             {Array.from({ length: takenBeds }).map((_, i) => (
               <div key={`t-${i}`} className="ca-bed-dot taken" />
             ))}
+            {/* Locked beds (gray) */}
+            {Array.from({ length: lockedBeds }).map((_, i) => (
+              <div key={`l-${i}`} className="ca-bed-dot locked" />
+            ))}
           </div>
           <span className="label">
             {availableBeds === 0
-              ? "Full"
+              ? lockedBeds === totalBeds && totalBeds > 0 ? "Maintenance" : "Full"
               : `${availableBeds} of ${totalBeds} open`}
           </span>
         </div>

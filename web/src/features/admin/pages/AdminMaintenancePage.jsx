@@ -1133,6 +1133,9 @@ export default function AdminMaintenancePage() {
             columns={columns}
             data={filteredRequests}
             loading={isLoading}
+            exportable={true}
+            exportFilename="Maintenance_Requests"
+            exportTitle="Maintenance Requests Export"
             selectable
             selectedIds={selectedRequestIds}
             getRowId={(row) => row.request_id}

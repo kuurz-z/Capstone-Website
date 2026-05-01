@@ -266,6 +266,9 @@ export default function BillingReportPage() {
             columns={OVERDUE_COLUMNS}
             data={pagedRows}
             loading={isLoading}
+            exportable={true}
+            exportFilename="Overdue_Bills"
+            exportTitle="Overdue Bills Export"
             pagination={{
               page,
               pageSize: 10,

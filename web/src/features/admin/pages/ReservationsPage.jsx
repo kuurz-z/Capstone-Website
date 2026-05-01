@@ -606,6 +606,9 @@ function ReservationsPage() {
                   columns={columns}
                   data={sortedReservations}
                   loading={loading}
+                  exportable={true}
+                  exportFilename="Reservations"
+                  exportTitle="Reservations Export"
                   disableRowInteraction
                   sorting="external"
                   sortKey={sortState.key}

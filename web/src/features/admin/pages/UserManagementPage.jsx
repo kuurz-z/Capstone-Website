@@ -11,6 +11,7 @@ import { useUsers, useUserStats } from "../../../shared/hooks/queries/useUsers";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
 import HardDeleteUserModal from "../components/users/HardDeleteUserModal";
+import DeleteUserModal from "../components/users/DeleteUserModal";
 import RestoreUserModal from "../components/users/RestoreUserModal";
 import AccountActionModal from "../components/users/AccountActionModal";
 import AccountRowActions from "../components/users/AccountRowActions";
@@ -43,6 +44,7 @@ function UserManagementPage() {
   const [accessDrawerUser, setAccessDrawerUser] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isHardDeleteModalOpen, setIsHardDeleteModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [accountAction, setAccountAction] = useState({
     type: null,
@@ -270,6 +272,11 @@ function UserManagementPage() {
     }
   };
 
+  const handleDeleteClick = (userData) => {
+    setSelectedUser(userData);
+    setIsDeleteModalOpen(true);
+  };
+
   const handleHardDeleteClick = (userData) => {
     setSelectedUser(userData);
     setIsHardDeleteModalOpen(true);
@@ -429,6 +436,13 @@ function UserManagementPage() {
           "success",
           3000,
         );
+      } else if (action === "restore") {
+        await authFetch(`/users/${userId}/restore`, { method: "PATCH" });
+        showNotification(
+          `${actionUserLabel} was restored successfully.`,
+          "success",
+          3000,
+        );
       }
       refetchAll();
     } catch (error) {
@@ -450,9 +464,14 @@ function UserManagementPage() {
       },
       { label: "Active", value: stats?.activeCount || 0, color: "green" },
       {
-        label: "Admin Accounts",
-        value: (stats?.byRole?.branch_admin || 0) + (stats?.byRole?.owner || 0),
+        label: "Branch Admins",
+        value: stats?.byRole?.branch_admin || 0,
         color: "blue",
+      },
+      {
+        label: "Owners",
+        value: stats?.byRole?.owner || 0,
+        color: "purple",
       },
       {
         label: "Blocked",
@@ -506,13 +525,13 @@ function UserManagementPage() {
     {
       key: "status",
       options: [
-        { value: "all", label: "All Status" },
+        { value: "all", label: "All Statuses" },
         { value: "active", label: "Active" },
-        { value: "restricted", label: "Blocked (All)" },
-        { value: "suspended", label: "Suspended" },
-        { value: "banned", label: "Blocked account" },
         { value: "pending_verification", label: "Pending Verification" },
-        { value: "archived", label: "Archived/Deleted" },
+        { value: "restricted", label: "All Restricted (Blocked/Suspended)" },
+        { value: "suspended", label: "Suspended (Temporary)" },
+        { value: "banned", label: "Banned (Permanent)" },
+        { value: "archived", label: "Archived" },
       ],
       value: statusFilter,
       onChange: (v) => {
@@ -593,6 +612,11 @@ function UserManagementPage() {
           !isCurrentUser &&
           isArchived &&
           (isOwner || !isPrivilegedAccount);
+        const canDelete =
+          canManageUsers &&
+          !isCurrentUser &&
+          !isArchived &&
+          (!isPrivilegedAccount || isOwner);
         const canHardDelete = canManageUsers && !isCurrentUser && isArchived && (!isPrivilegedAccount || isOwner);
 
         return (
@@ -603,6 +627,7 @@ function UserManagementPage() {
             canBlock={canBlock}
             canUnblock={canUnblock}
             canRestore={canRestore}
+            canDelete={canDelete}
             canHardDelete={canHardDelete}
             onViewAccess={() => setAccessDrawerUser(row)}
             onManagePermissions={() => handleOpenPermissions(row)}
@@ -614,6 +639,7 @@ function UserManagementPage() {
             onRestore={() =>
               setAccountAction({ type: "restore", user: row })
             }
+            onDelete={() => handleDeleteClick(row)}
             onHardDelete={() => handleHardDeleteClick(row)}
           />
         );
@@ -686,6 +712,9 @@ function UserManagementPage() {
           columns={columns}
           data={users}
           loading={loading}
+          exportable={true}
+          exportFilename="System_Users"
+          exportTitle="System Users Export"
           pagination={{
             page: currentPage,
             pageSize: ITEMS_PER_PAGE,
@@ -720,6 +749,14 @@ function UserManagementPage() {
           onFormChange={handleAddFormChange}
           onSubmit={handleCreateUser}
           onClose={() => setIsAddModalOpen(false)}
+        />
+      )}
+      {isDeleteModalOpen && (
+        <DeleteUserModal
+          user={selectedUser}
+          isOwner={isOwner}
+          onDelete={handleDeleteUser}
+          onClose={() => setIsDeleteModalOpen(false)}
         />
       )}
       {isHardDeleteModalOpen && (

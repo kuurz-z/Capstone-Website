@@ -26,6 +26,7 @@ export default function AccountRowActions({
   canBlock,
   canUnblock,
   canRestore,
+  canDelete,
   canHardDelete,
   onViewAccess,
   onManagePermissions,
@@ -33,6 +34,7 @@ export default function AccountRowActions({
   onBlock,
   onUnblock,
   onRestore,
+  onDelete,
   onHardDelete,
 }) {
   return (
@@ -73,9 +75,17 @@ export default function AccountRowActions({
           onPress={onRestore}
         />
       )}
-      {canHardDelete && (
+      {canDelete && (
         <ActionButton
           label="Delete"
+          variant="danger"
+          ariaLabel="Delete user"
+          onPress={onDelete}
+        />
+      )}
+      {canHardDelete && (
+        <ActionButton
+          label="Delete (Hard)"
           variant="danger"
           ariaLabel="Hard Delete user"
           onPress={onHardDelete}

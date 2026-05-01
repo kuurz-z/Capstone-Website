@@ -4,8 +4,10 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import EmptyState from "./EmptyState";
+import { exportToExcel, exportToPDF } from "../../../../shared/utils/exportUtils";
 import "./DataTable.css";
 
 /**
@@ -34,11 +36,15 @@ export default function DataTable({
   onSortChange,
   serverPagination = false,
   disableRowInteraction = false,
-  // Row selection (opt-in) — pass selectable={true} to enable checkboxes
+  // Row selection
   selectable = false,
-  selectedIds = null,   // Set of row IDs currently selected
+  selectedIds = null,
   getRowId = (row) => row.request_id || row.id || row._id,
-  onSelectionChange = null, // (nextSet: Set) => void
+  onSelectionChange = null,
+  // Export features
+  exportable = false,
+  exportFilename = "Table_Export",
+  exportTitle = "Exported Data",
 }) {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
@@ -120,6 +126,26 @@ export default function DataTable({
 
   return (
     <div className="data-table-wrapper">
+      {exportable && data.length > 0 && (
+        <div className="data-table-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <button 
+            type="button" 
+            className="data-table__export-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.75rem', fontSize: '0.85rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff', color: '#333' }}
+            onClick={() => exportToExcel(sortedData, columns, exportFilename)}
+          >
+            <Download size={14} /> Excel
+          </button>
+          <button 
+            type="button" 
+            className="data-table__export-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.25rem 0.75rem', fontSize: '0.85rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff', color: '#333' }}
+            onClick={() => exportToPDF(sortedData, columns, exportFilename, exportTitle)}
+          >
+            <Download size={14} /> PDF
+          </button>
+        </div>
+      )}
       <div className="data-table-scroll">
         <table className="data-table">
           <thead>

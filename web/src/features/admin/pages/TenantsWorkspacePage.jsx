@@ -1051,6 +1051,9 @@ export default function TenantsWorkspacePage() {
           data={sortedTenants}
           loading={loading}
           disableRowInteraction
+          exportable={true}
+          exportFilename="Tenants_List"
+          exportTitle="Tenants Data Export"
           pagination={{
             page: currentPage,
             pageSize: ITEMS_PER_PAGE,

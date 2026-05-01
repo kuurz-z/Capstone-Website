@@ -700,6 +700,9 @@ function RoomAvailabilityPage() {
             columns={columns}
             data={filteredRooms}
             loading={loading}
+            exportable={true}
+            exportFilename="Room_Availability"
+            exportTitle="Room Availability Export"
             pagination={{
               page: currentPage,
               pageSize: ROOMS_PER_PAGE,
