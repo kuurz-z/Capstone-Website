@@ -19,6 +19,7 @@
  */
 
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -100,6 +101,21 @@ transporter.verify((error) => {
     });
   }
 });
+
+// =============================================================================
+// RESEND — OTP EMAIL TRANSPORT
+// =============================================================================
+
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
+const OTP_FROM = String(process.env.RESEND_FROM || "onboarding@resend.dev").trim();
+
+const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
+if (resendClient) {
+  console.log("[EMAIL CONFIG] Resend configured.", { from: OTP_FROM });
+} else {
+  console.log("[EMAIL CONFIG] RESEND_API_KEY not set — OTP email will fail.");
+}
 
 // =============================================================================
 // EMAIL TEMPLATES
@@ -987,15 +1003,18 @@ export const sendPaymentReceiptEmail = async ({
 };
 
 export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }) => {
-  if (!emailConfig.user || !emailConfig.pass) {
-    console.log("[OTP EMAIL] Not sent — email not configured (no sender credentials)");
+  if (!resendClient) {
+    console.log("[OTP EMAIL] Not sent — RESEND_API_KEY is not configured");
     return { success: false, message: "Email service not configured" };
   }
 
   const displayName = name || "there";
-  const mailOptions = {
-    from: { name: "Lilycrest Dormitory", address: emailConfig.user },
-    to,
+
+  console.log("[OTP EMAIL] Sending via Resend", { to, from: OTP_FROM });
+
+  const { data, error } = await resendClient.emails.send({
+    from: OTP_FROM,
+    to: [to],
     subject: "Your Lilycrest login OTP",
     html: `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -1018,41 +1037,25 @@ export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }
   </table>
 </body></html>`,
     text: `Hi ${displayName}, your Lilycrest login OTP is ${otp}. It expires in ${expiresInMinutes} minutes.`,
-  };
+  });
 
-  try {
-    console.log("[OTP EMAIL] Sending", {
-      to,
-      from: emailConfig.user,
-      host: emailConfig.host || "gmail",
-      port: emailConfig.port,
-    });
-    const info = await transporter.sendMail(mailOptions);
-    console.log("[OTP EMAIL] Sent successfully", {
-      to,
-      messageId: info.messageId,
-      accepted: info.accepted,
-      rejected: info.rejected,
-    });
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
+  if (error) {
     console.error("[OTP EMAIL ERROR]", {
       to,
+      name: error.name,
       message: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-      responseCode: error.responseCode,
+      statusCode: error.statusCode,
     });
     return {
       success: false,
       error: error.message,
-      code: error.code,
-      command: error.command,
-      response: error.response,
-      responseCode: error.responseCode,
+      code: error.name,
+      statusCode: error.statusCode,
     };
   }
+
+  console.log("[OTP EMAIL] Sent successfully", { to, messageId: data.id });
+  return { success: true, messageId: data.id };
 };
 
 export default transporter;
