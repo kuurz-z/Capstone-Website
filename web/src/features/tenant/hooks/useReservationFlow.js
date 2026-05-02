@@ -329,7 +329,7 @@ export default function useReservationFlow() {
                 : "Name mismatch detected. Please review your information or upload a clearer ID.",
         extractedName: r.idExtractedName || "",
         extractedIdNumber: r.idExtractedNumber || "",
-        matchScore: r.idNameMatchScore || 0,
+        matchScore: r.idNameMatchScore ?? null,
         notes: r.idValidationNotes || [],
       });
     }
@@ -942,7 +942,7 @@ export default function useReservationFlow() {
             "ID uploaded. It will be manually reviewed by admin.",
           extractedName: result.extractedName || "",
           extractedIdNumber: result.extractedIdNumber || "",
-          matchScore: result.matchScore || 0,
+          matchScore: result.matchScore ?? null,
           notes: result.notes || [],
         };
 

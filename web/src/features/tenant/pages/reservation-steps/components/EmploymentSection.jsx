@@ -90,11 +90,14 @@ const EmploymentSection = ({
       <input
         type="tel"
         className="form-input"
-        placeholder="+63 or land line"
+        placeholder="09XXXXXXXXX or 02-XXXXXXXX"
         value={employerContact}
-        onChange={(e) =>
-          handleGeneralInput(e.target.value, setEmployerContact, 100)
-        }
+        onChange={(e) => {
+          // Strip letters and any char that can't appear in a PH phone number.
+          // Allowed: digits, spaces, hyphens, parentheses, leading +.
+          const cleaned = e.target.value.replace(/[^0-9\s\-()+]/g, "");
+          setEmployerContact(cleaned.slice(0, 20));
+        }}
         style={{
           border:
             showValidationErrors && employerContact && !validatePHPhoneOrLandline(employerContact)
