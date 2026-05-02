@@ -611,6 +611,10 @@
         );
     };
 
+    const clearQuickFilters = () => {
+      setQuickFilters([]);
+    };
+
     const resetFilters = () => {
         setSearchTerm("");
         setLeaseStatusFilter("all");
@@ -792,7 +796,7 @@
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-[var(--card)] border border-[var(--border-light)] rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-info-light rounded-lg">
+              <div className="p-2 bg-blue-100 rounded-lg">
                 <Users className="w-5 h-5 text-blue-600" />
               </div>
               <div>
@@ -822,7 +826,7 @@
           </div>
           <div className="bg-[var(--card)] border border-[var(--border-light)] rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-warning-light rounded-lg">
+              <div className="p-2 bg-amber-100 rounded-lg">
                 <Clock3 className="w-5 h-5 text-amber-500" />
               </div>
               <div>
@@ -870,6 +874,7 @@
           setDateTo={setDateTo}
           quickFilters={quickFilters}
           toggleQuickFilter={toggleQuickFilter}
+          clearQuickFilters={clearQuickFilters}
           QUICK_FILTERS={QUICK_FILTERS}
           resetFilters={resetFilters}
         />
@@ -915,11 +920,12 @@
                 {paginatedTenants.map((tenant) => (
                   <tr
                     key={tenant.reservationId || tenant.tenantName}
-                    className="border-b border-[var(--border-light)] hover:bg-muted/50 transition-colors"
+                    className="border-b border-[var(--border-light)] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    onClick={() => setSelectedReservationId(tenant.reservationId)}
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500 text-primary-foreground flex items-center justify-center text-sm font-semibold">
+                        <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-semibold">
                           {tenant.tenantName
                             .split(/\s+/)
                             .filter(Boolean)
