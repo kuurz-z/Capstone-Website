@@ -1,8 +1,10 @@
 /* =============================================================================
    DESIGN TOKENS - Unified semantic system for admin UI
    ============================================================================= */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@custom-variant dark (&:is(.dark *));
 
 :root {
   /* Core semantic source of truth */
@@ -241,73 +243,21 @@ html[data-theme="dark"] {
   --chart-navy: var(--secondary);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-input-background: var(--input-background);
-  --color-switch-background: var(--switch-background);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-success-light: var(--success-light);
-  --color-success-dark: var(--success-dark);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-warning-light: var(--warning-light);
-  --color-warning-dark: var(--warning-dark);
-  --color-danger: var(--danger);
-  --color-danger-foreground: var(--danger-foreground);
-  --color-danger-light: var(--danger-light);
-  --color-danger-dark: var(--danger-dark);
-  --color-error: var(--error);
-  --color-error-foreground: var(--error-foreground);
-  --color-error-light: var(--error-light);
-  --color-error-dark: var(--error-dark);
-  --color-info: var(--info);
-  --color-info-foreground: var(--info-foreground);
-  --color-info-light: var(--info-light);
-  --color-info-dark: var(--info-dark);
-  --color-neutral: var(--neutral);
-  --color-neutral-foreground: var(--neutral-foreground);
-  --color-neutral-light: var(--neutral-light);
-  --color-neutral-dark: var(--neutral-dark);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-chart-primary: var(--chart-primary);
-  --color-chart-secondary: var(--chart-secondary);
-  --color-chart-success: var(--chart-success);
-  --color-chart-warning: var(--chart-warning);
-  --color-chart-danger: var(--chart-danger);
-  --color-chart-blue: var(--chart-blue);
-  --color-chart-gold: var(--chart-gold);
-  --color-chart-navy: var(--chart-navy);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--card);
-  --color-sidebar-foreground: var(--foreground);
-  --color-sidebar-primary: var(--primary);
-  --color-sidebar-primary-foreground: var(--primary-foreground);
-  --color-sidebar-accent: var(--accent);
-  --color-sidebar-accent-foreground: var(--accent-foreground);
-  --color-sidebar-border: var(--border);
-  --color-sidebar-ring: var(--ring);
+*,
+::before,
+::after {
+  border-color: var(--border);
 }
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+input,
+select,
+textarea {
+  background-color: var(--input-background);
+  color: var(--foreground);
+}
+
