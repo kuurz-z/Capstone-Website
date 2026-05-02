@@ -15,7 +15,7 @@ export default function TenantFilterBar({
  dateFrom, setDateFrom,
  dateTo, setDateTo,
  quickFilters, toggleQuickFilter, QUICK_FILTERS,
- resetFilters
+ resetFilters,
 }) {
  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
  const filterRef = useRef(null);

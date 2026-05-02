@@ -238,6 +238,12 @@ function VisitSchedulesTab() {
         color: "green",
       },
       {
+        label: "Rejected",
+        value: rejected.length,
+        icon: XIcon,
+        color: "red",
+      },
+      {
         label: "No-Show",
         value: noShows.length,
         icon: AlertCircle,
@@ -248,6 +254,7 @@ function VisitSchedulesTab() {
     [
       cancelled.length,
       completed.length,
+      rejected.length,
       noShows.length,
       schedules.length,
       upcoming.length,
@@ -259,8 +266,9 @@ function VisitSchedulesTab() {
     if (activeFilter === 0) base = schedules;
     else if (activeFilter === 1) base = upcoming;
     else if (activeFilter === 2) base = completed;
-    else if (activeFilter === 3) base = noShows;
-    else if (activeFilter === 4) base = cancelled;
+    else if (activeFilter === 3) base = rejected;
+    else if (activeFilter === 4) base = noShows;
+    else if (activeFilter === 5) base = cancelled;
     else base = schedules;
 
     const query = searchTerm.trim().toLowerCase();

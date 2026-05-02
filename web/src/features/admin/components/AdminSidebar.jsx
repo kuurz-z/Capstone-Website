@@ -51,7 +51,7 @@ export default function AdminSidebar({
     "bg-[color:var(--primary)] text-[color:var(--primary-foreground)]";
   const navButtonIdle =
     "text-[var(--text-primary)] hover:bg-[rgba(209,178,61,0.14)] hover:text-[var(--text-primary)]";
-  const iconSizeClass = collapsed ? "h-4 w-4" : "h-5 w-5";
+  const iconSizeClass = collapsed ? "h-5.5 w-5.5" : "h-5 w-5";
   const groupMarginClass = collapsed ? "mt-3" : "mt-6";
   const dividerMarginClass = collapsed ? "my-2" : "my-4";
 
