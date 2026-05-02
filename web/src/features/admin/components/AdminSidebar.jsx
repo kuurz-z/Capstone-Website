@@ -46,7 +46,7 @@ export default function AdminSidebar({
   const navPaddingClass = collapsed ? "py-2" : "py-4";
   const sectionLabelClass = "px-3 mb-2 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]";
   const navButtonBase =
-    `group relative flex w-full items-center gap-3 rounded-md text-sm font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-outline)] focus-visible:ring-offset-0 ${collapsed ? "py-1.5 px-2" : "py-2.5 px-3"}`;
+    `group relative flex w-full items-center gap-3 rounded-md text-sm font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-outline)] focus-visible:ring-offset-0 ${collapsed ? "justify-center py-1.5 px-2" : "py-2.5 px-3"}`;
   const navButtonActive =
     "bg-[color:var(--primary)] text-[color:var(--primary-foreground)]";
   const navButtonIdle =
@@ -124,7 +124,7 @@ export default function AdminSidebar({
                         key={item.to}
                         to={item.to}
                         className={({ isActive }) =>
-                          `${navButtonBase} ${isActive ? navButtonActive : navButtonIdle} ${collapsed ? "justify-center px-2" : ""}`
+                          `${navButtonBase} ${isActive ? navButtonActive : navButtonIdle}`
                         }
                         title={collapsed ? item.text : undefined}
                         aria-label={item.text}
@@ -134,7 +134,7 @@ export default function AdminSidebar({
                       >
                         {({ isActive }) => (
                           <>
-                            <Icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-[#0f1a2f]" : "text-[var(--text-primary)]"}`} />
+                            <Icon className={`${iconSizeClass} flex-shrink-0 ${isActive ? "text-[#0f1a2f]" : "text-[var(--text-primary)]"}`} />
                             {!collapsed && (
                               <span className="truncate text-sm leading-tight">{item.text}</span>
                             )}
