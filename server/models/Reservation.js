@@ -340,6 +340,12 @@ const reservationSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Timestamp of when the internal receipt email was successfully sent.
+    // Prevents duplicate receipt emails on repeated webhook deliveries.
+    receiptSentAt: {
+      type: Date,
+      default: null,
+    },
 
     // --- Reservation Dates & Pricing ---
     moveInDate: {
