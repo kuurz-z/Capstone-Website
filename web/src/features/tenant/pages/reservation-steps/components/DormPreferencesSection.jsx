@@ -89,7 +89,10 @@ const DormPreferencesSection = ({
         style={{
           colorScheme: "light",
           cursor: readOnly ? "not-allowed" : "pointer",
-          border: errBorder(showValidationErrors, targetMoveInDate),
+          border:
+            showValidationErrors && (!targetMoveInDate || fieldErrors.targetMoveInDate)
+              ? "1.5px solid #dc2626"
+              : undefined,
         }}
       />
       <div style={{ fontSize: "11px", color: "#6B7280", marginTop: "4px" }}>

@@ -521,6 +521,9 @@ export const buildUserUpdatePayload = (body) => {
         if (normalized !== null) updates[key] = normalized;
       } else if (key === "billingEmail") {
         updates[key] = typeof body[key] === "string" ? body[key].toLowerCase().trim() : body[key];
+      } else if (key === "leaseDuration") {
+        // leaseDuration is optional (Number field) — skip empty string to prevent CastError
+        if (body[key] !== "" && body[key] !== null) updates[key] = body[key];
       } else {
         updates[key] = body[key];
       }
@@ -544,8 +547,20 @@ export const buildUserUpdatePayload = (body) => {
         const normalized = normalizePHPhone(body[bodyKey]);
         if (normalized !== null) updates[path] = normalized;
       } else if (isSoftPhone) {
-        const normalized = normalizePHPhone(body[bodyKey]);
-        updates[path] = normalized !== null ? normalized : String(body[bodyKey]).trim();
+        const raw = String(body[bodyKey] || "").trim();
+        if (raw) {
+          const normalized = normalizePHPhone(raw);
+          if (normalized !== null) {
+            updates[path] = normalized; // valid PH mobile
+          } else {
+            const digits = raw.replace(/[\s\-()]/g, "");
+            if (/^0[2-8]\d{7,8}$/.test(digits)) {
+              updates[path] = raw; // valid PH landline
+            }
+            // invalid format: skip — do not persist garbage
+          }
+        }
+        // empty: skip — leave existing DB value unchanged
       } else {
         updates[path] = body[bodyKey];
       }

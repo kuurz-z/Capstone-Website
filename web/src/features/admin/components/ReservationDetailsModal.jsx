@@ -536,6 +536,40 @@ export default function ReservationDetailsModal({
                     ))}
                   </div>
                 )}
+
+                {reservation.address && (
+                  <div className="rdm-info-grid" style={{ marginTop: 10 }}>
+                    {[
+                      ["Region", fmt(reservation.address.region)],
+                      ["Province", fmt(reservation.address.province)],
+                      ["City / Municipality", fmt(reservation.address.city)],
+                      ["Barangay", fmt(reservation.address.barangay)],
+                      ["Street", fmt(reservation.address.street)],
+                      ["Unit / House No.", fmt(reservation.address.unitHouseNo)],
+                    ].map(([label, value]) => (
+                      <div className="rdm-info-item" key={label}>
+                        <span className="rdm-info-label">{label}</span>
+                        <span className="rdm-info-value">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {reservation.employment && (
+                  <div className="rdm-info-grid" style={{ marginTop: 10 }}>
+                    {[
+                      ["Employer / School", fmt(reservation.employment.employerSchool)],
+                      ["Employer Address", fmt(reservation.employment.employerAddress)],
+                      ["Employer Contact", fmt(reservation.employment.employerContact)],
+                      ["Occupation", fmt(reservation.employment.occupation)],
+                    ].map(([label, value]) => (
+                      <div className="rdm-info-item" key={label}>
+                        <span className="rdm-info-label">{label}</span>
+                        <span className="rdm-info-value">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

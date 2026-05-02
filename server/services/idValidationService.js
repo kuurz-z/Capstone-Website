@@ -252,7 +252,7 @@ export const validateReservationIdDocument = async ({
       matchScore: 0,
       validationNotes: ocr.notes || ["ID requires manual verification."],
       message: ocr.message || VALIDATION_STATUS_MESSAGES.manual_review,
-      provider: "google_vision",
+      provider: ocr._provider || "google_vision",
     };
   }
 
@@ -324,7 +324,7 @@ export const validateReservationIdDocument = async ({
           : status === "failed"
             ? VALIDATION_STATUS_MESSAGES.failed
             : VALIDATION_STATUS_MESSAGES.warning,
-    provider: "google_vision",
+    provider: ocr._provider || "google_vision",
   };
 };
 

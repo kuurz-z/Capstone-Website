@@ -1934,6 +1934,19 @@ export const updateReservationByUser = async (req, res, next) => {
       if (!hasVal(effectiveCompanyUrl) && !hasVal(effectiveCompanyReason))
         missingRequired.push("company ID (upload or provide a reason)");
 
+      // — Employer contact: optional, but must be a valid PH number if provided
+      const effectiveEmployerContact =
+        updates["employment.employerContact"] ?? reservation.employment?.employerContact;
+      if (effectiveEmployerContact) {
+        const d = String(effectiveEmployerContact).replace(/[\s\-()]/g, "");
+        const isValidEmployerPhone = /^09\d{9}$/.test(d) || /^0[2-8]\d{7,8}$/.test(d);
+        if (!isValidEmployerPhone) {
+          missingRequired.push(
+            "employer contact number (invalid format — must be a valid Philippine mobile or landline)",
+          );
+        }
+      }
+
       // — Agreements must be explicitly true
       const effectivePrivacy = updates.agreedToPrivacy ?? reservation.agreedToPrivacy;
       const effectiveCert = updates.agreedToCertification ?? reservation.agreedToCertification;

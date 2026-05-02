@@ -29,6 +29,7 @@ import {
   validateEstimatedTime,
   validateTargetMoveInDate,
   validatePHPhoneLocal,
+  validatePHPhoneOrLandline,
 } from "../utils/reservationValidation";
 
 export default function useReservationFlow() {
@@ -991,6 +992,7 @@ export default function useReservationFlow() {
       educationLevel,
       addressUnitHouseNo,
       addressStreet,
+      addressRegion,
       addressBarangay,
       addressCity,
       addressProvince,
@@ -1013,7 +1015,7 @@ export default function useReservationFlow() {
       workSchedule,
       workScheduleOther,
       targetMoveInDate,
-      leaseDuration,
+      ...(leaseDuration ? { leaseDuration } : {}),
       finalMoveInDate,
       agreedToPrivacy,
       agreedToCertification,
@@ -1153,7 +1155,6 @@ export default function useReservationFlow() {
             { key: "selfiePhoto", label: "Selfie Photo", isMissing: !selfiePhoto },
             { key: "lastName", label: "Last Name", isMissing: !hasText(lastName) },
             { key: "firstName", label: "First Name", isMissing: !hasText(firstName) },
-            { key: "middleName", label: "Middle Name", isMissing: !hasText(middleName) },
             {
               key: "mobileNumber",
               label: "Mobile Number",
@@ -1215,7 +1216,12 @@ export default function useReservationFlow() {
             { key: "healthConcerns", label: "Health Concerns", isMissing: !hasText(healthConcerns) },
             { key: "employerSchool", label: "Current Employer", isMissing: !hasText(employerSchool) },
             { key: "employerAddress", label: "Employer Address", isMissing: !hasText(employerAddress) },
-            { key: "employerContact", label: "Employer Contact", isMissing: !hasText(employerContact) },
+            {
+              key: "employerContact",
+              label: "Employer Contact Number",
+              isMissing: hasText(employerContact) && !validatePHPhoneOrLandline(employerContact),
+              message: "Enter a valid phone number (e.g. 09123456789 or 02-1234567).",
+            },
             { key: "occupation", label: "Occupation", isMissing: !hasText(occupation) },
             {
               key: "companyID",

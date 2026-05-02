@@ -78,7 +78,7 @@ const PersonalInfoSection = ({
         label="Middle Name" value={middleName} setter={setMiddleName}
         fieldKey="middleName" handler={handleNameInput}
         validate={validateField} errors={fieldErrors}
-        required showValidationErrors={showValidationErrors}
+        showValidationErrors={showValidationErrors}
       />
       <NameField
         label="Nickname" value={nickname} setter={setNickname}

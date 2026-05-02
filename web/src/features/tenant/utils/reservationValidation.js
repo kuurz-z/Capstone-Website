@@ -177,3 +177,17 @@ export const validateGeneralTextField = (text, maxLength = 100) => {
   }
   return { valid: true };
 };
+
+/**
+ * Validate Philippine phone number — accepts:
+ *   - Mobile:   09XXXXXXXXX (11 digits starting with 09)
+ *   - Landline: 0[2-8] followed by 7–8 digits
+ * Returns true if value matches either pattern. Empty/null returns false.
+ */
+export const validatePHPhoneOrLandline = (value) => {
+  if (!value || !String(value).trim()) return false;
+  const digits = String(value).replace(/[\s\-()]/g, "");
+  if (/^09\d{9}$/.test(digits)) return true;
+  if (/^0[2-8]\d{7,8}$/.test(digits)) return true;
+  return false;
+};

@@ -14,6 +14,26 @@ const SUPPORTED_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 const MANUAL_REVIEW_NOTE =
   "Google Vision validation unavailable. Manual review required.";
 
+// Detect credentials at module load so startup logs reflect true availability.
+const _resolvedCredentials = (() => {
+  const candidates = [
+    process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    path.resolve(process.cwd(), "server/config/google-vision-key.json"),
+    path.resolve(process.cwd(), "config/google-vision-key.json"),
+    path.resolve(__dirname, "../config/google-vision-key.json"),
+  ].filter(Boolean);
+  return candidates.find((c) => fs.existsSync(c)) || null;
+})();
+
+if (_resolvedCredentials) {
+  console.info(`[GoogleVision] Credentials configured: ${_resolvedCredentials}. AI validation enabled.`);
+} else {
+  console.warn(
+    "[GoogleVision] No credentials found. ID validation will fall back to manual_review. " +
+    "Set GOOGLE_APPLICATION_CREDENTIALS or place google-vision-key.json in server/config/."
+  );
+}
+
 let visionClient = null;
 
 const isUrl = (value) => /^https?:\/\//i.test(String(value || ""));
@@ -55,12 +75,13 @@ const getExtensionFromSource = (source, contentType = "") => {
   }
 };
 
-const manualReviewResult = (message = "ID requires manual verification.") => ({
+const manualReviewResult = (message = "ID requires manual verification.", provider = "google_vision") => ({
   status: "manual_review",
   text: "",
   normalizedText: "",
   message,
   notes: [MANUAL_REVIEW_NOTE],
+  _provider: provider,
 });
 
 const normalizeText = (text = "") =>
@@ -179,8 +200,17 @@ export const extractTextFromImage = async (source) => {
       message: "ID text extracted.",
       notes: [],
     };
-  } catch {
-    return manualReviewResult();
+  } catch (err) {
+    const isCredentialError =
+      !_resolvedCredentials ||
+      String(err?.message || "").toLowerCase().includes("credentials") ||
+      String(err?.message || "").toLowerCase().includes("not configured");
+    const reason = isCredentialError ? "credentials_missing" : "ocr_runtime_error";
+    console.warn(
+      `[GoogleVision] extractTextFromImage failed (reason: ${reason})` +
+      (isCredentialError ? "" : ` — ${err?.message || err}`)
+    );
+    return manualReviewResult("ID requires manual verification.", isCredentialError ? "not_configured" : "vision_error");
   } finally {
     if (prepared?.cleanup && prepared.filePath) {
       fs.promises.unlink(prepared.filePath).catch(() => {});
