@@ -160,7 +160,7 @@ const buildTimeline = (r, direction = "desc") => {
     });
   }
 
-  if (r.firstName && r.lastName && r.agreedToCertification) {
+  if (r.applicationSubmittedAt) {
     // Fallback: scheduleApprovedAt is the closest prior event (visit approval happens right before application)
     // Avoid updatedAt since it reflects the latest save (e.g. payment), not the application submission time
     const appDate = r.applicationSubmittedAt || r.scheduleApprovedAt || r.createdAt;

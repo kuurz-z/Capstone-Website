@@ -309,6 +309,7 @@ function ReservationFlowPage() {
                 }}
                 onPrev={() => flow.navigate("/applicant/profile")}
                 onNext={() => flow.handleNextStage()}
+                onSaveDraft={flow.handleSaveAndExit}
                 readOnly={flow.isStageLocked(3)}
                 onEditApplication={() => flow.setEditingApplication(true)}
               />

@@ -83,9 +83,8 @@ function resolveCurrentStage(reservation) {
 
   // application submitted
   if (
-    reservation.agreedToCertification &&
-    reservation.firstName &&
-    reservation.lastName
+    reservation.applicationSubmittedAt ||
+    status === "payment_pending"
   )
     return 4; // ready for payment
 

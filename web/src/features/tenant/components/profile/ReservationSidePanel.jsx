@@ -57,7 +57,7 @@ export default function ReservationSidePanel({ reservation, onClick }) {
   const isConfirmed = status === "reserved" || reservation.paymentStatus === "paid";
   const hasVisit = !!(reservation.visitDate && reservation.visitTime);
   const visitApproved = reservation.visitApproved || reservation.scheduleApproved;
-  const hasApplication = !!(reservation.firstName && reservation.lastName && reservation.mobileNumber);
+  const hasApplication = !!reservation.applicationSubmittedAt;
 
   const room = reservation.roomId || {};
   const roomName = room.name || "—";

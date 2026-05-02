@@ -86,7 +86,7 @@ const ReservationApplicationStep = ({
   agreedToPrivacy, setAgreedToPrivacy,
   agreedToCertification, setAgreedToCertification,
   devBypassValidation, setDevBypassValidation,
-  onPrev, onNext, readOnly, saveStatus,
+  onPrev, onNext, onSaveDraft, readOnly, saveStatus,
   showValidationErrors, applicationSubmitted, paymentApproved,
   onEditApplication, scrollToSection, onClearScrollToSection,
 }) => {
@@ -341,9 +341,14 @@ const ReservationApplicationStep = ({
         </div>
       )}
       {!readOnly && (
-        <div className="stage-buttons" style={{ justifyContent: "flex-end" }}>
+        <div className="stage-buttons" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          
+          <button onClick={onSaveDraft} className="btn" style={{ borderColor: "#ccc", color: "#666" }}>
+            Save & Exit
+          </button>
+
           <button onClick={onNext} className="btn btn-primary">
-            {applicationSubmitted ? "Save Changes" : "Continue to Payment"}
+            {applicationSubmitted ? "Update Submission" : "Submit Application"}
           </button>
         </div>
       )}

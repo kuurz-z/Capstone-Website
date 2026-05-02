@@ -1846,10 +1846,10 @@ export const updateReservationByUser = async (req, res, next) => {
       const missingRequired = [];
       const hasVal = (v) => v != null && String(v).trim().length > 0;
 
-      if (!hasVal(updates.selfiePhotoUrl))          missingRequired.push("profile photo");
-      if (!hasVal(updates.emergencyContactName))    missingRequired.push("emergency contact name");
-      if (!hasVal(updates.emergencyContactNumber))  missingRequired.push("emergency contact phone");
-      if (!hasVal(updates.validIDFrontUrl))         missingRequired.push("valid ID (front)");
+      if (!hasVal(updates.selfiePhotoUrl || reservation.selfiePhotoUrl))          missingRequired.push("profile photo");
+      if (!hasVal(updates["emergencyContact.name"] || reservation.emergencyContact?.name))    missingRequired.push("emergency contact name");
+      if (!hasVal(updates["emergencyContact.contactNumber"] || reservation.emergencyContact?.contactNumber))  missingRequired.push("emergency contact phone");
+      if (!hasVal(updates.validIDFrontUrl || reservation.validIDFrontUrl))         missingRequired.push("valid ID (front)");
       const submittedIdType =
         updates.idType ||
         updates.validIDType ||

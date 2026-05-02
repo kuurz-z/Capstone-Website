@@ -295,7 +295,7 @@ export default function useReservationFlow() {
     if (r.leaseDuration) setLeaseDuration(String(r.leaseDuration));
     // Restore agreements ONLY if the application was previously submitted
     // (prevents step 2's agreedToPrivacy from pre-checking step 3's consent)
-    const hasApplication = Boolean(r.firstName && r.lastName && r.mobileNumber);
+    const hasApplication = Boolean(r.applicationSubmittedAt);
     if (hasApplication && r.agreedToPrivacy) setAgreedToPrivacy(true);
     if (hasApplication && r.agreedToCertification) setAgreedToCertification(true);
     // File URLs
@@ -1089,6 +1089,92 @@ export default function useReservationFlow() {
   }, [buildDraftPayload, currentStage, reservationId]);
 
   // ── Stage handler ──────────────────────────────────────
+  const handleSaveAndExit = async () => {
+    setIsLoading(true);
+    setSaveStatus("saving");
+    try {
+      if (currentStage === 3) {
+        // Save without the submit flag to keep it as a draft
+        await updateReservationDraft({
+          firstName,
+          lastName,
+          middleName,
+          nickname,
+          mobileNumber,
+          birthday,
+          maritalStatus,
+          nationality,
+          educationLevel,
+          addressUnitHouseNo,
+          addressStreet,
+          addressRegion,
+          addressBarangay,
+          addressCity,
+          addressProvince,
+          emergencyContactName,
+          emergencyRelationship,
+          emergencyContactNumber,
+          healthConcerns,
+          employerSchool,
+          employerAddress,
+          employerContact,
+          startDate,
+          occupation,
+          previousEmployment,
+          roomType,
+          preferredRoomNumber,
+          referralSource,
+          referrerName,
+          estimatedMoveInTime,
+          workSchedule,
+          workScheduleOther,
+          targetMoveInDate,
+          leaseDuration,
+          agreedToPrivacy,
+          agreedToCertification,
+          selfiePhotoUrl,
+          validIDFrontUrl,
+          validIDBackUrl,
+          nbiClearanceUrl,
+          nbiReason,
+          personalNotes,
+          companyIDUrl,
+          companyIDReason,
+          validIDType,
+          idType: validIDType,
+          submitApplication: false, 
+        });
+      }
+      
+      setSaveStatus("saved");
+      setSuccessOverlay({
+        show: true,
+        title: "Draft Saved",
+        subtitle: "Your progress has been saved. You can complete it anytime.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      
+      setTimeout(() => {
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "info",
+            title: "Draft Saved",
+            message: "Your application is saved as a draft.",
+          },
+        });
+      }, 1500);
+
+    } catch (error) {
+      showNotification(
+        getFriendlyError(error, "Failed to save draft."),
+        "error",
+        3000
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleNextStage = async () => {
     try {
       if (currentStage === 1) {
@@ -1625,6 +1711,7 @@ export default function useReservationFlow() {
 
     // Handlers
     handleNextStage,
+    handleSaveAndExit,
     handlePrevStage,
     handleStageConfirm,
     validateApplicantIdDocument,
