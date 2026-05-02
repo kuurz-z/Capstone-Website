@@ -34,6 +34,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
 } from "react";
@@ -60,6 +61,10 @@ export function FirebaseAuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [idToken, setIdToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Tracks the UID of the most recently seen Firebase user in THIS tab.
+  // Used to detect when a DIFFERENT user signs in from another browser tab
+  // (Firebase auth is shared across tabs via indexedDB).
+  const prevUidRef = useRef(null);
 
   // Listen for auth state and token changes
   useEffect(() => {
@@ -71,14 +76,25 @@ export function FirebaseAuthProvider({ children }) {
     }
 
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
       if (firebaseUser) {
-        // Get fresh token whenever auth state changes
+        // Cross-tab contamination guard: if a DIFFERENT user signs in from
+        // another tab, the shared indexedDB auth state changes here too.
+        // Force a reload so this tab starts clean with the new identity
+        // instead of silently replacing User A's session with User B's data.
+        if (prevUidRef.current && prevUidRef.current !== firebaseUser.uid) {
+          localStorage.removeItem("user");
+          localStorage.removeItem("authToken");
+          window.location.reload();
+          return;
+        }
+        prevUidRef.current = firebaseUser.uid;
         const token = await firebaseUser.getIdToken();
         setIdToken(token);
       } else {
+        prevUidRef.current = null;
         setIdToken(null);
       }
+      setUser(firebaseUser);
       setLoading(false);
     });
 

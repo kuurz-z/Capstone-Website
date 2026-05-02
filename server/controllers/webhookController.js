@@ -110,8 +110,6 @@ async function handleDepositPayment(metadata, eventData) {
 
   const canAutoReserve = canAutoReserveReservation(reservation.status);
   if (canAutoReserve) {
-    // Auto-reserve once the deposit is settled for the current staged flow,
-    // while still supporting older reservations that stayed at pending.
     reservation.status = "reserved";
   }
 
@@ -128,6 +126,7 @@ async function handleDepositPayment(metadata, eventData) {
       oldStatus,
       newStatus: reservation.status,
       paymentId,
+      userId: String(reservation.userId),
       autoReserved: canAutoReserve,
     },
     "Webhook: Deposit payment processed",
@@ -144,36 +143,60 @@ async function handleDepositPayment(metadata, eventData) {
     logger.error({ err: notifErr }, "Webhook: Failed to send notification");
   }
 
-  // Send PayMongo-style receipt email
+  // Send internal receipt email — skip if already sent (duplicate webhook guard)
+  if (reservation.receiptSentAt) {
+    logger.info({ reservationId, paymentId }, "Webhook: Receipt already sent, skipping email");
+    return;
+  }
+
   try {
     const tenant = await User.findById(reservation.userId).lean();
     if (tenant?.email) {
-      // Use the actual amount charged through PayMongo (in centavos ÷ 100),
-      // NOT reservation.totalPrice which is the full stay cost, not the deposit.
       const actualPaidAmount =
         extractPaidAmount(eventData) ??
         reservation.reservationFeeAmount ??
         BUSINESS.DEPOSIT_AMOUNT;
 
-      const paymentId = extractPaymentId(eventData);
+      const receiptPaymentId = extractPaymentId(eventData);
       const paymentDate = new Date().toLocaleDateString("en-PH", {
         month: "long", day: "numeric", year: "numeric",
       });
       const reservationCode = reservation.reservationCode || String(reservation._id).slice(-8).toUpperCase();
+      const tenantName = `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim();
 
-      await sendPaymentReceiptEmail({
+      const emailResult = await sendPaymentReceiptEmail({
         to: tenant.email,
-        tenantName: `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
+        tenantName,
         amount: actualPaidAmount,
         description: `Lilycrest Dormitory — Reservation Deposit (${reservationCode})`,
-        billedTo: `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim(),
+        billedTo: tenantName,
         paymentMethod: "GCash / Online Payment",
         paymentDate,
-        referenceId: paymentId,
+        referenceId: receiptPaymentId,
+        reservationCode,
+        roomName: reservation.roomId?.name || "",
+        branch: reservation.roomId?.branch || "",
       });
+
+      if (emailResult?.success) {
+        // Atomic update: only set receiptSentAt if it hasn't been set by a concurrent process
+        await Reservation.updateOne(
+          { _id: reservation._id, receiptSentAt: null },
+          { $set: { receiptSentAt: new Date() } },
+        );
+        logger.info(
+          { reservationId, paymentId, to: tenant.email },
+          "Webhook: Receipt email sent",
+        );
+      } else {
+        logger.warn(
+          { reservationId, paymentId, reason: emailResult?.message || emailResult?.error },
+          "Webhook: Receipt email not sent",
+        );
+      }
     }
   } catch (emailErr) {
-    logger.error({ err: emailErr }, "Webhook: Failed to send email");
+    logger.error({ err: emailErr }, "Webhook: Failed to send receipt email");
   }
 }
 
@@ -504,6 +527,43 @@ export const handlePaymongoSourceWebhook = async (req, res) => {
         logger.warn(
           { eventId, paymentId, sessionId },
           "Webhook(payment): payment.failed — no matching record found",
+        );
+      }
+
+    } else if (eventType === "checkout_session.payment.paid") {
+      // checkout_session.payment.paid can arrive at this URL if the PayMongo dashboard
+      // webhook is configured to /api/paymongo/webhook instead of /api/webhooks/paymongo.
+      // In this case paymentData IS the Checkout Session object (same shape as handlePaymongoWebhook).
+      const checkoutMeta = paymentData?.attributes?.metadata || {};
+      const checkoutSessionId = paymentData?.id || "unknown";
+
+      logger.info(
+        {
+          eventId,
+          checkoutSessionId,
+          metadataType: checkoutMeta.type,
+          reservationId: checkoutMeta.reservationId,
+          billId: checkoutMeta.billId,
+        },
+        "Webhook(payment): checkout_session.payment.paid — delegating to deposit/bill handler",
+      );
+
+      if (checkoutMeta.type === "deposit") {
+        await handleDepositPayment(checkoutMeta, paymentData);
+        logger.info(
+          { eventId, checkoutSessionId, reservationId: checkoutMeta.reservationId },
+          "Webhook(payment): checkout_session deposit processing complete",
+        );
+      } else if (checkoutMeta.type === "bill") {
+        await handleBillPayment(checkoutMeta, paymentData);
+        logger.info(
+          { eventId, checkoutSessionId, billId: checkoutMeta.billId },
+          "Webhook(payment): checkout_session bill processing complete",
+        );
+      } else {
+        logger.warn(
+          { eventId, checkoutSessionId, metadataType: checkoutMeta.type },
+          "Webhook(payment): checkout_session.payment.paid — unknown metadata type, skipping",
         );
       }
 

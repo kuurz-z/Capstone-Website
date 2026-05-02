@@ -898,6 +898,9 @@ const generatePaymentReceiptHtml = ({
   paymentMethod,
   paymentDate,
   referenceId,
+  reservationCode,
+  roomName,
+  branch,
 }) => `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5;">
   <table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td style="padding:40px 20px;">
@@ -928,6 +931,16 @@ const generatePaymentReceiptHtml = ({
           <tr>
             <td colspan="2" style="padding:0 0 16px;color:#374151;font-size:14px;">${description}</td>
           </tr>
+          ${reservationCode ? `
+          <!-- Reservation details -->
+          <tr style="border-top:1px solid #F3F4F6;">
+            <td style="padding:12px 0 4px;color:#9CA3AF;font-size:12px;text-transform:uppercase;width:50%;">Reservation code</td>
+            <td style="padding:12px 0 4px;color:#9CA3AF;font-size:12px;text-transform:uppercase;width:50%;">${roomName ? "Room / Branch" : ""}</td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 16px;color:#374151;font-size:14px;font-weight:600;">${reservationCode}</td>
+            <td style="padding:0 0 16px;color:#374151;font-size:14px;font-weight:500;">${roomName ? `${roomName}${branch ? ` · ${branch}` : ""}` : ""}</td>
+          </tr>` : ""}
           <!-- Billed to -->
           <tr style="border-top:1px solid #F3F4F6;">
             <td colspan="2" style="padding:12px 0 4px;color:#9CA3AF;font-size:12px;text-transform:uppercase;">Billed to</td>
@@ -952,12 +965,20 @@ const generatePaymentReceiptHtml = ({
             <td colspan="2" style="padding:0 0 8px;color:#6B7280;font-size:12px;font-family:monospace;">${referenceId}</td>
           </tr>
         </table>
+        ${reservationCode ? `
+        <!-- Next Steps -->
+        <div style="background:#F0F9FF;border-left:3px solid #0EA5E9;padding:14px 16px;margin:0 0 16px;border-radius:0 6px 6px 0;">
+          <p style="color:#0369A1;font-size:12px;font-weight:600;margin:0 0 6px;text-transform:uppercase;">What Happens Next</p>
+          <p style="color:#374151;font-size:13px;margin:0;line-height:1.6;">
+            Your room reservation is now <strong>secured</strong>. The admin team will review your application and contact you to arrange your move-in schedule. Please prepare your valid ID and other required documents on move-in day.
+          </p>
+        </div>` : ""}
         <p style="color:#6B7280;font-size:13px;line-height:1.5;margin:0;">If you have any questions about this payment, contact Lilycrest Dormitory through the tenant portal.</p>
       </td></tr>
       <!-- Footer -->
       <tr><td style="background:#183153;padding:20px 40px;text-align:center;">
         <p style="color:rgba(255,255,255,0.7);font-size:11px;margin:0 0 8px;line-height:1.5;">You're receiving this e-mail because you made a payment at Lilycrest Dormitory.</p>
-        <p style="color:#D4982B;font-size:14px;font-weight:600;margin:0 0 4px;">🏠 Lilycrest Dormitory</p>
+        <p style="color:#D4982B;font-size:14px;font-weight:600;margin:0 0 4px;">Lilycrest Dormitory</p>
         <p style="color:rgba(255,255,255,0.5);font-size:10px;margin:0;">Dormitory Management System</p>
       </td></tr>
     </table>
@@ -973,34 +994,67 @@ export const sendPaymentReceiptEmail = async ({
   paymentMethod = "Online Payment",
   paymentDate,
   referenceId,
+  reservationCode,
+  roomName,
+  branch,
 }) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    console.log("⚠️ Receipt email not sent — email not configured");
-    return { success: false, message: "Email service not configured" };
+  const subject = `Payment Receipt — ₱${Number(amount).toLocaleString()} | Lilycrest Dormitory`;
+  const html = generatePaymentReceiptHtml({
+    tenantName,
+    amount,
+    description,
+    billedTo,
+    paymentMethod,
+    paymentDate,
+    referenceId,
+    reservationCode,
+    roomName,
+    branch,
+  });
+  const text = `Hi ${tenantName}, your payment of ₱${amount} for "${description}" has been received. Reference: ${referenceId}. Date: ${paymentDate}.${reservationCode ? ` Reservation: ${reservationCode}.` : ""} — Lilycrest Dormitory`;
+
+  // Primary: SMTP (Nodemailer)
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+    try {
+      const info = await transporter.sendMail({
+        from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
+        to,
+        subject,
+        html,
+        text,
+      });
+      console.log(`✅ Receipt email sent to ${to} — ${info.messageId}`);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error(`❌ Receipt email (SMTP) failed for ${to}:`, error.message);
+      return { success: false, error: error.message };
+    }
   }
-  const mailOptions = {
-    from: { name: "Lilycrest Dormitory", address: process.env.EMAIL_USER },
-    to,
-    subject: `Payment Receipt — ₱${Number(amount).toLocaleString()} | Lilycrest Dormitory`,
-    html: generatePaymentReceiptHtml({
-      tenantName,
-      amount,
-      description,
-      billedTo,
-      paymentMethod,
-      paymentDate,
-      referenceId,
-    }),
-    text: `Hi ${tenantName}, your payment of ₱${amount} for "${description}" has been received. Reference: ${referenceId}. Date: ${paymentDate}. — Lilycrest Dormitory`,
-  };
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Receipt email sent to ${to} — ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error(`❌ Receipt email failed for ${to}:`, error.message);
-    return { success: false, error: error.message };
+
+  // Fallback: Resend (same service used for OTP)
+  if (resendClient && OTP_FROM) {
+    try {
+      const { data, error } = await resendClient.emails.send({
+        from: OTP_FROM,
+        to: [to],
+        subject,
+        html,
+        text,
+      });
+      if (error) {
+        console.error(`❌ Receipt email (Resend) failed for ${to}:`, error.message);
+        return { success: false, error: error.message };
+      }
+      console.log(`✅ Receipt email (Resend) sent to ${to} — ${data.id}`);
+      return { success: true, messageId: data.id };
+    } catch (error) {
+      console.error(`❌ Receipt email (Resend) error for ${to}:`, error.message);
+      return { success: false, error: error.message };
+    }
   }
+
+  console.log("⚠️ Receipt email not sent — neither SMTP nor Resend is configured");
+  return { success: false, message: "Email service not configured" };
 };
 
 export const sendLoginOtpEmail = async ({ to, name, otp, expiresInMinutes = 10 }) => {

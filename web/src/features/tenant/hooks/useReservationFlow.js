@@ -32,6 +32,11 @@ import {
   validatePHPhoneOrLandline,
 } from "../utils/reservationValidation";
 
+// Returns a sessionStorage key scoped to the Firebase UID when known,
+// falling back to the legacy unscoped key for backward compatibility.
+const getActiveResKey = (uid) =>
+  uid ? `activeReservationId_${uid}` : "activeReservationId";
+
 export default function useReservationFlow() {
   const navigate = useNavigate();
   const appNavigate = useAppNavigation();
@@ -57,7 +62,9 @@ export default function useReservationFlow() {
   const [isLoading, setIsLoading] = useState(
     () =>
       new URLSearchParams(window.location.search).has("payment") ||
-      Boolean(sessionStorage.getItem("activeReservationId"))
+      Boolean(sessionStorage.getItem("activeReservationId")) ||
+      // Also check user-scoped keys (set after login is known)
+      Object.keys(sessionStorage).some((k) => k.startsWith("activeReservationId_"))
   );
   const [visitApproved, setVisitApproved] = useState(false);
   const [visitCompleted, setVisitCompleted] = useState(false);
@@ -455,7 +462,9 @@ export default function useReservationFlow() {
         // and verify payment using the reservation's stored session ID.
         paymentVerifyingRef.current = true; // block re-init from hook's setSearchParams
         isPaymentReturnRef.current = false; // consume the flag
-        const storedResId = sessionStorage.getItem("activeReservationId");
+        const storedResId =
+          sessionStorage.getItem(getActiveResKey(user?.firebaseUid)) ||
+          sessionStorage.getItem("activeReservationId"); // legacy fallback
         if (storedResId) {
           loadExistingReservation(storedResId, true);
         } else {
@@ -463,7 +472,9 @@ export default function useReservationFlow() {
         }
       } else {
         const stored = sessionStorage.getItem("pendingReservation");
-        const storedResId = sessionStorage.getItem("activeReservationId");
+        const storedResId =
+          sessionStorage.getItem(getActiveResKey(user?.firebaseUid)) ||
+          sessionStorage.getItem("activeReservationId"); // legacy fallback
         if (stored) {
           setReservationData(JSON.parse(stored));
         } else if (storedResId) {
@@ -642,7 +653,8 @@ export default function useReservationFlow() {
           try {
             const result = await billingApi.checkPaymentStatus(reservation.paymongoSessionId);
             if (result.status === "paid") {
-              sessionStorage.removeItem("activeReservationId");
+              sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
+              sessionStorage.removeItem("activeReservationId"); // legacy cleanup
               // Back button → redirect to dashboard; Return to merchant → show step 5
               if (paymentReturnStatusRef.current === "cancelled") {
                 appNavigate("/applicant/profile", {
@@ -708,7 +720,8 @@ export default function useReservationFlow() {
       console.error("❌ [LOAD_RESERVATION] Failed to load reservation id:", resId, "| status:", err?.response?.status, "| message:", err?.message, err);
       const status = err?.response?.status;
       if (status === 404) {
-        sessionStorage.removeItem("activeReservationId");
+        sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
+        sessionStorage.removeItem("activeReservationId"); // legacy cleanup
         appNavigate("/applicant/check-availability", {
           flash: {
             type: "error",

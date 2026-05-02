@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const verifyWebhookSignature = jest.fn();
 const reservationFindById = jest.fn();
+const reservationUpdateOne = jest.fn().mockResolvedValue({ modifiedCount: 1 });
 const billFindById = jest.fn();
 const userFindById = jest.fn();
 const sendPaymentReceiptEmail = jest.fn();
@@ -14,7 +15,7 @@ await jest.unstable_mockModule("../config/paymongo.js", () => ({
 }));
 
 await jest.unstable_mockModule("../models/index.js", () => ({
-  Reservation: { findById: reservationFindById },
+  Reservation: { findById: reservationFindById, updateOne: reservationUpdateOne },
   Bill: { findById: billFindById },
   User: { findById: userFindById },
 }));
@@ -95,6 +96,8 @@ describe("handlePaymongoWebhook", () => {
   beforeEach(() => {
     verifyWebhookSignature.mockReset();
     reservationFindById.mockReset();
+    reservationUpdateOne.mockReset();
+    reservationUpdateOne.mockResolvedValue({ modifiedCount: 1 });
     billFindById.mockReset();
     userFindById.mockReset();
     sendPaymentReceiptEmail.mockReset();
