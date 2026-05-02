@@ -14,11 +14,15 @@ const IMAGEKIT_URL_ENDPOINT =
 
 // ── Validation ─────────────────────────────────────────────
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+// Only JPEG, PNG, and PDF are accepted.
+// HEIC (iPhone) and WebP are excluded because:
+//   - HEIC has limited browser/server support and causes display issues
+//   - WebP is a delivery format, not a document format — photos and IDs
+//     should be submitted in universally readable formats
 const ALLOWED_TYPES = [
   "image/jpeg",
   "image/png",
-  "image/webp",
-  "image/heic",
   "application/pdf",
 ];
 
@@ -36,7 +40,7 @@ export function validateFile(file) {
     return { valid: false, error: `File too large (${sizeMB}MB). Maximum is 5MB.` };
   }
   if (!ALLOWED_TYPES.includes(file.type)) {
-    return { valid: false, error: "Only JPEG, PNG, WebP, HEIC, and PDF files are allowed." };
+    return { valid: false, error: "Only JPEG, PNG, and PDF files are allowed. Please convert HEIC or WebP images before uploading." };
   }
   return { valid: true };
 }

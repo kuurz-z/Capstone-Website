@@ -1,7 +1,6 @@
 import React from "react";
 import { Navigate, Route } from "react-router-dom";
-import RequireAdmin from "../../shared/guards/RequireAdmin";
-import RequireOwner from "../../shared/guards/RequireOwner";
+import ProtectedRoute from "../../shared/components/ProtectedRoute";
 import { RouteShell } from "./RouteShell";
 import {
   AdminLayout,
@@ -13,6 +12,7 @@ import {
   UserManagementPage,
   AdminBillingPage,
   AdminAnnouncementsPage,
+  AdminChatPage,
   MaintenancePage,
   InquiriesPage,
   AnalyticsPage,
@@ -20,6 +20,7 @@ import {
   BranchManagementPage,
   RolePermissionsPage,
   SystemSettingsPage,
+  AdminNotificationsPage,
 } from "../lazyPages";
 import {
   ANALYTICS_DETAILS_PATH,
@@ -31,11 +32,11 @@ export function AdminRoutes() {
     <Route
       path="/admin"
       element={
-        <RequireAdmin>
+        <ProtectedRoute requiredRole="branch_admin">
           <RouteShell name="AdminLayout">
             <AdminLayout />
           </RouteShell>
-        </RequireAdmin>
+        </ProtectedRoute>
       }
     >
       <Route index element={<Navigate to="/admin/dashboard" replace />} />
@@ -104,6 +105,14 @@ export function AdminRoutes() {
         }
       />
       <Route
+        path="chat"
+        element={
+          <RouteShell name="AdminChat">
+            <AdminChatPage />
+          </RouteShell>
+        }
+      />
+      <Route
         path="maintenance"
         element={
           <RouteShell name="AdminMaintenance">
@@ -132,6 +141,14 @@ export function AdminRoutes() {
         element={
           <RouteShell name="Inquiries">
             <InquiriesPage />
+          </RouteShell>
+        }
+      />
+      <Route
+        path="notifications"
+        element={
+          <RouteShell name="AdminNotifications">
+            <AdminNotificationsPage />
           </RouteShell>
         }
       />
@@ -178,31 +195,31 @@ export function AdminRoutes() {
       <Route
         path="branches"
         element={
-          <RequireOwner>
+          <ProtectedRoute requiredRole="owner">
             <RouteShell name="Branches">
               <BranchManagementPage />
             </RouteShell>
-          </RequireOwner>
+          </ProtectedRoute>
         }
       />
       <Route
         path="settings"
         element={
-          <RequireOwner>
+          <ProtectedRoute requiredRole="owner">
             <RouteShell name="Settings">
               <SystemSettingsPage />
             </RouteShell>
-          </RequireOwner>
+          </ProtectedRoute>
         }
       />
       <Route
         path="roles"
         element={
-          <RequireOwner>
+          <ProtectedRoute requiredRole="owner">
             <RouteShell name="Roles">
               <RolePermissionsPage />
             </RouteShell>
-          </RequireOwner>
+          </ProtectedRoute>
         }
       />
     </Route>

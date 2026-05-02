@@ -45,6 +45,7 @@ import announcementRoutes from "./routes/announcementRoutes.js";
 import maintenanceRoutes from "./routes/maintenanceContractRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
 import digitalTwinRoutes from "./routes/digitalTwinRoutes.js";
@@ -172,7 +173,7 @@ const startBackgroundServices = (mongoConnected) => {
 };
 
 app.options("*", (req, res) => {
-  const origin = req.headers.origin;
+  const { origin } = req.headers;
   if (origin && isOriginAllowed(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader(
@@ -181,7 +182,7 @@ app.options("*", (req, res) => {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type,Authorization,X-Request-Id",
+      "Content-Type,Authorization,X-Request-Id,X-Device-Id,X-Session-Id",
     );
     res.setHeader("Access-Control-Allow-Credentials", "true");
   }
@@ -225,7 +226,8 @@ app.use(
   }),
 );
 
-app.use("/api/webhooks", webhookRoutes);
+app.use("/api/paymongo", webhookRoutes);  // payment.paid, payment.failed, source.chargeable
+app.use("/api/webhooks", webhookRoutes);  // checkout_session.payment.paid
 app.use(globalLimiter);
 app.use(compression());
 app.use(express.json({ limit: "8mb" }));
@@ -244,6 +246,7 @@ app.use("/api/m/maintenance", maintenanceRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/chat", chatRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/digital-twin", digitalTwinRoutes);
 app.use("/api/utilities", utilityBillingRoutes);

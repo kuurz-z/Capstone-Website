@@ -823,6 +823,8 @@ html[data-theme="dark"] .rf-receipt-header__badge { color: var(--color-success);
 .rf-upload-zone--error          { border-color: var(--rf-error-text); background: var(--rf-error-bg); }
 .rf-upload-zone--success        { border-color: var(--rf-success); background: var(--rf-success-bg); }
 .rf-upload-zone--uploading      { opacity: 0.85; cursor: wait; }
+.rf-upload-zone--disabled       { opacity: 0.62; cursor: not-allowed; background: var(--rf-surface-alt); }
+.rf-upload-zone--disabled:hover { background: var(--rf-surface-alt); }
 
 .rf-upload-status {
   font-size: 14px;
@@ -864,6 +866,8 @@ html[data-theme="dark"] .rf-receipt-header__badge { color: var(--color-success);
 .rf-upload-meta__dot  { color: var(--rf-border-card); }
 
 .rf-upload-replace-hint { font-size: 11px; color: var(--rf-text-muted); margin-top: 4px; }
+.rf-upload-preview      { display: inline-flex; margin-top: 6px; color: var(--rf-accent); font-size: 12px; font-weight: 700; text-decoration: none; }
+.rf-upload-preview:hover { text-decoration: underline; }
 .rf-upload-hint         { font-size: 12px; color: var(--rf-text-muted); margin-top: 4px; }
 .rf-upload-cta          { font-size: 14px; color: var(--rf-text-secondary); }
 .rf-upload-icon         { margin-bottom: 8px; color: var(--rf-text-muted); }
@@ -885,6 +889,45 @@ html[data-theme="dark"] .rf-receipt-header__badge { color: var(--color-success);
   font-size: 12px;
   color: var(--rf-error-text);
   margin-top: 4px;
+}
+
+.rf-id-validation {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rf-border-card);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+}
+.rf-id-validation__title {
+  font-weight: 700;
+  color: var(--rf-text-secondary);
+}
+.rf-id-validation__meta {
+  margin-top: 3px;
+  color: var(--rf-text-muted);
+}
+.rf-id-validation__notes {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--rf-text-muted);
+}
+.rf-id-validation--passed {
+  border-color: var(--rf-success);
+  background: var(--rf-success-bg);
+}
+.rf-id-validation--warning {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.rf-id-validation--failed {
+  border-color: var(--rf-error-text);
+  background: var(--rf-error-bg);
+}
+.rf-id-validation--manual_review,
+.rf-id-validation--validating {
+  border-color: #d6dde6;
+  background: #f8fafc;
 }
 
 .rf-address-heading-wrap { margin-top: 8px; margin-bottom: 4px; }

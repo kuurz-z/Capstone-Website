@@ -2,7 +2,25 @@
  * Billing API - Domain-specific billing operations
  */
 
-import { authFetch } from "./httpClient.js";
+import { getSessionHeaders } from "./authSession";
+import { API_URL, authFetch, getFreshToken } from "./httpClient.js";
+
+const getDownloadFilename = (response, fallback) => {
+  const disposition = response.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  return match?.[1] || fallback;
+};
+
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
 
 export const billingApi = {
   // ── Tenant Endpoints ──
@@ -68,6 +86,62 @@ export const billingApi = {
 
   getPendingVerifications: (branch = null) =>
     authFetch(`/billing/pending-verifications${branch ? `?branch=${branch}` : ""}`),
+
+  getRentBills: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return authFetch(`/billing/rent${query ? `?${query}` : ""}`);
+  },
+
+  getRentBillableTenants: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return authFetch(`/billing/rent/tenants${query ? `?${query}` : ""}`);
+  },
+
+  generateRentBill: (data) =>
+    authFetch("/billing/rent/generate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  previewRentBill: (data) =>
+    authFetch("/billing/rent/preview", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  generateAllRentBills: (data) =>
+    authFetch("/billing/rent/generate-all", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  sendRentBill: (billId) =>
+    authFetch(`/billing/rent/${billId}/send`, {
+      method: "POST",
+    }),
+
+  downloadBillPdf: async (billId, fallbackFilename = "billing-statement.pdf") => {
+    const token = await getFreshToken();
+    if (!token) throw new Error("No authorization header provided - user not authenticated");
+
+    const response = await fetch(`${API_URL}/billing/${billId}/pdf`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...getSessionHeaders(),
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || error.message || "Failed to download PDF.");
+    }
+
+    const blob = await response.blob();
+    const filename = getDownloadFilename(response, fallbackFilename);
+    downloadBlob(blob, filename);
+    return { filename };
+  },
 
   verifyPayment: (billId, data) =>
     authFetch(`/billing/${billId}/verify`, {

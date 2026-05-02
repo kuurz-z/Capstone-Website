@@ -62,6 +62,12 @@ const businessSettingsSchema = new mongoose.Schema(
       default: BUSINESS.PENALTY_RATE_PER_DAY,
       min: 0,
     },
+    maxPenaltyCapPercent: {
+      type: Number,
+      default: BUSINESS.MAX_PENALTY_CAP_PERCENT,
+      min: 0,
+      max: 100,
+    },
     defaultElectricityRatePerKwh: {
       type: Number,
       default: BUSINESS.DEFAULT_ELECTRICITY_RATE_PER_KWH,

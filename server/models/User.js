@@ -33,6 +33,7 @@ import {
   getDefaultPermissionsForRole,
   normalizePermissions,
 } from "../config/accessControl.js";
+import { invalidateAccountStatusCache } from "../utils/accountStatusCache.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -304,8 +305,18 @@ userSchema.pre("save", function (next) {
 
   if (this.isModified("accountStatus")) {
     this.isActive = this.accountStatus === "active";
+    // Flag so the post-save hook can act — isModified() resets after save().
+    this._accountStatusChanged = true;
   }
   next();
+});
+
+// Invalidate the in-memory account status cache whenever accountStatus changes,
+// regardless of which code path triggered the save.
+userSchema.post("save", function () {
+  if (this._accountStatusChanged && this.firebaseUid) {
+    invalidateAccountStatusCache(this.firebaseUid);
+  }
 });
 
 // ============================================================================

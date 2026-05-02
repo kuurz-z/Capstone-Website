@@ -34,6 +34,11 @@ import React, {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { authApi } from "../api/authApi";
+import {
+  clearSessionId,
+  getOtpPending,
+  isLoginInProgress,
+} from "../api/authSession";
 import { auth } from "../../firebase/config";
 import { useFirebaseAuth } from "./FirebaseAuthContext";
 import { USER_ROLES } from "../utils/constants";
@@ -74,7 +79,11 @@ export const AuthProvider = ({ children }) => {
     // The resend button temporarily signs in to Firebase just to call
     // sendEmailVerification(). We must NOT treat that transient sign-in
     // as a real login session or the user gets navigated in unexpectedly.
-    if (sessionStorage.getItem("resendInProgress") === "1") {
+    if (
+      sessionStorage.getItem("resendInProgress") === "1" ||
+      isLoginInProgress() ||
+      getOtpPending()
+    ) {
       setLoading(false);
       return;
     }
@@ -93,7 +102,11 @@ export const AuthProvider = ({ children }) => {
 
       // Guard: double-check the resend flag in case it was set while the
       // API call was in-flight (the transient sign-in can be very fast)
-      if (sessionStorage.getItem("resendInProgress") === "1") {
+      if (
+        sessionStorage.getItem("resendInProgress") === "1" ||
+        isLoginInProgress() ||
+        getOtpPending()
+      ) {
         setLoading(false);
         return;
       }
@@ -117,6 +130,12 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       // User not authenticated in backend - clear state
+      if (
+        error.response?.data?.code === "OTP_SESSION_REQUIRED" ||
+        error.response?.data?.code === "OTP_SESSION_INVALID"
+      ) {
+        clearSessionId();
+      }
       setUser(null);
       setIsAuthenticated(false);
     } finally {
@@ -188,6 +207,11 @@ export const AuthProvider = ({ children }) => {
     setGlobalLoading(true);
     try {
       const userData = await authApi.login();
+      if (userData?.requiresOtp) {
+        setUser(null);
+        setIsAuthenticated(false);
+        return userData;
+      }
       const resolvedUser = userData.user || userData;
       setUser(resolvedUser);
       setIsAuthenticated(true);
@@ -338,6 +362,7 @@ export const AuthProvider = ({ children }) => {
    */
   const updateUser = (userData) => {
     setUser(userData);
+    setIsAuthenticated(Boolean(userData));
     // Also update localStorage for persistence
     localStorage.setItem("user", JSON.stringify(userData));
   };

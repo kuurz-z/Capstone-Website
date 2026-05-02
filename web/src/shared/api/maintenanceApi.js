@@ -55,7 +55,7 @@ export const maintenanceApi = {
   reopenRequest: (requestId, note) =>
     authFetch(`/m/maintenance/${requestId}/reopen`, {
       method: "PATCH",
-      body: JSON.stringify({ note }),
+      body: JSON.stringify({ reopen_note: note }),
     }),
 
   /**
@@ -74,6 +74,15 @@ export const maintenanceApi = {
    */
   updateAdminRequestStatus: (requestId, payload) =>
     authFetch(`/m/maintenance/admin/${requestId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Bulk update maintenance requests (admin only)
+   */
+  bulkUpdateAdminRequests: (payload) =>
+    authFetch("/m/maintenance/admin/bulk", {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),

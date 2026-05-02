@@ -3,26 +3,176 @@
  * Extracted from routes for cleaner separation.
  */
 
-import { getAuth } from "../config/firebase.js";
-import { User, LoginLog } from "../models/index.js";
-import { ROOM_BRANCHES } from "../config/branches.js";
-import logger from "../middleware/logger.js";
-import auditLogger from "../utils/auditLogger.js";
+import crypto from "crypto";
 import { getDefaultPermissionsForRole } from "../config/accessControl.js";
+import { ROOM_BRANCHES } from "../config/branches.js";
+import { sendLoginOtpEmail } from "../config/email.js";
+import { getAuth } from "../config/firebase.js";
 import {
-  sendSuccess,
-  sendError,
-  AppError,
+  AppError
 } from "../middleware/errorHandler.js";
+import logger from "../middleware/logger.js";
 import {
   sanitizeName,
   sanitizePhone,
   sanitizeText,
 } from "../middleware/validation.js";
+import { LoginLog, User, UserSession } from "../models/index.js";
+import auditLogger from "../utils/auditLogger.js";
 
 
 const VALID_BRANCHES = ROOM_BRANCHES;
 const VALID_ROLES = ["applicant", "tenant", "branch_admin", "owner"];
+const ADMIN_ROLES = ["branch_admin", "owner", "superadmin"];
+const OTP_EXPIRES_MINUTES = 10;
+const OTP_EXPIRES_MS = OTP_EXPIRES_MINUTES * 60 * 1000;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+
+const isAdminRole = (role) => ADMIN_ROLES.includes(role);
+
+const getDeviceId = (req) =>
+  typeof req.headers["x-device-id"] === "string"
+    ? req.headers["x-device-id"].trim()
+    : "";
+
+const getSessionId = (req) =>
+  typeof req.headers["x-session-id"] === "string"
+    ? req.headers["x-session-id"].trim()
+    : "";
+
+const createOtp = () => crypto.randomInt(100000, 1000000).toString();
+
+const hashOtp = (otp) =>
+  crypto.createHash("sha256").update(`${process.env.JWT_SECRET || "lilycrest"}:${otp}`).digest("hex");
+
+const buildUserPayload = (user) => ({
+  id: user._id,
+  user_id: user.user_id,
+  firebaseUid: user.firebaseUid,
+  email: user.email,
+  username: user.username,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  phone: user.phone,
+  branch: user.branch,
+  role: user.role,
+  permissions: user.permissions,
+  isActive: user.isActive,
+  isEmailVerified: user.isEmailVerified,
+  accountStatus: user.accountStatus,
+});
+
+const storeOtpChallenge = async (user, req, deviceId) => {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    logger.error(
+      { userId: String(user._id), email: user.email },
+      "Login OTP email cannot be sent because RESEND_API_KEY or RESEND_FROM_EMAIL is missing",
+    );
+    throw new AppError(
+      "Failed to send OTP email",
+      503,
+      "OTP_EMAIL_SEND_FAILED",
+    );
+  }
+
+  const otp = createOtp();
+  const now = new Date();
+  logger.info(
+    { userId: String(user._id), email: user.email, deviceId },
+    "Login OTP generated",
+  );
+
+  const pending = await UserSession.findOneAndUpdate(
+    {
+      userId: user._id,
+      deviceId,
+      isActive: false,
+    },
+    {
+      $set: {
+        deviceId,
+        device: req.headers["x-device-name"] || "Unknown",
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || req.connection?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+        otpHash: hashOtp(otp),
+        otpExpiresAt: new Date(now.getTime() + OTP_EXPIRES_MS),
+        otpLastSentAt: now,
+        otpAttempts: 0,
+        otpVerifiedAt: null,
+        expiresAt: null,
+        logoutTime: now,
+      },
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+
+  logger.info(
+    {
+      userId: String(user._id),
+      email: user.email,
+      deviceId,
+      otpExpiresAt: pending.otpExpiresAt,
+    },
+    "Login OTP stored",
+  );
+
+  const name = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username;
+  console.log("[OTP EMAIL] Sending", { to: user.email });
+
+  const emailResult = await sendLoginOtpEmail({
+    to: user.email,
+    name,
+    otp,
+    expiresInMinutes: OTP_EXPIRES_MINUTES,
+  });
+
+  if (!emailResult?.success) {
+    console.error("[OTP EMAIL ERROR]", {
+      userId: String(user._id),
+      email: user.email,
+      emailError: emailResult?.error,
+      emailCode: emailResult?.code,
+      emailProvider: "resend",
+      emailStatusCode: emailResult?.statusCode,
+    });
+    logger.error(
+      {
+        userId: String(user._id),
+        email: user.email,
+        emailError: emailResult?.error,
+        emailCode: emailResult?.code,
+        emailProvider: "resend",
+        emailStatusCode: emailResult?.statusCode,
+      },
+      "Failed to send login OTP email",
+    );
+
+    pending.otpHash = null;
+    pending.otpExpiresAt = null;
+    pending.otpAttempts = 0;
+    await pending.save();
+
+    throw new AppError(
+      "Failed to send OTP email",
+      503,
+      "OTP_EMAIL_SEND_FAILED",
+    );
+  }
+
+  console.log("[OTP EMAIL] Sent successfully", { to: user.email, messageId: emailResult.messageId });
+  logger.info(
+    {
+      userId: String(user._id),
+      email: user.email,
+      messageId: emailResult.messageId,
+    },
+    "Login OTP email sent",
+  );
+
+  return pending;
+};
 
 export const register = async (req, res, next) => {
   try {
@@ -30,12 +180,7 @@ export const register = async (req, res, next) => {
     // Sanitize and validate input
     const data = req.sanitizedData;
 
-    const username = data.username;
-    const firstName = data.firstName;
-    const lastName = data.lastName;
-    const phone = data.phone; // may be undefined
-    const branch = data.branch; // may be undefined
-    const email = data.email; // may be undefined (for Gmail users)
+    const { username, firstName, lastName, phone, branch, email } = data;
 
     // Validate required fields
     if (!username || !firstName || !lastName) {
@@ -165,7 +310,38 @@ export const login = async (req, res, next) => {
     const isCheckOnly = req.query.checkOnly === "true";
 
     // Find user in database using Firebase UID from verified token
-    const user = await User.findOne({ firebaseUid: req.user.uid });
+    let user = await User.findOne({ firebaseUid: req.user.uid });
+
+    if (!user && req.user.email) {
+      // UID not found — fall back to email lookup.
+      // Handles: Google sign-in to an account originally created with
+      // email/password (Firebase may issue a different UID for the OAuth
+      // credential), or admin-provisioned records with no UID yet.
+      const provider = req.user.firebase?.sign_in_provider || "unknown";
+      const byEmail = await User.findOne({
+        email: req.user.email.toLowerCase().trim(),
+      });
+
+      if (byEmail) {
+        logger.info(
+          {
+            email: req.user.email,
+            provider,
+            previousUid: byEmail.firebaseUid || "(none)",
+            newUid: req.user.uid,
+          },
+          "Login: user found by email — linking Firebase UID to existing account",
+        );
+        byEmail.firebaseUid = req.user.uid;
+        await byEmail.save();
+        user = byEmail;
+      } else {
+        logger.info(
+          { uid: req.user.uid, email: req.user.email, provider },
+          "Login: user not found by UID or email",
+        );
+      }
+    }
 
     if (!user) {
       // Only log if this is a real login attempt, not a check
@@ -210,14 +386,64 @@ export const login = async (req, res, next) => {
     }
 
     // Block unverified non-admin users from logging in
-    const isAdminRole = user.role === "branch_admin" || user.role === "owner";
-    if (!user.isEmailVerified && !isAdminRole) {
+    const adminUser = isAdminRole(user.role);
+    if (!user.isEmailVerified && !adminUser) {
       await auditLogger.logLogin(req, user, false, "Email not verified");
       LoginLog.logEvent({ userId: user._id, email: user.email, action: "login_failed", success: false, failureReason: "Email not verified", req });
       return res.status(403).json({
         error: "Please verify your email before logging in.",
         code: "EMAIL_NOT_VERIFIED",
       });
+    }
+
+    if (isCheckOnly) {
+      return res.json({
+        message: "User exists",
+        user: buildUserPayload(user),
+      });
+    }
+
+    const signInProvider = req.user.firebase?.sign_in_provider;
+    const isOAuthUser = Boolean(signInProvider && signInProvider !== "password");
+
+    let session = null;
+    if (adminUser || isOAuthUser) {
+      // Admins and OAuth users (Google, Facebook, etc.) skip OTP.
+      // OAuth providers already verify identity; no second factor needed.
+      // isOAuthUser sessions must have otpVerifiedAt set so verifyToken
+      // middleware's findValidOtpSession check passes for protected routes.
+      session = await UserSession.createSession(user._id, req, {
+        deviceId: getDeviceId(req) || null,
+        durationMs: SESSION_DURATION_MS,
+        otpVerified: isOAuthUser,
+      });
+    } else {
+      const deviceId = getDeviceId(req);
+      if (!deviceId) {
+        return res.status(400).json({
+          error: "Device verification is required. Please try signing in again.",
+          code: "DEVICE_ID_REQUIRED",
+        });
+      }
+
+      const existingSession = await UserSession.findValidOtpSession(
+        user._id,
+        deviceId,
+        getSessionId(req),
+      );
+
+      if (!existingSession) {
+        await storeOtpChallenge(user, req, deviceId);
+        return res.status(200).json({
+          requiresOtp: true,
+          code: "OTP_REQUIRED",
+          message: "OTP verification required",
+        });
+      }
+
+      existingSession.lastActivityAt = new Date();
+      await existingSession.save();
+      session = existingSession;
     }
 
     // Log successful login (not for checkOnly)
@@ -228,25 +454,157 @@ export const login = async (req, res, next) => {
 
     res.json({
       message: "Login successful",
-      user: {
-        id: user._id,
-        user_id: user.user_id,
-        firebaseUid: user.firebaseUid,
-        email: user.email,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phone: user.phone,
-        branch: user.branch,
-        role: user.role,
-        permissions: user.permissions,
-        isActive: user.isActive,
-        isEmailVerified: user.isEmailVerified,
-        accountStatus: user.accountStatus,
-      },
+      sessionId: session?.sessionId || null,
+      user: buildUserPayload(user),
     });
   } catch (error) {
     await auditLogger.logError(req, error, "Login error");
+    next(error);
+  }
+};
+
+export const verifyLoginOtp = async (req, res, next) => {
+  try {
+    const { otp } = req.body || {};
+    const deviceId = getDeviceId(req);
+
+    if (!deviceId) {
+      return res.status(400).json({
+        error: "Device verification is required. Please sign in again.",
+        code: "DEVICE_ID_REQUIRED",
+      });
+    }
+
+    if (!/^\d{6}$/.test(String(otp || ""))) {
+      return res.status(400).json({
+        error: "Enter the 6-digit OTP code.",
+        code: "INVALID_OTP_FORMAT",
+      });
+    }
+
+    const user = await User.findOne({ firebaseUid: req.user.uid });
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found in database. Please register first.",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    if (isAdminRole(user.role)) {
+      const session = await UserSession.createSession(user._id, req, {
+        deviceId,
+        durationMs: SESSION_DURATION_MS,
+        otpVerified: false,
+      });
+      return res.json({
+        message: "Login successful",
+        sessionId: session.sessionId,
+        user: buildUserPayload(user),
+      });
+    }
+
+    const pending = await UserSession.findPendingOtp(user._id, deviceId);
+    if (!pending) {
+      return res.status(400).json({
+        error: "OTP expired. Please request a new code.",
+        code: "OTP_EXPIRED",
+      });
+    }
+
+    if (pending.otpAttempts >= OTP_MAX_ATTEMPTS) {
+      return res.status(429).json({
+        error: "Too many invalid OTP attempts. Please request a new code.",
+        code: "OTP_ATTEMPTS_EXCEEDED",
+      });
+    }
+
+    if (pending.otpHash !== hashOtp(String(otp))) {
+      pending.otpAttempts += 1;
+      await pending.save();
+      return res.status(400).json({
+        error: "Invalid OTP code.",
+        code: "OTP_INVALID",
+      });
+    }
+
+    await UserSession.updateMany(
+      { userId: user._id, deviceId, isActive: true },
+      { $set: { isActive: false, logoutTime: new Date() } },
+    );
+
+    pending.otpHash = null;
+    pending.otpExpiresAt = null;
+    pending.otpAttempts = 0;
+    await pending.save();
+
+    const session = await UserSession.createSession(user._id, req, {
+      deviceId,
+      durationMs: SESSION_DURATION_MS,
+      otpVerified: true,
+    });
+
+    await auditLogger.logLogin(req, user, true);
+    LoginLog.logEvent({ userId: user._id, email: user.email, action: "login", success: true, req });
+
+    return res.json({
+      message: "OTP verified",
+      sessionId: session.sessionId,
+      user: buildUserPayload(user),
+    });
+  } catch (error) {
+    await auditLogger.logError(req, error, "OTP verification error");
+    next(error);
+  }
+};
+
+export const resendLoginOtp = async (req, res, next) => {
+  try {
+    const deviceId = getDeviceId(req);
+    if (!deviceId) {
+      return res.status(400).json({
+        error: "Device verification is required. Please sign in again.",
+        code: "DEVICE_ID_REQUIRED",
+      });
+    }
+
+    const user = await User.findOne({ firebaseUid: req.user.uid });
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found in database. Please register first.",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    if (isAdminRole(user.role)) {
+      return res.json({ message: "OTP is not required for this account." });
+    }
+
+    const pending = await UserSession.findOne({
+      userId: user._id,
+      deviceId,
+      isActive: false,
+      otpHash: { $ne: null },
+    }).select("+otpHash");
+
+    if (pending?.otpLastSentAt) {
+      const elapsed = Date.now() - pending.otpLastSentAt.getTime();
+      if (elapsed < OTP_RESEND_COOLDOWN_MS) {
+        const retryAfterSeconds = Math.ceil((OTP_RESEND_COOLDOWN_MS - elapsed) / 1000);
+        return res.status(429).json({
+          error: `Please wait ${retryAfterSeconds}s before requesting another OTP.`,
+          code: "OTP_RESEND_COOLDOWN",
+          retryAfterSeconds,
+        });
+      }
+    }
+
+    await storeOtpChallenge(user, req, deviceId);
+    return res.json({
+      message: "OTP sent. Please check your email.",
+      cooldownSeconds: Math.ceil(OTP_RESEND_COOLDOWN_MS / 1000),
+    });
+  } catch (error) {
+    await auditLogger.logError(req, error, "OTP resend error");
     next(error);
   }
 };
@@ -266,6 +624,14 @@ export const logout = async (req, res, next) => {
     }
 
     // Log logout event for authenticated user with full details
+    const sessionId = getSessionId(req);
+    if (sessionId) {
+      await UserSession.updateOne(
+        { userId: user._id, sessionId, isActive: true },
+        { $set: { isActive: false, logoutTime: new Date() } },
+      );
+    }
+
     await auditLogger.logLogout(req, user);
     LoginLog.logEvent({ userId: user._id, email: user.email, action: "logout", success: true, req });
 
@@ -580,15 +946,27 @@ export const setRole = async (req, res, next) => {
       });
     }
 
-    await auth.setCustomUserClaims(user.firebaseUid, claims);
-
-    // Update role in MongoDB database
+    // Persist to MongoDB first — if this fails we never touch Firebase,
+    // so the two stores stay in sync.
+    const previousRole = user.role;
+    const previousPermissions = [...(user.permissions || [])];
     user.role = role;
     user.permissions =
       role === "branch_admin" || role === "owner"
         ? getDefaultPermissionsForRole(role)
         : [];
     await user.save();
+
+    // Propagate to Firebase claims.  On failure, roll back MongoDB so the
+    // stores don't diverge.
+    try {
+      await auth.setCustomUserClaims(user.firebaseUid, claims);
+    } catch (firebaseErr) {
+      user.role = previousRole;
+      user.permissions = previousPermissions;
+      await user.save();
+      throw firebaseErr;
+    }
 
     res.json({
       message: "User role updated successfully",

@@ -17,6 +17,11 @@
 
 import { auth } from "../../firebase/config";
 import { API_BASE_URL } from "./baseUrl";
+import {
+  clearSessionId,
+  getSessionHeaders,
+  setSessionId,
+} from "./authSession";
 
 /**
  * Get fresh Firebase ID token for API requests.
@@ -52,24 +57,35 @@ const authRequest = async (url, options = {}, _isRetry = false) => {
     headers: {
       "Content-Type": "application/json",
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...getSessionHeaders(),
       ...options.headers,
     },
   });
 
   if (!response.ok) {
-    if (response.status === 401 && !_isRetry) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorCode = errorData.code || errorData.error?.code;
+    const shouldRetryAuth =
+      response.status === 401 &&
+      !_isRetry &&
+      !["OTP_SESSION_REQUIRED", "OTP_SESSION_INVALID"].includes(errorCode);
+
+    if (shouldRetryAuth) {
       const refreshedToken = await getFreshToken(true);
       if (refreshedToken) {
         return authRequest(url, options, true);
       }
     }
 
-    const errorData = await response.json().catch(() => ({}));
+    const errorMessage =
+      typeof errorData.error === "string"
+        ? errorData.error
+        : errorData.error?.message ||
+          errorData.message ||
+          "Request failed";
     // Create error with .response property so callers can check status codes
     // (e.g., Google sign-up flow checks error.response?.status === 404)
-    const error = new Error(
-      errorData.error || errorData.message || "Request failed",
-    );
+    const error = new Error(errorMessage);
     error.response = {
       status: response.status,
       data: errorData,
@@ -89,7 +105,22 @@ export const authApi = {
    * Authenticate user with backend after Firebase sign-in
    * @returns {Promise<Object>} User data from backend
    */
-  login: () => authRequest("/auth/login", { method: "POST" }),
+  login: async () => {
+    const response = await authRequest("/auth/login", { method: "POST" });
+    if (response.sessionId) setSessionId(response.sessionId);
+    return response;
+  },
+
+  verifyOtp: async (otp) => {
+    const response = await authRequest("/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ otp }),
+    });
+    if (response.sessionId) setSessionId(response.sessionId);
+    return response;
+  },
+
+  resendOtp: () => authRequest("/auth/resend-otp", { method: "POST" }),
 
   /**
    * Check if user exists in backend (doesn't create audit log)
@@ -125,6 +156,7 @@ export const authApi = {
       );
     }
     // Always sign out from Firebase even if backend fails
+    clearSessionId();
     await auth.signOut();
     return { message: "Logged out successfully" };
   },

@@ -2,11 +2,26 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reservationApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 
-const invalidateReservationSideEffects = (qc) =>
+/**
+ * Targeted invalidation after a reservation mutation.
+ * Invalidates the list views and occupancy data, but NOT unrelated domains.
+ * Pass reservationId to also bust the specific detail cache.
+ */
+const invalidateReservationSideEffects = (qc, reservationId = null) =>
   Promise.all([
-    qc.invalidateQueries({ queryKey: ["reservations"] }),
-    qc.invalidateQueries({ queryKey: ["rooms"] }),
+    // All list/workspace variants under "reservations"
+    qc.invalidateQueries({ queryKey: ["reservations", "list"] }),
+    qc.invalidateQueries({ queryKey: ["reservations", "currentResidents"] }),
+    qc.invalidateQueries({ queryKey: ["reservations", "tenantWorkspace"] }),
+    // Room occupancy changes on bed assignment/release
+    qc.invalidateQueries({ queryKey: ["rooms", "branchOccupancy"] }),
+    qc.invalidateQueries({ queryKey: ["rooms", "occupancy"] }),
+    // Current user's own reservation/profile state
     qc.invalidateQueries({ queryKey: ["users", "currentUser"] }),
+    // Specific detail if known
+    ...(reservationId
+      ? [qc.invalidateQueries({ queryKey: queryKeys.reservations.detail(reservationId) })]
+      : []),
   ]);
 
 /** Fetch all reservations — 30s freshness, mutations trigger instant refresh */
@@ -84,7 +99,8 @@ export function useUpdateReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.update(reservationId, data),
-    onSuccess: () => invalidateReservationSideEffects(qc),
+    onSuccess: (_data, { reservationId }) =>
+      invalidateReservationSideEffects(qc, reservationId),
   });
 }
 
@@ -94,7 +110,8 @@ export function useUpdateReservationByUser() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.updateByUser(reservationId, data),
-    onSuccess: () => invalidateReservationSideEffects(qc),
+    onSuccess: (_data, { reservationId }) =>
+      invalidateReservationSideEffects(qc, reservationId),
   });
 }
 
@@ -103,7 +120,8 @@ export function useCancelReservation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (reservationId) => reservationApi.cancel(reservationId),
-    onSuccess: () => invalidateReservationSideEffects(qc),
+    onSuccess: (_data, reservationId) =>
+      invalidateReservationSideEffects(qc, reservationId),
   });
 }
 
@@ -113,7 +131,8 @@ export function useExtendReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.extend(reservationId, data),
-    onSuccess: () => invalidateReservationSideEffects(qc),
+    onSuccess: (_data, { reservationId }) =>
+      invalidateReservationSideEffects(qc, reservationId),
   });
 }
 
@@ -123,7 +142,8 @@ export function useReleaseReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.release(reservationId, data),
-    onSuccess: () => invalidateReservationSideEffects(qc),
+    onSuccess: (_data, { reservationId }) =>
+      invalidateReservationSideEffects(qc, reservationId),
   });
 }
 
@@ -133,6 +153,7 @@ export function useArchiveReservation() {
   return useMutation({
     mutationFn: ({ reservationId, data }) =>
       reservationApi.archive(reservationId, data),
-    onSuccess: () => invalidateReservationSideEffects(qc),
+    onSuccess: (_data, { reservationId }) =>
+      invalidateReservationSideEffects(qc, reservationId),
   });
 }

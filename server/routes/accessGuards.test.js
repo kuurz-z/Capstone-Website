@@ -51,6 +51,9 @@ await jest.unstable_mockModule("../validation/schemas.js", () => ({
 }));
 await jest.unstable_mockModule("../middleware/rateLimiter.js", () => ({
   publicLimiter: noop,
+  authLimiter: noop,
+  reservationLimiter: noop,
+  apiLimiter: noop,
 }));
 await jest.unstable_mockModule("../config/firebase.js", () => ({
   getAuth: jest.fn(),
@@ -61,6 +64,8 @@ await jest.unstable_mockModule("../utils/auditLogger.js", () => ({
 await jest.unstable_mockModule("../controllers/authController.js", () => ({
   register: noop,
   login: noop,
+  verifyLoginOtp: noop,
+  resendLoginOtp: noop,
   logout: noop,
   getProfile: noop,
   updateProfile: noop,
@@ -78,6 +83,8 @@ await jest.unstable_mockModule("../controllers/reservationsController.js", () =>
   createReservation: noop,
   updateReservation: noop,
   updateReservationByUser: noop,
+  cancelReservationByUser: noop,
+  validateReservationIdByUser: noop,
   deleteReservation: noop,
   extendReservation: noop,
   releaseSlot: noop,
@@ -109,6 +116,7 @@ await jest.unstable_mockModule("../controllers/billingController.js", () => ({
   getCurrentBilling: noop,
   getBillingHistory: noop,
   getMyBills: noop,
+  downloadBillPdf: noop,
   getMyUtilityBreakdownByBillId: noop,
   submitPaymentProof: noop,
   getBillingStats: noop,
@@ -116,6 +124,12 @@ await jest.unstable_mockModule("../controllers/billingController.js", () => ({
   getRoomsWithTenants: noop,
   getPendingVerifications: noop,
   getBillingReport: noop,
+  getRentBills: noop,
+  getRentBillableTenants: noop,
+  getRentBillPreview: noop,
+  generateRentBill: noop,
+  generateAllRentBills: noop,
+  sendRentBill: noop,
   verifyPayment: noop,
   markBillAsPaid: noop,
   deleteBill: noop,
@@ -161,6 +175,7 @@ await jest.unstable_mockModule("../controllers/maintenanceController.js", () => 
   updateRequest: noop,
   updateAdminRequestStatus: noop,
   updateAdminRequestStatusCompat: noop,
+  updateAdminBulkRequests: noop,
   getCompletionStats: noop,
   getIssueFrequency: noop,
 }));

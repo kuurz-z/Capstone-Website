@@ -21,6 +21,7 @@
 
 import mongoose from "mongoose";
 import { ROOM_BRANCHES } from "../config/branches.js";
+import { PAYMENT_METHODS } from "../config/paymentMethods.js";
 
 // ============================================================================
 // SCHEMA DEFINITION
@@ -211,18 +212,7 @@ const billSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: [
-        "bank",
-        "gcash",
-        "card",
-        "check",
-        "cash",
-        "paymongo",
-        "paymaya",
-        "grab_pay",
-        "maya",
-        "online",
-      ],
+      enum: PAYMENT_METHODS,
       default: null,
     },
     paymongoSessionId: {
@@ -261,6 +251,32 @@ const billSchema = new mongoose.Schema(
           water: {
             type: utilityDispatchEntrySchema,
             default: () => ({}),
+          },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
+    delivery: {
+      type: new mongoose.Schema(
+        {
+          email: {
+            status: {
+              type: String,
+              enum: ["not_attempted", "sent", "failed"],
+              default: "not_attempted",
+            },
+            sentAt: { type: Date, default: null },
+            error: { type: String, default: "" },
+          },
+          notification: {
+            status: {
+              type: String,
+              enum: ["not_attempted", "sent", "failed"],
+              default: "not_attempted",
+            },
+            sentAt: { type: Date, default: null },
+            error: { type: String, default: "" },
           },
         },
         { _id: false },
@@ -308,7 +324,8 @@ const billSchema = new mongoose.Schema(
     // --- Penalty Details ---
     penaltyDetails: {
       daysLate: { type: Number, default: 0 },
-      ratePerDay: { type: Number, default: 50 },
+      // No default — always written explicitly when a penalty is applied.
+      ratePerDay: { type: Number, default: null },
       appliedAt: { type: Date, default: null },
     },
   },
@@ -329,6 +346,21 @@ billSchema.index({
   billingMonth: 1,
   isArchived: 1,
 });
+
+// Prevent duplicate rent bills for the same reservation + billing cycle.
+// The partial filter excludes bills without a reservationId (utility-only bills).
+billSchema.index(
+  { reservationId: 1, billingCycleStart: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: {
+      reservationId: { $type: "objectId" },
+      billingCycleStart: { $type: "date" },
+    },
+    name: "unique_reservation_billing_cycle",
+  },
+);
 
 // For forecasting and trend analysis
 billSchema.index({ billingMonth: -1, totalAmount: 1 });

@@ -8,7 +8,6 @@
 
 .data-table-scroll {
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   background: var(--bg-card);
@@ -35,6 +34,7 @@
   letter-spacing: 0.06em;
   border-bottom: 1px solid var(--border-default);
   white-space: nowrap;
+  -webkit-user-select: none;
   user-select: none;
   background: var(--bg-table-header);
 }
@@ -84,6 +84,31 @@
 
 .data-table__row--static:hover {
   background: transparent;
+}
+
+/* ── Row selection ── */
+.data-table__row--selected {
+  background: #eff6ff !important;
+}
+
+.data-table__row--selected:hover {
+  background: #dbeafe !important;
+}
+
+.data-table__th--checkbox,
+.data-table__td--checkbox {
+  width: 44px;
+  padding: 0 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.data-table__checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+  flex-shrink: 0;
 }
 
 /* ── Cells ── */

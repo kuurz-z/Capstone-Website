@@ -93,13 +93,34 @@ export const reservationApi = {
     ),
 
   /**
-   * Cancel reservation
+   * Validate applicant valid ID using backend OCR/Google Vision.
+   */
+  validateIdDocument: (reservationId, data) =>
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/id-validation`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    ),
+
+  cancelByUser: (reservationId, reason = "") =>
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/cancel`, {
+        method: "PATCH",
+        body: JSON.stringify({ reason }),
+      }),
+    ),
+
+  /**
+   * Cancel reservation — legacy alias kept for backward compatibility.
+   * New code should use cancelByUser instead.
+   * @deprecated Use cancelByUser
    */
   cancel: (reservationId) =>
     withLifecycleNormalization(
-      authFetch(`/reservations/${reservationId}`, {
-      method: "PUT",
-      body: JSON.stringify({ status: "cancelled" }),
+      authFetch(`/reservations/${reservationId}/cancel`, {
+        method: "PATCH",
+        body: JSON.stringify({}),
       }),
     ),
 

@@ -61,15 +61,32 @@ export function useMarkAsPaid() {
   return useMutation({
     mutationFn: ({ billId, amount, note }) =>
       billingApi.markAsPaid(billId, amount, note),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["billing"] }),
+    onSuccess: (_data, { billId }) =>
+      Promise.all([
+        // Bust only the affected list views and stats — not every billing query
+        qc.invalidateQueries({ queryKey: queryKeys.billing.byBranch() }),
+        qc.invalidateQueries({ queryKey: queryKeys.billing.stats }),
+        qc.invalidateQueries({ queryKey: queryKeys.billing.myBills }),
+        qc.invalidateQueries({ queryKey: queryKeys.billing.current }),
+        qc.invalidateQueries({ queryKey: queryKeys.billing.pendingVerifications }),
+        // Bust the specific bill detail if callers cache it
+        ...(billId
+          ? [qc.invalidateQueries({ queryKey: ["billing", "detail", billId] })]
+          : []),
+      ]),
   });
 }
 
-/** Apply penalties to overdue bills */
+/** Apply penalties to overdue bills — affects many bills, invalidate branch list + stats */
 export function useApplyPenalties() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => billingApi.applyPenalties(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["billing"] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.billing.byBranch() }),
+        qc.invalidateQueries({ queryKey: queryKeys.billing.stats }),
+        qc.invalidateQueries({ queryKey: queryKeys.billing.report }),
+      ]),
   });
 }

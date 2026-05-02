@@ -26,8 +26,6 @@
   border-bottom: 1px solid var(--border-light);
   padding-bottom: var(--spacing-xs);
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
   -ms-overflow-style: none;
 }
 

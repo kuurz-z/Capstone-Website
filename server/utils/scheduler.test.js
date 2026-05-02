@@ -18,9 +18,11 @@ const getLifecyclePolicySettings = jest.fn(async () => ({
   archiveCancelledAfterDays: 7,
 }));
 const getPenaltyRatePerDay = jest.fn(async () => 50);
+const getMaxPenaltyCapPercent = jest.fn(async () => 100);
 const resolvePenaltyRatePerDay = jest.fn((rate) => rate || 50);
 const dispatchDueScheduledAnnouncements = jest.fn();
 const notify = {
+  general: jest.fn(),
   reservationExpired: jest.fn(),
   reservationNoShow: jest.fn(),
   penaltyApplied: jest.fn(),
@@ -60,6 +62,7 @@ await jest.unstable_mockModule("../utils/reservationHelpers.js", () => ({
 
 await jest.unstable_mockModule("./notificationService.js", () => ({
   default: notify,
+  notify,
 }));
 
 await jest.unstable_mockModule("./occupancyManager.js", () => ({
@@ -86,6 +89,7 @@ await jest.unstable_mockModule("./billingPolicy.js", () => ({
 await jest.unstable_mockModule("./businessSettings.js", () => ({
   getLifecyclePolicySettings,
   getPenaltyRatePerDay,
+  getMaxPenaltyCapPercent,
   resolvePenaltyRatePerDay,
 }));
 
@@ -145,9 +149,12 @@ describe("scheduler jobs", () => {
     });
     getPenaltyRatePerDay.mockReset();
     getPenaltyRatePerDay.mockResolvedValue(50);
+    getMaxPenaltyCapPercent.mockReset();
+    getMaxPenaltyCapPercent.mockResolvedValue(100);
     resolvePenaltyRatePerDay.mockReset();
     resolvePenaltyRatePerDay.mockImplementation((rate) => rate || 50);
     dispatchDueScheduledAnnouncements.mockReset();
+    notify.general.mockReset();
     notify.reservationExpired.mockReset();
     notify.reservationNoShow.mockReset();
     notify.penaltyApplied.mockReset();
@@ -299,18 +306,31 @@ describe("scheduler jobs", () => {
   });
 
   test("markOverdueBills only marks records with due dates in the past", async () => {
-    billUpdateMany.mockResolvedValue({ modifiedCount: 3 });
+    const overdueBill = {
+      _id: "bill-1",
+      userId: "user-1",
+      billingMonth: new Date("2026-04-01T00:00:00.000Z"),
+    };
+    billFind.mockReturnValue(makePopulateChain([overdueBill]));
+    billUpdateMany.mockResolvedValue({ modifiedCount: 1 });
 
     await scheduler.markOverdueBills();
 
-    expect(billUpdateMany).toHaveBeenCalledWith(
+    expect(billFind).toHaveBeenCalledWith(
       expect.objectContaining({
         status: { $in: ["pending", "partially-paid"] },
         dueDate: expect.objectContaining({ $ne: null, $lt: expect.any(Date) }),
         isArchived: false,
       }),
+      { _id: 1, userId: 1, billingMonth: 1 },
+    );
+    expect(billUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _id: { $in: ["bill-1"] },
+      }),
       { $set: { status: "overdue" } },
     );
+    expect(notify.general).toHaveBeenCalledTimes(1);
   });
 
   test("computeOverduePenalties skips overdue bills that do not have due dates", async () => {

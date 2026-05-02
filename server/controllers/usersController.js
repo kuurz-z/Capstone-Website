@@ -1264,6 +1264,61 @@ export const restoreUser = async (req, res, next) => {
 };
 
 /**
+ * PATCH /api/users/:userId/archive
+ * Soft-delete (archive) a user account.
+ * Access: Admin | Owner
+ */
+export const archiveUser = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: "Invalid user ID format", code: "INVALID_USER_ID" });
+    }
+
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+    }
+
+    const canAccessTarget = await hasBranchAccessToTargetUser(
+      targetUser,
+      req.isOwner ? null : req.branchFilter,
+    );
+    if (!canAccessTarget) {
+      return res.status(404).json({ error: "User not found or access denied", code: "USER_NOT_FOUND" });
+    }
+
+    if (!req.isOwner && ["branch_admin", "owner"].includes(targetUser.role)) {
+      return res.status(403).json({ error: "Only the owner can archive admin accounts", code: "ROLE_FORBIDDEN" });
+    }
+
+    if (targetUser.isArchived) {
+      return res.json({ message: "User already archived", archived: true });
+    }
+
+    const actor = await User.findOne({ firebaseUid: req.user.uid }).select("_id").lean();
+    const oldData = targetUser.toObject();
+
+    await targetUser.archive(actor?._id || null);
+
+    await auditLogger.logModification(
+      req,
+      "user",
+      userId,
+      oldData,
+      targetUser.toObject(),
+      "User archived",
+    );
+
+    return res.json({ message: "User archived successfully", archived: true });
+  } catch (error) {
+    await auditLogger.logError(req, error, "Failed to archive user");
+    next(error);
+  }
+};
+
+/**
  * PATCH /api/users/:userId/ban
  * Ban a user account permanently.
  * Access: Owner only

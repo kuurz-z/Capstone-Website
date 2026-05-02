@@ -11,6 +11,7 @@
 
 import { auth } from "../../firebase/config";
 import { API_BASE_URL } from "./baseUrl";
+import { getSessionHeaders } from "./authSession";
 
 export const API_URL = API_BASE_URL;
 
@@ -77,6 +78,7 @@ export const authFetch = async (url, options = {}, _isRetry = false) => {
     const headers = {
       "Content-Type": "application/json",
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...getSessionHeaders(),
       ...optionHeaders,
     };
 

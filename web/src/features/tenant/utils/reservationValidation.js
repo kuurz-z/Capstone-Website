@@ -39,6 +39,22 @@ export const validatePhoneNumber = (phone) => {
  return { valid: true };
 };
 
+/**
+ * Validate Philippine local mobile number format: 09XXXXXXXXX (11 digits).
+ * Used for all phone fields in the reservation flow.
+ * Accepts digits-only input (no +63 prefix).
+ */
+export const validatePHPhoneLocal = (phone) => {
+  if (!phone || !phone.trim())
+    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
+  const digits = phone.replace(/\D/g, "");
+  if (!digits.startsWith("09"))
+    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
+  if (digits.length !== 11)
+    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
+  return { valid: true };
+};
+
 export const validateBirthday = (birthday) => {
  if (!birthday) return { valid: false, error: "Birthday is required" };
  const birthDate = new Date(birthday);
@@ -160,4 +176,18 @@ export const validateGeneralTextField = (text, maxLength = 100) => {
  return { valid: false, error: `Must be ${maxLength} characters or less` };
  }
  return { valid: true };
+};
+
+/**
+ * Validate Philippine phone number — accepts:
+ *   - Mobile:   09XXXXXXXXX (11 digits starting with 09)
+ *   - Landline: 0[2-8] followed by 7–8 digits
+ * Returns true if value matches either pattern. Empty/null returns false.
+ */
+export const validatePHPhoneOrLandline = (value) => {
+  if (!value || !String(value).trim()) return false;
+  const digits = String(value).replace(/[\s\-()]/g, "");
+  if (/^09\d{9}$/.test(digits)) return true;
+  if (/^0[2-8]\d{7,8}$/.test(digits)) return true;
+  return false;
 };

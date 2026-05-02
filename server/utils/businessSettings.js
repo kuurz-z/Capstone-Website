@@ -31,6 +31,7 @@ export const DEFAULT_POLICY_SETTINGS = Object.freeze({
 export const DEFAULT_BUSINESS_SETTINGS = Object.freeze({
   reservationFeeAmount: BUSINESS.DEPOSIT_AMOUNT,
   penaltyRatePerDay: BUSINESS.PENALTY_RATE_PER_DAY,
+  maxPenaltyCapPercent: BUSINESS.MAX_PENALTY_CAP_PERCENT,
   defaultElectricityRatePerKwh: BUSINESS.DEFAULT_ELECTRICITY_RATE_PER_KWH,
   defaultWaterRatePerUnit: 0,
   ...DEFAULT_POLICY_SETTINGS,
@@ -211,6 +212,11 @@ export async function getReservationFeeAmount() {
 export async function getPenaltyRatePerDay() {
   const settings = await getBusinessSettings();
   return settings.penaltyRatePerDay ?? BUSINESS.PENALTY_RATE_PER_DAY;
+}
+
+export async function getMaxPenaltyCapPercent() {
+  const settings = await getBusinessSettings();
+  return settings.maxPenaltyCapPercent ?? BUSINESS.MAX_PENALTY_CAP_PERCENT;
 }
 
 export function resolvePenaltyRatePerDay(storedRatePerDay, configuredRatePerDay) {

@@ -1,8 +1,8 @@
 import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
+    keepPreviousData,
+    useMutation,
+    useQuery,
+    useQueryClient,
 } from "@tanstack/react-query";
 import { maintenanceApi } from "../../api/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
@@ -18,11 +18,19 @@ export function useMyMaintenanceRequests(filters) {
 
 /** Fetch maintenance requests for admins */
 export function useAdminMaintenanceRequests(filters) {
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: queryKeys.maintenance.admin(filters),
     queryFn: () => maintenanceApi.getAdminAll(filters),
     placeholderData: keepPreviousData,
+    refetchInterval: 60_000,       // reduced from 15 s — less network churn
+    refetchOnWindowFocus: false,   // tab-switching no longer triggers a fetch
   });
+
+  const refresh = () =>
+    qc.invalidateQueries({ queryKey: queryKeys.maintenance.admin(filters) });
+
+  return { ...query, refresh };
 }
 
 /** Fetch single maintenance request */
@@ -50,8 +58,14 @@ export function useUpdateMyMaintenanceRequest() {
   return useMutation({
     mutationFn: ({ requestId, data }) =>
       maintenanceApi.updateMyRequest(requestId, data),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all });
+      if (variables?.requestId) {
+        qc.invalidateQueries({
+          queryKey: queryKeys.maintenance.detail(variables.requestId),
+        });
+      }
+    },
   });
 }
 
@@ -60,8 +74,14 @@ export function useCancelMaintenanceRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (requestId) => maintenanceApi.cancelRequest(requestId),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
+    onSuccess: (_data, requestId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all });
+      if (requestId) {
+        qc.invalidateQueries({
+          queryKey: queryKeys.maintenance.detail(requestId),
+        });
+      }
+    },
   });
 }
 
@@ -71,8 +91,14 @@ export function useReopenMaintenanceRequest() {
   return useMutation({
     mutationFn: ({ requestId, note }) =>
       maintenanceApi.reopenRequest(requestId, note),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all });
+      if (variables?.requestId) {
+        qc.invalidateQueries({
+          queryKey: queryKeys.maintenance.detail(variables.requestId),
+        });
+      }
+    },
   });
 }
 
@@ -82,8 +108,25 @@ export function useUpdateMaintenanceRequest() {
   return useMutation({
     mutationFn: ({ requestId, payload }) =>
       maintenanceApi.updateAdminRequestStatus(requestId, payload),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all });
+      if (variables?.requestId) {
+        qc.invalidateQueries({
+          queryKey: queryKeys.maintenance.detail(variables.requestId),
+        });
+      }
+    },
+  });
+}
+
+/** Bulk update maintenance requests (admin) */
+export function useBulkMaintenanceUpdate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload) => maintenanceApi.bulkUpdateAdminRequests(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.maintenance.all });
+    },
   });
 }
 

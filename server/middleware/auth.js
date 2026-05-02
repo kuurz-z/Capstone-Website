@@ -26,9 +26,16 @@
 
 import { getAuth } from "../config/firebase.js";
 import crypto from "crypto";
-import { User } from "../models/index.js";
+import { User, UserSession } from "../models/index.js";
 
 import { CACHE } from "../config/constants.js";
+import {
+  getCachedAccountStatus as _getCachedAccountStatus,
+  setCachedAccountStatus as _setCachedAccountStatus,
+  invalidateAccountStatusCache,
+} from "../utils/accountStatusCache.js";
+
+export { invalidateAccountStatusCache };
 
 /* ─── In-memory token verification cache (avoids hitting Firebase each request) ── */
 const tokenCache = new Map();
@@ -65,30 +72,25 @@ function setCachedToken(token, decoded) {
   tokenCache.set(key, { decoded, ts: Date.now(), lastAccess: Date.now() });
 }
 
-/* ─── In-memory account status cache (avoids hitting MongoDB each request) ── */
-const accountStatusCache = new Map();
-const ACCOUNT_STATUS_CACHE_TTL = CACHE.ACCOUNT_STATUS_TTL_MS;
+/* ─── Account status cache — backed by shared module so User post-save hooks
+       can invalidate it without creating a circular import. ─────────────────── */
+const getCachedAccountStatus = _getCachedAccountStatus;
+const setCachedAccountStatus = _setCachedAccountStatus;
 
-function getCachedAccountStatus(uid) {
-  const entry = accountStatusCache.get(uid);
-  if (!entry) return undefined;
-  if (Date.now() - entry.ts > ACCOUNT_STATUS_CACHE_TTL) {
-    accountStatusCache.delete(uid);
-    return undefined;
-  }
-  return entry.status;
-}
+const OTP_SESSION_EXEMPT_PATHS = [
+  "/api/auth/login",
+  "/api/auth/verify-otp",
+  "/api/auth/resend-otp",
+  "/api/auth/logout",
+  "/api/auth/register",
+  "/api/auth/log-password-reset",
+];
 
-function setCachedAccountStatus(uid, status) {
-  accountStatusCache.set(uid, { status, ts: Date.now() });
-  if (accountStatusCache.size > CACHE.MAX_ACCOUNT_STATUS_ENTRIES) {
-    const oldest = accountStatusCache.keys().next().value;
-    accountStatusCache.delete(oldest);
-  }
-}
+const isOtpSessionExempt = (req) =>
+  OTP_SESSION_EXEMPT_PATHS.some((path) => req.originalUrl?.startsWith(path));
 
-/** Invalidate a user's cached account status (call when admin suspends/bans) */
-export const invalidateAccountStatusCache = (uid) => accountStatusCache.delete(uid);
+const isAdminRole = (role) =>
+  role === "branch_admin" || role === "owner" || role === "superadmin";
 
 /**
  * Verify Firebase ID Token
@@ -142,9 +144,11 @@ export const verifyToken = async (req, res, next) => {
 
     // --- Account status check (cached — saves ~5-50ms per request) ---
     // Block suspended/banned users from accessing any protected endpoint
+    let dbUser = await User.findOne({ firebaseUid: decodedToken.uid })
+      .select("_id accountStatus role")
+      .lean();
     let accountStatus = getCachedAccountStatus(decodedToken.uid);
     if (accountStatus === undefined) {
-      const dbUser = await User.findOne({ firebaseUid: decodedToken.uid }).select("accountStatus").lean();
       accountStatus = dbUser?.accountStatus || null;
       setCachedAccountStatus(decodedToken.uid, accountStatus);
     }
@@ -157,6 +161,45 @@ export const verifyToken = async (req, res, next) => {
       };
       const info = statusMap[accountStatus];
       if (info) return res.status(403).json(info);
+    }
+
+    if (
+      dbUser &&
+      !isAdminRole(dbUser.role) &&
+      !isOtpSessionExempt(req)
+    ) {
+      const deviceId =
+        typeof req.headers["x-device-id"] === "string"
+          ? req.headers["x-device-id"].trim()
+          : "";
+      const sessionId =
+        typeof req.headers["x-session-id"] === "string"
+          ? req.headers["x-session-id"].trim()
+          : "";
+
+      if (!deviceId || !sessionId) {
+        return res.status(401).json({
+          error: "Session verification required. Please sign in again.",
+          code: "OTP_SESSION_REQUIRED",
+        });
+      }
+
+      const session = await UserSession.findValidOtpSession(
+        dbUser._id,
+        deviceId,
+        sessionId,
+      );
+
+      if (!session) {
+        return res.status(401).json({
+          error: "Your session expired. Please verify again.",
+          code: "OTP_SESSION_INVALID",
+        });
+      }
+
+      session.lastActivityAt = new Date();
+      await session.save();
+      req.session = session;
     }
 
     // Token is valid, proceed to next middleware/route

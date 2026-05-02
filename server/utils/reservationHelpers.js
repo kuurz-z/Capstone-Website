@@ -106,7 +106,8 @@ export const getMoveInBlockers = (reservation) => {
     );
   }
 
-  const visitWaived = reservation.isOutOfTown === true;
+  const visitWaived =
+    reservation.isOutOfTown === true && reservation.isOutOfTownApproved === true;
   if (!reservation.visitApproved && !visitWaived) {
     blockers.push(
       "Site visit must be completed and approved by admin before move-in."
@@ -429,6 +430,7 @@ export const USER_UPDATE_FLAT_FIELDS = [
   "validIDFrontUrl",
   "validIDBackUrl",
   "validIDType",
+  "idType",
   "nbiClearanceUrl",
   "nbiReason",
   "companyIDUrl",
@@ -481,15 +483,51 @@ export const USER_UPDATE_RENAMES = {
 };
 
 /**
+ * Normalize a Philippine mobile number to the local 09XXXXXXXXX format.
+ * Accepts +639XXXXXXXXX and 09XXXXXXXXX.
+ * Returns null if the value is not a recognizable PH mobile number.
+ */
+export const normalizePHPhone = (raw) => {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, "");
+
+  // E.164: +639XXXXXXXXX → strip country code → 09XXXXXXXXX
+  if (digits.startsWith("639") && digits.length === 12) {
+    return "0" + digits.slice(2); // 639... → 09...
+  }
+  // Local format: 09XXXXXXXXX (11 digits starting with 09)
+  if (digits.startsWith("09") && digits.length === 11) {
+    return digits;
+  }
+  // Unrecognized format — return null so callers can skip or reject
+  return null;
+};
+
+/**
  * Build the $set update object from req.body using the config arrays above.
  * Replaces ~50 manual setField() calls.
+ * Phone fields are normalized to local 09 format on the way in.
  */
 export const buildUserUpdatePayload = (body) => {
   const updates = {};
 
   // Flat fields
   for (const key of USER_UPDATE_FLAT_FIELDS) {
-    if (body[key] !== undefined) updates[key] = body[key];
+    if (body[key] !== undefined) {
+      if (key === "mobileNumber") {
+        // Strict: normalize to 09XXXXXXXXX — skip entirely if format is unrecognized
+        // so an incomplete/invalid input never overwrites a previously valid saved number.
+        const normalized = normalizePHPhone(body[key]);
+        if (normalized !== null) updates[key] = normalized;
+      } else if (key === "billingEmail") {
+        updates[key] = typeof body[key] === "string" ? body[key].toLowerCase().trim() : body[key];
+      } else if (key === "leaseDuration") {
+        // leaseDuration is optional (Number field) — skip empty string to prevent CastError
+        if (body[key] !== "" && body[key] !== null) updates[key] = body[key];
+      } else {
+        updates[key] = body[key];
+      }
+    }
   }
 
   // Renamed fields
@@ -497,9 +535,36 @@ export const buildUserUpdatePayload = (body) => {
     if (body[bodyKey] !== undefined) updates[schemaKey] = body[bodyKey];
   }
 
-  // Nested fields
+  // Nested fields — normalize phone numbers
   for (const [bodyKey, path] of Object.entries(USER_UPDATE_NESTED_FIELDS)) {
-    if (body[bodyKey] !== undefined) updates[path] = body[bodyKey];
+    if (body[bodyKey] !== undefined) {
+      // Strict phone fields: skip if normalization fails (emergency contact, visitor)
+      const isStrictPhone = bodyKey === "emergencyContactNumber" || bodyKey === "visitorPhone";
+      // Soft phone field: normalize if PH mobile, otherwise save trimmed raw (supports landlines)
+      const isSoftPhone = bodyKey === "employerContact";
+
+      if (isStrictPhone) {
+        const normalized = normalizePHPhone(body[bodyKey]);
+        if (normalized !== null) updates[path] = normalized;
+      } else if (isSoftPhone) {
+        const raw = String(body[bodyKey] || "").trim();
+        if (raw) {
+          const normalized = normalizePHPhone(raw);
+          if (normalized !== null) {
+            updates[path] = normalized; // valid PH mobile
+          } else {
+            const digits = raw.replace(/[\s\-()]/g, "");
+            if (/^0[2-8]\d{7,8}$/.test(digits)) {
+              updates[path] = raw; // valid PH landline
+            }
+            // invalid format: skip — do not persist garbage
+          }
+        }
+        // empty: skip — leave existing DB value unchanged
+      } else {
+        updates[path] = body[bodyKey];
+      }
+    }
   }
 
   return updates;
