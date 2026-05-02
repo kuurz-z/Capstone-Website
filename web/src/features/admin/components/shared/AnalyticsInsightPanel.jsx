@@ -19,7 +19,7 @@ function SectionList({ title, items }) {
 
 export default function AnalyticsInsightPanel({
   title = "AI Summary",
-  subtitle = "Simple AI explanation based on this report",
+  subtitle = "AI-generated report insight",
   data,
   isLoading,
   isError,
@@ -41,6 +41,13 @@ export default function AnalyticsInsightPanel({
   }
 
   const insight = data?.insight;
+  const snapshotMeta = data?.snapshotMeta || {};
+  const providerLabel = snapshotMeta.usedFallback
+    ? "Fallback summary"
+    : snapshotMeta.provider === "gemini"
+      ? `Powered by Gemini${snapshotMeta.model ? ` (${snapshotMeta.model})` : ""}`
+      : "AI summary";
+
   if (!insight) {
     return (
       <div className="analytics-insight-panel__state">
@@ -58,6 +65,9 @@ export default function AnalyticsInsightPanel({
         <div className="analytics-insight-panel__meta">
           <span className="analytics-insight-panel__pill">
             {subtitle}
+          </span>
+          <span className="analytics-insight-panel__pill">
+            {providerLabel}
           </span>
           <span className="analytics-insight-panel__pill">
             How sure: {insight.confidence || "low"}

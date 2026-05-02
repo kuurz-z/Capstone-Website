@@ -29,6 +29,11 @@ import {
   deriveUtilityPeriodBillingState,
   getUtilityDiagnostics,
 } from "../utils/utilityDiagnostics.js";
+import { buildElectricityReview } from "../utils/electricityReviewRules.js";
+import {
+  buildBillingIntelligenceSnapshot,
+  generateBillingIntelligence,
+} from "../services/billingIntelligenceService.js";
 import {
   resolveReferencedUser,
   UNKNOWN_TENANT_LABEL,
@@ -1582,6 +1587,122 @@ export const getUtilityResult = async (req, res, next) => {
  * This is the "source of truth" view for billing — billing periods just
  * filter from this log by date range.
  * ──────────────────────────────────────────────────────────────────────── */
+export const getUtilityAiReview = async (req, res, next) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const { utilityType, periodId } = req.params;
+
+    if (utilityType !== "electricity") {
+      return res.status(400).json({
+        success: false,
+        utilityType,
+        error: "AI billing review is currently available for electricity only.",
+      });
+    }
+
+    const period = await UtilityPeriod.findOne({
+      _id: periodId,
+      utilityType: "electricity",
+      isArchived: false,
+    }).lean();
+
+    if (!period) {
+      return res.status(404).json({ error: "Electricity period not found" });
+    }
+
+    const room = await Room.findById(period.roomId)
+      .select("_id name roomNumber branch type capacity")
+      .lean();
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (!admin.isOwner && room.branch !== admin.branch) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const [periods, readings, reservations, linkedBills] = await Promise.all([
+      UtilityPeriod.find({
+        roomId: room._id,
+        utilityType: "electricity",
+        isArchived: false,
+      })
+        .sort({ startDate: 1 })
+        .lean(),
+      UtilityReading.find({
+        roomId: room._id,
+        utilityType: "electricity",
+        isArchived: false,
+      })
+        .sort({ date: 1, createdAt: 1 })
+        .lean(),
+      Reservation.find({
+        roomId: room._id,
+        status: { $in: BILLABLE_RESERVATION_STATUS_QUERY },
+        isArchived: { $ne: true },
+      })
+        .populate("userId", "firstName lastName")
+        .lean(),
+      Bill.find({
+        _id: { $in: getUtilitySummaryBillIds(period) },
+      })
+        .select("charges utilityDispatch status sentAt issuedAt dueDate")
+        .lean(),
+    ]);
+
+    const periodForReview =
+      periods.find((entry) => String(entry._id) === String(period._id)) ||
+      period;
+    const electricityReview = buildElectricityReview({
+      period: periodForReview,
+      periods,
+      readings,
+      reservations,
+    });
+    const { billingState, billingLabel } = deriveUtilityPeriodBillingState({
+      period,
+      utilityType: "electricity",
+      linkedBills,
+    });
+    const snapshot = buildBillingIntelligenceSnapshot({
+      period,
+      periods,
+      room: { ...room, roomLabel: getRoomLabel(room) },
+      electricityReview,
+      billingState,
+      billingLabel,
+    });
+    const { insight, model, fallbackReason } =
+      await generateBillingIntelligence(snapshot);
+
+    res.json({
+      success: true,
+      periodId,
+      utilityType: "electricity",
+      snapshotMeta: {
+        provider: insight.provider,
+        usedFallback: insight.usedFallback,
+        model,
+        fallbackReason,
+        generatedAt: insight.generatedAt,
+      },
+      insight: {
+        headline: insight.headline,
+        summary: insight.summary,
+        riskLevel: insight.riskLevel,
+        keyFindings: insight.keyFindings,
+        recommendedActions: insight.recommendedActions,
+        riskDrivers: insight.riskDrivers,
+        reviewChecklist: insight.reviewChecklist,
+        disputePreventionNote: insight.disputePreventionNote,
+        tenantExplanationDraft: insight.tenantExplanationDraft,
+        confidence: insight.confidence,
+        disclaimer:
+          "This AI review is advisory only. Deterministic billing rules control validation, amounts, and sending.",
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getRoomHistory = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);

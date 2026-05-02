@@ -16,6 +16,8 @@ import {
   Save,
   Download,
   Send,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../../../shared/hooks/useAuth";
 import ConfirmModal from "../../../../shared/components/ConfirmModal";
@@ -32,6 +34,7 @@ import {
   useUpdateUtilityReading,
   useDeleteUtilityPeriod,
   useRoomHistory,
+  useElectricityAiReview,
   utilityKeys,
 } from "../../../../shared/hooks/queries/useUtility";
 import { utilityApi } from "../../../../shared/api/utilityApi.js";
@@ -287,6 +290,7 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
   const dropdownRef = useRef(null);
+  const aiReviewPanelRef = useRef(null);
   const notify = useBillingNotifier();
 
   /** Mask tenant name for privacy: "Leander Ponce" -> "Leander *****" */
@@ -410,6 +414,24 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
     selectedRoomId,
     utilityQueryOptions,
   );
+  const aiReviewPeriodId =
+    utilityType === "electricity" && selectedPeriodId ? selectedPeriodId : null;
+  const canRequestAiReview =
+    utilityType === "electricity" && Boolean(aiReviewPeriodId);
+  const {
+    data: aiReviewData,
+    isFetching: aiReviewFetching,
+    isError: aiReviewIsError,
+    error: aiReviewError,
+    refetch: refetchAiReview,
+  } = useElectricityAiReview(aiReviewPeriodId, {
+    ...utilityQueryOptions,
+    enabled:
+      utilityQueryOptions.enabled &&
+      canRequestAiReview &&
+      activePanel === "aiReview",
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Mutations
   const updatePeriod = useUpdateUtilityPeriod(utilityType);
@@ -741,6 +763,17 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
     setActivePanel(panel);
   };
   const closePanel = () => setActivePanel(null);
+  const openAiReview = (periodId) => {
+    if (utilityType !== "electricity" || !periodId) return;
+    setSelectedPeriodId(periodId);
+    setActivePanel("aiReview");
+    window.requestAnimationFrame(() => {
+      aiReviewPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    });
+  };
 
   const buildGenerationBlocker = (error) => {
     const payload = error?.response?.data?.error || null;
@@ -1287,6 +1320,115 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
     });
   };
 
+  const renderAiReviewPanel = () => {
+    if (activePanel !== "aiReview" || utilityType !== "electricity") return null;
+    const insight = aiReviewData?.insight;
+    const snapshotMeta = aiReviewData?.snapshotMeta || {};
+    const providerLabel =
+      snapshotMeta.provider === "gemini" && !snapshotMeta.usedFallback
+        ? `Powered by Gemini${snapshotMeta.model ? ` (${snapshotMeta.model})` : ""}`
+        : "Fallback summary";
+    const errorMessage =
+      aiReviewError?.response?.data?.error ||
+      aiReviewError?.message ||
+      "AI billing review is unavailable right now.";
+    const renderInsightList = (title, items, keyPrefix, limit = 3) => {
+      const cleanItems = Array.isArray(items) ? items.filter(Boolean).slice(0, limit) : [];
+      if (!cleanItems.length) return null;
+
+      return (
+        <div>
+          <h5>{title}</h5>
+          <ul>
+            {cleanItems.map((item, index) => (
+              <li key={`${keyPrefix}-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    };
+    const priorityFindings = [
+      ...(Array.isArray(insight?.riskDrivers) ? insight.riskDrivers : []),
+      ...(Array.isArray(insight?.keyFindings) ? insight.keyFindings : []),
+    ];
+    const ownerActions = [
+      ...(Array.isArray(insight?.reviewChecklist) ? insight.reviewChecklist : []),
+      ...(Array.isArray(insight?.recommendedActions) ? insight.recommendedActions : []),
+    ];
+
+    return (
+      <section className="eb-panel eb-ai-review" ref={aiReviewPanelRef}>
+        <div className="eb-panel__header">
+          <span className="eb-ai-review__title">
+            <Sparkles size={14} /> AI Billing Review
+          </span>
+          <div className="eb-ai-review__actions">
+            <span className="eb-ai-review__provider">{providerLabel}</span>
+            <button
+              type="button"
+              className="eb-panel__close"
+              onClick={closePanel}
+              aria-label="Close AI billing review"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="eb-panel__body">
+          {aiReviewFetching && !insight ? (
+            <p className="eb-panel__hint">Generating billing review...</p>
+          ) : aiReviewIsError ? (
+            <div className="eb-ai-review__empty">
+              <AlertTriangle size={16} />
+              <span>{errorMessage}</span>
+            </div>
+          ) : insight ? (
+            <>
+              <div className="eb-ai-review__headline-row">
+                <h4 className="eb-ai-review__headline">{insight.headline}</h4>
+                <span
+                  className={`eb-ai-review__risk eb-ai-review__risk--${insight.riskLevel || "low"}`}
+                >
+                  {insight.riskLevel || "low"} risk
+                </span>
+              </div>
+              <p className="eb-ai-review__summary">{insight.summary}</p>
+              <div className="eb-ai-review__grid">
+                {renderInsightList("What stands out", priorityFindings, "finding", 3)}
+                {renderInsightList("What to check", ownerActions, "action", 3)}
+              </div>
+              {insight.disputePreventionNote && (
+                <div className="eb-ai-review__note">
+                  <h5>Owner note</h5>
+                  <p>{insight.disputePreventionNote}</p>
+                </div>
+              )}
+              <div className="eb-ai-review__meta">
+                <span>Confidence: {insight.confidence || "low"}</span>
+                <span>{insight.disclaimer}</span>
+              </div>
+              <div className="eb-panel__footer">
+                <button
+                  type="button"
+                  className="eb-btn eb-btn--ghost eb-btn--xs"
+                  onClick={() => refetchAiReview()}
+                  disabled={aiReviewFetching}
+                >
+                  <RefreshCw size={12} />{" "}
+                  {aiReviewFetching ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="eb-panel__hint">
+              Select an electricity billing period to generate a review.
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  };
+
   const renderExpandedPeriodDetails = (period) => {
     if (!period || selectedPeriodId !== period.id) return null;
     const displayStatus = getDisplayStatus(period);
@@ -1311,6 +1453,9 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
         </div>
 
         <div className="eb-period-detail__body eb-period-detail__body--minimal">
+          {activePanel === "aiReview" && selectedPeriodId === period.id
+            ? renderAiReviewPanel()
+            : null}
           {result ? (
             <>
               <div className="eb-minimal-stats">
@@ -1754,6 +1899,14 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                   )}
                 </div>
                 <div className="eb-header__actions">
+                  {canRequestAiReview && (
+                    <button
+                      className="eb-btn eb-btn--outline"
+                      onClick={() => openAiReview(selectedPeriodFromList.id)}
+                    >
+                      <Sparkles size={13} /> AI Review
+                    </button>
+                  )}
                   <button
                     className="eb-btn eb-btn--primary"
                     onClick={() => setIsNewPeriodModalOpen(true)}
@@ -2131,6 +2284,18 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                                       {sendingByPeriodId[p.id]
                                         ? "Sending..."
                                         : "Send"}
+                                    </button>
+                                  )}
+                                  {utilityType === "electricity" && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--outline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openAiReview(p.id);
+                                      }}
+                                    >
+                                      <Sparkles size={11} /> AI Review
                                     </button>
                                   )}
                                   {canEditPeriod(p) && (

@@ -355,7 +355,7 @@ const SplitDashboard = ({
             }}
           >
             <CreditCard size={18} />
-            {payingOnline === "rent" ? "Processing..." : "Pay Oldest Rent Statement"}
+            {payingOnline === "rent" ? "Processing..." : "Pay Rent and Fees"}
           </button>
         )}
       </div>
@@ -412,7 +412,7 @@ const SplitDashboard = ({
             }}
           >
             <CreditCard size={18} />
-            {payingOnline === "utilities" ? "Processing..." : "Pay Oldest Utility Statement"}
+            {payingOnline === "utilities" ? "Processing..." : "Pay Utility Bill"}
           </button>
         )}
       </div>
@@ -874,6 +874,16 @@ const ElectricityPeriodRow = ({ period }) => {
                 <span>Rate: <strong style={{ color: "var(--text-heading)" }}>₱{data.ratePerKwh}/kWh</strong></span>
                 <span>Your Share: <strong style={{ color: "var(--text-heading)" }}>{fmtKwh(data.myTotalKwh)}</strong></span>
                 <span>Total Due: <strong style={{ color: "#F59E0B" }}>{fmt(data.myBillAmount)}</strong></span>
+              </div>
+              <div style={elecS.explanationNote}>
+                <AlertCircle size={15} color="#2563eb" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <strong style={elecS.explanationTitle}>Billing explanation</strong>
+                  <p style={elecS.explanationText}>
+                    Your electricity charge is based on the room meter reading,
+                    the rate per kWh, and your share for this billing period.
+                  </p>
+                </div>
               </div>
               {(data.segments || []).map((seg, i) => (
                 <ElectricityReferenceSegmentCard key={i} seg={seg} ratePerKwh={data.ratePerKwh} />
@@ -1543,6 +1553,28 @@ const elecS = {
     color: "#64748b",
     padding: "16px",
     justifyContent: "center",
+  },
+  explanationNote: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: "10px 12px",
+    border: "1px solid #bfdbfe",
+    borderRadius: 10,
+    background: "#eff6ff",
+  },
+  explanationTitle: {
+    display: "block",
+    marginBottom: 2,
+    color: "#1e3a8a",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  explanationText: {
+    margin: 0,
+    color: "#334155",
+    fontSize: 12,
+    lineHeight: 1.45,
   },
   segmentCard: {
     border: "1px solid #e2e8f0",

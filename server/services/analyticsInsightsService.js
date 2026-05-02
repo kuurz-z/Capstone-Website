@@ -1,6 +1,10 @@
 const MAX_FINDINGS = 4;
 const MAX_ANOMALIES = 3;
 const MAX_ACTIONS = 3;
+const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
+const GEMINI_API_VERSION = "v1beta";
+const GEMINI_TIMEOUT_MS = 12000;
+const VALID_CONFIDENCE = new Set(["low", "medium", "high"]);
 
 const safePercent = (value) => `${Number(value || 0)}%`;
 
@@ -26,11 +30,15 @@ const buildSnapshotMeta = ({
   snapshot,
   provider,
   usedFallback,
+  model = null,
+  fallbackReason = null,
 }) => ({
   reportType,
   source: "analytics-report-snapshot",
   provider,
   usedFallback,
+  model,
+  fallbackReason,
   branch: scope.branch,
   branchesIncluded: scope.branchesIncluded,
   filters,
@@ -404,10 +412,197 @@ const createHeuristicProvider = () => ({
   },
 });
 
+const analyticsInsightResponseSchema = {
+  type: "object",
+  properties: {
+    headline: {
+      type: "string",
+      description: "One concise sentence that states the most important report insight.",
+    },
+    summary: {
+      type: "string",
+      description: "A short paragraph explaining the trend using only the provided snapshot data.",
+    },
+    keyFindings: {
+      type: "array",
+      minItems: 1,
+      maxItems: MAX_FINDINGS,
+      items: { type: "string" },
+    },
+    anomalies: {
+      type: "array",
+      maxItems: MAX_ANOMALIES,
+      items: { type: "string" },
+    },
+    recommendedActions: {
+      type: "array",
+      minItems: 1,
+      maxItems: MAX_ACTIONS,
+      items: { type: "string" },
+    },
+    confidence: {
+      type: "string",
+      enum: ["low", "medium", "high"],
+    },
+  },
+  required: [
+    "headline",
+    "summary",
+    "keyFindings",
+    "anomalies",
+    "recommendedActions",
+    "confidence",
+  ],
+  propertyOrdering: [
+    "headline",
+    "summary",
+    "keyFindings",
+    "anomalies",
+    "recommendedActions",
+    "confidence",
+  ],
+};
+
+const clampText = (value, maxLength = 420) =>
+  String(value || "").trim().slice(0, maxLength);
+
+const clampList = (items, limit, maxLength = 220) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => clampText(item, maxLength))
+    .filter(Boolean)
+    .slice(0, limit);
+
+const normalizeInsight = (insight) => {
+  const normalized = {
+    headline: clampText(insight?.headline, 180),
+    summary: clampText(insight?.summary, 700),
+    keyFindings: clampList(insight?.keyFindings, MAX_FINDINGS),
+    anomalies: clampList(insight?.anomalies, MAX_ANOMALIES),
+    recommendedActions: clampList(insight?.recommendedActions, MAX_ACTIONS),
+    confidence: VALID_CONFIDENCE.has(insight?.confidence)
+      ? insight.confidence
+      : "low",
+  };
+
+  if (!normalized.headline || !normalized.summary) {
+    throw new Error("Gemini insight response is missing headline or summary.");
+  }
+  if (!normalized.keyFindings.length || !normalized.recommendedActions.length) {
+    throw new Error("Gemini insight response is missing required lists.");
+  }
+
+  return normalized;
+};
+
+const buildGeminiPrompt = ({ reportType, scope, filters, question, snapshot }) =>
+  [
+    "You are an analytics assistant for LilyCrest Dormitory Management.",
+    "Generate a practical management insight for the selected report.",
+    "Use only the JSON snapshot data. Do not invent facts, tenants, amounts, dates, or policy.",
+    "Keep recommendations operational and human-review focused. Do not say that records were changed.",
+    "For owner/all-branch scope, include planning or branch-comparison implications when supported by the data.",
+    "",
+    `Report type: ${reportType}`,
+    `Role: ${scope.role || "unknown"}`,
+    `Branch scope: ${scope.branch || "all"}`,
+    `Branches included: ${(scope.branchesIncluded || []).join(", ") || "none"}`,
+    `Question: ${question || "No specific question."}`,
+    "",
+    "Filters:",
+    JSON.stringify(filters || {}, null, 2),
+    "",
+    "Snapshot:",
+    JSON.stringify(snapshot || {}, null, 2),
+  ].join("\n");
+
+const parseGeminiText = (body) => {
+  const text = body?.candidates?.[0]?.content?.parts
+    ?.map((part) => part?.text || "")
+    .join("")
+    .trim();
+
+  if (!text) {
+    throw new Error("Gemini returned an empty insight response.");
+  }
+
+  return JSON.parse(text);
+};
+
+const createGeminiProvider = () => {
+  const apiKey = String(
+    process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || "",
+  ).trim();
+  const model = String(process.env.GEMINI_MODEL || GEMINI_DEFAULT_MODEL).trim();
+
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY or GOOGLE_AI_API_KEY is not configured.");
+  }
+
+  return {
+    name: "gemini",
+    model,
+    async generate({ reportType, scope, filters, question, snapshot }) {
+      if (typeof fetch !== "function") {
+        throw new Error("Global fetch is not available for Gemini requests.");
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+      const endpoint = `https://generativelanguage.googleapis.com/${GEMINI_API_VERSION}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: buildGeminiPrompt({
+                      reportType,
+                      scope,
+                      filters,
+                      question,
+                      snapshot,
+                    }),
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 900,
+              responseMimeType: "application/json",
+              responseSchema: analyticsInsightResponseSchema,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          throw new Error(
+            `Gemini request failed with ${response.status}: ${errorText.slice(0, 180)}`,
+          );
+        }
+
+        const body = await response.json();
+        return normalizeInsight(parseGeminiText(body));
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+  };
+};
+
 const createAnalyticsInsightsProvider = () => {
   const requestedProvider = String(process.env.AI_INSIGHTS_PROVIDER || "heuristic").trim().toLowerCase();
 
   switch (requestedProvider) {
+    case "gemini":
+      return createGeminiProvider();
     case "heuristic":
     default:
       return createHeuristicProvider();
@@ -427,14 +622,32 @@ export const generateAnalyticsInsight = async ({
   }
 
   const snapshot = snapshotBuilder(reportData);
-  const provider = createAnalyticsInsightsProvider();
-  const insight = await provider.generate({
-    reportType,
-    scope,
-    filters,
-    question,
-    snapshot,
-  });
+  let provider;
+  let insight;
+  let usedFallback = false;
+  let fallbackReason = null;
+
+  try {
+    provider = createAnalyticsInsightsProvider();
+    insight = await provider.generate({
+      reportType,
+      scope,
+      filters,
+      question,
+      snapshot,
+    });
+  } catch (error) {
+    provider = createHeuristicProvider();
+    insight = await provider.generate({
+      reportType,
+      scope,
+      filters,
+      question,
+      snapshot,
+    });
+    usedFallback = true;
+    fallbackReason = error?.message || "AI provider unavailable.";
+  }
 
   return {
     snapshotMeta: buildSnapshotMeta({
@@ -444,7 +657,9 @@ export const generateAnalyticsInsight = async ({
       question,
       snapshot,
       provider: provider.name,
-      usedFallback: provider.name === "heuristic-fallback",
+      usedFallback: usedFallback || provider.name === "heuristic-fallback",
+      model: provider.model || null,
+      fallbackReason,
     }),
     insight: {
       headline: insight.headline,
