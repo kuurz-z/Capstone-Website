@@ -1,5 +1,6 @@
 import React from "react";
 import FileUploadField from "./FileUploadField";
+import { validatePHPhoneOrLandline } from "../../../utils/reservationValidation";
 
 const errBorder = (show, value) =>
  show && !value ? "1.5px solid #dc2626" : undefined;
@@ -83,22 +84,29 @@ const EmploymentSection = ({
 
  <div className="form-group" data-field="employerContact">
  <label className="form-label">
- Employer's Contact Number <span className="rf-required">*</span>
+ Employer's Contact Number{" "}
+ <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: 400 }}>(optional)</span>
  </label>
  <input
  type="tel"
  className="form-input"
- placeholder="+63 or land line"
+ placeholder="09XXXXXXXXX or 02-XXXXXXXX"
  value={employerContact}
- onChange={(e) =>
- handleGeneralInput(e.target.value, setEmployerContact, 100)
- }
- style={{ border: errBorder(showValidationErrors, employerContact) }}
+ onChange={(e) => {
+ const cleaned = e.target.value.replace(/[^0-9\s\-()+]/g, "");
+ setEmployerContact(cleaned.slice(0, 20));
+ }}
+ style={{
+ border:
+ showValidationErrors && employerContact && !validatePHPhoneOrLandline(employerContact)
+ ? "1.5px solid #dc2626"
+ : undefined,
+ }}
  />
  <FieldError
  error={
- showValidationErrors && !employerContact
- ? "Employer contact is required"
+ showValidationErrors && employerContact && !validatePHPhoneOrLandline(employerContact)
+ ? "Enter a valid phone number (e.g. 09123456789 or 02-1234567)"
  : null
  }
  />

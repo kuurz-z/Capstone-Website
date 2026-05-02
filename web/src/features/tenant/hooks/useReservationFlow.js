@@ -329,7 +329,9 @@ export default function useReservationFlow() {
                 : "Name mismatch detected. Please review your information or upload a clearer ID.",
         extractedName: r.idExtractedName || "",
         extractedIdNumber: r.idExtractedNumber || "",
-        matchScore: r.idNameMatchScore || 0,
+        // Force null for manual_review so historical DB rows with stored 0 don't
+        // display a misleading "0%" score in the UI.
+        matchScore: r.idValidationStatus === "manual_review" ? null : (r.idNameMatchScore ?? null),
         notes: r.idValidationNotes || [],
       });
     }
@@ -942,7 +944,7 @@ export default function useReservationFlow() {
             "ID uploaded. It will be manually reviewed by admin.",
           extractedName: result.extractedName || "",
           extractedIdNumber: result.extractedIdNumber || "",
-          matchScore: result.matchScore || 0,
+          matchScore: result.matchScore ?? null,
           notes: result.notes || [],
         };
 

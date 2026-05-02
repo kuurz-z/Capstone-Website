@@ -76,7 +76,9 @@ const scoreNameMatch = (applicantName, extractedText) => {
   const tokens = tokenizeName(applicantName);
   const normalizedText = normalizeTextForComparison(extractedText);
 
-  if (!tokens.length || !normalizedText) return 0;
+  // Return null (not 0) when there is nothing to compare against.
+  // Callers treat null as "score unavailable" rather than "failed match".
+  if (!tokens.length || !normalizedText) return null;
 
   const matched = tokens.filter((token) => normalizedText.includes(token));
   const uniqueTokenCount = new Set(tokens).size || 1;
@@ -241,15 +243,21 @@ export const validateReservationIdDocument = async ({
     };
   }
 
+  console.info(`[IDValidation] Starting — idType: ${normalizedIdType}`);
+
   const ocr = await extractTextFromImage(documentUrl);
+
   if (ocr.status === "manual_review") {
+    console.info(
+      `[IDValidation] OCR result: manual_review — provider: ${ocr._provider || "unknown"}`,
+    );
     return {
       status: "manual_review",
       idType: normalizedIdType,
       extractedText: "",
       extractedName: "",
       extractedIdNumber: "",
-      matchScore: 0,
+      matchScore: null, // score not computed — do not display as 0%
       validationNotes: ocr.notes || ["ID requires manual verification."],
       message: ocr.message || VALIDATION_STATUS_MESSAGES.manual_review,
       provider: ocr._provider || "google_vision",
@@ -289,6 +297,15 @@ export const validateReservationIdDocument = async ({
   const extractedName = extractLikelyName(applicantName, extractedText);
   const extractedIdNumber = extractIdNumber(normalizedIdType, extractedText);
   const matchScore = scoreNameMatch(applicantName, extractedText);
+
+  // Safe log — token count and score only, no actual name or ID text.
+  console.info(
+    `[IDValidation] OCR text length: ${extractedText.length}, ` +
+    `applicant tokens: ${String(applicantName).trim() ? "present" : "empty"}, ` +
+    `matchScore: ${matchScore === null ? "null (name unavailable)" : matchScore}, ` +
+    `extractedName found: ${Boolean(extractedName)}`,
+  );
+
   const typeResult = applyTypeRules({
     idType: normalizedIdType,
     extractedText,
@@ -296,11 +313,20 @@ export const validateReservationIdDocument = async ({
     extractedIdNumber,
   });
 
-  const nameStatus = matchScore >= 0.67 ? "passed" : "warning";
+  // matchScore is null when applicantName had no tokens (name fields empty).
+  // Treat as manual_review — we cannot confirm or deny a match.
+  const nameStatus =
+    matchScore === null ? "manual_review"
+    : matchScore >= 0.67 ? "passed"
+    : "warning";
   const status = mergeStatus(typeResult.severity, nameStatus);
   const validationNotes = [...typeResult.notes];
 
-  if (matchScore < 0.67) {
+  if (matchScore === null) {
+    validationNotes.push(
+      "Name comparison skipped — first and last name must be filled in before validating.",
+    );
+  } else if (matchScore < 0.67) {
     validationNotes.unshift("Applicant name was not confidently matched against the ID text.");
   }
 
