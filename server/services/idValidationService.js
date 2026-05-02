@@ -243,8 +243,14 @@ export const validateReservationIdDocument = async ({
     };
   }
 
+  console.info(`[IDValidation] Starting — idType: ${normalizedIdType}`);
+
   const ocr = await extractTextFromImage(documentUrl);
+
   if (ocr.status === "manual_review") {
+    console.info(
+      `[IDValidation] OCR result: manual_review — provider: ${ocr._provider || "unknown"}`,
+    );
     return {
       status: "manual_review",
       idType: normalizedIdType,
@@ -291,6 +297,15 @@ export const validateReservationIdDocument = async ({
   const extractedName = extractLikelyName(applicantName, extractedText);
   const extractedIdNumber = extractIdNumber(normalizedIdType, extractedText);
   const matchScore = scoreNameMatch(applicantName, extractedText);
+
+  // Safe log — token count and score only, no actual name or ID text.
+  console.info(
+    `[IDValidation] OCR text length: ${extractedText.length}, ` +
+    `applicant tokens: ${String(applicantName).trim() ? "present" : "empty"}, ` +
+    `matchScore: ${matchScore === null ? "null (name unavailable)" : matchScore}, ` +
+    `extractedName found: ${Boolean(extractedName)}`,
+  );
+
   const typeResult = applyTypeRules({
     idType: normalizedIdType,
     extractedText,

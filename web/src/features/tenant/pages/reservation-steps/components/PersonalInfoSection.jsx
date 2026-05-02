@@ -349,7 +349,9 @@ const IdValidationFeedback = ({ result, isValidating }) => {
           Extracted name: {result.extractedName}
         </div>
       )}
-      {typeof result?.matchScore === "number" && status !== "validating" && (
+      {typeof result?.matchScore === "number" &&
+        status !== "validating" &&
+        status !== "manual_review" && (
         <div className="rf-id-validation__meta">
           Name match score: {Math.round(result.matchScore * 100)}%
         </div>

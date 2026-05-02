@@ -7,8 +7,9 @@ import vision from "@google-cloud/vision";
 const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png"]);
 const SUPPORTED_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
+// Shown to the applicant — must be user-friendly, no system jargon.
 const MANUAL_REVIEW_NOTE =
-  "Google Vision validation unavailable. Manual review required.";
+  "Your ID has been uploaded and will be reviewed by our admin team.";
 
 // Parse service account credentials from environment variable at module load.
 // Set GOOGLE_VISION_CREDENTIALS to the full JSON content of the service account key.
@@ -133,8 +134,15 @@ const resolveLocalFile = async (source) => {
 export const extractTextFromImage = async (source) => {
   let prepared = null;
 
+  // Safe per-request log — no credentials, no PII, no image content.
+  console.info(
+    `[GoogleVision] OCR request — configured: ${Boolean(_visionCredentials)}, ` +
+    `source: ${isUrl(source) ? "url" : source ? "file" : "missing"}`,
+  );
+
   try {
     if (!source) {
+      console.warn("[GoogleVision] OCR skipped — no source provided");
       return {
         status: "failed",
         text: "",
@@ -144,15 +152,26 @@ export const extractTextFromImage = async (source) => {
       };
     }
 
+    if (!_visionCredentials) {
+      console.warn("[GoogleVision] OCR skipped — GOOGLE_VISION_CREDENTIALS not set");
+      return manualReviewResult("ID requires manual verification.");
+    }
+
     prepared = isUrl(source)
       ? await downloadUrlToTempFile(source)
       : await resolveLocalFile(source);
 
+    console.info(
+      `[GoogleVision] Image prepared — ext: ${prepared.extension}, size: ${prepared.size} bytes`,
+    );
+
     if (prepared.extension === ".pdf") {
+      console.info("[GoogleVision] OCR skipped — PDF, routing to manual review");
       return manualReviewResult("ID uploaded. It will be manually reviewed by admin.");
     }
 
     if (!IMAGE_EXTENSIONS.has(prepared.extension)) {
+      console.warn(`[GoogleVision] OCR skipped — unsupported extension: ${prepared.extension}`);
       return {
         status: "failed",
         text: "",
@@ -166,6 +185,7 @@ export const extractTextFromImage = async (source) => {
       prepared.contentType &&
       !SUPPORTED_MIME_TYPES.has(prepared.contentType.split(";")[0].trim().toLowerCase())
     ) {
+      console.warn(`[GoogleVision] OCR skipped — unsupported MIME: ${prepared.contentType}`);
       return {
         status: "failed",
         text: "",
@@ -178,6 +198,11 @@ export const extractTextFromImage = async (source) => {
     const client = getVisionClient();
     const [result] = await client.textDetection(prepared.filePath);
     const fullText = normalizeText(result?.textAnnotations?.[0]?.description || "");
+
+    console.info(
+      `[GoogleVision] OCR complete — text length: ${fullText.length} chars, ` +
+      `empty: ${fullText.trim().length === 0}`,
+    );
 
     return {
       status: "processed",
@@ -192,11 +217,15 @@ export const extractTextFromImage = async (source) => {
       String(err?.message || "").toLowerCase().includes("credentials") ||
       String(err?.message || "").toLowerCase().includes("not configured");
     const reason = isCredentialError ? "credentials_missing" : "ocr_runtime_error";
+    // Log the technical reason server-side only — never expose to client.
     console.warn(
-      `[GoogleVision] extractTextFromImage failed (reason: ${reason})` +
-      (isCredentialError ? "" : ` — ${err?.message || err}`)
+      `[GoogleVision] OCR failed — reason: ${reason}` +
+      (isCredentialError ? "" : `, error: ${err?.message || err}`),
     );
-    return manualReviewResult("ID requires manual verification.", isCredentialError ? "not_configured" : "vision_error");
+    return manualReviewResult(
+      "ID requires manual verification.",
+      isCredentialError ? "not_configured" : "vision_error",
+    );
   } finally {
     if (prepared?.cleanup && prepared.filePath) {
       fs.promises.unlink(prepared.filePath).catch(() => {});
