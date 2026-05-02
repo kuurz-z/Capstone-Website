@@ -6,6 +6,31 @@ Implement **Admin Utility Billing AI Intelligence** for the billing module. Gemi
 
 The AI is **explain-only**. It can summarize risks and recommend admin actions, but it cannot block, approve, edit, or send bills.
 
+## Implementation Status
+
+Status: **implemented and under verification**.
+
+Completed:
+
+- Backend billing intelligence service and heuristic fallback.
+- Compact electricity billing snapshot builder with sensitive tenant data excluded.
+- Gemini structured-output integration using the existing `GOOGLE_AI_API_KEY` / `GEMINI_API_KEY` configuration.
+- Admin-only electricity AI review endpoint: `POST /api/utility-billing/:utilityType/periods/:periodId/ai-review`.
+- Frontend API hook, React Query hook, AI Review button, panel, loading/error states, provider label, and fallback label.
+- Service tests for Gemini success, fallback, invalid JSON, forecast handling, blocked periods, and sensitive-data exclusion.
+- Controller tests for branch access, owner access, unsupported water review, missing period handling, and non-mutating review behavior.
+
+Latest verification:
+
+- `npm test -- billingIntelligenceService.test.js utilityBillingController.aiReview.test.js` passed: 13 tests.
+- `npm run build` in `web` passed.
+
+Remaining recommended checks:
+
+- Manual admin demo with `AI_INSIGHTS_PROVIDER=heuristic`.
+- Manual admin demo with `AI_INSIGHTS_PROVIDER=gemini` and a valid Google AI key.
+- Optional frontend component tests if the project adds a frontend test harness for admin billing panels.
+
 ## Goals
 
 - Add AI-assisted explanations to the admin electricity billing workflow.

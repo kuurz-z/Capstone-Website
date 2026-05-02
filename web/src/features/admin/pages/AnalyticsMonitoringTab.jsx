@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
-import { useAuditAnalytics } from "../../../shared/hooks/queries/useAnalyticsReports";
+import {
+  useAuditAnalytics,
+  useSystemPerformance,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
   AnalyticsBarChart,
   AnalyticsComparisonChart,
@@ -15,7 +18,10 @@ import { buildRangeLabel, formatBranch, formatDate, formatDateTime } from "./rep
 import {
   AnalyticsInsightSection,
   buildInsightPdfSections,
+  buildServerTableParams,
   ExportButtons,
+  getTablePagination,
+  getTableRows,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
@@ -36,12 +42,25 @@ const SUSPICIOUS_IP_COLUMNS = [
   { key: "attempts", label: "Failed Logins", sortable: true },
   { key: "lastSeenAt", label: "Last Seen", render: (row) => formatDateTime(row.lastSeenAt), sortable: true },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, onRangeChange }) {
   const [eventPage, setEventPage] = useState(1);
   const [ipPage, setIpPage] = useState(1);
-  const params = useMemo(() => ({ branch, range }), [branch, range]);
+  const params = useMemo(
+    () => ({
+      branch,
+      range,
+      ...buildServerTableParams(eventPage, TABLE_PAGE_SIZE),
+    }),
+    [branch, eventPage, range],
+  );
   const { data, isLoading, isError } = useAuditAnalytics(params);
+  const {
+    data: performanceData,
+    isLoading: isPerformanceLoading,
+    isError: isPerformanceError,
+  } = useSystemPerformance({ branch, range: "24h" });
   const {
     data: insightData,
     isLoading: isInsightLoading,
@@ -55,14 +74,48 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
   const kpis = data?.kpis || {};
   const branchSummary = data?.series?.branchSummary || [];
   const severityDistribution = data?.series?.severityDistribution || [];
-  const recentSecurityEvents = data?.tables?.recentSecurityEvents || [];
+  const recentSecurityEventsTable = data?.tables?.recentSecurityEvents;
+  const recentSecurityEvents = getTableRows(recentSecurityEventsTable);
+  const recentSecurityEventsPagination = getTablePagination(
+    recentSecurityEventsTable,
+    recentSecurityEvents,
+  );
   const suspiciousIps = data?.tables?.suspiciousIps || [];
+  const performanceKpis = performanceData?.kpis || {};
+  const performanceChecks = performanceData?.checks || {};
+  const resourceUsage = performanceData?.series?.resourceUsage || [];
 
   const metricCards = [
     { label: "Failed Logins", value: kpis.failedLogins || 0, tone: "rose" },
     { label: "Critical Events", value: kpis.criticalEvents || 0, tone: "amber" },
     { label: "Access Overrides", value: kpis.accessOverrides || 0, tone: "blue" },
     { label: "Unique IPs", value: kpis.uniqueFailedLoginIps || 0, tone: "green" },
+  ];
+  const performanceCards = [
+    {
+      label: "Service Status",
+      value: isPerformanceLoading
+        ? "..."
+        : performanceKpis.serviceStatus || "unknown",
+      tone: performanceKpis.serviceStatus === "healthy" ? "green" : "amber",
+    },
+    {
+      label: "Database",
+      value: isPerformanceLoading
+        ? "..."
+        : performanceKpis.databaseStatus || "unknown",
+      tone: performanceKpis.databaseStatus === "connected" ? "green" : "rose",
+    },
+    {
+      label: "Active Sessions",
+      value: performanceKpis.activeSessions || 0,
+      tone: "blue",
+    },
+    {
+      label: "Memory Usage",
+      value: `${performanceKpis.memoryUsageRate || 0}%`,
+      tone: "amber",
+    },
   ];
 
   const exportCsv = () => {
@@ -138,6 +191,54 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
     >
       <MetricGrid items={metricCards} />
 
+      <ReportChartPanel
+        title="System performance"
+        subtitle="Owner-only runtime, database, and active-session health from the last 24 hours"
+      >
+        {isPerformanceError ? (
+          <p className="admin-reports__hint">System performance metrics could not be loaded.</p>
+        ) : (
+          <div className="admin-reports__panel-stack">
+            <MetricGrid items={performanceCards} />
+            <div className="admin-reports__grid">
+              <AnalyticsBarChart
+                data={resourceUsage}
+                bars={[{ key: "value", label: "MB", color: "#2563eb" }]}
+                valueFormatter={(value) => `${value} MB`}
+                emptyTitle="No resource usage data"
+                emptyDescription="Runtime memory data will appear once the endpoint responds."
+              />
+              <div className="admin-reports__meta-grid">
+                <div className="admin-reports__meta-card">
+                  <span className="admin-reports__meta-label">API uptime</span>
+                  <div className="admin-reports__meta-value">
+                    {performanceKpis.uptimeHours || 0} hrs
+                  </div>
+                </div>
+                <div className="admin-reports__meta-card">
+                  <span className="admin-reports__meta-label">Security check</span>
+                  <div className="admin-reports__meta-value">
+                    {performanceChecks.securitySignals?.status || "unknown"}
+                  </div>
+                  <p className="admin-reports__hint">
+                    {performanceKpis.failedLogins24h || 0} failed login(s), {performanceKpis.highSeverityAudit24h || 0} high-severity event(s)
+                  </p>
+                </div>
+                <div className="admin-reports__meta-card">
+                  <span className="admin-reports__meta-label">Database ready state</span>
+                  <div className="admin-reports__meta-value">
+                    {performanceChecks.database?.readyState ?? "-"}
+                  </div>
+                  <p className="admin-reports__hint">
+                    {performanceChecks.database?.label || "unknown"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </ReportChartPanel>
+
       <AnalyticsInsightSection
         reportLabel="security"
         summaryTitle="Security Summary"
@@ -184,10 +285,11 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
           loading={isLoading}
           pagination={{
             page: eventPage,
-              pageSize: 10,
-              total: recentSecurityEvents.length,
+              pageSize: TABLE_PAGE_SIZE,
+              total: recentSecurityEventsPagination.total,
               onPageChange: setEventPage,
             }}
+            serverPagination
             emptyState={{
               title: isError ? "System monitoring unavailable" : "No recent security events",
               description: isError

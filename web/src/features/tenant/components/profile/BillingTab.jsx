@@ -355,7 +355,7 @@ const SplitDashboard = ({
             }}
           >
             <CreditCard size={18} />
-            {payingOnline === "rent" ? "Processing..." : "Pay Rent and Fees"}
+            {payingOnline === "rent" ? "Processing..." : "Pay Oldest Rent Statement"}
           </button>
         )}
       </div>
@@ -412,7 +412,7 @@ const SplitDashboard = ({
             }}
           >
             <CreditCard size={18} />
-            {payingOnline === "utilities" ? "Processing..." : "Pay Utility Bill"}
+            {payingOnline === "utilities" ? "Processing..." : "Pay Oldest Utility Statement"}
           </button>
         )}
       </div>

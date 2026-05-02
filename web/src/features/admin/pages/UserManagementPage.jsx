@@ -127,6 +127,7 @@ function UserManagementPage() {
     email: "",
     phone: "",
     role: "applicant",
+    branch: "",
     password: "",
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -156,16 +157,33 @@ function UserManagementPage() {
           : value.length < 6
             ? "Min 6 characters"
             : "";
+      case "branch":
+        return addForm.role === "branch_admin" && !value
+          ? "Branch is required for branch admins"
+          : "";
       default:
         return "";
     }
   };
 
   const handleAddFormChange = (field, value) => {
-    setAddForm((prev) => ({ ...prev, [field]: value }));
+    const nextForm = {
+      ...addForm,
+      [field]: value,
+      ...(field === "role" && value !== "branch_admin" ? { branch: "" } : {}),
+    };
+    setAddForm(nextForm);
     setAddFormErrors((prev) => ({
       ...prev,
       [field]: validateAddField(field, value),
+      ...(field === "role" || field === "branch"
+        ? {
+            branch:
+              nextForm.role === "branch_admin" && !nextForm.branch
+                ? "Branch is required for branch admins"
+                : "",
+          }
+        : {}),
     }));
   };
 
@@ -340,7 +358,7 @@ function UserManagementPage() {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     const errors = {};
-    ["username", "email", "firstName", "lastName", "password"].forEach((f) => {
+    ["username", "email", "firstName", "lastName", "password", "branch"].forEach((f) => {
       const err = validateAddField(f, addForm[f]);
       if (err) errors[f] = err;
     });
@@ -363,6 +381,7 @@ function UserManagementPage() {
           email: addForm.email,
           phone: addForm.phone || undefined,
           role: addForm.role,
+          branch: addForm.branch || undefined,
           password: addForm.password,
         }),
       });
@@ -660,6 +679,7 @@ function UserManagementPage() {
               email: "",
               phone: "",
               role: "applicant",
+              branch: "",
               password: "",
             });
             setAddFormErrors({});

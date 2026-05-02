@@ -22,6 +22,11 @@ const pickTopBy = (rows, key, limit = 3) =>
     .sort((left, right) => Number(right?.[key] || 0) - Number(left?.[key] || 0))
     .slice(0, limit);
 
+const tableRows = (table) => {
+  if (Array.isArray(table)) return table;
+  return Array.isArray(table?.rows) ? table.rows : [];
+};
+
 const buildSnapshotMeta = ({
   reportType,
   scope,
@@ -59,7 +64,7 @@ const buildOccupancySnapshot = (reportData) => {
   const kpis = reportData?.kpis || {};
   const trend = reportData?.series?.occupancyTrend || [];
   const roomTypes = reportData?.tables?.roomTypes || [];
-  const inventory = reportData?.tables?.inventory || [];
+  const inventory = tableRows(reportData?.tables?.inventory);
   const firstRate = Number(trend[0]?.totalRate || kpis.occupancyRate || 0);
   const lastRate = Number(trend[trend.length - 1]?.totalRate || kpis.occupancyRate || 0);
 
@@ -138,7 +143,7 @@ const buildOperationsSnapshot = (reportData) => {
   const kpis = reportData?.kpis || {};
   const reservationsByPeriod = reportData?.series?.reservationsByPeriod || [];
   const maintenanceByType = reportData?.series?.maintenanceByType || [];
-  const maintenanceIssues = reportData?.tables?.maintenanceIssues || [];
+  const maintenanceIssues = tableRows(reportData?.tables?.maintenanceIssues);
   const peakInquiryWindows = reportData?.tables?.peakInquiryWindows || [];
 
   return {
@@ -176,7 +181,7 @@ const buildOperationsSnapshot = (reportData) => {
 const buildAuditSnapshot = (reportData) => {
   const kpis = reportData?.kpis || {};
   const branchSummary = reportData?.series?.branchSummary || [];
-  const recentSecurityEvents = reportData?.tables?.recentSecurityEvents || [];
+  const recentSecurityEvents = tableRows(reportData?.tables?.recentSecurityEvents);
   const suspiciousIps = reportData?.tables?.suspiciousIps || [];
 
   return {

@@ -69,6 +69,45 @@ import { resolveAdminAccessContext } from "../utils/adminAccess.js";
 
 const getAdminInfo = resolveAdminAccessContext;
 
+const UTILITY_EXPORT_TYPES = new Set(["electricity", "water"]);
+
+const formatExportDate = (value) =>
+  value ? dayjs(value).format("YYYY-MM-DD") : "";
+
+const buildUtilityExportRow = ({ utilityType, period, summary }) => {
+  const room = period.roomId || {};
+  const charge =
+    utilityType === "water"
+      ? summary.waterCharge ?? summary.amount ?? summary.totalCost ?? 0
+      : summary.electricityCharge ?? summary.amount ?? summary.totalCost ?? 0;
+
+  return {
+    utilityType,
+    branch: room.branch || period.branch || "",
+    roomId: String(room._id || period.roomId || ""),
+    roomName: getRoomLabel(room) || room.name || room.roomNumber || "",
+    periodId: String(period._id || ""),
+    periodStatus: period.status || "",
+    startDate: formatExportDate(period.startDate),
+    endDate: formatExportDate(period.endDate),
+    startReading: period.startReading ?? "",
+    endReading: period.endReading ?? "",
+    totalUsage: period.computedTotalUsage ?? "",
+    ratePerUnit: period.ratePerUnit ?? "",
+    totalRoomCost: period.computedTotalCost ?? "",
+    tenantId: summary.tenantId ? String(summary.tenantId) : "",
+    tenantName: summary.tenantName || "",
+    tenantEmail: summary.tenantEmail || "",
+    reservationId: summary.reservationId ? String(summary.reservationId) : "",
+    bedId: summary.bedId || "",
+    bedName: summary.bedName || summary.bedLabel || "",
+    durationRange: summary.durationRange || "",
+    usage: summary.usage ?? summary.consumption ?? "",
+    amount: charge,
+    billId: summary.billId ? String(summary.billId) : "",
+  };
+};
+
 function assertUtilityRoomEligibility(room, utilityType) {
   if (utilityType === "water" && !isWaterBillableRoom(room)) {
     const error = new Error(
@@ -1582,11 +1621,44 @@ export const getUtilityResult = async (req, res, next) => {
 };
 
 /* ─── ROOM HISTORY ───────────────────────────────────────────────────────────
- * Returns a complete occupancy log for a room: tenant name, bed, dates,
- * duration, and associated move-in/move-out meter readings.
+ * Exports finalized utility billing rows for admin CSV downloads.
+ * Branch admins are scoped to their assigned branch; owners may filter by branch.
  * This is the "source of truth" view for billing — billing periods just
- * filter from this log by date range.
  * ──────────────────────────────────────────────────────────────────────── */
+export const exportUtilityRows = async (req, res, next) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const { utilityType } = req.params;
+    if (!UTILITY_EXPORT_TYPES.has(utilityType)) {
+      return res.status(400).json({ error: "Invalid utility type specified" });
+    }
+
+    const branch = admin.isOwner ? req.query.branch || null : admin.branch;
+    const periods = await UtilityPeriod.find({
+      utilityType,
+      isArchived: false,
+      status: { $in: ["closed", "revised"] },
+    })
+      .populate("roomId", "name roomNumber branch type")
+      .sort({ startDate: -1, createdAt: -1 })
+      .lean();
+
+    const scopedPeriods = branch
+      ? periods.filter((period) => period.roomId?.branch === branch)
+      : periods;
+
+    const rows = scopedPeriods.flatMap((period) =>
+      (period.tenantSummaries || []).map((summary) =>
+        buildUtilityExportRow({ utilityType, period, summary }),
+      ),
+    );
+
+    res.json({ success: true, rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getUtilityAiReview = async (req, res, next) => {
   try {
     const admin = await getAdminInfo(req);

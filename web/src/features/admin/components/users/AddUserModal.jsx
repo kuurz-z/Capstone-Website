@@ -186,9 +186,26 @@ export default function AddUserModal({
             </div>
             <div className="form-group">
               <label>Branch</label>
-              <div className="form-hint-box">
-                Auto-assigned when user becomes a tenant
-              </div>
+              {addForm.role === "branch_admin" ? (
+                <>
+                  <select
+                    value={addForm.branch || ""}
+                    onChange={(e) => onFormChange("branch", e.target.value)}
+                    required
+                  >
+                    <option value="">Select branch</option>
+                    <option value="gil-puyat">Gil Puyat</option>
+                    <option value="guadalupe">Guadalupe</option>
+                  </select>
+                  {addFormErrors.branch && (
+                    <span className="field-error">{addFormErrors.branch}</span>
+                  )}
+                </>
+              ) : (
+                <div className="form-hint-box">
+                  Auto-assigned when user becomes a tenant
+                </div>
+              )}
             </div>
           </div>
 

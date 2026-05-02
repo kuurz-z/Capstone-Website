@@ -116,6 +116,27 @@ const getMeterRangeLabel = (period, utilityType) =>
       ? `${fmtCurrency(period.ratePerUnit)} total water charge`
       : `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."}` : EMPTY_VALUE}`
     : EMPTY_VALUE;
+const getExportColumns = (utilityType) => {
+  const unitLabel = utilityType === "water" ? "Water Charge" : "Usage";
+  return [
+    { key: "branch", label: "Branch" },
+    { key: "roomName", label: "Room" },
+    { key: "periodStatus", label: "Period Status" },
+    { key: "startDate", label: "Start Date" },
+    { key: "endDate", label: "End Date" },
+    { key: "startReading", label: "Start Reading" },
+    { key: "endReading", label: "End Reading" },
+    { key: "totalUsage", label: "Room Usage" },
+    { key: "ratePerUnit", label: utilityType === "water" ? "Room Water Charge" : "Rate" },
+    { key: "tenantName", label: "Tenant" },
+    { key: "tenantEmail", label: "Tenant Email" },
+    { key: "bedName", label: "Bed" },
+    { key: "durationRange", label: "Coverage" },
+    { key: "usage", label: unitLabel },
+    { key: "amount", label: "Amount" },
+    { key: "billId", label: "Bill ID" },
+  ];
+};
 const getExpectedPeriodEndDate = (period) =>
   period?.endDate || period?.targetCloseDate || null;
 const getPeriodRangeText = (period) => {

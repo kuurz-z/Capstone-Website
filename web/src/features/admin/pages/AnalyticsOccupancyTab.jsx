@@ -13,7 +13,10 @@ import {
   AnalyticsInsightSection,
   buildInsightPdfSections,
   buildBranchControl,
+  buildServerTableParams,
   ExportButtons,
+  getTablePagination,
+  getTableRows,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
@@ -31,6 +34,7 @@ const INVENTORY_COLUMNS = [
   { key: "unavailableBeds", label: "Unavailable", sortable: true },
   { key: "occupancyRate", label: "Rate", render: (row) => `${row.occupancyRate}%` },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 function ForecastCards({ forecast }) {
   const projectedMonths = forecast?.projected || [];
@@ -75,8 +79,9 @@ export default function AnalyticsOccupancyTab({
     () => ({
       range,
       ...(isOwner ? { branch } : {}),
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
     }),
-    [branch, isOwner, range],
+    [branch, isOwner, page, range],
   );
 
   const { data, isLoading, isError } = useOccupancyReport(params);
@@ -94,7 +99,9 @@ export default function AnalyticsOccupancyTab({
     branch: isOwner ? branch : undefined,
   });
 
-  const inventory = data?.tables?.inventory || [];
+  const inventoryTable = data?.tables?.inventory;
+  const inventory = getTableRows(inventoryTable);
+  const inventoryPagination = getTablePagination(inventoryTable, inventory);
   const roomTypes = data?.tables?.roomTypes || [];
   const trend = data?.series?.occupancyTrend || [];
   const forecast = forecastData?.forecast || {};
@@ -231,10 +238,11 @@ export default function AnalyticsOccupancyTab({
           loading={isLoading}
           pagination={{
             page,
-            pageSize: 10,
-            total: inventory.length,
+            pageSize: TABLE_PAGE_SIZE,
+            total: inventoryPagination.total,
             onPageChange: setPage,
           }}
+          serverPagination
           emptyState={{
             title: isError ? "Occupancy report unavailable" : "No occupancy rows",
             description: isError

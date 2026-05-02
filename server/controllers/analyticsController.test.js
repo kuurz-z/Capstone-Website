@@ -10,8 +10,11 @@ const maintenanceFind = jest.fn();
 const userCountDocuments = jest.fn();
 const billAggregate = jest.fn();
 const billFind = jest.fn();
+const auditCountDocuments = jest.fn();
 const auditFind = jest.fn();
+const loginLogCountDocuments = jest.fn();
 const loginLogFind = jest.fn();
+const userSessionCountDocuments = jest.fn();
 const getUserBranchInfo = jest.fn();
 const getBranchOccupancyStats = jest.fn();
 const sendSuccess = jest.fn();
@@ -29,6 +32,7 @@ const createLeanChain = (result) => {
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   AuditLog: {
+    countDocuments: auditCountDocuments,
     find: auditFind,
   },
   Bill: {
@@ -40,6 +44,7 @@ await jest.unstable_mockModule("../models/index.js", () => ({
     find: inquiryFind,
   },
   LoginLog: {
+    countDocuments: loginLogCountDocuments,
     find: loginLogFind,
   },
   MaintenanceRequest: {
@@ -55,6 +60,9 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   },
   User: {
     countDocuments: userCountDocuments,
+  },
+  UserSession: {
+    countDocuments: userSessionCountDocuments,
   },
 }));
 
@@ -87,6 +95,7 @@ const {
   getOccupancyForecast,
   getOccupancyReport,
   getOperationsReport,
+  getSystemPerformance,
 } = await import("./analyticsController.js");
 
 describe("analyticsController", () => {
@@ -100,9 +109,12 @@ describe("analyticsController", () => {
     maintenanceFind.mockReset();
     userCountDocuments.mockReset();
     billAggregate.mockReset();
+    auditCountDocuments.mockReset();
     billFind.mockReset();
+    loginLogCountDocuments.mockReset();
     auditFind.mockReset();
     loginLogFind.mockReset();
+    userSessionCountDocuments.mockReset();
     getUserBranchInfo.mockReset();
     getBranchOccupancyStats.mockReset();
     sendSuccess.mockReset();
@@ -316,9 +328,74 @@ describe("analyticsController", () => {
           occupancyRate: 100,
         }),
         tables: expect.objectContaining({
-          inventory: expect.arrayContaining([
-            expect.objectContaining({ roomNumber: "101", roomTypeLabel: "Private" }),
-          ]),
+          inventory: expect.objectContaining({
+            rows: expect.arrayContaining([
+              expect.objectContaining({ roomNumber: "101", roomTypeLabel: "Private" }),
+            ]),
+            pagination: expect.objectContaining({ total: 1 }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  test("paginates and sorts occupancy table rows from query parameters", async () => {
+    getUserBranchInfo.mockResolvedValue({
+      role: "branch_admin",
+      branch: "gil-puyat",
+      isOwner: false,
+    });
+    roomFind.mockReturnValueOnce(
+      createLeanChain([
+        {
+          _id: "room-101",
+          name: "Room 101",
+          roomNumber: "101",
+          branch: "gil-puyat",
+          type: "private",
+          capacity: 1,
+          currentOccupancy: 1,
+          beds: [],
+        },
+        {
+          _id: "room-103",
+          name: "Room 103",
+          roomNumber: "103",
+          branch: "gil-puyat",
+          type: "private",
+          capacity: 1,
+          currentOccupancy: 0,
+          beds: [],
+        },
+      ]),
+    );
+    reservationFind.mockReturnValue(createLeanChain([]));
+
+    const req = {
+      user: { uid: "firebase-admin-table" },
+      query: {
+        range: "30d",
+        tableLimit: "1",
+        tableOffset: "1",
+        tableSort: "roomNumber",
+        tableDirection: "desc",
+      },
+    };
+    const res = { req };
+
+    await getOccupancyReport(req, res, jest.fn());
+
+    const [, payload] = sendSuccess.mock.calls.at(-1);
+    expect(payload.tables.inventory).toEqual(
+      expect.objectContaining({
+        rows: [expect.objectContaining({ roomNumber: "101" })],
+        pagination: expect.objectContaining({
+          total: 2,
+          limit: 1,
+          offset: 1,
+          sort: "roomNumber",
+          direction: "desc",
+          hasMore: false,
         }),
       }),
     );
@@ -381,12 +458,15 @@ describe("analyticsController", () => {
       expect.objectContaining({
         scope: expect.objectContaining({ branch: "guadalupe" }),
         tables: expect.objectContaining({
-          overdueAccounts: expect.arrayContaining([
-            expect.objectContaining({
-              tenantName: "Mika Cruz",
-              balance: 10500,
-            }),
-          ]),
+          overdueAccounts: expect.objectContaining({
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                tenantName: "Mika Cruz",
+                balance: 10500,
+              }),
+            ]),
+            pagination: expect.objectContaining({ total: 1 }),
+          }),
         }),
       }),
     );
@@ -612,6 +692,51 @@ describe("analyticsController", () => {
           suspiciousIps: expect.arrayContaining([
             expect.objectContaining({ ipAddress: "203.0.113.10", attempts: 3 }),
           ]),
+          recentSecurityEvents: expect.objectContaining({
+            rows: expect.any(Array),
+            pagination: expect.objectContaining({ total: 2 }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  test("returns owner system performance metrics", async () => {
+    getUserBranchInfo.mockResolvedValue({
+      role: "owner",
+      branch: "gil-puyat",
+      isOwner: true,
+    });
+    userSessionCountDocuments.mockResolvedValue(7);
+    loginLogCountDocuments.mockResolvedValue(3);
+    auditCountDocuments.mockResolvedValue(2);
+
+    const req = { user: { uid: "owner-performance" }, query: {} };
+    const res = { req };
+
+    await getSystemPerformance(req, res, jest.fn());
+
+    expect(userSessionCountDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isActive: true,
+      }),
+    );
+    expect(sendSuccess).toHaveBeenCalledWith(
+      res,
+      expect.objectContaining({
+        scope: expect.objectContaining({
+          role: "owner",
+        }),
+        kpis: expect.objectContaining({
+          activeSessions: 7,
+          failedLogins24h: 3,
+          highSeverityAudit24h: 2,
+          serviceStatus: expect.any(String),
+          databaseStatus: expect.any(String),
+        }),
+        checks: expect.objectContaining({
+          api: expect.objectContaining({ status: "ok" }),
+          database: expect.objectContaining({ readyState: expect.any(Number) }),
         }),
       }),
     );

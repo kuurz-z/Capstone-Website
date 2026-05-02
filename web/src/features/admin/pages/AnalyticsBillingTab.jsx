@@ -13,7 +13,10 @@ import {
   AnalyticsInsightSection,
   buildInsightPdfSections,
   buildBranchControl,
+  buildServerTableParams,
   ExportButtons,
+  getTablePagination,
+  getTableRows,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
@@ -30,6 +33,7 @@ const OVERDUE_COLUMNS = [
   { key: "daysOverdue", label: "Days Overdue", sortable: true },
   { key: "balance", label: "Balance", render: (row) => formatPeso(row.balance), sortable: true },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsBillingTab({
   branch,
@@ -43,8 +47,9 @@ export default function AnalyticsBillingTab({
     () => ({
       range,
       ...(isOwner ? { branch } : {}),
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
     }),
-    [branch, isOwner, range],
+    [branch, isOwner, page, range],
   );
   const { data, isLoading, isError } = useBillingReport(params);
   const {
@@ -56,7 +61,9 @@ export default function AnalyticsBillingTab({
     range,
     branch: isOwner ? branch : undefined,
   });
-  const overdueAccounts = data?.tables?.overdueAccounts || [];
+  const overdueAccountsTable = data?.tables?.overdueAccounts;
+  const overdueAccounts = getTableRows(overdueAccountsTable);
+  const overdueAccountsPagination = getTablePagination(overdueAccountsTable, overdueAccounts);
   const unpaidBalances = data?.tables?.unpaidBalances || [];
   const revenueByMonth = data?.series?.revenueByMonth || [];
   const statusDistribution = data?.series?.statusDistribution || [];
@@ -206,10 +213,11 @@ export default function AnalyticsBillingTab({
           loading={isLoading}
           pagination={{
             page,
-            pageSize: 10,
-            total: overdueAccounts.length,
+            pageSize: TABLE_PAGE_SIZE,
+            total: overdueAccountsPagination.total,
             onPageChange: setPage,
           }}
+          serverPagination
           emptyState={{
             title: isError ? "Billing report unavailable" : "No overdue accounts",
             description: isError

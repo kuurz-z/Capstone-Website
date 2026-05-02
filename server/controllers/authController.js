@@ -761,13 +761,24 @@ export const updateBranch = async (req, res, next) => {
       });
     }
 
-    // Update user's branch
-    const user = await User.findOneAndUpdate(
-      { firebaseUid: req.user.uid },
-      { branch },
-      { new: true, runValidators: true },
-    );
+    const existingUser = await User.findOne({ firebaseUid: req.user.uid });
+    if (!existingUser) {
+      return res.status(404).json({
+        error: "User not found",
+        code: "USER_NOT_FOUND",
+      });
+    }
 
+    if (isAdminRole(existingUser.role)) {
+      return res.status(403).json({
+        error: "Branch assignment for admin accounts must be managed by the owner.",
+        code: "ADMIN_BRANCH_SELF_SERVICE_DENIED",
+      });
+    }
+
+    // Update applicant/tenant branch selection.
+    existingUser.branch = branch;
+    const user = await existingUser.save();
     if (!user) {
       return res.status(404).json({
         error: "User not found",

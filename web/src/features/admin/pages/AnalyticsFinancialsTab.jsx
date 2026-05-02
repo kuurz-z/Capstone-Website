@@ -11,6 +11,9 @@ import {
 import { buildRangeLabel, formatBranch, formatPeso } from "./reportCommon";
 import {
   ExportButtons,
+  buildServerTableParams,
+  getTablePagination,
+  getTableRows,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
@@ -29,16 +32,25 @@ const OVERDUE_ROOM_COLUMNS = [
     sortable: true,
   },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, onRangeChange }) {
   const [page, setPage] = useState(1);
-  const params = useMemo(() => ({ branch, range }), [branch, range]);
+  const params = useMemo(
+    () => ({
+      branch,
+      range,
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
+    }),
+    [branch, page, range],
+  );
   const { data, isLoading, isError } = useFinancialsAnalytics(params);
   const branchComparison = data?.series?.branchComparison || [];
   const revenueByMonth = data?.series?.revenueByMonth || [];
   const overdueAging = data?.series?.overdueAging || [];
-  const overdueRooms = data?.tables?.overdueRooms || [];
-  const pagedRooms = overdueRooms.slice((page - 1) * 10, page * 10);
+  const overdueRoomsTable = data?.tables?.overdueRooms;
+  const overdueRooms = getTableRows(overdueRoomsTable);
+  const overdueRoomsPagination = getTablePagination(overdueRoomsTable, overdueRooms);
 
   const metricCards = [
     { label: "Collected Revenue", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
@@ -177,14 +189,15 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
       <ReportChartPanel title="Overdue exposure tables" subtitle="Rooms carrying the highest unpaid balance">
         <DataTable
           columns={OVERDUE_ROOM_COLUMNS}
-          data={pagedRooms}
+          data={overdueRooms}
           loading={isLoading}
           pagination={{
             page,
-            pageSize: 10,
-            total: overdueRooms.length,
+            pageSize: TABLE_PAGE_SIZE,
+            total: overdueRoomsPagination.total,
             onPageChange: setPage,
           }}
+          serverPagination
           emptyState={{
             title: isError ? "Financial overview unavailable" : "No overdue rooms",
             description: isError

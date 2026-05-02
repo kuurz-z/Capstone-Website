@@ -15,7 +15,10 @@ import {
   AnalyticsInsightSection,
   buildInsightPdfSections,
   buildBranchControl,
+  buildServerTableParams,
   ExportButtons,
+  getTablePagination,
+  getTableRows,
   handleCsvExport,
   handlePdfExport,
   MetricGrid,
@@ -37,6 +40,7 @@ const MAINTENANCE_COLUMNS = [
   },
   { key: "slaState", label: "SLA", sortable: true },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsOperationsTab({
   branch,
@@ -50,8 +54,9 @@ export default function AnalyticsOperationsTab({
     () => ({
       range,
       ...(isOwner ? { branch } : {}),
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
     }),
-    [branch, isOwner, range],
+    [branch, isOwner, page, range],
   );
   const { data, isLoading, isError } = useOperationsReport(params);
   const {
@@ -63,7 +68,9 @@ export default function AnalyticsOperationsTab({
     range,
     branch: isOwner ? branch : undefined,
   });
-  const maintenanceIssues = data?.tables?.maintenanceIssues || [];
+  const maintenanceIssuesTable = data?.tables?.maintenanceIssues;
+  const maintenanceIssues = getTableRows(maintenanceIssuesTable);
+  const maintenanceIssuesPagination = getTablePagination(maintenanceIssuesTable, maintenanceIssues);
   const reservations = data?.tables?.reservations || [];
   const inquiryWindows = data?.tables?.peakInquiryWindows || [];
   const reservationsByPeriod = data?.series?.reservationsByPeriod || [];
@@ -194,10 +201,11 @@ export default function AnalyticsOperationsTab({
           loading={isLoading}
           pagination={{
             page,
-            pageSize: 10,
-            total: maintenanceIssues.length,
+            pageSize: TABLE_PAGE_SIZE,
+            total: maintenanceIssuesPagination.total,
             onPageChange: setPage,
           }}
+          serverPagination
           emptyState={{
             title: isError ? "Operations report unavailable" : "No maintenance issues",
             description: isError

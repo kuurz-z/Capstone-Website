@@ -10,6 +10,7 @@ import {
   getUtilityLatestReading,
   getUtilityPeriods,
   getUtilityResult,
+  exportUtilityRows,
   deleteUtilityPeriod,
   updateUtilityPeriod,
   deleteUtilityReading,
@@ -39,6 +40,7 @@ router.get("/:utilityType/readings/:roomId/latest", getUtilityLatestReading);
 router.get("/:utilityType/readings/:roomId", getUtilityReadings);
 router.get("/:utilityType/periods/:roomId", getUtilityPeriods);
 router.get("/:utilityType/results/:periodId", getUtilityResult);
+router.get("/:utilityType/export", exportUtilityRows);
 router.get("/:utilityType/rooms/:roomId/history", getRoomHistory);
 router.post("/:utilityType/periods/:periodId/ai-review", getUtilityAiReview);
 

@@ -2488,6 +2488,7 @@ export const renewContract = async (req, res, next) => {
 export const moveOutReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
+    const { meterReading } = req.body || {};
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId)
