@@ -14,7 +14,10 @@
  */
 
 import express from "express";
-import { handlePaymongoWebhook } from "../controllers/webhookController.js";
+import {
+  handlePaymongoWebhook,
+  handlePaymongoSourceWebhook,
+} from "../controllers/webhookController.js";
 
 const router = express.Router();
 
@@ -30,10 +33,19 @@ const router = express.Router();
  * - Uses express.raw() to preserve raw body for signature verification
  * - PayMongo sends JSON with Content-Type: application/json
  */
+// POST /api/webhooks/paymongo — checkout_session.payment.paid
 router.post(
   "/paymongo",
   express.raw({ type: "application/json" }),
   handlePaymongoWebhook,
+);
+
+// POST /api/paymongo/webhook — payment.paid, payment.failed, source.chargeable
+// (mounted at /api/paymongo in server.js)
+router.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  handlePaymongoSourceWebhook,
 );
 
 // ============================================================================

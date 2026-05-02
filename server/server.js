@@ -173,7 +173,7 @@ const startBackgroundServices = (mongoConnected) => {
 };
 
 app.options("*", (req, res) => {
-  const origin = req.headers.origin;
+  const { origin } = req.headers;
   if (origin && isOriginAllowed(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader(
@@ -226,7 +226,8 @@ app.use(
   }),
 );
 
-app.use("/api/webhooks", webhookRoutes);
+app.use("/api/paymongo", webhookRoutes);  // payment.paid, payment.failed, source.chargeable
+app.use("/api/webhooks", webhookRoutes);  // checkout_session.payment.paid
 app.use(globalLimiter);
 app.use(compression());
 app.use(express.json({ limit: "8mb" }));
