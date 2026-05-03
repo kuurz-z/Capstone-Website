@@ -879,6 +879,35 @@
           resetFilters={resetFilters}
         />
 
+      <PageShell.Content>
+        <DataTable
+          columns={columns}
+          data={sortedTenants}
+          loading={loading}
+          disableRowInteraction
+          exportable={true}
+          exportFilename="Tenants_List"
+          exportTitle="Tenants Data Export"
+          pagination={{
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            total: sortedTenants.length,
+            onPageChange: setCurrentPage,
+          }}
+          emptyState={
+            isError
+              ? {
+                  icon: AlertTriangle,
+                  title: "Unable to load tenants",
+                  description: error?.message || "The tenancy workspace could not be loaded.",
+                }
+              : {
+                  icon: Users,
+                  title: "No tenants found",
+                  description: "Adjust the filters or wait for tenant records to appear.",
+                }
+          }
+        />
 
         <div className="bg-[var(--card)] border border-[var(--border-light)] rounded-lg overflow-hidden">
           <div className="overflow-x-auto">

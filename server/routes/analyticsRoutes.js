@@ -9,6 +9,7 @@ import {
   getOccupancyForecast,
   getOccupancyReport,
   getOperationsReport,
+  getSystemPerformance,
 } from "../controllers/analyticsController.js";
 
 const router = express.Router();
@@ -23,5 +24,6 @@ router.get("/forecast/occupancy", getOccupancyForecast);
 router.post("/insights", getAnalyticsInsights);
 router.get("/financials", verifyOwner, getFinancialsReport);
 router.get("/audit", verifyOwner, getAuditSummary);
+router.get("/system-performance", verifyOwner, getSystemPerformance);
 
 export default router;

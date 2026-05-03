@@ -21,6 +21,7 @@ import { useUsers, useUserStats } from "../../../shared/hooks/queries/useUsers";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
 import HardDeleteUserModal from "../components/users/HardDeleteUserModal";
+import DeleteUserModal from "../components/users/DeleteUserModal";
 import RestoreUserModal from "../components/users/RestoreUserModal";
 import AccountActionModal from "../components/users/AccountActionModal";
 import AccountRowActions from "../components/users/AccountRowActions";
@@ -53,6 +54,7 @@ function UserManagementPage() {
   const [accessDrawerUser, setAccessDrawerUser] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isHardDeleteModalOpen, setIsHardDeleteModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [accountAction, setAccountAction] = useState({
     type: null,
@@ -164,6 +166,7 @@ function getAvatarColor(user) {
     email: "",
     phone: "",
     role: "applicant",
+    branch: "",
     password: "",
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -193,16 +196,33 @@ function getAvatarColor(user) {
           : value.length < 6
             ? "Min 6 characters"
             : "";
+      case "branch":
+        return addForm.role === "branch_admin" && !value
+          ? "Branch is required for branch admins"
+          : "";
       default:
         return "";
     }
   };
 
   const handleAddFormChange = (field, value) => {
-    setAddForm((prev) => ({ ...prev, [field]: value }));
+    const nextForm = {
+      ...addForm,
+      [field]: value,
+      ...(field === "role" && value !== "branch_admin" ? { branch: "" } : {}),
+    };
+    setAddForm(nextForm);
     setAddFormErrors((prev) => ({
       ...prev,
       [field]: validateAddField(field, value),
+      ...(field === "role" || field === "branch"
+        ? {
+            branch:
+              nextForm.role === "branch_admin" && !nextForm.branch
+                ? "Branch is required for branch admins"
+                : "",
+          }
+        : {}),
     }));
   };
 
@@ -316,6 +336,11 @@ function getAvatarColor(user) {
     }
   };
 
+  const handleDeleteClick = (userData) => {
+    setSelectedUser(userData);
+    setIsDeleteModalOpen(true);
+  };
+
   const handleHardDeleteClick = (userData) => {
     setSelectedUser(userData);
     setIsHardDeleteModalOpen(true);
@@ -407,7 +432,7 @@ function getAvatarColor(user) {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     const errors = {};
-    ["username", "email", "firstName", "lastName", "password"].forEach((f) => {
+    ["username", "email", "firstName", "lastName", "password", "branch"].forEach((f) => {
       const err = validateAddField(f, addForm[f]);
       if (err) errors[f] = err;
     });
@@ -430,6 +455,7 @@ function getAvatarColor(user) {
           email: addForm.email,
           phone: addForm.phone || undefined,
           role: addForm.role,
+          branch: addForm.branch || undefined,
           password: addForm.password,
         }),
       });
@@ -503,6 +529,13 @@ function getAvatarColor(user) {
           "success",
           3000,
         );
+      } else if (action === "restore") {
+        await authFetch(`/users/${userId}/restore`, { method: "PATCH" });
+        showNotification(
+          `${actionUserLabel} was restored successfully.`,
+          "success",
+          3000,
+        );
       }
       refetchAll();
     } catch (error) {
@@ -524,9 +557,14 @@ function getAvatarColor(user) {
       },
       { label: "Active", value: stats?.activeCount || 0, color: "green" },
       {
-        label: "Admin Accounts",
-        value: (stats?.byRole?.branch_admin || 0) + (stats?.byRole?.owner || 0),
+        label: "Branch Admins",
+        value: stats?.byRole?.branch_admin || 0,
         color: "blue",
+      },
+      {
+        label: "Owners",
+        value: stats?.byRole?.owner || 0,
+        color: "purple",
       },
       {
         label: "Blocked",
@@ -580,13 +618,13 @@ function getAvatarColor(user) {
     {
       key: "status",
       options: [
-        { value: "all", label: "All Status" },
+        { value: "all", label: "All Statuses" },
         { value: "active", label: "Active" },
-        { value: "restricted", label: "Blocked (All)" },
-        { value: "suspended", label: "Suspended" },
-        { value: "banned", label: "Blocked account" },
         { value: "pending_verification", label: "Pending Verification" },
-        { value: "archived", label: "Archived/Deleted" },
+        { value: "restricted", label: "All Restricted (Blocked/Suspended)" },
+        { value: "suspended", label: "Suspended (Temporary)" },
+        { value: "banned", label: "Banned (Permanent)" },
+        { value: "archived", label: "Archived" },
       ],
       value: statusFilter,
       onChange: (v) => {
@@ -673,11 +711,12 @@ function getAvatarColor(user) {
           !isCurrentUser &&
           isArchived &&
           (isOwner || !isPrivilegedAccount);
-        const canHardDelete =
+        const canDelete =
           canManageUsers &&
           !isCurrentUser &&
-          isArchived &&
+          !isArchived &&
           (!isPrivilegedAccount || isOwner);
+        const canHardDelete = canManageUsers && !isCurrentUser && isArchived && (!isPrivilegedAccount || isOwner);
 
         return (
           <AccountRowActions
@@ -689,6 +728,7 @@ function getAvatarColor(user) {
             canBlock={canBlock}
             canUnblock={canUnblock}
             canRestore={canRestore}
+            canDelete={canDelete}
             canHardDelete={canHardDelete}
             onViewAccess={() => setAccessDrawerUser(row)}
             onManagePermissions={() => handleOpenPermissions(row)}
@@ -697,7 +737,10 @@ function getAvatarColor(user) {
             onUnblock={() =>
               setAccountAction({ type: "reactivate", user: row })
             }
-            onRestore={() => setAccountAction({ type: "restore", user: row })}
+            onRestore={() =>
+              setAccountAction({ type: "restore", user: row })
+            }
+            onDelete={() => handleDeleteClick(row)}
             onHardDelete={() => handleHardDeleteClick(row)}
           />
         );
@@ -718,6 +761,7 @@ function getAvatarColor(user) {
               email: "",
               phone: "",
               role: "applicant",
+              branch: "",
               password: "",
             });
             setAddFormErrors({});
@@ -771,35 +815,29 @@ function getAvatarColor(user) {
         ))}
       </div>
 
-      {/* Filters and Search */}
-      <div
-        className="rounded-lg p-6 space-y-4"
-        style={{
-          backgroundColor: "var(--card)",
-          border: "1px solid var(--color-border-default)",
-        }}
-      >
-        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-          <div className="relative flex-1 max-w-md w-full">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
-              style={{ color: "var(--muted-foreground)" }}
-            />
-            <input
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search users..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg focus:outline-none h-11"
-              style={{
-                backgroundColor: "var(--input-background)",
-                border: "1px solid var(--color-border-default)",
-                color: "var(--color-text-primary)",
-              }}
-            />
-          </div>
+      <PageShell.Content>
+        <DataTable
+          columns={columns}
+          data={users}
+          loading={loading}
+          exportable={true}
+          exportFilename="System_Users"
+          exportTitle="System Users Export"
+          pagination={{
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            total: totalUsers,
+            onPageChange: setCurrentPage,
+          }}
+          serverPagination
+          emptyState={{
+            icon: Users,
+            title: "No users found",
+            description: "Try adjusting your filters.",
+          }}
+          onRowClick={(row) => setAccessDrawerUser(row)}
+        />
+      </PageShell.Content>
 
           <div className="flex items-center gap-3">
             <button
@@ -1090,6 +1128,14 @@ function getAvatarColor(user) {
           onFormChange={handleAddFormChange}
           onSubmit={handleCreateUser}
           onClose={() => setIsAddModalOpen(false)}
+        />
+      )}
+      {isDeleteModalOpen && (
+        <DeleteUserModal
+          user={selectedUser}
+          isOwner={isOwner}
+          onDelete={handleDeleteUser}
+          onClose={() => setIsDeleteModalOpen(false)}
         />
       )}
       {isHardDeleteModalOpen && (

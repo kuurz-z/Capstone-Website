@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const reservationFindById = jest.fn();
+const userFindOne = jest.fn();
 const utilityReadingFindOne = jest.fn();
 const ensureCurrentCycleRentBill = jest.fn();
+const moveOutStayWorkflow = jest.fn();
+const notifyGeneral = jest.fn();
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   Reservation: { findById: reservationFindById },
-  User: {},
+  User: { findOne: userFindOne },
   Room: {},
   Bill: { countDocuments: jest.fn(), deleteMany: jest.fn() },
   UtilityReading: { findOne: utilityReadingFindOne },
@@ -26,6 +29,12 @@ await jest.unstable_mockModule("../utils/auditLogger.js", () => ({
 }));
 await jest.unstable_mockModule("../utils/occupancyManager.js", () => ({
   updateOccupancyOnReservationChange: jest.fn(),
+}));
+await jest.unstable_mockModule("../utils/tenantActionService.js", () => ({
+  getTenantActionContext: jest.fn(),
+  moveOutStayWorkflow,
+  renewStayWorkflow: jest.fn(),
+  transferStayWorkflow: jest.fn(),
 }));
 await jest.unstable_mockModule("../utils/rentGenerator.js", () => ({
   ensureCurrentCycleRentBill,
@@ -72,8 +81,11 @@ await jest.unstable_mockModule("../middleware/errorHandler.js", () => ({
   sendError: jest.fn(),
   AppError: class AppError extends Error {},
 }));
+await jest.unstable_mockModule("../utils/notificationService.js", () => ({
+  notify: { general: notifyGeneral },
+}));
 
-const { updateReservation } = await import("./reservationsController.js");
+const { moveOutReservation, updateReservation } = await import("./reservationsController.js");
 
 const createResponse = () => ({
   statusCode: 200,
@@ -91,8 +103,12 @@ const createResponse = () => ({
 describe("reservationsController.updateReservation access hardening", () => {
   beforeEach(() => {
     reservationFindById.mockReset();
+    userFindOne.mockReset();
     utilityReadingFindOne.mockReset();
     ensureCurrentCycleRentBill.mockReset();
+    moveOutStayWorkflow.mockReset();
+    notifyGeneral.mockReset();
+    userFindOne.mockResolvedValue(null);
   });
 
   test("rejects invalid lifecycle jumps before mutating reservation", async () => {
@@ -122,6 +138,51 @@ describe("reservationsController.updateReservation access hardening", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.code).toBe("INVALID_RESERVATION_STATUS_TRANSITION");
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("move-out reads meterReading from request body before running workflow", async () => {
+    const reservation = {
+      _id: "507f1f77bcf86cd799439011",
+      status: "moveIn",
+      userId: { _id: "tenant-1", firstName: "Tala", lastName: "Tenant", email: "tala@example.com" },
+      roomId: { _id: "room-1", branch: "gil-puyat", name: "Room 1" },
+      toObject: () => ({
+        _id: "507f1f77bcf86cd799439011",
+        status: "moveIn",
+        userId: "tenant-1",
+        roomId: { _id: "room-1", branch: "gil-puyat", name: "Room 1" },
+      }),
+    };
+    const populatedQuery = {
+      populate: jest.fn().mockReturnThis(),
+      then: (resolve) => Promise.resolve(resolve(reservation)),
+    };
+    reservationFindById.mockReturnValue(populatedQuery);
+    moveOutStayWorkflow.mockResolvedValue({
+      reservation,
+      stay: { _id: "stay-1", status: "completed" },
+      billingSummary: { outstandingBalance: 0 },
+    });
+
+    const req = {
+      params: { reservationId: "507f1f77bcf86cd799439011" },
+      body: { meterReading: 128, moveOutDate: "2026-05-02" },
+      branchFilter: "gil-puyat",
+      user: { uid: "admin-uid" },
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await moveOutReservation(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(moveOutStayWorkflow).toHaveBeenCalledWith({
+      reservationId: "507f1f77bcf86cd799439011",
+      payload: req.body,
+      actorId: null,
+    });
+    expect(res.body.message).toBe("Tenant moved out successfully");
     expect(next).not.toHaveBeenCalled();
   });
 });

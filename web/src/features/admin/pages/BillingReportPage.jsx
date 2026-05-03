@@ -258,29 +258,32 @@ export default function BillingReportPage() {
  </ReportChartPanel>
  </div>
 
- <ReportChartPanel
- title="Overdue accounts"
- subtitle="Bills past due date and still carrying an outstanding balance"
- >
- <DataTable
- columns={OVERDUE_COLUMNS}
- data={pagedRows}
- loading={isLoading}
- pagination={{
- page,
- pageSize: 10,
- total: overdueAccounts.length,
- onPageChange: setPage,
- }}
- emptyState={{
- title: isError ? "Billing report unavailable" : "No overdue accounts",
- description: isError
- ? "The billing report could not be loaded."
- : "No overdue balances were found for the selected scope.",
- }}
- />
- </ReportChartPanel>
- </PageShell.Content>
- </PageShell>
- );
+        <ReportChartPanel
+          title="Overdue accounts"
+          subtitle="Bills past due date and still carrying an outstanding balance"
+        >
+          <DataTable
+            columns={OVERDUE_COLUMNS}
+            data={pagedRows}
+            loading={isLoading}
+            exportable={true}
+            exportFilename="Overdue_Bills"
+            exportTitle="Overdue Bills Export"
+            pagination={{
+              page,
+              pageSize: 10,
+              total: overdueAccounts.length,
+              onPageChange: setPage,
+            }}
+            emptyState={{
+              title: isError ? "Billing report unavailable" : "No overdue accounts",
+              description: isError
+                ? "The billing report could not be loaded."
+                : "No overdue balances were found for the selected scope.",
+            }}
+          />
+        </ReportChartPanel>
+      </PageShell.Content>
+    </PageShell>
+  );
 }

@@ -303,7 +303,7 @@ export default function useReservationFlow() {
     if (r.leaseDuration) setLeaseDuration(String(r.leaseDuration));
     // Restore agreements ONLY if the application was previously submitted
     // (prevents step 2's agreedToPrivacy from pre-checking step 3's consent)
-    const hasApplication = Boolean(r.firstName && r.lastName && r.mobileNumber);
+    const hasApplication = Boolean(r.applicationSubmittedAt);
     if (hasApplication && r.agreedToPrivacy) setAgreedToPrivacy(true);
     if (hasApplication && r.agreedToCertification) setAgreedToCertification(true);
     // File URLs
@@ -1105,7 +1105,93 @@ export default function useReservationFlow() {
     };
   }, [buildDraftPayload, currentStage, reservationId]);
 
-  // ΓöÇΓöÇ Stage handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Stage handler ──────────────────────────────────────
+  const handleSaveAndExit = async () => {
+    setIsLoading(true);
+    setSaveStatus("saving");
+    try {
+      if (currentStage === 3) {
+        // Save without the submit flag to keep it as a draft
+        await updateReservationDraft({
+          firstName,
+          lastName,
+          middleName,
+          nickname,
+          mobileNumber,
+          birthday,
+          maritalStatus,
+          nationality,
+          educationLevel,
+          addressUnitHouseNo,
+          addressStreet,
+          addressRegion,
+          addressBarangay,
+          addressCity,
+          addressProvince,
+          emergencyContactName,
+          emergencyRelationship,
+          emergencyContactNumber,
+          healthConcerns,
+          employerSchool,
+          employerAddress,
+          employerContact,
+          startDate,
+          occupation,
+          previousEmployment,
+          roomType,
+          preferredRoomNumber,
+          referralSource,
+          referrerName,
+          estimatedMoveInTime,
+          workSchedule,
+          workScheduleOther,
+          targetMoveInDate,
+          leaseDuration,
+          agreedToPrivacy,
+          agreedToCertification,
+          selfiePhotoUrl,
+          validIDFrontUrl,
+          validIDBackUrl,
+          nbiClearanceUrl,
+          nbiReason,
+          personalNotes,
+          companyIDUrl,
+          companyIDReason,
+          validIDType,
+          idType: validIDType,
+          submitApplication: false, 
+        });
+      }
+      
+      setSaveStatus("saved");
+      setSuccessOverlay({
+        show: true,
+        title: "Draft Saved",
+        subtitle: "Your progress has been saved. You can complete it anytime.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      
+      setTimeout(() => {
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "info",
+            title: "Draft Saved",
+            message: "Your application is saved as a draft.",
+          },
+        });
+      }, 1500);
+
+    } catch (error) {
+      showNotification(
+        getFriendlyError(error, "Failed to save draft."),
+        "error",
+        3000
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleNextStage = async () => {
     try {
       if (currentStage === 1) {
@@ -1396,6 +1482,63 @@ export default function useReservationFlow() {
         navigate("/applicant/profile");
       }
     } catch (error) {
+      const errorMsg = error?.message || "";
+      if (errorMsg.includes("The following required fields are missing:")) {
+        const match = errorMsg.match(/missing:\s*(.*)/i);
+        if (match && match[1]) {
+          const fieldsStr = match[1].replace(/\.$/, "");
+          const fields = fieldsStr.split(",").map((s) => s.trim());
+          const firstFieldStr = fields[0];
+          
+          let fieldKey = null;
+          const lowerField = firstFieldStr.toLowerCase();
+          if (lowerField.includes("first name")) fieldKey = "firstName";
+          else if (lowerField.includes("last name")) fieldKey = "lastName";
+          else if (lowerField.includes("middle name")) fieldKey = "middleName";
+          else if (lowerField.includes("mobile number")) fieldKey = "mobileNumber";
+          else if (lowerField.includes("birthday")) fieldKey = "birthday";
+          else if (lowerField.includes("marital status")) fieldKey = "maritalStatus";
+          else if (lowerField.includes("nationality")) fieldKey = "nationality";
+          else if (lowerField.includes("education level")) fieldKey = "educationLevel";
+          else if (lowerField.includes("address unit") || lowerField.includes("house no")) fieldKey = "addressUnitHouseNo";
+          else if (lowerField.includes("address street")) fieldKey = "addressStreet";
+          else if (lowerField.includes("address region")) fieldKey = "addressRegion";
+          else if (lowerField.includes("address barangay")) fieldKey = "addressBarangay";
+          else if (lowerField.includes("address city")) fieldKey = "addressCity";
+          else if (lowerField.includes("address province")) fieldKey = "addressProvince";
+          else if (lowerField.includes("emergency contact name")) fieldKey = "emergencyContactName";
+          else if (lowerField.includes("emergency phone") || lowerField.includes("emergency contact phone") || lowerField.includes("emergency contact number")) fieldKey = "emergencyContactNumber";
+          else if (lowerField.includes("emergency relationship")) fieldKey = "emergencyRelationship";
+          else if (lowerField.includes("health concerns")) fieldKey = "healthConcerns";
+          else if (lowerField.includes("employer") || lowerField.includes("school")) fieldKey = "employerSchool";
+          else if (lowerField.includes("occupation")) fieldKey = "occupation";
+          else if (lowerField.includes("referral")) fieldKey = "referralSource";
+          else if (lowerField.includes("target move-in date")) fieldKey = "targetMoveInDate";
+          else if (lowerField.includes("estimated time") || lowerField.includes("move-in time")) fieldKey = "estimatedMoveInTime";
+          else if (lowerField.includes("work schedule")) fieldKey = "workSchedule";
+          else if (lowerField.includes("company id")) fieldKey = "companyID";
+          else if (lowerField.includes("valid id front")) fieldKey = "validIDFront";
+          else if (lowerField.includes("valid id back")) fieldKey = "validIDBack";
+          else if (lowerField.includes("selfie photo")) fieldKey = "selfiePhoto";
+
+          showNotification(
+            `"${firstFieldStr.charAt(0).toUpperCase() + firstFieldStr.slice(1)}" is required. Please fill it in to continue.`,
+            "error",
+            5000,
+          );
+          
+          if (fieldKey || firstFieldStr) {
+            setTimeout(() => {
+              const selector = fieldKey ? `[data-field="${fieldKey}"]` : `[data-field="${firstFieldStr}"]`;
+              const el = document.querySelector(selector);
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 300);
+          }
+          setIsLoading(false);
+          return;
+        }
+      }
+
       showNotification(
         getFriendlyError(error, "Failed to process reservation. Please try again."),
         "error",
@@ -1589,6 +1732,7 @@ export default function useReservationFlow() {
 
     // Handlers
     handleNextStage,
+    handleSaveAndExit,
     handlePrevStage,
     handleStageConfirm,
     validateApplicantIdDocument,

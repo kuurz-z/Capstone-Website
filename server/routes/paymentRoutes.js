@@ -74,15 +74,7 @@ router.get("/history", verifyToken, async (req, res) => {
  * GET /api/payments/bill/:billId/payments
  * Get all payments for a specific bill
  */
-router.get("/bill/:billId/payments", verifyToken, async (req, res) => {
-  try {
-    const payments = await Payment.getPaymentsForBill(req.params.billId);
-    res.json({ success: true, data: payments });
-  } catch (error) {
-    console.error("❌ Bill payments error:", error);
-    res.status(500).json({ error: "Failed to fetch bill payments" });
-  }
-});
+router.get("/bill/:billId/payments", verifyToken, paymentController.getPaymentsForBill);
 
 /**
  * GET /api/payments/vacancy-dates

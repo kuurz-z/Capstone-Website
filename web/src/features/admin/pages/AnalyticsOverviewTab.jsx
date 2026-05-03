@@ -27,41 +27,31 @@ import {
 } from "./analyticsTabShared";
 
 function ForecastCards({ forecast }) {
- const projectedMonths = forecast?.projected || [];
- const recommendations = forecast?.insights?.recommendations || [];
+  const projectedMonths = forecast?.projected || [];
 
- if (!forecast?.sufficientHistory) {
- return (
- <p className="text-sm text-muted-foreground italic py-4">
- {forecast?.insights?.headline || "Insufficient history to forecast occupancy."}
- </p>
- );
- }
+  if (!forecast?.sufficientHistory) {
+    return (
+      <p className="text-sm text-slate-500 italic py-4">
+        Insufficient history to forecast occupancy.
+      </p>
+    );
+  }
 
- return (
- <div className="flex flex-col gap-4 py-2">
- <p className="text-sm font-medium text-card-foreground">{forecast.insights?.headline}</p>
- <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
- {projectedMonths.map((item) => (
- <div key={item.month} className="bg-muted rounded-xl p-4 border border-border flex flex-col gap-1">
- <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{item.label}</span>
- <div className="text-2xl font-bold text-foreground">{item.projectedOccupancyRate}%</div>
- <p className="text-xs text-muted-foreground mt-1">
- Baseline <span className="font-medium text-card-foreground">{item.baselineRate}%</span> • Seasonal <span className="font-medium text-card-foreground">{item.seasonalMultiplier}x</span>
- </p>
- </div>
- ))}
- </div>
- <div className="mt-2 flex flex-col gap-2">
- {recommendations.slice(0, 2).map((item, i) => (
- <div key={item} className="flex items-start gap-2.5 bg-blue-50/50 p-3 rounded-lg border border-blue-100/50">
- <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5" />
- <p className="text-sm text-card-foreground leading-relaxed">{item}</p>
- </div>
- ))}
- </div>
- </div>
- );
+  return (
+    <div className="flex flex-col gap-4 py-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {projectedMonths.map((item) => (
+          <div key={item.month} className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex flex-col gap-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{item.label}</span>
+            <div className="text-2xl font-bold text-slate-800">{item.projectedOccupancyRate}%</div>
+            <p className="text-xs text-slate-500 mt-1">
+              Baseline <span className="font-medium text-slate-700">{item.baselineRate}%</span> • Seasonal <span className="font-medium text-slate-700">{item.seasonalMultiplier}x</span>
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function AnalyticsOverviewTab({
@@ -255,12 +245,6 @@ export default function AnalyticsOverviewTab({
  </ReportChartPanel>
  </div>
 
- <ReportChartPanel
- title="Forecasting insights"
- subtitle="Actionable branch planning signals from the current projection"
- >
- <ForecastCards forecast={forecast} />
- </ReportChartPanel>
- </AnalyticsTabLayout>
- );
+    </AnalyticsTabLayout>
+  );
 }

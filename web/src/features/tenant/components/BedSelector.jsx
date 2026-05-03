@@ -17,11 +17,12 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
  bunkUnits.push({ upper: upperBeds[i] || null, lower: lowerBeds[i] || null });
  }
 
- const getStatus = (bed) => {
- if (!bed) return "empty";
- if (bed.status) return bed.status; // available, occupied, reserved, locked, maintenance
- return bed.available === false ? "occupied" : "available";
- };
+  const getStatus = (bed) => {
+    if (!bed) return "empty";
+    if (bed.status === 'maintenance') return 'locked';
+    if (bed.status) return bed.status; // available, occupied, reserved, locked
+    return bed.available === false ? "occupied" : "available";
+  };
 
  const isSelectable = (bed) => {
  if (readOnly || !bed) return false;
@@ -41,44 +42,42 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
  const selected = isSelected(bed);
  const selectable = isSelectable(bed);
 
- return (
- <div
- className={`bs-bed bs-${status} ${selected ? "bs-selected" : ""} ${selectable ? "bs-clickable" : ""}`}
- onClick={() => handleClick(bed)}
- role={selectable ? "button" : undefined}
- tabIndex={selectable ? 0 : undefined}
- onKeyDown={(e) => {
- if (selectable && (e.key === "Enter" || e.key ===" ")) {
- e.preventDefault();
- handleClick(bed);
- }
- }}
- >
- <div className="bs-bed-content">
- <div className="bs-bed-left">
- <div className={`bs-dot bs-dot-${status}`} />
- <div>
- <div className="bs-label">{label}</div>
- <div className="bs-id">{bed.id}</div>
- </div>
- </div>
- <div className="bs-badge">
- {selected
- ? "✓ Selected"
- : status === "occupied"
- ? "Occupied"
- : status === "reserved"
- ? "🔒 Reserved"
- : status === "locked"
- ? "🔧 Locked"
- : status === "maintenance"
- ? "Locked"
- : "Available"}
- </div>
- </div>
- </div>
- );
- };
+    return (
+      <div
+        className={`bs-bed bs-${status} ${selected ? "bs-selected" : ""} ${selectable ? "bs-clickable" : ""}`}
+        onClick={() => handleClick(bed)}
+        role={selectable ? "button" : undefined}
+        tabIndex={selectable ? 0 : undefined}
+        onKeyDown={(e) => {
+          if (selectable && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            handleClick(bed);
+          }
+        }}
+      >
+        <div className="bs-bed-content">
+          <div className="bs-bed-left">
+            <div className={`bs-dot bs-dot-${status}`} />
+            <div>
+              <div className="bs-label">{label}</div>
+              <div className="bs-id">{bed.id}</div>
+            </div>
+          </div>
+          <div className="bs-badge">
+            {selected
+              ? "✓ Selected"
+              : status === "occupied"
+                ? "Occupied"
+                : status === "reserved"
+                  ? "🔒 Reserved"
+                  : status === "locked"
+                    ? "� Locked"
+                    : "Available"}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
  return (
  <div className="bed-selector">

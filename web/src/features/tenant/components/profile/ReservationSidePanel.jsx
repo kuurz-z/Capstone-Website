@@ -49,11 +49,11 @@ export default function ReservationSidePanel({ reservation, onClick }) {
  return root.getAttribute("data-theme") === "dark" || root.classList.contains("dark");
  });
 
- React.useEffect(() => {
- const root = document.documentElement;
- const syncTheme = () => {
- setIsDark(root.getAttribute("data-theme") === "dark" || root.classList.contains("dark"));
- };
+  const status = reservation.reservationStatus || reservation.status;
+  const isConfirmed = status === "reserved" || reservation.paymentStatus === "paid";
+  const hasVisit = !!(reservation.visitDate && reservation.visitTime);
+  const visitApproved = reservation.visitApproved || reservation.scheduleApproved;
+  const hasApplication = !!reservation.applicationSubmittedAt;
 
  const observer = new MutationObserver(syncTheme);
  observer.observe(root, {

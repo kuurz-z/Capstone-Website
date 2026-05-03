@@ -838,33 +838,43 @@ const ElectricityPeriodRow = ({ period }) => {
  {open ? <ChevronUp size={16} color="#94a3b8" style={{ marginLeft: 8 }} /> : <ChevronDown size={16} color="#94a3b8" style={{ marginLeft: 8 }} />}
  </button>
 
- {open && (
- <div style={s.breakdown}>
- {isLoading ? (
- <div style={elecS.loadingRow}><Activity size={14} /> Loading breakdown...</div>
- ) : data ? (
- <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
- <div style={{ display: "flex", gap: 16, fontSize: 13, color: "#64748b", padding: "4px 0" }}>
- <span>Rate: <strong style={{ color: "var(--text-heading)" }}>₱{data.ratePerKwh}/kWh</strong></span>
- <span>Your Share: <strong style={{ color: "var(--text-heading)" }}>{fmtKwh(data.myTotalKwh)}</strong></span>
- <span>Total Due: <strong style={{ color: "#F59E0B" }}>{fmt(data.myBillAmount)}</strong></span>
- </div>
- {(data.segments || []).map((seg, i) => (
- <ElectricityReferenceSegmentCard key={i} seg={seg} ratePerKwh={data.ratePerKwh} />
- ))}
- <ElectricityFinalBreakdownCard
- data={data}
- period={period}
- electricityAmount={electricityAmount}
- />
- </div>
- ) : (
- <div style={elecS.loadingRow}>
- {electricityAmount > 0
- ? `Electricity charge recorded: ${fmt(electricityAmount)}. Detailed segment data is not available for this statement.`
- : "Details not available."}
- </div>
- )}
+      {open && (
+        <div style={s.breakdown}>
+          {isLoading ? (
+            <div style={elecS.loadingRow}><Activity size={14} /> Loading breakdown...</div>
+          ) : data ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", gap: 16, fontSize: 13, color: "#64748b", padding: "4px 0" }}>
+                <span>Rate: <strong style={{ color: "var(--text-heading)" }}>₱{data.ratePerKwh}/kWh</strong></span>
+                <span>Your Share: <strong style={{ color: "var(--text-heading)" }}>{fmtKwh(data.myTotalKwh)}</strong></span>
+                <span>Total Due: <strong style={{ color: "#F59E0B" }}>{fmt(data.myBillAmount)}</strong></span>
+              </div>
+              <div style={elecS.explanationNote}>
+                <AlertCircle size={15} color="#2563eb" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <strong style={elecS.explanationTitle}>Billing explanation</strong>
+                  <p style={elecS.explanationText}>
+                    Your electricity charge is based on the room meter reading,
+                    the rate per kWh, and your share for this billing period.
+                  </p>
+                </div>
+              </div>
+              {(data.segments || []).map((seg, i) => (
+                <ElectricityReferenceSegmentCard key={i} seg={seg} ratePerKwh={data.ratePerKwh} />
+              ))}
+              <ElectricityFinalBreakdownCard
+                data={data}
+                period={period}
+                electricityAmount={electricityAmount}
+              />
+            </div>
+          ) : (
+            <div style={elecS.loadingRow}>
+              {electricityAmount > 0
+                ? `Electricity charge recorded: ${fmt(electricityAmount)}. Detailed segment data is not available for this statement.`
+                : "Details not available."}
+            </div>
+          )}
 
  {summary.isCombinedStatement && (
  <StatementScopeNotice
@@ -1488,174 +1498,196 @@ const s = {
 };
 
 const elecS = {
- loadingRow: {
- display: "flex",
- alignItems: "center",
- gap: 8,
- fontSize: 13,
- color: "#64748b",
- padding: "16px",
- justifyContent: "center",
- },
- segmentCard: {
- border: "1px solid #e2e8f0",
- borderRadius: 8,
- overflow: "hidden",
- },
- segmentHeader: {
- display: "flex",
- justifyContent: "space-between",
- padding: "10px 16px",
- background: "#0A1628",
- color: "#fff",
- fontSize: 13,
- },
- tableHeader: {
- display: "grid",
- gridTemplateColumns: "1fr 1fr 1fr",
- padding: "8px 0",
- borderBottom: "1px solid #e2e8f0",
- },
- tableHeaderCell: { fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" },
- tableRow: {
- display: "grid",
- gridTemplateColumns: "1fr 1fr 1fr",
- padding: "8px 0",
- borderBottom: "1px solid #f1f5f9",
- },
- tableCell: { fontSize: 13, color: "#475569" },
- tableRow2: {
- display: "grid",
- gridTemplateColumns: "1fr auto",
- padding: "8px 0",
- borderBottom: "1px solid #f1f5f9",
- },
- tableCell2: { fontSize: 13, color: "#475569" },
- segmentFooter: {
- display: "flex",
- justifyContent: "space-between",
- alignItems: "center",
- padding: "12px 0 16px",
- color: "#FF8C42",
- fontSize: 13,
- },
- referenceCard: {
- background: "#fffdf7",
- border: "1px solid #ead7bc",
- borderRadius: 10,
- padding: "12px",
- },
- referenceIntro: {
- fontSize: 13,
- color: "#334155",
- marginBottom: 8,
- },
- referenceTable: {
- width: "100%",
- borderCollapse: "collapse",
- tableLayout: "fixed",
- },
- referenceSectionCell: {
- background: "#f7e3c8",
- fontWeight: 700,
- },
- referenceHeaderCell: {
- border: "1px solid #7c6b58",
- background: "#f3f4f6",
- color: "#1e293b",
- fontSize: 12,
- fontWeight: 700,
- padding: "6px 8px",
- textAlign: "center",
- },
- referenceSpacerCell: {
- border: "1px solid #7c6b58",
- background: "#f9fafb",
- padding: "6px 8px",
- },
- referenceLabelCell: {
- border: "1px solid #7c6b58",
- color: "#1f2937",
- fontSize: 13,
- padding: "6px 8px",
- },
- referenceValueCell: {
- border: "1px solid #7c6b58",
- color: "#111827",
- fontSize: 13,
- padding: "6px 8px",
- textAlign: "center",
- fontVariantNumeric: "tabular-nums",
- },
- statChip: {
- background: "#f8fafc",
- border: "1px solid #e2e8f0",
- borderRadius: 8,
- padding: "10px 12px",
- },
- statLabel: { display: "block", fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginBottom: 2 },
- statValue: { display: "block", fontSize: 13, fontWeight: 600, color: "#1e293b" },
- finalBreakdownCard: {
- border: "1px solid #f1e2c8",
- borderRadius: 10,
- background: "#fffaf0",
- overflow: "hidden",
- },
- finalBreakdownHeader: {
- padding: "10px 12px",
- background: "#f7e3c8",
- color: "#7c2d12",
- fontSize: 13,
- fontWeight: 700,
- textTransform: "uppercase",
- letterSpacing: "0.03em",
- },
- finalBreakdownBody: {
- padding: "10px 12px",
- display: "flex",
- flexDirection: "column",
- gap: 8,
- },
- finalBreakdownSectionTitle: {
- color: "#7c2d12",
- fontSize: 11,
- fontWeight: 700,
- textTransform: "uppercase",
- letterSpacing: "0.04em",
- marginTop: 2,
- },
- finalBreakdownRow: {
- display: "flex",
- justifyContent: "space-between",
- alignItems: "center",
- gap: 12,
- },
- finalBreakdownLabel: {
- color: "#475569",
- fontSize: 13,
- },
- finalBreakdownValue: {
- color: "#111827",
- fontSize: 13,
- fontWeight: 600,
- fontVariantNumeric: "tabular-nums",
- },
- finalBreakdownFooter: {
- borderTop: "1px solid #f1e2c8",
- padding: "10px 12px",
- display: "flex",
- justifyContent: "space-between",
- alignItems: "center",
- color: "#7c2d12",
- fontSize: 13,
- fontWeight: 700,
- },
- finalBreakdownTotal: {
- color: "#9a3412",
- fontSize: 16,
- fontWeight: 800,
- fontVariantNumeric: "tabular-nums",
- },
+  loadingRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 13,
+    color: "#64748b",
+    padding: "16px",
+    justifyContent: "center",
+  },
+  explanationNote: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: "10px 12px",
+    border: "1px solid #bfdbfe",
+    borderRadius: 10,
+    background: "#eff6ff",
+  },
+  explanationTitle: {
+    display: "block",
+    marginBottom: 2,
+    color: "#1e3a8a",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  explanationText: {
+    margin: 0,
+    color: "#334155",
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+  segmentCard: {
+    border: "1px solid #e2e8f0",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  segmentHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "10px 16px",
+    background: "#0A1628",
+    color: "#fff",
+    fontSize: 13,
+  },
+  tableHeader: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    padding: "8px 0",
+    borderBottom: "1px solid #e2e8f0",
+  },
+  tableHeaderCell: { fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" },
+  tableRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    padding: "8px 0",
+    borderBottom: "1px solid #f1f5f9",
+  },
+  tableCell: { fontSize: 13, color: "#475569" },
+  tableRow2: {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    padding: "8px 0",
+    borderBottom: "1px solid #f1f5f9",
+  },
+  tableCell2: { fontSize: 13, color: "#475569" },
+  segmentFooter: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "12px 0 16px",
+    color: "#FF8C42",
+    fontSize: 13,
+  },
+  referenceCard: {
+    background: "#fffdf7",
+    border: "1px solid #ead7bc",
+    borderRadius: 10,
+    padding: "12px",
+  },
+  referenceIntro: {
+    fontSize: 13,
+    color: "#334155",
+    marginBottom: 8,
+  },
+  referenceTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    tableLayout: "fixed",
+  },
+  referenceSectionCell: {
+    background: "#f7e3c8",
+    fontWeight: 700,
+  },
+  referenceHeaderCell: {
+    border: "1px solid #7c6b58",
+    background: "#f3f4f6",
+    color: "#1e293b",
+    fontSize: 12,
+    fontWeight: 700,
+    padding: "6px 8px",
+    textAlign: "center",
+  },
+  referenceSpacerCell: {
+    border: "1px solid #7c6b58",
+    background: "#f9fafb",
+    padding: "6px 8px",
+  },
+  referenceLabelCell: {
+    border: "1px solid #7c6b58",
+    color: "#1f2937",
+    fontSize: 13,
+    padding: "6px 8px",
+  },
+  referenceValueCell: {
+    border: "1px solid #7c6b58",
+    color: "#111827",
+    fontSize: 13,
+    padding: "6px 8px",
+    textAlign: "center",
+    fontVariantNumeric: "tabular-nums",
+  },
+  statChip: {
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    borderRadius: 8,
+    padding: "10px 12px",
+  },
+  statLabel: { display: "block", fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginBottom: 2 },
+  statValue: { display: "block", fontSize: 13, fontWeight: 600, color: "#1e293b" },
+  finalBreakdownCard: {
+    border: "1px solid #f1e2c8",
+    borderRadius: 10,
+    background: "#fffaf0",
+    overflow: "hidden",
+  },
+  finalBreakdownHeader: {
+    padding: "10px 12px",
+    background: "#f7e3c8",
+    color: "#7c2d12",
+    fontSize: 13,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  finalBreakdownBody: {
+    padding: "10px 12px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  finalBreakdownSectionTitle: {
+    color: "#7c2d12",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    marginTop: 2,
+  },
+  finalBreakdownRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  finalBreakdownLabel: {
+    color: "#475569",
+    fontSize: 13,
+  },
+  finalBreakdownValue: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
+  },
+  finalBreakdownFooter: {
+    borderTop: "1px solid #f1e2c8",
+    padding: "10px 12px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    color: "#7c2d12",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  finalBreakdownTotal: {
+    color: "#9a3412",
+    fontSize: 16,
+    fontWeight: 800,
+    fontVariantNumeric: "tabular-nums",
+  },
 };
 
 export default BillingTab;

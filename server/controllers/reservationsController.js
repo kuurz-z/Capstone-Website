@@ -1872,48 +1872,10 @@ export const updateReservationByUser = async (req, res, next) => {
       const hasVal = (v) => v != null && String(v).trim().length > 0;
       const isValidPHPhone = (v) => v != null && /^09\d{9}$/.test(String(v));
 
-      // — Profile photo
-      if (!hasVal(updates.selfiePhotoUrl ?? reservation.selfiePhotoUrl))
-        missingRequired.push("profile photo");
-
-      // — Names
-      if (!hasVal(updates.firstName ?? reservation.firstName))
-        missingRequired.push("first name");
-      if (!hasVal(updates.lastName ?? reservation.lastName))
-        missingRequired.push("last name");
-
-      // — Mobile number (must be normalized to 09XXXXXXXXX)
-      const effectiveMobile = updates.mobileNumber ?? reservation.mobileNumber;
-      if (!isValidPHPhone(effectiveMobile))
-        missingRequired.push("mobile number (must be in 09XXXXXXXXX format)");
-
-      // — Birthday: required and applicant must be at least 18
-      const effectiveBirthday = updates.birthday ?? reservation.birthday;
-      if (!effectiveBirthday) {
-        missingRequired.push("birthday");
-      } else {
-        const ageYears = dayjs().diff(dayjs(effectiveBirthday), "year");
-        if (isNaN(ageYears) || ageYears < 18)
-          missingRequired.push("birthday (applicant must be at least 18 years old)");
-      }
-
-      // — Emergency contact (dot-notation keys from buildUserUpdatePayload)
-      const effectiveEmergencyName =
-        updates["emergencyContact.name"] ?? reservation.emergencyContact?.name;
-      const effectiveEmergencyPhone =
-        updates["emergencyContact.contactNumber"] ?? reservation.emergencyContact?.contactNumber;
-      if (!hasVal(effectiveEmergencyName))
-        missingRequired.push("emergency contact name");
-      if (!isValidPHPhone(effectiveEmergencyPhone))
-        missingRequired.push("emergency contact phone (must be in 09XXXXXXXXX format)");
-
-      // — Valid ID: both sides required
-      if (!hasVal(updates.validIDFrontUrl ?? reservation.validIDFrontUrl))
-        missingRequired.push("valid ID (front)");
-      if (!hasVal(updates.validIDBackUrl ?? reservation.validIDBackUrl))
-        missingRequired.push("valid ID (back)");
-
-      // — ID type
+      if (!hasVal(updates.selfiePhotoUrl || reservation.selfiePhotoUrl))          missingRequired.push("profile photo");
+      if (!hasVal(updates["emergencyContact.name"] || reservation.emergencyContact?.name))    missingRequired.push("emergency contact name");
+      if (!hasVal(updates["emergencyContact.contactNumber"] || reservation.emergencyContact?.contactNumber))  missingRequired.push("emergency contact phone");
+      if (!hasVal(updates.validIDFrontUrl || reservation.validIDFrontUrl))         missingRequired.push("valid ID (front)");
       const submittedIdType =
         updates.idType ||
         updates.validIDType ||
@@ -2586,6 +2548,7 @@ export const renewContract = async (req, res, next) => {
 export const moveOutReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
+    const { meterReading } = req.body || {};
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId)

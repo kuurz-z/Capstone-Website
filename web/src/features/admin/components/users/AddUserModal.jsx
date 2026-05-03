@@ -172,25 +172,42 @@ export default function AddUserModal({
  </div>
  </div>
 
- <div className="form-row">
- <div className="form-group">
- <label>Role</label>
- <select
- value={addForm.role}
- onChange={(e) => onFormChange("role", e.target.value)}
- required
- >
- <option value="applicant">Applicant</option>
- {isOwner && <option value="branch_admin">Branch Admin</option>}
- </select>
- </div>
- <div className="form-group">
- <label>Branch</label>
- <div className="form-hint-box">
- Auto-assigned when user becomes a tenant
- </div>
- </div>
- </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Role</label>
+              <select
+                value={addForm.role}
+                onChange={(e) => onFormChange("role", e.target.value)}
+                required
+              >
+                <option value="applicant">Applicant</option>
+                {isOwner && <option value="branch_admin">Branch Admin</option>}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Branch</label>
+              {addForm.role === "branch_admin" ? (
+                <>
+                  <select
+                    value={addForm.branch || ""}
+                    onChange={(e) => onFormChange("branch", e.target.value)}
+                    required
+                  >
+                    <option value="">Select branch</option>
+                    <option value="gil-puyat">Gil Puyat</option>
+                    <option value="guadalupe">Guadalupe</option>
+                  </select>
+                  {addFormErrors.branch && (
+                    <span className="field-error">{addFormErrors.branch}</span>
+                  )}
+                </>
+              ) : (
+                <div className="form-hint-box">
+                  Auto-assigned when user becomes a tenant
+                </div>
+              )}
+            </div>
+          </div>
 
  <div className="modal-footer">
  <button type="button" onClick={onClose} className="btn-cancel">

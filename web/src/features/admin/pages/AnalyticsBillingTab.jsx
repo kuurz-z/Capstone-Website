@@ -10,15 +10,18 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatDate, formatPeso } from "./reportCommon";
 import {
- AnalyticsInsightSection,
- buildInsightPdfSections,
- buildBranchControl,
- ExportButtons,
- handleCsvExport,
- handlePdfExport,
- MetricGrid,
- RANGE_OPTIONS_LONG,
- useReportInsights,
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
+  buildBranchControl,
+  buildServerTableParams,
+  ExportButtons,
+  getTablePagination,
+  getTableRows,
+  handleCsvExport,
+  handlePdfExport,
+  MetricGrid,
+  RANGE_OPTIONS_LONG,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const OVERDUE_COLUMNS = [
@@ -30,6 +33,7 @@ const OVERDUE_COLUMNS = [
  { key: "daysOverdue", label: "Days Overdue", sortable: true },
  { key: "balance", label: "Balance", render: (row) => formatPeso(row.balance), sortable: true },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsBillingTab({
  branch,
@@ -38,29 +42,32 @@ export default function AnalyticsBillingTab({
  onBranchChange,
  onRangeChange,
 }) {
- const [page, setPage] = useState(1);
- const params = useMemo(
- () => ({
- range,
- ...(isOwner ? { branch } : {}),
- }),
- [branch, isOwner, range],
- );
- const { data, isLoading, isError } = useBillingReport(params);
- const {
- data: insightData,
- isLoading: isInsightLoading,
- isError: isInsightError,
- } = useReportInsights({
- reportType: "billing",
- range,
- branch: isOwner ? branch : undefined,
- });
- const overdueAccounts = data?.tables?.overdueAccounts || [];
- const unpaidBalances = data?.tables?.unpaidBalances || [];
- const revenueByMonth = data?.series?.revenueByMonth || [];
- const statusDistribution = data?.series?.statusDistribution || [];
- const overdueAging = data?.series?.overdueAging || [];
+  const [page, setPage] = useState(1);
+  const params = useMemo(
+    () => ({
+      range,
+      ...(isOwner ? { branch } : {}),
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
+    }),
+    [branch, isOwner, page, range],
+  );
+  const { data, isLoading, isError } = useBillingReport(params);
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "billing",
+    range,
+    branch: isOwner ? branch : undefined,
+  });
+  const overdueAccountsTable = data?.tables?.overdueAccounts;
+  const overdueAccounts = getTableRows(overdueAccountsTable);
+  const overdueAccountsPagination = getTablePagination(overdueAccountsTable, overdueAccounts);
+  const unpaidBalances = data?.tables?.unpaidBalances || [];
+  const revenueByMonth = data?.series?.revenueByMonth || [];
+  const statusDistribution = data?.series?.statusDistribution || [];
+  const overdueAging = data?.series?.overdueAging || [];
 
  const metricCards = [
  { label: "Collected Revenue", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
@@ -199,25 +206,26 @@ export default function AnalyticsBillingTab({
  </ReportChartPanel>
  </div>
 
- <ReportChartPanel title="Overdue and unpaid tables" subtitle="Bills past due date and still carrying an outstanding balance">
- <DataTable
- columns={OVERDUE_COLUMNS}
- data={overdueAccounts}
- loading={isLoading}
- pagination={{
- page,
- pageSize: 10,
- total: overdueAccounts.length,
- onPageChange: setPage,
- }}
- emptyState={{
- title: isError ? "Billing report unavailable" : "No overdue accounts",
- description: isError
- ? "The billing report could not be loaded."
- : "No overdue balances were found for the selected scope.",
- }}
- />
- </ReportChartPanel>
- </AnalyticsTabLayout>
- );
+      <ReportChartPanel title="Overdue and unpaid tables" subtitle="Bills past due date and still carrying an outstanding balance">
+        <DataTable
+          columns={OVERDUE_COLUMNS}
+          data={overdueAccounts}
+          loading={isLoading}
+          pagination={{
+            page,
+            pageSize: TABLE_PAGE_SIZE,
+            total: overdueAccountsPagination.total,
+            onPageChange: setPage,
+          }}
+          serverPagination
+          emptyState={{
+            title: isError ? "Billing report unavailable" : "No overdue accounts",
+            description: isError
+              ? "The billing report could not be loaded."
+              : "No overdue balances were found for the selected scope.",
+          }}
+        />
+      </ReportChartPanel>
+    </AnalyticsTabLayout>
+  );
 }

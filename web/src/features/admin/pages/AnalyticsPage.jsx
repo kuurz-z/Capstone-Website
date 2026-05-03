@@ -1,18 +1,20 @@
 import React, { useEffect, useMemo } from "react";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, Download, ExternalLink } from "lucide-react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
- useBillingReport,
- useOccupancyReport,
- useOperationsReport,
+  useAnalyticsInsightsHub,
+  useBillingReport,
+  useOccupancyReport,
+  useOperationsReport,
 } from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
- AnalyticsBarChart,
- AnalyticsLineChart,
- AnalyticsTabLayout,
- AnalyticsToolbar,
- ReportChartPanel,
+  AnalyticsBarChart,
+  AnalyticsInsightsHub,
+  AnalyticsLineChart,
+  AnalyticsTabLayout,
+  AnalyticsToolbar,
+  ReportChartPanel,
 } from "../components/shared";
 import {
  ANALYTICS_DETAILS_PATH,
@@ -21,9 +23,10 @@ import {
  normalizeAnalyticsSummaryState,
 } from "./analyticsNavigation.mjs";
 import {
- buildBranchControl,
- MetricGrid,
- RANGE_OPTIONS_SHORT,
+  buildBranchControl,
+  handlePdfExport,
+  MetricGrid,
+  RANGE_OPTIONS_SHORT,
 } from "./analyticsTabShared";
 import {
  buildRangeLabel,
@@ -166,9 +169,14 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
  [branch, isOwner, range],
  );
 
- const occupancyQuery = useOccupancyReport(sharedDayParams);
- const billingQuery = useBillingReport(billingParams);
- const operationsQuery = useOperationsReport(sharedDayParams);
+  const occupancyQuery = useOccupancyReport(sharedDayParams);
+  const billingQuery = useBillingReport(billingParams);
+  const operationsQuery = useOperationsReport(sharedDayParams);
+  const hubQuery = useAnalyticsInsightsHub({
+    range,
+    billingRange: billingParams.range,
+    ...(isOwner ? { branch } : {}),
+  });
 
  const occupancyData = occupancyQuery.data;
  const billingData = billingQuery.data;
@@ -223,85 +231,129 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
  },
  ];
 
- const occupancyDetailHref = buildAnalyticsDetailsHref({
- tab: "occupancy",
- range,
- branch,
- isOwner,
- });
- const billingDetailHref = buildAnalyticsDetailsHref({
- tab: "billing",
- range,
- branch,
- isOwner,
- });
- const operationsDetailHref = buildAnalyticsDetailsHref({
- tab: "operations",
- range,
- branch,
- isOwner,
- });
+  const occupancyDetailHref = buildAnalyticsDetailsHref({
+    tab: "occupancy",
+    range,
+    branch,
+    isOwner,
+  });
+  const billingDetailHref = buildAnalyticsDetailsHref({
+    tab: "billing",
+    range,
+    branch,
+    isOwner,
+  });
+  const operationsDetailHref = buildAnalyticsDetailsHref({
+    tab: "operations",
+    range,
+    branch,
+    isOwner,
+  });
+  const exportHubPdf = () => {
+    const insight = hubQuery.data?.insight;
+    if (!insight) return;
 
- return (
- <AnalyticsTabLayout
- className="analytics-summary-layout"
- headerClassName="analytics-summary-layout__header"
- bodyClassName="analytics-summary-layout__body"
- mainClassName="analytics-summary-layout__main"
- header={
- <AnalyticsToolbar
- title="Analytics Summary"
- subtitle={`Summary view for ${branchLabel} (${buildRangeLabel(
- range,
- )})`}
- compact
- range={{
- value: range,
- onChange: (value) => {
- const nextParams = new URLSearchParams(searchParams);
- nextParams.set("range", value);
- setSearchParams(nextParams, { replace: true });
- },
- options: RANGE_OPTIONS_SHORT,
- }}
- branch={buildBranchControl({
- isOwner,
- branch,
- onChange: (value) => {
- const nextParams = new URLSearchParams(searchParams);
- nextParams.set("branch", value);
- setSearchParams(nextParams, { replace: true });
- },
- })}
- actions={
- <Link
- to={occupancyDetailHref}
- className="inline-flex items-center gap-2 rounded-xl bg-background px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-card"
- >
- View detailed analytics
- <ArrowRight size={16} />
- </Link>
- }
- />
- }
- >
- <div className="analytics-summary-focus flex flex-col gap-6">
- {hasPartialError ? (
- <div className="analytics-summary-focus__error rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
- Some summary sections could not be loaded. Available data is shown where possible.
- </div>
- ) : null}
+    handlePdfExport({
+      title: "AI Insights Hub",
+      subtitle: `${buildRangeLabel(range)} - ${branchLabel}`,
+      filename: `analytics-ai-insights-${range}.pdf`,
+      kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
+      sections: [
+        {
+          title: "AI Summary",
+          description: "Consolidated AI narrative from occupancy, billing, operations, and forecast data.",
+          rows: [
+            insight.headline ? `Headline: ${insight.headline}` : null,
+            insight.summary ? `Summary: ${insight.summary}` : null,
+            insight.confidence ? `Confidence: ${insight.confidence}` : null,
+            ...(insight.keyFindings || []).map((item) => `What stands out: ${item}`),
+            ...(insight.riskAlerts || []).map((item) => `Risk: ${item}`),
+            ...(insight.forecastHighlights || []).map((item) => `Forecast: ${item}`),
+            ...(insight.recommendedActions || []).map((item) => `Action: ${item}`),
+            insight.disclaimer ? `Disclaimer: ${insight.disclaimer}` : null,
+          ].filter(Boolean),
+        },
+      ],
+    });
+  };
 
- <section
- className="analytics-summary-overview"
- data-summary-overview="true"
- >
- <SummarySectionHeader
- className="analytics-summary-overview__header"
- eyebrow="Overview"
- title="Key metrics and trend summaries"
- subtitle="Review occupancy, billing, and operational performance for the selected scope."
- />
+  return (
+    <AnalyticsTabLayout
+      className="analytics-summary-layout"
+      headerClassName="analytics-summary-layout__header"
+      bodyClassName="analytics-summary-layout__body"
+      mainClassName="analytics-summary-layout__main"
+      header={
+        <AnalyticsToolbar
+          title="Analytics Summary"
+          subtitle={`Summary view for ${branchLabel} (${buildRangeLabel(
+            range,
+          )})`}
+          compact
+          range={{
+            value: range,
+            onChange: (value) => {
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.set("range", value);
+              setSearchParams(nextParams, { replace: true });
+            },
+            options: RANGE_OPTIONS_SHORT,
+          }}
+          branch={buildBranchControl({
+            isOwner,
+            branch,
+            onChange: (value) => {
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.set("branch", value);
+              setSearchParams(nextParams, { replace: true });
+            },
+          })}
+          actions={
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={exportHubPdf}
+                disabled={!hubQuery.data?.insight}
+              >
+                <Download size={16} />
+                Export AI PDF
+              </button>
+              <Link
+                to={occupancyDetailHref}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+              >
+                View detailed analytics
+                <ArrowRight size={16} />
+              </Link>
+            </div>
+          }
+        />
+      }
+    >
+      <div className="analytics-summary-focus flex flex-col gap-6">
+        {hasPartialError ? (
+          <div className="analytics-summary-focus__error rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            Some summary sections could not be loaded. Available data is shown where possible.
+          </div>
+        ) : null}
+
+        <AnalyticsInsightsHub
+          data={hubQuery.data}
+          isLoading={hubQuery.isLoading}
+          isError={hubQuery.isError}
+        />
+
+        <section
+          className="analytics-summary-overview"
+          data-summary-overview="true"
+        >
+          <SummarySectionHeader
+            className="analytics-summary-overview__header"
+            eyebrow="Overview"
+            title="Key metrics and trend summaries"
+            subtitle="Review occupancy, billing, and operational performance for the selected scope."
+          />
 
  <div className="analytics-summary-focus__metrics">
  <MetricGrid items={metricCards} />

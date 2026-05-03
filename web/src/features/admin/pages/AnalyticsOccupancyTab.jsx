@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
-import { useOccupancyForecast, useOccupancyReport } from "../../../shared/hooks/queries/useAnalyticsReports";
+import {
+  useOccupancyForecast,
+  useOccupancyReport,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
  AnalyticsDonutChart,
  AnalyticsLineChart,
@@ -10,15 +13,18 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch } from "./reportCommon";
 import {
- AnalyticsInsightSection,
- buildInsightPdfSections,
- buildBranchControl,
- ExportButtons,
- handleCsvExport,
- handlePdfExport,
- MetricGrid,
- RANGE_OPTIONS_SHORT,
- useReportInsights,
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
+  buildBranchControl,
+  buildServerTableParams,
+  ExportButtons,
+  getTablePagination,
+  getTableRows,
+  handleCsvExport,
+  handlePdfExport,
+  MetricGrid,
+  RANGE_OPTIONS_SHORT,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const INVENTORY_COLUMNS = [
@@ -31,37 +37,7 @@ const INVENTORY_COLUMNS = [
  { key: "unavailableBeds", label: "Unavailable", sortable: true },
  { key: "occupancyRate", label: "Rate", render: (row) => `${row.occupancyRate}%` },
 ];
-
-function ForecastCards({ forecast }) {
- const projectedMonths = forecast?.projected || [];
- const recommendations = forecast?.insights?.recommendations || [];
-
- if (!forecast?.sufficientHistory) {
- return (
- <p className="admin-reports__hint">
- {forecast?.insights?.headline || "Insufficient history to forecast occupancy."}
- </p>
- );
- }
-
- return (
- <div className="admin-reports__panel-stack">
- <p className="admin-reports__hint">{forecast.insights?.headline}</p>
- {projectedMonths.map((item) => (
- <div key={item.month} className="admin-reports__meta-card">
- <span className="admin-reports__meta-label">{item.label}</span>
- <div className="admin-reports__meta-value">{item.projectedOccupancyRate}%</div>
- <p className="admin-reports__hint">
- Baseline {item.baselineRate}% • Seasonal {item.seasonalMultiplier}x
- </p>
- </div>
- ))}
- {recommendations.slice(0, 2).map((item) => (
- <p key={item} className="admin-reports__hint">{item}</p>
- ))}
- </div>
- );
-}
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsOccupancyTab({
  branch,
@@ -70,14 +46,15 @@ export default function AnalyticsOccupancyTab({
  onBranchChange,
  onRangeChange,
 }) {
- const [page, setPage] = useState(1);
- const params = useMemo(
- () => ({
- range,
- ...(isOwner ? { branch } : {}),
- }),
- [branch, isOwner, range],
- );
+  const [page, setPage] = useState(1);
+  const params = useMemo(
+    () => ({
+      range,
+      ...(isOwner ? { branch } : {}),
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
+    }),
+    [branch, isOwner, page, range],
+  );
 
  const { data, isLoading, isError } = useOccupancyReport(params);
  const { data: forecastData } = useOccupancyForecast({
@@ -94,15 +71,17 @@ export default function AnalyticsOccupancyTab({
  branch: isOwner ? branch : undefined,
  });
 
- const inventory = data?.tables?.inventory || [];
- const roomTypes = data?.tables?.roomTypes || [];
- const trend = data?.series?.occupancyTrend || [];
- const forecast = forecastData?.forecast || {};
- const forecastSeries = (forecast.projected || []).map((item) => ({
- label: item.label,
- projected: item.projectedOccupancyRate,
- baseline: item.baselineRate,
- }));
+  const inventoryTable = data?.tables?.inventory;
+  const inventory = getTableRows(inventoryTable);
+  const inventoryPagination = getTablePagination(inventoryTable, inventory);
+  const roomTypes = data?.tables?.roomTypes || [];
+  const trend = data?.series?.occupancyTrend || [];
+  const forecast = forecastData?.forecast || {};
+  const forecastSeries = (forecast.projected || []).map((item) => ({
+    label: item.label,
+    projected: item.projectedOccupancyRate,
+    baseline: item.baselineRate,
+  }));
 
  const metricCards = [
  { label: "Occupancy Rate", value: data?.kpis?.occupancyRateLabel || "0%", tone: "blue" },
@@ -128,50 +107,57 @@ export default function AnalyticsOccupancyTab({
  );
  };
 
- const exportPdf = () => {
- handlePdfExport({
- title: "Occupancy Report",
- subtitle: `${buildRangeLabel(range)} • ${formatBranch(data?.scope?.branch || branch)}`,
- filename: `occupancy-report-${range}.pdf`,
- kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
- sections: [
- ...buildInsightPdfSections(insightData, "AI Occupancy Summary"),
- {
- title: "Room Type Summary",
- rows: roomTypes.map(
- (item) => `${item.roomTypeLabel}: ${item.occupiedBeds}/${item.capacity} occupied (${item.occupancyRate}%)`,
- ),
- },
- {
- title: "Inventory Snapshot",
- rows: inventory.slice(0, 12).map(
- (item) => `${item.roomNumber} • ${item.roomTypeLabel} • ${item.occupiedBeds}/${item.capacity} occupied`,
- ),
- },
- ],
- });
- };
+  const exportPdf = () => {
+    handlePdfExport({
+      title: "Occupancy Report",
+      subtitle: `${buildRangeLabel(range)} - ${formatBranch(data?.scope?.branch || branch)}`,
+      filename: `occupancy-report-${range}.pdf`,
+      kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
+      sections: [
+        ...buildInsightPdfSections(insightData, "AI Occupancy Summary"),
+        {
+          title: "Room Type Summary",
+          rows: roomTypes.map(
+            (item) => `${item.roomTypeLabel}: ${item.occupiedBeds}/${item.capacity} occupied (${item.occupancyRate}%)`,
+          ),
+        },
+        {
+          title: "Inventory Snapshot",
+          rows: inventory.slice(0, 12).map(
+            (item) => `${item.roomNumber} - ${item.roomTypeLabel} - ${item.occupiedBeds}/${item.capacity} occupied`,
+          ),
+        },
+      ],
+    });
+  };
 
- return (
- <AnalyticsTabLayout
- header={
- <AnalyticsToolbar
- title="Occupancy Analytics"
- subtitle={`Scope: ${formatBranch(data?.scope?.branch || branch)} • ${buildRangeLabel(range)}`}
- range={{ value: range, onChange: (value) => { setPage(1); onRangeChange(value); }, options: RANGE_OPTIONS_SHORT }}
- branch={buildBranchControl({
- isOwner,
- branch,
- onChange: (value) => {
- setPage(1);
- onBranchChange(value);
- },
- })}
- actions={<ExportButtons onCsv={exportCsv} onPdf={exportPdf} />}
- />
- }
- >
- <MetricGrid items={metricCards} />
+  return (
+    <AnalyticsTabLayout
+      header={
+        <AnalyticsToolbar
+          title="Occupancy Analytics"
+          subtitle={`Scope: ${formatBranch(data?.scope?.branch || branch)} - ${buildRangeLabel(range)}`}
+          range={{
+            value: range,
+            onChange: (value) => {
+              setPage(1);
+              onRangeChange(value);
+            },
+            options: RANGE_OPTIONS_SHORT,
+          }}
+          branch={buildBranchControl({
+            isOwner,
+            branch,
+            onChange: (value) => {
+              setPage(1);
+              onBranchChange(value);
+            },
+          })}
+          actions={<ExportButtons onCsv={exportCsv} onPdf={exportPdf} />}
+        />
+      }
+    >
+      <MetricGrid items={metricCards} />
 
  <AnalyticsInsightSection
  reportLabel="occupancy"
@@ -205,44 +191,39 @@ export default function AnalyticsOccupancyTab({
  </ReportChartPanel>
  </div>
 
- <div className="admin-reports__grid">
- <ReportChartPanel title="Forecast panel" subtitle="Projected occupancy compared with recent baseline">
- <AnalyticsLineChart
- data={forecastSeries}
- lines={[
- { key: "projected", label: "Projected occupancy" },
- { key: "baseline", label: "Baseline rate", color: "#0f766e" },
- ]}
- valueFormatter={(value) => `${value}%`}
- emptyTitle="Forecast unavailable"
- emptyDescription="More occupancy history is needed before a forecast can be shown."
- />
- </ReportChartPanel>
+      <ReportChartPanel title="Forecast panel" subtitle="Projected occupancy compared with recent baseline">
+        <AnalyticsLineChart
+          data={forecastSeries}
+          lines={[
+            { key: "projected", label: "Projected occupancy" },
+            { key: "baseline", label: "Baseline rate", color: "#0f766e" },
+          ]}
+          valueFormatter={(value) => `${value}%`}
+          emptyTitle="Forecast unavailable"
+          emptyDescription="More occupancy history is needed before a forecast can be shown."
+        />
+      </ReportChartPanel>
 
- <ReportChartPanel title="Forecast insights" subtitle="Deterministic 3-month occupancy projection">
- <ForecastCards forecast={forecast} />
- </ReportChartPanel>
- </div>
-
- <ReportChartPanel title="Inventory table" subtitle="Current room capacity, occupancy, and unavailable inventory">
- <DataTable
- columns={INVENTORY_COLUMNS}
- data={inventory}
- loading={isLoading}
- pagination={{
- page,
- pageSize: 10,
- total: inventory.length,
- onPageChange: setPage,
- }}
- emptyState={{
- title: isError ? "Occupancy report unavailable" : "No occupancy rows",
- description: isError
- ? "The occupancy report could not be loaded."
- : "No room inventory matched this branch scope yet.",
- }}
- />
- </ReportChartPanel>
- </AnalyticsTabLayout>
- );
+      <ReportChartPanel title="Inventory table" subtitle="Current room capacity, occupancy, and unavailable inventory">
+        <DataTable
+          columns={INVENTORY_COLUMNS}
+          data={inventory}
+          loading={isLoading}
+          pagination={{
+            page,
+            pageSize: TABLE_PAGE_SIZE,
+            total: inventoryPagination.total,
+            onPageChange: setPage,
+          }}
+          serverPagination
+          emptyState={{
+            title: isError ? "Occupancy report unavailable" : "No occupancy rows",
+            description: isError
+              ? "The occupancy report could not be loaded."
+              : "No room inventory matched this branch scope yet.",
+          }}
+        />
+      </ReportChartPanel>
+    </AnalyticsTabLayout>
+  );
 }

@@ -733,180 +733,62 @@ function ReservationsPage() {
                   Export CSV
                 </button>
               </div>
-            </div>
-
-            <div className="overflow-x-auto" style={{ backgroundColor: "var(--bg-card)" }}>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b" style={{ borderColor: "var(--border-light)", backgroundColor: "color-mix(in srgb, var(--bg-inset) 30%, transparent)" }}>
-                    {columns.slice(0, 5).map((col) => (
-                      <th
-                        key={col.key}
-                        className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground"
-                        onClick={() => {
-                          if (col.sortable) {
-                            setSortState((prev) => ({
-                              key: col.sortKey || col.key,
-                              dir:
-                                prev.key === (col.sortKey || col.key) &&
-                                prev.dir === "asc"
-                                  ? "desc"
-                                  : "asc",
-                            }));
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-1">
-                          {col.label}
-                          {col.sortable &&
-                            sortState.key === (col.sortKey || col.key) &&
-                            (sortState.dir === "asc" ? "↑" : "↓")}
-                        </div>
-                      </th>
-                    ))}
-                    <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedReservations
-                    .slice(
-                      (currentPage - 1) * itemsPerPage,
-                      currentPage * itemsPerPage,
-                    )
-                    .map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-[var(--border-light)] hover:bg-muted/30 transition-colors cursor-pointer"
-                        onMouseEnter={() =>
-                          prefetchReservationDetail(row.id).catch(() => {})
-                        }
-                      >
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm ${getAvatarColor(initials(row.customer))}`}
-                            >
-                              {initials(row.customer)}
-                            </div>
-                            <div>
-                              <div className="font-medium text-foreground">
-                                {row.customer}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {row.email}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {row.phone}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="font-medium text-foreground">
-                            {row.room}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {row.roomType || "Room"}, {row.branch}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <StatusBadge
-                            status={
-                              checkOverdueReservation(row)
-                                ? "overdue"
-                                : row.status
-                            }
-                          />
-                        </td>
-                        <td className="py-4 px-4 text-sm text-foreground">
-                          {formatShortDate(row.moveInDate)}
-                        </td>
-                        <td className="py-4 px-4 text-sm text-foreground">
-                          {formatShortDate(row.createdAt)}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleView(row.id);
-                              }}
-                              className="p-1.5 hover:bg-muted rounded-md transition-colors"
-                              title="View details"
-                            >
-                              <Eye className="w-4 h-4 text-muted-foreground" />
-                            </button>
-                            {can("manageReservations") && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(row.id);
-                                }}
-                                className="p-1.5 hover:bg-[color:var(--danger)]/10 text-[color:var(--danger)] rounded-md transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  {sortedReservations.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="py-8 text-center text-muted-foreground"
-                      >
-                        No reservations found. Try adjusting your filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {totalFiltered > itemsPerPage && (
-                <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-[var(--border-light)]">
-                  <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 text-sm border border-[var(--border-light)]
- rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <span className="px-3 py-1 text-sm text-muted-foreground">
-                    Page {currentPage} of{" "}
-                    {Math.ceil(totalFiltered / itemsPerPage)}
-                  </span>
-                  <button
-                    disabled={
-                      currentPage === Math.ceil(totalFiltered / itemsPerPage)
-                    }
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 text-sm border border-[var(--border-light)]
- rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {activeTab === "visits" && (
-        <div className="mt-2">
-          <VisitSchedulesTab />
-        </div>
-      )}
-      {activeTab === "inquiries" && (
-        <div className="mt-2">
-          <InquiriesPage isEmbedded />
-        </div>
-      )}
+              <div className="reservations-workspace__table">
+                <DataTable
+                  columns={columns}
+                  data={sortedReservations}
+                  loading={loading}
+                  exportable={true}
+                  exportFilename="Reservations"
+                  exportTitle="Reservations Export"
+                  disableRowInteraction
+                  sorting="external"
+                  sortKey={sortState.key}
+                  sortDir={sortState.dir}
+                  onSortChange={(key, dir) => setSortState({ key, dir })}
+                  onRowHover={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  onRowFocus={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  pagination={{
+                    page: currentPage,
+                    pageSize: itemsPerPage,
+                    total: totalFiltered,
+                    onPageChange: setCurrentPage,
+                  }}
+                  emptyState={{
+                    icon: CalendarCheck,
+                    title: "No reservations found",
+                    description: "Try adjusting your filters.",
+                  }}
+                />
+              </div>
+            </section>
+          )}
+          {activeTab === "visits" && (
+            <section
+              id="page-shell-panel-visits"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-visits"
+            >
+              <VisitSchedulesTab />
+            </section>
+          )}
+          {activeTab === "inquiries" && (
+            <section
+              id="page-shell-panel-inquiries"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-inquiries"
+            >
+              <InquiriesPage isEmbedded />
+            </section>
+          )}
+        </PageShell.Content>
+      </PageShell>
 
       {selectedReservation && (
         <ReservationDetailsModal

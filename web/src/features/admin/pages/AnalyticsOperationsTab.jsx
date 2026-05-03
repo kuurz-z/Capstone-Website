@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
-import { useOperationsReport } from "../../../shared/hooks/queries/useAnalyticsReports";
+import {
+  useOperationsReport,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
  AnalyticsBarChart,
  AnalyticsDonutChart,
@@ -12,15 +14,18 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatDate, formatDateTime } from "./reportCommon";
 import {
- AnalyticsInsightSection,
- buildInsightPdfSections,
- buildBranchControl,
- ExportButtons,
- handleCsvExport,
- handlePdfExport,
- MetricGrid,
- RANGE_OPTIONS_SHORT,
- useReportInsights,
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
+  buildBranchControl,
+  buildServerTableParams,
+  ExportButtons,
+  getTablePagination,
+  getTableRows,
+  handleCsvExport,
+  handlePdfExport,
+  MetricGrid,
+  RANGE_OPTIONS_SHORT,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const MAINTENANCE_COLUMNS = [
@@ -37,6 +42,7 @@ const MAINTENANCE_COLUMNS = [
  },
  { key: "slaState", label: "SLA", sortable: true },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsOperationsTab({
  branch,
@@ -45,30 +51,33 @@ export default function AnalyticsOperationsTab({
  onBranchChange,
  onRangeChange,
 }) {
- const [page, setPage] = useState(1);
- const params = useMemo(
- () => ({
- range,
- ...(isOwner ? { branch } : {}),
- }),
- [branch, isOwner, range],
- );
- const { data, isLoading, isError } = useOperationsReport(params);
- const {
- data: insightData,
- isLoading: isInsightLoading,
- isError: isInsightError,
- } = useReportInsights({
- reportType: "operations",
- range,
- branch: isOwner ? branch : undefined,
- });
- const maintenanceIssues = data?.tables?.maintenanceIssues || [];
- const reservations = data?.tables?.reservations || [];
- const inquiryWindows = data?.tables?.peakInquiryWindows || [];
- const reservationsByPeriod = data?.series?.reservationsByPeriod || [];
- const maintenanceByType = data?.series?.maintenanceByType || [];
- const maintenanceResolution = data?.series?.maintenanceResolution || [];
+  const [page, setPage] = useState(1);
+  const params = useMemo(
+    () => ({
+      range,
+      ...(isOwner ? { branch } : {}),
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
+    }),
+    [branch, isOwner, page, range],
+  );
+  const { data, isLoading, isError } = useOperationsReport(params);
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "operations",
+    range,
+    branch: isOwner ? branch : undefined,
+  });
+  const maintenanceIssuesTable = data?.tables?.maintenanceIssues;
+  const maintenanceIssues = getTableRows(maintenanceIssuesTable);
+  const maintenanceIssuesPagination = getTablePagination(maintenanceIssuesTable, maintenanceIssues);
+  const reservations = data?.tables?.reservations || [];
+  const inquiryWindows = data?.tables?.peakInquiryWindows || [];
+  const reservationsByPeriod = data?.series?.reservationsByPeriod || [];
+  const maintenanceByType = data?.series?.maintenanceByType || [];
+  const maintenanceResolution = data?.series?.maintenanceResolution || [];
 
  const metricCards = [
  { label: "Reservations", value: data?.kpis?.reservations || 0, tone: "blue" },
@@ -187,25 +196,26 @@ export default function AnalyticsOperationsTab({
  </ReportChartPanel>
  </div>
 
- <ReportChartPanel title="Maintenance and reservation tables" subtitle="Most recent branch-scoped maintenance tickets">
- <DataTable
- columns={MAINTENANCE_COLUMNS}
- data={maintenanceIssues}
- loading={isLoading}
- pagination={{
- page,
- pageSize: 10,
- total: maintenanceIssues.length,
- onPageChange: setPage,
- }}
- emptyState={{
- title: isError ? "Operations report unavailable" : "No maintenance issues",
- description: isError
- ? "The operations report could not be loaded."
- : "No maintenance issues were found for the selected scope.",
- }}
- />
- </ReportChartPanel>
+      <ReportChartPanel title="Maintenance and reservation tables" subtitle="Most recent branch-scoped maintenance tickets">
+        <DataTable
+          columns={MAINTENANCE_COLUMNS}
+          data={maintenanceIssues}
+          loading={isLoading}
+          pagination={{
+            page,
+            pageSize: TABLE_PAGE_SIZE,
+            total: maintenanceIssuesPagination.total,
+            onPageChange: setPage,
+          }}
+          serverPagination
+          emptyState={{
+            title: isError ? "Operations report unavailable" : "No maintenance issues",
+            description: isError
+              ? "The operations report could not be loaded."
+              : "No maintenance issues were found for the selected scope.",
+          }}
+        />
+      </ReportChartPanel>
 
  <ReportChartPanel
  title="Recent reservations"

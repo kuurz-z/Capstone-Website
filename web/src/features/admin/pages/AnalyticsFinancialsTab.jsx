@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { useFinancialsAnalytics } from "../../../shared/hooks/queries/useAnalyticsReports";
+import {
+  useFinancialsAnalytics,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
  AnalyticsBarChart,
  AnalyticsComparisonChart,
@@ -10,11 +12,17 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatPeso } from "./reportCommon";
 import {
- ExportButtons,
- handleCsvExport,
- handlePdfExport,
- MetricGrid,
- RANGE_OPTIONS_LONG,
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
+  ExportButtons,
+  buildServerTableParams,
+  getTablePagination,
+  getTableRows,
+  handleCsvExport,
+  handlePdfExport,
+  MetricGrid,
+  RANGE_OPTIONS_LONG,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const OVERDUE_ROOM_COLUMNS = [
@@ -29,16 +37,34 @@ const OVERDUE_ROOM_COLUMNS = [
  sortable: true,
  },
 ];
+const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, onRangeChange }) {
- const [page, setPage] = useState(1);
- const params = useMemo(() => ({ branch, range }), [branch, range]);
- const { data, isLoading, isError } = useFinancialsAnalytics(params);
- const branchComparison = data?.series?.branchComparison || [];
- const revenueByMonth = data?.series?.revenueByMonth || [];
- const overdueAging = data?.series?.overdueAging || [];
- const overdueRooms = data?.tables?.overdueRooms || [];
- const pagedRooms = overdueRooms.slice((page - 1) * 10, page * 10);
+  const [page, setPage] = useState(1);
+  const params = useMemo(
+    () => ({
+      branch,
+      range,
+      ...buildServerTableParams(page, TABLE_PAGE_SIZE),
+    }),
+    [branch, page, range],
+  );
+  const { data, isLoading, isError } = useFinancialsAnalytics(params);
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "financials",
+    range,
+    branch,
+  });
+  const branchComparison = data?.series?.branchComparison || [];
+  const revenueByMonth = data?.series?.revenueByMonth || [];
+  const overdueAging = data?.series?.overdueAging || [];
+  const overdueRoomsTable = data?.tables?.overdueRooms;
+  const overdueRooms = getTableRows(overdueRoomsTable);
+  const overdueRoomsPagination = getTablePagination(overdueRoomsTable, overdueRooms);
 
  const metricCards = [
  { label: "Collected Revenue", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
@@ -61,29 +87,30 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  );
  };
 
- const exportPdf = () => {
- handlePdfExport({
- title: "Financial Overview",
- subtitle: `${buildRangeLabel(range)} • ${formatBranch(data?.scope?.branch || branch)}`,
- filename: `financial-overview-${range}.pdf`,
- kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
- sections: [
- {
- title: "Branch Comparison",
- rows: branchComparison.map(
- (item) =>
- `${item.label}: collected ${formatPeso(item.collectedRevenue)}, overdue ${formatPeso(item.overdueAmount)}, collection rate ${item.collectionRate}%`,
- ),
- },
- {
- title: "Top Overdue Rooms",
- rows: overdueRooms.slice(0, 12).map(
- (item) => `${item.roomName} • ${formatBranch(item.branch)} • ${formatPeso(item.outstandingBalance)}`,
- ),
- },
- ],
- });
- };
+  const exportPdf = () => {
+    handlePdfExport({
+      title: "Financial Overview",
+      subtitle: `${buildRangeLabel(range)} • ${formatBranch(data?.scope?.branch || branch)}`,
+      filename: `financial-overview-${range}.pdf`,
+      kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
+      sections: [
+        ...buildInsightPdfSections(insightData, "AI Financial Summary"),
+        {
+          title: "Branch Comparison",
+          rows: branchComparison.map(
+            (item) =>
+              `${item.label}: collected ${formatPeso(item.collectedRevenue)}, overdue ${formatPeso(item.overdueAmount)}, collection rate ${item.collectionRate}%`,
+          ),
+        },
+        {
+          title: "Top Overdue Rooms",
+          rows: overdueRooms.slice(0, 12).map(
+            (item) => `${item.roomName} • ${formatBranch(item.branch)} • ${formatPeso(item.outstandingBalance)}`,
+          ),
+        },
+      ],
+    });
+  };
 
  return (
  <AnalyticsTabLayout
@@ -110,23 +137,31 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  >
  <MetricGrid items={metricCards} />
 
- <div className="admin-reports__grid">
- <ReportChartPanel title="Branch comparison" subtitle="Collections, overdue exposure, and collection rate by branch">
- <AnalyticsComparisonChart
- data={branchComparison.map((item) => ({
- label: item.label,
- collected: item.collectedRevenue,
- overdue: item.overdueAmount,
- }))}
- bars={[
- { key: "collected", label: "Collected", color: "#2563eb" },
- { key: "overdue", label: "Overdue", color: "#dc2626" },
- ]}
- valueFormatter={(value) => formatPeso(value)}
- emptyTitle="No branch comparison data"
- emptyDescription="Branch financial comparison will appear once billing records are available."
- />
- </ReportChartPanel>
+      <AnalyticsInsightSection
+        reportLabel="financial"
+        summaryTitle="Financial Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
+
+      <div className="admin-reports__grid">
+        <ReportChartPanel title="Branch comparison" subtitle="Collections, overdue exposure, and collection rate by branch">
+          <AnalyticsComparisonChart
+            data={branchComparison.map((item) => ({
+              label: item.label,
+              collected: item.collectedRevenue,
+              overdue: item.overdueAmount,
+            }))}
+            bars={[
+              { key: "collected", label: "Collected", color: "#2563eb" },
+              { key: "overdue", label: "Overdue", color: "#dc2626" },
+            ]}
+            valueFormatter={(value) => formatPeso(value)}
+            emptyTitle="No branch comparison data"
+            emptyDescription="Branch financial comparison will appear once billing records are available."
+          />
+        </ReportChartPanel>
 
  <ReportChartPanel title="Overdue aging" subtitle="Outstanding balances bucketed by days overdue">
  <AnalyticsBarChart
@@ -174,25 +209,26 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  </ReportChartPanel>
  </div>
 
- <ReportChartPanel title="Overdue exposure tables" subtitle="Rooms carrying the highest unpaid balance">
- <DataTable
- columns={OVERDUE_ROOM_COLUMNS}
- data={pagedRooms}
- loading={isLoading}
- pagination={{
- page,
- pageSize: 10,
- total: overdueRooms.length,
- onPageChange: setPage,
- }}
- emptyState={{
- title: isError ? "Financial overview unavailable" : "No overdue rooms",
- description: isError
- ? "The financial overview could not be loaded."
- : "No overdue room exposure was found for the selected scope.",
- }}
- />
- </ReportChartPanel>
- </AnalyticsTabLayout>
- );
+      <ReportChartPanel title="Overdue exposure tables" subtitle="Rooms carrying the highest unpaid balance">
+        <DataTable
+          columns={OVERDUE_ROOM_COLUMNS}
+          data={overdueRooms}
+          loading={isLoading}
+          pagination={{
+            page,
+            pageSize: TABLE_PAGE_SIZE,
+            total: overdueRoomsPagination.total,
+            onPageChange: setPage,
+          }}
+          serverPagination
+          emptyState={{
+            title: isError ? "Financial overview unavailable" : "No overdue rooms",
+            description: isError
+              ? "The financial overview could not be loaded."
+              : "No overdue room exposure was found for the selected scope.",
+          }}
+        />
+      </ReportChartPanel>
+    </AnalyticsTabLayout>
+  );
 }

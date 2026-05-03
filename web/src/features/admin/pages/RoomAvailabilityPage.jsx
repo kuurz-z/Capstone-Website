@@ -5,6 +5,7 @@ import {
   Clock3,
   FileDown,
   LayoutGrid,
+  ListOrdered,
   Settings,
   Plus,
   Bed,
@@ -28,7 +29,7 @@ import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { roomApi } from "../../../shared/api/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { showNotification } from "../../../shared/utils/notification";
-import { exportToCSV } from "../../../shared/utils/exportUtils";
+import { exportToCSV, exportToPDF } from "../../../shared/utils/exportUtils";
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import {
   normalizeBranchFilterValue,
@@ -160,6 +161,7 @@ function RoomAvailabilityPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
   const [deletingRoom, setDeletingRoom] = useState(null);
+  const [showSoonestList, setShowSoonestList] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ROOMS_PER_PAGE = 10;
 
@@ -264,17 +266,23 @@ function RoomAvailabilityPage() {
     forecastStatusFilter,
   ]);
 
-  const featuredForecast =
-    filteredForecast
-      .filter((item) => item.nextExpectedVacancy)
-      .sort(
-        (a, b) =>
-          new Date(a.nextExpectedVacancy) - new Date(b.nextExpectedVacancy),
-      )[0] || null;
-  const forecastPageCount = Math.max(
-    1,
-    Math.ceil(filteredForecast.length / ROOMS_PER_PAGE),
+  const featuredForecast = filteredForecast
+    .filter((item) => item.nextExpectedVacancy)
+    .sort((a, b) => new Date(a.nextExpectedVacancy) - new Date(b.nextExpectedVacancy))[0] || null;
+  const soonestVacancyList = useMemo(
+    () =>
+      filteredForecast
+        .filter((item) => item.nextExpectedVacancy)
+        .map((item) => ({
+          ...item,
+          soonestBed: getSoonestVacancy(item),
+          daysUntil: getDaysUntilVacancy(item.nextExpectedVacancy),
+        }))
+        .sort((a, b) => new Date(a.nextExpectedVacancy) - new Date(b.nextExpectedVacancy))
+        .slice(0, 8),
+    [filteredForecast],
   );
+  const forecastPageCount = Math.max(1, Math.ceil(filteredForecast.length / ROOMS_PER_PAGE));
   const paginatedForecast = useMemo(() => {
     const start = (currentPage - 1) * ROOMS_PER_PAGE;
     return filteredForecast.slice(start, start + ROOMS_PER_PAGE);
@@ -292,6 +300,10 @@ function RoomAvailabilityPage() {
     forecastStatusFilter,
     activeTab,
   ]);
+
+  useEffect(() => {
+    setShowSoonestList(false);
+  }, [searchTerm, branchFilter, roomTypeFilter, forecastStatusFilter]);
 
   useEffect(() => {
     if (TAB_KEYS.has(requestedTab)) return;
@@ -337,19 +349,29 @@ function RoomAvailabilityPage() {
       (r) => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity,
     ).length;
     const available = rooms.filter((r) => r.currentOccupancy === 0).length;
-    const maintenance = rooms.filter((r) => {
-      const mBeds = (r.beds || []).filter(
-        (b) => b.status === "maintenance",
-      ).length;
-      return mBeds > 0 && mBeds === r.capacity && r.capacity > 0;
-    }).length;
+    const configuredBeds = rooms.reduce((sum, room) => {
+      if (Array.isArray(room.beds) && room.beds.length > 0) return sum + room.beds.length;
+      return sum + (room.capacity || 0);
+    }, 0);
+    const maintenanceBeds = rooms.reduce((sum, room) => {
+      const beds = Array.isArray(room.beds) ? room.beds : [];
+      return sum + beds.filter((bed) => bed.status === "maintenance").length;
+    }, 0);
+    const lockedBeds = rooms.reduce((sum, room) => {
+      const beds = Array.isArray(room.beds) ? room.beds : [];
+      return sum + beds.filter((bed) => bed.status === "locked").length;
+    }, 0);
+    const floors = new Set(rooms.map((room) => room.floor).filter((floor) => floor != null)).size;
 
     return {
       total,
       full,
       partial,
       available,
-      maintenance,
+      configuredBeds,
+      maintenanceBeds,
+      lockedBeds,
+      floors,
       rate: capacity > 0 ? ((occupied / capacity) * 100).toFixed(1) : "0.0",
     };
   }, [rooms]);
@@ -362,6 +384,10 @@ function RoomAvailabilityPage() {
       const soonest = getSoonestVacancy(item);
       return soonest?.daysRemaining > 0 && soonest.daysRemaining <= 30;
     }).length;
+    const thisWeek = withDate.filter((item) => {
+      const soonest = getSoonestVacancy(item);
+      return soonest?.daysRemaining > 0 && soonest.daysRemaining <= 7;
+    }).length;
     const overdue = withDate.filter((item) => {
       const soonest = getSoonestVacancy(item);
       return soonest?.isOverdue;
@@ -370,6 +396,7 @@ function RoomAvailabilityPage() {
     return {
       total: filteredForecast.length,
       withDate: withDate.length,
+      thisWeek,
       expiringSoon,
       overdue,
     };
@@ -486,49 +513,91 @@ function RoomAvailabilityPage() {
     setSearchParams(next);
   };
 
-  const handleExportRooms = () => {
-    exportToCSV(
-      filteredRooms.map((room) => ({
-        roomName: room.name,
-        roomNumber: room.roomNumber,
-        branch: formatBranch(room.branch),
-        type: formatRoomType(room.type),
-        floor: room.floor,
-        capacity: room.capacity,
-        currentOccupancy: room.currentOccupancy || 0,
-        status: `${room.currentOccupancy || 0}/${room.capacity || 0}`,
-      })),
-      [
-        { key: "roomName", label: "Room Name" },
-        { key: "roomNumber", label: "Room Number" },
-        { key: "branch", label: "Branch" },
-        { key: "type", label: "Type" },
-        { key: "floor", label: "Floor" },
-        { key: "capacity", label: "Capacity" },
-        { key: "currentOccupancy", label: "Occupied" },
-        { key: "status", label: "Occupancy" },
-      ],
-      "room-inventory",
-    );
+  const roomExportColumns = [
+    { key: "roomName", label: "Room Name" },
+    { key: "roomNumber", label: "Room Number" },
+    { key: "branch", label: "Branch" },
+    { key: "type", label: "Type" },
+    { key: "floor", label: "Floor" },
+    { key: "capacity", label: "Capacity" },
+    { key: "currentOccupancy", label: "Occupied" },
+    { key: "status", label: "Occupancy" },
+  ];
+
+  const roomExportRows = filteredRooms.map((room) => ({
+    roomName: room.name,
+    roomNumber: room.roomNumber,
+    branch: formatBranch(room.branch),
+    type: formatRoomType(room.type),
+    floor: room.floor,
+    capacity: room.capacity,
+    currentOccupancy: room.currentOccupancy || 0,
+    status: `${room.currentOccupancy || 0}/${room.capacity || 0}`,
+  }));
+
+  const handleExportRoomsCSV = () => {
+    exportToCSV(roomExportRows, roomExportColumns, "room-inventory");
+  };
+
+  const handleExportRoomsPDF = () => {
+    exportToPDF(roomExportRows, roomExportColumns, "room-inventory", "Room Inventory");
   };
 
   // Config — 2 tabs: Rooms (merged with Bed Config) + Occupancy
   const tabs = [
-    { key: "rooms", label: "Rooms", icon: LayoutGrid },
-    { key: "occupancy", label: "Occupancy", icon: Activity },
+    { key: "rooms", label: "Room Inventory", icon: LayoutGrid },
+    { key: "occupancy", label: "Live Occupancy", icon: Activity },
     { key: "forecast", label: "Vacancy Forecast", icon: Clock3 },
   ];
 
+  const roomSummaryItems = [
+    { label: "Total Rooms", value: stats.total, color: "blue" },
+    { label: "Configured Beds", value: stats.configuredBeds, color: "purple" },
+    { label: "Floors", value: stats.floors, color: "blue" },
+    { label: "Maintenance Beds", value: stats.maintenanceBeds, color: "red" },
+    { label: "Locked Beds", value: stats.lockedBeds, color: "orange" },
+  ];
+
   const forecastSummaryItems = [
-    { label: "Forecast Rooms", value: forecastSummary.total, color: "blue" },
-    { label: "With Dates", value: forecastSummary.withDate, color: "green" },
-    {
-      label: "Expiring Soon",
-      value: forecastSummary.expiringSoon,
-      color: "orange",
-    },
+    { label: "Rooms Tracked", value: forecastSummary.total, color: "blue" },
+    { label: "With Lease End", value: forecastSummary.withDate, color: "green" },
+    { label: "Due This Week", value: forecastSummary.thisWeek, color: "orange" },
+    { label: "Due This Month", value: forecastSummary.expiringSoon, color: "purple" },
     { label: "Overdue", value: forecastSummary.overdue, color: "red" },
   ];
+
+  const tabOverview = {
+    rooms: {
+      eyebrow: "Inventory setup",
+      title: "Room Inventory",
+      description: "Rooms, floors, capacities, and bed configuration for the selected branch scope.",
+      stats: [
+        { label: "Full rooms", value: stats.full },
+        { label: "Partially filled", value: stats.partial },
+        { label: "Empty rooms", value: stats.available },
+      ],
+    },
+    occupancy: {
+      eyebrow: "Current utilization",
+      title: "Live Occupancy",
+      description: "Committed beds, available beds, readiness status, and current occupancy by room type.",
+      stats: [
+        { label: "Occupancy rate", value: `${stats.rate}%` },
+        { label: "Full rooms", value: stats.full },
+        { label: "Empty rooms", value: stats.available },
+      ],
+    },
+    forecast: {
+      eyebrow: "Lease timeline",
+      title: "Vacancy Forecast",
+      description: "Expected future openings calculated from active tenants' move-in dates, lease durations, and extensions.",
+      stats: [
+        { label: "Tracked rooms", value: forecastSummary.total },
+        { label: "This week", value: forecastSummary.thisWeek },
+        { label: "This month", value: forecastSummary.expiringSoon },
+      ],
+    },
+  }[activeTab];
 
   const roomFilters = [
     {
@@ -670,62 +739,78 @@ function RoomAvailabilityPage() {
   }, [allGroupedByFloor, floorKeys, currentPage]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground mb-1">
-          Room Management
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Track available capacity, assignments, and turnover across rooms
-          without leaving operations.
-        </p>
-      </div>
+    <PageShell tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange}>
+      <PageShell.Summary>
+        <section className={`room-tab-overview room-tab-overview--${activeTab}`}>
+          <div>
+            <span className="room-tab-overview__eyebrow">{tabOverview.eyebrow}</span>
+            <h2>{tabOverview.title}</h2>
+            <p>{tabOverview.description}</p>
+          </div>
+          <div className="room-tab-overview__stats">
+            {tabOverview.stats.map((item) => (
+              <span key={item.label}>
+                <strong>{item.value}</strong>
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </section>
+        {activeTab === "rooms" && <SummaryBar items={roomSummaryItems} />}
+        {activeTab === "forecast" && <SummaryBar items={forecastSummaryItems} />}
+      </PageShell.Summary>
 
-      {/* Tabs */}
-      <div
-        style={{
-          borderBottom:
-            "1px solid color-mix(in srgb, var(--border) 60%, transparent)",
-        }}
-      >
-        <div className="flex gap-6">
-          {[
-            { id: "rooms", label: "Rooms" },
-            { id: "occupancy", label: "Occupancy" },
-            { id: "forecast", label: "Vacancy Forecast" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={`pb-3 px-1 text-sm font-medium transition-colors relative ${
-                activeTab === tab.id
-                  ? ""
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              style={activeTab === tab.id ? { color: "var(--primary)" } : {}}
-            >
-              {tab.label}
-              {activeTab === tab.id && (
-                <div
-                  className="absolute bottom-0 left-0 right-0 h-0.5"
-                  style={{ backgroundColor: "var(--primary)" }}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {activeTab === "rooms" && (
-        <>
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div
-              className="rounded-lg p-3"
-              style={{
-                backgroundColor: "var(--card)",
-                border: "1px solid var(--border)",
+      <PageShell.Actions>
+        {activeTab === "rooms" && (
+          <ActionBar
+            search={{
+              value: searchTerm,
+              onChange: setSearchTerm,
+              placeholder: "Search rooms...",
+            }}
+            filters={roomFilters}
+            actions={
+              can("manageRooms")
+                ? [
+                    {
+                      label: "Add Room",
+                      icon: Plus,
+                      variant: "primary",
+                      onClick: () => setShowCreateModal(true),
+                    },
+                    {
+                      label: "Export CSV",
+                      icon: FileDown,
+                      onClick: handleExportRoomsCSV,
+                    },
+                    {
+                      label: "Export PDF",
+                      icon: FileDown,
+                      onClick: handleExportRoomsPDF,
+                    },
+                  ]
+                : [
+                    {
+                      label: "Export CSV",
+                      icon: FileDown,
+                      onClick: handleExportRoomsCSV,
+                    },
+                    {
+                      label: "Export PDF",
+                      icon: FileDown,
+                      onClick: handleExportRoomsPDF,
+                    },
+                  ]
+            }
+          />
+        )}
+        {activeTab === "forecast" && (
+          <>
+            <ActionBar
+              search={{
+                value: searchTerm,
+                onChange: setSearchTerm,
+                placeholder: "Search forecast rooms...",
               }}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -959,76 +1044,22 @@ function RoomAvailabilityPage() {
                         {floorRooms.length} rooms
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-3">
-                      {floorRooms.map((room) => {
-                        const bedsInMaintenance = (room.beds || []).filter(
-                          (b) => b.status === "maintenance",
-                        ).length;
-                        const roomLevelMaintenance =
-                          bedsInMaintenance === room.capacity &&
-                          room.capacity > 0;
-                        const effectiveCapacity = roomLevelMaintenance
-                          ? 0
-                          : room.capacity - bedsInMaintenance;
-
-                        let displayStatus = "available";
-                        if (roomLevelMaintenance) displayStatus = "maintenance";
-                        else if (
-                          room.currentOccupancy >= effectiveCapacity &&
-                          effectiveCapacity > 0
-                        )
-                          displayStatus = "full";
-                        else if (room.currentOccupancy > 0)
-                          displayStatus = "partial";
-
-                        const config = getRoomStatusConfig(displayStatus);
-
-                        return (
-                          <button
-                            key={room._id || room.id}
-                            onClick={() => {
-                              if (can("manageRooms")) handleConfigure(room);
-                            }}
-                            className={`group relative rounded-xl p-4 hover:shadow-md transition-all duration-200 text-center flex flex-col items-center justify-center w-[118px] h-[116px] ${!can("manageRooms") ? "cursor-default" : "cursor-pointer"}`}
-                            style={{
-                              backgroundColor: "var(--card)",
-
-                              border: "1px solid var(--border)",
-                            }}
-                            title={`${room.name || room.roomNumber} - ${config.label}${bedsInMaintenance > 0 ? ` (${bedsInMaintenance} bed${bedsInMaintenance > 1 ? "s" : ""} in maintenance)` : ""}`}
-                          >
-                            <div
-                              className={`absolute top-3 right-3 w-2.5 h-2.5 rounded-full ${config.dot}`}
-                            />
-
-                            {bedsInMaintenance > 0 && !roomLevelMaintenance && (
-                              <div className="absolute top-3 left-3 text-muted-foreground">
-                                <Wrench className="w-4 h-4" />
-                              </div>
-                            )}
-
-                            <Bed className="w-5 h-5 text-muted-foreground/80 mb-1 group-hover:text-primary transition-colors" />
-                            <span className="text-[18px] font-bold text-foreground dark:text-foreground tracking-tight leading-none mb-1.5">
-                              {room.roomNumber}
-                            </span>
-
-                            {roomLevelMaintenance ? (
-                              <span className="text-xs text-muted-foreground font-medium">
-                                Maintenance
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground font-medium">
-                                {room.currentOccupancy || 0}/{effectiveCapacity}
-                                {bedsInMaintenance > 0 && (
-                                  <span className="ml-[2px]">
-                                    ({bedsInMaintenance}M)
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
+                    <div className="forecast-highlight__meta">
+                      <span className="forecast-highlight__date">
+                        {formatForecastDate(featuredForecast.nextExpectedVacancy)}
+                      </span>
+                      <span className="forecast-highlight__count">
+                        {getDaysUntilVacancy(featuredForecast.nextExpectedVacancy)} days away
+                      </span>
+                      <button
+                        type="button"
+                        className="forecast-highlight__list-btn"
+                        onClick={() => setShowSoonestList((visible) => !visible)}
+                        aria-expanded={showSoonestList}
+                      >
+                        <ListOrdered size={14} />
+                        {showSoonestList ? "Hide list" : "View list"}
+                      </button>
                     </div>
                   </div>
                 ))
@@ -1038,16 +1069,104 @@ function RoomAvailabilityPage() {
                   style={{
                     backgroundColor: "var(--card)",
 
-                    border: "1px dashed",
-                  }}
-                >
-                  <DoorOpen className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-foreground">
-                    No rooms found matching your filters
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Try adjusting your search or add a new room.
-                  </p>
+                {showSoonestList && soonestVacancyList.length > 0 && (
+                  <div className="soonest-vacancy-list">
+                    {soonestVacancyList.map((item, index) => {
+                      const tone = getForecastTone(item.daysUntil);
+                      return (
+                        <article key={item.roomId || item.roomNumber} className="soonest-vacancy-list__row">
+                          <span className="soonest-vacancy-list__rank">{index + 1}</span>
+                          <div className="soonest-vacancy-list__room">
+                            <strong>{item.roomName || item.roomNumber}</strong>
+                            <span>
+                              {formatBranch(item.branch)} · {formatRoomType(item.type)}
+                            </span>
+                          </div>
+                          <div className="soonest-vacancy-list__bed">
+                            <span>{item.soonestBed?.position || "Bed"}</span>
+                            <small>{item.currentOccupancy || 0}/{item.capacity || 0} occupied</small>
+                          </div>
+                          <div className="soonest-vacancy-list__date">
+                            <strong>{formatForecastDate(item.nextExpectedVacancy)}</strong>
+                            <span style={{ color: tone.accent }}>{tone.label}</span>
+                          </div>
+                          <span className="soonest-vacancy-list__days">
+                            {item.daysUntil == null ? "No date" : `${item.daysUntil}d`}
+                          </span>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="forecast-grid">
+                  {paginatedForecast.map((item) => {
+                    const daysUntil = getDaysUntilVacancy(item.nextExpectedVacancy);
+                    const tone = getForecastTone(daysUntil);
+                    const occupancyPct = Math.round(((item.currentOccupancy || 0) / (item.capacity || 1)) * 100);
+
+                    return (
+                      <article key={item.roomId || item.roomNumber} className={`forecast-card ${tone.className}`}>
+                        <div className="forecast-card__header">
+                          <div>
+                            <span className="forecast-card__branch">{formatBranch(item.branch)}</span>
+                            <h3>{item.roomName || item.roomNumber}</h3>
+                          </div>
+                          <span className="forecast-card__status" style={{ color: tone.accent }}>
+                            {tone.label}
+                          </span>
+                        </div>
+
+                        <div className="forecast-card__metrics">
+                          <div>
+                            <span className="forecast-card__label">Next vacancy</span>
+                            <strong>{formatForecastDate(item.nextExpectedVacancy)}</strong>
+                          </div>
+                          <div>
+                            <span className="forecast-card__label">Occupied now</span>
+                            <strong>{item.currentOccupancy || 0}/{item.capacity || 0}</strong>
+                          </div>
+                          <div>
+                            <span className="forecast-card__label">Room type</span>
+                            <strong>{formatRoomType(item.type)}</strong>
+                          </div>
+                        </div>
+
+                        <div className="forecast-card__occupancy">
+                          <div className="forecast-card__occupancy-bar">
+                            <div
+                              className="forecast-card__occupancy-fill"
+                              style={{ width: `${occupancyPct}%` }}
+                            />
+                          </div>
+                          <span>{occupancyPct}% occupied</span>
+                        </div>
+
+                        <div className="forecast-card__beds">
+                          {(item.beds || []).map((bed) => {
+                            const bedDays = getDaysUntilVacancy(bed.expectedVacancy);
+                            const bedTone = getForecastTone(bedDays);
+                            return (
+                              <div key={bed.bedId} className="forecast-bed-row">
+                                <div>
+                                  <span className="forecast-bed-row__name">{bed.position}</span>
+                                  <span className="forecast-bed-row__date">
+                                    {formatForecastDate(bed.expectedVacancy)}
+                                  </span>
+                                </div>
+                                <span
+                                  className="forecast-bed-row__badge"
+                                  style={{ color: bedTone.accent, borderColor: `${bedTone.accent}33` }}
+                                >
+                                  {bedDays == null ? "Held" : `${bedDays}d`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
 

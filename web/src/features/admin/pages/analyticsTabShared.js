@@ -71,6 +71,28 @@ export function handlePdfExport(config) {
  exportReportPdf(config);
 }
 
+export function getTableRows(table) {
+  if (Array.isArray(table)) return table;
+  return Array.isArray(table?.rows) ? table.rows : [];
+}
+
+export function getTablePagination(table, fallbackRows = []) {
+  if (table?.pagination) return table.pagination;
+  return {
+    total: fallbackRows.length,
+    limit: fallbackRows.length || 10,
+    offset: 0,
+  };
+}
+
+export function buildServerTableParams(page, pageSize = 10) {
+  const safePage = Math.max(Number(page) || 1, 1);
+  return {
+    tableLimit: pageSize,
+    tableOffset: (safePage - 1) * pageSize,
+  };
+}
+
 export function useReportInsights({ reportType, range, branch }) {
  const params = useMemo(
  () => ({
@@ -91,20 +113,20 @@ export function AnalyticsInsightSection({
  isLoading,
  isError,
 }) {
- return (
- <ReportChartPanel
- title="AI summary"
- subtitle={`Simple explanation of this ${reportLabel} report`}
- >
- <AnalyticsInsightPanel
- title={summaryTitle}
- subtitle="Simple AI explanation"
- data={data}
- isLoading={isLoading}
- isError={isError}
- />
- </ReportChartPanel>
- );
+  return (
+    <ReportChartPanel
+      title="AI summary"
+      subtitle={`AI-generated insight for this ${reportLabel} report`}
+    >
+      <AnalyticsInsightPanel
+        title={summaryTitle}
+        subtitle="AI-generated report insight"
+        data={data}
+        isLoading={isLoading}
+        isError={isError}
+      />
+    </ReportChartPanel>
+  );
 }
 
 export function buildInsightPdfSections(insightData, title = "AI Summary") {
@@ -131,4 +153,3 @@ export function buildInsightPdfSections(insightData, title = "AI Summary") {
  },
  ];
 }
-

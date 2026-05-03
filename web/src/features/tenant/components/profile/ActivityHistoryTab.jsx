@@ -160,18 +160,18 @@ const buildTimeline = (r, direction = "desc") => {
  });
  }
 
- if (r.firstName && r.lastName && r.agreedToCertification) {
- // Fallback: scheduleApprovedAt is the closest prior event (visit approval happens right before application)
- // Avoid updatedAt since it reflects the latest save (e.g. payment), not the application submission time
- const appDate = r.applicationSubmittedAt || r.scheduleApprovedAt || r.createdAt;
- events.push({
- id: "application", icon: FileText, iconBg: "#FFF7ED", iconColor: "#EA580C",
- title: "Application Submitted",
- description: "Personal details and documents submitted.",
- date: appDate,
- status: "Submitted", statusColor: "#EA580C", statusBg: "#FFF7ED",
- });
- }
+  if (r.applicationSubmittedAt) {
+    // Fallback: scheduleApprovedAt is the closest prior event (visit approval happens right before application)
+    // Avoid updatedAt since it reflects the latest save (e.g. payment), not the application submission time
+    const appDate = r.applicationSubmittedAt || r.scheduleApprovedAt || r.createdAt;
+    events.push({
+      id: "application", icon: FileText, iconBg: "#FFF7ED", iconColor: "#EA580C",
+      title: "Application Submitted",
+      description: "Personal details and documents submitted.",
+      date: appDate,
+      status: "Submitted", statusColor: "#EA580C", statusBg: "#FFF7ED",
+    });
+  }
 
  if (r.paymentStatus === "paid" || r.paymentDate || r.status === "reserved") {
  events.push({

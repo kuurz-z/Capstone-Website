@@ -81,13 +81,12 @@ function resolveCurrentStage(reservation) {
  if (status === "reserved") return 5;
  if (reservation.paymentStatus === "paid") return 5;
 
- // application submitted
- if (
- reservation.agreedToCertification &&
- reservation.firstName &&
- reservation.lastName
- )
- return 4; // ready for payment
+  // application submitted
+  if (
+    reservation.applicationSubmittedAt ||
+    status === "payment_pending"
+  )
+    return 4; // ready for payment
 
  // visit approved → ready for application
  if (reservation.visitApproved || reservation.scheduleApproved) return 3;

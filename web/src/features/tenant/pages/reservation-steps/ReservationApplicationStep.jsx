@@ -44,49 +44,51 @@ const SectionHeader = React.memo(({ number, title, id, sectionRef, isFirst }) =>
 // ReservationApplicationStep — flat layout with section headers
 // ─────────────────────────────────────────────────────────────
 const ReservationApplicationStep = ({
- billingEmail, selfiePhoto, setSelfiePhoto,
- lastName, setLastName, firstName, setFirstName,
- middleName, setMiddleName, nickname, setNickname,
- mobileNumber, setMobileNumber, birthday, setBirthday,
- maritalStatus, setMaritalStatus, nationality, setNationality,
- educationLevel, setEducationLevel,
- addressUnitHouseNo, setAddressUnitHouseNo,
- addressStreet, setAddressStreet,
- addressRegion, setAddressRegion,
- addressBarangay, setAddressBarangay,
- addressCity, setAddressCity,
- addressProvince, setAddressProvince,
- validIDFront, setValidIDFront,
- validIDBack, setValidIDBack,
- nbiClearance, setNbiClearance,
- nbiReason, setNbiReason,
- personalNotes, setPersonalNotes,
- emergencyContactName, setEmergencyContactName,
- emergencyRelationship, setEmergencyRelationship,
- emergencyContactNumber, setEmergencyContactNumber,
- healthConcerns, setHealthConcerns,
- employerSchool, setEmployerSchool,
- employerAddress, setEmployerAddress,
- employerContact, setEmployerContact,
- startDate, setStartDate,
- occupation, setOccupation,
- companyID, setCompanyID,
- companyIDReason, setCompanyIDReason,
- previousEmployment, setPreviousEmployment,
- preferredRoomNumber, setPreferredRoomNumber,
- referralSource, setReferralSource,
- referrerName, setReferrerName,
- targetMoveInDate, setTargetMoveInDate,
- estimatedMoveInTime, setEstimatedMoveInTime,
- leaseDuration, setLeaseDuration,
- workSchedule, setWorkSchedule,
- workScheduleOther, setWorkScheduleOther,
- agreedToPrivacy, setAgreedToPrivacy,
- agreedToCertification, setAgreedToCertification,
- devBypassValidation, setDevBypassValidation,
- onPrev, onNext, readOnly, saveStatus,
- showValidationErrors, applicationSubmitted, paymentApproved,
- onEditApplication, scrollToSection, onClearScrollToSection,
+  billingEmail, selfiePhoto, setSelfiePhoto,
+  lastName, setLastName, firstName, setFirstName,
+  middleName, setMiddleName, nickname, setNickname,
+  mobileNumber, setMobileNumber, birthday, setBirthday,
+  maritalStatus, setMaritalStatus, nationality, setNationality,
+  educationLevel, setEducationLevel,
+  addressUnitHouseNo, setAddressUnitHouseNo,
+  addressStreet, setAddressStreet,
+  addressRegion, setAddressRegion,
+  addressBarangay, setAddressBarangay,
+  addressCity, setAddressCity,
+  addressProvince, setAddressProvince,
+  validIDFront, setValidIDFront,
+  validIDBack, setValidIDBack,
+  validIDType, setValidIDType,
+  idValidationResult, isValidatingId, onValidateIdDocument,
+  nbiClearance, setNbiClearance,
+  nbiReason, setNbiReason,
+  personalNotes, setPersonalNotes,
+  emergencyContactName, setEmergencyContactName,
+  emergencyRelationship, setEmergencyRelationship,
+  emergencyContactNumber, setEmergencyContactNumber,
+  healthConcerns, setHealthConcerns,
+  employerSchool, setEmployerSchool,
+  employerAddress, setEmployerAddress,
+  employerContact, setEmployerContact,
+  startDate, setStartDate,
+  occupation, setOccupation,
+  companyID, setCompanyID,
+  companyIDReason, setCompanyIDReason,
+  previousEmployment, setPreviousEmployment,
+  preferredRoomNumber, setPreferredRoomNumber,
+  referralSource, setReferralSource,
+  referrerName, setReferrerName,
+  targetMoveInDate, setTargetMoveInDate,
+  estimatedMoveInTime, setEstimatedMoveInTime,
+  leaseDuration, setLeaseDuration,
+  workSchedule, setWorkSchedule,
+  workScheduleOther, setWorkScheduleOther,
+  agreedToPrivacy, setAgreedToPrivacy,
+  agreedToCertification, setAgreedToCertification,
+  devBypassValidation, setDevBypassValidation,
+  onPrev, onNext, onSaveDraft, readOnly, saveStatus,
+  showValidationErrors, applicationSubmitted, paymentApproved,
+  onEditApplication, scrollToSection, onClearScrollToSection,
 }) => {
  const [showPoliciesModal, setShowPoliciesModal] = useState(false);
  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -331,17 +333,36 @@ const ReservationApplicationStep = ({
  </div>
  )}
 
- <ConfirmModal
- isOpen={confirmModal.open}
- onClose={() => setConfirmModal((p) => ({ ...p, open: false }))}
- onConfirm={confirmModal.onConfirm}
- title={confirmModal.title}
- message={confirmModal.message}
- variant={confirmModal.variant}
- confirmText={confirmModal.confirmText || "Confirm"}
- />
- </div>
- );
+      {/* Footer buttons */}
+      {readOnly && applicationSubmitted && !paymentApproved && (
+        <div className="stage-buttons" style={{ justifyContent: "flex-end" }}>
+          <button onClick={onEditApplication} className="btn btn-primary">Edit Application</button>
+        </div>
+      )}
+      {!readOnly && (
+        <div className="stage-buttons" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          
+          <button onClick={onSaveDraft} className="btn" style={{ borderColor: "#ccc", color: "#666" }}>
+            Save & Exit
+          </button>
+
+          <button onClick={onNext} className="btn btn-primary">
+            {applicationSubmitted ? "Update Submission" : "Submit Application"}
+          </button>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={confirmModal.open}
+        onClose={() => setConfirmModal((p) => ({ ...p, open: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        variant={confirmModal.variant}
+        confirmText={confirmModal.confirmText || "Confirm"}
+      />
+    </div>
+  );
 };
 
 export default ReservationApplicationStep;

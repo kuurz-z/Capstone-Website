@@ -15,9 +15,8 @@ import {
   Save,
   Download,
   Send,
-  Calendar,
-  FileX,
-  ClipboardX,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../../../shared/hooks/useAuth";
 import ConfirmModal from "../../../../shared/components/ConfirmModal";
@@ -34,6 +33,7 @@ import {
   useUpdateUtilityReading,
   useDeleteUtilityPeriod,
   useRoomHistory,
+  useElectricityAiReview,
   utilityKeys,
 } from "../../../../shared/hooks/queries/useUtility";
 import { utilityApi } from "../../../../shared/api/utilityApi.js";
@@ -110,6 +110,27 @@ const getMeterRangeLabel = (period, utilityType) =>
       ? `${fmtCurrency(period.ratePerUnit)} total water charge`
       : `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."}` : EMPTY_VALUE}`
     : EMPTY_VALUE;
+const getExportColumns = (utilityType) => {
+  const unitLabel = utilityType === "water" ? "Water Charge" : "Usage";
+  return [
+    { key: "branch", label: "Branch" },
+    { key: "roomName", label: "Room" },
+    { key: "periodStatus", label: "Period Status" },
+    { key: "startDate", label: "Start Date" },
+    { key: "endDate", label: "End Date" },
+    { key: "startReading", label: "Start Reading" },
+    { key: "endReading", label: "End Reading" },
+    { key: "totalUsage", label: "Room Usage" },
+    { key: "ratePerUnit", label: utilityType === "water" ? "Room Water Charge" : "Rate" },
+    { key: "tenantName", label: "Tenant" },
+    { key: "tenantEmail", label: "Tenant Email" },
+    { key: "bedName", label: "Bed" },
+    { key: "durationRange", label: "Coverage" },
+    { key: "usage", label: unitLabel },
+    { key: "amount", label: "Amount" },
+    { key: "billId", label: "Bill ID" },
+  ];
+};
 const getExpectedPeriodEndDate = (period) =>
   period?.endDate || period?.targetCloseDate || null;
 const getPeriodRangeText = (period) => {
@@ -294,6 +315,8 @@ const TENANT_SUMMARY_EXPORT_COLUMNS = [
 const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
+  const dropdownRef = useRef(null);
+  const aiReviewPanelRef = useRef(null);
   const notify = useBillingNotifier();
 
   /** Mask tenant name for privacy: "Leander Ponce" -> "Leander *****" */
@@ -422,6 +445,24 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
     selectedRoomId,
     utilityQueryOptions,
   );
+  const aiReviewPeriodId =
+    utilityType === "electricity" && selectedPeriodId ? selectedPeriodId : null;
+  const canRequestAiReview =
+    utilityType === "electricity" && Boolean(aiReviewPeriodId);
+  const {
+    data: aiReviewData,
+    isFetching: aiReviewFetching,
+    isError: aiReviewIsError,
+    error: aiReviewError,
+    refetch: refetchAiReview,
+  } = useElectricityAiReview(aiReviewPeriodId, {
+    ...utilityQueryOptions,
+    enabled:
+      utilityQueryOptions.enabled &&
+      canRequestAiReview &&
+      activePanel === "aiReview",
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Mutations
   const updatePeriod = useUpdateUtilityPeriod(utilityType);
@@ -821,6 +862,17 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
     setActivePanel(panel);
   };
   const closePanel = () => setActivePanel(null);
+  const openAiReview = (periodId) => {
+    if (utilityType !== "electricity" || !periodId) return;
+    setSelectedPeriodId(periodId);
+    setActivePanel("aiReview");
+    window.requestAnimationFrame(() => {
+      aiReviewPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    });
+  };
 
   const buildGenerationBlocker = (error) => {
     const payload = error?.response?.data?.error || null;
@@ -1336,6 +1388,448 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
     });
   };
 
+  const handleExportSegment = (period, segment, index, ratePerUnit) => {
+    const rows = [
+      {
+        occupants: segment.activeTenantCount ?? 0,
+        firstReadingDate: segment.startDate
+          ? new Date(segment.startDate).toLocaleDateString()
+          : (segment.periodLabel || "").split(/\s*[-â€“]\s*/)[0] || EMPTY_VALUE,
+        firstReading: fmtNumber(segment.readingFrom, 2),
+        secondReadingDate: segment.endDate
+          ? new Date(segment.endDate).toLocaleDateString()
+          : (segment.periodLabel || "").split(/\s*[-â€“]\s*/)[1] || EMPTY_VALUE,
+        secondReading: fmtNumber(segment.readingTo, 2),
+        segmentPeriod: getSegmentPeriodLabel(segment),
+        boundaryEvents: `${EVENT_TYPE_LABELS[segment.startEventType] || segment.startEventType || "Regular"} to ${EVENT_TYPE_LABELS[segment.endEventType] || segment.endEventType || "Regular"}`,
+        totalConsumption: fmtNumber(segment.unitsConsumed, 2),
+        segmentTotalCost: fmtCurrency(segment.totalCost),
+        amountDuePerPerson: `${fmtCurrency(segment.sharePerTenantCost)} @ ${fmtNumber(ratePerUnit, 2)} / ${utilityType === "electricity" ? "kWh" : "cu.m."}`,
+        coveredTenants: segment.coveredTenantNames?.length
+          ? segment.coveredTenantNames.join(", ")
+          : "No active tenant",
+      },
+    ];
+
+    exportLocalRows({
+      rows,
+      columns: SEGMENT_EXPORT_COLUMNS,
+      filename: `${utilityType}-segment-${period?.id || "period"}-${index + 1}`,
+      emptyMessage: `No ${utilityType} segment rows available for export.`,
+    });
+  };
+
+  const renderAiReviewPanel = () => {
+    if (activePanel !== "aiReview" || utilityType !== "electricity") return null;
+    const insight = aiReviewData?.insight;
+    const snapshotMeta = aiReviewData?.snapshotMeta || {};
+    const providerLabel =
+      snapshotMeta.provider === "gemini" && !snapshotMeta.usedFallback
+        ? `Powered by Gemini${snapshotMeta.model ? ` (${snapshotMeta.model})` : ""}`
+        : "Fallback summary";
+    const errorMessage =
+      aiReviewError?.response?.data?.error ||
+      aiReviewError?.message ||
+      "AI billing review is unavailable right now.";
+    const renderInsightList = (title, items, keyPrefix, limit = 3) => {
+      const cleanItems = Array.isArray(items) ? items.filter(Boolean).slice(0, limit) : [];
+      if (!cleanItems.length) return null;
+
+      return (
+        <div>
+          <h5>{title}</h5>
+          <ul>
+            {cleanItems.map((item, index) => (
+              <li key={`${keyPrefix}-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    };
+    const priorityFindings = [
+      ...(Array.isArray(insight?.riskDrivers) ? insight.riskDrivers : []),
+      ...(Array.isArray(insight?.keyFindings) ? insight.keyFindings : []),
+    ];
+    const ownerActions = [
+      ...(Array.isArray(insight?.reviewChecklist) ? insight.reviewChecklist : []),
+      ...(Array.isArray(insight?.recommendedActions) ? insight.recommendedActions : []),
+    ];
+
+    return (
+      <section className="eb-panel eb-ai-review" ref={aiReviewPanelRef}>
+        <div className="eb-panel__header">
+          <span className="eb-ai-review__title">
+            <Sparkles size={14} /> AI Billing Review
+          </span>
+          <div className="eb-ai-review__actions">
+            <span className="eb-ai-review__provider">{providerLabel}</span>
+            <button
+              type="button"
+              className="eb-panel__close"
+              onClick={closePanel}
+              aria-label="Close AI billing review"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="eb-panel__body">
+          {aiReviewFetching && !insight ? (
+            <p className="eb-panel__hint">Generating billing review...</p>
+          ) : aiReviewIsError ? (
+            <div className="eb-ai-review__empty">
+              <AlertTriangle size={16} />
+              <span>{errorMessage}</span>
+            </div>
+          ) : insight ? (
+            <>
+              <div className="eb-ai-review__headline-row">
+                <h4 className="eb-ai-review__headline">{insight.headline}</h4>
+                <span
+                  className={`eb-ai-review__risk eb-ai-review__risk--${insight.riskLevel || "low"}`}
+                >
+                  {insight.riskLevel || "low"} risk
+                </span>
+              </div>
+              <p className="eb-ai-review__summary">{insight.summary}</p>
+              <div className="eb-ai-review__grid">
+                {renderInsightList("What stands out", priorityFindings, "finding", 3)}
+                {renderInsightList("What to check", ownerActions, "action", 3)}
+              </div>
+              {insight.disputePreventionNote && (
+                <div className="eb-ai-review__note">
+                  <h5>Owner note</h5>
+                  <p>{insight.disputePreventionNote}</p>
+                </div>
+              )}
+              <div className="eb-ai-review__meta">
+                <span>Confidence: {insight.confidence || "low"}</span>
+                <span>{insight.disclaimer}</span>
+              </div>
+              <div className="eb-panel__footer">
+                <button
+                  type="button"
+                  className="eb-btn eb-btn--ghost eb-btn--xs"
+                  onClick={() => refetchAiReview()}
+                  disabled={aiReviewFetching}
+                >
+                  <RefreshCw size={12} />{" "}
+                  {aiReviewFetching ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="eb-panel__hint">
+              Select an electricity billing period to generate a review.
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  };
+
+  const renderExpandedPeriodDetails = (period) => {
+    if (!period || selectedPeriodId !== period.id) return null;
+    const displayStatus = getDisplayStatus(period);
+
+    return (
+      <div className="eb-period-detail eb-period-detail--minimal">
+        <div className="eb-minimal-header">
+          <div className="eb-minimal-header__info">
+            <span
+              className={`eb-status-indicator eb-status-indicator--${displayStatus}`}
+            >
+              {getDisplayStatusLabel(period)}
+            </span>
+            <button
+              type="button"
+              className="eb-btn-text eb-btn-text--subtle"
+              onClick={() => setSelectedPeriodId(null)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="eb-period-detail__body eb-period-detail__body--minimal">
+          {activePanel === "aiReview" && selectedPeriodId === period.id
+            ? renderAiReviewPanel()
+            : null}
+          {result ? (
+            <>
+              <div className="eb-minimal-stats">
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">
+                    {utilityType === "water"
+                      ? "Total covered days"
+                      : `Total ${utilityType === "electricity" ? "kWh" : "cu.m."}`}
+                  </span>
+                  <span className="eb-minimal-stat__value">
+                    {fmtNumber(result.computedTotalUsage, 2)}
+                  </span>
+                </div>
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">Room Cost</span>
+                  <span className="eb-minimal-stat__value eb-minimal-stat__value--highlight">
+                    {fmtCurrency(
+                      result.totalRoomCost || result.computedTotalCost,
+                    )}
+                  </span>
+                </div>
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">
+                    {utilityType === "water" ? "Water charge" : "Current Rate"}
+                  </span>
+                  <span className="eb-minimal-stat__value">
+                    {fmtCurrency(result.ratePerUnit)}{" "}
+                    <small>
+                      /{utilityType === "electricity" ? "kWh" : "cu.m."}
+                    </small>
+                  </span>
+                </div>
+                <div className="eb-minimal-stat">
+                  <span className="eb-minimal-stat__label">Segments</span>
+                  <span className="eb-minimal-stat__value">
+                    {result.segments?.length || 0}
+                  </span>
+                </div>
+              </div>
+
+              <div className="eb-result-flow">
+                <div className="eb-result-flow__header">
+                  <div className="eb-result-flow__title">
+                    <span className="eb-result-flow__text">
+                      Segment Breakdown
+                    </span>
+                    {result.verified ? (
+                      <span className="eb-verified-badge">
+                        <Check size={12} strokeWidth={2.5} /> Verified
+                      </span>
+                    ) : (
+                      <span className="eb-unverified-badge">
+                        <AlertTriangle size={12} strokeWidth={2.5} /> Unverified
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="eb-result-flow__content">
+                  <div className="eb-segment-grid">
+                    {(result.segments || []).map((seg, index) => (
+                      <div
+                        className="eb-table-fluid eb-segment-card"
+                        key={`${period.id}-segment-${index}`}
+                      >
+                        <table className="eb-table-minimal eb-table-minimal--bordered">
+                          <colgroup>
+                            <col style={{ width: "45%" }} />
+                            <col style={{ width: "25%" }} />
+                            <col style={{ width: "30%" }} />
+                          </colgroup>
+                          <thead>
+                            <tr className="eb-segment-table__head-row">
+                              <th
+                                colSpan="2"
+                                className="eb-segment-table__head-label"
+                              >
+                                No. of occupants in the room:
+                              </th>
+                              <th className="eb-align-center eb-segment-table__head-count">
+                                {seg.activeTenantCount}
+                              </th>
+                            </tr>
+                            <tr>
+                              <th></th>
+                              <th className="eb-align-center eb-segment-table__subhead">
+                                Date
+                              </th>
+                              <th className="eb-align-center eb-segment-table__subhead">
+                                {utilityType === "electricity"
+                                  ? "kwh"
+                                  : "cu.m."}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="eb-text-muted">1st reading</td>
+                              <td className="eb-align-center">
+                                {seg.startDate
+                                  ? new Date(seg.startDate).toLocaleDateString()
+                                  : (seg.periodLabel || "").split(
+                                      /\s*[-–]\s*/,
+                                    )[0] || "-"}
+                              </td>
+                              <td className="eb-align-center">
+                                {fmtNumber(seg.readingFrom, 2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">2nd reading</td>
+                              <td className="eb-align-center">
+                                {seg.endDate
+                                  ? new Date(seg.endDate).toLocaleDateString()
+                                  : (seg.periodLabel || "").split(
+                                      /\s*[-–]\s*/,
+                                    )[1] || "-"}
+                              </td>
+                              <td className="eb-align-center">
+                                {fmtNumber(seg.readingTo, 2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">Segment period</td>
+                              <td className="eb-align-center" colSpan={2}>
+                                {getSegmentPeriodLabel(seg)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">Boundary events</td>
+                              <td className="eb-align-center" colSpan={2}>
+                                {EVENT_TYPE_LABELS[seg.startEventType] ||
+                                  seg.startEventType ||
+                                  "Regular"}{" "}
+                                to{" "}
+                                {EVENT_TYPE_LABELS[seg.endEventType] ||
+                                  seg.endEventType ||
+                                  "Regular"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted eb-text-italic">
+                                Total consumption
+                              </td>
+                              <td
+                                className="eb-align-center"
+                                style={{ borderBottom: "none" }}
+                              ></td>
+                              <td className="eb-align-center">
+                                {fmtNumber(seg.unitsConsumed, 2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td colSpan="2" className="eb-text-muted">
+                                Segment total cost
+                              </td>
+                              <td className="eb-align-center eb-text-strong">
+                                {fmtCurrency(seg.totalCost)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td colSpan="2" className="eb-text-muted">
+                                Amount due (Php{" "}
+                                {fmtNumber(result.ratePerUnit, 2)} /{" "}
+                                {utilityType === "electricity"
+                                  ? "kwh"
+                                  : "cu.m."}
+                                ) per person
+                              </td>
+                              <td className="eb-align-center eb-text-strong eb-segment-table__amount">
+                                {fmtCurrency(seg.sharePerTenantCost)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="eb-text-muted">Covered tenants</td>
+                              <td className="eb-align-center" colSpan={2}>
+                                {seg.coveredTenantNames?.length
+                                  ? seg.coveredTenantNames.join(", ")
+                                  : "No active tenant"}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <div className="eb-section__footer eb-section__footer--export">
+                          <button
+                            type="button"
+                            className="eb-btn eb-btn--ghost"
+                            onClick={() =>
+                              handleExportSegment(
+                                period,
+                                seg,
+                                index,
+                                result.ratePerUnit,
+                              )
+                            }
+                          >
+                            <Download size={13} /> Export
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="eb-section-divider">
+                    <div className="eb-table-fluid">
+                      <table className="eb-table-minimal w-100">
+                        <colgroup>
+                          <col style={{ width: "32%" }} />
+                          <col style={{ width: "24%" }} />
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "22%" }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Tenant Name</th>
+                            <th>Duration Range</th>
+                            <th className="eb-align-right">
+                              Total{" "}
+                              {utilityType === "electricity" ? "kWh" : "cu.m."}
+                            </th>
+                            <th className="eb-align-right">Bill Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(result.tenantSummaries || []).map(
+                            (tenant, index) => (
+                              <tr key={`${period.id}-tenant-${index}`}>
+                                <td>
+                                  <div className="eb-tenant-identity">
+                                    <div className="eb-tenant-identity__name">
+                                      {tenant.tenantName}
+                                    </div>
+                                    <div className="eb-tenant-identity__email">
+                                      {tenant.tenantEmail || EMPTY_VALUE}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>{tenant.durationRange || "Ongoing"}</td>
+                                <td className="eb-align-right">
+                                  {fmtNumber(tenant.totalUsage, 4)}
+                                </td>
+                                <td className="eb-align-right eb-text-strong">
+                                  {fmtCurrency(tenant.billAmount)}
+                                </td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                      <div className="eb-section__footer eb-section__footer--export">
+                        <button
+                          type="button"
+                          className="eb-btn eb-btn--ghost"
+                          onClick={() =>
+                            handleExportTenantSummary(period, result)
+                          }
+                        >
+                          <Download size={13} /> Export
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="eb-cycle-panel__empty">
+              Segment details are not available for this billing cycle yet.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section
       className="space-y-4"
@@ -1572,12 +2066,39 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
               </p>
             </div>
           ) : (
-            <>
-              <div className="rounded-[14px] border border-border bg-card px-5 py-4 shadow-[0_1px_0_rgba(15,23,42,0.02)] min-h-[455px]">
-                <div className="flex items-center gap-3">
-                  <span
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary
-"
+            <div className="eb-content">
+              <div className="eb-header">
+                <div className="eb-header__left">
+                  <div className="eb-header__meta">
+                    <h2 className="eb-header__title">
+                      {getRoomLabel(selectedRoom)}
+                    </h2>
+                    <p className="eb-header__subtitle">
+                      Manage cycle setup, readings, and publishing for this
+                      room.
+                    </p>
+                  </div>
+                  <span className="eb-header__branch">
+                    {selectedRoom?.branch}
+                  </span>
+                  {selectedRoom?.type && (
+                    <span className="eb-header__room-type">
+                      {selectedRoom.type}
+                    </span>
+                  )}
+                </div>
+                <div className="eb-header__actions">
+                  {canRequestAiReview && (
+                    <button
+                      className="eb-btn eb-btn--outline"
+                      onClick={() => openAiReview(selectedPeriodFromList.id)}
+                    >
+                      <Sparkles size={13} /> AI Review
+                    </button>
+                  )}
+                  <button
+                    className="eb-btn eb-btn--primary"
+                    onClick={() => setIsNewPeriodModalOpen(true)}
                   >
                     <Calendar size={16} strokeWidth={2} />
                   </span>
@@ -1666,7 +2187,397 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                   </div>
                 )}
               </div>
-            </>
+
+              <section className="eb-section">
+                <div className="eb-section__header">
+                  <h3 className="eb-section__title eb-section__title--primary">
+                    Billing Timeline
+                    <span className="eb-section__count eb-section__count--inline">
+                      {billingTimelineRows.length}
+                    </span>
+                  </h3>
+                  <div className="eb-section__header-actions">
+                    <button
+                      type="button"
+                      className="eb-btn eb-btn--ghost eb-btn--xs"
+                      onClick={handleExportTimeline}
+                      disabled={billingTimelineRows.length === 0}
+                    >
+                      <Download size={12} /> Export
+                    </button>
+                  </div>
+                </div>
+                <p className="eb-section__hint">
+                  Latest meter and occupancy events for the selected billing
+                  period.
+                </p>
+                <div className="eb-section-body eb-section-body--spaced">
+                  <>
+                    <div className="eb-table-wrap eb-table-wrap--timeline">
+                      <table className="eb-table eb-table--timeline">
+                        <colgroup>
+                          <col style={{ width: "14%" }} />
+                          <col style={{ width: "18%" }} />
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "16%" }} />
+                          <col style={{ width: "16%" }} />
+                          <col style={{ width: "14%" }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Event</th>
+                            <th>Tenant</th>
+                            <th>Bed</th>
+                            <th>Reading</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedTimelineRows.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={6}
+                                className="eb-cell--muted eb-cell--empty"
+                              >
+                                No timeline events found for this billing
+                                period.
+                              </td>
+                            </tr>
+                          ) : (
+                            pagedTimelineRows.map((row) => (
+                              <tr key={row.id}>
+                                <td>{fmtDate(row.date)}</td>
+                                <td>
+                                  <div className="eb-timeline-event">
+                                    <div className="eb-timeline-event__title">
+                                      {getEventTypeLabel(row.eventType)}
+                                    </div>
+                                    <div className="eb-timeline-event__meta">
+                                      <span className="eb-timeline-badge">
+                                        {getTimelineRecordLabel(row)}
+                                      </span>
+                                      <span className="eb-timeline-badge eb-timeline-badge--status">
+                                        {getTimelineStatusLabel(row)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  {!isMoveLifecycleEvent(row.eventType) ? (
+                                    "Room Level"
+                                  ) : (
+                                    <div className="eb-tenant-identity">
+                                      <div className="eb-tenant-identity__name">
+                                        {maskName(row.tenantName)}
+                                      </div>
+                                      <div className="eb-tenant-identity__email">
+                                        {row.tenantEmail || EMPTY_VALUE}
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td>
+                                  {!isMoveLifecycleEvent(row.eventType)
+                                    ? "Room Level"
+                                    : row.bedName || EMPTY_VALUE}
+                                </td>
+                                <td>
+                                  {row.reading != null
+                                    ? `${fmtNumber(row.reading, 2)} ${
+                                        utilityType === "electricity"
+                                          ? "kWh"
+                                          : "cu.m."
+                                      }`
+                                    : EMPTY_VALUE}
+                                </td>
+                                <td className="eb-cell--actions eb-cell--actions-nowrap">
+                                  {row.hasMeterRecord && row.rawReading ? (
+                                    <>
+                                      <button
+                                        className="eb-btn eb-btn--xs eb-btn--outline"
+                                        onClick={() =>
+                                          handleEditReading(row.rawReading)
+                                        }
+                                        disabled={isSystemBoundaryEvent(
+                                          row.eventType,
+                                        )}
+                                        title={
+                                          isSystemBoundaryEvent(row.eventType)
+                                            ? "Boundary events are locked to preserve billing integrity."
+                                            : "Manage reading"
+                                        }
+                                      >
+                                        <Pencil size={11} /> Manage
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span className="eb-cell--muted">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Pagination
+                      page={timelinePage}
+                      total={totalTimelinePages}
+                      onChange={setTimelinePage}
+                      countLabel={`${billingTimelineRows.length} timeline entr${billingTimelineRows.length === 1 ? "y" : "ies"}`}
+                    />
+                  </>
+                </div>
+              </section>
+
+              <section className="eb-section eb-section--primary">
+                <div className="eb-section__header">
+                  <h3 className="eb-section__title eb-section__title--primary">
+                    <Zap
+                      size={14}
+                      style={{ color: "var(--color-accent-hover, #E0752E)" }}
+                    />
+                    Billing Cycle History
+                  </h3>
+                  <div className="eb-section__header-actions">
+                    <span className="eb-section__count">
+                      {periods.length} period{periods.length !== 1 ? "s" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      className="eb-btn eb-btn--ghost eb-btn--xs"
+                      onClick={handleExportPeriodHistory}
+                      disabled={periods.length === 0 || isExporting}
+                    >
+                      <Download size={12} />{" "}
+                      {isExporting ? "Exporting..." : "Export"}
+                    </button>
+                  </div>
+                </div>
+                <p className="eb-section__hint">
+                  Closed and revised periods remain available for review,
+                  sending, and revision actions.
+                </p>
+                {periods.length === 0 ? (
+                  <p className="eb-empty-hint">
+                    No billing history for this room yet.
+                  </p>
+                ) : (
+                  <>
+                    <div className="eb-table-wrap eb-table-wrap--history">
+                      <table className="eb-table eb-table--history">
+                        <colgroup>
+                          <col style={{ width: "30%" }} />
+                          <col style={{ width: "18%" }} />
+                          <col style={{ width: "12%" }} />
+                          <col style={{ width: "10%" }} />
+                          <col />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Cycle</th>
+                            <th>
+                              {utilityType === "water" ? "Basis" : "Meter"}
+                            </th>
+                            <th>Rate</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedPeriods.map((p) => (
+                            <Fragment key={p.id}>
+                              <tr
+                                className={[
+                                  selectedPeriodId === p.id
+                                    ? "eb-row--selected"
+                                    : "",
+                                  p.status === "open" ? "eb-row--open" : "",
+                                ]
+                                  .join(" ")
+                                  .trim()}
+                                onClick={() =>
+                                  (p.status === "closed" ||
+                                    p.status === "revised") &&
+                                  selectAndFocusPeriod(p.id)
+                                }
+                                style={{
+                                  cursor:
+                                    p.status === "closed" ||
+                                    p.status === "revised"
+                                      ? "pointer"
+                                      : "default",
+                                }}
+                                title={
+                                  p.status === "closed" ||
+                                  p.status === "revised"
+                                    ? "Click to view this billing cycle"
+                                    : undefined
+                                }
+                              >
+                                <td>
+                                  <div className="eb-period-summary">
+                                    <strong className="eb-period-label__title">
+                                      {getCycleLabel(p)}
+                                    </strong>
+                                    <span className="eb-period-summary__meta">
+                                      {p.status === "closed" ||
+                                      p.status === "revised"
+                                        ? "Move-in start to billing end"
+                                        : "Current active cycle"}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="eb-period-summary">
+                                    <span className="eb-period-summary__value">
+                                      {getMeterRangeLabel(p, utilityType)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span className="eb-rate-display">
+                                    {fmtCurrency(p.ratePerUnit)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span
+                                    className={`eb-status-pill eb-status-pill--${getDisplayStatus(p)}`}
+                                  >
+                                    {getDisplayStatusLabel(p)}
+                                  </span>
+                                  {p.revised ? (
+                                    <span className="eb-revised-tag">
+                                      edited
+                                    </span>
+                                  ) : null}
+                                </td>
+                                <td
+                                  className="eb-cell--actions eb-cell--actions-nowrap"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {getDisplayStatus(p) === "ready_to_send" && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--primary"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSendPeriod(
+                                          p,
+                                          getRoomLabel(
+                                            selectedRoom || {},
+                                            "Room",
+                                          ),
+                                        );
+                                      }}
+                                      disabled={
+                                        Boolean(sendingByPeriodId[p.id]) ||
+                                        sendPeriod.isPending
+                                      }
+                                    >
+                                      <Send size={11} />{" "}
+                                      {sendingByPeriodId[p.id]
+                                        ? "Sending..."
+                                        : "Send"}
+                                    </button>
+                                  )}
+                                  {utilityType === "electricity" && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--outline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openAiReview(p.id);
+                                      }}
+                                    >
+                                      <Sparkles size={11} /> AI Review
+                                    </button>
+                                  )}
+                                  {canEditPeriod(p) && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--outline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenEditPeriod(p);
+                                      }}
+                                    >
+                                      <Pencil size={11} /> Edit
+                                    </button>
+                                  )}
+                                  {canDeletePeriod(p) && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--danger"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeletePeriod(p.id);
+                                      }}
+                                      disabled={deletePeriod.isPending}
+                                    >
+                                      <Trash2 size={11} />{" "}
+                                      {deletePeriod.isPending
+                                        ? "Deleting..."
+                                        : "Delete"}
+                                    </button>
+                                  )}
+                                  {(p.status === "closed" ||
+                                    p.status === "revised") && (
+                                    <button
+                                      type="button"
+                                      className="eb-btn eb-btn--xs eb-btn--ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        selectAndFocusPeriod(p.id);
+                                      }}
+                                      aria-label={
+                                        selectedPeriodId === p.id
+                                          ? "Collapse billing cycle details"
+                                          : "Expand billing cycle details"
+                                      }
+                                      title={
+                                        selectedPeriodId === p.id
+                                          ? "Hide details"
+                                          : "Show details"
+                                      }
+                                    >
+                                      {selectedPeriodId === p.id ? (
+                                        <ChevronUp size={14} />
+                                      ) : (
+                                        <ChevronDown size={14} />
+                                      )}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                              {selectedPeriodId === p.id &&
+                                (p.status === "closed" ||
+                                  p.status === "revised") && (
+                                  <tr className="eb-history-detail-row">
+                                    <td
+                                      colSpan={5}
+                                      className="eb-history-detail-cell"
+                                    >
+                                      {renderExpandedPeriodDetails(p)}
+                                    </td>
+                                  </tr>
+                                )}
+                            </Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Pagination
+                      page={periodsPage}
+                      total={totalPeriodPages}
+                      onChange={setPeriodsPage}
+                      countLabel={`${periods.length} total period${periods.length !== 1 ? "s" : ""}`}
+                    />
+                  </>
+                )}
+              </section>
+            </div>
           )}
         </div>
       </div>
