@@ -685,8 +685,9 @@ function RoomAvailabilityPage() {
       {/* Tabs */}
       <div
         style={{
-  borderBottom: "1px solid color-mix(in srgb, var(--border) 60%, transparent)",
-}}
+          borderBottom:
+            "1px solid color-mix(in srgb, var(--border) 60%, transparent)",
+        }}
       >
         <div className="flex gap-6">
           {[
@@ -724,7 +725,7 @@ function RoomAvailabilityPage() {
               className="rounded-lg p-3"
               style={{
                 backgroundColor: "var(--card)",
-                border: "1px solid var(--border)"
+                border: "1px solid var(--border)",
               }}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -741,8 +742,8 @@ function RoomAvailabilityPage() {
               className="rounded-lg p-3"
               style={{
                 backgroundColor: "var(--card)",
-                
-                border: "1px solid var(--border)"
+
+                border: "1px solid var(--border)",
               }}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -757,8 +758,8 @@ function RoomAvailabilityPage() {
               className="rounded-lg p-3"
               style={{
                 backgroundColor: "var(--card)",
-                
-                border: "1px solid var(--border)"
+
+                border: "1px solid var(--border)",
               }}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -773,7 +774,7 @@ function RoomAvailabilityPage() {
               className="rounded-lg p-3"
               style={{
                 backgroundColor: "var(--card)",
-                border: "1px solid var(--border)"
+                border: "1px solid var(--border)",
               }}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -788,7 +789,7 @@ function RoomAvailabilityPage() {
               className="rounded-lg p-3"
               style={{
                 backgroundColor: "var(--card)",
-                border: "1px solid var(--border)"
+                border: "1px solid var(--border)",
               }}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -805,8 +806,8 @@ function RoomAvailabilityPage() {
               className="rounded-lg p-3"
               style={{
                 backgroundColor: "var(--card)",
-                
-                border: "1px solid var(--border)"
+
+                border: "1px solid var(--border)",
               }}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -823,19 +824,19 @@ function RoomAvailabilityPage() {
             className="rounded-xl p-5"
             style={{
               backgroundColor: "var(--card)",
-              
-              border: "1px solid var(--border)"
+
+              border: "1px solid var(--border)",
             }}
           >
             <div className="flex flex-col lg:flex-row gap-3 mb-6">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" />
                 <input
                   type="text"
                   placeholder="Search by room number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground/70"
+                  className="w-full pl-9 pr-4 py-2 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground/70"
                   style={{ border: "1px solid var(--border)" }}
                 />
               </div>
@@ -844,11 +845,13 @@ function RoomAvailabilityPage() {
                 <select
                   value={roomStatusFilter}
                   onChange={(e) => setRoomStatusFilter(e.target.value)}
-                  className="px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:14px_14px] bg-[position:right_10px_center] bg-no-repeat"
+                  className="px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer pr-8
+    bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%231e293b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]
+    dark:bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23f8fafc%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]
+    bg-[length:14px_14px] bg-[position:right_10px_center] bg-no-repeat"
                   style={{
                     backgroundColor: "var(--card)",
-                    
-                    border: "1px solid var(--border)"
+                    border: "1px solid var(--border)",
                   }}
                 >
                   {roomFilters[0].options.map((o) => (
@@ -861,11 +864,13 @@ function RoomAvailabilityPage() {
                 <select
                   value={branchFilter}
                   onChange={(e) => setBranchFilter(e.target.value)}
-                  className="px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:14px_14px] bg-[position:right_10px_center] bg-no-repeat"
+                  className="px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer pr-8
+    bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%231e293b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]
+    dark:bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23f8fafc%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]
+    bg-[length:14px_14px] bg-[position:right_10px_center] bg-no-repeat"
                   style={{
                     backgroundColor: "var(--card)",
-                    
-                    border: "1px solid var(--border)"
+                    border: "1px solid var(--border)",
                   }}
                 >
                   {roomFilters[1].options.map((o) => (
@@ -878,11 +883,13 @@ function RoomAvailabilityPage() {
                 <select
                   value={floorFilter}
                   onChange={(e) => setFloorFilter(e.target.value)}
-                  className="px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:14px_14px] bg-[position:right_10px_center] bg-no-repeat"
+                  className="px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 appearance-none cursor-pointer pr-8
+    bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%231e293b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]
+    dark:bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23f8fafc%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')]
+    bg-[length:14px_14px] bg-[position:right_10px_center] bg-no-repeat"
                   style={{
                     backgroundColor: "var(--card)",
-                    
-                    border: "1px solid var(--border)"
+                    border: "1px solid var(--border)",
                   }}
                 >
                   {roomFilters[2].options.map((o) => (
@@ -985,8 +992,8 @@ function RoomAvailabilityPage() {
                             className={`group relative rounded-xl p-4 hover:shadow-md transition-all duration-200 text-center flex flex-col items-center justify-center w-[118px] h-[116px] ${!can("manageRooms") ? "cursor-default" : "cursor-pointer"}`}
                             style={{
                               backgroundColor: "var(--card)",
-                              
-                              border: "1px solid var(--border)"
+
+                              border: "1px solid var(--border)",
                             }}
                             title={`${room.name || room.roomNumber} - ${config.label}${bedsInMaintenance > 0 ? ` (${bedsInMaintenance} bed${bedsInMaintenance > 1 ? "s" : ""} in maintenance)` : ""}`}
                           >
@@ -1030,7 +1037,7 @@ function RoomAvailabilityPage() {
                   className="text-center py-16 rounded-lg border-dashed"
                   style={{
                     backgroundColor: "var(--card)",
-                    
+
                     border: "1px dashed",
                   }}
                 >
@@ -1045,13 +1052,7 @@ function RoomAvailabilityPage() {
               )}
 
               {floorKeys.length > FLOORS_PER_PAGE && (
-                <div
-                  className="flex items-center justify-between pt-4 mt-6 px-1"
-                  style={{
-                    borderTopColor: "var(--border)",
-                    borderTop: "1px solid",
-                  }}
-                >
+                <div className="flex items-center justify-between pt-4 mt-6 px-1">
                   <span className="text-xs text-muted-foreground">
                     Showing floors {(currentPage - 1) * FLOORS_PER_PAGE + 1} to{" "}
                     {Math.min(currentPage * FLOORS_PER_PAGE, floorKeys.length)}{" "}
@@ -1063,8 +1064,7 @@ function RoomAvailabilityPage() {
                       onClick={() => setCurrentPage((p) => p - 1)}
                       className="px-3 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed text-foreground"
                       style={{
-                        
-                        border: "1px solid var(--border)"
+                        border: "1px solid var(--border)",
                       }}
                       onMouseEnter={(e) =>
                         (e.target.style.backgroundColor = "var(--muted)")
@@ -1083,8 +1083,7 @@ function RoomAvailabilityPage() {
                       onClick={() => setCurrentPage((p) => p + 1)}
                       className="px-3 py-1 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed text-foreground"
                       style={{
-                        
-                        border: "1px solid var(--border)"
+                        border: "1px solid var(--border)",
                       }}
                       onMouseEnter={(e) =>
                         (e.target.style.backgroundColor = "var(--muted)")
@@ -1121,8 +1120,8 @@ function RoomAvailabilityPage() {
               className="forecast-empty-state rounded-lg p-8"
               style={{
                 backgroundColor: "var(--card)",
-                
-                border: "1px solid var(--border)"
+
+                border: "1px solid var(--border)",
               }}
             >
               <Clock3 size={28} />
@@ -1133,8 +1132,8 @@ function RoomAvailabilityPage() {
               className="forecast-empty-state rounded-lg p-8"
               style={{
                 backgroundColor: "var(--card)",
-                
-                border: "1px solid var(--border)"
+
+                border: "1px solid var(--border)",
               }}
             >
               <Clock3 size={28} />

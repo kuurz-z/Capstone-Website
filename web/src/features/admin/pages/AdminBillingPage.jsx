@@ -13,7 +13,7 @@ const AdminBillingPage = () => {
   const [activeTab, setActiveTab] = useState("electricity");
 
   return (
-    <div className="px-6 py-4">
+    <div>
       <header className="space-y-4">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Billing</h1>
@@ -23,13 +23,17 @@ const AdminBillingPage = () => {
           </p>
         </div>
 
-        <div className="flex flex-col gap-4 rounded-xl border border-border bg-amber-50/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          className="flex flex-col gap-4 rounded-xl border border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+          style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)" }}
+        >
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full bg-warning-light text-warning-dark">
-              <Zap size={16} />
-            </span>
+            <Zap size={20} style={{ color: "var(--warning-dark)", marginTop: "2px", flexShrink: 0 }} />
             <div>
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-warning-dark">
+              <span
+                className="text-xs font-semibold uppercase tracking-[0.2em]"
+                style={{ color: "var(--warning-dark)" }}
+              >
                 Billing Workspace
               </span>
               <h2 className="mt-1 text-base font-semibold text-foreground">
@@ -43,7 +47,7 @@ const AdminBillingPage = () => {
           </div>
 
           <div
-            className="inline-flex items-center gap-1 rounded-full border border-border bg-card p-1"
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1"
             role="tablist"
             aria-label="Billing type"
           >
@@ -59,16 +63,25 @@ const AdminBillingPage = () => {
                   aria-controls={`billing-panel-${tab.id}`}
                   aria-selected={isActive}
                   tabIndex={isActive ? 0 : -1}
-                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition"
+                  style={
                     isActive
-                      ? "bg-amber-400 text-amber-950 shadow-sm"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
+                      ? {
+                          background: "var(--primary)",
+                          color: "var(--primary-foreground)",
+                          boxShadow: "var(--shadow-sm)",
+                        }
+                      : { color: "var(--muted-foreground)" }
+                  }
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.background = "var(--muted)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.background = "";
+                  }}
                   onClick={() => setActiveTab(tab.id)}
                 >
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-card/70">
-                    <Icon size={12} />
-                  </span>
+                  <Icon size={15} />
                   {tab.label}
                 </button>
               );
@@ -84,10 +97,7 @@ const AdminBillingPage = () => {
           aria-labelledby="billing-tab-electricity"
           className={activeTab === "electricity" ? "block" : "hidden"}
         >
-          <UtilityBillingTab
-            utilityType="electricity"
-            isActive={activeTab === "electricity"}
-          />
+          <UtilityBillingTab utilityType="electricity" isActive={activeTab === "electricity"} />
         </section>
 
         <section
@@ -96,10 +106,7 @@ const AdminBillingPage = () => {
           aria-labelledby="billing-tab-water"
           className={activeTab === "water" ? "block" : "hidden"}
         >
-          <UtilityBillingTab
-            utilityType="water"
-            isActive={activeTab === "water"}
-          />
+          <UtilityBillingTab utilityType="water" isActive={activeTab === "water"} />
         </section>
 
         <section
