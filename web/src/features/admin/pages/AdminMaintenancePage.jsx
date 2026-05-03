@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
  AlertTriangle,
  CheckCircle2,
+ ChevronDown,
+ ChevronUp,
  ClipboardList,
  Clock3,
  FileDown,
- Filter,
  Image as ImageIcon,
  Loader2,
  MessageSquare,
@@ -99,16 +100,152 @@ const urgencyRank = {
  low: 2,
 };
 
+const TERMINAL_STATUSES = new Set(["completed", "rejected", "cancelled"]);
+
 const SUMMARY_STATUSES = [
- { key: "all", label: "All Requests", icon: ClipboardList, color: "blue" },
- { key: "pending", label: "Pending", icon: Clock3, color: "orange" },
- { key: "viewed", label: "Viewed", icon: Filter, color: "orange" },
- { key: "in_progress", label: "In Progress", icon: RefreshCcw, color: "blue" },
- { key: "resolved", label: "Resolved", icon: CheckCircle2, color: "green" },
- { key: "completed", label: "Completed", icon: CheckCircle2, color: "green" },
- { key: "rejected", label: "Rejected", icon: XCircle, color: "red" },
- { key: "cancelled", label: "Cancelled", icon: AlertTriangle, color: "neutral" },
+ { key: "pending", label: "Pending" },
+ { key: "viewed", label: "Viewed" },
+ { key: "in_progress", label: "In Progress" },
+ { key: "resolved", label: "Resolved" },
+ { key: "completed", label: "Completed" },
+ { key: "rejected", label: "Rejected" },
+ { key: "cancelled", label: "Cancelled" },
 ];
+
+const MANAGEMENT_SUMMARY_CARDS = [
+ {
+ key: "open_queue",
+ label: "Open Queue",
+ icon: ClipboardList,
+ color: "orange",
+ description: "Pending and viewed requests",
+ },
+ {
+ key: "in_progress",
+ label: "In Progress",
+ icon: RefreshCcw,
+ color: "blue",
+ description: "Requests actively handled",
+ },
+ {
+ key: "overdue",
+ label: "SLA Overdue",
+ icon: AlertTriangle,
+ color: "red",
+ description: "SLA delayed and not terminal",
+ },
+ {
+ key: "due_soon",
+ label: "SLA Due Soon",
+ icon: Clock3,
+ color: "purple",
+ description: "SLA priority and non-terminal",
+ },
+ {
+ key: "completed_today",
+ label: "Resolved in Period",
+ icon: CheckCircle2,
+ color: "green",
+ description: "Resolved or completed in date range",
+ },
+ {
+ key: "unassigned_high",
+ label: "Unassigned High",
+ icon: UserRound,
+ color: "orange",
+ description: "High urgency with no assignee",
+ },
+ {
+ key: "exceptions",
+ label: "Exceptions",
+ icon: XCircle,
+ color: "red",
+ description: "Rejected or cancelled requests",
+ },
+];
+
+const SLA_FILTER_OPTIONS = [
+ { key: "all", label: "All SLA health" },
+ { key: "on_track", label: "On Track" },
+ { key: "priority", label: "Priority" },
+ { key: "delayed", label: "Delayed" },
+ { key: "closed", label: "Closed" },
+ { key: "no_sla", label: "No SLA" },
+];
+
+const isNonTerminal = (status) => !TERMINAL_STATUSES.has(status);
+
+const isWithinDateWindow = ({ value, dateFrom, dateTo }) => {
+ if (!value) return false;
+ const date = new Date(value);
+ if (Number.isNaN(date.getTime())) return false;
+
+ const start = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+ const end = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+
+ if (start && date < start) return false;
+ if (end && date > end) return false;
+ return true;
+};
+
+const isCompletedInWindow = ({ request, dateFrom, dateTo }) => {
+ if (!(request.status === "resolved" || request.status === "completed")) {
+ return false;
+ }
+
+ const completedAt =
+ request.assignment?.resolvedAt || request.resolved_at || request.updated_at;
+ if (!completedAt) return false;
+
+ if (dateFrom || dateTo) {
+ return isWithinDateWindow({ value: completedAt, dateFrom, dateTo });
+ }
+
+ const completedDate = new Date(completedAt);
+ if (Number.isNaN(completedDate.getTime())) return false;
+ const today = new Date();
+ return (
+ completedDate.getFullYear() === today.getFullYear() &&
+ completedDate.getMonth() === today.getMonth() &&
+ completedDate.getDate() === today.getDate()
+ );
+};
+
+const matchesSummaryCard = ({ request, cardKey, dateFrom, dateTo }) => {
+ if (!cardKey) return true;
+
+ switch (cardKey) {
+ case "open_queue":
+ return request.status === "pending" || request.status === "viewed";
+ case "in_progress":
+ return request.status === "in_progress";
+ case "overdue":
+ return request.slaState?.label === "delayed" && isNonTerminal(request.status);
+ case "due_soon":
+ return request.slaState?.label === "priority" && isNonTerminal(request.status);
+ case "completed_today":
+ return isCompletedInWindow({ request, dateFrom, dateTo });
+ case "unassigned_high":
+ return (
+ request.urgency === "high" &&
+ !String(request.assigned_to || "").trim() &&
+ isNonTerminal(request.status)
+ );
+ case "exceptions":
+ return request.status === "rejected" || request.status === "cancelled";
+ default:
+ return true;
+ }
+};
+
+const matchesSlaFilter = ({ request, slaFilter }) => {
+ if (!slaFilter || slaFilter === "all") return true;
+ if (slaFilter === "no_sla") return !request.slaState;
+ if (slaFilter === "on_track") {
+ return request.slaState?.label === "on_track" || !request.slaState?.label;
+ }
+ return request.slaState?.label === slaFilter;
+};
 
 const getStatusDotClass = (status) => {
  switch (status) {
@@ -177,6 +314,7 @@ export default function AdminMaintenancePage() {
  const [statusFilter, setStatusFilter] = useState("all");
  const [requestTypeFilter, setRequestTypeFilter] = useState("all");
  const [urgencyFilter, setUrgencyFilter] = useState("all");
+ const [slaFilter, setSlaFilter] = useState("all");
  const [dateFrom, setDateFrom] = useState("");
  const [dateTo, setDateTo] = useState("");
  const requestedBranch = searchParams.get("branch");
@@ -188,6 +326,8 @@ export default function AdminMaintenancePage() {
  );
  const [sortMode, setSortMode] = useState("newest");
  const [searchQuery, setSearchQuery] = useState("");
+ const [summaryCardKey, setSummaryCardKey] = useState(null);
+ const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
  const [currentPage, setCurrentPage] = useState(1);
  const [selectedRequestId, setSelectedRequestId] = useState(null);
  const [draftStatus, setDraftStatus] = useState("viewed");
@@ -245,24 +385,25 @@ export default function AdminMaintenancePage() {
  const summaryRequests = summaryData?.requests || requests;
  const selectedRequest = requestDetailData?.request || null;
 
- const summaryItems = useMemo(() => {
- const counts = summaryRequests.reduce((acc, request) => {
- const key = request.status || "pending";
- acc[key] = (acc[key] || 0) + 1;
- return acc;
- }, {});
-
- return SUMMARY_STATUSES.map((item) => ({
+ const summaryItems = useMemo(
+ () =>
+ MANAGEMENT_SUMMARY_CARDS.map((item) => ({
  ...item,
- value:
- item.key === "all"
- ? summaryRequests.length
- : counts[item.key] || 0,
- }));
- }, [summaryRequests]);
+ value: summaryRequests.filter((request) =>
+ matchesSummaryCard({
+ request,
+ cardKey: item.key,
+ dateFrom,
+ dateTo,
+ }),
+ ).length,
+ trend: item.description,
+ })),
+ [dateFrom, dateTo, summaryRequests],
+ );
 
- const activeSummaryIndex = SUMMARY_STATUSES.findIndex(
- (item) => item.key === statusFilter,
+ const activeSummaryIndex = MANAGEMENT_SUMMARY_CARDS.findIndex(
+ (item) => item.key === summaryCardKey,
  );
 
  const sortedRequests = useMemo(() => {
@@ -281,7 +422,7 @@ export default function AdminMaintenancePage() {
  return nextRequests;
  }, [requests, sortMode]);
 
- const filteredRequests = useMemo(() => {
+ const searchedRequests = useMemo(() => {
  const query = searchQuery.trim().toLowerCase();
  if (!query) return sortedRequests;
 
@@ -302,6 +443,21 @@ export default function AdminMaintenancePage() {
  return haystack.includes(query);
  });
  }, [searchQuery, sortedRequests]);
+
+ const filteredRequests = useMemo(
+ () =>
+ searchedRequests.filter(
+ (request) =>
+ matchesSlaFilter({ request, slaFilter }) &&
+ matchesSummaryCard({
+ request,
+ cardKey: summaryCardKey,
+ dateFrom,
+ dateTo,
+ }),
+ ),
+ [dateFrom, dateTo, searchedRequests, slaFilter, summaryCardKey],
+ );
 
  const activeFilterChips = useMemo(() => {
  const chips = [];
@@ -324,6 +480,17 @@ export default function AdminMaintenancePage() {
  chips.push({
  key: `urgency-${urgencyFilter}`,
  label: `Urgency: ${getMaintenanceUrgencyMeta(urgencyFilter).label}`,
+ });
+ }
+
+ if (slaFilter !== "all") {
+ const slaLabel =
+ SLA_FILTER_OPTIONS.find((item) => item.key === slaFilter)?.label ||
+ slaFilter;
+
+ chips.push({
+ key: `sla-${slaFilter}`,
+ label: `SLA Health: ${slaLabel}`,
  });
  }
 
@@ -362,6 +529,19 @@ export default function AdminMaintenancePage() {
  });
  }
 
+ if (summaryCardKey) {
+ const selectedCard = MANAGEMENT_SUMMARY_CARDS.find(
+ (item) => item.key === summaryCardKey,
+ );
+
+ if (selectedCard) {
+ chips.push({
+ key: `summary-${summaryCardKey}`,
+ label: `Summary: ${selectedCard.label}`,
+ });
+ }
+ }
+
  return chips;
  }, [
  branchFilter,
@@ -370,6 +550,8 @@ export default function AdminMaintenancePage() {
  isOwner,
  requestTypeFilter,
  searchQuery,
+ slaFilter,
+ summaryCardKey,
  sortMode,
  statusFilter,
  urgencyFilter,
@@ -382,6 +564,7 @@ export default function AdminMaintenancePage() {
  dateFrom,
  dateTo,
  requestTypeFilter,
+ slaFilter,
  sortMode,
  statusFilter,
  urgencyFilter,
@@ -425,11 +608,14 @@ export default function AdminMaintenancePage() {
  setStatusFilter("all");
  setRequestTypeFilter("all");
  setUrgencyFilter("all");
+ setSlaFilter("all");
  setDateFrom("");
  setDateTo("");
  setBranchFilter("all");
  setSortMode("newest");
  setSearchQuery("");
+ setSummaryCardKey(null);
+ setShowAdvancedFilters(false);
  };
 
  const handleExport = () => {
@@ -464,12 +650,12 @@ export default function AdminMaintenancePage() {
 
  const handleSummaryFilter = (index) => {
  if (index === -1) {
- setStatusFilter("all");
+ setSummaryCardKey(null);
  return;
  }
- const item = SUMMARY_STATUSES[index];
+ const item = MANAGEMENT_SUMMARY_CARDS[index];
  if (!item) return;
- setStatusFilter(item.key);
+ setSummaryCardKey(item.key);
  };
 
  const handleSubmitUpdate = async (event) => {
@@ -595,12 +781,16 @@ export default function AdminMaintenancePage() {
  key: "status",
  label: "Status",
  render: (row) => (
- <div className="flex flex-col gap-2">
  <div className={`flex items-center gap-2 text-[13px] font-medium ${getStatusTextClass(row.status)}`}>
  <span className={`h-1.5 w-1.5 rounded-full ${getStatusDotClass(row.status)}`} />
  <span>{formatMaintenanceStatus(row.status)}</span>
  </div>
- {row.slaState ? (
+ ),
+ },
+ {
+ key: "sla",
+ label: "SLA Health",
+ render: (row) => (
  <span
  className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
  style={{
@@ -610,8 +800,6 @@ export default function AdminMaintenancePage() {
  >
  {formatSlaState(row.slaState)}
  </span>
- ) : null}
- </div>
  ),
  },
  {
@@ -630,7 +818,7 @@ export default function AdminMaintenancePage() {
  );
 
  return (
- <div className="bg-card">
+ <div>
  <PageShell>
  <PageShell.Summary>
  <div>
@@ -643,7 +831,7 @@ export default function AdminMaintenancePage() {
  </div>
  <SummaryBar
  items={summaryItems}
- activeIndex={activeSummaryIndex === -1 ? 0 : activeSummaryIndex}
+ activeIndex={activeSummaryIndex}
  onItemClick={(index) => handleSummaryFilter(index)}
  />
  </div>
@@ -655,8 +843,8 @@ export default function AdminMaintenancePage() {
  Find requests quickly
  </h2>
 
- <div className="mt-4 flex flex-wrap items-center gap-3">
- <label className="relative min-w-[220px] flex-1">
+ <div className="mt-4 flex flex-wrap items-end gap-3">
+ <label className="relative min-w-[280px] flex-[2_1_420px]">
  <span className="sr-only">Search</span>
  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
  <input
@@ -664,19 +852,19 @@ export default function AdminMaintenancePage() {
  placeholder="Search tenant, ID, assignment, or description"
  value={searchQuery}
  onChange={(event) => setSearchQuery(event.target.value)}
- className="h-9 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm text-muted-foreground placeholder:text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm text-muted-foreground placeholder:text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
  />
  </label>
 
- <label className="min-w-[170px] flex-1">
+ <label className="min-w-[180px] flex-1">
  <span className="sr-only">Status</span>
  <select
  value={statusFilter}
  onChange={(event) => setStatusFilter(event.target.value)}
- className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
  >
  <option value="all">All statuses</option>
- {SUMMARY_STATUSES.filter((item) => item.key !== "all").map((item) => (
+ {SUMMARY_STATUSES.map((item) => (
  <option key={item.key} value={item.key}>
  {item.label}
  </option>
@@ -685,27 +873,11 @@ export default function AdminMaintenancePage() {
  </label>
 
  <label className="min-w-[180px] flex-1">
- <span className="sr-only">Request Type</span>
- <select
- value={requestTypeFilter}
- onChange={(event) => setRequestTypeFilter(event.target.value)}
- className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
- >
- <option value="all">All request types</option>
- {MAINTENANCE_REQUEST_TYPES.map((requestType) => (
- <option key={requestType} value={requestType}>
- {getMaintenanceTypeMeta(requestType).label}
- </option>
- ))}
- </select>
- </label>
-
- <label className="min-w-[170px] flex-1">
  <span className="sr-only">Urgency</span>
  <select
  value={urgencyFilter}
  onChange={(event) => setUrgencyFilter(event.target.value)}
- className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
  >
  <option value="all">All urgency levels</option>
  {MAINTENANCE_URGENCY_LEVELS.map((urgency) => (
@@ -716,13 +888,87 @@ export default function AdminMaintenancePage() {
  </select>
  </label>
 
+ <label className="min-w-[180px] flex-1">
+ <span className="sr-only">SLA Health</span>
+ <select
+ value={slaFilter}
+ onChange={(event) => setSlaFilter(event.target.value)}
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ >
+ {SLA_FILTER_OPTIONS.map((option) => (
+ <option key={option.key} value={option.key}>
+ {option.label}
+ </option>
+ ))}
+ </select>
+ </label>
+
+ <div className="ml-auto flex flex-wrap items-center gap-2">
+ <button
+ type="button"
+ className="inline-flex h-10 min-w-[140px] items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-card-foreground hover:bg-muted"
+ onClick={() => setShowAdvancedFilters((current) => !current)}
+ aria-expanded={showAdvancedFilters}
+ >
+ {showAdvancedFilters ? (
+ <>
+ <ChevronUp size={14} />
+ Less Filters
+ </>
+ ) : (
+ <>
+ <ChevronDown size={14} />
+ More Filters
+ </>
+ )}
+ </button>
+
+ <button
+ type="button"
+ className="inline-flex h-10 min-w-[130px] items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-card-foreground hover:bg-muted"
+ onClick={handleExport}
+ disabled={filteredRequests.length === 0}
+ >
+ <FileDown size={14} />
+ Export CSV
+ </button>
+
+ <button
+ type="button"
+ className="inline-flex h-10 min-w-[130px] items-center justify-center rounded-md border border-border bg-card px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-card-foreground"
+ onClick={handleResetFilters}
+ >
+ Reset Filters
+ </button>
+ </div>
+
+ </div>
+
+ {showAdvancedFilters ? (
+ <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-12 xl:items-end">
+ <label className="xl:col-span-3">
+ <span className="sr-only">Request Type</span>
+ <select
+ value={requestTypeFilter}
+ onChange={(event) => setRequestTypeFilter(event.target.value)}
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ >
+ <option value="all">All request types</option>
+ {MAINTENANCE_REQUEST_TYPES.map((requestType) => (
+ <option key={requestType} value={requestType}>
+ {getMaintenanceTypeMeta(requestType).label}
+ </option>
+ ))}
+ </select>
+ </label>
+
  {isOwner ? (
- <label className="min-w-[160px] flex-1">
+ <label className="xl:col-span-3">
  <span className="sr-only">Branch</span>
  <select
  value={branchFilter}
  onChange={(event) => setBranchFilter(event.target.value)}
- className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
  >
  <option value="all">All branches</option>
  {BRANCH_OPTIONS.map((branch) => (
@@ -734,58 +980,39 @@ export default function AdminMaintenancePage() {
  </label>
  ) : null}
 
- <button
- type="button"
- className="inline-flex h-9 min-w-[140px] items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-card-foreground hover:bg-muted"
- onClick={handleExport}
- disabled={filteredRequests.length === 0}
- >
- <FileDown size={14} />
- Export CSV
- </button>
- </div>
-
- <div className="mt-3 flex flex-wrap items-center gap-3">
- <label className="min-w-[170px]">
+ <label className="xl:col-span-2">
  <span className="sr-only">Date From</span>
  <input
  type="date"
  value={dateFrom}
  onChange={(event) => setDateFrom(event.target.value)}
- className="h-8 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
  />
  </label>
 
- <label className="min-w-[170px]">
+ <label className="xl:col-span-2">
  <span className="sr-only">Date To</span>
  <input
  type="date"
  value={dateTo}
  onChange={(event) => setDateTo(event.target.value)}
- className="h-8 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
  />
  </label>
 
- <label className="min-w-[180px]">
+ <label className="xl:col-span-2">
  <span className="sr-only">Sort By</span>
  <select
  value={sortMode}
  onChange={(event) => setSortMode(event.target.value)}
- className="h-8 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
+ className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-muted-foreground focus:border-border focus:outline-none focus:ring-2 focus:ring-slate-100"
  >
  <option value="newest">Newest first</option>
  <option value="urgency">Urgency high first</option>
  </select>
  </label>
-
- <button
- type="button"
- className="text-sm font-medium text-muted-foreground hover:text-card-foreground"
- onClick={handleResetFilters}
- >
- Reset Filters
- </button>
  </div>
+ ) : null}
 
  <div className="mt-4 text-sm text-muted-foreground">
  Showing {filteredRequests.length} of {summaryRequests.length} requests
@@ -1090,7 +1317,7 @@ export default function AdminMaintenancePage() {
  </strong>
  <span className="text-xs text-muted-foreground">
  {formatMaintenanceStatus(entry.status)}
- {entry.actor_name ? ` • ${entry.actor_name}` : ""}
+ {entry.actor_name ? ` - ${entry.actor_name}` : ""}
  </span>
  <p className="mt-2 text-sm text-muted-foreground">
  {entry.note || entry.event || "Status updated."}
