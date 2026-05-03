@@ -5,6 +5,7 @@ import {
   Clock3,
   FileDown,
   LayoutGrid,
+  ListOrdered,
   Settings,
   Plus,
 } from "lucide-react";
@@ -24,7 +25,7 @@ import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { roomApi } from "../../../shared/api/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { showNotification } from "../../../shared/utils/notification";
-import { exportToCSV } from "../../../shared/utils/exportUtils";
+import { exportToCSV, exportToPDF } from "../../../shared/utils/exportUtils";
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import {
   normalizeBranchFilterValue,
@@ -143,6 +144,7 @@ function RoomAvailabilityPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
   const [deletingRoom, setDeletingRoom] = useState(null);
+  const [showSoonestList, setShowSoonestList] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ROOMS_PER_PAGE = 10;
 
@@ -202,6 +204,19 @@ function RoomAvailabilityPage() {
   const featuredForecast = filteredForecast
     .filter((item) => item.nextExpectedVacancy)
     .sort((a, b) => new Date(a.nextExpectedVacancy) - new Date(b.nextExpectedVacancy))[0] || null;
+  const soonestVacancyList = useMemo(
+    () =>
+      filteredForecast
+        .filter((item) => item.nextExpectedVacancy)
+        .map((item) => ({
+          ...item,
+          soonestBed: getSoonestVacancy(item),
+          daysUntil: getDaysUntilVacancy(item.nextExpectedVacancy),
+        }))
+        .sort((a, b) => new Date(a.nextExpectedVacancy) - new Date(b.nextExpectedVacancy))
+        .slice(0, 8),
+    [filteredForecast],
+  );
   const forecastPageCount = Math.max(1, Math.ceil(filteredForecast.length / ROOMS_PER_PAGE));
   const paginatedForecast = useMemo(() => {
     const start = (currentPage - 1) * ROOMS_PER_PAGE;
@@ -212,6 +227,10 @@ function RoomAvailabilityPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, branchFilter, floorFilter, roomTypeFilter, forecastStatusFilter, activeTab]);
+
+  useEffect(() => {
+    setShowSoonestList(false);
+  }, [searchTerm, branchFilter, roomTypeFilter, forecastStatusFilter]);
 
   useEffect(() => {
     if (TAB_KEYS.has(requestedTab)) return;
@@ -250,12 +269,29 @@ function RoomAvailabilityPage() {
     const full = rooms.filter((r) => r.currentOccupancy >= r.capacity).length;
     const partial = rooms.filter((r) => r.currentOccupancy > 0 && r.currentOccupancy < r.capacity).length;
     const available = rooms.filter((r) => r.currentOccupancy === 0).length;
+    const configuredBeds = rooms.reduce((sum, room) => {
+      if (Array.isArray(room.beds) && room.beds.length > 0) return sum + room.beds.length;
+      return sum + (room.capacity || 0);
+    }, 0);
+    const maintenanceBeds = rooms.reduce((sum, room) => {
+      const beds = Array.isArray(room.beds) ? room.beds : [];
+      return sum + beds.filter((bed) => bed.status === "maintenance").length;
+    }, 0);
+    const lockedBeds = rooms.reduce((sum, room) => {
+      const beds = Array.isArray(room.beds) ? room.beds : [];
+      return sum + beds.filter((bed) => bed.status === "locked").length;
+    }, 0);
+    const floors = new Set(rooms.map((room) => room.floor).filter((floor) => floor != null)).size;
 
     return {
       total,
       full,
       partial,
       available,
+      configuredBeds,
+      maintenanceBeds,
+      lockedBeds,
+      floors,
       rate: capacity > 0 ? ((occupied / capacity) * 100).toFixed(1) : "0.0",
     };
   }, [rooms]);
@@ -266,6 +302,10 @@ function RoomAvailabilityPage() {
       const soonest = getSoonestVacancy(item);
       return soonest?.daysRemaining > 0 && soonest.daysRemaining <= 30;
     }).length;
+    const thisWeek = withDate.filter((item) => {
+      const soonest = getSoonestVacancy(item);
+      return soonest?.daysRemaining > 0 && soonest.daysRemaining <= 7;
+    }).length;
     const overdue = withDate.filter((item) => {
       const soonest = getSoonestVacancy(item);
       return soonest?.isOverdue;
@@ -274,6 +314,7 @@ function RoomAvailabilityPage() {
     return {
       total: filteredForecast.length,
       withDate: withDate.length,
+      thisWeek,
       expiringSoon,
       overdue,
     };
@@ -385,53 +426,91 @@ function RoomAvailabilityPage() {
     setSearchParams(next);
   };
 
-  const handleExportRooms = () => {
-    exportToCSV(
-      filteredRooms.map((room) => ({
-        roomName: room.name,
-        roomNumber: room.roomNumber,
-        branch: formatBranch(room.branch),
-        type: formatRoomType(room.type),
-        floor: room.floor,
-        capacity: room.capacity,
-        currentOccupancy: room.currentOccupancy || 0,
-        status: `${room.currentOccupancy || 0}/${room.capacity || 0}`,
-      })),
-      [
-        { key: "roomName", label: "Room Name" },
-        { key: "roomNumber", label: "Room Number" },
-        { key: "branch", label: "Branch" },
-        { key: "type", label: "Type" },
-        { key: "floor", label: "Floor" },
-        { key: "capacity", label: "Capacity" },
-        { key: "currentOccupancy", label: "Occupied" },
-        { key: "status", label: "Occupancy" },
-      ],
-      "room-inventory",
-    );
+  const roomExportColumns = [
+    { key: "roomName", label: "Room Name" },
+    { key: "roomNumber", label: "Room Number" },
+    { key: "branch", label: "Branch" },
+    { key: "type", label: "Type" },
+    { key: "floor", label: "Floor" },
+    { key: "capacity", label: "Capacity" },
+    { key: "currentOccupancy", label: "Occupied" },
+    { key: "status", label: "Occupancy" },
+  ];
+
+  const roomExportRows = filteredRooms.map((room) => ({
+    roomName: room.name,
+    roomNumber: room.roomNumber,
+    branch: formatBranch(room.branch),
+    type: formatRoomType(room.type),
+    floor: room.floor,
+    capacity: room.capacity,
+    currentOccupancy: room.currentOccupancy || 0,
+    status: `${room.currentOccupancy || 0}/${room.capacity || 0}`,
+  }));
+
+  const handleExportRoomsCSV = () => {
+    exportToCSV(roomExportRows, roomExportColumns, "room-inventory");
+  };
+
+  const handleExportRoomsPDF = () => {
+    exportToPDF(roomExportRows, roomExportColumns, "room-inventory", "Room Inventory");
   };
 
   // Config — 2 tabs: Rooms (merged with Bed Config) + Occupancy
   const tabs = [
-    { key: "rooms", label: "Rooms", icon: LayoutGrid },
-    { key: "occupancy", label: "Occupancy", icon: Activity },
+    { key: "rooms", label: "Room Inventory", icon: LayoutGrid },
+    { key: "occupancy", label: "Live Occupancy", icon: Activity },
     { key: "forecast", label: "Vacancy Forecast", icon: Clock3 },
   ];
 
   const roomSummaryItems = [
     { label: "Total Rooms", value: stats.total, color: "blue" },
-    { label: "Full", value: stats.full, color: "red" },
-    { label: "Partial", value: stats.partial, color: "orange" },
-    { label: "Available", value: stats.available, color: "green" },
-    { label: "Occupancy Rate", value: `${stats.rate}%`, color: "purple" },
+    { label: "Configured Beds", value: stats.configuredBeds, color: "purple" },
+    { label: "Floors", value: stats.floors, color: "blue" },
+    { label: "Maintenance Beds", value: stats.maintenanceBeds, color: "red" },
+    { label: "Locked Beds", value: stats.lockedBeds, color: "orange" },
   ];
 
   const forecastSummaryItems = [
-    { label: "Forecast Rooms", value: forecastSummary.total, color: "blue" },
-    { label: "With Dates", value: forecastSummary.withDate, color: "green" },
-    { label: "Expiring Soon", value: forecastSummary.expiringSoon, color: "orange" },
+    { label: "Rooms Tracked", value: forecastSummary.total, color: "blue" },
+    { label: "With Lease End", value: forecastSummary.withDate, color: "green" },
+    { label: "Due This Week", value: forecastSummary.thisWeek, color: "orange" },
+    { label: "Due This Month", value: forecastSummary.expiringSoon, color: "purple" },
     { label: "Overdue", value: forecastSummary.overdue, color: "red" },
   ];
+
+  const tabOverview = {
+    rooms: {
+      eyebrow: "Inventory setup",
+      title: "Room Inventory",
+      description: "Rooms, floors, capacities, and bed configuration for the selected branch scope.",
+      stats: [
+        { label: "Full rooms", value: stats.full },
+        { label: "Partially filled", value: stats.partial },
+        { label: "Empty rooms", value: stats.available },
+      ],
+    },
+    occupancy: {
+      eyebrow: "Current utilization",
+      title: "Live Occupancy",
+      description: "Committed beds, available beds, readiness status, and current occupancy by room type.",
+      stats: [
+        { label: "Occupancy rate", value: `${stats.rate}%` },
+        { label: "Full rooms", value: stats.full },
+        { label: "Empty rooms", value: stats.available },
+      ],
+    },
+    forecast: {
+      eyebrow: "Lease timeline",
+      title: "Vacancy Forecast",
+      description: "Expected future openings calculated from active tenants' move-in dates, lease durations, and extensions.",
+      stats: [
+        { label: "Tracked rooms", value: forecastSummary.total },
+        { label: "This week", value: forecastSummary.thisWeek },
+        { label: "This month", value: forecastSummary.expiringSoon },
+      ],
+    },
+  }[activeTab];
 
   const roomFilters = [
     {
@@ -615,6 +694,21 @@ function RoomAvailabilityPage() {
   return (
     <PageShell tabs={tabs} activeTab={activeTab} onTabChange={handleTabChange}>
       <PageShell.Summary>
+        <section className={`room-tab-overview room-tab-overview--${activeTab}`}>
+          <div>
+            <span className="room-tab-overview__eyebrow">{tabOverview.eyebrow}</span>
+            <h2>{tabOverview.title}</h2>
+            <p>{tabOverview.description}</p>
+          </div>
+          <div className="room-tab-overview__stats">
+            {tabOverview.stats.map((item) => (
+              <span key={item.label}>
+                <strong>{item.value}</strong>
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </section>
         {activeTab === "rooms" && <SummaryBar items={roomSummaryItems} />}
         {activeTab === "forecast" && <SummaryBar items={forecastSummaryItems} />}
       </PageShell.Summary>
@@ -640,14 +734,24 @@ function RoomAvailabilityPage() {
                     {
                       label: "Export CSV",
                       icon: FileDown,
-                      onClick: handleExportRooms,
+                      onClick: handleExportRoomsCSV,
+                    },
+                    {
+                      label: "Export PDF",
+                      icon: FileDown,
+                      onClick: handleExportRoomsPDF,
                     },
                   ]
                 : [
                     {
                       label: "Export CSV",
                       icon: FileDown,
-                      onClick: handleExportRooms,
+                      onClick: handleExportRoomsCSV,
+                    },
+                    {
+                      label: "Export PDF",
+                      icon: FileDown,
+                      onClick: handleExportRoomsPDF,
                     },
                   ]
             }
@@ -700,9 +804,6 @@ function RoomAvailabilityPage() {
             columns={columns}
             data={filteredRooms}
             loading={loading}
-            exportable={true}
-            exportFilename="Room_Availability"
-            exportTitle="Room Availability Export"
             pagination={{
               page: currentPage,
               pageSize: ROOMS_PER_PAGE,
@@ -751,7 +852,46 @@ function RoomAvailabilityPage() {
                       <span className="forecast-highlight__count">
                         {getDaysUntilVacancy(featuredForecast.nextExpectedVacancy)} days away
                       </span>
+                      <button
+                        type="button"
+                        className="forecast-highlight__list-btn"
+                        onClick={() => setShowSoonestList((visible) => !visible)}
+                        aria-expanded={showSoonestList}
+                      >
+                        <ListOrdered size={14} />
+                        {showSoonestList ? "Hide list" : "View list"}
+                      </button>
                     </div>
+                  </div>
+                )}
+
+                {showSoonestList && soonestVacancyList.length > 0 && (
+                  <div className="soonest-vacancy-list">
+                    {soonestVacancyList.map((item, index) => {
+                      const tone = getForecastTone(item.daysUntil);
+                      return (
+                        <article key={item.roomId || item.roomNumber} className="soonest-vacancy-list__row">
+                          <span className="soonest-vacancy-list__rank">{index + 1}</span>
+                          <div className="soonest-vacancy-list__room">
+                            <strong>{item.roomName || item.roomNumber}</strong>
+                            <span>
+                              {formatBranch(item.branch)} · {formatRoomType(item.type)}
+                            </span>
+                          </div>
+                          <div className="soonest-vacancy-list__bed">
+                            <span>{item.soonestBed?.position || "Bed"}</span>
+                            <small>{item.currentOccupancy || 0}/{item.capacity || 0} occupied</small>
+                          </div>
+                          <div className="soonest-vacancy-list__date">
+                            <strong>{formatForecastDate(item.nextExpectedVacancy)}</strong>
+                            <span style={{ color: tone.accent }}>{tone.label}</span>
+                          </div>
+                          <span className="soonest-vacancy-list__days">
+                            {item.daysUntil == null ? "No date" : `${item.daysUntil}d`}
+                          </span>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -779,7 +919,7 @@ function RoomAvailabilityPage() {
                             <strong>{formatForecastDate(item.nextExpectedVacancy)}</strong>
                           </div>
                           <div>
-                            <span className="forecast-card__label">Committed</span>
+                            <span className="forecast-card__label">Occupied now</span>
                             <strong>{item.currentOccupancy || 0}/{item.capacity || 0}</strong>
                           </div>
                           <div>

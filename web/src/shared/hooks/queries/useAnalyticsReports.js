@@ -72,3 +72,13 @@ export function useAnalyticsInsights(params, options = {}) {
     ...options,
   });
 }
+
+export function useAnalyticsInsightsHub(params, options = {}) {
+  return useAnalyticsInsights(
+    {
+      ...params,
+      reportType: "hub",
+    },
+    options,
+  );
+}

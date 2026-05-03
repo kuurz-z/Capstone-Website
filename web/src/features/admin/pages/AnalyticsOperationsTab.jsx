@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
-import { useOperationsReport } from "../../../shared/hooks/queries/useAnalyticsReports";
+import {
+  useOperationsReport,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
   AnalyticsBarChart,
   AnalyticsDonutChart,

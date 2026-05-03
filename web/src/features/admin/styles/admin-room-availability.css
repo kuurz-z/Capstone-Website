@@ -53,9 +53,93 @@
   line-height: 1;
 }
 
+.room-tab-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 2px 0 4px;
+}
+
+.room-tab-overview__eyebrow {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.room-tab-overview h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.room-tab-overview p {
+  max-width: 720px;
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.room-tab-overview__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(86px, 1fr));
+  gap: 8px;
+  min-width: min(360px, 100%);
+}
+
+.room-tab-overview__stats span {
+  display: flex;
+  min-height: 58px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 550;
+}
+
+.room-tab-overview__stats strong {
+  color: var(--text-primary);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.room-tab-overview--rooms {
+  border-bottom: 2px solid rgba(37, 99, 235, 0.16);
+}
+
+.room-tab-overview--occupancy {
+  border-bottom: 2px solid rgba(217, 119, 6, 0.18);
+}
+
+.room-tab-overview--forecast {
+  border-bottom: 2px solid rgba(22, 163, 74, 0.18);
+}
+
 @media (max-width: 768px) {
   .room-occupancy-cell span {
     display: none;
+  }
+
+  .room-tab-overview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .room-tab-overview__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -116,6 +200,103 @@
 .forecast-highlight__count {
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+.forecast-highlight__list-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.forecast-highlight__list-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+}
+
+.soonest-vacancy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.soonest-vacancy-list__row {
+  display: grid;
+  grid-template-columns: 34px minmax(180px, 1.4fr) minmax(130px, 0.8fr) minmax(120px, 0.8fr) 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.soonest-vacancy-list__rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.soonest-vacancy-list__room,
+.soonest-vacancy-list__bed,
+.soonest-vacancy-list__date {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.soonest-vacancy-list__room strong,
+.soonest-vacancy-list__date strong {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.soonest-vacancy-list__room span,
+.soonest-vacancy-list__bed small,
+.soonest-vacancy-list__date span {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.soonest-vacancy-list__bed span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.soonest-vacancy-list__days {
+  justify-self: end;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .forecast-grid {
@@ -299,6 +480,18 @@
   .forecast-highlight__meta {
     align-items: flex-start;
     min-width: 0;
+  }
+
+  .soonest-vacancy-list__row {
+    grid-template-columns: 28px 1fr;
+    align-items: start;
+  }
+
+  .soonest-vacancy-list__bed,
+  .soonest-vacancy-list__date,
+  .soonest-vacancy-list__days {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .forecast-card__metrics {

@@ -153,4 +153,3 @@ export function buildInsightPdfSections(insightData, title = "AI Summary") {
     },
   ];
 }
-

@@ -1453,6 +1453,91 @@ const buildAuditSummaryData = async (scope, rangeKey, tableRequest = parseTableR
   };
 };
 
+const buildFinancialsReportData = async (scope, rangeKey, tableRequest = parseTableRequest()) => {
+  if (!scope.isOwner) {
+    throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
+  }
+
+  const rangeMonths = parseReportMonths(rangeKey);
+  const sinceMonth = dayjs()
+    .subtract(rangeMonths - 1, "month")
+    .startOf("month")
+    .toDate();
+
+  const [periodBills, openBills] = await Promise.all([
+    fetchScopedBills(scope.branchesIncluded, {
+      billingMonth: { $gte: sinceMonth },
+    }),
+    fetchScopedBills(scope.branchesIncluded, {
+      status: { $in: ["pending", "overdue", "partially-paid"] },
+    }),
+  ]);
+
+  const branchComparison = buildFinancialBranchSummaries({
+    periodBills,
+    openBills,
+    branches: scope.branchesIncluded,
+  });
+  const billedAmount = periodBills.reduce(
+    (sum, bill) => sum + toNumber(bill.totalAmount),
+    0,
+  );
+  const collectedRevenue = periodBills.reduce(
+    (sum, bill) => sum + toNumber(bill.paidAmount),
+    0,
+  );
+  const outstandingBalance = openBills.reduce(
+    (sum, bill) => sum + getRemainingBalance(bill),
+    0,
+  );
+  const overdueBills = openBills.filter(
+    (bill) => bill.dueDate && dayjs(bill.dueDate).isBefore(dayjs(), "day"),
+  );
+  const overdueAmount = overdueBills.reduce(
+    (sum, bill) => sum + getRemainingBalance(bill),
+    0,
+  );
+  const collectionRate =
+    billedAmount > 0 ? Math.round((collectedRevenue / billedAmount) * 100) : 0;
+  const netPosition = collectedRevenue - overdueAmount;
+
+  return {
+    ...buildRangeEnvelope(scope, {
+      range: rangeKey,
+      since: sinceMonth.toISOString(),
+    }),
+    kpis: {
+      billedAmount,
+      billedAmountLabel: formatCurrency(billedAmount),
+      collectedRevenue,
+      collectedRevenueLabel: formatCurrency(collectedRevenue),
+      outstandingBalance,
+      outstandingBalanceLabel: formatCurrency(outstandingBalance),
+      overdueAmount,
+      overdueAmountLabel: formatCurrency(overdueAmount),
+      collectionRate,
+      collectionRateLabel: `${collectionRate}%`,
+      netPosition,
+      netPositionLabel: formatCurrency(netPosition),
+    },
+    series: {
+      revenueByMonth: buildBillingMonthSeries(periodBills, rangeMonths),
+      overdueAging: buildOverdueAging(openBills),
+      branchComparison,
+    },
+    tables: {
+      overdueRooms: buildPaginatedTable(buildOverdueRoomRows(openBills), tableRequest, {
+        sort: "outstandingBalance",
+        direction: "desc",
+      }),
+      unpaidBalances: openBills
+        .map(buildBillingTableRow)
+        .sort((left, right) => right.balance - left.balance)
+        .slice(0, 20),
+    },
+  };
+};
+
 const resolveInsightScope = async (req, branchOverride) => {
   if (!branchOverride) {
     return resolveAnalyticsScope(req);
@@ -1467,10 +1552,78 @@ const resolveInsightScope = async (req, branchOverride) => {
   });
 };
 
+const buildOccupancyForecastData = async (
+  scope,
+  { projectionMonths = 3, historyMonths = 12 } = {},
+) => {
+  const rooms = await Room.find({
+    isArchived: false,
+    branch: { $in: scope.branchesIncluded },
+  })
+    .select("_id branch type capacity")
+    .lean();
+  const roomIds = rooms.map((room) => room._id);
+  const reservations = roomIds.length
+    ? await fetchScopedReservations(roomIds)
+    : [];
+
+  const forecast = buildOccupancyForecast({
+    rooms,
+    reservations,
+    projectionMonths,
+    historyMonths,
+    scope,
+  });
+
+  return {
+    ...buildRangeEnvelope(scope, {
+      months: projectionMonths,
+      historyMonths,
+    }),
+    forecast,
+  };
+};
+
+const buildAnalyticsHubReportData = async (scope, rangeKey, options = {}) => {
+  const billingRange = String(options.billingRange || "3m").trim().toLowerCase();
+  const forecastMonths = Math.max(
+    1,
+    Math.min(Number.parseInt(options.forecastMonths, 10) || 3, 6),
+  );
+  const tableRequest = parseTableRequest({ tableLimit: 20, tableOffset: 0 });
+
+  const [occupancy, billing, operations, forecastData, audit] = await Promise.all([
+    buildOccupancyReportData(scope, rangeKey, tableRequest),
+    buildBillingReportData(scope, billingRange, tableRequest),
+    buildOperationsReportData(scope, rangeKey, tableRequest),
+    buildOccupancyForecastData(scope, { projectionMonths: forecastMonths }),
+    scope.isOwner
+      ? buildAuditSummaryData(scope, rangeKey, tableRequest)
+      : Promise.resolve(null),
+  ]);
+
+  return {
+    ...buildRangeEnvelope(scope, {
+      range: rangeKey,
+      billingRange,
+      forecastMonths,
+    }),
+    reports: {
+      occupancy,
+      billing,
+      operations,
+      ...(audit ? { audit } : {}),
+    },
+    forecast: forecastData.forecast,
+  };
+};
+
 const REPORT_BUILDERS = Object.freeze({
+  hub: { defaultRange: "30d", build: buildAnalyticsHubReportData },
   occupancy: { defaultRange: "30d", build: buildOccupancyReportData },
   billing: { defaultRange: "3m", build: buildBillingReportData },
   operations: { defaultRange: "30d", build: buildOperationsReportData },
+  financials: { defaultRange: "3m", build: buildFinancialsReportData },
   audit: { defaultRange: "30d", build: buildAuditSummaryData },
 });
 
@@ -1632,90 +1785,8 @@ export const getOperationsReport = async (req, res, next) => {
 export const getFinancialsReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
-    if (!scope.isOwner) {
-      throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
-    }
-
     const rangeKey = String(req.query.range || "3m").trim().toLowerCase();
-    const tableRequest = parseTableRequest(req.query);
-    const rangeMonths = parseReportMonths(rangeKey);
-    const sinceMonth = dayjs()
-      .subtract(rangeMonths - 1, "month")
-      .startOf("month")
-      .toDate();
-
-    const [periodBills, openBills] = await Promise.all([
-      fetchScopedBills(scope.branchesIncluded, {
-        billingMonth: { $gte: sinceMonth },
-      }),
-      fetchScopedBills(scope.branchesIncluded, {
-        status: { $in: ["pending", "overdue", "partially-paid"] },
-      }),
-    ]);
-
-    const branchComparison = buildFinancialBranchSummaries({
-      periodBills,
-      openBills,
-      branches: scope.branchesIncluded,
-    });
-    const billedAmount = periodBills.reduce(
-      (sum, bill) => sum + toNumber(bill.totalAmount),
-      0,
-    );
-    const collectedRevenue = periodBills.reduce(
-      (sum, bill) => sum + toNumber(bill.paidAmount),
-      0,
-    );
-    const outstandingBalance = openBills.reduce(
-      (sum, bill) => sum + getRemainingBalance(bill),
-      0,
-    );
-    const overdueBills = openBills.filter(
-      (bill) => bill.dueDate && dayjs(bill.dueDate).isBefore(dayjs(), "day"),
-    );
-    const overdueAmount = overdueBills.reduce(
-      (sum, bill) => sum + getRemainingBalance(bill),
-      0,
-    );
-    const collectionRate =
-      billedAmount > 0 ? Math.round((collectedRevenue / billedAmount) * 100) : 0;
-    const netPosition = collectedRevenue - overdueAmount;
-
-    sendSuccess(res, {
-      ...buildRangeEnvelope(scope, {
-        range: rangeKey,
-        since: sinceMonth.toISOString(),
-      }),
-      kpis: {
-        billedAmount,
-        billedAmountLabel: formatCurrency(billedAmount),
-        collectedRevenue,
-        collectedRevenueLabel: formatCurrency(collectedRevenue),
-        outstandingBalance,
-        outstandingBalanceLabel: formatCurrency(outstandingBalance),
-        overdueAmount,
-        overdueAmountLabel: formatCurrency(overdueAmount),
-        collectionRate,
-        collectionRateLabel: `${collectionRate}%`,
-        netPosition,
-        netPositionLabel: formatCurrency(netPosition),
-      },
-      series: {
-        revenueByMonth: buildBillingMonthSeries(periodBills, rangeMonths),
-        overdueAging: buildOverdueAging(openBills),
-        branchComparison,
-      },
-      tables: {
-        overdueRooms: buildPaginatedTable(buildOverdueRoomRows(openBills), tableRequest, {
-          sort: "outstandingBalance",
-          direction: "desc",
-        }),
-        unpaidBalances: openBills
-          .map(buildBillingTableRow)
-          .sort((left, right) => right.balance - left.balance)
-          .slice(0, 20),
-      },
-    });
+    sendSuccess(res, await buildFinancialsReportData(scope, rangeKey, parseTableRequest(req.query)));
   } catch (error) {
     next(error);
   }
@@ -1839,8 +1910,15 @@ export const getAnalyticsInsights = async (req, res, next) => {
     const rangeKey = String(req.body?.range || reportConfig.defaultRange)
       .trim()
       .toLowerCase();
+    const insightBuildOptions = {
+      billingRange: req.body?.billingRange,
+      forecastMonths: req.body?.forecastMonths,
+    };
     const question = String(req.body?.question || "").trim();
-    const reportData = await reportConfig.build(scope, rangeKey);
+    const reportData =
+      reportType === "hub"
+        ? await reportConfig.build(scope, rangeKey, insightBuildOptions)
+        : await reportConfig.build(scope, rangeKey);
     const { snapshotMeta, insight } = await generateAnalyticsInsight({
       reportType,
       scope,
@@ -1867,34 +1945,10 @@ export const getOccupancyForecast = async (req, res, next) => {
       1,
       Math.min(Number.parseInt(req.query.months, 10) || 3, 6),
     );
-    const historyMonths = 12;
-
-    const rooms = await Room.find({
-      isArchived: false,
-      branch: { $in: scope.branchesIncluded },
-    })
-      .select("_id branch type capacity")
-      .lean();
-    const roomIds = rooms.map((room) => room._id);
-    const reservations = roomIds.length
-      ? await fetchScopedReservations(roomIds)
-      : [];
-
-    const forecast = buildOccupancyForecast({
-      rooms,
-      reservations,
-      projectionMonths,
-      historyMonths,
-      scope,
-    });
-
-    sendSuccess(res, {
-      ...buildRangeEnvelope(scope, {
-        months: projectionMonths,
-        historyMonths,
-      }),
-      forecast,
-    });
+    sendSuccess(
+      res,
+      await buildOccupancyForecastData(scope, { projectionMonths }),
+    );
   } catch (error) {
     next(error);
   }

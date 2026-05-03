@@ -50,6 +50,118 @@ const billingReportData = {
   },
 };
 
+const hubReportData = {
+  filters: { range: "30d", billingRange: "3m", forecastMonths: 3 },
+  reports: {
+    occupancy: {
+      kpis: {
+        occupancyRate: 83,
+        totalCapacity: 24,
+        occupiedBeds: 20,
+        availableBeds: 4,
+        unavailableBeds: 1,
+      },
+      series: {
+        occupancyTrend: [
+          { label: "Apr 27", totalRate: 78 },
+          { label: "May 3", totalRate: 83 },
+        ],
+      },
+      tables: {
+        roomTypes: [
+          {
+            roomTypeLabel: "Private",
+            occupancyRate: 100,
+            occupiedBeds: 4,
+            capacity: 4,
+          },
+        ],
+        inventory: {
+          rows: [
+            {
+              roomNumber: "Room 705",
+              branch: "gil-puyat",
+              occupancyRate: 100,
+              availableBeds: 0,
+              unavailableBeds: 1,
+            },
+          ],
+        },
+      },
+    },
+    billing: billingReportData,
+    operations: {
+      kpis: {
+        reservations: 6,
+        inquiries: 3,
+        maintenanceRequests: 5,
+        avgResolutionHours: 18,
+        slaComplianceRate: 76,
+      },
+      series: {
+        reservationsByPeriod: [{ label: "May 3", count: 6 }],
+        maintenanceByType: [{ label: "Plumbing", count: 3 }],
+      },
+      tables: {
+        maintenanceIssues: {
+          rows: [
+            {
+              typeLabel: "Plumbing",
+              urgency: "high",
+              status: "open",
+              branch: "gil-puyat",
+              slaState: "delayed",
+            },
+          ],
+        },
+        peakInquiryWindows: [{ label: "10:00-12:00", count: 2 }],
+      },
+    },
+    audit: {
+      kpis: {
+        failedLogins: 12,
+        suspiciousIpCount: 2,
+        highSeverityActions: 1,
+        accessOverrides: 1,
+        criticalEvents: 1,
+      },
+      series: {
+        branchSummary: [
+          {
+            label: "Gil Puyat",
+            highSeverityCount: 1,
+            accessOverrideCount: 1,
+            totalEvents: 5,
+          },
+        ],
+      },
+      tables: {
+        suspiciousIps: [{ ipAddress: "127.0.0.1", attempts: 8, targetedEmails: ["masked"] }],
+        recentSecurityEvents: {
+          rows: [{ branch: "gil-puyat", action: "role_update", severity: "high" }],
+        },
+      },
+    },
+  },
+  forecast: {
+    sufficientHistory: true,
+    historyMonthsAvailable: 5,
+    requiredHistoryMonths: 4,
+    projected: [
+      {
+        label: "Jun 2026",
+        projectedOccupancyRate: 87,
+        baselineRate: 83,
+        seasonalMultiplier: 1.05,
+      },
+    ],
+    insights: {
+      headline: "Gil Puyat occupancy is projected to rise next month.",
+      recommendations: ["Prepare available rooms before June demand rises."],
+    },
+  },
+};
+
 describe("generateAnalyticsInsight", () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
@@ -215,5 +327,75 @@ describe("generateAnalyticsInsight", () => {
     expect(result.snapshotMeta.usedFallback).toBe(true);
     expect(result.snapshotMeta.fallbackReason).toBeTruthy();
     expect(result.insight.headline).toEqual(expect.any(String));
+  });
+
+  test("normalizes Gemini hub responses with risks and forecast highlights", async () => {
+    process.env.AI_INSIGHTS_PROVIDER = "gemini";
+    process.env.GEMINI_API_KEY = "test-key";
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    headline: "The AI hub found collection and maintenance risk.",
+                    summary: "Occupancy is strong, but overdue balances and delayed maintenance need attention.",
+                    keyFindings: ["Occupancy is 83%."],
+                    riskAlerts: ["PHP 9,000 is overdue."],
+                    forecastHighlights: ["Jun 2026 is projected at 87% occupancy."],
+                    recommendedActions: ["Follow up overdue balances first."],
+                    confidence: "medium",
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    }));
+
+    const result = await generateAnalyticsInsight({
+      reportType: "hub",
+      scope,
+      filters: hubReportData.filters,
+      reportData: hubReportData,
+    });
+
+    expect(result.snapshotMeta).toMatchObject({
+      reportType: "hub",
+      provider: "gemini",
+      usedFallback: false,
+    });
+    expect(result.insight).toMatchObject({
+      riskAlerts: ["PHP 9,000 is overdue."],
+      forecastHighlights: ["Jun 2026 is projected at 87% occupancy."],
+      confidence: "medium",
+    });
+  });
+
+  test("builds heuristic hub insight when Gemini is unavailable", async () => {
+    process.env.AI_INSIGHTS_PROVIDER = "gemini";
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_AI_API_KEY;
+
+    const result = await generateAnalyticsInsight({
+      reportType: "hub",
+      scope,
+      filters: hubReportData.filters,
+      reportData: hubReportData,
+      question: "What needs attention?",
+    });
+
+    expect(result.snapshotMeta).toMatchObject({
+      reportType: "hub",
+      provider: "heuristic-fallback",
+      usedFallback: true,
+    });
+    expect(result.insight.riskAlerts.length).toBeGreaterThan(0);
+    expect(result.insight.forecastHighlights.length).toBeGreaterThan(0);
+    expect(result.insight.summary).toContain("You asked");
   });
 });

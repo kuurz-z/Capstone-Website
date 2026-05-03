@@ -22,6 +22,7 @@ test("owners get owner-only tabs", () => {
     "occupancy",
     "billing",
     "operations",
+    "consolidated",
     "financials",
     "monitoring",
   ]);

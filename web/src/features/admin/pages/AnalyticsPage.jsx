@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo } from "react";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, Download, ExternalLink } from "lucide-react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
+  useAnalyticsInsightsHub,
   useBillingReport,
   useOccupancyReport,
   useOperationsReport,
 } from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
   AnalyticsBarChart,
+  AnalyticsInsightsHub,
   AnalyticsLineChart,
   AnalyticsTabLayout,
   AnalyticsToolbar,
@@ -22,6 +24,7 @@ import {
 } from "./analyticsNavigation.mjs";
 import {
   buildBranchControl,
+  handlePdfExport,
   MetricGrid,
   RANGE_OPTIONS_SHORT,
 } from "./analyticsTabShared";
@@ -169,6 +172,11 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
   const occupancyQuery = useOccupancyReport(sharedDayParams);
   const billingQuery = useBillingReport(billingParams);
   const operationsQuery = useOperationsReport(sharedDayParams);
+  const hubQuery = useAnalyticsInsightsHub({
+    range,
+    billingRange: billingParams.range,
+    ...(isOwner ? { branch } : {}),
+  });
 
   const occupancyData = occupancyQuery.data;
   const billingData = billingQuery.data;
@@ -241,6 +249,33 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
     branch,
     isOwner,
   });
+  const exportHubPdf = () => {
+    const insight = hubQuery.data?.insight;
+    if (!insight) return;
+
+    handlePdfExport({
+      title: "AI Insights Hub",
+      subtitle: `${buildRangeLabel(range)} - ${branchLabel}`,
+      filename: `analytics-ai-insights-${range}.pdf`,
+      kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
+      sections: [
+        {
+          title: "AI Summary",
+          description: "Consolidated AI narrative from occupancy, billing, operations, and forecast data.",
+          rows: [
+            insight.headline ? `Headline: ${insight.headline}` : null,
+            insight.summary ? `Summary: ${insight.summary}` : null,
+            insight.confidence ? `Confidence: ${insight.confidence}` : null,
+            ...(insight.keyFindings || []).map((item) => `What stands out: ${item}`),
+            ...(insight.riskAlerts || []).map((item) => `Risk: ${item}`),
+            ...(insight.forecastHighlights || []).map((item) => `Forecast: ${item}`),
+            ...(insight.recommendedActions || []).map((item) => `Action: ${item}`),
+            insight.disclaimer ? `Disclaimer: ${insight.disclaimer}` : null,
+          ].filter(Boolean),
+        },
+      ],
+    });
+  };
 
   return (
     <AnalyticsTabLayout
@@ -274,13 +309,24 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
             },
           })}
           actions={
-            <Link
-              to={occupancyDetailHref}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
-            >
-              View detailed analytics
-              <ArrowRight size={16} />
-            </Link>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={exportHubPdf}
+                disabled={!hubQuery.data?.insight}
+              >
+                <Download size={16} />
+                Export AI PDF
+              </button>
+              <Link
+                to={occupancyDetailHref}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+              >
+                View detailed analytics
+                <ArrowRight size={16} />
+              </Link>
+            </div>
           }
         />
       }
@@ -291,6 +337,12 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
             Some summary sections could not be loaded. Available data is shown where possible.
           </div>
         ) : null}
+
+        <AnalyticsInsightsHub
+          data={hubQuery.data}
+          isLoading={hubQuery.isLoading}
+          isError={hubQuery.isError}
+        />
 
         <section
           className="analytics-summary-overview"

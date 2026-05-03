@@ -1,8 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BarChart3 } from "lucide-react";
 import { digitalTwinApi } from "../../../shared/api/digitalTwinApi";
 import { formatRoomType, formatBranch } from "../utils/formatters";
-import { useVacancyForecast } from "../../../shared/hooks/queries/useRooms";
 import { useDigitalTwinSnapshot } from "../../../shared/hooks/queries/useDigitalTwin";
 import { SummaryBar, ActionBar, DataTable, StatusBadge } from "../components/shared";
 
@@ -41,15 +40,17 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [showRoomDetails, setShowRoomDetails] = useState(false);
   const [loadingRoomDetails, setLoadingRoomDetails] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROOMS_PER_PAGE = 10;
 
   const branch = branchFilter === "all" ? "all" : branchFilter;
   const { data: snapshot, isLoading: loading, error: queryError } = useDigitalTwinSnapshot(branch);
-  const { data: vacancyResponse } = useVacancyForecast({
-    branch: branchFilter === "all" ? null : branchFilter,
-  });
   const error = queryError ? "Failed to load occupancy data" : null;
   const rooms = snapshot?.rooms || [];
-  const vacancyForecast = vacancyResponse?.forecast || [];
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [branchFilter]);
 
   const handleViewRoomDetails = async (room) => {
     setLoadingRoomDetails(true);
@@ -95,11 +96,6 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
       return { type, count: typeRooms.length, capacity, occupied, rate };
     });
   }, [rooms]);
-
-  const forecastByRoomId = useMemo(
-    () => new Map(vacancyForecast.map((item) => [String(item.roomId), item])),
-    [vacancyForecast],
-  );
 
   // Summary items
   const summaryItems = [
@@ -182,15 +178,6 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
       },
     },
     {
-      key: "forecast",
-      label: "Next Vacancy",
-      render: (r) => {
-        const forecast = forecastByRoomId.get(String(r._id));
-        if (!forecast?.nextExpectedVacancy) return "No forecast";
-        return new Date(forecast.nextExpectedVacancy).toLocaleDateString();
-      },
-    },
-    {
       key: "action",
       label: "Action",
       align: "right",
@@ -223,7 +210,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         <div className="admin-section-header">
           <h1>Occupancy Tracking</h1>
           <p className="admin-section-subtitle">
-            Monitor committed occupancy, bed status, and upcoming vacancies.
+            Monitor committed occupancy, live bed status, and remaining capacity.
           </p>
         </div>
       )}
@@ -281,31 +268,6 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         </div>
       </div>
 
-      {vacancyForecast.length > 0 && (
-        <div className="occupancy-type-breakdown">
-          <h3 className="occupancy-section-heading">Upcoming Vacancies</h3>
-          <div className="occupancy-type-cards">
-            {vacancyForecast
-              .filter((item) => item.nextExpectedVacancy)
-              .slice(0, 4)
-              .map((item) => (
-                <div key={item.roomId} className="occupancy-type-card">
-                  <div className="occupancy-type-card-header">
-                    <span className="occupancy-type-name">{item.roomName || item.roomNumber}</span>
-                    <span className="occupancy-type-count">{formatBranch(item.branch)}</span>
-                  </div>
-                  <span className="occupancy-type-stat">
-                    Next vacancy: {new Date(item.nextExpectedVacancy).toLocaleDateString()}
-                  </span>
-                  <span className="occupancy-type-stat">
-                    {item.currentOccupancy} / {item.capacity} committed
-                  </span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
       {/* Room Table — using shared DataTable */}
       <DataTable
         columns={columns}
@@ -314,6 +276,12 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
         exportable={true}
         exportFilename="Occupancy_Tracking"
         exportTitle="Occupancy Tracking Export"
+        pagination={{
+          page: currentPage,
+          pageSize: ROOMS_PER_PAGE,
+          total: rooms.length,
+          onPageChange: setCurrentPage,
+        }}
         emptyState={{
           icon: BarChart3,
           title: "No rooms found",

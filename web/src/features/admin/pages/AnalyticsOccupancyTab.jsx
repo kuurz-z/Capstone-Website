@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
-import { useOccupancyForecast, useOccupancyReport } from "../../../shared/hooks/queries/useAnalyticsReports";
+import {
+  useOccupancyForecast,
+  useOccupancyReport,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
   AnalyticsDonutChart,
   AnalyticsLineChart,
@@ -35,37 +38,6 @@ const INVENTORY_COLUMNS = [
   { key: "occupancyRate", label: "Rate", render: (row) => `${row.occupancyRate}%` },
 ];
 const TABLE_PAGE_SIZE = 10;
-
-function ForecastCards({ forecast }) {
-  const projectedMonths = forecast?.projected || [];
-  const recommendations = forecast?.insights?.recommendations || [];
-
-  if (!forecast?.sufficientHistory) {
-    return (
-      <p className="admin-reports__hint">
-        {forecast?.insights?.headline || "Insufficient history to forecast occupancy."}
-      </p>
-    );
-  }
-
-  return (
-    <div className="admin-reports__panel-stack">
-      <p className="admin-reports__hint">{forecast.insights?.headline}</p>
-      {projectedMonths.map((item) => (
-        <div key={item.month} className="admin-reports__meta-card">
-          <span className="admin-reports__meta-label">{item.label}</span>
-          <div className="admin-reports__meta-value">{item.projectedOccupancyRate}%</div>
-          <p className="admin-reports__hint">
-            Baseline {item.baselineRate}% • Seasonal {item.seasonalMultiplier}x
-          </p>
-        </div>
-      ))}
-      {recommendations.slice(0, 2).map((item) => (
-        <p key={item} className="admin-reports__hint">{item}</p>
-      ))}
-    </div>
-  );
-}
 
 export default function AnalyticsOccupancyTab({
   branch,
@@ -138,7 +110,7 @@ export default function AnalyticsOccupancyTab({
   const exportPdf = () => {
     handlePdfExport({
       title: "Occupancy Report",
-      subtitle: `${buildRangeLabel(range)} • ${formatBranch(data?.scope?.branch || branch)}`,
+      subtitle: `${buildRangeLabel(range)} - ${formatBranch(data?.scope?.branch || branch)}`,
       filename: `occupancy-report-${range}.pdf`,
       kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
       sections: [
@@ -152,7 +124,7 @@ export default function AnalyticsOccupancyTab({
         {
           title: "Inventory Snapshot",
           rows: inventory.slice(0, 12).map(
-            (item) => `${item.roomNumber} • ${item.roomTypeLabel} • ${item.occupiedBeds}/${item.capacity} occupied`,
+            (item) => `${item.roomNumber} - ${item.roomTypeLabel} - ${item.occupiedBeds}/${item.capacity} occupied`,
           ),
         },
       ],
@@ -164,8 +136,15 @@ export default function AnalyticsOccupancyTab({
       header={
         <AnalyticsToolbar
           title="Occupancy Analytics"
-          subtitle={`Scope: ${formatBranch(data?.scope?.branch || branch)} • ${buildRangeLabel(range)}`}
-          range={{ value: range, onChange: (value) => { setPage(1); onRangeChange(value); }, options: RANGE_OPTIONS_SHORT }}
+          subtitle={`Scope: ${formatBranch(data?.scope?.branch || branch)} - ${buildRangeLabel(range)}`}
+          range={{
+            value: range,
+            onChange: (value) => {
+              setPage(1);
+              onRangeChange(value);
+            },
+            options: RANGE_OPTIONS_SHORT,
+          }}
           branch={buildBranchControl({
             isOwner,
             branch,
@@ -212,24 +191,18 @@ export default function AnalyticsOccupancyTab({
         </ReportChartPanel>
       </div>
 
-      <div className="admin-reports__grid">
-        <ReportChartPanel title="Forecast panel" subtitle="Projected occupancy compared with recent baseline">
-          <AnalyticsLineChart
-            data={forecastSeries}
-            lines={[
-              { key: "projected", label: "Projected occupancy" },
-              { key: "baseline", label: "Baseline rate", color: "#0f766e" },
-            ]}
-            valueFormatter={(value) => `${value}%`}
-            emptyTitle="Forecast unavailable"
-            emptyDescription="More occupancy history is needed before a forecast can be shown."
-          />
-        </ReportChartPanel>
-
-        <ReportChartPanel title="Forecast insights" subtitle="Deterministic 3-month occupancy projection">
-          <ForecastCards forecast={forecast} />
-        </ReportChartPanel>
-      </div>
+      <ReportChartPanel title="Forecast panel" subtitle="Projected occupancy compared with recent baseline">
+        <AnalyticsLineChart
+          data={forecastSeries}
+          lines={[
+            { key: "projected", label: "Projected occupancy" },
+            { key: "baseline", label: "Baseline rate", color: "#0f766e" },
+          ]}
+          valueFormatter={(value) => `${value}%`}
+          emptyTitle="Forecast unavailable"
+          emptyDescription="More occupancy history is needed before a forecast can be shown."
+        />
+      </ReportChartPanel>
 
       <ReportChartPanel title="Inventory table" subtitle="Current room capacity, occupancy, and unavailable inventory">
         <DataTable

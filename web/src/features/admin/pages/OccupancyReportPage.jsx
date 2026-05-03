@@ -2,10 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download, FileDown } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
-import {
-  useOccupancyForecast,
-  useOccupancyReport,
-} from "../../../shared/hooks/queries/useAnalyticsReports";
+import { useOccupancyReport } from "../../../shared/hooks/queries/useAnalyticsReports";
 import { exportToCSV } from "../../../shared/utils/exportUtils";
 import { exportReportPdf } from "../../../shared/utils/reportPdf";
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
@@ -82,15 +79,9 @@ export default function OccupancyReportPage() {
   );
 
   const { data, isLoading, isError } = useOccupancyReport(params);
-  const { data: forecastData } = useOccupancyForecast({
-    months: 3,
-    ...(isOwner ? { branch } : {}),
-  });
   const inventory = data?.tables?.inventory || [];
   const roomTypes = data?.tables?.roomTypes || [];
   const trend = data?.series?.occupancyTrend || [];
-  const forecast = forecastData?.forecast || {};
-  const projectedMonths = forecast.projected || [];
   const latestTrend = trend.slice(-10).map((item) => ({
     label: item.label,
     value: item.totalRate,
@@ -119,7 +110,7 @@ export default function OccupancyReportPage() {
   const handlePdfExport = () => {
     exportReportPdf({
       title: "Occupancy Report",
-      subtitle: `${buildRangeLabel(range)} • ${formatBranch(data?.scope?.branch || branch)}`,
+      subtitle: `${buildRangeLabel(range)} - ${formatBranch(data?.scope?.branch || branch)}`,
       filename: `occupancy-report-${range}.pdf`,
       kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
       sections: [
@@ -134,7 +125,7 @@ export default function OccupancyReportPage() {
           title: "Inventory Snapshot",
           rows: inventory.slice(0, 12).map(
             (item) =>
-              `${item.roomNumber} • ${item.roomTypeLabel} • ${item.occupiedBeds}/${item.capacity} occupied`,
+              `${item.roomNumber} - ${item.roomTypeLabel} - ${item.occupiedBeds}/${item.capacity} occupied`,
           ),
         },
       ],
@@ -150,7 +141,7 @@ export default function OccupancyReportPage() {
       <PageShell.Summary>
         <ReportFilterBar
           title="Occupancy report"
-          subtitle={`${buildRangeLabel(range)} • Scope: ${formatBranch(data?.scope?.branch || branch)}`}
+          subtitle={`${buildRangeLabel(range)} - Scope: ${formatBranch(data?.scope?.branch || branch)}`}
           controls={
             <div className="admin-reports__actions">
               <button className="action-bar__btn action-bar__btn--ghost" onClick={handleCsvExport}>
@@ -232,33 +223,6 @@ export default function OccupancyReportPage() {
             />
           </ReportChartPanel>
         </div>
-
-        <ReportChartPanel
-          title="Forecasting insights"
-          subtitle="Deterministic 3-month occupancy projection"
-        >
-          {forecast.sufficientHistory ? (
-            <div className="admin-reports__panel-stack">
-              <p className="admin-reports__hint">{forecast.insights?.headline}</p>
-              {projectedMonths.map((item) => (
-                <div key={item.month} className="admin-reports__meta-card">
-                  <span className="admin-reports__meta-label">{item.label}</span>
-                  <div className="admin-reports__meta-value">{item.projectedOccupancyRate}%</div>
-                  <p className="admin-reports__hint">
-                    Baseline {item.baselineRate}% • Seasonal {item.seasonalMultiplier}x
-                  </p>
-                </div>
-              ))}
-              {(forecast.insights?.recommendations || []).slice(0, 2).map((item) => (
-                <p key={item} className="admin-reports__hint">{item}</p>
-              ))}
-            </div>
-          ) : (
-            <p className="admin-reports__hint">
-              {forecast.insights?.headline || "Insufficient history to forecast occupancy."}
-            </p>
-          )}
-        </ReportChartPanel>
 
         <ReportChartPanel
           title="Inventory snapshot"

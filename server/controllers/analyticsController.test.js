@@ -821,6 +821,208 @@ describe("analyticsController", () => {
     expect(JSON.stringify(payload.snapshotMeta)).not.toContain("mia@example.com");
   });
 
+  test("builds AI insights for owner financial analytics", async () => {
+    getUserBranchInfo.mockResolvedValue({
+      role: "owner",
+      branch: "gil-puyat",
+      isOwner: true,
+    });
+    billFind
+      .mockReturnValueOnce(
+        createLeanChain([
+          {
+            _id: "bill-fin-1",
+            branch: "gil-puyat",
+            status: "paid",
+            totalAmount: 16000,
+            paidAmount: 14000,
+            remainingAmount: 2000,
+            billingMonth: "2026-03-01T00:00:00.000Z",
+            dueDate: "2026-03-08T00:00:00.000Z",
+            roomId: { name: "Room 201", branch: "gil-puyat" },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(
+        createLeanChain([
+          {
+            _id: "bill-fin-2",
+            branch: "gil-puyat",
+            status: "overdue",
+            totalAmount: 12000,
+            paidAmount: 2000,
+            remainingAmount: 10000,
+            dueDate: "2026-03-05T00:00:00.000Z",
+            roomId: { name: "Room 202", branch: "gil-puyat" },
+          },
+        ]),
+      );
+
+    const req = {
+      user: { uid: "owner-ai-financials", owner: true },
+      query: {},
+      body: {
+        reportType: "financials",
+        range: "3m",
+        branch: "gil-puyat",
+      },
+    };
+    const res = { req };
+    const next = jest.fn();
+
+    await getAnalyticsInsights(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(sendSuccess).toHaveBeenCalledWith(
+      res,
+      expect.objectContaining({
+        snapshotMeta: expect.objectContaining({
+          reportType: "financials",
+          provider: "heuristic-fallback",
+          usedFallback: true,
+        }),
+        insight: expect.objectContaining({
+          headline: expect.any(String),
+          keyFindings: expect.any(Array),
+          recommendedActions: expect.any(Array),
+        }),
+      }),
+    );
+  });
+
+  test("builds the consolidated AI hub without leaking branch-admin scope", async () => {
+    process.env.AI_INSIGHTS_PROVIDER = "heuristic";
+    getUserBranchInfo.mockResolvedValue({
+      role: "branch_admin",
+      branch: "gil-puyat",
+      isOwner: false,
+    });
+
+    const rooms = [
+      {
+        _id: "room-1",
+        name: "Room 101",
+        roomNumber: "101",
+        branch: "gil-puyat",
+        type: "private",
+        capacity: 2,
+        currentOccupancy: 2,
+        available: true,
+        beds: [],
+      },
+    ];
+    roomFind
+      .mockReturnValueOnce(createLeanChain(rooms))
+      .mockReturnValueOnce(createLeanChain(rooms))
+      .mockReturnValueOnce(createLeanChain(rooms));
+    reservationFind.mockReturnValue(
+      createLeanChain([
+        {
+          _id: "res-1",
+          roomId: { _id: "room-1", branch: "gil-puyat", type: "private" },
+          userId: { firstName: "Masked", lastName: "Tenant" },
+          status: "moveIn",
+          createdAt: "2026-01-01T08:00:00.000Z",
+          moveInDate: "2026-01-05T08:00:00.000Z",
+          moveOutDate: "2026-02-20T08:00:00.000Z",
+        },
+      ]),
+    );
+    billFind
+      .mockReturnValueOnce(
+        createLeanChain([
+          {
+            _id: "bill-1",
+            branch: "gil-puyat",
+            status: "partially-paid",
+            totalAmount: 10000,
+            paidAmount: 6000,
+            remainingAmount: 4000,
+            billingMonth: "2026-03-01T00:00:00.000Z",
+            dueDate: "2026-03-05T00:00:00.000Z",
+            roomId: { name: "Room 101", branch: "gil-puyat" },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(
+        createLeanChain([
+          {
+            _id: "bill-2",
+            branch: "gil-puyat",
+            status: "overdue",
+            totalAmount: 9000,
+            paidAmount: 1000,
+            remainingAmount: 8000,
+            dueDate: "2026-03-05T00:00:00.000Z",
+            roomId: { name: "Room 101", branch: "gil-puyat" },
+          },
+        ]),
+      );
+    inquiryFind.mockReturnValue(createLeanChain([]));
+    maintenanceFind.mockReturnValue(
+      createLeanChain([
+        {
+          _id: "maint-1",
+          request_id: "MR-1",
+          request_type: "plumbing",
+          urgency: "high",
+          status: "open",
+          branch: "gil-puyat",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ]),
+    );
+
+    const req = {
+      user: { uid: "branch-ai-hub" },
+      query: {},
+      body: {
+        reportType: "hub",
+        range: "30d",
+        billingRange: "3m",
+        branch: "guadalupe",
+      },
+    };
+    const res = { req };
+    const next = jest.fn();
+
+    await getAnalyticsInsights(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(roomFind).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: { $in: ["gil-puyat"] },
+      }),
+    );
+    expect(sendSuccess).toHaveBeenCalledWith(
+      res,
+      expect.objectContaining({
+        scope: expect.objectContaining({
+          role: "branch_admin",
+          branch: "gil-puyat",
+          branchesIncluded: ["gil-puyat"],
+        }),
+        filters: expect.objectContaining({
+          range: "30d",
+          billingRange: "3m",
+        }),
+        snapshotMeta: expect.objectContaining({
+          reportType: "hub",
+        }),
+        insight: expect.objectContaining({
+          riskAlerts: expect.any(Array),
+          forecastHighlights: expect.any(Array),
+          recommendedActions: expect.any(Array),
+        }),
+      }),
+    );
+
+    const [, payload] = sendSuccess.mock.calls.at(-1);
+    expect(payload.snapshotMeta.promptPreview.metricsIncluded).not.toContain(
+      "criticalSecurityEvents",
+    );
+  });
+
   test("returns deterministic occupancy forecast when enough history exists", async () => {
     getUserBranchInfo.mockResolvedValue({
       role: "branch_admin",

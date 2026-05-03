@@ -191,6 +191,14 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
     >
       <MetricGrid items={metricCards} />
 
+      <AnalyticsInsightSection
+        reportLabel="security"
+        summaryTitle="Security Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
+
       <ReportChartPanel
         title="System performance"
         subtitle="Owner-only runtime, database, and active-session health from the last 24 hours"
@@ -238,14 +246,6 @@ export default function AnalyticsMonitoringTab({ branch, range, onBranchChange, 
           </div>
         )}
       </ReportChartPanel>
-
-      <AnalyticsInsightSection
-        reportLabel="security"
-        summaryTitle="Security Summary"
-        data={insightData}
-        isLoading={isInsightLoading}
-        isError={isInsightError}
-      />
 
       <div className="admin-reports__grid">
         <ReportChartPanel title="Severity distribution" subtitle="Security and audit events by severity">

@@ -18,3 +18,16 @@ test("financial analytics lets DataTable handle overdue room pagination", async 
   assert.match(source, /total: overdueRoomsPagination\.total/);
   assert.match(source, /serverPagination/);
 });
+
+test("financial analytics keeps its AI report panel", async () => {
+  const source = await readFile(
+    path.join(__dirname, "AnalyticsFinancialsTab.jsx"),
+    "utf8",
+  );
+
+  assert.match(source, /useReportInsights/);
+  assert.match(source, /reportType: "financials"/);
+  assert.match(source, /<AnalyticsInsightSection/);
+  assert.match(source, /summaryTitle="Financial Summary"/);
+  assert.match(source, /AI Financial Summary/);
+});

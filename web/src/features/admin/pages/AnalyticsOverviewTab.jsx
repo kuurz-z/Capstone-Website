@@ -28,19 +28,17 @@ import {
 
 function ForecastCards({ forecast }) {
   const projectedMonths = forecast?.projected || [];
-  const recommendations = forecast?.insights?.recommendations || [];
 
   if (!forecast?.sufficientHistory) {
     return (
       <p className="text-sm text-slate-500 italic py-4">
-        {forecast?.insights?.headline || "Insufficient history to forecast occupancy."}
+        Insufficient history to forecast occupancy.
       </p>
     );
   }
 
   return (
     <div className="flex flex-col gap-4 py-2">
-      <p className="text-sm font-medium text-slate-700">{forecast.insights?.headline}</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {projectedMonths.map((item) => (
           <div key={item.month} className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex flex-col gap-1">
@@ -49,14 +47,6 @@ function ForecastCards({ forecast }) {
             <p className="text-xs text-slate-500 mt-1">
               Baseline <span className="font-medium text-slate-700">{item.baselineRate}%</span> • Seasonal <span className="font-medium text-slate-700">{item.seasonalMultiplier}x</span>
             </p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex flex-col gap-2">
-        {recommendations.slice(0, 2).map((item, i) => (
-          <div key={item} className="flex items-start gap-2.5 bg-blue-50/50 p-3 rounded-lg border border-blue-100/50">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5" />
-            <p className="text-sm text-slate-700 leading-relaxed">{item}</p>
           </div>
         ))}
       </div>
@@ -255,12 +245,6 @@ export default function AnalyticsOverviewTab({
         </ReportChartPanel>
       </div>
 
-      <ReportChartPanel
-        title="Forecasting insights"
-        subtitle="Actionable branch planning signals from the current projection"
-      >
-        <ForecastCards forecast={forecast} />
-      </ReportChartPanel>
     </AnalyticsTabLayout>
   );
 }

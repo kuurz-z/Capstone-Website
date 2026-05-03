@@ -63,12 +63,8 @@ export default function AnalyticsInsightPanel({
         <h3 className="analytics-insight-panel__headline">{insight.headline}</h3>
         <p className="analytics-insight-panel__summary">{insight.summary}</p>
         <div className="analytics-insight-panel__meta">
-          <span className="analytics-insight-panel__pill">
-            {subtitle}
-          </span>
-          <span className="analytics-insight-panel__pill">
-            {providerLabel}
-          </span>
+          <span className="analytics-insight-panel__pill">{subtitle}</span>
+          <span className="analytics-insight-panel__pill">{providerLabel}</span>
           <span className="analytics-insight-panel__pill">
             How sure: {insight.confidence || "low"}
           </span>

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { useFinancialsAnalytics } from "../../../shared/hooks/queries/useAnalyticsReports";
+import {
+  useFinancialsAnalytics,
+} from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
   AnalyticsBarChart,
   AnalyticsComparisonChart,
@@ -10,6 +12,8 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatPeso } from "./reportCommon";
 import {
+  AnalyticsInsightSection,
+  buildInsightPdfSections,
   ExportButtons,
   buildServerTableParams,
   getTablePagination,
@@ -18,6 +22,7 @@ import {
   handlePdfExport,
   MetricGrid,
   RANGE_OPTIONS_LONG,
+  useReportInsights,
 } from "./analyticsTabShared";
 
 const OVERDUE_ROOM_COLUMNS = [
@@ -45,6 +50,15 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
     [branch, page, range],
   );
   const { data, isLoading, isError } = useFinancialsAnalytics(params);
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "financials",
+    range,
+    branch,
+  });
   const branchComparison = data?.series?.branchComparison || [];
   const revenueByMonth = data?.series?.revenueByMonth || [];
   const overdueAging = data?.series?.overdueAging || [];
@@ -80,6 +94,7 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
       filename: `financial-overview-${range}.pdf`,
       kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
       sections: [
+        ...buildInsightPdfSections(insightData, "AI Financial Summary"),
         {
           title: "Branch Comparison",
           rows: branchComparison.map(
@@ -121,6 +136,14 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
       }
     >
       <MetricGrid items={metricCards} />
+
+      <AnalyticsInsightSection
+        reportLabel="financial"
+        summaryTitle="Financial Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
 
       <div className="admin-reports__grid">
         <ReportChartPanel title="Branch comparison" subtitle="Collections, overdue exposure, and collection rate by branch">

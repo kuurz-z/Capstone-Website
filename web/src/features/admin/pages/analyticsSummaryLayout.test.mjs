@@ -13,7 +13,12 @@ async function readSource(fileName) {
 
 test("analytics summary keeps a KPI-plus-chart overview structure", async () => {
   const source = await readSource("AnalyticsPage.jsx");
+  const hubSource = await readSource(
+    path.join("..", "components", "shared", "AnalyticsInsightsHub.jsx"),
+  );
 
+  assert.match(source, /<AnalyticsInsightsHub/);
+  assert.match(hubSource, /data-ai-insights-hub/);
   assert.match(source, /className="analytics-summary-focus flex flex-col gap-6"/);
   assert.match(source, /className="analytics-summary-layout"/);
   assert.match(source, /className="analytics-summary-overview__header"/);
@@ -28,6 +33,31 @@ test("analytics summary keeps a KPI-plus-chart overview structure", async () => 
   assert.match(source, /data-summary-focus-section="billing"/);
   assert.match(source, /data-summary-focus-section="operations"/);
   assert.match(source, /data-summary-focus-sections="true"/);
+});
+
+test("analytics detail tabs keep per-tab AI report panels", async () => {
+  const expectedReports = [
+    ["AnalyticsOccupancyTab.jsx", "occupancy", "Occupancy Summary"],
+    ["AnalyticsBillingTab.jsx", "billing", "Billing Summary"],
+    ["AnalyticsOperationsTab.jsx", "operations", "Operations Summary"],
+    ["AnalyticsFinancialsTab.jsx", "financials", "Financial Summary"],
+    ["AnalyticsMonitoringTab.jsx", "audit", "Security Summary"],
+  ];
+
+  for (const [fileName, reportType, summaryTitle] of expectedReports) {
+    const source = await readSource(fileName);
+
+    assert.match(source, /useReportInsights/);
+    assert.match(source, /<AnalyticsInsightSection/);
+    assert.match(source, /buildInsightPdfSections/);
+    assert.match(source, new RegExp(`reportType: "${reportType}"`));
+    assert.match(source, new RegExp(`summaryTitle="${summaryTitle}"`));
+  }
+
+  const consolidatedSource = await readSource("AnalyticsConsolidatedTab.jsx");
+  assert.match(consolidatedSource, /useAnalyticsInsightsHub/);
+  assert.match(consolidatedSource, /<AnalyticsInsightsHub/);
+  assert.match(consolidatedSource, /title="AI Consolidated Report"/);
 });
 
 test("analytics summary no longer renders the legacy stacked summary section helper", async () => {
