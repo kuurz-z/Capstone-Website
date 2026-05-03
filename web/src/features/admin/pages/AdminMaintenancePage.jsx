@@ -306,6 +306,20 @@ const createFilterPayload = ({
  return filters;
 };
 
+const AVATAR_PALETTES = [
+  { bg: "bg-blue-700",    text: "text-white"    },
+  { bg: "bg-emerald-700", text: "text-white"  },
+  { bg: "bg-violet-700",  text: "text-white"   },
+  { bg: "bg-rose-700",    text: "text-white"     },
+  { bg: "bg-amber-700",   text: "text-white"    },
+  { bg: "bg-cyan-700",    text: "text-white"     },
+];
+
+const getAvatarPalette = (name = "") => {
+  const index = [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_PALETTES.length;
+  return AVATAR_PALETTES[index];
+};
+
 export default function AdminMaintenancePage() {
  const { user } = useAuth();
  const isOwner = user?.role === "owner";
@@ -689,7 +703,7 @@ export default function AdminMaintenancePage() {
  label: "Tenant",
  render: (row) => (
  <div className="flex items-center gap-3">
- <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50 text-xs font-semibold text-warning-dark">
+ <div className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ${getAvatarPalette(row.tenant?.full_name).bg} ${getAvatarPalette(row.tenant?.full_name).text}`}>
  {(row.tenant?.full_name || "T")
  .split(/\s+/)
  .filter(Boolean)
