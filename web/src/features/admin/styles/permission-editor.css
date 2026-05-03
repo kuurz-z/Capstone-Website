@@ -1,13 +1,13 @@
 /* ═══════════════════════════════════════════════════
    Permission Editor — Design Token Migration
    ═══════════════════════════════════════════════════ */
-@import "../../admin/styles/design-tokens.css";
+@import "design-tokens.css";
 
 .permission-editor {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: var(--card);
+  background: var(--bg-card);
 }
 
 /* Header */
@@ -16,22 +16,21 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-  background: var(--muted);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-inset);
 }
 
 .pe-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--muted-foreground);
 }
 
 .pe-title h4 {
   margin: 0;
   font-size: var(--font-size-md);
   font-weight: 600;
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 .pe-header-actions {
@@ -43,7 +42,7 @@
 .pe-link-btn {
   background: none;
   border: none;
-  color: var(--chart-4);
+  color: var(--accent-purple);
   font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
@@ -53,11 +52,11 @@
 }
 
 .pe-link-btn:hover {
-  background: color-mix(in srgb, var(--chart-4) 10%, var(--card));
+  background: var(--accent-purple-bg);
 }
 
 .pe-divider {
-  color: var(--muted-foreground);
+  color: var(--text-muted);
   font-size: var(--font-size-sm);
   opacity: 0.5;
 }
@@ -65,8 +64,8 @@
 .pe-badge-full {
   font-size: var(--font-size-xs);
   font-weight: 600;
-  color: var(--success-dark);
-  background: var(--success-light);
+  color: var(--status-success);
+  background: var(--status-success-bg);
   padding: 3px 10px;
   border-radius: 20px;
 }
@@ -76,7 +75,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1px;
-  background: var(--border);
+  background: var(--border-light);
 }
 
 .pe-item {
@@ -84,22 +83,22 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: var(--card);
+  background: var(--bg-card);
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
   user-select: none;
 }
 
 .pe-item:hover:not(.readonly) {
-  background: var(--muted);
+  background: var(--bg-hover);
 }
 
 .pe-item.active {
-  background: color-mix(in srgb, var(--success) 10%, var(--card));
+  background: var(--accent-green-bg);
 }
 
 .pe-item.active:hover:not(.readonly) {
-  background: color-mix(in srgb, var(--success) 14%, var(--card));
+  background: rgba(13, 150, 104, 0.08);
 }
 
 .pe-item.readonly {
@@ -107,26 +106,9 @@
   opacity: 0.85;
 }
 
-/* Icon — sized for lucide, not emoji */
 .pe-item-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--muted);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 18px;
   flex-shrink: 0;
-  color: var(--muted-foreground);
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-
-.pe-item.active .pe-item-icon {
-  background: color-mix(in srgb, var(--success) 14%, var(--card));
-  color: var(--success);
-  border-color: color-mix(in srgb, var(--success) 20%, var(--border));
 }
 
 .pe-item-content {
@@ -138,13 +120,13 @@
   display: block;
   font-size: var(--font-size-base);
   font-weight: 600;
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 .pe-item-desc {
   display: block;
   font-size: var(--font-size-xs);
-  color: var(--muted-foreground);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -155,19 +137,19 @@
 }
 
 .pe-check {
-  color: var(--success);
+  color: var(--accent-green);
 }
 
 .pe-x {
-  color: var(--muted-foreground);
+  color: var(--text-muted);
   opacity: 0.5;
 }
 
 /* Footer */
 .pe-footer {
   padding: 12px 18px;
-  border-top: 1px solid var(--border);
-  background: var(--muted);
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-inset);
   display: flex;
   justify-content: flex-end;
 }
@@ -179,8 +161,8 @@
   padding: 8px 18px;
   font-size: var(--font-size-base);
   font-weight: 600;
-  color: var(--card);
-  background: var(--chart-4);
+  color: #fff;
+  background: var(--accent-purple);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -188,8 +170,8 @@
 }
 
 .pe-save-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--chart-4) 85%, black);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--chart-4) 22%, transparent);
+  filter: brightness(0.9);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.22);
 }
 
 .pe-save-btn:disabled {

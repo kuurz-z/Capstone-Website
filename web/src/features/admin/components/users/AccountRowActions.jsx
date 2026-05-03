@@ -1,22 +1,22 @@
 function ActionButton({
- label,
- variant = "default",
- onPress,
- ariaLabel,
+  label,
+  variant = "default",
+  onPress,
+  ariaLabel,
 }) {
- return (
- <button
- type="button"
- className={`account-row-action account-row-action--${variant}`}
- aria-label={ariaLabel || label}
- onClick={(event) => {
- event.stopPropagation();
- onPress();
- }}
- >
- {label}
- </button>
- );
+  return (
+    <button
+      type="button"
+      className={`account-row-action account-row-action--${variant}`}
+      aria-label={ariaLabel || label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onPress();
+      }}
+    >
+      {label}
+    </button>
+  );
 }
 
 export default function AccountRowActions({

@@ -120,45 +120,6 @@ const pickSharedDateLabel = (tenants, picker) => {
   return fmtDate(values[0]);
 };
 
-// ─── Status helpers ──────────────────────────────────────────────────────────
-
-const getRoomStatusClasses = (status) => {
-  switch (status) {
-    case "paid":
-      return "bg-success-light text-success-dark";
-    case "sent":
-      return "bg-info-light text-info-dark";
-    case "generated":
-      return "bg-warning-light text-warning-dark";
-    case "ready":
-      return "bg-success-light text-success-dark";
-    case "overdue":
-      return "bg-danger-light text-danger-dark";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-};
-
-const getTenantStatusClasses = (status) => {
-  switch (status) {
-    case "paid":
-      return "bg-success-light text-success-dark";
-    case "sent":
-      return "bg-info-light text-info-dark";
-    case "generated":
-      return "bg-warning-light text-warning-dark";
-    case "ready":
-      return "bg-success-light text-success-dark";
-    case "overdue":
-    case "missing_data":
-      return "bg-danger-light text-danger-dark";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-};
-
-// ─── Preview Modal ────────────────────────────────────────────────────────────
-
 function PreviewModal({
   preview,
   isGenerating,
@@ -173,126 +134,96 @@ function PreviewModal({
   const generateDisabled = isGenerating || Boolean(duplicateBill);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4 backdrop-blur-sm"
-      role="presentation"
-    >
-      <section
-        className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rent-preview-title"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+    <div className="rent-billing__modal-backdrop" role="presentation">
+      <section className="rent-billing__modal" role="dialog" aria-modal="true" aria-labelledby="rent-preview-title">
+        <div className="rent-billing__modal-header">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-              Bill Preview
-            </p>
-            <h3 id="rent-preview-title" className="mt-0.5 text-sm font-semibold text-card-foreground">
-              Monthly Rent
-            </h3>
+            <span className="rent-billing__eyebrow">Bill Preview</span>
+            <h3 id="rent-preview-title">Monthly Rent</h3>
           </div>
-          <button
-            type="button"
-            className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
-            onClick={onClose}
-            disabled={isGenerating}
-          >
+          <button type="button" onClick={onClose} disabled={isGenerating}>
             Close
           </button>
         </div>
 
-        {/* Grid info */}
-        <div className="grid grid-cols-2 gap-4 px-5 py-4">
-          {[
-            {
-              label: "Tenant",
-              primary: preview.tenant?.name || "Tenant",
-              secondary: preview.tenant?.email || "",
-            },
-            {
-              label: "Room / Bed",
-              primary: preview.room?.name || "Room",
-              secondary: preview.room?.bed || "No bed label",
-            },
-            {
-              label: "Billing Period",
-              primary: formatCycle(preview.billingPeriod?.start, preview.billingPeriod?.end),
-              secondary: formatBranch(preview.branch),
-            },
-            {
-              label: "Due Date",
-              primary: fmtDate(preview.dueDate),
-              secondary: preview.billReference,
-            },
-          ].map(({ label, primary, secondary }) => (
-            <div key={label} className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-              <p className="mt-1 text-sm font-semibold text-card-foreground">{primary}</p>
-              {secondary && <p className="text-xs text-muted-foreground">{secondary}</p>}
-            </div>
-          ))}
-        </div>
-
-        {/* Breakdown */}
-        <div className="space-y-2 border-t border-border px-5 py-4">
-          {[
-            { label: "Monthly rent", value: fmtCurrency(preview.charges?.rent || 0) },
-            { label: "Appliance fee", value: fmtCurrency(preview.charges?.applianceFees || 0) },
-            { label: "Credit / advance applied", value: `-${fmtCurrency(preview.creditApplied || 0)}` },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium text-card-foreground">{value}</span>
-            </div>
-          ))}
-          <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
-            <span className="font-semibold text-card-foreground">Total amount due</span>
-            <span className="text-base font-bold text-[color:var(--color-accent,#D4AF37)]">
-              {fmtCurrency(preview.totalAmount || 0)}
-            </span>
+        <div className="rent-billing__preview-grid">
+          <div>
+            <span>Tenant</span>
+            <strong>{preview.tenant?.name || "Tenant"}</strong>
+            <small>{preview.tenant?.email || ""}</small>
+          </div>
+          <div>
+            <span>Room / Bed</span>
+            <strong>{preview.room?.name || "Room"}</strong>
+            <small>{preview.room?.bed || "No bed label"}</small>
+          </div>
+          <div>
+            <span>Billing Period</span>
+            <strong>{formatCycle(preview.billingPeriod?.start, preview.billingPeriod?.end)}</strong>
+            <small>{formatBranch(preview.branch)}</small>
+          </div>
+          <div>
+            <span>Due Date</span>
+            <strong>{fmtDate(preview.dueDate)}</strong>
+            <small>{preview.billReference}</small>
           </div>
         </div>
 
-        <p className="px-5 pb-2 text-xs text-muted-foreground">
+        <div className="rent-billing__breakdown">
+          <div>
+            <span>Monthly rent</span>
+            <strong>{fmtCurrency(preview.charges?.rent || 0)}</strong>
+          </div>
+          <div>
+            <span>Appliance fee</span>
+            <strong>{fmtCurrency(preview.charges?.applianceFees || 0)}</strong>
+          </div>
+          <div>
+            <span>Credit / advance applied</span>
+            <strong>-{fmtCurrency(preview.creditApplied || 0)}</strong>
+          </div>
+          <div className="rent-billing__breakdown-total">
+            <span>Total amount due</span>
+            <strong>{fmtCurrency(preview.totalAmount || 0)}</strong>
+          </div>
+        </div>
+
+        <div className="rent-billing__payment-note">
           Payment instructions are included in the tenant bill and billing history after generation.
-        </p>
+        </div>
 
         {duplicateBill && (
-          <div className="mx-5 mb-3 flex items-center gap-2 rounded-lg border border-warning bg-warning-light px-3 py-2 text-xs font-medium text-warning-dark">
-            <AlertCircle size={13} />
+          <div className="rent-billing__notice rent-billing__notice--warning">
+            <AlertCircle size={15} />
             Duplicate bill already exists.
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-5 py-4">
+        <div className="rent-billing__modal-actions">
           {duplicateBill && (
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
               onClick={() => onDownload(duplicateBill)}
               disabled={isDownloading === String(duplicateBill.id)}
             >
               {isDownloading === String(duplicateBill.id) ? (
-                <LoaderCircle size={13} className="animate-spin" />
+                <LoaderCircle size={14} className="rent-billing__spin" />
               ) : (
-                <Download size={13} />
+                <Download size={14} />
               )}
               Download PDF
             </button>
           )}
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#D4AF37] px-4 py-1.5 text-xs font-semibold text-[#000000] hover:bg-[#FFE9A3] disabled:opacity-50"
+            className="rent-billing__primary"
             onClick={onGenerate}
             disabled={generateDisabled}
           >
             {isGenerating ? (
-              <LoaderCircle size={13} className="animate-spin" />
+              <LoaderCircle size={14} className="rent-billing__spin" />
             ) : (
-              <Send size={13} />
+              <Send size={14} />
             )}
             {isGenerating ? "Generating..." : "Generate & Send Bill"}
           </button>
@@ -301,8 +232,6 @@ function PreviewModal({
     </div>
   );
 }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RentBillingTab({ isActive }) {
   const { user } = useAuth();
@@ -372,7 +301,11 @@ export default function RentBillingTab({ isActive }) {
     const roomMap = new Map();
     rooms.forEach((room) => {
       const roomId = getId(room.id || room._id);
-      roomMap.set(roomId, { ...room, id: roomId, rentTenants: [] });
+      roomMap.set(roomId, {
+        ...room,
+        id: roomId,
+        rentTenants: [],
+      });
     });
 
     tenants.forEach((tenant) => {
@@ -391,32 +324,39 @@ export default function RentBillingTab({ isActive }) {
           rentTenants: [],
         });
       }
+
       const row = roomMap.get(roomId);
-      row.rentTenants.push({ ...tenant, currentBill: getTenantBill(tenant, billsById) });
+      row.rentTenants.push({
+        ...tenant,
+        currentBill: getTenantBill(tenant, billsById),
+      });
     });
 
     return [...roomMap.values()]
       .map((room) => {
         const activeTenants = room.rentTenants || [];
-        const generated = activeTenants.filter((t) => t.currentMonthBill);
+        const generated = activeTenants.filter((tenant) => tenant.currentMonthBill);
         const ready = activeTenants.filter(
-          (t) =>
-            !t.currentMonthBill &&
-            t.billStatus === "ready" &&
-            normalizeAmount(amounts[getId(t.reservationId)] ?? t.monthlyRent) > 0,
+          (tenant) =>
+            !tenant.currentMonthBill &&
+            tenant.billStatus === "ready" &&
+            normalizeAmount(amounts[getId(tenant.reservationId)] ?? tenant.monthlyRent) > 0,
         );
-        const hasOverdue = generated.some((t) => {
-          const bill = t.currentBill;
-          return (bill?.status || t.currentMonthBill?.status) === "overdue";
+        const hasOverdue = generated.some((tenant) => {
+          const bill = tenant.currentBill;
+          return (bill?.status || tenant.currentMonthBill?.status) === "overdue";
         });
-        const allGenerated = activeTenants.length > 0 && generated.length === activeTenants.length;
+        const allGenerated =
+          activeTenants.length > 0 && generated.length === activeTenants.length;
         const allPaid =
           allGenerated &&
-          generated.every((t) => {
-            const bill = t.currentBill;
-            return (bill?.status || t.currentMonthBill?.status) === "paid";
+          generated.every((tenant) => {
+            const bill = tenant.currentBill;
+            return (bill?.status || tenant.currentMonthBill?.status) === "paid";
           });
-        const allSent = allGenerated && generated.every((t) => isBillSent(t.currentBill));
+        const allSent =
+          allGenerated &&
+          generated.every((tenant) => isBillSent(tenant.currentBill));
 
         let rentStatus = "no_active";
         if (hasOverdue) rentStatus = "overdue";
@@ -432,10 +372,10 @@ export default function RentBillingTab({ isActive }) {
           rentStatusLabel: ROOM_STATUS_LABELS[rentStatus],
         };
       })
-      .sort((l, r) => {
-        const bc = String(l.branch || "").localeCompare(String(r.branch || ""));
-        if (bc) return bc;
-        return getRoomName(l).localeCompare(getRoomName(r), undefined, { numeric: true });
+      .sort((left, right) => {
+        const branchCompare = String(left.branch || "").localeCompare(String(right.branch || ""));
+        if (branchCompare) return branchCompare;
+        return getRoomName(left).localeCompare(getRoomName(right), undefined, { numeric: true });
       });
   }, [amounts, billsById, rooms, tenants]);
 
@@ -444,9 +384,16 @@ export default function RentBillingTab({ isActive }) {
     if (!search) return roomRows;
     return roomRows.filter((room) => {
       const tenantText = (room.rentTenants || [])
-        .map((t) => `${t.tenantName} ${t.email} ${t.bedPosition}`)
+        .map((tenant) => `${tenant.tenantName} ${tenant.email} ${tenant.bedPosition}`)
         .join(" ");
-      return [getRoomName(room), room.roomNumber, room.branch, room.type, room.rentStatusLabel, tenantText]
+      return [
+        getRoomName(room),
+        room.roomNumber,
+        room.branch,
+        room.type,
+        room.rentStatusLabel,
+        tenantText,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(search);
@@ -454,7 +401,10 @@ export default function RentBillingTab({ isActive }) {
   }, [roomRows, sidebarSearch]);
 
   const totalRoomPages = Math.max(1, Math.ceil(filteredRooms.length / ROOMS_PER_PAGE));
-  const pagedRooms = filteredRooms.slice((roomsPage - 1) * ROOMS_PER_PAGE, roomsPage * ROOMS_PER_PAGE);
+  const pagedRooms = filteredRooms.slice(
+    (roomsPage - 1) * ROOMS_PER_PAGE,
+    roomsPage * ROOMS_PER_PAGE,
+  );
 
   useEffect(() => {
     if (roomsPage > totalRoomPages) setRoomsPage(totalRoomPages);
@@ -462,35 +412,39 @@ export default function RentBillingTab({ isActive }) {
 
   useEffect(() => {
     if (loading || roomRows.length === 0) return;
-    if (!selectedRoomId || !roomRows.some((r) => r.id === selectedRoomId)) {
+    if (!selectedRoomId || !roomRows.some((room) => room.id === selectedRoomId)) {
       setSelectedRoomId(roomRows[0].id);
     }
   }, [loading, roomRows, selectedRoomId]);
 
-  const selectedRoom = roomRows.find((r) => r.id === selectedRoomId) || null;
+  const selectedRoom = roomRows.find((room) => room.id === selectedRoomId) || null;
   const selectedTenants = selectedRoom?.rentTenants || [];
 
   const selectedSummary = useMemo(() => {
-    const alreadyBilled = selectedTenants.filter((t) => t.currentMonthBill);
-    const generatedBills = alreadyBilled.map((t) => getTenantBill(t, billsById)).filter(Boolean);
-    const readyTenants = selectedTenants.filter((t) => {
-      const amount = normalizeAmount(amounts[getId(t.reservationId)] ?? t.monthlyRent);
+    const alreadyBilled = selectedTenants.filter((tenant) => tenant.currentMonthBill);
+    const generatedBills = alreadyBilled
+      .map((tenant) => getTenantBill(tenant, billsById))
+      .filter(Boolean);
+    const readyTenants = selectedTenants.filter((tenant) => {
+      const amount = normalizeAmount(amounts[getId(tenant.reservationId)] ?? tenant.monthlyRent);
       return (
-        !t.currentMonthBill &&
-        t.billStatus === "ready" &&
+        !tenant.currentMonthBill &&
+        tenant.billStatus === "ready" &&
         amount > 0 &&
-        (dueDate || t.dueDate || t.billingCycle?.dueDate)
+        (dueDate || tenant.dueDate || tenant.billingCycle?.dueDate)
       );
     });
-    const missingData = selectedTenants.filter((t) => {
-      const amount = normalizeAmount(amounts[getId(t.reservationId)] ?? t.monthlyRent);
+    const missingData = selectedTenants.filter((tenant) => {
+      const amount = normalizeAmount(amounts[getId(tenant.reservationId)] ?? tenant.monthlyRent);
       return (
-        !t.currentMonthBill &&
-        (t.billStatus !== "ready" || amount <= 0 || !(dueDate || t.dueDate || t.billingCycle?.dueDate))
+        !tenant.currentMonthBill &&
+        (tenant.billStatus !== "ready" ||
+          amount <= 0 ||
+          !(dueDate || tenant.dueDate || tenant.billingCycle?.dueDate))
       );
     });
     const totalExpectedAmount = readyTenants.reduce(
-      (sum, t) => sum + normalizeAmount(amounts[getId(t.reservationId)] ?? t.monthlyRent),
+      (sum, tenant) => sum + normalizeAmount(amounts[getId(tenant.reservationId)] ?? tenant.monthlyRent),
       0,
     );
     const outstandingBalance = generatedBills.reduce(
@@ -533,22 +487,30 @@ export default function RentBillingTab({ isActive }) {
     if (formError) return formError;
     if (!tenant) return "No active tenant found.";
     if (!month) return "Billing month is required.";
-    if (!dueDate && !tenant.dueDate && !tenant.billingCycle?.dueDate) return "Due date required.";
-    if (!allowExisting && tenant.currentMonthBill) return "Duplicate bill already exists.";
+    if (!dueDate && !tenant.dueDate && !tenant.billingCycle?.dueDate) {
+      return "Due date required.";
+    }
+    if (!allowExisting && tenant.currentMonthBill) {
+      return "Duplicate bill already exists.";
+    }
     if (tenant.billStatus === "missing_data") {
       const message = tenant.validationErrors?.[0] || "Missing tenant billing data.";
       if (message.toLowerCase().includes("rent")) return "Missing rent amount.";
       if (message.toLowerCase().includes("active")) return "No active tenant found.";
       return message;
     }
-    if (normalizeAmount(amounts[getId(tenant.reservationId)] ?? tenant.monthlyRent) <= 0)
+    if (normalizeAmount(amounts[getId(tenant.reservationId)] ?? tenant.monthlyRent) <= 0) {
       return "Missing rent amount.";
+    }
     return "";
   };
 
   const handlePreview = async (tenant) => {
     const validationError = validateTenantAction(tenant, { allowExisting: true });
-    if (validationError) { showNotification(validationError, "error"); return; }
+    if (validationError) {
+      showNotification(validationError, "error");
+      return;
+    }
 
     const reservationId = getId(tenant.reservationId);
     setPreviewLoadingId(reservationId);
@@ -556,7 +518,9 @@ export default function RentBillingTab({ isActive }) {
       const result = await billingApi.previewRentBill(buildPayload(tenant));
       setPreview(result?.preview || null);
       setPreviewTenant(tenant);
-      if (result?.preview?.duplicateBill) showNotification("Duplicate bill already exists.", "warning");
+      if (result?.preview?.duplicateBill) {
+        showNotification("Duplicate bill already exists.", "warning");
+      }
     } catch (error) {
       showNotification(error?.message || "Failed to preview rent bill.", "error");
     } finally {
@@ -574,7 +538,8 @@ export default function RentBillingTab({ isActive }) {
     if (!skipConfirm) {
       const confirmed = await showConfirmation(
         `Generate and send a Monthly Rent bill for ${tenant.tenantName} in ${getRoomName(selectedRoom)} for ${fmtMonth(getBillingMonthDate(month))}?`,
-        "Generate", "Cancel",
+        "Generate",
+        "Cancel",
       );
       if (!confirmed) return;
     }
@@ -583,15 +548,20 @@ export default function RentBillingTab({ isActive }) {
     setGeneratingId(reservationId);
     try {
       const result = await billingApi.generateRentBill(buildPayload(tenant));
-      if (result?.warning) showNotification("Bill created, but email failed.", "warning");
-      else showNotification("Rent bill generated successfully.", "success");
+      if (result?.warning) {
+        showNotification("Bill created, but email failed.", "warning");
+      } else {
+        showNotification("Rent bill generated successfully.", "success");
+      }
       setPreview(null);
       setPreviewTenant(null);
       await loadData();
     } catch (error) {
       const message = error?.message || "Failed to generate rent bill.";
       showNotification(
-        message.toLowerCase().includes("duplicate") ? "Duplicate bill already exists." : message,
+        message.toLowerCase().includes("duplicate")
+          ? "Duplicate bill already exists."
+          : message,
         message.toLowerCase().includes("duplicate") ? "warning" : "error",
       );
     } finally {
@@ -601,13 +571,19 @@ export default function RentBillingTab({ isActive }) {
 
   const handleSendBill = async (bill) => {
     const billId = getId(bill?.id || bill?._id);
-    if (!billId) { showNotification("No generated rent bill found.", "error"); return; }
+    if (!billId) {
+      showNotification("No generated rent bill found.", "error");
+      return;
+    }
 
     setSendingId(billId);
     try {
       const result = await billingApi.sendRentBill(billId);
-      if (result?.warning) showNotification("Bill created, but email failed.", "warning");
-      else showNotification("Bill sent successfully.", "success");
+      if (result?.warning) {
+        showNotification("Bill created, but email failed.", "warning");
+      } else {
+        showNotification("Bill sent successfully.", "success");
+      }
       await loadData();
     } catch (error) {
       showNotification(error?.message || "Failed to send rent bill.", "error");
@@ -618,7 +594,10 @@ export default function RentBillingTab({ isActive }) {
 
   const handleDownloadPdf = async (bill) => {
     const billId = getId(bill?.id || bill?._id);
-    if (!billId) { showNotification("No generated rent bill found.", "error"); return; }
+    if (!billId) {
+      showNotification("No generated rent bill found.", "error");
+      return;
+    }
 
     setDownloadingId(billId);
     try {
@@ -633,12 +612,23 @@ export default function RentBillingTab({ isActive }) {
   };
 
   const handleBatchGenerate = async () => {
-    if (!selectedRoom) { showNotification("Select a room first.", "error"); return; }
-    if (formError) { showNotification(formError, "error"); return; }
-    if (selectedSummary.totalTenants === 0) { showNotification("No active tenant found.", "error"); return; }
+    if (!selectedRoom) {
+      showNotification("Select a room first.", "error");
+      return;
+    }
+    if (formError) {
+      showNotification(formError, "error");
+      return;
+    }
+    if (selectedSummary.totalTenants === 0) {
+      showNotification("No active tenant found.", "error");
+      return;
+    }
     if (selectedSummary.readyToGenerate <= 0) {
       showNotification(
-        selectedSummary.alreadyBilled > 0 ? "Some tenants already have bills for this cycle." : "Missing rent amount.",
+        selectedSummary.alreadyBilled > 0
+          ? "Some tenants already have bills for this cycle."
+          : "Missing rent amount.",
         selectedSummary.alreadyBilled > 0 ? "warning" : "error",
       );
       return;
@@ -646,12 +636,16 @@ export default function RentBillingTab({ isActive }) {
 
     const confirmed = await showConfirmation(
       `Generate rent bills for ${getRoomName(selectedRoom)}? Tenants: ${selectedSummary.totalTenants}. Already billed: ${selectedSummary.alreadyBilled}. Ready to generate: ${selectedSummary.readyToGenerate}. Missing data: ${selectedSummary.missingData}. Total expected amount: ${fmtCurrency(selectedSummary.totalExpectedAmount)}.`,
-      "Generate All", "Cancel",
+      "Generate All",
+      "Cancel",
     );
     if (!confirmed) return;
 
     setBatchAction("generate");
-    let generated = 0, duplicates = 0, warnings = 0, failures = 0;
+    let generated = 0;
+    let duplicates = 0;
+    let warnings = 0;
+    let failures = 0;
 
     try {
       for (const tenant of selectedSummary.readyTenants) {
@@ -660,15 +654,26 @@ export default function RentBillingTab({ isActive }) {
           generated += 1;
           if (result?.warning) warnings += 1;
         } catch (error) {
-          if ((error?.message || "").toLowerCase().includes("duplicate")) duplicates += 1;
-          else failures += 1;
+          if ((error?.message || "").toLowerCase().includes("duplicate")) {
+            duplicates += 1;
+          } else {
+            failures += 1;
+          }
         }
       }
-      if (generated > 0) showNotification("Rent bills generated for this room.", "success");
-      if (duplicates > 0 || selectedSummary.alreadyBilled > 0)
+
+      if (generated > 0) {
+        showNotification("Rent bills generated for this room.", "success");
+      }
+      if (duplicates > 0 || selectedSummary.alreadyBilled > 0) {
         showNotification("Some tenants already have bills for this cycle.", "warning");
-      if (warnings > 0) showNotification("Bill created, but email failed.", "warning");
-      if (failures > 0) showNotification("Some rent bills could not be generated.", "error");
+      }
+      if (warnings > 0) {
+        showNotification("Bill created, but email failed.", "warning");
+      }
+      if (failures > 0) {
+        showNotification("Some rent bills could not be generated.", "error");
+      }
       await loadData();
     } finally {
       setBatchAction("");
@@ -676,17 +681,26 @@ export default function RentBillingTab({ isActive }) {
   };
 
   const handleBatchSend = async () => {
-    if (!selectedRoom) { showNotification("Select a room first.", "error"); return; }
-    if (selectedSummary.generatedBills.length === 0) { showNotification("No generated rent bill found.", "error"); return; }
+    if (!selectedRoom) {
+      showNotification("Select a room first.", "error");
+      return;
+    }
+    if (selectedSummary.generatedBills.length === 0) {
+      showNotification("No generated rent bill found.", "error");
+      return;
+    }
 
     const confirmed = await showConfirmation(
       `Send generated rent bills for ${getRoomName(selectedRoom)}? Generated bills: ${selectedSummary.generatedBills.length}. Already sent: ${selectedSummary.generatedBills.length - selectedSummary.unsentBills.length}.`,
-      "Send All", "Cancel",
+      "Send All",
+      "Cancel",
     );
     if (!confirmed) return;
 
     setBatchAction("send");
-    let sent = 0, warnings = 0, failures = 0;
+    let sent = 0;
+    let warnings = 0;
+    let failures = 0;
 
     try {
       for (const bill of selectedSummary.generatedBills) {
@@ -694,8 +708,11 @@ export default function RentBillingTab({ isActive }) {
           const result = await billingApi.sendRentBill(getId(bill.id || bill._id));
           sent += 1;
           if (result?.warning) warnings += 1;
-        } catch { failures += 1; }
+        } catch {
+          failures += 1;
+        }
       }
+
       if (sent > 0) showNotification("Bill sent successfully.", "success");
       if (warnings > 0) showNotification("Bill created, but email failed.", "warning");
       if (failures > 0) showNotification("Some rent bills could not be sent.", "error");
@@ -713,20 +730,25 @@ export default function RentBillingTab({ isActive }) {
 
     const confirmed = await showConfirmation(
       `Download generated rent bill PDFs for ${getRoomName(selectedRoom)}? PDFs available: ${selectedSummary.downloadableBills.length}.`,
-      "Download PDFs", "Cancel",
+      "Download PDFs",
+      "Cancel",
     );
     if (!confirmed) return;
 
     setBatchAction("download");
-    let downloaded = 0, failed = 0;
+    let downloaded = 0;
+    let failed = 0;
 
     try {
       for (const bill of selectedSummary.downloadableBills) {
         try {
           await billingApi.downloadBillPdf(getId(bill.id || bill._id), buildPdfFilename(bill));
           downloaded += 1;
-        } catch { failed += 1; }
+        } catch {
+          failed += 1;
+        }
       }
+
       if (downloaded > 0) showNotification("PDF downloaded successfully.", "success");
       if (failed > 0) showNotification("Some PDFs could not be downloaded.", "error");
       await loadData();
@@ -735,97 +757,155 @@ export default function RentBillingTab({ isActive }) {
     }
   };
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
+  const renderCyclePanel = () => (
+    <section className="rent-billing__cycle-panel">
+      <div className="rent-billing__cycle-panel-header">
+        <div>
+          <h3>Rent Billing Cycle</h3>
+          <p>Review the selected month and tenant cycle dates before generation.</p>
+        </div>
+        <button type="button" className="eb-btn eb-btn--ghost" onClick={loadData} disabled={loading}>
+          <RefreshCw size={13} className={loading ? "rent-billing__spin" : ""} />
+          Refresh
+        </button>
+      </div>
+
+      <div className="rent-billing__cycle-controls">
+        <label className="eb-field">
+          <span>Billing Month</span>
+          <input
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+          />
+        </label>
+        <label className="eb-field">
+          <span>Due Date Override</span>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="rent-billing__cycle-grid">
+        <div>
+          <span>Billing month</span>
+          <strong>{fmtMonth(getBillingMonthDate(month))}</strong>
+        </div>
+        <div>
+          <span>Cycle start</span>
+          <strong>{pickSharedDateLabel(selectedTenants, (tenant) => tenant.billingCycleStart)}</strong>
+        </div>
+        <div>
+          <span>Cycle end</span>
+          <strong>{pickSharedDateLabel(selectedTenants, (tenant) => tenant.billingCycleEnd)}</strong>
+        </div>
+        <div>
+          <span>Due date</span>
+          <strong>
+            {dueDate
+              ? `${fmtDate(dueDate)} override`
+              : pickSharedDateLabel(selectedTenants, (tenant) => tenant.dueDate || tenant.billingCycle?.dueDate)}
+          </strong>
+        </div>
+        <div>
+          <span>Generation date</span>
+          <strong>{pickSharedDateLabel(selectedTenants, (tenant) => tenant.nextBillingDate || tenant.billingCycle?.generationDate)}</strong>
+        </div>
+      </div>
+
+      {selectedSummary.alreadyBilled > 0 && (
+        <div className="rent-billing__notice rent-billing__notice--warning">
+          <AlertCircle size={15} />
+          Some tenants already have bills for this cycle.
+        </div>
+      )}
+    </section>
+  );
 
   return (
-    <section className="space-y-4" aria-label="Rent billing workspace">
-
-      {/* Form error notice */}
+    <section className="eb-shell rent-billing rent-billing--workspace" aria-label="Rent billing workspace">
       {formError && (
-        <div className="flex items-center gap-2 rounded-lg border border-warning bg-warning-light px-4 py-2.5 text-xs font-medium text-warning-dark">
-          <AlertCircle size={13} />
+        <div className="rent-billing__notice">
+          <AlertCircle size={15} />
           {formError}
         </div>
       )}
 
-      {/* ── Two-column shell ─────────────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:auto-rows-auto">
-
-        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <aside className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-              <Home size={12} className="shrink-0" />
-              Rooms
+      <div className="eb-layout">
+        <aside className="eb-sidebar">
+          <div className="eb-sidebar__header">
+            <span className="eb-sidebar__title">
+              <Home size={13} /> Rooms
             </span>
-            <span className="text-xs text-muted-foreground">{filteredRooms.length} rooms</span>
+            {isOwner && (
+              <select
+                value={branch}
+                onChange={(event) => {
+                  setBranch(event.target.value);
+                  setSelectedRoomId(null);
+                  setRoomsPage(1);
+                }}
+                className="eb-sidebar__filter"
+              >
+                {BRANCH_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {/* Search */}
-          <div className="mt-3">
+          <div className="eb-sidebar__search-wrap">
             <input
               type="text"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground placeholder:text-muted-foreground focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
+              className="eb-sidebar__search"
               placeholder="Search rooms..."
               value={sidebarSearch}
-              onChange={(e) => { setSidebarSearch(e.target.value); setRoomsPage(1); }}
+              onChange={(event) => {
+                setSidebarSearch(event.target.value);
+                setRoomsPage(1);
+              }}
               aria-label="Search rooms"
             />
           </div>
 
-          {/* Branch filter (owners only) */}
-          {isOwner && (
-            <div className="mt-2">
-              <select
-                value={branch}
-                onChange={(e) => { setBranch(e.target.value); setSelectedRoomId(null); setRoomsPage(1); }}
-                className="w-full rounded-lg border border-border bg-card px-2 py-2 text-xs text-muted-foreground focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
-              >
-                {BRANCH_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Room list */}
-          <div className="mt-4 space-y-2">
+          <div className="eb-sidebar__list">
             {loading && roomRows.length === 0 ? (
-              <div className="space-y-2">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-12 w-full animate-pulse rounded-lg bg-muted" />
+              <div className="eb-skeleton-list">
+                {[1, 2, 3, 4, 5].map((index) => (
+                  <div key={index} className="eb-skeleton-card" />
                 ))}
               </div>
             ) : filteredRooms.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+              <div className="eb-sidebar__empty">
                 {sidebarSearch ? "No rooms match your search" : "No rooms found"}
               </div>
             ) : (
               pagedRooms.map((room) => (
                 <button
                   key={room.id}
-                  className={`w-full rounded-lg border px-3 py-2 text-left transition ${
-                    selectedRoomId === room.id
-                      ? "border-amber-400 bg-amber-50/70"
-                      : "border-border/70 hover:border-border hover:bg-muted"
-                  }`}
+                  className={`eb-room${selectedRoomId === room.id ? " eb-room--active" : ""}`}
                   aria-pressed={selectedRoomId === room.id}
                   aria-label={`Select ${getRoomName(room)}`}
                   onClick={() => setSelectedRoomId(room.id)}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-card-foreground">{getRoomName(room)}</span>
+                  <div className="eb-room__top-row">
+                    <span className="eb-room__name">{getRoomName(room)}</span>
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${room.activeTenantCount > 0 ? "bg-emerald-500" : "bg-slate-300"}`}
+                      className={`eb-room__dot${room.activeTenantCount > 0 ? " eb-room__dot--active" : ""}`}
                       title={`${room.activeTenantCount} active tenant${room.activeTenantCount === 1 ? "" : "s"}`}
                     />
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${getRoomStatusClasses(room.rentStatus)}`}>
+                  <div className="eb-room__bottom-row">
+                    <span className={`eb-room__badge eb-room__badge--rent-${room.rentStatus}`}>
                       {room.rentStatusLabel}
                     </span>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                  <div className="eb-room__kwh">
                     {formatBranch(room.branch)} · {room.activeTenantCount} active
                   </div>
                 </button>
@@ -833,28 +913,27 @@ export default function RentBillingTab({ isActive }) {
             )}
           </div>
 
-          <div className="mt-4 text-xs text-muted-foreground">
-            Use filters to quickly find and select rooms. Manage rent bills for the selected room.
-          </div>
-
-          {/* Pagination */}
           {filteredRooms.length > ROOMS_PER_PAGE && (
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>{filteredRooms.length} rooms</span>
-              <div className="flex items-center gap-2">
+            <div className="eb-sidebar__pager">
+              <span className="eb-sidebar__pager-count">
+                {filteredRooms.length} rooms
+              </span>
+              <div className="eb-room-pager">
                 <button
-                  className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+                  className="eb-room-pager__btn"
                   disabled={roomsPage <= 1}
-                  onClick={() => setRoomsPage((p) => p - 1)}
+                  onClick={() => setRoomsPage((page) => page - 1)}
                   aria-label="Previous room page"
                 >
                   <ChevronLeft size={14} />
                 </button>
-                <span>{roomsPage}/{totalRoomPages}</span>
+                <span className="eb-room-pager__label">
+                  {roomsPage}/{totalRoomPages}
+                </span>
                 <button
-                  className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+                  className="eb-room-pager__btn"
                   disabled={roomsPage >= totalRoomPages}
-                  onClick={() => setRoomsPage((p) => p + 1)}
+                  onClick={() => setRoomsPage((page) => page + 1)}
                   aria-label="Next room page"
                 >
                   <ChevronRight size={14} />
@@ -864,441 +943,331 @@ export default function RentBillingTab({ isActive }) {
           )}
         </aside>
 
-        {/* ── Main panel ───────────────────────────────────────────────────── */}
-        <div className="space-y-4">
+        <main className="eb-main">
           {!selectedRoom ? (
-            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center">
-              <Home size={36} strokeWidth={1.5} className="text-slate-300" />
-              <p className="mt-3 text-sm font-semibold text-card-foreground">Select a room to continue</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+            <div className="eb-empty-state">
+              <Home size={40} strokeWidth={1.5} />
+              <p className="eb-empty-state__title">Select a room to continue</p>
+              <p className="eb-empty-state__hint">
                 Pick a room to manage monthly rent bills by tenant and bed.
               </p>
             </div>
           ) : (
-            <>
-              {/* Room header card */}
-              <div className="rounded-[14px] border border-border bg-card px-5 py-4 shadow-[0_1px_0_rgba(15,23,42,0.02)]">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary">
-                      <Home size={16} strokeWidth={2} />
-                    </span>
-                    <div>
-                      <h2 className="text-[15px] font-semibold leading-none text-card-foreground">
-                        {getRoomName(selectedRoom)}
-                      </h2>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Manage rent previews, generation, sending, and PDFs for this room.
-                      </p>
-                    </div>
+            <div className="eb-content">
+              <div className="eb-header">
+                <div className="eb-header__left">
+                  <div className="eb-header__meta">
+                    <h2 className="eb-header__title">{getRoomName(selectedRoom)}</h2>
+                    <p className="eb-header__subtitle">
+                      Manage rent previews, generation, sending, and PDFs for this room.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                      {formatBranch(selectedRoom.branch)}
-                    </span>
-                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                      {formatRoomType(selectedRoom.type)}
-                    </span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase ${getRoomStatusClasses(selectedRoom.rentStatus)}`}>
-                      {selectedRoom.rentStatusLabel}
-                    </span>
-                  </div>
+                  <span className="eb-header__branch">{formatBranch(selectedRoom.branch)}</span>
+                  <span className="eb-header__room-type">
+                    {formatRoomType(selectedRoom.type)}
+                  </span>
                 </div>
-
-                {/* Occupancy metrics */}
-                <div className="mt-6 grid gap-10 md:grid-cols-3">
-                  <div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Ready</p>
-                    <p className="mt-2 text-[28px] font-medium leading-none tracking-[-0.04em] text-card-foreground">
-                      {selectedSummary.readyToGenerate}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Already Billed</p>
-                    <p className="mt-2 text-[28px] font-medium leading-none tracking-[-0.04em] text-card-foreground">
-                      {selectedSummary.alreadyBilled}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Outstanding</p>
-                    <p className="mt-2 text-[28px] font-medium leading-none tracking-[-0.04em] text-primary">
-                      {fmtCurrency(selectedSummary.outstandingBalance)}
-                    </p>
-                  </div>
+                <div className="eb-header__actions">
+                  <span className={`rent-billing__room-status rent-billing__room-status--${selectedRoom.rentStatus}`}>
+                    {selectedRoom.rentStatusLabel}
+                  </span>
                 </div>
               </div>
 
-              {/* Billing cycle controls card */}
-              <div className="rounded-xl border border-border bg-card p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+              <section className="eb-snapshot-card rent-billing__room-snapshot">
+                <div className="eb-snapshot-card__header">
                   <div>
-                    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-                      <CalendarDays size={12} className="shrink-0" />
-                      Rent Billing Cycle
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Review the selected month and tenant cycle dates before generation.
+                    <h3 className="eb-snapshot-card__title">Room Occupancy</h3>
+                    <p className="eb-snapshot-card__cycle">
+                      {selectedRoom.activeTenantCount} active tenant{selectedRoom.activeTenantCount === 1 ? "" : "s"}
+                      {selectedRoom.capacity ? ` / ${selectedRoom.capacity} beds` : ""}
                     </p>
                   </div>
+                  <Users size={18} />
+                </div>
+                <div className="eb-snapshot-card__metrics">
+                  <div className="eb-snapshot-metric">
+                    <span className="eb-snapshot-metric__label">Ready</span>
+                    <span className="eb-snapshot-metric__value">{selectedSummary.readyToGenerate}</span>
+                  </div>
+                  <div className="eb-snapshot-metric">
+                    <span className="eb-snapshot-metric__label">Already billed</span>
+                    <span className="eb-snapshot-metric__value">{selectedSummary.alreadyBilled}</span>
+                  </div>
+                  <div className="eb-snapshot-metric">
+                    <span className="eb-snapshot-metric__label">Outstanding</span>
+                    <span className="eb-snapshot-metric__value eb-snapshot-metric__value--strong">
+                      {fmtCurrency(selectedSummary.outstandingBalance)}
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              {renderCyclePanel()}
+
+              <section className="rent-billing__batch-bar">
+                <div>
+                  <span>Selected room</span>
+                  <strong>{getRoomName(selectedRoom)}</strong>
+                </div>
+                <div>
+                  <span>Missing data</span>
+                  <strong>{selectedSummary.missingData}</strong>
+                </div>
+                <div>
+                  <span>Total expected</span>
+                  <strong>{fmtCurrency(selectedSummary.totalExpectedAmount)}</strong>
+                </div>
+                <div className="rent-billing__batch-actions">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
-                    onClick={loadData}
-                    disabled={loading}
+                    className="eb-btn eb-btn--primary"
+                    onClick={handleBatchGenerate}
+                    disabled={Boolean(batchAction) || selectedSummary.readyToGenerate <= 0}
                   >
-                    <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-                    Refresh
+                    {batchAction === "generate" ? (
+                      <LoaderCircle size={13} className="rent-billing__spin" />
+                    ) : (
+                      <FileText size={13} />
+                    )}
+                    Generate Room Bills
+                  </button>
+                  <button
+                    type="button"
+                    className="eb-btn eb-btn--outline"
+                    onClick={handleBatchSend}
+                    disabled={Boolean(batchAction) || selectedSummary.generatedBills.length === 0}
+                  >
+                    {batchAction === "send" ? (
+                      <LoaderCircle size={13} className="rent-billing__spin" />
+                    ) : (
+                      <Send size={13} />
+                    )}
+                    Send Generated
+                  </button>
+                  <button
+                    type="button"
+                    className="eb-btn eb-btn--ghost"
+                    onClick={handleBatchDownload}
+                    disabled={Boolean(batchAction) || selectedSummary.downloadableBills.length === 0}
+                  >
+                    {batchAction === "download" ? (
+                      <LoaderCircle size={13} className="rent-billing__spin" />
+                    ) : (
+                      <Download size={13} />
+                    )}
+                    Download PDFs
                   </button>
                 </div>
+              </section>
 
-                {/* Controls */}
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Billing Month</label>
-                    <input
-                      type="month"
-                      value={month}
-                      onChange={(e) => setMonth(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
-                    />
+              <section className="eb-section rent-billing__tenant-section">
+                <div className="eb-section__header">
+                  <div>
+                    <h3 className="eb-section__title">Tenant Rent Billing</h3>
+                    <p className="eb-section__hint">
+                      Active tenants and bed assignments for the selected room.
+                    </p>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Due Date Override</label>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100"
-                    />
-                  </div>
+                  <span className="eb-section__count eb-section__count--inline">
+                    {selectedTenants.length} tenant{selectedTenants.length === 1 ? "" : "s"}
+                  </span>
                 </div>
 
-                {/* Cycle grid */}
-                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-                  {[
-                    { label: "Billing month", value: fmtMonth(getBillingMonthDate(month)) },
-                    { label: "Cycle start", value: pickSharedDateLabel(selectedTenants, (t) => t.billingCycleStart) },
-                    { label: "Cycle end", value: pickSharedDateLabel(selectedTenants, (t) => t.billingCycleEnd) },
-                    {
-                      label: "Due date",
-                      value: dueDate
-                        ? `${fmtDate(dueDate)} (override)`
-                        : pickSharedDateLabel(selectedTenants, (t) => t.dueDate || t.billingCycle?.dueDate),
-                    },
-                    {
-                      label: "Generation date",
-                      value: pickSharedDateLabel(selectedTenants, (t) => t.nextBillingDate || t.billingCycle?.generationDate),
-                    },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-                      <p className="mt-1 text-sm font-semibold text-card-foreground">{value}</p>
-                    </div>
-                  ))}
-                </div>
+                {selectedTenants.length === 0 ? (
+                  <div className="rent-billing__empty">No active tenant found.</div>
+                ) : (
+                  <div className="rent-billing__table-wrap">
+                    <table className="rent-billing__table rent-billing__table--room">
+                      <thead>
+                        <tr>
+                          <th>Tenant</th>
+                          <th>Bed / Room</th>
+                          <th>Move-in</th>
+                          <th>Monthly Rent</th>
+                          <th>Billing Cycle</th>
+                          <th>Next Due</th>
+                          <th>Status</th>
+                          <th>Outstanding</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedTenants.map((tenant) => {
+                          const reservationId = getId(tenant.reservationId);
+                          const amount = amounts[reservationId] ?? tenant.monthlyRent ?? "";
+                          const amountInvalid = normalizeAmount(amount) <= 0;
+                          const bill = getTenantBill(tenant, billsById);
+                          const billId = getId(bill?.id || bill?._id);
+                          const tenantStatus = getTenantStatus(tenant, bill);
+                          const rowBusy =
+                            previewLoadingId === reservationId ||
+                            generatingId === reservationId ||
+                            sendingId === billId ||
+                            downloadingId === billId ||
+                            Boolean(batchAction);
 
-                {selectedSummary.alreadyBilled > 0 && (
-                  <div className="mt-3 flex items-center gap-2 rounded-lg border border-warning bg-warning-light px-3 py-2 text-xs font-medium text-warning-dark">
-                    <AlertCircle size={13} />
-                    Some tenants already have bills for this cycle.
+                          return (
+                            <tr key={reservationId}>
+                              <td>
+                                <strong>{tenant.tenantName}</strong>
+                                <span>{tenant.email}</span>
+                              </td>
+                              <td>
+                                <strong>{tenant.bedPosition || "No bed label"}</strong>
+                                <span>{tenant.roomName || getRoomName(selectedRoom)}</span>
+                              </td>
+                              <td>{tenant.moveInDate ? fmtDate(tenant.moveInDate) : "Missing"}</td>
+                              <td>
+                                <label className="rent-billing__amount rent-billing__amount--inline">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={amount}
+                                    onChange={(event) =>
+                                      setAmounts((current) => ({
+                                        ...current,
+                                        [reservationId]: event.target.value,
+                                      }))
+                                    }
+                                    aria-invalid={amountInvalid}
+                                  />
+                                  {amountInvalid && <em>Missing rent amount.</em>}
+                                </label>
+                              </td>
+                              <td>{formatCycle(tenant.billingCycleStart, tenant.billingCycleEnd)}</td>
+                              <td>{fmtDate(dueDate || tenant.dueDate || tenant.billingCycle?.dueDate)}</td>
+                              <td>
+                                <span className={`rent-billing__badge rent-billing__badge--${tenantStatus}`}>
+                                  {TENANT_STATUS_LABELS[tenantStatus] || tenantStatus}
+                                </span>
+                              </td>
+                              <td>
+                                {bill
+                                  ? fmtCurrency(bill.status === "paid" ? 0 : bill.remainingAmount ?? bill.totalAmount ?? 0)
+                                  : fmtCurrency(0)}
+                              </td>
+                              <td>
+                                <div className="rent-billing__actions">
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePreview(tenant)}
+                                    disabled={rowBusy || amountInvalid}
+                                  >
+                                    {previewLoadingId === reservationId ? (
+                                      <LoaderCircle size={14} className="rent-billing__spin" />
+                                    ) : (
+                                      <Eye size={14} />
+                                    )}
+                                    Preview
+                                  </button>
+                                  {!bill && (
+                                    <button
+                                      type="button"
+                                      className="rent-billing__primary"
+                                      onClick={() => handleGenerate(tenant)}
+                                      disabled={
+                                        rowBusy ||
+                                        amountInvalid ||
+                                        tenant.billStatus === "missing_data" ||
+                                        Boolean(formError)
+                                      }
+                                    >
+                                      {generatingId === reservationId ? (
+                                        <LoaderCircle size={14} className="rent-billing__spin" />
+                                      ) : (
+                                        <FileText size={14} />
+                                      )}
+                                      Generate
+                                    </button>
+                                  )}
+                                  {bill && bill.status !== "paid" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendBill(bill)}
+                                      disabled={rowBusy}
+                                    >
+                                      {sendingId === billId ? (
+                                        <LoaderCircle size={14} className="rent-billing__spin" />
+                                      ) : (
+                                        <Send size={14} />
+                                      )}
+                                      Send
+                                    </button>
+                                  )}
+                                  {bill && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadPdf(bill)}
+                                      disabled={rowBusy}
+                                    >
+                                      {downloadingId === billId ? (
+                                        <LoaderCircle size={14} className="rent-billing__spin" />
+                                      ) : (
+                                        <Download size={14} />
+                                      )}
+                                      PDF
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
-              </div>
-            </>
+              </section>
+
+              <section className="eb-section">
+                <div className="eb-section__header">
+                  <div>
+                    <h3 className="eb-section__title">
+                      <CalendarDays size={13} /> Rent Bill History
+                    </h3>
+                    <p className="eb-section__hint">
+                      Generated rent bills for the selected room and billing month.
+                    </p>
+                  </div>
+                  <span className="eb-section__count eb-section__count--inline">
+                    {selectedSummary.generatedBills.length} bill{selectedSummary.generatedBills.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {selectedSummary.generatedBills.length === 0 ? (
+                  <p className="eb-empty-hint">No generated rent bills for this room yet.</p>
+                ) : (
+                  <div className="rent-billing__history-list">
+                    {selectedSummary.generatedBills.map((bill) => (
+                      <div className="rent-billing__history-row" key={getId(bill.id || bill._id)}>
+                        <div>
+                          <strong>{bill.tenant?.name || "Tenant"}</strong>
+                          <span>{formatCycle(bill.billingCycleStart, bill.billingCycleEnd)}</span>
+                        </div>
+                        <span className={`rent-billing__delivery rent-billing__delivery--${getBillDeliveryStatus(bill)}`}>
+                          {isBillSent(bill) ? "Sent" : getBillDeliveryStatus(bill) === "failed" ? "Email failed" : "Generated"}
+                        </span>
+                        <strong>{fmtCurrency(bill.totalAmount || 0)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
           )}
-        </div>
+        </main>
       </div>
 
-      {/* ── Batch action bar ─────────────────────────────────────────────────── */}
-      {selectedRoom && (
-        <section className="rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-6">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Selected room</p>
-                <p className="mt-0.5 text-sm font-semibold text-card-foreground">{getRoomName(selectedRoom)}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Missing data</p>
-                <p className="mt-0.5 text-sm font-semibold text-card-foreground">{selectedSummary.missingData}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Total expected</p>
-                <p className="mt-0.5 text-sm font-semibold text-card-foreground">{fmtCurrency(selectedSummary.totalExpectedAmount)}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-lg bg-[#D4AF37] px-3 py-1.5 text-xs font-semibold text-[#000000] hover:bg-[#FFE9A3] disabled:opacity-50"
-                onClick={handleBatchGenerate}
-                disabled={Boolean(batchAction) || selectedSummary.readyToGenerate <= 0}
-              >
-                {batchAction === "generate" ? <LoaderCircle size={13} className="animate-spin" /> : <FileText size={13} />}
-                Generate Room Bills
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
-                onClick={handleBatchSend}
-                disabled={Boolean(batchAction) || selectedSummary.generatedBills.length === 0}
-              >
-                {batchAction === "send" ? <LoaderCircle size={13} className="animate-spin" /> : <Send size={13} />}
-                Send Generated
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
-                onClick={handleBatchDownload}
-                disabled={Boolean(batchAction) || selectedSummary.downloadableBills.length === 0}
-              >
-                {batchAction === "download" ? <LoaderCircle size={13} className="animate-spin" /> : <Download size={13} />}
-                Download PDFs
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── Tenant rent billing table ────────────────────────────────────────── */}
-      {selectedRoom && (
-        <section className="rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-                <Users size={12} className="shrink-0" />
-                Tenant Rent Billing
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Active tenants and bed assignments for the selected room.
-              </p>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {selectedTenants.length} tenant{selectedTenants.length === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          {selectedTenants.length === 0 ? (
-            <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-              No active tenant found.
-            </div>
-          ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-border">
-                    {["Tenant", "Bed / Room", "Move-in", "Monthly Rent", "Billing Cycle", "Next Due", "Status", "Outstanding", "Actions"].map((h) => (
-                      <th key={h} className="py-2 pr-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {selectedTenants.map((tenant) => {
-                    const reservationId = getId(tenant.reservationId);
-                    const amount = amounts[reservationId] ?? tenant.monthlyRent ?? "";
-                    const amountInvalid = normalizeAmount(amount) <= 0;
-                    const bill = getTenantBill(tenant, billsById);
-                    const billId = getId(bill?.id || bill?._id);
-                    const tenantStatus = getTenantStatus(tenant, bill);
-                    const rowBusy =
-                      previewLoadingId === reservationId ||
-                      generatingId === reservationId ||
-                      sendingId === billId ||
-                      downloadingId === billId ||
-                      Boolean(batchAction);
-
-                    return (
-                      <tr key={reservationId} className="group">
-                        <td className="py-3 pr-4">
-                          <p className="font-semibold text-card-foreground">{tenant.tenantName}</p>
-                          <p className="text-muted-foreground">{tenant.email}</p>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <p className="font-semibold text-card-foreground">{tenant.bedPosition || "No bed label"}</p>
-                          <p className="text-muted-foreground">{tenant.roomName || getRoomName(selectedRoom)}</p>
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {tenant.moveInDate ? fmtDate(tenant.moveInDate) : "Missing"}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <div className="space-y-1">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={amount}
-                              onChange={(e) =>
-                                setAmounts((cur) => ({ ...cur, [reservationId]: e.target.value }))
-                              }
-                              aria-invalid={amountInvalid}
-                              className={`w-24 rounded-lg border px-2 py-1 text-xs text-card-foreground focus:outline-none focus:ring-2 focus:ring-amber-100 ${
-                                amountInvalid ? "border-danger bg-danger-light" : "border-border bg-card focus:border-amber-400"
-                              }`}
-                            />
-                            {amountInvalid && (
-                              <p className="text-[10px] text-danger">Missing rent amount.</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {formatCycle(tenant.billingCycleStart, tenant.billingCycleEnd)}
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {fmtDate(dueDate || tenant.dueDate || tenant.billingCycle?.dueDate)}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${getTenantStatusClasses(tenantStatus)}`}>
-                            {TENANT_STATUS_LABELS[tenantStatus] || tenantStatus}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {bill
-                            ? fmtCurrency(bill.status === "paid" ? 0 : bill.remainingAmount ?? bill.totalAmount ?? 0)
-                            : fmtCurrency(0)}
-                        </td>
-                        <td className="py-3">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                              onClick={() => handlePreview(tenant)}
-                              disabled={rowBusy || amountInvalid}
-                            >
-                              {previewLoadingId === reservationId ? (
-                                <LoaderCircle size={11} className="animate-spin" />
-                              ) : (
-                                <Eye size={11} />
-                              )}
-                              Preview
-                            </button>
-                            {!bill && (
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1 rounded-md bg-[#D4AF37] px-2 py-1 text-[11px] font-semibold text-[#000000] hover:bg-[#FFE9A3] disabled:cursor-not-allowed disabled:opacity-40"
-                                onClick={() => handleGenerate(tenant)}
-                                disabled={rowBusy || amountInvalid || tenant.billStatus === "missing_data" || Boolean(formError)}
-                              >
-                                {generatingId === reservationId ? (
-                                  <LoaderCircle size={11} className="animate-spin" />
-                                ) : (
-                                  <FileText size={11} />
-                                )}
-                                Generate
-                              </button>
-                            )}
-                            {bill && bill.status !== "paid" && (
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                                onClick={() => handleSendBill(bill)}
-                                disabled={rowBusy}
-                              >
-                                {sendingId === billId ? (
-                                  <LoaderCircle size={11} className="animate-spin" />
-                                ) : (
-                                  <Send size={11} />
-                                )}
-                                Send
-                              </button>
-                            )}
-                            {bill && (
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                                onClick={() => handleDownloadPdf(bill)}
-                                disabled={rowBusy}
-                              >
-                                {downloadingId === billId ? (
-                                  <LoaderCircle size={11} className="animate-spin" />
-                                ) : (
-                                  <Download size={11} />
-                                )}
-                                PDF
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ── Rent bill history ────────────────────────────────────────────────── */}
-      {selectedRoom && (
-        <section className="rounded-xl border border-border bg-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-                <CalendarDays size={12} className="shrink-0" />
-                Rent Bill History
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Generated rent bills for the selected room and billing month.
-              </p>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {selectedSummary.generatedBills.length} bill{selectedSummary.generatedBills.length === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          <div className="mt-3 space-y-2">
-            {selectedSummary.generatedBills.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-                No generated rent bills for this room yet.
-              </div>
-            ) : (
-              selectedSummary.generatedBills.map((bill) => {
-                const deliveryStatus = getBillDeliveryStatus(bill);
-                const sent = isBillSent(bill);
-                return (
-                  <div
-                    key={getId(bill.id || bill._id)}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-card-foreground">{bill.tenant?.name || "Tenant"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCycle(bill.billingCycleStart, bill.billingCycleEnd)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                          sent
-                            ? "bg-info-light text-info-dark"
-                            : deliveryStatus === "failed"
-                            ? "bg-danger-light text-danger-dark"
-                            : "bg-warning-light text-warning-dark"
-                        }`}
-                      >
-                        {sent ? "Sent" : deliveryStatus === "failed" ? "Email failed" : "Generated"}
-                      </span>
-                      <span className="text-sm font-semibold text-card-foreground">
-                        {fmtCurrency(bill.totalAmount || 0)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* ── Preview Modal ────────────────────────────────────────────────────── */}
       <PreviewModal
         preview={preview}
         isGenerating={Boolean(generatingId && previewTenant)}
         isDownloading={downloadingId}
         onClose={() => {
-          if (!generatingId) { setPreview(null); setPreviewTenant(null); }
+          if (!generatingId) {
+            setPreview(null);
+            setPreviewTenant(null);
+          }
         }}
         onGenerate={() => previewTenant && handleGenerate(previewTenant, { skipConfirm: true })}
         onDownload={handleDownloadPdf}

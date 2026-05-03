@@ -23,14 +23,14 @@ html:has(.admin-layout) body {
 /* Content shifts based on sidebar state */
 .admin-layout-main {
   flex: 1;
-  margin-left: 256px;
+  margin-left: 248px;
   display: flex;
   flex-direction: column;
   transition: margin-left 0.3s var(--ease-out);
 }
 
 .admin-layout--collapsed .admin-layout-main {
-  margin-left: 64px;
+  margin-left: 68px;
 }
 
 /* ── Top bar ──────────────────────────────────────────────────────────────── */
@@ -105,7 +105,7 @@ html:has(.admin-layout) body {
 
 /* ── Content area ─────────────────────────────────────────────────────────── */
 .admin-content {
-  --admin-topbar-height: 64px;
+  --admin-topbar-height: 74px;
   --admin-content-padding: var(--spacing-page);
   --admin-content-viewport-budget: calc(100dvh - var(--admin-topbar-height));
   --admin-content-inner-height: calc(
@@ -116,7 +116,7 @@ html:has(.admin-layout) body {
   overflow-y: scroll;
   scrollbar-gutter: stable;
   background: var(--bg-page);
-  min-height: calc(100vh - 64px);
+  min-height: calc(100vh - 74px);
 }
 
 /* Subtle custom scrollbar for the content area */
@@ -150,14 +150,14 @@ html:has(.admin-layout) body {
 
   .admin-topbar {
     padding: 0 16px;
-    min-height: 64px;
+    min-height: 62px;
   }
 
   .admin-content {
-    --admin-topbar-height: 64px;
+    --admin-topbar-height: 62px;
     --admin-content-padding: 16px;
     padding: var(--admin-content-padding);
-    min-height: calc(100vh - 64px);
+    min-height: calc(100vh - 62px);
   }
 
   .admin-topbar-subtitle {

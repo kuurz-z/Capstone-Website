@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * useReservationFlow ΓÇö Custom Hook
+ * useReservationFlow — Custom Hook
  * =============================================================================
  *
  * Extracted from ReservationFlowPage.jsx.
@@ -29,13 +29,7 @@ import {
   validateEstimatedTime,
   validateTargetMoveInDate,
   validatePHPhoneLocal,
-  validatePHPhoneOrLandline,
 } from "../utils/reservationValidation";
-
-// Returns a sessionStorage key scoped to the Firebase UID when known,
-// falling back to the legacy unscoped key for backward compatibility.
-const getActiveResKey = (uid) =>
-  uid ? `activeReservationId_${uid}` : "activeReservationId";
 
 export default function useReservationFlow() {
   const navigate = useNavigate();
@@ -55,16 +49,14 @@ export default function useReservationFlow() {
         : null;
   const isStepMode = Boolean(stepOverride);
 
-  // ΓöÇΓöÇ Core state ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Core state ─────────────────────────────────────────
   const [reservationData, setReservationData] = useState(null);
   const [currentStage, setCurrentStage] = useState(1);
   const [highestStageReached, setHighestStageReached] = useState(1);
   const [isLoading, setIsLoading] = useState(
     () =>
       new URLSearchParams(window.location.search).has("payment") ||
-      Boolean(sessionStorage.getItem("activeReservationId")) ||
-      // Also check user-scoped keys (set after login is known)
-      Object.keys(sessionStorage).some((k) => k.startsWith("activeReservationId_"))
+      Boolean(sessionStorage.getItem("activeReservationId"))
   );
   const [visitApproved, setVisitApproved] = useState(false);
   const [visitCompleted, setVisitCompleted] = useState(false);
@@ -158,7 +150,7 @@ export default function useReservationFlow() {
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [agreedToCertification, setAgreedToCertification] = useState(false);
 
-  // Stage 4: Payment ΓÇö tenant must acknowledge the non-refundable fee policy
+  // Stage 4: Payment — tenant must acknowledge the non-refundable fee policy
   const [agreedToFeePolicy, setAgreedToFeePolicy] = useState(false);
   const [finalMoveInDate, setFinalMoveInDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -182,13 +174,13 @@ export default function useReservationFlow() {
     billingEmail: "",
   });
 
-  // ΓöÇΓöÇ Capture payment redirect flag + status at render time (before effects clear URL) ΓöÇΓöÇ
+  // ── Capture payment redirect flag + status at render time (before effects clear URL) ──
   const paymentReturnStatusRef = useRef(
     new URLSearchParams(window.location.search).get("payment")
   );
   const isPaymentReturnRef = useRef(Boolean(paymentReturnStatusRef.current));
 
-  // ΓöÇΓöÇ Payment redirect hook (must be after all useState) ΓöÇΓöÇΓöÇΓöÇ
+  // ── Payment redirect hook (must be after all useState) ────
   const { searchParams, setSearchParams } = usePaymentRedirect({
     user,
     showNotification,
@@ -204,7 +196,7 @@ export default function useReservationFlow() {
   const isFirstRenderRef = useRef(true);
   const navigatingAwayRef = useRef(false);
 
-  // ΓöÇΓöÇ Warn before leaving mid-flow (skip if intentional navigation) ΓöÇΓöÇ
+  // ── Warn before leaving mid-flow (skip if intentional navigation) ──
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (navigatingAwayRef.current) return;
@@ -217,7 +209,7 @@ export default function useReservationFlow() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isFormDirty, currentStage]);
 
-  // ΓöÇΓöÇ Stepper locking ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Stepper locking ────────────────────────────────────
   const isStageLocked = (stageId) => {
     if (paymentApproved) return stageId < 5;
     if (stageId === 1) return visitCompleted;
@@ -247,7 +239,7 @@ export default function useReservationFlow() {
     setCurrentStage(stageId);
   };
 
-  // ΓöÇΓöÇ Helpers to populate state from a reservation object ΓöÇΓöÇΓöÇΓöÇ
+  // ── Helpers to populate state from a reservation object ────
   const populateFromReservation = (r) => {
     if (r.firstName) setFirstName(r.firstName);
     if (r.lastName) setLastName(r.lastName);
@@ -329,17 +321,15 @@ export default function useReservationFlow() {
                 : "Name mismatch detected. Please review your information or upload a clearer ID.",
         extractedName: r.idExtractedName || "",
         extractedIdNumber: r.idExtractedNumber || "",
-        // Force null for manual_review so historical DB rows with stored 0 don't
-        // display a misleading "0%" score in the UI.
-        matchScore: r.idValidationStatus === "manual_review" ? null : (r.idNameMatchScore ?? null),
+        matchScore: r.idNameMatchScore || 0,
         notes: r.idValidationNotes || [],
       });
     }
     // NOTE: agreedToPrivacy / agreedToCertification are NOT restored
-    // from saved data ΓÇö consent must be re-affirmed each session.
+    // from saved data — consent must be re-affirmed each session.
   };
 
-  // ΓöÇΓöÇ Pre-fill empty fields from user profile (for new reservations) ΓöÇΓöÇ
+  // ── Pre-fill empty fields from user profile (for new reservations) ──
   const prefillFromProfile = async () => {
     try {
       const profile = await authApi.getCurrentUser();
@@ -359,7 +349,7 @@ export default function useReservationFlow() {
       if (!emergencyContactNumber && profile.emergencyPhone)
         setEmergencyContactNumber(profile.emergencyPhone);
     } catch {
-      // Non-critical ΓÇö silently skip if profile fetch fails
+      // Non-critical — silently skip if profile fetch fails
     }
   };
 
@@ -414,7 +404,7 @@ export default function useReservationFlow() {
     };
   };
 
-  // ΓöÇΓöÇ Data loading ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Data loading ───────────────────────────────────────
   const processedKeyRef = useRef(null);
   const paymentVerifyingRef = useRef(false);
   const justPaidRef = useRef(false);
@@ -441,7 +431,7 @@ export default function useReservationFlow() {
     const editMode = location.state?.editMode;
     const resId = location.state?.reservationId;
 
-    // ΓöÇΓöÇ ALWAYS reset session-specific fields first ΓöÇΓöÇ
+    // ── ALWAYS reset session-specific fields first ──
     // For new reservations, these stay blank.
     // For continuing, the async load functions below will repopulate from DB.
     setTargetMoveInDate("");
@@ -454,19 +444,17 @@ export default function useReservationFlow() {
       loadExistingReservation(resId);
     } else {
       const state = location.state?.roomData;
-      // Check if this is a PayMongo return ΓÇö defer stage logic to usePaymentRedirect
+      // Check if this is a PayMongo return — defer stage logic to usePaymentRedirect
       const paymentParam = new URLSearchParams(window.location.search).get("payment");
       if (state) {
         setReservationData(state);
         prefillFromProfile(); // Pre-fill Step 3 from profile for new reservations
       } else if (isPaymentReturnRef.current) {
-        // Returning from PayMongo ΓÇö load reservation data for display,
+        // Returning from PayMongo — load reservation data for display,
         // and verify payment using the reservation's stored session ID.
         paymentVerifyingRef.current = true; // block re-init from hook's setSearchParams
         isPaymentReturnRef.current = false; // consume the flag
-        const storedResId =
-          sessionStorage.getItem(getActiveResKey(user?.firebaseUid)) ||
-          sessionStorage.getItem("activeReservationId"); // legacy fallback
+        const storedResId = sessionStorage.getItem("activeReservationId");
         if (storedResId) {
           loadExistingReservation(storedResId, true);
         } else {
@@ -474,9 +462,7 @@ export default function useReservationFlow() {
         }
       } else {
         const stored = sessionStorage.getItem("pendingReservation");
-        const storedResId =
-          sessionStorage.getItem(getActiveResKey(user?.firebaseUid)) ||
-          sessionStorage.getItem("activeReservationId"); // legacy fallback
+        const storedResId = sessionStorage.getItem("activeReservationId");
         if (stored) {
           setReservationData(JSON.parse(stored));
         } else if (storedResId) {
@@ -604,7 +590,7 @@ export default function useReservationFlow() {
       };
       let targetStage = STAGE_BY_STATUS[reservationStatus] || 1;
 
-      // visit_pending: tenant must wait ΓÇö redirect to profile (unless rejected)
+      // visit_pending: tenant must wait — redirect to profile (unless rejected)
       if (reservationStatus === "visit_pending" && !reservation.scheduleRejected) {
         appNavigate("/applicant/profile", {
           flash: {
@@ -647,7 +633,7 @@ export default function useReservationFlow() {
         targetStage = 2;
       }
       if (skipStageSet) {
-        // Payment redirect ΓÇö verify using the reservation's stored paymongoSessionId
+        // Payment redirect — verify using the reservation's stored paymongoSessionId
         // Set highest to 5 immediately so the stepper renders all stages green from the start
         setHighestStageReached(5);
         // Verify payment status with PayMongo
@@ -655,9 +641,8 @@ export default function useReservationFlow() {
           try {
             const result = await billingApi.checkPaymentStatus(reservation.paymongoSessionId);
             if (result.status === "paid") {
-              sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
-              sessionStorage.removeItem("activeReservationId"); // legacy cleanup
-              // Back button ΓåÆ redirect to dashboard; Return to merchant ΓåÆ show step 5
+              sessionStorage.removeItem("activeReservationId");
+              // Back button → redirect to dashboard; Return to merchant → show step 5
               if (paymentReturnStatusRef.current === "cancelled") {
                 appNavigate("/applicant/profile", {
                   flash: {
@@ -672,7 +657,7 @@ export default function useReservationFlow() {
               try {
                 const updated = await reservationApi.getById(resId);
                 if (updated?.reservationCode) setReservationCode(updated.reservationCode);
-              } catch { /* non-critical ΓÇö code just won't display */ }
+              } catch { /* non-critical — code just won't display */ }
               setCurrentStage(5);
               setHighestStageReached(5);
               setPaymentSubmitted(true);
@@ -693,7 +678,7 @@ export default function useReservationFlow() {
               return;
             }
           } catch (err) {
-            console.error("Γ¥î [VERIFY] Payment check failed ΓÇö sessionId:", reservation.paymongoSessionId, err);
+            console.error("❌ [VERIFY] Payment check failed — sessionId:", reservation.paymongoSessionId, err);
             setCurrentStage(4);
             if (paymentReturnStatusRef.current !== "cancelled") {
               showNotification("Could not verify payment. Please check your profile.", "warning", 5000);
@@ -701,10 +686,10 @@ export default function useReservationFlow() {
             return;
           }
         } else {
-          // No stored session ID ΓÇö skip generic toast, just navigate to correct stage
+          // No stored session ID — skip generic toast, just navigate to correct stage
           console.warn("[PAYMENT] skipStageSet=true but paymongoSessionId is empty for reservation:", resId);
           setCurrentStage(targetStage);
-          return; // ΓåÉ prevent double-toast: skip the generic notification below
+          return; // ← prevent double-toast: skip the generic notification below
         }
       } else {
         if (stepOverride && stepOverride <= highest)
@@ -719,11 +704,10 @@ export default function useReservationFlow() {
         3000,
       );
     } catch (err) {
-      console.error("Γ¥î [LOAD_RESERVATION] Failed to load reservation id:", resId, "| status:", err?.response?.status, "| message:", err?.message, err);
+      console.error("❌ [LOAD_RESERVATION] Failed to load reservation id:", resId, "| status:", err?.response?.status, "| message:", err?.message, err);
       const status = err?.response?.status;
       if (status === 404) {
-        sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
-        sessionStorage.removeItem("activeReservationId"); // legacy cleanup
+        sessionStorage.removeItem("activeReservationId");
         appNavigate("/applicant/check-availability", {
           flash: {
             type: "error",
@@ -746,7 +730,7 @@ export default function useReservationFlow() {
     }
   };
 
-  // ΓöÇΓöÇ Form change tracking (Stage 1) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Form change tracking (Stage 1) ─────────────────────
   useEffect(() => {
     if (currentStage === 1) {
       setIsFormDirty(
@@ -763,7 +747,7 @@ export default function useReservationFlow() {
     currentStage,
   ]);
 
-  // ΓöÇΓöÇ API helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── API helpers ────────────────────────────────────────
   const advanceStage = async (nextStage, message) => {
     setHighestStageReached((prev) => Math.max(prev, nextStage));
     await queryClient.invalidateQueries({ queryKey: ["reservations"] });
@@ -904,7 +888,7 @@ export default function useReservationFlow() {
     return response?.reservation || response;
   };
 
-  // ΓöÇΓöÇ Auto-save (stages 3-4) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Auto-save (stages 3-4) ─────────────────────────────
   const validateApplicantIdDocument = useCallback(
     async ({ documentUrl, idType } = {}) => {
       const targetReservationId = reservationId || reservationData?._id || reservationData?.id;
@@ -944,7 +928,7 @@ export default function useReservationFlow() {
             "ID uploaded. It will be manually reviewed by admin.",
           extractedName: result.extractedName || "",
           extractedIdNumber: result.extractedIdNumber || "",
-          matchScore: result.matchScore ?? null,
+          matchScore: result.matchScore || 0,
           notes: result.notes || [],
         };
 
@@ -1007,7 +991,6 @@ export default function useReservationFlow() {
       educationLevel,
       addressUnitHouseNo,
       addressStreet,
-      addressRegion,
       addressBarangay,
       addressCity,
       addressProvince,
@@ -1030,7 +1013,7 @@ export default function useReservationFlow() {
       workSchedule,
       workScheduleOther,
       targetMoveInDate,
-      ...(leaseDuration ? { leaseDuration } : {}),
+      leaseDuration,
       finalMoveInDate,
       agreedToPrivacy,
       agreedToCertification,
@@ -1250,12 +1233,13 @@ export default function useReservationFlow() {
       } else if (currentStage === 3) {
         if (!devBypassValidation) {
           const hasText = (value) => Boolean(value?.trim?.() || value);
-          // 09XXXXXXXXX format ΓÇö matches backend normalization and new input constraint.
+          // 09XXXXXXXXX format — matches backend normalization and new input constraint.
           const isValidPhone = (value) => validatePHPhoneLocal(value).valid;
           const requiredFields = [
             { key: "selfiePhoto", label: "Selfie Photo", isMissing: !selfiePhoto },
             { key: "lastName", label: "Last Name", isMissing: !hasText(lastName) },
             { key: "firstName", label: "First Name", isMissing: !hasText(firstName) },
+            { key: "middleName", label: "Middle Name", isMissing: !hasText(middleName) },
             {
               key: "mobileNumber",
               label: "Mobile Number",
@@ -1317,12 +1301,7 @@ export default function useReservationFlow() {
             { key: "healthConcerns", label: "Health Concerns", isMissing: !hasText(healthConcerns) },
             { key: "employerSchool", label: "Current Employer", isMissing: !hasText(employerSchool) },
             { key: "employerAddress", label: "Employer Address", isMissing: !hasText(employerAddress) },
-            {
-              key: "employerContact",
-              label: "Employer Contact Number",
-              isMissing: hasText(employerContact) && !validatePHPhoneOrLandline(employerContact),
-              message: "Enter a valid phone number (e.g. 09123456789 or 02-1234567).",
-            },
+            { key: "employerContact", label: "Employer Contact", isMissing: !hasText(employerContact) },
             { key: "occupation", label: "Occupation", isMissing: !hasText(occupation) },
             {
               key: "companyID",
@@ -1620,7 +1599,7 @@ export default function useReservationFlow() {
     setPendingStageAction(null);
   };
 
-  // ΓöÇΓöÇΓöÇ Return everything the page component needs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ─── Return everything the page component needs ────────
   return {
     // Navigation
     navigate,

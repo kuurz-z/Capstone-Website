@@ -4,12 +4,12 @@ import {
   useOccupancyReport,
 } from "../../../shared/hooks/queries/useAnalyticsReports";
 import {
- AnalyticsDonutChart,
- AnalyticsLineChart,
- AnalyticsTabLayout,
- AnalyticsToolbar,
- DataTable,
- ReportChartPanel,
+  AnalyticsDonutChart,
+  AnalyticsLineChart,
+  AnalyticsTabLayout,
+  AnalyticsToolbar,
+  DataTable,
+  ReportChartPanel,
 } from "../components/shared";
 import { buildRangeLabel, formatBranch } from "./reportCommon";
 import {
@@ -28,23 +28,23 @@ import {
 } from "./analyticsTabShared";
 
 const INVENTORY_COLUMNS = [
- { key: "roomNumber", label: "Room", sortable: true },
- { key: "roomTypeLabel", label: "Type", sortable: true },
- { key: "branch", label: "Branch", render: (row) => formatBranch(row.branch) },
- { key: "capacity", label: "Capacity", sortable: true },
- { key: "occupiedBeds", label: "Occupied", sortable: true },
- { key: "availableBeds", label: "Available", sortable: true },
- { key: "unavailableBeds", label: "Unavailable", sortable: true },
- { key: "occupancyRate", label: "Rate", render: (row) => `${row.occupancyRate}%` },
+  { key: "roomNumber", label: "Room", sortable: true },
+  { key: "roomTypeLabel", label: "Type", sortable: true },
+  { key: "branch", label: "Branch", render: (row) => formatBranch(row.branch) },
+  { key: "capacity", label: "Capacity", sortable: true },
+  { key: "occupiedBeds", label: "Occupied", sortable: true },
+  { key: "availableBeds", label: "Available", sortable: true },
+  { key: "unavailableBeds", label: "Unavailable", sortable: true },
+  { key: "occupancyRate", label: "Rate", render: (row) => `${row.occupancyRate}%` },
 ];
 const TABLE_PAGE_SIZE = 10;
 
 export default function AnalyticsOccupancyTab({
- branch,
- range,
- isOwner,
- onBranchChange,
- onRangeChange,
+  branch,
+  range,
+  isOwner,
+  onBranchChange,
+  onRangeChange,
 }) {
   const [page, setPage] = useState(1);
   const params = useMemo(
@@ -56,20 +56,20 @@ export default function AnalyticsOccupancyTab({
     [branch, isOwner, page, range],
   );
 
- const { data, isLoading, isError } = useOccupancyReport(params);
- const { data: forecastData } = useOccupancyForecast({
- months: 3,
- ...(isOwner ? { branch } : {}),
- });
- const {
- data: insightData,
- isLoading: isInsightLoading,
- isError: isInsightError,
- } = useReportInsights({
- reportType: "occupancy",
- range,
- branch: isOwner ? branch : undefined,
- });
+  const { data, isLoading, isError } = useOccupancyReport(params);
+  const { data: forecastData } = useOccupancyForecast({
+    months: 3,
+    ...(isOwner ? { branch } : {}),
+  });
+  const {
+    data: insightData,
+    isLoading: isInsightLoading,
+    isError: isInsightError,
+  } = useReportInsights({
+    reportType: "occupancy",
+    range,
+    branch: isOwner ? branch : undefined,
+  });
 
   const inventoryTable = data?.tables?.inventory;
   const inventory = getTableRows(inventoryTable);
@@ -83,29 +83,29 @@ export default function AnalyticsOccupancyTab({
     baseline: item.baselineRate,
   }));
 
- const metricCards = [
- { label: "Occupancy Rate", value: data?.kpis?.occupancyRateLabel || "0%", tone: "blue" },
- { label: "Total Capacity", value: data?.kpis?.totalCapacity || 0, tone: "green" },
- { label: "Occupied Beds", value: data?.kpis?.occupiedBeds || 0, tone: "amber" },
- { label: "Unavailable Beds", value: data?.kpis?.unavailableBeds || 0, tone: "rose" },
- ];
+  const metricCards = [
+    { label: "Occupancy Rate", value: data?.kpis?.occupancyRateLabel || "0%", tone: "blue" },
+    { label: "Total Capacity", value: data?.kpis?.totalCapacity || 0, tone: "green" },
+    { label: "Occupied Beds", value: data?.kpis?.occupiedBeds || 0, tone: "amber" },
+    { label: "Unavailable Beds", value: data?.kpis?.unavailableBeds || 0, tone: "rose" },
+  ];
 
- const exportCsv = () => {
- handleCsvExport(
- inventory,
- [
- { key: "roomNumber", label: "Room" },
- { key: "roomTypeLabel", label: "Type" },
- { key: "branch", label: "Branch", formatter: (value) => formatBranch(value) },
- { key: "capacity", label: "Capacity" },
- { key: "occupiedBeds", label: "Occupied Beds" },
- { key: "availableBeds", label: "Available Beds" },
- { key: "unavailableBeds", label: "Unavailable Beds" },
- { key: "occupancyRate", label: "Occupancy Rate", formatter: (value) => `${value}%` },
- ],
- `occupancy-report-${range}`,
- );
- };
+  const exportCsv = () => {
+    handleCsvExport(
+      inventory,
+      [
+        { key: "roomNumber", label: "Room" },
+        { key: "roomTypeLabel", label: "Type" },
+        { key: "branch", label: "Branch", formatter: (value) => formatBranch(value) },
+        { key: "capacity", label: "Capacity" },
+        { key: "occupiedBeds", label: "Occupied Beds" },
+        { key: "availableBeds", label: "Available Beds" },
+        { key: "unavailableBeds", label: "Unavailable Beds" },
+        { key: "occupancyRate", label: "Occupancy Rate", formatter: (value) => `${value}%` },
+      ],
+      `occupancy-report-${range}`,
+    );
+  };
 
   const exportPdf = () => {
     handlePdfExport({
@@ -159,37 +159,37 @@ export default function AnalyticsOccupancyTab({
     >
       <MetricGrid items={metricCards} />
 
- <AnalyticsInsightSection
- reportLabel="occupancy"
- summaryTitle="Occupancy Summary"
- data={insightData}
- isLoading={isInsightLoading}
- isError={isInsightError}
- />
+      <AnalyticsInsightSection
+        reportLabel="occupancy"
+        summaryTitle="Occupancy Summary"
+        data={insightData}
+        isLoading={isInsightLoading}
+        isError={isInsightError}
+      />
 
- <div className="admin-reports__grid">
- <ReportChartPanel title="Occupancy trend" subtitle="Daily occupancy rate over the selected period">
- <AnalyticsLineChart
- data={trend.map((item) => ({ label: item.label, occupancy: item.totalRate }))}
- lines={[{ key: "occupancy", label: "Occupancy rate" }]}
- valueFormatter={(value) => `${value}%`}
- emptyTitle="No occupancy trend"
- emptyDescription="The branch does not have enough occupancy history for this range yet."
- />
- </ReportChartPanel>
+      <div className="admin-reports__grid">
+        <ReportChartPanel title="Occupancy trend" subtitle="Daily occupancy rate over the selected period">
+          <AnalyticsLineChart
+            data={trend.map((item) => ({ label: item.label, occupancy: item.totalRate }))}
+            lines={[{ key: "occupancy", label: "Occupancy rate" }]}
+            valueFormatter={(value) => `${value}%`}
+            emptyTitle="No occupancy trend"
+            emptyDescription="The branch does not have enough occupancy history for this range yet."
+          />
+        </ReportChartPanel>
 
- <ReportChartPanel title="Room type mix" subtitle="Current occupancy by room type">
- <AnalyticsDonutChart
- data={roomTypes.map((item) => ({
- label: item.roomTypeLabel,
- value: item.occupiedBeds,
- }))}
- centerLabel={{ value: data?.kpis?.occupiedBeds || 0, label: "Occupied" }}
- emptyTitle="No room type data"
- emptyDescription="Room type distribution will appear once inventory is available."
- />
- </ReportChartPanel>
- </div>
+        <ReportChartPanel title="Room type mix" subtitle="Current occupancy by room type">
+          <AnalyticsDonutChart
+            data={roomTypes.map((item) => ({
+              label: item.roomTypeLabel,
+              value: item.occupiedBeds,
+            }))}
+            centerLabel={{ value: data?.kpis?.occupiedBeds || 0, label: "Occupied" }}
+            emptyTitle="No room type data"
+            emptyDescription="Room type distribution will appear once inventory is available."
+          />
+        </ReportChartPanel>
+      </div>
 
       <ReportChartPanel title="Forecast panel" subtitle="Projected occupancy compared with recent baseline">
         <AnalyticsLineChart

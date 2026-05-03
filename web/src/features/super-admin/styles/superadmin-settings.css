@@ -1,32 +1,31 @@
 /* ============================================================
    SUPER ADMIN SETTINGS PAGE
-   Refactored to use unified design tokens
    ============================================================ */
 
 .sa-settings-header-copy {
   max-width: 760px;
   margin: 10px 0 0;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-md);
+  color: #64748b;
+  font-size: 14px;
   line-height: 1.6;
 }
 
 .sa-settings-section {
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: 24px;
 }
 
 .sa-settings-section-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--spacing-lg);
+  gap: 16px;
   margin-bottom: 18px;
 }
 
 .sa-settings-section-copy {
-  margin: var(--spacing-sm) 0 0;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-base);
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
   line-height: 1.6;
 }
 
@@ -34,11 +33,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 8px 12px;
   border-radius: 999px;
-  background: var(--info-light);
-  color: var(--info);
-  font-size: var(--font-size-sm);
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -46,18 +45,18 @@
 .sa-settings-meta-bar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-md);
+  gap: 12px;
   margin-bottom: 20px;
   padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, var(--card), var(--muted));
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
 }
 
 .sa-settings-meta-label {
   display: block;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-xs);
+  color: #64748b;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -65,9 +64,9 @@
 
 .sa-settings-meta-value {
   display: block;
-  margin-top: var(--spacing-sm);
-  color: var(--foreground);
-  font-size: var(--font-size-lg);
+  margin-top: 8px;
+  color: #0f172a;
+  font-size: 15px;
   font-weight: 800;
 }
 
@@ -82,15 +81,15 @@
   flex-direction: column;
   gap: 14px;
   padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  background: var(--card);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
 }
 
 .sa-settings-field-header {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-md);
+  gap: 12px;
 }
 
 .sa-settings-field-heading {
@@ -98,7 +97,7 @@
   flex: 1;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--spacing-md);
+  gap: 12px;
 }
 
 .sa-setting-icon {
@@ -107,55 +106,55 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md);
-  background: var(--muted);
-  color: var(--neutral-dark);
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
   flex-shrink: 0;
 }
 
 .sa-setting-label {
-  font-size: var(--font-size-md);
+  font-size: 14px;
   font-weight: 700;
-  color: var(--foreground);
+  color: #0f172a;
 }
 
 .sa-setting-value {
-  font-size: var(--font-size-base);
+  font-size: 13px;
   font-weight: 800;
-  color: var(--info);
+  color: #1d4ed8;
   white-space: nowrap;
 }
 
 .sa-setting-desc {
   margin: 0;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-sm);
+  color: #64748b;
+  font-size: 12px;
   line-height: 1.55;
 }
 
 .sa-settings-input {
   width: 100%;
-  padding: var(--spacing-md) 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--input-background);
-  color: var(--foreground);
-  font-size: var(--font-size-md);
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 14px;
   font-weight: 600;
   transition:
-    border-color var(--duration-normal) var(--ease-in-out),
-    box-shadow var(--duration-normal) var(--ease-in-out);
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .sa-settings-input:focus {
   outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 18%, transparent);
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
 }
 
 .sa-settings-input:disabled {
-  background: var(--muted);
-  color: var(--neutral);
+  background: #f8fafc;
+  color: #94a3b8;
   cursor: not-allowed;
 }
 
@@ -164,41 +163,41 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
+  gap: 8px;
   min-height: 42px;
-  padding: 0 var(--spacing-lg);
+  padding: 0 16px;
   border-radius: 999px;
-  font-size: var(--font-size-base);
+  font-size: 13px;
   font-weight: 800;
   transition:
-    transform var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out),
-    border-color var(--duration-normal) var(--ease-in-out),
-    background-color var(--duration-normal) var(--ease-in-out);
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .sa-settings-primary-btn {
   border: none;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  box-shadow: var(--shadow-lg);
+  background: #0f172a;
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.16);
 }
 
 .sa-settings-primary-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.22);
 }
 
 .sa-settings-secondary-btn {
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--foreground);
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
 }
 
 .sa-settings-secondary-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-md);
+  border-color: #94a3b8;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
 }
 
 .sa-settings-primary-btn:disabled,
@@ -220,11 +219,11 @@
   flex-direction: column;
   gap: 14px;
   padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--info) 8%, transparent), transparent 34%),
-    linear-gradient(180deg, var(--card), var(--muted));
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
+    linear-gradient(180deg, #ffffff, #f8fafc);
 }
 
 .sa-settings-override-header {
@@ -236,16 +235,16 @@
 
 .sa-settings-override-header h3 {
   margin: 0;
-  color: var(--foreground);
-  font-size: var(--font-size-xl);
+  color: #0f172a;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
 .sa-settings-override-header p {
   margin: 6px 0 0;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-base);
+  color: #64748b;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -255,9 +254,9 @@
   justify-content: center;
   padding: 7px 10px;
   border-radius: 999px;
-  background: var(--info-light);
-  color: var(--info-dark);
-  font-size: var(--font-size-xs);
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -268,26 +267,25 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: var(--foreground);
-  font-size: var(--font-size-md);
+  color: #334155;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .sa-settings-toggle input {
   width: 16px;
   height: 16px;
-  accent-color: var(--primary);
 }
 
 .sa-settings-inline-field {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .sa-settings-inline-field span {
-  color: var(--neutral-dark);
-  font-size: var(--font-size-sm);
+  color: #475569;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -296,49 +294,49 @@
 .sa-settings-override-meta {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-md) 14px;
-  border-radius: var(--radius-lg);
-  background: var(--muted);
-  color: var(--muted-foreground);
-  font-size: var(--font-size-sm);
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .sa-settings-override-meta strong {
-  color: var(--foreground);
-  font-size: var(--font-size-base);
+  color: #0f172a;
+  font-size: 13px;
 }
 
 .sa-settings-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-lg);
+  gap: 16px;
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid #e2e8f0;
 }
 
 .sa-settings-footer-copy {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  color: var(--muted-foreground);
-  font-size: var(--font-size-base);
+  gap: 4px;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .sa-settings-footer-copy strong {
-  color: var(--foreground);
+  color: #0f172a;
 }
 
 .sa-settings-loading {
-  color: var(--foreground);
+  color: #0f172a;
 }
 
 .sa-settings-loading p {
-  margin: var(--spacing-sm) 0 0;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-base);
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
 }
 
 @media (max-width: 960px) {

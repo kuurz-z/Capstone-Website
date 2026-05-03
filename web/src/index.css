@@ -95,16 +95,6 @@
   /* ── Focus Ring ────────────────────────────────────────────── */
   --focus-ring: 0 0 0 1.5px rgba(10, 22, 40, 0.07);
   --focus-outline: 2px solid rgba(212, 175, 55, 0.52);
-
-  --chart-gold: var(--color-accent);
---success: var(--color-success);
---border: var(--border-card);
---popover: var(--surface-elevated);
---foreground: var(--text-body);
---muted-foreground: var(--text-muted);
---card: var(--surface-card);
---muted: var(--surface-muted);
-
 }
 
 html {

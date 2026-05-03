@@ -1,149 +1,62 @@
 /* =============================================================================
-   DESIGN TOKENS - Unified semantic system for admin UI
+   DESIGN TOKENS — Refined light-mode design system
    ============================================================================= */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 
 :root {
-  /* Core semantic source of truth */
-  --font-size: 16px;
-  --font-family: var(--font-sans, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
+  /* ── Text ── */
+  --text-primary: #1a1a1a;
+  --text-secondary: #5a5a5a;
+  --text-muted: #8c8c8c;
+  --text-inverse: #ffffff;
 
-  --background: #ffffff;
-  --foreground: #1e293b;
-  --card: #ffffff;
-  --card-foreground: #1e293b;
-  --popover: #ffffff;
-  --popover-foreground: #1e293b;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --input: transparent;
-  --input-background: #f8fafc;
-  --switch-background: #cbd5e1;
+  /* ── Surfaces ── */
+  --bg-page: #f7f8fa;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.025);
+  --bg-active: rgba(0, 0, 0, 0.05);
+  --bg-elevated: #ffffff;
+  --bg-sidebar: #fafbfc;
+  --bg-inset: #f4f5f7;
+  --bg-table-header: #f8f9fb;
 
-  --primary: #d4af37;
-  --primary-foreground: #1e293b;
-  --secondary: #1e3a8a;
-  --secondary-foreground: #ffffff;
-  --accent: #fef3c7;
-  --accent-foreground: #1e293b;
+  /* ── Borders ── */
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --border-focus: rgba(47, 128, 237, 0.4);
 
-  --success: #16a34a;
-  --success-foreground: #ffffff;
-  --success-light: #dcfce7;
-  --success-dark: #166534;
+  /* ── Status colors ── */
+  --status-success: #0d9668;
+  --status-success-bg: rgba(13, 150, 104, 0.08);
+  --status-warning: #c77d0a;
+  --status-warning-bg: rgba(199, 125, 10, 0.08);
+  --status-error: #e14b4b;
+  --status-error-bg: rgba(225, 75, 75, 0.07);
+  --status-info: #2e7cf6;
+  --status-info-bg: rgba(46, 124, 246, 0.07);
+  --status-neutral: #8c8c8c;
+  --status-neutral-bg: rgba(140, 140, 140, 0.07);
 
-  --warning: #f59e0b;
-  --warning-foreground: #78350f;
-  --warning-light: #fef3c7;
-  --warning-dark: #92400e;
+  /* ── Accent ── */
+  --accent-blue: #2e7cf6;
+  --accent-blue-bg: rgba(46, 124, 246, 0.07);
+  --accent-green: #0d9668;
+  --accent-green-bg: rgba(13, 150, 104, 0.07);
+  --accent-orange: #d68a0a;
+  --accent-orange-bg: rgba(214, 138, 10, 0.07);
+  --accent-red: #e14b4b;
+  --accent-red-bg: rgba(225, 75, 75, 0.06);
+  --accent-purple: #6b48ff;
+  --accent-purple-bg: rgba(107, 72, 255, 0.07);
 
-  --danger: #ef4444;
-  --danger-foreground: #ffffff;
-  --danger-light: #fee2e2;
-  --danger-dark: #991b1b;
-  --error: var(--danger);
-  --error-foreground: var(--danger-foreground);
-  --error-light: var(--danger-light);
-  --error-dark: var(--danger-dark);
-
-  --info: #2563eb;
-  --info-foreground: #ffffff;
-  --info-light: #dbeafe;
-  --info-dark: #1e40af;
-
-  --neutral: #64748b;
-  --neutral-foreground: #ffffff;
-  --neutral-light: #f1f5f9;
-  --neutral-dark: #475569;
-
-  --ring: #d4af37;
-  --radius: 0.5rem;
-
-  /* Charts for Recharts and dashboard visuals */
-  --chart-1: #16a34a;
-  --chart-2: #2563eb;
-  --chart-3: #f59e0b;
-  --chart-4: #8b5cf6;
-  --chart-5: #ec4899;
-  --chart-primary: var(--chart-2);
-  --chart-secondary: var(--chart-1);
-  --chart-success: var(--chart-1);
-  --chart-warning: var(--chart-3);
-  --chart-danger: var(--danger);
-  --chart-blue: var(--chart-2);
-  --chart-gold: var(--chart-3);
-  --chart-navy: var(--secondary);
-
-  /* Legacy compatibility aliases */
-  --text-primary: var(--foreground);
-  --text-secondary: var(--muted-foreground);
-  --text-muted: var(--neutral);
-  --text-inverse: var(--background);
-
-  --bg-page: var(--background);
-  --bg-card: var(--card);
-  --bg-hover: color-mix(in srgb, var(--foreground) 4%, transparent);
-  --bg-active: color-mix(in srgb, var(--foreground) 8%, transparent);
-  --bg-elevated: var(--card);
-  --bg-sidebar: var(--card);
-  --bg-inset: var(--muted);
-  --bg-table-header: color-mix(in srgb, var(--muted) 70%, var(--background));
-
-  --border-light: color-mix(in srgb, var(--border) 45%, transparent);
-  --border-default: var(--border);
-  --border-strong: color-mix(in srgb, var(--border) 140%, var(--foreground));
-  --border-focus: color-mix(in srgb, var(--ring) 60%, transparent);
-
-  --status-success: var(--success);
-  --status-success-bg: color-mix(in srgb, var(--success) 12%, transparent);
-  --status-warning: var(--warning);
-  --status-warning-bg: color-mix(in srgb, var(--warning) 12%, transparent);
-  --status-error: var(--danger);
-  --status-error-bg: color-mix(in srgb, var(--danger) 10%, transparent);
-  --status-info: var(--info);
-  --status-info-bg: color-mix(in srgb, var(--info) 10%, transparent);
-  --status-neutral: var(--neutral);
-  --status-neutral-bg: color-mix(in srgb, var(--neutral) 10%, transparent);
-
-  --color-bg-primary: var(--background);
-  --color-bg-surface: var(--card);
-  --color-bg-elevated: var(--card);
-  --color-border-default: var(--border);
-  --color-border-subtle: color-mix(in srgb, var(--border) 60%, var(--background));
-  --color-text-primary: var(--foreground);
-  --color-text-secondary: var(--muted-foreground);
-  --color-text-muted: var(--neutral);
-  --color-accent: var(--primary);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-danger: var(--danger);
-  --color-error: var(--danger);
-  --color-info: var(--info);
-
-  --accent-blue: var(--info);
-  --accent-blue-bg: color-mix(in srgb, var(--info) 10%, transparent);
-  --accent-green: var(--success);
-  --accent-green-bg: color-mix(in srgb, var(--success) 10%, transparent);
-  --accent-orange: var(--warning);
-  --accent-orange-bg: color-mix(in srgb, var(--warning) 10%, transparent);
-  --accent-red: var(--danger);
-  --accent-red-bg: color-mix(in srgb, var(--danger) 10%, transparent);
-  --accent-purple: var(--chart-4);
-  --accent-purple-bg: color-mix(in srgb, var(--chart-4) 10%, transparent);
-
-  /* Existing scale tokens kept for compatibility */
+  /* ── Radius ── */
   --radius-xs: 3px;
   --radius-sm: 5px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
 
+  /* ── Spacing ── */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
@@ -152,6 +65,7 @@
   --spacing-2xl: 32px;
   --spacing-page: 28px;
 
+  /* ── Shadows ── */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03);
@@ -160,6 +74,8 @@
   --shadow-drawer: -4px 0 32px rgba(0, 0, 0, 0.1), 0 0 1px rgba(0, 0, 0, 0.08);
   --shadow-card-hover: 0 6px 20px rgba(0, 0, 0, 0.07), 0 1px 4px rgba(0, 0, 0, 0.03);
 
+  /* ── Typography ── */
+  --font-family: var(--font-sans, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   --font-size-xs: 11px;
   --font-size-sm: 12px;
   --font-size-base: 13px;
@@ -168,96 +84,10 @@
   --font-size-xl: 18px;
   --font-size-2xl: 22px;
 
+  /* ── Transitions ── */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-fast: 0.15s;
   --duration-normal: 0.2s;
   --duration-slow: 0.3s;
 }
-
-.dark,
-html[data-theme="dark"] {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --card: #1e293b;
-  --card-foreground: #f8fafc;
-  --popover: #1e293b;
-  --popover-foreground: #f8fafc;
-  --muted: #334155;
-  --muted-foreground: #94a3b8;
-  --border: #334155;
-  --input: #334155;
-  --input-background: #1e293b;
-  --switch-background: #475569;
-
-  --primary: #d4af37;
-  --primary-foreground: #0f172a;
-  --secondary: #1e3a8a;
-  --secondary-foreground: #f8fafc;
-  --accent: #1e3a8a;
-  --accent-foreground: #d4af37;
-
-  --success: #22c55e;
-  --success-foreground: #052e16;
-  --success-light: #14532d;
-  --success-dark: #86efac;
-
-  --warning: #fbbf24;
-  --warning-foreground: #422006;
-  --warning-light: #78350f;
-  --warning-dark: #fde68a;
-
-  --danger: #ef4444;
-  --danger-foreground: #7f1d1d;
-  --danger-light: #7f1d1d;
-  --danger-dark: #fca5a5;
-  --error: var(--danger);
-  --error-foreground: var(--danger-foreground);
-  --error-light: var(--danger-light);
-  --error-dark: var(--danger-dark);
-
-  --info: #3b82f6;
-  --info-foreground: #eff6ff;
-  --info-light: #1e3a8a;
-  --info-dark: #93c5fd;
-
-  --neutral: #94a3b8;
-  --neutral-foreground: #1e293b;
-  --neutral-light: #475569;
-  --neutral-dark: #cbd5e1;
-
-  --ring: #d4af37;
-
-  --chart-1: #22c55e;
-  --chart-2: #3b82f6;
-  --chart-3: #fbbf24;
-  --chart-4: #a78bfa;
-  --chart-5: #f472b6;
-  --chart-primary: var(--chart-2);
-  --chart-secondary: var(--chart-1);
-  --chart-success: var(--chart-1);
-  --chart-warning: var(--chart-3);
-  --chart-danger: var(--danger);
-  --chart-blue: var(--chart-2);
-  --chart-gold: var(--chart-3);
-  --chart-navy: var(--secondary);
-}
-
-*,
-::before,
-::after {
-  border-color: var(--border);
-}
-
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-input,
-select,
-textarea {
-  background-color: var(--input-background);
-  color: var(--foreground);
-}
-

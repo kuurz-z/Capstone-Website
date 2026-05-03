@@ -1,323 +1,144 @@
-﻿import { useEffect, useMemo, useState } from "react";
 import {
- AlertTriangle,
- CheckCircle2,
- ChevronDown,
- ChevronUp,
- ClipboardList,
- Clock3,
- FileDown,
- Image as ImageIcon,
- Loader2,
- MessageSquare,
- RefreshCcw,
- Search,
- UserRound,
- Wrench,
- XCircle,
+    AlertTriangle,
+    CheckCircle2,
+    ClipboardList,
+    Clock3,
+    FileDown,
+    Filter,
+    Image as ImageIcon,
+    Loader2,
+    RefreshCcw,
+    Search,
+    UserRound,
+    Wrench,
+    XCircle,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { fmtDate, fmtDateTime } from "../../../shared/utils/dateFormat";
 import { useSearchParams } from "react-router-dom";
+import {
+    useAdminMaintenanceRequests,
+    useBulkMaintenanceUpdate,
+    useMaintenanceRequest,
+    useUpdateMaintenanceRequest,
+} from "../../../shared/hooks/queries/useMaintenance";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
- useAdminMaintenanceRequests,
- useMaintenanceRequest,
- useUpdateMaintenanceRequest,
-} from "../../../shared/hooks/queries/useMaintenance";
-import { showNotification } from "../../../shared/utils/notification";
-import {
- ADMIN_MAINTENANCE_STATUS_OPTIONS,
- MAINTENANCE_REQUEST_TYPES,
- MAINTENANCE_URGENCY_LEVELS,
- formatMaintenanceStatus,
- getMaintenanceTypeMeta,
- getMaintenanceUrgencyMeta,
-} from "../../../shared/utils/maintenanceConfig";
-import { exportToCSV } from "../../../shared/utils/exportUtils";
-import { BRANCH_OPTIONS, BRANCH_DISPLAY_NAMES } from "../../../shared/utils/constants";
-import {
- normalizeBranchFilterValue,
- syncBranchSearchParam,
+    normalizeBranchFilterValue,
+    syncBranchSearchParam,
 } from "../../../shared/utils/branchFilterQuery.mjs";
+import { BRANCH_DISPLAY_NAMES, BRANCH_OPTIONS } from "../../../shared/utils/constants";
+import { exportToCSV } from "../../../shared/utils/exportUtils";
 import {
- DataTable,
- DetailDrawer,
- PageShell,
- StatusBadge,
- SummaryBar,
+    ADMIN_MAINTENANCE_STATUS_OPTIONS,
+    formatMaintenanceStatus,
+    getAllowedAdminMaintenanceStatuses,
+    getMaintenanceTypeMeta,
+    getMaintenanceUrgencyMeta,
+    isAdminTerminalMaintenanceStatus,
+    MAINTENANCE_REQUEST_TYPES,
+    MAINTENANCE_URGENCY_LEVELS,
+} from "../../../shared/utils/maintenanceConfig";
+import { showConfirmation, showNotification } from "../../../shared/utils/notification";
+import {
+    DataTable,
+    DetailDrawer,
+    PageShell,
+    StatusBadge,
+    SummaryBar,
 } from "../components/shared";
+import "../styles/admin-maintenance.css";
+import "../styles/design-tokens.css";
 
 const ITEMS_PER_PAGE = 10;
 
-const fmtDate = (value) => {
- const date = new Date(value);
- if (Number.isNaN(date.getTime())) return "Unknown date";
- return date.toLocaleDateString("en-PH", {
- year: "numeric",
- month: "short",
- day: "numeric",
- });
-};
-
-const fmtDateTime = (value) => {
- const date = new Date(value);
- if (Number.isNaN(date.getTime())) return "Unknown date";
- return date.toLocaleString("en-PH", {
- year: "numeric",
- month: "short",
- day: "numeric",
- hour: "numeric",
- minute: "2-digit",
- });
-};
-
 const formatSlaState = (slaState) => {
- if (!slaState) return "No SLA";
- if (slaState.label === "delayed") return "Delayed";
- if (slaState.label === "priority") return "Priority";
- if (slaState.label === "closed") return "Closed";
- return "On Track";
+  if (!slaState) return "No SLA";
+  if (slaState.label === "delayed") return "Delayed";
+  if (slaState.label === "priority") return "Priority";
+  if (slaState.label === "closed") return "Closed";
+  return "On Track";
 };
 
 const getSlaTone = (slaState) => {
- if (!slaState) {
- return { bg: "#E2E8F0", color: "#475569" };
- }
- if (slaState.label === "delayed") {
- return { bg: "#FEE2E2", color: "#DC2626" };
- }
- if (slaState.label === "priority") {
- return { bg: "#FEF3C7", color: "#D97706" };
- }
- if (slaState.label === "closed") {
- return { bg: "#DCFCE7", color: "#166534" };
- }
- return { bg: "#DBEAFE", color: "#2563EB" };
+  if (!slaState) {
+    return { bg: "#E2E8F0", color: "#475569" };
+  }
+  if (slaState.label === "delayed") {
+    return { bg: "#FEE2E2", color: "#DC2626" };
+  }
+  if (slaState.label === "priority") {
+    return { bg: "#FEF3C7", color: "#D97706" };
+  }
+  if (slaState.label === "closed") {
+    return { bg: "#DCFCE7", color: "#166534" };
+  }
+  return { bg: "#DBEAFE", color: "#2563EB" };
 };
 
 const urgencyRank = {
- high: 0,
- normal: 1,
- low: 2,
+  high: 0,
+  normal: 1,
+  low: 2,
 };
-
-const TERMINAL_STATUSES = new Set(["completed", "rejected", "cancelled"]);
 
 const SUMMARY_STATUSES = [
- { key: "pending", label: "Pending" },
- { key: "viewed", label: "Viewed" },
- { key: "in_progress", label: "In Progress" },
- { key: "resolved", label: "Resolved" },
- { key: "completed", label: "Completed" },
- { key: "rejected", label: "Rejected" },
- { key: "cancelled", label: "Cancelled" },
+  { key: "all", label: "All Requests", icon: ClipboardList, color: "blue" },
+  { key: "pending", label: "Pending", icon: Clock3, color: "orange" },
+  { key: "viewed", label: "Viewed", icon: Filter, color: "orange" },
+  { key: "in_progress", label: "In Progress", icon: RefreshCcw, color: "blue" },
+  { key: "waiting_tenant", label: "Waiting for Tenant", icon: Clock3, color: "blue" },
+  { key: "resolved", label: "Resolved", icon: CheckCircle2, color: "green" },
+  { key: "completed", label: "Completed", icon: CheckCircle2, color: "green" },
+  { key: "rejected", label: "Rejected", icon: XCircle, color: "red" },
+  { key: "cancelled", label: "Cancelled", icon: AlertTriangle, color: "neutral" },
+  { key: "closed", label: "Closed", icon: CheckCircle2, color: "neutral" },
 ];
 
-const MANAGEMENT_SUMMARY_CARDS = [
- {
- key: "open_queue",
- label: "Open Queue",
- icon: ClipboardList,
- color: "orange",
- description: "Pending and viewed requests",
- },
- {
- key: "in_progress",
- label: "In Progress",
- icon: RefreshCcw,
- color: "blue",
- description: "Requests actively handled",
- },
- {
- key: "overdue",
- label: "SLA Overdue",
- icon: AlertTriangle,
- color: "red",
- description: "SLA delayed and not terminal",
- },
- {
- key: "due_soon",
- label: "SLA Due Soon",
- icon: Clock3,
- color: "purple",
- description: "SLA priority and non-terminal",
- },
- {
- key: "completed_today",
- label: "Resolved in Period",
- icon: CheckCircle2,
- color: "green",
- description: "Resolved or completed in date range",
- },
- {
- key: "unassigned_high",
- label: "Unassigned High",
- icon: UserRound,
- color: "orange",
- description: "High urgency with no assignee",
- },
- {
- key: "exceptions",
- label: "Exceptions",
- icon: XCircle,
- color: "red",
- description: "Rejected or cancelled requests",
- },
+const QUICK_FILTERS = [
+  { key: "needs_action", label: "Needs Action" },
+  { key: "unassigned", label: "Unassigned" },
+  { key: "high_priority", label: "High Priority" },
+  { key: "delayed", label: "Delayed" },
+  { key: "waiting_tenant", label: "Waiting for Tenant" },
 ];
 
-const SLA_FILTER_OPTIONS = [
- { key: "all", label: "All SLA health" },
- { key: "on_track", label: "On Track" },
- { key: "priority", label: "Priority" },
- { key: "delayed", label: "Delayed" },
- { key: "closed", label: "Closed" },
- { key: "no_sla", label: "No SLA" },
+const ADMIN_RESPONSE_TEMPLATES = [
+  "We have received your request.",
+  "Assigned to maintenance staff.",
+  "Work is in progress.",
+  "Issue has been resolved.",
+  "Please provide more details.",
 ];
 
-const isNonTerminal = (status) => !TERMINAL_STATUSES.has(status);
-
-const isWithinDateWindow = ({ value, dateFrom, dateTo }) => {
- if (!value) return false;
- const date = new Date(value);
- if (Number.isNaN(date.getTime())) return false;
-
- const start = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
- const end = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
-
- if (start && date < start) return false;
- if (end && date > end) return false;
- return true;
-};
-
-const isCompletedInWindow = ({ request, dateFrom, dateTo }) => {
- if (!(request.status === "resolved" || request.status === "completed")) {
- return false;
- }
-
- const completedAt =
- request.assignment?.resolvedAt || request.resolved_at || request.updated_at;
- if (!completedAt) return false;
-
- if (dateFrom || dateTo) {
- return isWithinDateWindow({ value: completedAt, dateFrom, dateTo });
- }
-
- const completedDate = new Date(completedAt);
- if (Number.isNaN(completedDate.getTime())) return false;
- const today = new Date();
- return (
- completedDate.getFullYear() === today.getFullYear() &&
- completedDate.getMonth() === today.getMonth() &&
- completedDate.getDate() === today.getDate()
- );
-};
-
-const matchesSummaryCard = ({ request, cardKey, dateFrom, dateTo }) => {
- if (!cardKey) return true;
-
- switch (cardKey) {
- case "open_queue":
- return request.status === "pending" || request.status === "viewed";
- case "in_progress":
- return request.status === "in_progress";
- case "overdue":
- return request.slaState?.label === "delayed" && isNonTerminal(request.status);
- case "due_soon":
- return request.slaState?.label === "priority" && isNonTerminal(request.status);
- case "completed_today":
- return isCompletedInWindow({ request, dateFrom, dateTo });
- case "unassigned_high":
- return (
- request.urgency === "high" &&
- !String(request.assigned_to || "").trim() &&
- isNonTerminal(request.status)
- );
- case "exceptions":
- return request.status === "rejected" || request.status === "cancelled";
- default:
- return true;
- }
-};
-
-const matchesSlaFilter = ({ request, slaFilter }) => {
- if (!slaFilter || slaFilter === "all") return true;
- if (slaFilter === "no_sla") return !request.slaState;
- if (slaFilter === "on_track") {
- return request.slaState?.label === "on_track" || !request.slaState?.label;
- }
- return request.slaState?.label === slaFilter;
-};
-
-const getStatusDotClass = (status) => {
- switch (status) {
- case "pending":
- return "bg-amber-300";
- case "viewed":
- return "bg-amber-300";
- case "in_progress":
- return "bg-blue-500";
- case "resolved":
- case "completed":
- return "bg-emerald-500";
- case "rejected":
- return "bg-rose-500";
- case "cancelled":
- return "bg-slate-400";
- default:
- return "bg-slate-400";
- }
-};
-
-const getStatusTextClass = (status) => {
- switch (status) {
- case "pending":
- case "viewed":
- return "text-warning-dark";
- case "in_progress":
- return "text-blue-600";
- case "resolved":
- case "completed":
- return "text-emerald-600";
- case "rejected":
- return "text-error-dark";
- case "cancelled":
- return "text-muted-foreground";
- default:
- return "text-muted-foreground";
- }
-};
+const QUICK_STATUS_ACTIONS = [
+  { status: "viewed", label: "Mark Viewed" },
+  { status: "in_progress", label: "Start Work" },
+  { status: "waiting_tenant", label: "Waiting for Tenant" },
+  { status: "resolved", label: "Resolve" },
+  { status: "completed", label: "Complete" },
+  { status: "rejected", label: "Reject" },
+  { status: "closed", label: "Close" },
+];
 
 const createFilterPayload = ({
- status,
- requestType,
- urgency,
- dateFrom,
- dateTo,
- branch,
+  status,
+  requestType,
+  urgency,
+  dateFrom,
+  dateTo,
+  branch,
 }) => {
- const filters = { limit: 200 };
+  const filters = { limit: 200 };
 
- if (status && status !== "all") filters.status = status;
- if (requestType && requestType !== "all") filters.request_type = requestType;
- if (urgency && urgency !== "all") filters.urgency = urgency;
- if (dateFrom) filters.date_from = dateFrom;
- if (dateTo) filters.date_to = dateTo;
- if (branch && branch !== "all") filters.branch = branch;
+  if (status && status !== "all") filters.status = status;
+  if (requestType && requestType !== "all") filters.request_type = requestType;
+  if (urgency && urgency !== "all") filters.urgency = urgency;
+  if (dateFrom) filters.date_from = dateFrom;
+  if (dateTo) filters.date_to = dateTo;
+  if (branch && branch !== "all") filters.branch = branch;
 
- return filters;
-};
-
-const AVATAR_PALETTES = [
-  { bg: "bg-blue-700",    text: "text-white"    },
-  { bg: "bg-emerald-700", text: "text-white"  },
-  { bg: "bg-violet-700",  text: "text-white"   },
-  { bg: "bg-rose-700",    text: "text-white"     },
-  { bg: "bg-amber-700",   text: "text-white"    },
-  { bg: "bg-cyan-700",    text: "text-white"     },
-];
-
-const getAvatarPalette = (name = "") => {
-  const index = [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_PALETTES.length;
-  return AVATAR_PALETTES[index];
+  return filters;
 };
 
 export default function AdminMaintenancePage() {

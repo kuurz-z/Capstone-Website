@@ -7,76 +7,76 @@ import { exportToCSV } from "../../../shared/utils/exportUtils";
 import { exportReportPdf } from "../../../shared/utils/reportPdf";
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import {
- ActionBar,
- DataTable,
- PageShell,
- ReportChartPanel,
- ReportFilterBar,
- ReportMetricCard,
+  ActionBar,
+  DataTable,
+  PageShell,
+  ReportChartPanel,
+  ReportFilterBar,
+  ReportMetricCard,
 } from "../components/shared";
 import {
- REPORT_ROUTES,
- REPORT_TABS,
- buildRangeLabel,
- formatBranch,
+  REPORT_ROUTES,
+  REPORT_TABS,
+  buildRangeLabel,
+  formatBranch,
 } from "./reportCommon";
 import "../styles/design-tokens.css";
 import "../styles/admin-reports.css";
 
 const RANGE_OPTIONS = [
- { value: "30d", label: "Last 30 days" },
- { value: "60d", label: "Last 60 days" },
- { value: "90d", label: "Last 90 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "60d", label: "Last 60 days" },
+  { value: "90d", label: "Last 90 days" },
 ];
 
 const INVENTORY_COLUMNS = [
- { key: "roomNumber", label: "Room", sortable: true },
- { key: "roomTypeLabel", label: "Type", sortable: true },
- { key: "branch", label: "Branch", render: (row) => formatBranch(row.branch) },
- { key: "capacity", label: "Capacity", sortable: true },
- { key: "occupiedBeds", label: "Occupied", sortable: true },
- { key: "availableBeds", label: "Available", sortable: true },
- { key: "unavailableBeds", label: "Unavailable", sortable: true },
- { key: "occupancyRate", label: "Rate", render: (row) => `${row.occupancyRate}%` },
+  { key: "roomNumber", label: "Room", sortable: true },
+  { key: "roomTypeLabel", label: "Type", sortable: true },
+  { key: "branch", label: "Branch", render: (row) => formatBranch(row.branch) },
+  { key: "capacity", label: "Capacity", sortable: true },
+  { key: "occupiedBeds", label: "Occupied", sortable: true },
+  { key: "availableBeds", label: "Available", sortable: true },
+  { key: "unavailableBeds", label: "Unavailable", sortable: true },
+  { key: "occupancyRate", label: "Rate", render: (row) => `${row.occupancyRate}%` },
 ];
 
 function BarList({ items, labelKey = "label", valueKey = "value", valueFormatter = (value) => value }) {
- const maxValue = Math.max(...items.map((item) => Number(item[valueKey] || 0)), 1);
+  const maxValue = Math.max(...items.map((item) => Number(item[valueKey] || 0)), 1);
 
- return (
- <div className="admin-reports__list">
- {items.map((item) => {
- const value = Number(item[valueKey] || 0);
- const width = Math.max((value / maxValue) * 100, value > 0 ? 6 : 0);
- return (
- <div key={`${item[labelKey]}-${value}`} className="admin-reports__bar-row">
- <span className="admin-reports__bar-label">{item[labelKey]}</span>
- <div className="admin-reports__bar-track">
- <div className="admin-reports__bar-fill" style={{ width: `${width}%` }} />
- </div>
- <span className="admin-reports__bar-value">{valueFormatter(value, item)}</span>
- </div>
- );
- })}
- </div>
- );
+  return (
+    <div className="admin-reports__list">
+      {items.map((item) => {
+        const value = Number(item[valueKey] || 0);
+        const width = Math.max((value / maxValue) * 100, value > 0 ? 6 : 0);
+        return (
+          <div key={`${item[labelKey]}-${value}`} className="admin-reports__bar-row">
+            <span className="admin-reports__bar-label">{item[labelKey]}</span>
+            <div className="admin-reports__bar-track">
+              <div className="admin-reports__bar-fill" style={{ width: `${width}%` }} />
+            </div>
+            <span className="admin-reports__bar-value">{valueFormatter(value, item)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function OccupancyReportPage() {
- const navigate = useNavigate();
- const { user } = useAuth();
- const isOwner = user?.role === "owner";
- const [range, setRange] = useState("30d");
- const [branch, setBranch] = useState(isOwner ? "all" : user?.branch || "gil-puyat");
- const [page, setPage] = useState(1);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isOwner = user?.role === "owner";
+  const [range, setRange] = useState("30d");
+  const [branch, setBranch] = useState(isOwner ? "all" : user?.branch || "gil-puyat");
+  const [page, setPage] = useState(1);
 
- const params = useMemo(
- () => ({
- range,
- ...(isOwner ? { branch } : {}),
- }),
- [branch, isOwner, range],
- );
+  const params = useMemo(
+    () => ({
+      range,
+      ...(isOwner ? { branch } : {}),
+    }),
+    [branch, isOwner, range],
+  );
 
   const { data, isLoading, isError } = useOccupancyReport(params);
   const inventory = data?.tables?.inventory || [];
@@ -87,25 +87,25 @@ export default function OccupancyReportPage() {
     value: item.totalRate,
   }));
 
- const metricCards = [
- { label: "Occupancy Rate", value: data?.kpis?.occupancyRateLabel || "0%", tone: "blue" },
- { label: "Total Capacity", value: data?.kpis?.totalCapacity || 0, tone: "green" },
- { label: "Occupied Beds", value: data?.kpis?.occupiedBeds || 0, tone: "amber" },
- { label: "Unavailable Beds", value: data?.kpis?.unavailableBeds || 0, tone: "rose" },
- ];
+  const metricCards = [
+    { label: "Occupancy Rate", value: data?.kpis?.occupancyRateLabel || "0%", tone: "blue" },
+    { label: "Total Capacity", value: data?.kpis?.totalCapacity || 0, tone: "green" },
+    { label: "Occupied Beds", value: data?.kpis?.occupiedBeds || 0, tone: "amber" },
+    { label: "Unavailable Beds", value: data?.kpis?.unavailableBeds || 0, tone: "rose" },
+  ];
 
- const handleCsvExport = () => {
- exportToCSV(inventory, [
- { key: "roomNumber", label: "Room" },
- { key: "roomTypeLabel", label: "Type" },
- { key: "branch", label: "Branch", formatter: (value) => formatBranch(value) },
- { key: "capacity", label: "Capacity" },
- { key: "occupiedBeds", label: "Occupied Beds" },
- { key: "availableBeds", label: "Available Beds" },
- { key: "unavailableBeds", label: "Unavailable Beds" },
- { key: "occupancyRate", label: "Occupancy Rate", formatter: (value) => `${value}%` },
- ], `occupancy-report-${range}`);
- };
+  const handleCsvExport = () => {
+    exportToCSV(inventory, [
+      { key: "roomNumber", label: "Room" },
+      { key: "roomTypeLabel", label: "Type" },
+      { key: "branch", label: "Branch", formatter: (value) => formatBranch(value) },
+      { key: "capacity", label: "Capacity" },
+      { key: "occupiedBeds", label: "Occupied Beds" },
+      { key: "availableBeds", label: "Available Beds" },
+      { key: "unavailableBeds", label: "Unavailable Beds" },
+      { key: "occupancyRate", label: "Occupancy Rate", formatter: (value) => `${value}%` },
+    ], `occupancy-report-${range}`);
+  };
 
   const handlePdfExport = () => {
     exportReportPdf({
@@ -167,62 +167,62 @@ export default function OccupancyReportPage() {
         </div>
       </PageShell.Summary>
 
- <PageShell.Actions>
- <ActionBar
- filters={[
- {
- key: "range",
- value: range,
- onChange: (value) => {
- setRange(value);
- setPage(1);
- },
- options: RANGE_OPTIONS,
- },
- ...(isOwner
- ? [
- {
- key: "branch",
- value: branch,
- onChange: (value) => {
- setBranch(value);
- setPage(1);
- },
- options: OWNER_BRANCH_FILTER_OPTIONS,
- },
- ]
- : []),
- ]}
- />
- </PageShell.Actions>
+      <PageShell.Actions>
+        <ActionBar
+          filters={[
+            {
+              key: "range",
+              value: range,
+              onChange: (value) => {
+                setRange(value);
+                setPage(1);
+              },
+              options: RANGE_OPTIONS,
+            },
+            ...(isOwner
+              ? [
+                  {
+                    key: "branch",
+                    value: branch,
+                    onChange: (value) => {
+                      setBranch(value);
+                      setPage(1);
+                    },
+                    options: OWNER_BRANCH_FILTER_OPTIONS,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </PageShell.Actions>
 
- <PageShell.Content>
- <div className="admin-reports__grid">
- <ReportChartPanel
- title="Occupancy trend"
- subtitle="Daily occupancy rate over the selected period"
- >
- <BarList
- items={latestTrend}
- valueKey="value"
- valueFormatter={(value) => `${value}%`}
- />
- </ReportChartPanel>
+      <PageShell.Content>
+        <div className="admin-reports__grid">
+          <ReportChartPanel
+            title="Occupancy trend"
+            subtitle="Daily occupancy rate over the selected period"
+          >
+            <BarList
+              items={latestTrend}
+              valueKey="value"
+              valueFormatter={(value) => `${value}%`}
+            />
+          </ReportChartPanel>
 
- <ReportChartPanel
- title="Room type mix"
- subtitle="Current occupancy by room type"
- >
- <BarList
- items={roomTypes.map((item) => ({
- label: item.roomTypeLabel,
- value: item.occupancyRate,
- }))}
- valueKey="value"
- valueFormatter={(value) => `${value}%`}
- />
- </ReportChartPanel>
- </div>
+          <ReportChartPanel
+            title="Room type mix"
+            subtitle="Current occupancy by room type"
+          >
+            <BarList
+              items={roomTypes.map((item) => ({
+                label: item.roomTypeLabel,
+                value: item.occupancyRate,
+              }))}
+              valueKey="value"
+              valueFormatter={(value) => `${value}%`}
+            />
+          </ReportChartPanel>
+        </div>
 
         <ReportChartPanel
           title="Inventory snapshot"

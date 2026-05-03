@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Zap,
   Plus,
   Check,
-  Search,
-  Clock3,
-  History,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   Trash2,
@@ -47,8 +48,13 @@ import {
 } from "../../../../shared/utils/lifecycleNaming";
 import { getRoomLabel } from "../../../../shared/utils/roomLabel.js";
 import { fmtDate } from "../../utils/formatters";
+import BillingContentEmpty from "./shared/BillingContentEmpty";
+import BillingRoomHeader from "./shared/BillingRoomHeader";
+import BillingRoomList from "./shared/BillingRoomList";
+import BillingStatusBadge from "./shared/BillingStatusBadge";
+import InlineRateEditor from "./shared/InlineRateEditor";
 import useBillingNotifier from "./shared/useBillingNotifier";
-import BillingCycleDetailModal from "./BillingCycleDetailModal";
+import "./UtilityBillingTab.css";
 
 const EMPTY_VALUE = "-";
 const WATER_BILLABLE_ROOM_TYPES = new Set(["private", "double-sharing"]);
@@ -203,31 +209,6 @@ const getTimelineStatusLabel = (row) => {
   if (row.rawReading) return getReadingStatusLabel(row.rawReading);
   return EMPTY_VALUE;
 };
-const getHistoryStatusClasses = (status) => {
-  switch (status) {
-    case "sent":
-    case "finalized":
-      return "bg-info-light text-info-dark";
-    case "ready_to_send":
-    case "ready":
-      return "bg-warning-light text-warning-dark";
-    case "open":
-      return "bg-success-light text-success-dark";
-    case "revised":
-      return ""; // handled via inline style
-    case "no_active_cycle":
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-};
-const getTimelineDotClasses = (eventType) => {
-  const normalized = normalizeUtilityEventType(eventType);
-  if (normalized === "moveIn") return "bg-amber-500";
-  if (normalized === "moveOut") return "bg-rose-500";
-  if (normalized === "periodStart") return "bg-emerald-500";
-  if (normalized === "periodEnd") return "bg-red-600";
-  return "bg-slate-300";
-};
 const toInputDate = (value) => {
   if (!value) return "";
   const date = new Date(value);
@@ -312,6 +293,20 @@ const TENANT_SUMMARY_EXPORT_COLUMNS = [
   { key: "billAmount", label: "Bill Amount" },
 ];
 
+const SEGMENT_EXPORT_COLUMNS = [
+  { key: "occupants", label: "Occupants" },
+  { key: "firstReadingDate", label: "1st Reading Date" },
+  { key: "firstReading", label: "1st Reading" },
+  { key: "secondReadingDate", label: "2nd Reading Date" },
+  { key: "secondReading", label: "2nd Reading" },
+  { key: "segmentPeriod", label: "Segment Period" },
+  { key: "boundaryEvents", label: "Boundary Events" },
+  { key: "totalConsumption", label: "Total Consumption" },
+  { key: "segmentTotalCost", label: "Segment Total Cost" },
+  { key: "amountDuePerPerson", label: "Amount Due Per Person" },
+  { key: "coveredTenants", label: "Covered Tenants" },
+];
+
 const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
@@ -342,8 +337,6 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   // Panel / section state
   const [activePanel, setActivePanel] = useState(null);
   const [isNewPeriodModalOpen, setIsNewPeriodModalOpen] = useState(false);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [historyModalPeriodId, setHistoryModalPeriodId] = useState(null);
 
   const [confirmModal, setConfirmModal] = useState({
     open: false,
@@ -382,7 +375,7 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   // Pagination
   const PERIODS_PER_PAGE = 5;
   const TIMELINE_PER_PAGE = 8;
-  const ROOMS_PER_PAGE = 3;
+  const ROOMS_PER_PAGE = 10;
   const [periodsPage, setPeriodsPage] = useState(1);
   const [timelinePage, setTimelinePage] = useState(1);
   const [roomsPage, setRoomsPage] = useState(1);
@@ -428,9 +421,6 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   const selectedPeriodFromList = periodList.find(
     (period) => period.id === selectedPeriodId,
   );
-  const historyModalPeriod = periodList.find(
-    (period) => period.id === historyModalPeriodId,
-  );
   const selectedResultPeriodId =
     selectedPeriodFromList && selectedPeriodFromList.status !== "open"
       ? selectedPeriodFromList.id
@@ -472,10 +462,6 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   const deletePeriod = useDeleteUtilityPeriod(utilityType);
   const [sendingByPeriodId, setSendingByPeriodId] = useState({});
   const [isSendingAllReady, setIsSendingAllReady] = useState(false);
-  const [periodStatusFilter, setPeriodStatusFilter] = useState("");
-  const [periodStartDate, setPeriodStartDate] = useState("");
-  const [periodEndDate, setPeriodEndDate] = useState("");
-  const [periodSearch, setPeriodSearch] = useState("");
 
   const rooms = useMemo(() => {
     const list = roomsData?.rooms || [];
@@ -682,11 +668,6 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
       : currentPeriodUsage != null && currentPeriod?.ratePerUnit != null
         ? currentPeriodUsage * currentPeriod.ratePerUnit
         : null;
-  const isCurrentCycleLocked = Boolean(
-    currentPeriod?.status === "locked" ||
-    currentPeriod?.isLocked ||
-    currentPeriod?.locked,
-  );
 
   // Paginated slices
   const totalRoomPages = Math.max(
@@ -697,57 +678,14 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
     (roomsPage - 1) * ROOMS_PER_PAGE,
     roomsPage * ROOMS_PER_PAGE,
   );
-
-  const filteredPeriods = useMemo(() => {
-    let list = [...periods];
-
-    if (periodStatusFilter) {
-      list = list.filter((p) => {
-        const s = getDisplayStatus(p);
-        if (periodStatusFilter === "sent")
-          return s === "sent" || s === "finalized";
-        if (periodStatusFilter === "pending")
-          return s === "ready_to_send" || s === "ready";
-        if (periodStatusFilter === "draft") return s === "open";
-        if (periodStatusFilter === "paid") return s === "paid";
-        return true;
-      });
-    }
-
-    if (periodStartDate) {
-      list = list.filter((p) => p.startDate && p.startDate >= periodStartDate);
-    }
-
-    if (periodEndDate) {
-      list = list.filter((p) => {
-        const end = p.endDate || p.targetCloseDate;
-        return end && end <= periodEndDate;
-      });
-    }
-
-    if (periodSearch.trim()) {
-      const q = periodSearch.trim().toLowerCase();
-      list = list.filter((p) => getCycleLabel(p).toLowerCase().includes(q));
-    }
-
-    return list;
-  }, [
-    periods,
-    periodStatusFilter,
-    periodStartDate,
-    periodEndDate,
-    periodSearch,
-  ]);
-
   const totalPeriodPages = Math.max(
     1,
-    Math.ceil(filteredPeriods.length / PERIODS_PER_PAGE),
+    Math.ceil(periods.length / PERIODS_PER_PAGE),
   );
-  const pagedPeriods = filteredPeriods.slice(
+  const pagedPeriods = periods.slice(
     (periodsPage - 1) * PERIODS_PER_PAGE,
     periodsPage * PERIODS_PER_PAGE,
   );
-
   const totalTimelinePages = Math.max(
     1,
     Math.ceil(billingTimelineRows.length / TIMELINE_PER_PAGE),
@@ -801,11 +739,11 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
   const Pagination = ({ page, total, onChange, countLabel }) => {
     if (total <= 1) return null;
     return (
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{countLabel}</span>
-        <div className="flex items-center gap-1">
+      <div className="eb-pagination">
+        <span className="eb-pagination__info">{countLabel}</span>
+        <div className="eb-pagination__controls">
           <button
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            className="eb-page-btn"
             onClick={() => onChange(page - 1)}
             disabled={page === 1}
           >
@@ -814,18 +752,14 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
           {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
             <button
               key={n}
-              className={`rounded-md border px-2 py-1 text-xs ${
-                page === n
-                  ? "border-amber-400 bg-amber-400/20 text-warning-dark"
-                  : "border-border text-muted-foreground hover:bg-muted"
-              }`}
+              className={`eb-page-btn${page === n ? " eb-page-btn--active" : ""}`}
               onClick={() => onChange(n)}
             >
               {n}
             </button>
           ))}
           <button
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            className="eb-page-btn"
             onClick={() => onChange(page + 1)}
             disabled={page === total}
           >
@@ -844,18 +778,6 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
       return;
     }
     setSelectedPeriodId(periodId);
-  };
-
-  const openHistoryModal = (periodId) => {
-    setSelectedPeriodId(periodId);
-    setHistoryModalPeriodId(periodId);
-    setIsHistoryModalOpen(true);
-  };
-
-  const closeHistoryModal = () => {
-    setIsHistoryModalOpen(false);
-    setHistoryModalPeriodId(null);
-    setSelectedPeriodId(null);
   };
 
   const openPanel = (panel) => {
@@ -1832,46 +1754,39 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
 
   return (
     <section
-      className="space-y-4"
+      className="eb-shell"
       aria-label={`${utilityType} billing workspace`}
     >
-      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:auto-rows-auto">
-        <aside className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-              <Search size={12} className="shrink-0" />
-              Room Selection
+      <div className="eb-layout">
+        <aside className="eb-sidebar">
+          <div className="eb-sidebar__header">
+            <span className="eb-sidebar__title">
+              <Zap size={13} /> Rooms
             </span>
-            <span className="text-xs text-muted-foreground">
-              {filteredRooms.length} rooms
-            </span>
+            {isOwner && (
+              <select
+                value={branchFilter}
+                onChange={(e) => {
+                  setBranchFilter(e.target.value);
+                  setSelectedRoomId(null);
+                  setSelectedPeriodId(null);
+                  setRoomsPage(1);
+                }}
+                className="eb-sidebar__filter"
+              >
+                <option value="">All</option>
+                <option value="gil-puyat">Gil-Puyat</option>
+                <option value="guadalupe">Guadalupe</option>
+              </select>
+            )}
           </div>
 
-          <div className="mt-3">
+          {/* Search */}
+          <div className="eb-sidebar__search-wrap">
             <input
               type="text"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground placeholder:text-muted-foreground focus:outline-none"
-              style={{ outlineColor: "var(--ring)" }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "var(--ring)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "";
-                e.currentTarget.style.boxShadow = "";
-              }}
-              // // style={{ "--tw-ring-color": "var(--primary)" }}
-              // // onFocus={(e) => {
-              // //   e.currentTarget.style.borderColor = "var(--primary)";
-              // //   e.currentTarget.style.boxShadow =
-              // //     "0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent)";
-              // // }}
-              // onBlur={(e) => {
-              //   e.currentTarget.style.borderColor = "";
-              //   e.currentTarget.style.boxShadow = "";
-              // }}
-              placeholder="Search by room name or number..."
+              className="eb-sidebar__search"
+              placeholder="Search rooms..."
               value={sidebarSearch}
               onChange={(e) => {
                 setSidebarSearch(e.target.value);
@@ -1881,99 +1796,27 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
             />
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <select
-              value={branchFilter}
-              onChange={(e) => {
-                if (!isOwner) return;
-                setBranchFilter(e.target.value);
-                setSelectedRoomId(null);
-                setSelectedPeriodId(null);
-                setRoomsPage(1);
-              }}
-              disabled={!isOwner}
-              className="rounded-lg border border-border bg-card px-2 py-2 text-xs text-muted-foreground disabled:bg-muted focus:outline-none"
-              style={{ outlineColor: "var(--ring)" }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "var(--ring)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "";
-                e.currentTarget.style.boxShadow = "";
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "var(--primary)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "";
-                e.currentTarget.style.boxShadow = "";
-              }}
-            >
-              <option value="">All branches</option>
-              <option value="gil-puyat">Gil-Puyat</option>
-              <option value="guadalupe">Guadalupe</option>
-            </select>
-            <select
-              defaultValue="all"
-              disabled
-              className="rounded-lg border border-border bg-muted px-2 py-2 text-xs text-muted-foreground"
-            >
-              <option value="all">All status</option>
-            </select>
-          </div>
-
-          <div className="mt-4 space-y-2">
+          <div className="eb-sidebar__list">
             {roomsLoading ? (
-              <div className="space-y-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="h-12 w-full animate-pulse rounded-lg bg-muted"
-                  />
+              <div className="eb-skeleton-list">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="eb-skeleton-card" />
                 ))}
               </div>
             ) : filteredRooms.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+              <div className="eb-sidebar__empty">
                 {sidebarSearch
                   ? "No rooms match your search"
                   : "No rooms found"}
               </div>
             ) : (
               pagedRooms.map((room) => {
-                const statusTone = getHistoryStatusClasses(
-                  room.billingState || "no_active_cycle",
-                );
-                const isSelected = selectedRoomId === room.id;
+                const isEmpty = !room.hasActiveTenants;
                 return (
                   <button
                     key={room.id}
-                    className="w-full rounded-lg border px-3 py-2 text-left transition"
-                    style={
-                      isSelected
-                        ? {
-                            borderColor: "var(--primary)",
-                            background:
-                              "color-mix(in srgb, var(--primary) 12%, var(--card))",
-                          }
-                        : {}
-                    }
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.background = "var(--muted)";
-                        e.currentTarget.style.borderColor = "var(--border)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.background = "";
-                        e.currentTarget.style.borderColor = "";
-                      }
-                    }}
-                    aria-pressed={isSelected}
+                    className={`eb-room${selectedRoomId === room.id ? " eb-room--active" : ""}`}
+                    aria-pressed={selectedRoomId === room.id}
                     aria-label={`Select ${getRoomLabel(room)} room`}
                     onClick={() => {
                       setSelectedRoomId(room.id);
@@ -1982,17 +1825,12 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                       closePanel();
                     }}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-card-foreground">
+                    <div className="eb-room__top-row">
+                      <span className="eb-room__name">
                         {getRoomLabel(room)}
                       </span>
                       <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{
-                          background: room.hasActiveTenants
-                            ? "var(--success)"
-                            : "var(--neutral)",
-                        }}
+                        className={`eb-room__dot${room.hasActiveTenants ? " eb-room__dot--active" : ""}`}
                         title={
                           room.hasActiveTenants
                             ? "Has active tenants"
@@ -2000,14 +1838,14 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                         }
                       />
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="eb-room__bottom-row">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusTone}`}
+                        className={`eb-room__badge eb-room__badge--${room.billingState || "no_active_cycle"}${isEmpty ? " eb-room__badge--empty" : ""}`}
                       >
                         {getRoomBadgeLabel(room)}
                       </span>
                       {room.latestReading != null && (
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="eb-room__kwh">
                           {room.latestReading}{" "}
                           {utilityType === "electricity" ? "kWh" : "cu.m."}
                         </span>
@@ -2018,29 +1856,25 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
               })
             )}
           </div>
-
-          <div className="mt-4 text-xs text-muted-foreground">
-            Use filters to quickly find and select rooms. Manage meter readings
-            and billing for the selected room.
-          </div>
-
           {filteredRooms.length > ROOMS_PER_PAGE && (
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>{filteredRooms.length} rooms</span>
-              <div className="flex items-center gap-2">
+            <div className="eb-sidebar__pager">
+              <span className="eb-sidebar__pager-count">
+                {filteredRooms.length} rooms
+              </span>
+              <div className="eb-room-pager">
                 <button
-                  className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+                  className="eb-room-pager__btn"
                   disabled={roomsPage <= 1}
                   onClick={() => setRoomsPage((p) => p - 1)}
                   aria-label="Previous room page"
                 >
                   <ChevronLeft size={14} />
                 </button>
-                <span>
+                <span className="eb-sidebar__pager-count">
                   {roomsPage}/{totalRoomPages}
                 </span>
                 <button
-                  className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+                  className="eb-room-pager__btn"
                   disabled={roomsPage >= totalRoomPages}
                   onClick={() => setRoomsPage((p) => p + 1)}
                   aria-label="Next room page"
@@ -2052,15 +1886,13 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
           )}
         </aside>
 
-        <div className="space-y-4">
+        <main className="eb-main">
           {!selectedRoomId ? (
-            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center">
-              <Zap size={36} strokeWidth={1.5} className="text-slate-300" />
-              <p className="mt-3 text-sm font-semibold text-card-foreground">
-                Select a room to continue
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Pick a room on the left to manage{" "}
+            <div className="eb-empty-state">
+              <Zap size={40} strokeWidth={1.5} />
+              <p className="eb-empty-state__title">Select a room to continue</p>
+              <p className="eb-empty-state__hint">
+                Pick a room from the left panel to manage{" "}
                 {utilityType === "water" ? "water" : "electricity"} cycles,
                 readings, and sending.
               </p>
@@ -2100,30 +1932,20 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                     className="eb-btn eb-btn--primary"
                     onClick={() => setIsNewPeriodModalOpen(true)}
                   >
-                    <Calendar size={16} strokeWidth={2} />
-                  </span>
-                  <h3
-                    className="text-[15px] font-semibold leading-none text-card-foreground
-"
-                  >
-                    {getRoomLabel(selectedRoom)}
-                  </h3>
+                    <Plus size={13} /> New Billing Period
+                  </button>
                 </div>
+              </div>
 
+              <div className="eb-snapshot-card">
                 {currentPeriod ? (
                   <>
-                    <div className="mt-7 grid gap-10 md:grid-cols-2">
+                    <div className="eb-snapshot-card__header">
                       <div>
-                        <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        <h3 className="eb-snapshot-card__title">
                           Current Cycle
-                        </p>
-                        <p
-                          className="mt-2 text-[28px] font-medium leading-none tracking-[-0.04em] text-card-foreground
-"
-                        >
-                          {getCycleLabel(currentPeriod)}
-                        </p>
-                        <p className="mt-2 text-[14px] font-normal text-muted-foreground">
+                        </h3>
+                        <p className="eb-snapshot-card__cycle">
                           {fmtDate(currentPeriod.startDate)} -{" "}
                           {fmtDate(
                             currentPeriod.endDate ||
@@ -2131,59 +1953,62 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                           ) || "Ongoing"}
                         </p>
                       </div>
+                      <span
+                        className={`eb-status-pill eb-status-pill--${getDisplayStatus(currentPeriod)}`}
+                      >
+                        {getDisplayStatusLabel(currentPeriod)}
+                      </span>
+                    </div>
 
-                      <div>
-                        <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                          Rate
-                        </p>
-                        <p
-                          className="mt-2 text-[28px] font-medium leading-none tracking-[-0.04em] text-card-foreground
-"
-                        >
+                    <div className="eb-snapshot-card__metrics">
+                      <div className="eb-snapshot-metric">
+                        <span className="eb-snapshot-metric__label">
+                          Total Cost
+                        </span>
+                        <span className="eb-snapshot-metric__value eb-snapshot-metric__value--strong">
                           {currentPeriodCost != null
                             ? fmtCurrency(currentPeriodCost)
                             : EMPTY_VALUE}
-                        </p>
-                        <p className="mt-2 text-[14px] font-normal text-muted-foreground">
-                          Rate: {fmtCurrency(currentPeriod.ratePerUnit)} /
-                          {utilityType === "electricity" ? "kWh" : "cu.m."} |{" "}
+                        </span>
+                      </div>
+                      <div className="eb-snapshot-metric">
+                        <span className="eb-snapshot-metric__label">
+                          {utilityType === "water"
+                            ? "Covered Usage"
+                            : "Consumption"}
+                        </span>
+                        <span className="eb-snapshot-metric__value">
                           {currentPeriodUsage != null
-                            ? `${fmtNumber(currentPeriodUsage, 2)} ${utilityType === "electricity" ? "kWh" : "cu.m."}`
-                            : EMPTY_VALUE}
-                        </p>
+                            ? fmtNumber(currentPeriodUsage, 2)
+                            : EMPTY_VALUE}{" "}
+                          {utilityType === "electricity" ? "kWh" : "cu.m."}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="mt-6 border-t border-border pt-6">
-                      <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                        Consumption
-                      </p>
-                      <p
-                        className="mt-3 text-[30px] font-medium leading-none tracking-[-0.04em] text-primary
-"
-                      >
-                        {currentPeriodUsage != null
-                          ? fmtNumber(currentPeriodUsage, 2)
-                          : EMPTY_VALUE}{" "}
+                    <div className="eb-snapshot-card__details">
+                      <span>
+                        Rate: {fmtCurrency(currentPeriod.ratePerUnit)} /
                         {utilityType === "electricity" ? "kWh" : "cu.m."}
-                      </p>
+                      </span>
+                      <span>
+                        Start:{" "}
+                        {currentPeriod.startReading != null
+                          ? fmtNumber(currentPeriod.startReading, 2)
+                          : EMPTY_VALUE}
+                      </span>
+                      <span>
+                        End:{" "}
+                        {currentPeriod.endReading != null
+                          ? fmtNumber(currentPeriod.endReading, 2)
+                          : EMPTY_VALUE}
+                      </span>
                     </div>
                   </>
                 ) : (
-                  <div className="mt-4 flex flex-col items-center justify-center gap-2 px-4 py-24 text-center">
-                    <FileX size={28} style={{ color: "var(--neutral)" }} />
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: "var(--neutral)" }}
-                    >
-                      No billing cycle yet.
-                    </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: "var(--neutral-dark)" }}
-                    >
-                      Use New Billing Period to create your first cycle.
-                    </p>
+                  <div className="eb-snapshot-card__empty">
+                    No billing cycle yet. Use New Billing Period to create your
+                    first cycle.
                   </div>
                 )}
               </div>
@@ -2579,320 +2404,19 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
               </section>
             </div>
           )}
-        </div>
+        </main>
       </div>
-
-      <section className="rounded-xl border border-border bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-              <History size={12} className="shrink-0" />
-              Billing Cycle History
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Closed and revised periods remain available for review, sending,
-              and revision actions.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold"
-              style={{
-                background: "var(--primary)",
-                color: "var(--primary-foreground)",
-              }}
-              onClick={() => setIsNewPeriodModalOpen(true)}
-            >
-              <Plus size={12} /> New Billing Period
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
-              onClick={handleExportRows}
-              disabled={isExporting}
-            >
-              <Download size={12} />
-              {isExporting ? "Exporting..." : "Upload & Export"}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 md:grid-cols-4">
-          {/* Status filter */}
-          <select
-            value={periodStatusFilter}
-            onChange={(e) => {
-              setPeriodStatusFilter(e.target.value);
-              setPeriodsPage(1);
-            }}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground focus:outline-none appearance-none"
-            style={{
-              backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' width%3D'16' height%3D'16' viewBox%3D'0 0 24 24' fill%3D'none' stroke%3D'%231e293b' stroke-width%3D'2' stroke-linecap%3D'round' stroke-linejoin%3D'round'%3E%3Cpolyline points%3D'6 9 12 15 18 9'%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 10px center",
-              backgroundSize: "14px 14px",
-              paddingRight: "32px",
-            }}
-          >
-            <option value="">All Status</option>
-            <option value="draft">Draft</option>
-            <option value="pending">Pending</option>
-            <option value="sent">Sent</option>
-            <option value="paid">Paid</option>
-          </select>
-
-          {/* Start date */}
-          <input
-            type="date"
-            value={periodStartDate}
-            onChange={(e) => {
-              setPeriodStartDate(e.target.value);
-              setPeriodsPage(1);
-            }}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground focus:outline-none"
-            style={{ outlineColor: "var(--ring)" }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "var(--ring)";
-              e.currentTarget.style.boxShadow =
-                "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "";
-              e.currentTarget.style.boxShadow = "";
-            }}
-          />
-
-          {/* End date */}
-          <input
-            type="date"
-            value={periodEndDate}
-            onChange={(e) => {
-              setPeriodEndDate(e.target.value);
-              setPeriodsPage(1);
-            }}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground focus:outline-none"
-            style={{ outlineColor: "var(--ring)" }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "var(--ring)";
-              e.currentTarget.style.boxShadow =
-                "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "";
-              e.currentTarget.style.boxShadow = "";
-            }}
-          />
-
-          {/* Cycle search */}
-          <input
-            type="text"
-            value={periodSearch}
-            onChange={(e) => {
-              setPeriodSearch(e.target.value);
-              setPeriodsPage(1);
-            }}
-            placeholder="Search by cycle..."
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground placeholder:text-muted-foreground focus:outline-none"
-            style={{ outlineColor: "var(--ring)" }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "var(--ring)";
-              e.currentTarget.style.boxShadow =
-                "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "";
-              e.currentTarget.style.boxShadow = "";
-            }}
-          />
-        </div>
-
-        <div className="mt-2 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Showing {filteredPeriods.length} of {periods.length} billing cycles
-          </p>
-          {(periodStatusFilter ||
-            periodStartDate ||
-            periodEndDate ||
-            periodSearch) && (
-            <button
-              type="button"
-              className="text-xs font-medium transition-colors"
-              style={{ color: "var(--neutral)" }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.color = "var(--foreground)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.color = "var(--neutral)")
-              }
-              onClick={() => {
-                setPeriodStatusFilter("");
-                setPeriodStartDate("");
-                setPeriodEndDate("");
-                setPeriodSearch("");
-                setPeriodsPage(1);
-              }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        <div className="mt-3 min-h-[420px] space-y-2">
-          {filteredPeriods.length === 0 ? (
-            <div className="flex h-[420px] flex-col items-center justify-center gap-2 text-center">
-              <ClipboardX size={28} style={{ color: "var(--neutral)" }} />
-              <p
-                className="text-sm font-medium"
-                style={{ color: "var(--neutral)" }}
-              >
-                {periods.length === 0
-                  ? "No billing history yet."
-                  : "No cycles match your filters."}
-              </p>
-              <p className="text-xs" style={{ color: "var(--neutral-dark)" }}>
-                {periods.length === 0
-                  ? "Closed and revised periods will appear here once created."
-                  : "Try adjusting your filters or clearing them."}
-              </p>
-            </div>
-          ) : (
-            pagedPeriods.map((p) => {
-              const status = getDisplayStatus(p);
-              const isClickable =
-                p.status === "closed" || p.status === "revised";
-              return (
-                <div
-                  key={p.id}
-                  className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 ${
-                    isClickable ? "cursor-pointer" : "cursor-default"
-                  }`}
-                  onClick={() => isClickable && openHistoryModal(p.id)}
-                  title={
-                    isClickable ? "Click to view this billing cycle" : undefined
-                  }
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-card-foreground">
-                      {getCycleLabel(p)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {getMeterRangeLabel(p, utilityType)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {fmtCurrency(p.ratePerUnit)}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${getHistoryStatusClasses(status)}`}
-                    >
-                      {getDisplayStatusLabel(p)}
-                    </span>
-                    {p.revised ? (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                        style={{
-                          background:
-                            "color-mix(in srgb, var(--warning) 12%, var(--card))",
-                          color: "var(--warning-dark)",
-                        }}
-                      >
-                        Edited
-                      </span>
-                    ) : null}
-                    <div
-                      className="flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {getDisplayStatus(p) === "ready_to_send" && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-50"
-                          style={{
-                            background: "var(--primary)",
-                            color: "var(--primary-foreground)",
-                          }}
-                          onClick={() =>
-                            handleSendPeriod(
-                              p,
-                              getRoomLabel(selectedRoom || {}, "Room"),
-                            )
-                          }
-                          disabled={
-                            Boolean(sendingByPeriodId[p.id]) ||
-                            sendPeriod.isPending
-                          }
-                        >
-                          <Send size={11} />
-                          {sendingByPeriodId[p.id] ? "Sending..." : "Send"}
-                        </button>
-                      )}
-                      {canEditPeriod(p) && (
-                        <button
-                          type="button"
-                          className="rounded-md border border-border p-1 text-muted-foreground hover:bg-muted"
-                          onClick={() => handleOpenEditPeriod(p)}
-                          aria-label="Edit period"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                      )}
-                      {canDeletePeriod(p) && (
-                        <button
-                          type="button"
-                          className="rounded-md border border-border p-1 hover:bg-muted"
-                          style={{ color: "var(--danger)" }}
-                          onClick={() => handleDeletePeriod(p.id)}
-                          aria-label="Delete period"
-                          disabled={deletePeriod.isPending}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                      {(p.status === "closed" || p.status === "revised") && (
-                        <button
-                          type="button"
-                          className="rounded-md border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted"
-                          onClick={() => openHistoryModal(p.id)}
-                        >
-                          View
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <Pagination
-          page={periodsPage}
-          total={totalPeriodPages}
-          onChange={setPeriodsPage}
-          countLabel={`${filteredPeriods.length} of ${periods.length} period${periods.length !== 1 ? "s" : ""}`}
-        />
-      </section>
       {/* Edit Reading Modal */}
       {editReadingModal.open && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center p-4 backdrop-blur-sm"
-          style={{
-            background:
-              "color-mix(in srgb, var(--background) 60%, transparent)",
-          }}
+          className="eb-modal-overlay"
           onClick={() => setEditReadingModal({ open: false, reading: null })}
         >
-          <div
-            className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <span className="text-sm font-semibold text-foreground">
-                Manage Meter Reading
-              </span>
+          <div className="eb-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="eb-modal__header">
+              <span>Manage Meter Reading</span>
               <button
-                className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-card-foreground"
+                className="eb-panel__close"
                 onClick={() =>
                   setEditReadingModal({ open: false, reading: null })
                 }
@@ -2900,25 +2424,14 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                 <X size={15} />
               </button>
             </div>
-            <div className="px-5 py-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">
+            <div className="eb-modal__body">
+              <div className="eb-form-row">
+                <div className="eb-field">
+                  <label>
                     Reading ({utilityType === "electricity" ? "kWh" : "cu.m."})
                   </label>
                   <input
                     type="number"
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                    style={{ outlineColor: "var(--ring)" }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "var(--ring)";
-                      e.currentTarget.style.boxShadow =
-                        "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "";
-                      e.currentTarget.style.boxShadow = "";
-                    }}
                     value={editReadingForm.reading}
                     onChange={(e) =>
                       setEditReadingForm({
@@ -2929,23 +2442,10 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                     autoFocus
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Date
-                  </label>
+                <div className="eb-field eb-field--date">
+                  <label>Date</label>
                   <input
                     type="date"
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                    style={{ outlineColor: "var(--ring)" }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "var(--ring)";
-                      e.currentTarget.style.boxShadow =
-                        "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "";
-                      e.currentTarget.style.boxShadow = "";
-                    }}
                     value={editReadingForm.date}
                     onChange={(e) =>
                       setEditReadingForm({
@@ -2955,22 +2455,9 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                     }
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Event
-                  </label>
+                <div className="eb-field">
+                  <label>Event</label>
                   <select
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                    style={{ outlineColor: "var(--ring)" }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "var(--ring)";
-                      e.currentTarget.style.boxShadow =
-                        "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "";
-                      e.currentTarget.style.boxShadow = "";
-                    }}
                     value={editReadingForm.eventType}
                     onChange={(e) =>
                       setEditReadingForm({
@@ -2986,13 +2473,9 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-5 py-4">
+            <div className="eb-modal__footer">
               <button
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
-                style={{
-                  background: "var(--primary)",
-                  color: "var(--primary-foreground)",
-                }}
+                className="eb-btn eb-btn--primary"
                 onClick={handleSaveEditReading}
                 disabled={updateReading.isPending}
               >
@@ -3000,15 +2483,7 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                 {updateReading.isPending ? "Saving..." : "Save Changes"}
               </button>
               <button
-                className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold"
-                style={{
-                  borderColor: "var(--danger)",
-                  color: "var(--danger-dark)",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "var(--danger-light)")
-                }
-                onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+                className="eb-btn eb-btn--danger"
                 onClick={() => {
                   if (!editReadingModal.reading?.id) return;
                   setEditReadingModal({ open: false, reading: null });
@@ -3019,7 +2494,7 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                 <Trash2 size={13} /> Delete Reading
               </button>
               <button
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
+                className="eb-btn eb-btn--ghost"
                 onClick={() =>
                   setEditReadingModal({ open: false, reading: null })
                 }
@@ -3033,23 +2508,14 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
 
       {editPeriodModal.open && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center p-4 backdrop-blur-sm"
-          style={{
-            background:
-              "color-mix(in srgb, var(--background) 60%, transparent)",
-          }}
+          className="eb-modal-overlay"
           onClick={() => setEditPeriodModal({ open: false, periodId: null })}
         >
-          <div
-            className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <span className="text-sm font-semibold text-foreground">
-                Edit Billing Period
-              </span>
+          <div className="eb-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="eb-modal__header">
+              <span>Edit Billing Period</span>
               <button
-                className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-card-foreground"
+                className="eb-panel__close"
                 onClick={() =>
                   setEditPeriodModal({ open: false, periodId: null })
                 }
@@ -3057,24 +2523,11 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                 <X size={15} />
               </button>
             </div>
-            <div className="grid gap-3 px-5 py-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Cycle Start
-                </label>
+            <div className="eb-modal__body">
+              <div className="eb-field eb-field--date">
+                <label>Cycle Start</label>
                 <input
                   type="date"
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                  style={{ outlineColor: "var(--ring)" }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "var(--ring)";
-                    e.currentTarget.style.boxShadow =
-                      "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "";
-                    e.currentTarget.style.boxShadow = "";
-                  }}
                   value={editPeriodForm.startDate}
                   onChange={(e) =>
                     setEditPeriodForm((current) => ({
@@ -3084,23 +2537,10 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                   }
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Cycle End
-                </label>
+              <div className="eb-field eb-field--date">
+                <label>Cycle End</label>
                 <input
                   type="date"
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                  style={{ outlineColor: "var(--ring)" }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "var(--ring)";
-                    e.currentTarget.style.boxShadow =
-                      "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "";
-                    e.currentTarget.style.boxShadow = "";
-                  }}
                   value={editPeriodForm.endDate}
                   onChange={(e) =>
                     setEditPeriodForm((current) => ({
@@ -3112,24 +2552,11 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
               </div>
               {utilityType === "electricity" && (
                 <>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">
-                      Start Meter Reading
-                    </label>
+                  <div className="eb-field">
+                    <label>Start Meter Reading</label>
                     <input
                       type="number"
                       step="0.01"
-                      className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                      style={{ outlineColor: "var(--ring)" }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = "var(--ring)";
-                        e.currentTarget.style.boxShadow =
-                          "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = "";
-                        e.currentTarget.style.boxShadow = "";
-                      }}
                       value={editPeriodForm.startReading}
                       onChange={(e) =>
                         setEditPeriodForm((current) => ({
@@ -3139,24 +2566,11 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                       }
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">
-                      End Meter Reading
-                    </label>
+                  <div className="eb-field">
+                    <label>End Meter Reading</label>
                     <input
                       type="number"
                       step="0.01"
-                      className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                      style={{ outlineColor: "var(--ring)" }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor = "var(--ring)";
-                        e.currentTarget.style.boxShadow =
-                          "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = "";
-                        e.currentTarget.style.boxShadow = "";
-                      }}
                       value={editPeriodForm.endReading}
                       onChange={(e) =>
                         setEditPeriodForm((current) => ({
@@ -3168,24 +2582,11 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                   </div>
                 </>
               )}
-              <div className="space-y-1 md:col-span-2">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Rate
-                </label>
+              <div className="eb-field">
+                <label>Rate</label>
                 <input
                   type="number"
                   step="0.01"
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm text-card-foreground focus:outline-none"
-                  style={{ outlineColor: "var(--ring)" }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "var(--ring)";
-                    e.currentTarget.style.boxShadow =
-                      "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "";
-                    e.currentTarget.style.boxShadow = "";
-                  }}
                   value={editPeriodForm.ratePerUnit}
                   onChange={(e) =>
                     setEditPeriodForm((current) => ({
@@ -3196,13 +2597,9 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                 />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
+            <div className="eb-modal__footer">
               <button
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
-                style={{
-                  background: "var(--primary)",
-                  color: "var(--primary-foreground)",
-                }}
+                className="eb-btn eb-btn--primary"
                 onClick={handleSaveEditPeriod}
                 disabled={updatePeriod.isPending}
               >
@@ -3210,7 +2607,7 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
                 {updatePeriod.isPending ? "Saving..." : "Save Changes"}
               </button>
               <button
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
+                className="eb-btn eb-btn--ghost"
                 onClick={() =>
                   setEditPeriodModal({ open: false, periodId: null })
                 }
@@ -3221,145 +2618,6 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
           </div>
         </div>
       )}
-
-      <section className="lg:col-span-2 flex max-h-[600px] flex-col rounded-xl border border-border bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-accent,#D4AF37)]">
-              <Clock3 size={12} className="shrink-0" />
-              Billing Timeline
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Latest meter and occupancy events for the active/latest billing
-              period.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              {billingTimelineRows.length} events
-            </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
-              onClick={handleExportTimeline}
-              disabled={billingTimelineRows.length === 0}
-            >
-              <Download size={12} /> Export
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1">
-          {pagedTimelineRows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-              No timeline events found for this billing period.
-            </div>
-          ) : (
-            pagedTimelineRows.map((row) => (
-              <div
-                key={row.id}
-                className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-border/60 px-3 py-3"
-              >
-                <div className="flex min-w-[220px] flex-1 gap-3">
-                  <span
-                    className={`mt-1 h-2.5 w-2.5 rounded-full ${getTimelineDotClasses(
-                      row.eventType,
-                    )}`}
-                  />
-                  <div>
-                    <p className="text-sm font-semibold text-card-foreground">
-                      {getEventTypeLabel(row.eventType)}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                      <span className="rounded-full bg-muted px-2 py-0.5">
-                        {getTimelineRecordLabel(row)}
-                      </span>
-                      <span className="rounded-full bg-muted px-2 py-0.5">
-                        {getTimelineStatusLabel(row)}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {!isMoveLifecycleEvent(row.eventType)
-                          ? "Room Level"
-                          : maskName(row.tenantName)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {row.reading != null
-                        ? `${fmtNumber(row.reading, 2)} ${
-                            utilityType === "electricity" ? "kWh" : "cu.m."
-                          }`
-                        : EMPTY_VALUE}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 text-right">
-                  <span className="text-xs text-muted-foreground">
-                    {fmtDate(row.date)}
-                  </span>
-                  {row.hasMeterRecord && row.rawReading ? (
-                    <button
-                      className={`inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${
-                        isCurrentCycleLocked
-                          ? "cursor-not-allowed opacity-40"
-                          : ""
-                      }`}
-                      onClick={() => handleEditReading(row.rawReading)}
-                      disabled={
-                        isSystemBoundaryEvent(row.eventType) ||
-                        isCurrentCycleLocked
-                      }
-                      title={
-                        isCurrentCycleLocked
-                          ? "This billing cycle is locked."
-                          : isSystemBoundaryEvent(row.eventType)
-                            ? "Boundary events are locked to preserve billing integrity."
-                            : "Manage reading"
-                      }
-                    >
-                      <Pencil size={12} /> Manage
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <Pagination
-          page={timelinePage}
-          total={totalTimelinePages}
-          onChange={setTimelinePage}
-          countLabel={`${billingTimelineRows.length} timeline entr${
-            billingTimelineRows.length === 1 ? "y" : "ies"
-          }`}
-        />
-      </section>
-
-      <BillingCycleDetailModal
-        isOpen={isHistoryModalOpen}
-        onClose={closeHistoryModal}
-        period={historyModalPeriod}
-        result={result}
-        utilityType={utilityType}
-        statusLabel={
-          historyModalPeriod ? getDisplayStatusLabel(historyModalPeriod) : ""
-        }
-        isReadOnly={
-          historyModalPeriod ? !canEditPeriod(historyModalPeriod) : true
-        }
-        formatters={{
-          fmtCurrency,
-          fmtNumber,
-          fmtShortDate,
-          getSegmentPeriodLabel,
-        }}
-        eventTypeLabels={EVENT_TYPE_LABELS}
-        onExport={
-          historyModalPeriod && result
-            ? () => handleExportTenantSummary(historyModalPeriod, result)
-            : null
-        }
-      />
 
       {/* New Billing Period Modal */}
       <NewBillingPeriodModal

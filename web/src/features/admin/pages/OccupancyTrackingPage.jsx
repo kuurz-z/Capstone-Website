@@ -3,8 +3,10 @@ import { BarChart3 } from "lucide-react";
 import { digitalTwinApi } from "../../../shared/api/digitalTwinApi";
 import { formatRoomType, formatBranch } from "../utils/formatters";
 import { useDigitalTwinSnapshot } from "../../../shared/hooks/queries/useDigitalTwin";
+import { SummaryBar, ActionBar, DataTable, StatusBadge } from "../components/shared";
 
 import OccupancyRoomModal from "../components/occupancy/OccupancyRoomModal";
+import "../styles/admin-occupancy-tracking.css";
 
 /* ── Helpers ────────────────────────────────────── */
 function getOccupancyColor(occupied, capacity) {
@@ -16,55 +18,20 @@ function getOccupancyColor(occupied, capacity) {
   return "var(--status-error)";
 }
 
-function getReadinessState(room) {
-  const status = String(room.readinessStatus || "").toLowerCase();
-
-  if (status === "ready" || status === "pending" || status === "unknown") {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+function getStatusLabel(room) {
+  const status = room.readinessStatus || (room.available ? "available" : "occupied");
+  switch (status) {
+    case "maintenance":
+      return { label: "Maintenance", variant: "error" };
+    case "reserved":
+      return { label: "Reserved", variant: "info" };
+    case "occupied":
+      return { label: "Occupied", variant: "warning" };
+    case "mixed":
+      return { label: "Mixed", variant: "warning" };
+    default:
+      return { label: "Available", variant: "success" };
   }
-
-  if (status === "maintenance" || status === "reserved" || status === "mixed") {
-    return "Pending";
-  }
-
-  if (status === "occupied") {
-    return "Ready";
-  }
-
-  if (status === "available") {
-    return "Unknown";
-  }
-
-  return room.available ? "Unknown" : "Ready";
-}
-
-function getReadinessConfig(readiness) {
-  if (readiness === "Ready") {
-    return {
-      dot: "bg-green-500",
-      text: "text-green-600",
-    };
-  }
-
-  if (readiness === "Pending") {
-    return {
-      dot: "bg-amber-500",
-      text: "text-warning-dark",
-    };
-  }
-
-  return {
-    dot: "bg-slate-400",
-    text: "text-muted-foreground",
-  };
-}
-
-function formatNextVacancy(forecast) {
-  if (!forecast?.nextExpectedVacancy) return "No forecast";
-  return new Date(forecast.nextExpectedVacancy).toLocaleDateString(undefined, {
-    month: "short",
-    year: "numeric",
-  });
 }
 
 /* ── Component ──────────────────────────────────── */
@@ -107,20 +74,14 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
   const stats = useMemo(() => {
     const totalRooms = rooms.length;
     const totalCapacity = rooms.reduce((sum, r) => sum + (r.capacity || 0), 0);
-    const totalOccupancy = rooms.reduce(
-      (sum, r) => sum + (r.currentOccupancy || 0),
-      0,
-    );
+    const totalOccupancy = rooms.reduce((sum, r) => sum + (r.currentOccupancy || 0), 0);
     const availableBeds = rooms.reduce((sum, room) => {
       const available = Array.isArray(room.beds)
         ? room.beds.filter((bed) => bed.status === "available").length
         : Math.max((room.capacity || 0) - (room.currentOccupancy || 0), 0);
       return sum + available;
     }, 0);
-    const rate =
-      totalCapacity > 0
-        ? Math.round((totalOccupancy / totalCapacity) * 100)
-        : 0;
+    const rate = totalCapacity > 0 ? Math.round((totalOccupancy / totalCapacity) * 100) : 0;
     return { totalRooms, totalCapacity, totalOccupancy, availableBeds, rate };
   }, [rooms]);
 
@@ -130,10 +91,7 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     return types.map((type) => {
       const typeRooms = rooms.filter((r) => r.type === type);
       const capacity = typeRooms.reduce((sum, r) => sum + (r.capacity || 0), 0);
-      const occupied = typeRooms.reduce(
-        (sum, r) => sum + (r.currentOccupancy || 0),
-        0,
-      );
+      const occupied = typeRooms.reduce((sum, r) => sum + (r.currentOccupancy || 0), 0);
       const rate = capacity > 0 ? Math.round((occupied / capacity) * 100) : 0;
       return { type, count: typeRooms.length, capacity, occupied, rate };
     });
@@ -148,38 +106,75 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
     { label: "Occupancy Rate", value: `${stats.rate}%`, color: "red" },
   ];
 
-    return {
-      private: privateType,
-      double: doubleType,
-      quad: quadType,
-    };
-  }, [roomsByType]);
+  // Filters
+  const filters = [
+    {
+      key: "branch",
+      options: [
+        { value: "all", label: "All Branches" },
+        { value: "gil-puyat", label: "Gil Puyat" },
+        { value: "guadalupe", label: "Guadalupe" },
+      ],
+      value: branchFilter,
+      onChange: setBranchFilter,
+    },
+  ];
 
-  const roomTypeChartData = useMemo(
-    () => [
-      {
-        name: "Private",
-        occupied: roomTypeStats.private.occupied,
-        available: Math.max(
-          roomTypeStats.private.capacity - roomTypeStats.private.occupied,
-          0,
-        ),
+  // DataTable columns
+  const columns = [
+    {
+      key: "room",
+      label: "Room",
+      render: (r) => (
+        <div className="room-name-cell">
+          <span className="room-name-primary">{r.name || r.roomName}</span>
+          <span className="room-name-sub">{formatBranch(r.branch)}</span>
+        </div>
+      ),
+    },
+    { key: "type", label: "Type", render: (r) => formatRoomType(r.type || r.roomType) },
+    { key: "capacity", label: "Capacity", render: (r) => r.capacity || 0 },
+    {
+      key: "occupied",
+      label: "Committed",
+      render: (r) => (
+        <span className="occupancy-occupied-count">{r.currentOccupancy || r.occupancy || 0}</span>
+      ),
+    },
+    {
+      key: "available",
+      label: "Available Beds",
+      render: (r) => {
+        const avail = Array.isArray(r.beds)
+          ? r.beds.filter((bed) => bed.status === "available").length
+          : (r.capacity || 0) - (r.currentOccupancy || r.occupancy || 0);
+        return <span className="occupancy-available-count">{avail}</span>;
       },
-      {
-        name: "Double",
-        occupied: roomTypeStats.double.occupied,
-        available: Math.max(
-          roomTypeStats.double.capacity - roomTypeStats.double.occupied,
-          0,
-        ),
+    },
+    {
+      key: "occupancy",
+      label: "Occupancy",
+      render: (r) => {
+        const capacity = r.capacity || 1;
+        const occupied = r.currentOccupancy || r.occupancy || 0;
+        const rate = Math.round((occupied / capacity) * 100);
+        const color = getOccupancyColor(occupied, capacity);
+        return (
+          <div className="room-occupancy-cell">
+            <div className="room-occupancy-bar">
+              <div className="room-occupancy-fill" style={{ width: `${rate}%`, background: color }} />
+            </div>
+            <span>{rate}%</span>
+          </div>
+        );
       },
-      {
-        name: "Quad",
-        occupied: roomTypeStats.quad.occupied,
-        available: Math.max(
-          roomTypeStats.quad.capacity - roomTypeStats.quad.occupied,
-          0,
-        ),
+    },
+    {
+      key: "status",
+      label: "Readiness",
+      render: (r) => {
+        const { label, variant } = getStatusLabel(r);
+        return <StatusBadge variant={variant}>{label}</StatusBadge>;
       },
     },
     {
@@ -203,8 +198,8 @@ function OccupancyTrackingPage({ isEmbedded = false }) {
 
   if (loading) {
     return (
-      <div className="rounded-lg border border-[var(--border-card)] bg-[var(--surface-card)] p-8 text-center text-sm text-muted-foreground">
-        Loading occupancy data...
+      <div className="admin-section">
+        <div className="admin-loading">Loading occupancy data...</div>
       </div>
     );
   }

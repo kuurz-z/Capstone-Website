@@ -1,20 +1,20 @@
 import "./AnalyticsInsightPanel.css";
 
 function SectionList({ title, items }) {
- return (
- <section className="analytics-insight-panel__section">
- <h4 className="analytics-insight-panel__section-title">{title}</h4>
- {items?.length ? (
- <ul className="analytics-insight-panel__list">
- {items.map((item) => (
- <li key={item}>{item}</li>
- ))}
- </ul>
- ) : (
- <p className="admin-reports__hint">No items highlighted for this section.</p>
- )}
- </section>
- );
+  return (
+    <section className="analytics-insight-panel__section">
+      <h4 className="analytics-insight-panel__section-title">{title}</h4>
+      {items?.length ? (
+        <ul className="analytics-insight-panel__list">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="admin-reports__hint">No items highlighted for this section.</p>
+      )}
+    </section>
+  );
 }
 
 export default function AnalyticsInsightPanel({
@@ -24,21 +24,21 @@ export default function AnalyticsInsightPanel({
   isLoading,
   isError,
 }) {
- if (isLoading) {
- return (
- <div className="analytics-insight-panel__state">
- Preparing a simple AI summary for this report...
- </div>
- );
- }
+  if (isLoading) {
+    return (
+      <div className="analytics-insight-panel__state">
+        Preparing a simple AI summary for this report...
+      </div>
+    );
+  }
 
- if (isError) {
- return (
- <div className="analytics-insight-panel__state">
- AI summary is unavailable right now. The charts and tables below still show the actual report data.
- </div>
- );
- }
+  if (isError) {
+    return (
+      <div className="analytics-insight-panel__state">
+        AI summary is unavailable right now. The charts and tables below still show the actual report data.
+      </div>
+    );
+  }
 
   const insight = data?.insight;
   const snapshotMeta = data?.snapshotMeta || {};
@@ -71,13 +71,13 @@ export default function AnalyticsInsightPanel({
         </div>
       </div>
 
- <div className="analytics-insight-panel__grid">
- <SectionList title="What Stands Out" items={insight.keyFindings} />
- <SectionList title="Things To Watch" items={insight.anomalies} />
- <SectionList title="What To Do Next" items={insight.recommendedActions} />
- </div>
+      <div className="analytics-insight-panel__grid">
+        <SectionList title="What Stands Out" items={insight.keyFindings} />
+        <SectionList title="Things To Watch" items={insight.anomalies} />
+        <SectionList title="What To Do Next" items={insight.recommendedActions} />
+      </div>
 
- <p className="admin-reports__hint">{insight.disclaimer}</p>
- </div>
- );
+      <p className="admin-reports__hint">{insight.disclaimer}</p>
+    </div>
+  );
 }

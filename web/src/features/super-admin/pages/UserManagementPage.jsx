@@ -6,9 +6,9 @@
  * suspend/ban/reactivate actions, and role changes.
  *
  * The admin page detects `isOwner` via useAuth() and unlocks:
- * - Branch dropdown filter (all branches)
- * - "Add User" button with role selection
- * - Suspend / Ban / Reactivate controls
- * - Super Admin role option in filters
+ *   - Branch dropdown filter (all branches)
+ *   - "Add User" button with role selection
+ *   - Suspend / Ban / Reactivate controls
+ *   - Super Admin role option in filters
  */
 export { default } from "../../admin/pages/UserManagementPage";

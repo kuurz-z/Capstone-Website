@@ -4,173 +4,173 @@ import useBodyScrollLock from "../../../../shared/hooks/useBodyScrollLock";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 
 export default function AddUserModal({
- addForm,
- addFormErrors,
- isCreating,
- isOwner,
- onFormChange,
- onSubmit,
- onClose,
+  addForm,
+  addFormErrors,
+  isCreating,
+  isOwner,
+  onFormChange,
+  onSubmit,
+  onClose,
 }) {
- const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
- useBodyScrollLock(true);
- useEscapeClose(true, onClose);
+  useBodyScrollLock(true);
+  useEscapeClose(true, onClose);
 
- if (typeof document === "undefined") return null;
+  if (typeof document === "undefined") return null;
 
- return createPortal(
- <div
- className="modal-overlay"
- onClick={(e) => {
- if (e.target === e.currentTarget) onClose();
- }}
- >
- <div
- className="modal-content"
- role="dialog"
- aria-modal="true"
- aria-label="Add new user"
- onClick={(e) => e.stopPropagation()}
- >
- <div className="modal-header">
- <h2>Add New User</h2>
- <button onClick={onClose} className="modal-close" aria-label="Close">
- ×
- </button>
- </div>
- <form onSubmit={onSubmit} className="modal-form">
- <div className="form-row">
- <div
- className={`form-group ${addFormErrors.username ? "has-error" : ""}`}
- >
- <label>Username *</label>
- <input
- type="text"
- value={addForm.username}
- onChange={(e) => onFormChange("username", e.target.value)}
- required
- placeholder="john_doe"
- />
- {addFormErrors.username && (
- <span className="field-error">{addFormErrors.username}</span>
- )}
- </div>
- <div
- className={`form-group ${addFormErrors.email ? "has-error" : ""}`}
- >
- <label>Email *</label>
- <input
- type="email"
- value={addForm.email}
- onChange={(e) => onFormChange("email", e.target.value)}
- required
- placeholder="user@example.com"
- />
- {addFormErrors.email && (
- <span className="field-error">{addFormErrors.email}</span>
- )}
- </div>
- </div>
+  return createPortal(
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add new user"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h2>Add New User</h2>
+          <button onClick={onClose} className="modal-close" aria-label="Close">
+            ×
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="modal-form">
+          <div className="form-row">
+            <div
+              className={`form-group ${addFormErrors.username ? "has-error" : ""}`}
+            >
+              <label>Username *</label>
+              <input
+                type="text"
+                value={addForm.username}
+                onChange={(e) => onFormChange("username", e.target.value)}
+                required
+                placeholder="john_doe"
+              />
+              {addFormErrors.username && (
+                <span className="field-error">{addFormErrors.username}</span>
+              )}
+            </div>
+            <div
+              className={`form-group ${addFormErrors.email ? "has-error" : ""}`}
+            >
+              <label>Email *</label>
+              <input
+                type="email"
+                value={addForm.email}
+                onChange={(e) => onFormChange("email", e.target.value)}
+                required
+                placeholder="user@example.com"
+              />
+              {addFormErrors.email && (
+                <span className="field-error">{addFormErrors.email}</span>
+              )}
+            </div>
+          </div>
 
- <div className="form-row">
- <div
- className={`form-group ${addFormErrors.firstName ? "has-error" : ""}`}
- >
- <label>First Name *</label>
- <input
- type="text"
- value={addForm.firstName}
- onChange={(e) => onFormChange("firstName", e.target.value)}
- required
- placeholder="John"
- />
- {addFormErrors.firstName && (
- <span className="field-error">{addFormErrors.firstName}</span>
- )}
- </div>
- <div
- className={`form-group ${addFormErrors.lastName ? "has-error" : ""}`}
- >
- <label>Last Name *</label>
- <input
- type="text"
- value={addForm.lastName}
- onChange={(e) => onFormChange("lastName", e.target.value)}
- required
- placeholder="Doe"
- />
- {addFormErrors.lastName && (
- <span className="field-error">{addFormErrors.lastName}</span>
- )}
- </div>
- </div>
+          <div className="form-row">
+            <div
+              className={`form-group ${addFormErrors.firstName ? "has-error" : ""}`}
+            >
+              <label>First Name *</label>
+              <input
+                type="text"
+                value={addForm.firstName}
+                onChange={(e) => onFormChange("firstName", e.target.value)}
+                required
+                placeholder="John"
+              />
+              {addFormErrors.firstName && (
+                <span className="field-error">{addFormErrors.firstName}</span>
+              )}
+            </div>
+            <div
+              className={`form-group ${addFormErrors.lastName ? "has-error" : ""}`}
+            >
+              <label>Last Name *</label>
+              <input
+                type="text"
+                value={addForm.lastName}
+                onChange={(e) => onFormChange("lastName", e.target.value)}
+                required
+                placeholder="Doe"
+              />
+              {addFormErrors.lastName && (
+                <span className="field-error">{addFormErrors.lastName}</span>
+              )}
+            </div>
+          </div>
 
- <div className="form-row">
- <div className="form-group">
- <label>Phone</label>
- <input
- type="tel"
- value={addForm.phone}
- onChange={(e) => onFormChange("phone", e.target.value)}
- placeholder="+1234567890"
- />
- </div>
- <div
- className={`form-group ${addFormErrors.password ? "has-error" : ""}`}
- >
- <label>Password *</label>
- <div className="password-field-wrapper">
- <input
- type={showPassword ? "text" : "password"}
- value={addForm.password}
- onChange={(e) => onFormChange("password", e.target.value)}
- required
- placeholder="Enter a password"
- minLength={6}
- />
- <button
- type="button"
- className="password-toggle-btn"
- onClick={() => setShowPassword((prev) => !prev)}
- >
- {showPassword ? (
- <svg
- width="16"
- height="16"
- viewBox="0 0 24 24"
- fill="none"
- stroke="currentColor"
- strokeWidth="2"
- strokeLinecap="round"
- strokeLinejoin="round"
- >
- <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
- <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
- <line x1="1" y1="1" x2="23" y2="23" />
- </svg>
- ) : (
- <svg
- width="16"
- height="16"
- viewBox="0 0 24 24"
- fill="none"
- stroke="currentColor"
- strokeWidth="2"
- strokeLinecap="round"
- strokeLinejoin="round"
- >
- <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
- <circle cx="12" cy="12" r="3" />
- </svg>
- )}
- </button>
- </div>
- {addFormErrors.password && (
- <span className="field-error">{addFormErrors.password}</span>
- )}
- </div>
- </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Phone</label>
+              <input
+                type="tel"
+                value={addForm.phone}
+                onChange={(e) => onFormChange("phone", e.target.value)}
+                placeholder="+1234567890"
+              />
+            </div>
+            <div
+              className={`form-group ${addFormErrors.password ? "has-error" : ""}`}
+            >
+              <label>Password *</label>
+              <div className="password-field-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={addForm.password}
+                  onChange={(e) => onFormChange("password", e.target.value)}
+                  required
+                  placeholder="Enter a password"
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? (
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {addFormErrors.password && (
+                <span className="field-error">{addFormErrors.password}</span>
+              )}
+            </div>
+          </div>
 
           <div className="form-row">
             <div className="form-group">
@@ -209,17 +209,17 @@ export default function AddUserModal({
             </div>
           </div>
 
- <div className="modal-footer">
- <button type="button" onClick={onClose} className="btn-cancel">
- Cancel
- </button>
- <button type="submit" className="btn-save" disabled={isCreating}>
- {isCreating ? "Creating..." : "Create User"}
- </button>
- </div>
- </form>
- </div>
- </div>,
- document.body,
- );
+          <div className="modal-footer">
+            <button type="button" onClick={onClose} className="btn-cancel">
+              Cancel
+            </button>
+            <button type="submit" className="btn-save" disabled={isCreating}>
+              {isCreating ? "Creating..." : "Create User"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body,
+  );
 }

@@ -1,40 +1,32 @@
 /* ============================================================
    SUPER ADMIN PERMISSIONS PAGE
+   Design system: sa2 (Stripe-inspired)
    ============================================================ */
-@import "../../admin/styles/design-tokens.css";
 
 .sa-perm-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-/* ── Card ── */
-.sa-perm-card {
-  padding: 0 !important;
-  scroll-margin-top: 120px;
-  overflow: hidden;
-}
-
-.sa-perm-card--focused {
-  border-color: color-mix(in srgb, var(--info) 40%, var(--border)) !important;
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--info) 8%, transparent),
-    var(--shadow-lg) !important;
-}
-
-/* ── Card header band ── */
-.sa-perm-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 24px;
-  background: var(--muted);
-  border-bottom: 1px solid var(--border);
   gap: 16px;
 }
 
-/* ── User info ── */
+.sa-perm-card {
+  padding: 24px 28px !important;
+  scroll-margin-top: 120px;
+}
+
+.sa-perm-card--focused {
+  border-color: rgba(37, 99, 235, 0.32) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08), 0 24px 48px rgba(15, 23, 42, 0.1) !important;
+}
+
+.sa-perm-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
 .sa-perm-user-info {
   display: flex;
   align-items: center;
@@ -42,17 +34,16 @@
 }
 
 .sa-perm-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--primary) 12%, var(--card));
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #f1f5f9;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
-  color: var(--primary);
+  color: #94a3b8;
 }
 
 .sa-perm-avatar img {
@@ -64,18 +55,16 @@
 .sa-perm-user-name {
   font-size: 15px;
   font-weight: 600;
-  color: var(--foreground);
+  color: #0f172a;
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .sa-perm-user-email {
-  font-size: var(--font-size-sm);
-  color: var(--muted-foreground);
-  margin-top: 2px;
+  font-size: 13px;
+  color: #94a3b8;
 }
 
-/* ── Meta (branch pill) ── */
 .sa-perm-meta {
   display: flex;
   align-items: center;
@@ -84,49 +73,22 @@
 }
 
 .sa-perm-branch {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--muted-foreground);
-  padding: 4px 12px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 99px;
-  letter-spacing: 0.01em;
-}
-
-/* ── Focus note ── */
-.sa-perm-focus-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 12px 0 0;
-  font-size: var(--font-size-sm);
+  font-size: 12px;
   font-weight: 500;
-  color: var(--info-dark);
-  background: var(--info-light);
-  border: 1px solid color-mix(in srgb, var(--info) 25%, var(--border));
-  border-radius: var(--radius-md);
-  padding: 7px 14px;
-  width: fit-content;
+  color: #64748b;
+  padding: 3px 10px;
+  background: #f1f5f9;
+  border-radius: 99px;
 }
 
-/* ── Responsive ── */
+.sa-perm-focus-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #1d4ed8;
+}
+
 @media (max-width: 700px) {
   .sa-perm-card-header {
     flex-direction: column;
-    align-items: flex-start;
-    padding: 16px;
-  }
-
-  .sa-perm-meta {
-    width: 100%;
-  }
-
-  .sa-perm-branch {
-    width: 100%;
-    justify-content: center;
   }
 }
