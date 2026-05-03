@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Ban,
   Calendar,
@@ -10,6 +10,7 @@ import {
   Trash2,
   X as XIcon,
   AlertCircle,
+  CalendarDays,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { reservationApi } from "../../../shared/api/apiClient";
@@ -24,12 +25,12 @@ import "../styles/admin-reservations.css";
 
 const getAvatarColor = (initials = "") => {
   const colors = [
-    "bg-[#ec4899] text-white",
-    "bg-[#22c55e] text-white",
-    "bg-[#8b5cf6] text-white",
-    "bg-[#ef4444] text-white",
-    "bg-[#3b82f6] text-white",
-    "bg-[#f59e0b] text-white",
+    "bg-[color:var(--chart-5)] text-white",
+    "bg-[color:var(--chart-1)] text-white",
+    "bg-[color:var(--chart-4)] text-white",
+    "bg-[color:var(--danger)] text-white",
+    "bg-[color:var(--chart-2)] text-white",
+    "bg-[color:var(--warning)] text-white",
   ];
   const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
   const index = charCode % colors.length;
@@ -58,6 +59,8 @@ function VisitSchedulesTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const { data: rawReservations = [], isLoading: loading } = useReservations({
     view: "admin-list",
@@ -108,8 +111,18 @@ function VisitSchedulesTab() {
       ),
     [schedules],
   );
+  const cancelled = useMemo(
+    () =>
+      schedules.filter(
+        (schedule) =>
+          (schedule.isHistorical && schedule.historyStatus === "cancelled") ||
+          (!schedule.isHistorical && schedule.status === "cancelled"),
+      ),
+    [schedules],
+  );
 
-  const refetchAll = () => queryClient.invalidateQueries({ queryKey: ["reservations"] });
+  const refetchAll = () =>
+    queryClient.invalidateQueries({ queryKey: ["reservations"] });
 
   const confirmAction = (
     title,
@@ -175,7 +188,7 @@ function VisitSchedulesTab() {
         });
       },
       "Verification revoked successfully",
-      "Failed to revoke verification. Please try again.",
+      "Failed to verify attendance. Please try again.",
     );
   };
 
@@ -200,7 +213,9 @@ function VisitSchedulesTab() {
       "danger",
       "Delete",
       async () => {
-        await reservationApi.update(reservationId, { removeVisitHistoryIndex: historyIndex });
+        await reservationApi.update(reservationId, {
+          removeVisitHistoryIndex: historyIndex,
+        });
       },
       "History entry removed",
       "Failed to remove history entry. Please try again.",
@@ -210,11 +225,40 @@ function VisitSchedulesTab() {
   const summaryItems = useMemo(
     () => [
       { label: "All", value: schedules.length, icon: Calendar, color: "blue" },
-      { label: "Pending", value: upcoming.length, icon: Clock, color: "orange" },
-      { label: "Completed", value: completed.length, icon: CheckCircle, color: "green" },
-      { label: "No-Show", value: noShows.length, icon: AlertCircle, color: "red" },
+      {
+        label: "Pending",
+        value: upcoming.length,
+        icon: Clock,
+        color: "orange",
+      },
+      {
+        label: "Approved",
+        value: completed.length,
+        icon: CheckCircle,
+        color: "green",
+      },
+      {
+        label: "Rejected",
+        value: rejected.length,
+        icon: XIcon,
+        color: "red",
+      },
+      {
+        label: "No-Show",
+        value: noShows.length,
+        icon: AlertCircle,
+        color: "red",
+      },
+      { label: "Cancelled", value: cancelled.length, icon: Ban, color: "red" },
     ],
-    [completed.length, noShows.length, schedules.length, upcoming.length],
+    [
+      cancelled.length,
+      completed.length,
+      rejected.length,
+      noShows.length,
+      schedules.length,
+      upcoming.length,
+    ],
   );
 
   const displayData = useMemo(() => {
@@ -222,7 +266,9 @@ function VisitSchedulesTab() {
     if (activeFilter === 0) base = schedules;
     else if (activeFilter === 1) base = upcoming;
     else if (activeFilter === 2) base = completed;
-    else if (activeFilter === 3) base = noShows;
+    else if (activeFilter === 3) base = rejected;
+    else if (activeFilter === 4) base = noShows;
+    else if (activeFilter === 5) base = cancelled;
     else base = schedules;
 
     const query = searchTerm.trim().toLowerCase();
@@ -241,51 +287,57 @@ function VisitSchedulesTab() {
 
     if (sortBy === "oldest") {
       result = [...result].sort(
-        (left, right) => new Date(left.scheduledDate || 0) - new Date(right.scheduledDate || 0),
+        (left, right) =>
+          new Date(left.scheduledDate || 0) -
+          new Date(right.scheduledDate || 0),
       );
     } else if (sortBy === "name-az") {
-      result = [...result].sort((left, right) => left.customer.localeCompare(right.customer));
+      result = [...result].sort((left, right) =>
+        left.customer.localeCompare(right.customer),
+      );
     } else if (sortBy === "name-za") {
-      result = [...result].sort((left, right) => right.customer.localeCompare(left.customer));
+      result = [...result].sort((left, right) =>
+        right.customer.localeCompare(left.customer),
+      );
     }
 
     return result;
-  }, [activeFilter, branchFilter, completed, noShows, rejected, schedules, searchTerm, sortBy, upcoming]);
+  }, [
+    activeFilter,
+    branchFilter,
+    cancelled,
+    completed,
+    noShows,
+    rejected,
+    schedules,
+    searchTerm,
+    sortBy,
+    upcoming,
+  ]);
 
-  const summaryColorClasses = {
-    blue: {
-      base: "border-blue-100 bg-blue-50/60",
-      active: "border-blue-300 bg-blue-100/80 shadow-sm ring-1 ring-blue-200",
-      icon: "text-blue-600",
-      label: "text-blue-700",
-      value: "text-blue-900",
-    },
-    orange: {
-      base: "border-amber-100 bg-amber-50/60",
-      active: "border-amber-300 bg-amber-100/80 shadow-sm ring-1 ring-amber-200",
-      icon: "text-amber-600",
-      label: "text-amber-700",
-      value: "text-amber-900",
-    },
-    green: {
-      base: "border-emerald-100 bg-emerald-50/60",
-      active: "border-emerald-300 bg-emerald-100/80 shadow-sm ring-1 ring-emerald-200",
-      icon: "text-emerald-600",
-      label: "text-emerald-700",
-      value: "text-emerald-900",
-    },
-    red: {
-      base: "border-red-100 bg-red-50/60",
-      active: "border-red-300 bg-red-100/80 shadow-sm ring-1 ring-red-200",
-      icon: "text-red-600",
-      label: "text-red-700",
-      value: "text-red-900",
-    },
-  };
+  const totalPages = Math.max(1, Math.ceil(displayData.length / itemsPerPage));
+  const paginatedData = useMemo(
+    () =>
+      displayData.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage,
+      ),
+    [currentPage, displayData],
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter, searchTerm, branchFilter, sortBy]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-flow-col auto-cols-[minmax(150px,1fr)] gap-3 overflow-x-auto pb-1">
         {summaryItems.map((item, index) => {
           const Icon = item.icon;
           const isActive = activeFilter === index;
@@ -294,36 +346,39 @@ function VisitSchedulesTab() {
             <div
               key={item.label}
               onClick={() => setActiveFilter(index)}
-              className={`bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer ${
-                isActive ? "ring-2 ring-primary" : ""
-              }`}
+              style={{
+                backgroundColor: "var(--bg-card)",
+                borderColor: isActive
+                  ? "color-mix(in srgb, var(--primary) 55%, var(--border-light))"
+                  : "var(--border-light)",
+              }}
+              className="border rounded-xl p-3 hover:shadow-md transition-shadow cursor-pointer min-h-[108px]"
             >
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start justify-between mb-3">
                 <Icon
-                  strokeWidth={1.5}
                   className={`w-5 h-5 ${
                     item.color === "blue"
-                      ? "text-blue-600"
+                      ? "text-[color:var(--info)]"
                       : item.color === "orange"
-                        ? "text-amber-500"
+                        ? "text-[color:var(--warning)]"
                         : item.color === "green"
-                          ? "text-green-600"
-                          : "text-red-600"
+                          ? "text-[color:var(--success)]"
+                          : "text-[color:var(--danger)]"
                   }`}
                 />
-                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-right">
                   {item.label}
                 </span>
               </div>
               <div
-                className={`text-[32px] font-medium leading-none ${
+                className={`text-[28px] font-medium leading-none ${
                   item.color === "blue"
-                    ? "text-blue-600"
+                    ? "text-[color:var(--info)]"
                     : item.color === "orange"
-                      ? "text-amber-500"
+                      ? "text-[color:var(--warning)]"
                       : item.color === "green"
-                        ? "text-green-600"
-                        : "text-red-600"
+                        ? "text-[color:var(--success)]"
+                        : "text-[color:var(--danger)]"
                 }`}
               >
                 {item.value}
@@ -333,7 +388,13 @@ function VisitSchedulesTab() {
         })}
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-6">
+      <div
+        className="border rounded-lg p-6"
+        style={{
+          backgroundColor: "var(--bg-card)",
+          borderColor: "var(--border-light)",
+        }}
+      >
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -342,7 +403,11 @@ function VisitSchedulesTab() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search by name, email, code, or room..."
-              className="w-full pl-10 pr-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              style={{
+                backgroundColor: "var(--input-background)",
+                borderColor: "var(--border-light)",
+              }}
+              className="w-full pl-10 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -350,7 +415,11 @@ function VisitSchedulesTab() {
             <select
               value={branchFilter}
               onChange={(event) => setBranchFilter(event.target.value)}
-              className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              style={{
+                backgroundColor: "var(--input-background)",
+                borderColor: "var(--border-light)",
+              }}
+              className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="all">All Branches</option>
               <option value="Gil Puyat">Gil Puyat</option>
@@ -360,7 +429,11 @@ function VisitSchedulesTab() {
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value)}
-              className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              style={{
+                backgroundColor: "var(--input-background)",
+                borderColor: "var(--border-light)",
+              }}
+              className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="recent">Most Recent</option>
               <option value="oldest">Oldest First</option>
@@ -373,18 +446,31 @@ function VisitSchedulesTab() {
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-12 text-center">
-              <p className="text-base text-muted-foreground">Loading visit schedules...</p>
+              <p className="text-base text-muted-foreground">
+                Loading visit schedules...
+              </p>
             </div>
           ) : displayData.length === 0 ? (
             <div className="p-12 text-center">
               <CalendarDays className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
-              <p className="text-base font-medium text-foreground">No visit schedules</p>
-              <p className="mt-1 text-base text-muted-foreground">Visit schedules will appear here.</p>
+              <p className="text-base font-medium text-foreground">
+                No visit schedules
+              </p>
+              <p className="mt-1 text-base text-muted-foreground">
+                Visit schedules will appear here.
+              </p>
             </div>
           ) : (
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
+                <tr
+                  className="border-b"
+                  style={{
+                    borderColor: "var(--border-light)",
+                    backgroundColor:
+                      "color-mix(in srgb, var(--bg-inset) 30%, transparent)",
+                  }}
+                >
                   <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Visitor
                   </th>
@@ -409,12 +495,17 @@ function VisitSchedulesTab() {
                 </tr>
               </thead>
               <tbody>
-                {displayData.map((row) => {
+                {paginatedData.map((row) => {
                   const isDim = row.isHistorical ? "opacity-55" : "";
                   const now = new Date();
                   const visitDate = new Date(row.visitDate);
-                  const isUpcoming = !row.visitApproved && !row.scheduleRejected && visitDate >= now;
-                  const actionedDate = row.actionedAt ? new Date(row.actionedAt) : null;
+                  const isUpcoming =
+                    !row.visitApproved &&
+                    !row.scheduleRejected &&
+                    visitDate >= now;
+                  const actionedDate = row.actionedAt
+                    ? new Date(row.actionedAt)
+                    : null;
 
                   let statusNode;
                   if (row.isHistorical) {
@@ -424,10 +515,14 @@ function VisitSchedulesTab() {
                       cancelled: { status: "overdue", label: "Cancelled" },
                       pending: { status: "pending", label: "Scheduled" },
                     };
-                    const config = historyMap[row.historyStatus] || historyMap.pending;
+                    const config =
+                      historyMap[row.historyStatus] || historyMap.pending;
                     statusNode = (
                       <div className="opacity-60">
-                        <StatusBadge status={config.status} label={config.label} />
+                        <StatusBadge
+                          status={config.status}
+                          label={config.label}
+                        />
                         {actionedDate && (
                           <div className="mt-1 text-xs text-muted-foreground">
                             {actionedDate.toLocaleDateString("en-US", {
@@ -446,10 +541,20 @@ function VisitSchedulesTab() {
                       </div>
                     );
                   } else if (row.scheduleRejected) {
-                    statusNode = <StatusBadge status="rejected" label="Rejected" />;
+                    statusNode = (
+                      <StatusBadge status="rejected" label="Rejected" />
+                    );
                   } else {
-                    const status = row.visitApproved ? "completed" : isUpcoming ? "pending" : "no-show";
-                    const label = row.visitApproved ? "Completed" : isUpcoming ? "Pending Approval" : "No-Show";
+                    const status = row.visitApproved
+                      ? "completed"
+                      : isUpcoming
+                        ? "pending"
+                        : "no-show";
+                    const label = row.visitApproved
+                      ? "Completed"
+                      : isUpcoming
+                        ? "Pending Approval"
+                        : "No-Show";
                     statusNode = (
                       <div>
                         <StatusBadge status={status} label={label} />
@@ -473,7 +578,10 @@ function VisitSchedulesTab() {
                   }
 
                   return (
-                    <tr key={row.id} className="border-b border-border hover:bg-gray-50 transition-colors">
+                    <tr
+                      key={row.id}
+                      className="border-b border-[var(--border-light)] hover:bg-muted transition-colors"
+                    >
                       <td className="py-4 px-4">
                         <div className={`flex items-center gap-3 ${isDim}`}>
                           <div
@@ -500,7 +608,9 @@ function VisitSchedulesTab() {
                                 </span>
                               ) : null}
                             </div>
-                            <div className="text-xs text-muted-foreground">{row.email}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {row.email}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -514,19 +624,25 @@ function VisitSchedulesTab() {
                         <div className={`leading-5 ${isDim}`}>
                           <div className="text-sm text-foreground">
                             {row.scheduledDate
-                              ? new Date(row.scheduledDate).toLocaleDateString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                })
+                              ? new Date(row.scheduledDate).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  },
+                                )
                               : "-"}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {row.scheduledDate
-                              ? new Date(row.scheduledDate).toLocaleTimeString("en-US", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
+                              ? new Date(row.scheduledDate).toLocaleTimeString(
+                                  "en-US",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )
                               : "-"}
                           </div>
                         </div>
@@ -535,14 +651,19 @@ function VisitSchedulesTab() {
                         <div className={`leading-5 ${isDim}`}>
                           <div className="text-sm text-foreground">
                             {row.visitDate
-                              ? new Date(row.visitDate).toLocaleDateString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                })
+                              ? new Date(row.visitDate).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  },
+                                )
                               : "-"}
                           </div>
-                          <div className="text-xs text-muted-foreground">{row.visitTime || "-"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.visitTime || "-"}
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 px-4">{statusNode}</td>
@@ -552,7 +673,12 @@ function VisitSchedulesTab() {
                             <button
                               className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-600 rounded-md transition-colors"
                               title="Delete this history entry"
-                              onClick={() => handleDeleteHistoryEntry(row.reservationId, row.historyIndex)}
+                              onClick={() =>
+                                handleDeleteHistoryEntry(
+                                  row.reservationId,
+                                  row.historyIndex,
+                                )
+                              }
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -561,7 +687,7 @@ function VisitSchedulesTab() {
                               {isUpcoming && (
                                 <>
                                   <button
-                                    className="px-2.5 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 font-medium rounded-md transition-colors flex items-center gap-1.5 text-sm"
+                                    className="px-2.5 py-1.5 bg-[color:var(--success-light)] hover:bg-[color:var(--success)]/20 text-[color:var(--success-dark)] dark:text-[color:var(--success-dark)] font-medium rounded-md transition-colors flex items-center gap-1.5 text-sm"
                                     disabled={actionLoading === row.id}
                                     onClick={() => handleVerify(row.id)}
                                   >
@@ -569,7 +695,7 @@ function VisitSchedulesTab() {
                                     Complete
                                   </button>
                                   <button
-                                    className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-medium rounded-md transition-colors flex items-center gap-1.5 text-sm"
+                                    className="px-2.5 py-1.5 bg-[color:var(--danger-light)] hover:bg-[color:var(--danger)]/20 text-[color:var(--danger-dark)] dark:text-[color:var(--danger-dark)] font-medium rounded-md transition-colors flex items-center gap-1.5 text-sm"
                                     title="Reject schedule"
                                     onClick={() => setSelectedSchedule(row)}
                                   >
@@ -605,11 +731,35 @@ function VisitSchedulesTab() {
             </table>
           )}
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-[var(--border-light)]">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+              className="px-3 py-1 text-sm border border-[var(--border-light)] rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1 text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => p + 1)}
+              className="px-3 py-1 text-sm border border-[var(--border-light)] rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       <ConfirmModal
         isOpen={confirmModal.open}
-        onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
+        onClose={() =>
+          setConfirmModal((previous) => ({ ...previous, open: false }))
+        }
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}

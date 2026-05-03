@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * useReservationFlow — Custom Hook
+ * useReservationFlow ΓÇö Custom Hook
  * =============================================================================
  *
  * Extracted from ReservationFlowPage.jsx.
@@ -55,7 +55,7 @@ export default function useReservationFlow() {
         : null;
   const isStepMode = Boolean(stepOverride);
 
-  // ── Core state ─────────────────────────────────────────
+  // ΓöÇΓöÇ Core state ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const [reservationData, setReservationData] = useState(null);
   const [currentStage, setCurrentStage] = useState(1);
   const [highestStageReached, setHighestStageReached] = useState(1);
@@ -158,7 +158,7 @@ export default function useReservationFlow() {
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [agreedToCertification, setAgreedToCertification] = useState(false);
 
-  // Stage 4: Payment — tenant must acknowledge the non-refundable fee policy
+  // Stage 4: Payment ΓÇö tenant must acknowledge the non-refundable fee policy
   const [agreedToFeePolicy, setAgreedToFeePolicy] = useState(false);
   const [finalMoveInDate, setFinalMoveInDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -182,13 +182,13 @@ export default function useReservationFlow() {
     billingEmail: "",
   });
 
-  // ── Capture payment redirect flag + status at render time (before effects clear URL) ──
+  // ΓöÇΓöÇ Capture payment redirect flag + status at render time (before effects clear URL) ΓöÇΓöÇ
   const paymentReturnStatusRef = useRef(
     new URLSearchParams(window.location.search).get("payment")
   );
   const isPaymentReturnRef = useRef(Boolean(paymentReturnStatusRef.current));
 
-  // ── Payment redirect hook (must be after all useState) ────
+  // ΓöÇΓöÇ Payment redirect hook (must be after all useState) ΓöÇΓöÇΓöÇΓöÇ
   const { searchParams, setSearchParams } = usePaymentRedirect({
     user,
     showNotification,
@@ -204,7 +204,7 @@ export default function useReservationFlow() {
   const isFirstRenderRef = useRef(true);
   const navigatingAwayRef = useRef(false);
 
-  // ── Warn before leaving mid-flow (skip if intentional navigation) ──
+  // ΓöÇΓöÇ Warn before leaving mid-flow (skip if intentional navigation) ΓöÇΓöÇ
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (navigatingAwayRef.current) return;
@@ -217,7 +217,7 @@ export default function useReservationFlow() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isFormDirty, currentStage]);
 
-  // ── Stepper locking ────────────────────────────────────
+  // ΓöÇΓöÇ Stepper locking ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const isStageLocked = (stageId) => {
     if (paymentApproved) return stageId < 5;
     if (stageId === 1) return visitCompleted;
@@ -247,7 +247,7 @@ export default function useReservationFlow() {
     setCurrentStage(stageId);
   };
 
-  // ── Helpers to populate state from a reservation object ────
+  // ΓöÇΓöÇ Helpers to populate state from a reservation object ΓöÇΓöÇΓöÇΓöÇ
   const populateFromReservation = (r) => {
     if (r.firstName) setFirstName(r.firstName);
     if (r.lastName) setLastName(r.lastName);
@@ -336,10 +336,10 @@ export default function useReservationFlow() {
       });
     }
     // NOTE: agreedToPrivacy / agreedToCertification are NOT restored
-    // from saved data — consent must be re-affirmed each session.
+    // from saved data ΓÇö consent must be re-affirmed each session.
   };
 
-  // ── Pre-fill empty fields from user profile (for new reservations) ──
+  // ΓöÇΓöÇ Pre-fill empty fields from user profile (for new reservations) ΓöÇΓöÇ
   const prefillFromProfile = async () => {
     try {
       const profile = await authApi.getCurrentUser();
@@ -359,7 +359,7 @@ export default function useReservationFlow() {
       if (!emergencyContactNumber && profile.emergencyPhone)
         setEmergencyContactNumber(profile.emergencyPhone);
     } catch {
-      // Non-critical — silently skip if profile fetch fails
+      // Non-critical ΓÇö silently skip if profile fetch fails
     }
   };
 
@@ -414,7 +414,7 @@ export default function useReservationFlow() {
     };
   };
 
-  // ── Data loading ───────────────────────────────────────
+  // ΓöÇΓöÇ Data loading ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const processedKeyRef = useRef(null);
   const paymentVerifyingRef = useRef(false);
   const justPaidRef = useRef(false);
@@ -441,7 +441,7 @@ export default function useReservationFlow() {
     const editMode = location.state?.editMode;
     const resId = location.state?.reservationId;
 
-    // ── ALWAYS reset session-specific fields first ──
+    // ΓöÇΓöÇ ALWAYS reset session-specific fields first ΓöÇΓöÇ
     // For new reservations, these stay blank.
     // For continuing, the async load functions below will repopulate from DB.
     setTargetMoveInDate("");
@@ -454,13 +454,13 @@ export default function useReservationFlow() {
       loadExistingReservation(resId);
     } else {
       const state = location.state?.roomData;
-      // Check if this is a PayMongo return — defer stage logic to usePaymentRedirect
+      // Check if this is a PayMongo return ΓÇö defer stage logic to usePaymentRedirect
       const paymentParam = new URLSearchParams(window.location.search).get("payment");
       if (state) {
         setReservationData(state);
         prefillFromProfile(); // Pre-fill Step 3 from profile for new reservations
       } else if (isPaymentReturnRef.current) {
-        // Returning from PayMongo — load reservation data for display,
+        // Returning from PayMongo ΓÇö load reservation data for display,
         // and verify payment using the reservation's stored session ID.
         paymentVerifyingRef.current = true; // block re-init from hook's setSearchParams
         isPaymentReturnRef.current = false; // consume the flag
@@ -604,7 +604,7 @@ export default function useReservationFlow() {
       };
       let targetStage = STAGE_BY_STATUS[reservationStatus] || 1;
 
-      // visit_pending: tenant must wait — redirect to profile (unless rejected)
+      // visit_pending: tenant must wait ΓÇö redirect to profile (unless rejected)
       if (reservationStatus === "visit_pending" && !reservation.scheduleRejected) {
         appNavigate("/applicant/profile", {
           flash: {
@@ -647,7 +647,7 @@ export default function useReservationFlow() {
         targetStage = 2;
       }
       if (skipStageSet) {
-        // Payment redirect — verify using the reservation's stored paymongoSessionId
+        // Payment redirect ΓÇö verify using the reservation's stored paymongoSessionId
         // Set highest to 5 immediately so the stepper renders all stages green from the start
         setHighestStageReached(5);
         // Verify payment status with PayMongo
@@ -657,7 +657,7 @@ export default function useReservationFlow() {
             if (result.status === "paid") {
               sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
               sessionStorage.removeItem("activeReservationId"); // legacy cleanup
-              // Back button → redirect to dashboard; Return to merchant → show step 5
+              // Back button ΓåÆ redirect to dashboard; Return to merchant ΓåÆ show step 5
               if (paymentReturnStatusRef.current === "cancelled") {
                 appNavigate("/applicant/profile", {
                   flash: {
@@ -672,7 +672,7 @@ export default function useReservationFlow() {
               try {
                 const updated = await reservationApi.getById(resId);
                 if (updated?.reservationCode) setReservationCode(updated.reservationCode);
-              } catch { /* non-critical — code just won't display */ }
+              } catch { /* non-critical ΓÇö code just won't display */ }
               setCurrentStage(5);
               setHighestStageReached(5);
               setPaymentSubmitted(true);
@@ -693,7 +693,7 @@ export default function useReservationFlow() {
               return;
             }
           } catch (err) {
-            console.error("❌ [VERIFY] Payment check failed — sessionId:", reservation.paymongoSessionId, err);
+            console.error("Γ¥î [VERIFY] Payment check failed ΓÇö sessionId:", reservation.paymongoSessionId, err);
             setCurrentStage(4);
             if (paymentReturnStatusRef.current !== "cancelled") {
               showNotification("Could not verify payment. Please check your profile.", "warning", 5000);
@@ -701,10 +701,10 @@ export default function useReservationFlow() {
             return;
           }
         } else {
-          // No stored session ID — skip generic toast, just navigate to correct stage
+          // No stored session ID ΓÇö skip generic toast, just navigate to correct stage
           console.warn("[PAYMENT] skipStageSet=true but paymongoSessionId is empty for reservation:", resId);
           setCurrentStage(targetStage);
-          return; // ← prevent double-toast: skip the generic notification below
+          return; // ΓåÉ prevent double-toast: skip the generic notification below
         }
       } else {
         if (stepOverride && stepOverride <= highest)
@@ -719,7 +719,7 @@ export default function useReservationFlow() {
         3000,
       );
     } catch (err) {
-      console.error("❌ [LOAD_RESERVATION] Failed to load reservation id:", resId, "| status:", err?.response?.status, "| message:", err?.message, err);
+      console.error("Γ¥î [LOAD_RESERVATION] Failed to load reservation id:", resId, "| status:", err?.response?.status, "| message:", err?.message, err);
       const status = err?.response?.status;
       if (status === 404) {
         sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
@@ -746,7 +746,7 @@ export default function useReservationFlow() {
     }
   };
 
-  // ── Form change tracking (Stage 1) ─────────────────────
+  // ΓöÇΓöÇ Form change tracking (Stage 1) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   useEffect(() => {
     if (currentStage === 1) {
       setIsFormDirty(
@@ -763,7 +763,7 @@ export default function useReservationFlow() {
     currentStage,
   ]);
 
-  // ── API helpers ────────────────────────────────────────
+  // ΓöÇΓöÇ API helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const advanceStage = async (nextStage, message) => {
     setHighestStageReached((prev) => Math.max(prev, nextStage));
     await queryClient.invalidateQueries({ queryKey: ["reservations"] });
@@ -904,7 +904,7 @@ export default function useReservationFlow() {
     return response?.reservation || response;
   };
 
-  // ── Auto-save (stages 3-4) ─────────────────────────────
+  // ΓöÇΓöÇ Auto-save (stages 3-4) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const validateApplicantIdDocument = useCallback(
     async ({ documentUrl, idType } = {}) => {
       const targetReservationId = reservationId || reservationData?._id || reservationData?.id;
@@ -1105,7 +1105,7 @@ export default function useReservationFlow() {
     };
   }, [buildDraftPayload, currentStage, reservationId]);
 
-  // ── Stage handler ──────────────────────────────────────
+  // ΓöÇΓöÇ Stage handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   const handleNextStage = async () => {
     try {
       if (currentStage === 1) {
@@ -1164,7 +1164,7 @@ export default function useReservationFlow() {
       } else if (currentStage === 3) {
         if (!devBypassValidation) {
           const hasText = (value) => Boolean(value?.trim?.() || value);
-          // 09XXXXXXXXX format — matches backend normalization and new input constraint.
+          // 09XXXXXXXXX format ΓÇö matches backend normalization and new input constraint.
           const isValidPhone = (value) => validatePHPhoneLocal(value).valid;
           const requiredFields = [
             { key: "selfiePhoto", label: "Selfie Photo", isMissing: !selfiePhoto },
@@ -1477,7 +1477,7 @@ export default function useReservationFlow() {
     setPendingStageAction(null);
   };
 
-  // ─── Return everything the page component needs ────────
+  // ΓöÇΓöÇΓöÇ Return everything the page component needs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   return {
     // Navigation
     navigate,

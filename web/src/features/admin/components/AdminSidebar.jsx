@@ -41,20 +41,29 @@ export default function AdminSidebar({
     : "A";
 
   const shellWidthClass = collapsed ? "w-16" : "w-64";
-  const shellVisibilityClass = isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0";
-  const sectionLabelClass = "px-3 mb-2 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]";
-  const navButtonBase =
-    "group relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-outline)] focus-visible:ring-offset-0";
+  const shellVisibilityClass = isOpen
+    ? "translate-x-0"
+    : "-translate-x-full md:translate-x-0";
+  const headerPaddingClass = collapsed ? "p-2.5" : "p-4";
+  const navPaddingClass = collapsed ? "py-2" : "py-4";
+  const sectionLabelClass =
+    "px-3 mb-2 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]";
+  const navButtonBase = `group relative flex w-full items-center gap-3 rounded-md text-sm font-medium transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-outline)] focus-visible:ring-offset-0 ${collapsed ? "justify-center py-1.5 px-2" : "py-2.5 px-3"}`;
   const navButtonActive =
-    "bg-[#d1b23d] text-[#0f1a2f]";
+    "bg-[color:var(--primary)] text-[color:var(--primary-foreground)]";
   const navButtonIdle =
     "text-[var(--text-primary)] hover:bg-[rgba(209,178,61,0.14)] hover:text-[var(--text-primary)]";
+  const iconSizeClass = collapsed ? "h-5.5 w-5.5" : "h-5 w-5";
+  const groupMarginClass = collapsed ? "mt-3" : "mt-6";
+  const dividerMarginClass = collapsed ? "my-2" : "my-4";
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--border-subtle,var(--border-light))] bg-white transition-all duration-300 ease-out ${shellWidthClass} ${shellVisibilityClass}`}
-    >
-      <div className="flex items-center justify-between border-b border-[var(--border-subtle,var(--border-light))] p-4">
+  className={`fixed inset-y-0 left-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--border-subtle,var(--border-light))] bg-[var(--bg-sidebar)] transition-all duration-300 ease-out ${shellWidthClass} ${shellVisibilityClass}`}
+>
+      <div
+        className={`flex items-center justify-between border-b border-[var(--border-subtle,var(--border-light))] ${headerPaddingClass}`}
+      >
         {!collapsed && (
           <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
             <span
@@ -77,7 +86,11 @@ export default function AdminSidebar({
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+          {collapsed ? (
+            <ChevronRight className="h-5 w-5" />
+          ) : (
+            <ChevronLeft className="h-5 w-5" />
+          )}
         </button>
         <button
           className="inline-flex rounded-md p-1.5 text-[var(--text-primary)] transition-colors duration-200 hover:bg-[rgba(209,178,61,0.12)] md:hidden"
@@ -90,7 +103,7 @@ export default function AdminSidebar({
       </div>
 
       <nav
-        className={`flex-1 overflow-x-hidden py-4 ${collapsed ? "overflow-y-hidden" : "sidebar-scroll overflow-y-auto"}`}
+        className={`flex-1 overflow-x-hidden ${navPaddingClass} ${collapsed ? "overflow-y-hidden" : "sidebar-scroll overflow-y-auto"}`}
         aria-label="Admin navigation"
       >
         {NAV_GROUPS.slice()
@@ -102,13 +115,15 @@ export default function AdminSidebar({
             return (
               <div
                 key={group.id}
-                className={group.id === "system" ? "mt-6" : ""}
+                className={group.id === "system" ? groupMarginClass : ""}
               >
                 {!collapsed && (
                   <div className={sectionLabelClass}>{group.label}</div>
                 )}
                 {collapsed && group.id === "system" && (
-                  <div className="mx-2 my-4 border-t border-[var(--border-subtle,var(--border-light))]" />
+                  <div
+                    className={`mx-2 border-t border-[var(--border-subtle,var(--border-light))] ${dividerMarginClass}`}
+                  />
                 )}
                 <div className="space-y-1 px-2">
                   {items.map((item) => {
@@ -119,19 +134,25 @@ export default function AdminSidebar({
                         key={item.to}
                         to={item.to}
                         className={({ isActive }) =>
-                          `${navButtonBase} ${isActive ? navButtonActive : navButtonIdle} ${collapsed ? "justify-center px-2" : ""}`
+                          `${navButtonBase} ${isActive ? navButtonActive : navButtonIdle}`
                         }
                         title={collapsed ? item.text : undefined}
                         aria-label={item.text}
                         onClick={onClose}
-                        onMouseEnter={() => collapsed && setHoveredItem(item.to)}
+                        onMouseEnter={() =>
+                          collapsed && setHoveredItem(item.to)
+                        }
                         onMouseLeave={() => setHoveredItem(null)}
                       >
                         {({ isActive }) => (
                           <>
-                            <Icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-[#0f1a2f]" : "text-[var(--text-primary)]"}`} />
+                            <Icon
+                              className={`${iconSizeClass} flex-shrink-0 ${isActive ? "text-[#0f1a2f]" : "text-[var(--text-primary)]"}`}
+                            />
                             {!collapsed && (
-                              <span className="truncate text-sm leading-tight">{item.text}</span>
+                              <span className="truncate text-sm leading-tight">
+                                {item.text}
+                              </span>
                             )}
                             {collapsed && hoveredItem === item.to && (
                               <span className="sb-tooltip">{item.text}</span>

@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fmtShortDate as formatShortDate } from "../../../shared/utils/dateFormat";
 import {
-  AlertCircle,
   Calendar,
   CheckCircle,
   Clock,
@@ -54,12 +52,12 @@ import "../styles/admin-reservations.css";
 
 const getAvatarColor = (initials = "") => {
   const colors = [
-    "bg-[#ec4899] text-white",
-    "bg-[#22c55e] text-white",
-    "bg-[#8b5cf6] text-white",
-    "bg-[#ef4444] text-white",
-    "bg-[#3b82f6] text-white",
-    "bg-[#f59e0b] text-white",
+    "bg-[color:var(--chart-5)] text-white",
+    "bg-[color:var(--chart-1)] text-white",
+    "bg-[color:var(--secondary)] text-white",
+    "bg-[color:var(--danger)] text-white",
+    "bg-[color:var(--chart-2)] text-white",
+    "bg-[color:var(--warning)] text-white",
   ];
   const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
   const index = charCode % colors.length;
@@ -73,38 +71,28 @@ function initials(name = "") {
     : (parts[0]?.[0] || "?").toUpperCase();
 }
 
-// formatShortDate moved to shared/utils/dateFormat — imported at top of file
-
-function getIdValidationLabel(status) {
-  switch (status) {
-    case "passed":
-      return "ID Passed";
-    case "warning":
-      return "ID Warning";
-    case "failed":
-      return "ID Failed";
-    case "manual_review":
-      return "Manual Review";
-    default:
-      return "Not Checked";
-  }
+function formatShortDate(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
-function IdValidationPill({ status }) {
-  const normalized = status || "not_validated";
-  return (
-    <span className={`res-id-pill res-id-pill--${normalized}`}>
-      {getIdValidationLabel(normalized)}
-    </span>
-  );
-}
-
-const SUMMARY_FILTERS = ["all", "in_progress", "reserved", "moveIn", "overdue"];
+const SUMMARY_FILTERS = [
+  "all",
+  "visit_pending",
+  "visit_approved",
+  "reserved",
+  "cancelled",
+  "moveIn",
+];
 function ReservationsPage() {
   const { user } = useAuth();
   const { can } = usePermissions();
   const queryClient = useQueryClient();
-  const isOwner = user?.role === "owner" || user?.role === "superadmin";
+  const isOwner = user?.role === "owner";
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("reservations");
   const [searchTerm, setSearchTerm] = useState("");
@@ -127,7 +115,7 @@ function ReservationsPage() {
     variant: "info",
     onConfirm: null,
   });
-  const itemsPerPage = 12;
+  const itemsPerPage = 10;
 
   const {
     data: rawReservations = [],
@@ -144,16 +132,21 @@ function ReservationsPage() {
   const counts = useMemo(
     () => ({
       total: reservations.length,
-      inProgress: reservations.filter((reservation) =>
-        IN_PROGRESS_STATUSES.includes(reservation.status),
+      visitPending: reservations.filter((reservation) =>
+        reservation.status === "visit_pending",
+      ).length,
+      visitApproved: reservations.filter((reservation) =>
+        reservation.status === "visit_approved",
       ).length,
       reserved: reservations.filter(
         (reservation) => reservation.status === "reserved",
       ).length,
-      movedIn: reservations.filter(
-        (reservation) => hasReservationStatus(reservation.status, "moveIn"),
+      cancelled: reservations.filter(
+        (reservation) => reservation.status === "cancelled",
       ).length,
-      overdue: reservations.filter(checkOverdueReservation).length,
+      movedIn: reservations.filter((reservation) =>
+        hasReservationStatus(reservation.status, "moveIn"),
+      ).length,
     }),
     [reservations],
   );
@@ -169,7 +162,6 @@ function ReservationsPage() {
         reservation.room.toLowerCase().includes(query);
       const matchStatus =
         statusFilter === "all"
-  
           ? true
           : statusFilter === "overdue"
             ? checkOverdueReservation(reservation)
@@ -177,8 +169,7 @@ function ReservationsPage() {
               ? IN_PROGRESS_STATUSES.includes(reservation.status)
               : hasReservationStatus(reservation.status, statusFilter);
       const matchBranch =
-        branchFilter === "all" ||
-        reservation.branchCode === branchFilter;
+        branchFilter === "all" || reservation.branchCode === branchFilter;
       return matchSearch && matchStatus && matchBranch;
     });
   }, [branchFilter, reservations, searchTerm, statusFilter]);
@@ -226,7 +217,9 @@ function ReservationsPage() {
       allValue: "all",
     });
 
-    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
+    setBranchFilter((current) =>
+      current === nextBranch ? current : nextBranch,
+    );
   }, [isOwner, requestedBranch, user?.branch]);
 
   useEffect(() => {
@@ -244,10 +237,31 @@ function ReservationsPage() {
   const summaryItems = useMemo(
     () => [
       { label: "All", value: counts.total, icon: Calendar, color: "blue" },
-      { label: "Pending", value: counts.inProgress, icon: Clock, color: "orange" },
-      { label: "Approved", value: counts.reserved, icon: CheckCircle, color: "green" },
-      { label: "Check-in", value: counts.movedIn, icon: User, color: "blue" },
-      { label: "Overdue", value: counts.overdue, icon: AlertCircle, color: "red" },
+      {
+        label: "Visit Pending",
+        value: counts.visitPending,
+        icon: Clock,
+        color: "orange",
+      },
+      {
+        label: "Visit Approved",
+        value: counts.visitApproved,
+        icon: CheckCircle,
+        color: "neutral",
+      },
+      {
+        label: "Reserved",
+        value: counts.reserved,
+        icon: CheckCircle,
+        color: "blue",
+      },
+      {
+        label: "Cancelled",
+        value: counts.cancelled,
+        icon: Trash2,
+        color: "red",
+      },
+      { label: "Move In", value: counts.movedIn, icon: User, color: "green" },
     ],
     [counts],
   );
@@ -298,13 +312,16 @@ function ReservationsPage() {
     [branchFilter, isOwner, statusFilter],
   );
 
-  const prefetchReservationDetail = useCallback(async (reservationId) => {
-    if (!reservationId) return null;
-    return queryClient.fetchQuery({
-      queryKey: queryKeys.reservations.detail(reservationId),
-      queryFn: () => reservationApi.getById(reservationId),
-    });
-  }, [queryClient]);
+  const prefetchReservationDetail = useCallback(
+    async (reservationId) => {
+      if (!reservationId) return null;
+      return queryClient.fetchQuery({
+        queryKey: queryKeys.reservations.detail(reservationId),
+        queryFn: () => reservationApi.getById(reservationId),
+      });
+    },
+    [queryClient],
+  );
 
   useEffect(() => {
     if (!selectedReservation?.id) return;
@@ -342,104 +359,104 @@ function ReservationsPage() {
     });
   }, [reservations, selectedReservation]);
 
-  const handleView = useCallback(async (reservationId) => {
-    try {
-      const reservation = await prefetchReservationDetail(reservationId);
-      setSelectedReservation({
-        ...reservation,
-        id: reservation._id,
-        customer:
-          reservation.customer ||
-          `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
-          "Unknown",
-        email: reservation.email || reservation.userId?.email || "-",
-        room: reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
-        branch: getBranchLabel(reservation.roomId?.branch),
-        branchCode: reservation.roomId?.branch || "",
-        roomType: reservation.roomId?.type || "",
-        status: reservation.status || "pending",
-        totalPrice: reservation.totalPrice,
-        paymentStatus: reservation.paymentStatus,
-        paymentMethod: reservation.paymentMethod,
-        createdAt: reservation.createdAt,
-        reservationCode: reservation.reservationCode || "-",
-        firstName: reservation.firstName,
-        lastName: reservation.lastName,
-        middleName: reservation.middleName,
-        nickname: reservation.nickname,
-        phone: reservation.mobileNumber || reservation.phone,
-        birthday: reservation.birthday,
-        maritalStatus: reservation.maritalStatus,
-        nationality: reservation.nationality,
-        educationLevel: reservation.educationLevel,
-        address: reservation.address,
-        emergencyContact: reservation.emergencyContact,
-        healthConcerns: reservation.healthConcerns,
-        employment: reservation.employment,
-        selfiePhotoUrl: reservation.selfiePhotoUrl,
-        validIDFrontUrl: reservation.validIDFrontUrl,
-        validIDBackUrl: reservation.validIDBackUrl,
-        validIDType: reservation.validIDType,
-        idType: reservation.idType,
-        idValidationStatus: reservation.idValidationStatus,
-        idExtractedName: reservation.idExtractedName,
-        idExtractedNumber: reservation.idExtractedNumber,
-        idNameMatchScore: reservation.idNameMatchScore,
-        idMismatchFlag: reservation.idMismatchFlag,
-        idValidationNotes: reservation.idValidationNotes,
-        idValidatedAt: reservation.idValidatedAt,
-        idValidationProvider: reservation.idValidationProvider,
-        idValidationDocumentUrl: reservation.idValidationDocumentUrl,
-        nbiClearanceUrl: reservation.nbiClearanceUrl,
-        nbiReason: reservation.nbiReason,
-        companyIDUrl: reservation.companyIDUrl,
-        companyIDReason: reservation.companyIDReason,
-        finalMoveInDate: reservation.finalMoveInDate,
-        proofOfPaymentUrl: reservation.proofOfPaymentUrl,
-        leaseDuration: reservation.leaseDuration,
-        billingEmail: reservation.billingEmail,
-        moveInDate: reservation.moveInDate,
-        moveOutDate: reservation.moveOutDate,
-        visitDate: reservation.visitDate,
-        visitTime: reservation.visitTime,
-        visitApproved: reservation.visitApproved,
-        notes: reservation.notes,
-      });
-    } catch {
-      const fallbackReservation = reservations.find(
-        (reservation) => reservation.id === reservationId,
-      );
-      if (fallbackReservation) {
-        setSelectedReservation(fallbackReservation);
+  const handleView = useCallback(
+    async (reservationId) => {
+      try {
+        const reservation = await prefetchReservationDetail(reservationId);
+        setSelectedReservation({
+          ...reservation,
+          id: reservation._id,
+          customer:
+            reservation.customer ||
+            `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
+            "Unknown",
+          email: reservation.email || reservation.userId?.email || "-",
+          room:
+            reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
+          branch: getBranchLabel(reservation.roomId?.branch),
+          branchCode: reservation.roomId?.branch || "",
+          roomType: reservation.roomId?.type || "",
+          status: reservation.status || "pending",
+          totalPrice: reservation.totalPrice,
+          paymentStatus: reservation.paymentStatus,
+          paymentMethod: reservation.paymentMethod,
+          createdAt: reservation.createdAt,
+          reservationCode: reservation.reservationCode || "-",
+          firstName: reservation.firstName,
+          lastName: reservation.lastName,
+          middleName: reservation.middleName,
+          nickname: reservation.nickname,
+          phone: reservation.mobileNumber || reservation.phone,
+          birthday: reservation.birthday,
+          maritalStatus: reservation.maritalStatus,
+          nationality: reservation.nationality,
+          educationLevel: reservation.educationLevel,
+          address: reservation.address,
+          emergencyContact: reservation.emergencyContact,
+          healthConcerns: reservation.healthConcerns,
+          employment: reservation.employment,
+          selfiePhotoUrl: reservation.selfiePhotoUrl,
+          validIDFrontUrl: reservation.validIDFrontUrl,
+          validIDBackUrl: reservation.validIDBackUrl,
+          validIDType: reservation.validIDType,
+          nbiClearanceUrl: reservation.nbiClearanceUrl,
+          nbiReason: reservation.nbiReason,
+          companyIDUrl: reservation.companyIDUrl,
+          companyIDReason: reservation.companyIDReason,
+          finalMoveInDate: reservation.finalMoveInDate,
+          proofOfPaymentUrl: reservation.proofOfPaymentUrl,
+          leaseDuration: reservation.leaseDuration,
+          billingEmail: reservation.billingEmail,
+          moveInDate: reservation.moveInDate,
+          moveOutDate: reservation.moveOutDate,
+          visitDate: reservation.visitDate,
+          visitTime: reservation.visitTime,
+          visitApproved: reservation.visitApproved,
+          notes: reservation.notes,
+        });
+      } catch {
+        const fallbackReservation = reservations.find(
+          (reservation) => reservation.id === reservationId,
+        );
+        if (fallbackReservation) {
+          setSelectedReservation(fallbackReservation);
+        }
       }
-    }
-  }, [prefetchReservationDetail, reservations]);
+    },
+    [prefetchReservationDetail, reservations],
+  );
 
   const refetchReservations = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ["reservations"] }),
     [queryClient],
   );
 
-  const handleDelete = useCallback((reservationId) => {
-    setConfirmModal({
-      open: true,
-      title: "Archive Reservation",
-      message:
-        "This action archives the reservation and preserves billing history. Permanent deletion is restricted when issued bills exist.",
-      variant: "danger",
-      confirmText: "Archive",
-      onConfirm: async () => {
-        setConfirmModal((previous) => ({ ...previous, open: false }));
-        try {
-          await reservationApi.delete(reservationId);
-          showNotification("Reservation archived", "success");
-          refetchReservations();
-        } catch (error) {
-          showNotification(error?.message || "Failed to archive reservation", "error");
-        }
-      },
-    });
-  }, [refetchReservations]);
+  const handleDelete = useCallback(
+    (reservationId) => {
+      setConfirmModal({
+        open: true,
+        title: "Archive Reservation",
+        message:
+          "This action archives the reservation and preserves billing history. Permanent deletion is restricted when issued bills exist.",
+        variant: "danger",
+        confirmText: "Archive",
+        onConfirm: async () => {
+          setConfirmModal((previous) => ({ ...previous, open: false }));
+          try {
+            await reservationApi.delete(reservationId);
+            showNotification("Reservation archived", "success");
+            refetchReservations();
+          } catch (error) {
+            showNotification(
+              error?.message || "Failed to archive reservation",
+              "error",
+            );
+          }
+        },
+      });
+    },
+    [refetchReservations],
+  );
 
   const handleExportReservations = useCallback(() => {
     exportToCSV(
@@ -449,7 +466,8 @@ function ReservationsPage() {
         email: reservation.email,
         branch: reservation.branch,
         room: reservation.room,
-        status: RESERVATION_STATUS_LABELS[reservation.status] || reservation.status,
+        status:
+          RESERVATION_STATUS_LABELS[reservation.status] || reservation.status,
         moveInDate: formatShortDate(readMoveInDate(reservation)),
         createdAt: formatShortDate(reservation.createdAt),
       })),
@@ -510,13 +528,10 @@ function ReservationsPage() {
         key: "status",
         label: "Status",
         render: (row) => (
-          <StatusBadge status={checkOverdueReservation(row) ? "overdue" : row.status} />
+          <StatusBadge
+            status={checkOverdueReservation(row) ? "overdue" : row.status}
+          />
         ),
-      },
-      {
-        key: "idValidationStatus",
-        label: "ID Check",
-        render: (row) => <IdValidationPill status={row.idValidationStatus} />,
       },
       {
         key: "moveInDate",
@@ -536,7 +551,10 @@ function ReservationsPage() {
         width: "70px",
         align: "right",
         render: (row) => (
-          <div className="res-actions" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="res-actions"
+            onClick={(event) => event.stopPropagation()}
+          >
             <button
               className="res-icon-btn"
               title="View details"
@@ -563,13 +581,16 @@ function ReservationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground mb-1">Reservations</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-1">
+          Reservations
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Review applications, confirm documents, and move accepted residents toward assignment.
+          Review applications, confirm documents, and move accepted residents
+          toward assignment.
         </p>
       </div>
 
-      <div className="border-b border-border">
+      <div className="border-b" style={{ borderColor: "var(--border-light)" }}>
         <div className="flex gap-6">
           {tabs.map((tab) => (
             <button
@@ -577,13 +598,13 @@ function ReservationsPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`pb-3 px-1 text-sm font-medium transition-colors relative ${
                 activeTab === tab.key
-                  ? "text-[#eab308]"
+                  ? "text-[color:var(--primary)]"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
               {activeTab === tab.key && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#eab308]" />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[color:var(--primary)]" />
               )}
             </button>
           ))}
@@ -592,7 +613,7 @@ function ReservationsPage() {
 
       {activeTab === "reservations" && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-flow-col auto-cols-[minmax(150px,1fr)] gap-3 overflow-x-auto pb-1">
             {summaryItems.map((item, idx) => (
               <div
                 key={item.label}
@@ -601,36 +622,46 @@ function ReservationsPage() {
                   setStatusFilter(nextFilter);
                   setCurrentPage(1);
                 }}
-                className={`bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer ${
-                  activeSummaryIndex === idx ? "ring-2 ring-primary" : ""
-                }`}
+                style={{
+                  backgroundColor: "var(--bg-card)",
+                  borderColor:
+                    activeSummaryIndex === idx
+                      ? "color-mix(in srgb, var(--primary) 55%, var(--border-light))"
+                      : "var(--border-light)",
+                }}
+                className={`border
+ rounded-xl p-3 hover:shadow-md transition-shadow cursor-pointer min-h-[108px]`}
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-3">
                   <item.icon
                     strokeWidth={1.5}
                     className={`w-5 h-5 ${
                       item.color === "blue"
-                        ? "text-blue-600"
+                        ? "text-[color:var(--info)]"
                         : item.color === "orange"
-                          ? "text-amber-500"
+                          ? "text-[color:var(--warning)]"
+                          : item.color === "neutral"
+                            ? "text-[color:var(--status-neutral)]"
                           : item.color === "green"
-                            ? "text-green-600"
-                            : "text-red-600"
+                            ? "text-[color:var(--success)]"
+                            : "text-[color:var(--danger)]"
                     }`}
                   />
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-right">
                     {item.label}
                   </span>
                 </div>
                 <div
-                  className={`text-[32px] font-medium leading-none ${
+                  className={`text-[28px] font-medium leading-none ${
                     item.color === "blue"
-                      ? "text-blue-600"
+                      ? "text-[color:var(--info)]"
                       : item.color === "orange"
-                        ? "text-amber-500"
+                        ? "text-[color:var(--warning)]"
+                        : item.color === "neutral"
+                          ? "text-[color:var(--status-neutral)]"
                         : item.color === "green"
-                          ? "text-green-600"
-                          : "text-red-600"
+                          ? "text-[color:var(--success)]"
+                          : "text-[color:var(--danger)]"
                   }`}
                 >
                   {item.value}
@@ -639,7 +670,10 @@ function ReservationsPage() {
             ))}
           </div>
 
-          <div className="bg-card border border-border rounded-lg p-6">
+          <div
+            style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-light)" }}
+            className="border rounded-lg p-6 overflow-x-auto"
+          >
             <div className="flex flex-col md:flex-row gap-4 mb-6">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -651,7 +685,8 @@ function ReservationsPage() {
                     setSearchTerm(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-10 pr-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  style={{ backgroundColor: "var(--input-background)", borderColor: "var(--border-light)" }}
+                  className="w-full pl-10 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
               <div className="flex gap-2">
@@ -662,7 +697,8 @@ function ReservationsPage() {
                       setBranchFilter(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    style={{ backgroundColor: "var(--input-background)", borderColor: "var(--border-light)" }}
+                    className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     {OWNER_BRANCH_FILTER_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -677,7 +713,8 @@ function ReservationsPage() {
                     setStatusFilter(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  style={{ backgroundColor: "var(--input-background)", borderColor: "var(--border-light)" }}
+                  className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {filters
                     .find((f) => f.key === "status")
@@ -689,7 +726,8 @@ function ReservationsPage() {
                 </select>
                 <button
                   onClick={handleExportReservations}
-                  className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center gap-2 text-sm font-medium"
+                  className="px-4 py-2 border border-[var(--border-light)]
+ rounded-md hover:bg-muted transition-colors flex items-center gap-2 text-sm font-medium"
                 >
                   <Download className="w-4 h-4" />
                   Export CSV
@@ -697,10 +735,10 @@ function ReservationsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" style={{ backgroundColor: "var(--bg-card)" }}>
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border">
+                  <tr className="border-b" style={{ borderColor: "var(--border-light)", backgroundColor: "color-mix(in srgb, var(--bg-inset) 30%, transparent)" }}>
                     {columns.slice(0, 5).map((col) => (
                       <th
                         key={col.key}
@@ -710,7 +748,8 @@ function ReservationsPage() {
                             setSortState((prev) => ({
                               key: col.sortKey || col.key,
                               dir:
-                                prev.key === (col.sortKey || col.key) && prev.dir === "asc"
+                                prev.key === (col.sortKey || col.key) &&
+                                prev.dir === "asc"
                                   ? "desc"
                                   : "asc",
                             }));
@@ -732,12 +771,17 @@ function ReservationsPage() {
                 </thead>
                 <tbody>
                   {sortedReservations
-                    .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                    .slice(
+                      (currentPage - 1) * itemsPerPage,
+                      currentPage * itemsPerPage,
+                    )
                     .map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-border hover:bg-gray-50 transition-colors cursor-pointer"
-                        onMouseEnter={() => prefetchReservationDetail(row.id).catch(() => {})}
+                        className="border-b border-[var(--border-light)] hover:bg-muted/30 transition-colors cursor-pointer"
+                        onMouseEnter={() =>
+                          prefetchReservationDetail(row.id).catch(() => {})
+                        }
                       >
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
@@ -747,21 +791,33 @@ function ReservationsPage() {
                               {initials(row.customer)}
                             </div>
                             <div>
-                              <div className="font-medium text-foreground">{row.customer}</div>
-                              <div className="text-xs text-muted-foreground">{row.email}</div>
-                              <div className="text-xs text-muted-foreground">{row.phone}</div>
+                              <div className="font-medium text-foreground">
+                                {row.customer}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {row.email}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {row.phone}
+                              </div>
                             </div>
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="font-medium text-foreground">{row.room}</div>
+                          <div className="font-medium text-foreground">
+                            {row.room}
+                          </div>
                           <div className="text-xs text-muted-foreground">
                             {row.roomType || "Room"}, {row.branch}
                           </div>
                         </td>
                         <td className="py-4 px-4">
                           <StatusBadge
-                            status={checkOverdueReservation(row) ? "overdue" : row.status}
+                            status={
+                              checkOverdueReservation(row)
+                                ? "overdue"
+                                : row.status
+                            }
                           />
                         </td>
                         <td className="py-4 px-4 text-sm text-foreground">
@@ -788,7 +844,7 @@ function ReservationsPage() {
                                   e.stopPropagation();
                                   handleDelete(row.id);
                                 }}
-                                className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-600 rounded-md transition-colors"
+                                className="p-1.5 hover:bg-[color:var(--danger)]/10 text-[color:var(--danger)] rounded-md transition-colors"
                                 title="Delete"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -800,7 +856,10 @@ function ReservationsPage() {
                     ))}
                   {sortedReservations.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                      <td
+                        colSpan={6}
+                        className="py-8 text-center text-muted-foreground"
+                      >
                         No reservations found. Try adjusting your filters.
                       </td>
                     </tr>
@@ -808,21 +867,26 @@ function ReservationsPage() {
                 </tbody>
               </table>
               {totalFiltered > itemsPerPage && (
-                <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-border">
+                <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-[var(--border-light)]">
                   <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1 text-sm border border-[var(--border-light)]
+ rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Previous
                   </button>
                   <span className="px-3 py-1 text-sm text-muted-foreground">
-                    Page {currentPage} of {Math.ceil(totalFiltered / itemsPerPage)}
+                    Page {currentPage} of{" "}
+                    {Math.ceil(totalFiltered / itemsPerPage)}
                   </span>
                   <button
-                    disabled={currentPage === Math.ceil(totalFiltered / itemsPerPage)}
+                    disabled={
+                      currentPage === Math.ceil(totalFiltered / itemsPerPage)
+                    }
                     onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1 text-sm border border-[var(--border-light)]
+ rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
                   </button>
@@ -853,7 +917,9 @@ function ReservationsPage() {
       )}
       <ConfirmModal
         isOpen={confirmModal.open}
-        onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
+        onClose={() =>
+          setConfirmModal((previous) => ({ ...previous, open: false }))
+        }
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}
@@ -866,6 +932,3 @@ function ReservationsPage() {
 }
 
 export default ReservationsPage;
-
-
-

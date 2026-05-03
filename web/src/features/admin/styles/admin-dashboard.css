@@ -4,7 +4,6 @@
 @import "design-tokens.css";
 
 .dashboard-page-bg {
-  background: #ffffff;
   min-height: 100%;
   margin: calc(var(--admin-content-padding, 24px) * -1);
   padding: var(--admin-content-padding, 24px);

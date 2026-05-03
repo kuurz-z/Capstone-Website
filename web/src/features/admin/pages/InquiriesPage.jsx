@@ -1,39 +1,32 @@
-import { useMemo, useState } from "react";
-import { fmtDate } from "../../../shared/utils/dateFormat";
+import { useState, useMemo } from "react";
 import {
-  CheckCheck,
-  ChevronLeft,
-  ChevronRight,
-  MailCheck,
   MessageSquare,
   Search,
+  User,
+  Mail,
+  MapPin,
+  Phone,
+  FileText,
+  Calendar,
+  ChevronDown,
   MoreVertical,
+  Check,
+  X as XIcon,
 } from "lucide-react";
-import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { inquiryApi } from "../../../shared/api/apiClient";
-import { useAuth } from "../../../shared/hooks/useAuth";
+import PageShell from "../components/shared/PageShell";
+import { reservationApi } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
-import ConfirmModal from "../../../shared/components/ConfirmModal";
-import { useInquiries, useInquiryStats } from "../../../shared/hooks/queries/useInquiries";
-import {
-  normalizeBranchFilterValue,
-  syncBranchSearchParam,
-} from "../../../shared/utils/branchFilterQuery.mjs";
+import { useInquiries } from "../../../shared/hooks/queries/useInquiries";
 import InquiryDetailsModal from "../components/InquiryDetailsModal";
-import { StatusBadge } from "../components/shared";
-import "../styles/design-tokens.css";
-import "../styles/admin-inquiries.css";
 
 const getAvatarColor = (initials = "") => {
   const colors = [
-    "bg-[#ec4899] text-white",
-    "bg-[#22c55e] text-white",
-    "bg-[#8b5cf6] text-white",
-    "bg-[#ef4444] text-white",
-    "bg-[#3b82f6] text-white",
-    "bg-[#f59e0b] text-white",
+    "bg-[color:var(--chart-5)] text-white",
+    "bg-[color:var(--chart-1)] text-white",
+    "bg-[color:var(--chart-4)] text-white",
+    "bg-[color:var(--danger)] text-white",
+    "bg-[color:var(--chart-2)] text-white",
+    "bg-[color:var(--warning)] text-white",
   ];
   const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
   const index = charCode % colors.length;
@@ -41,221 +34,59 @@ const getAvatarColor = (initials = "") => {
 };
 
 function initial(name = "") {
-  return (name.trim()[0] || "?").toUpperCase();
+  const parts = name.trim().split(" ");
+  return parts.length >= 2
+    ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+    : (parts[0]?.[0] || "?").toUpperCase();
 }
 
-// fmtDate imported from shared/utils/dateFormat
-
-export default function InquiriesPage({ isEmbedded = false }) {
-  const { user } = useAuth();
-  const isOwner = user?.role === "owner";
-  const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedInquiry, setSelectedInquiry] = useState(null);
-  const [confirmModal, setConfirmModal] = useState({
-    open: false,
-    title: "",
-    message: "",
-    variant: "info",
-    onConfirm: null,
+function fmtDate(dateStr) {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
+}
+
+const SUMMARY_FILTERS = ["", "pending", "resolved"];
+
+function InquiriesPage() {
+  const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const requestedBranch = searchParams.get("branch");
-  const [branchFilter, setBranchFilter] = useState(() =>
-    normalizeBranchFilterValue({
-      requestedBranch: isOwner ? requestedBranch : null,
-      allValue: "",
-    }),
-  );
+  const [branchFilter, setBranchFilter] = useState("");
   const [sortBy, setSortBy] = useState("recent");
   const [page, setPage] = useState(1);
-  const LIMIT = 10;
+  const limit = 10;
 
-  useEffect(() => {
-    const nextBranch = normalizeBranchFilterValue({
-      requestedBranch: isOwner ? requestedBranch : null,
-      allValue: "",
-    });
+  const {
+    data,
+    isLoading: loading,
+    refetch,
+  } = useInquiries({
+    page,
+    limit,
+    search: searchTerm,
+    status: statusFilter,
+    branch: branchFilter,
+    sortBy,
+  });
 
-    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
-  }, [isOwner, requestedBranch]);
+  const inquiries = data?.inquiries || [];
+  const total = data?.total || 0;
+  const totalPages = Math.ceil(total / limit);
 
-  useEffect(() => {
-    if (isEmbedded) return;
-    if (!user?.role) return;
 
-    const nextParams = syncBranchSearchParam(searchParams, branchFilter, {
-      enabled: isOwner,
-      allValue: "",
-    });
-
-    if (nextParams.toString() === searchParams.toString()) return;
-    setSearchParams(nextParams, { replace: true });
-  }, [branchFilter, isEmbedded, isOwner, searchParams, setSearchParams, user?.role]);
-
-  const params = useMemo(() => {
-    const nextParams = { page, limit: LIMIT };
-    if (statusFilter) nextParams.status = statusFilter;
-    if (searchTerm) nextParams.search = searchTerm;
-    if (branchFilter) nextParams.branch = branchFilter;
-    return nextParams;
-  }, [branchFilter, page, searchTerm, statusFilter]);
-
-  const { data: inquiriesData, isLoading: loading } = useInquiries(params);
-  const { data: statsData } = useInquiryStats({ enabled: !isEmbedded });
-
-  const rawInquiries = inquiriesData?.inquiries || [];
-  const inquiries = useMemo(() => {
-    const getName = (inquiry) =>
-      inquiry.name || `${inquiry.firstName || ""} ${inquiry.lastName || ""}`.trim() || "";
-
-    if (sortBy === "recent") {
-      return rawInquiries;
-    }
-
-    const sorted = [...rawInquiries];
-    if (sortBy === "oldest") {
-      sorted.sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
-    } else if (sortBy === "name-az") {
-      sorted.sort((left, right) => getName(left).localeCompare(getName(right)));
-    } else if (sortBy === "name-za") {
-      sorted.sort((left, right) => getName(right).localeCompare(getName(left)));
-    }
-    return sorted;
-  }, [rawInquiries, sortBy]);
-  const totalPages = inquiriesData?.pagination?.pages || 1;
-
-  const stats = {
-    total: statsData?.total || 0,
-    new: statsData?.byStatus?.pending || 0,
-    responded: statsData?.byStatus?.resolved || 0,
-  };
-
-  const refetchAll = () => queryClient.invalidateQueries({ queryKey: ["inquiries"] });
-
-  const handleArchive = (inquiryId) => {
-    setConfirmModal({
-      open: true,
-      title: "Archive Inquiry",
-      message: "Are you sure you want to archive this inquiry?",
-      variant: "warning",
-      confirmText: "Archive",
-      onConfirm: async () => {
-        setConfirmModal((previous) => ({ ...previous, open: false }));
-        try {
-          await inquiryApi.archive(inquiryId);
-          refetchAll();
-          showNotification("Inquiry archived successfully", "success", 3000);
-        } catch (error) {
-          console.error("Error archiving inquiry:", error);
-          showNotification(error.message || "Failed to archive inquiry", "error", 3000);
-        }
-      },
-    });
-  };
-
-  const summaryItems = useMemo(
-    () => [
-      { label: "New Inquiries", value: stats.new, icon: MessageSquare, color: "orange" },
-      { label: "Responded", value: stats.responded, icon: MailCheck, color: "blue" },
-      { label: "Resolved", value: stats.responded, icon: CheckCheck, color: "green" },
-    ],
-    [stats.new, stats.responded],
-  );
-
-  const summaryColorClasses = {
-    blue: {
-      base: "border-blue-100 bg-blue-50/60",
-      active: "border-blue-300 bg-blue-100/80 shadow-sm ring-1 ring-blue-200",
-      icon: "text-blue-600",
-      label: "text-blue-700",
-      value: "text-blue-900",
-    },
-    orange: {
-      base: "border-amber-100 bg-amber-50/60",
-      active: "border-amber-300 bg-amber-100/80 shadow-sm ring-1 ring-amber-200",
-      icon: "text-amber-600",
-      label: "text-amber-700",
-      value: "text-amber-900",
-    },
-    green: {
-      base: "border-emerald-100 bg-emerald-50/60",
-      active: "border-emerald-300 bg-emerald-100/80 shadow-sm ring-1 ring-emerald-200",
-      icon: "text-emerald-600",
-      label: "text-emerald-700",
-      value: "text-emerald-900",
-    },
-    red: {
-      base: "border-red-100 bg-red-50/60",
-      active: "border-red-300 bg-red-100/80 shadow-sm ring-1 ring-red-200",
-      icon: "text-red-600",
-      label: "text-red-700",
-      value: "text-red-900",
-    },
-  };
-
-  const summaryFilterValues = ["", "resolved", "pending"];
 
   return (
-    <div className={isEmbedded ? "" : "min-h-screen w-full"}>
-      <div className={isEmbedded ? "" : "w-full px-4 py-4 sm:px-6 lg:px-8"}>
-        {!isEmbedded && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-            {summaryItems.map((item, index) => {
-              const Icon = item.icon;
-              const isActive = statusFilter === summaryFilterValues[index];
-              const palette = summaryColorClasses[item.color] || summaryColorClasses.orange;
+    <PageShell>
 
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => {
-                    setStatusFilter(summaryFilterValues[index]);
-                    setPage(1);
-                  }}
-                  className={`bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer ${
-                    isActive ? "ring-2 ring-primary" : ""
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <Icon
-                      strokeWidth={1.5}
-                      className={`w-5 h-5 ${
-                        item.color === "blue"
-                          ? "text-blue-600"
-                          : item.color === "orange"
-                            ? "text-amber-500"
-                            : item.color === "green"
-                              ? "text-green-600"
-                              : "text-red-600"
-                      }`}
-                    />
-                    <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">
-                      {item.label}
-                    </span>
-                  </div>
-                  <div
-                    className={`text-[32px] font-medium leading-none ${
-                      item.color === "blue"
-                        ? "text-blue-600"
-                        : item.color === "orange"
-                          ? "text-amber-500"
-                          : item.color === "green"
-                            ? "text-green-600"
-                            : "text-red-600"
-                    }`}
-                  >
-                    {item.value}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <PageShell.Content>
+        <div className="flex flex-col gap-4 mb-6">
 
-        <div className="bg-card border border-border rounded-lg p-6">
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
@@ -266,7 +97,11 @@ export default function InquiriesPage({ isEmbedded = false }) {
                   setPage(1);
                 }}
                 placeholder="Search inquiries..."
-                className="w-full pl-10 pr-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                style={{
+                  backgroundColor: "var(--input-background)",
+                  borderColor: "var(--border-light)",
+                }}
+                className="w-full pl-10 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
@@ -277,7 +112,11 @@ export default function InquiriesPage({ isEmbedded = false }) {
                   setBranchFilter(event.target.value);
                   setPage(1);
                 }}
-                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                style={{
+                  backgroundColor: "var(--input-background)",
+                  borderColor: "var(--border-light)",
+                }}
+                className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">All Branches</option>
                 <option value="gil-puyat">Gil Puyat</option>
@@ -290,7 +129,11 @@ export default function InquiriesPage({ isEmbedded = false }) {
                   setStatusFilter(event.target.value);
                   setPage(1);
                 }}
-                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                style={{
+                  backgroundColor: "var(--input-background)",
+                  borderColor: "var(--border-light)",
+                }}
+                className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">All Status</option>
                 <option value="pending">Pending</option>
@@ -300,7 +143,11 @@ export default function InquiriesPage({ isEmbedded = false }) {
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value)}
-                className="px-4 py-2 bg-input-background border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                style={{
+                  backgroundColor: "var(--input-background)",
+                  borderColor: "var(--border-light)",
+                }}
+                className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="recent">Most Recent</option>
                 <option value="oldest">Oldest First</option>
@@ -313,13 +160,19 @@ export default function InquiriesPage({ isEmbedded = false }) {
           <div className="space-y-4">
             {loading ? (
               <div className="p-12 text-center">
-                <p className="text-sm text-muted-foreground">Loading inquiries...</p>
+                <p className="text-sm text-muted-foreground">
+                  Loading inquiries...
+                </p>
               </div>
             ) : inquiries.length === 0 ? (
               <div className="p-12 text-center">
                 <MessageSquare className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
-                <p className="text-base font-medium text-foreground">No inquiries found</p>
-                <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters.</p>
+                <p className="text-base font-medium text-foreground">
+                  No inquiries found
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Try adjusting your filters.
+                </p>
               </div>
             ) : (
               inquiries.map((inquiry) => {
@@ -333,7 +186,11 @@ export default function InquiriesPage({ isEmbedded = false }) {
                   <div
                     key={inquiry._id}
                     onClick={() => setSelectedInquiry(inquiry)}
-                    className="flex items-start justify-between p-5 bg-card border border-border rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
+                    style={{
+                      backgroundColor: "var(--bg-card)",
+                      borderColor: "var(--border-light)",
+                    }}
+                    className="flex items-start justify-between p-5 border rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start gap-4 flex-1">
                       <div
@@ -344,8 +201,12 @@ export default function InquiriesPage({ isEmbedded = false }) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between mb-2">
                           <div>
-                            <h3 className="font-semibold text-foreground">{name}</h3>
-                            <p className="text-sm text-muted-foreground">{inquiry.email || "-"}</p>
+                            <h3 className="font-semibold text-foreground">
+                              {name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {inquiry.email || "-"}
+                            </p>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">
@@ -373,7 +234,19 @@ export default function InquiriesPage({ isEmbedded = false }) {
                               {inquiry.subject || inquiry.inquiryType}
                             </span>
                           )}
-                          <StatusBadge status={status} />
+                          <span
+                            style={{
+                              backgroundColor: status === "resolved" 
+                                ? "var(--status-success-bg)" 
+                                : "var(--status-warning-bg)",
+                              color: status === "resolved" 
+                                ? "var(--status-success)" 
+                                : "var(--status-warning)",
+                            }}
+                            className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
+                          >
+                            {status}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -382,55 +255,50 @@ export default function InquiriesPage({ isEmbedded = false }) {
               })
             )}
           </div>
-        </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-border">
-            <button
-              className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={page <= 1}
-              onClick={() => setPage((previous) => Math.max(1, previous - 1))}
-              title="Previous page"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-1 text-sm text-muted-foreground">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              className="px-3 py-1 text-sm border border-border rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={page >= totalPages}
-              onClick={() => setPage((previous) => Math.min(totalPages, previous + 1))}
-              title="Next page"
-            >
-              Next
-            </button>
-          </div>
-        )}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center mt-6">
+              <p className="text-sm text-muted-foreground">
+                Showing {inquiries.length} of {total} results
+              </p>
+              <div className="flex gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  style={{
+                    backgroundColor: "var(--bg-card)",
+                    borderColor: "var(--border-light)",
+                  }}
+                  className="px-3 py-1 text-sm border rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  style={{
+                    backgroundColor: "var(--bg-card)",
+                    borderColor: "var(--border-light)",
+                  }}
+                  className="px-3 py-1 text-sm border rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </PageShell.Content>
 
       {selectedInquiry && (
         <InquiryDetailsModal
           inquiry={selectedInquiry}
           onClose={() => setSelectedInquiry(null)}
-          onUpdate={() => {
-            refetchAll();
-            setSelectedInquiry(null);
-          }}
-          onArchive={handleArchive}
+          onUpdate={refetch}
         />
       )}
-      <ConfirmModal
-        isOpen={confirmModal.open}
-        onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
-        onConfirm={confirmModal.onConfirm}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        variant={confirmModal.variant}
-        confirmText={confirmModal.confirmText || "Confirm"}
-      />
-      {!isEmbedded && stats.total > 0 && <div className="sr-only">{stats.total}</div>}
-      </div>
-    </div>
+    </PageShell>
   );
 }
 
+export default InquiriesPage;

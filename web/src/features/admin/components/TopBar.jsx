@@ -251,20 +251,6 @@ export default function TopBar({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    appNavigate("/admin/users");
-                  }}
-                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-[var(--bg-hover)]"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  <User className="h-4 w-4" />
-                  Profile
-                </button>
-
-                <button
-                  type="button"
-                  role="menuitem"
                   onClick={handleLogout}
                   disabled={logoutInProgress}
                   className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
