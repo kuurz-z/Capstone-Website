@@ -40,19 +40,18 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
   // Check authentication requirement
   if (requireAuth && !isAuthenticated) {
     const redirectPath = requiredRole === "applicant" ? "/" : "/signin";
-    return (
-      <Navigate
-        to={redirectPath}
-        replace
-        state={{
-          flash: {
-            type: "info",
-            message:
-              "Sign in to discover available rooms and reserve your space",
-          },
-        }}
-      />
-    );
+    const redirectState =
+      requiredRole === USER_ROLES.APPLICANT
+        ? {
+            flash: {
+              type: "info",
+              message:
+                "Sign in to discover available rooms and reserve your space",
+            },
+          }
+        : undefined;
+
+    return <Navigate to={redirectPath} replace state={redirectState} />;
   }
 
   // Check role requirements using custom claims from ID token
