@@ -252,8 +252,8 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
 /* ── Visit step: date picker ── */
 .rf-date-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 12px;
   margin-bottom: 8px;
 }
 .rf-date-btn {
@@ -266,8 +266,8 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
 }
 .rf-date-card {
   box-sizing: border-box;
-  height: 74px;
-  padding: 10px 10px;
+  height: 86px;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 2px solid var(--rf-border-card);
   background: var(--rf-surface);
@@ -308,19 +308,22 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   font-size: 16px;
   font-weight: 700;
   color: var(--rf-text-secondary);
+  white-space: nowrap;
 }
 .rf-date-card.selected .rf-date-num { color: var(--rf-text-heading); }
 .rf-date-reason {
   max-width: 100%;
-  margin-top: 3px;
+  min-height: 20px;
+  margin-top: 4px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 9px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 9.5px;
   font-weight: 500;
-  line-height: 1.1;
+  line-height: 1.12;
   color: var(--rf-error-text, #b91c1c);
-  opacity: 0.85;
+  opacity: 0.78;
 }
 .rf-today-pill {
   position: absolute;
