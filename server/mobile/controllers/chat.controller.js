@@ -445,12 +445,18 @@ async function getConversationMessages(req, res) {
       ),
     ]);
 
-    const messages = await db.collection(CHAT_MESSAGES)
-      .find({ conversationId: conversation._id })
-      .sort({ createdAt: 1 })
-      .toArray();
+    const [messages, freshConversation] = await Promise.all([
+      db.collection(CHAT_MESSAGES)
+        .find({ conversationId: conversation._id })
+        .sort({ createdAt: 1 })
+        .toArray(),
+      db.collection(CHAT_CONVERSATIONS).findOne({ _id: conversation._id }),
+    ]);
 
-    return res.json({ messages: messages.map(serializeMessage) });
+    return res.json({
+      messages: messages.map(serializeMessage),
+      conversation: serializeConversation(freshConversation),
+    });
   } catch (error) {
     return sendError(res, error, 'Failed to load messages.');
   }
@@ -538,9 +544,57 @@ async function sendMessage(req, res) {
   }
 }
 
+async function closeConversation(req, res) {
+  try {
+    const db = getDb();
+    const tenant = await resolveTenantContext(db, req.user);
+    const conversation = await getTenantConversation(db, req.params.conversationId, req.user);
+
+    if (conversation.status === 'closed') {
+      return res.json({ conversation: serializeConversation(conversation) });
+    }
+
+    const note = String(req.body?.note || '').trim().slice(0, 500) || 'Tenant closed the conversation.';
+    const now = new Date();
+
+    await db.collection(CHAT_CONVERSATIONS).updateOne(
+      { _id: conversation._id },
+      {
+        $set: {
+          status: 'closed',
+          closedAt: now,
+          closedBy: tenant.mongoId,
+          closingNote: note,
+          updatedAt: now,
+        },
+        $push: {
+          statusHistory: {
+            $each: [{
+              status: 'closed',
+              note,
+              actorId: tenant.mongoId,
+              actorName: tenant.tenantName,
+              createdAt: now,
+            }],
+            $slice: -25,
+          },
+        },
+      },
+    );
+
+    const closed = await db.collection(CHAT_CONVERSATIONS).findOne({ _id: conversation._id });
+    safeEmitChatAdmins(closed.branch, 'chat:conversation-updated', serializeConversation(closed));
+
+    return res.json({ conversation: serializeConversation(closed) });
+  } catch (error) {
+    return sendError(res, error, 'Failed to close conversation.');
+  }
+}
+
 module.exports = {
   startConversation,
   getMyConversations,
   getConversationMessages,
   sendMessage,
+  closeConversation,
 };
