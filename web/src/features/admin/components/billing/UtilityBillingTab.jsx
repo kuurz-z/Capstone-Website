@@ -1401,15 +1401,6 @@ const UtilityBillingTab = ({ utilityType, isActive = true }) => {
               className="rounded-lg border border-border bg-card px-2 py-2 text-xs text-muted-foreground disabled:bg-muted focus:outline-none"
               style={{ outlineColor: "var(--ring)" }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = "var(--ring)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "";
-                e.currentTarget.style.boxShadow = "";
-              }}
-              onFocus={(e) => {
                 e.currentTarget.style.borderColor = "var(--primary)";
                 e.currentTarget.style.boxShadow =
                   "0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent)";

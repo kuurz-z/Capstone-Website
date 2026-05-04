@@ -5,7 +5,7 @@ import { showNotification } from "../utils/notification";
 export function useRouteFlash() {
   const location = useLocation();
   const navigate = useNavigate();
-  const processedFlashRef = useRef(false);
+  const processedFlashRef = useRef(null);
 
   const routePath = useMemo(
     () => `${location.pathname}${location.search}${location.hash}`,
@@ -16,22 +16,26 @@ export function useRouteFlash() {
     const routeFlash = location.state?.flash;
 
     if (!routeFlash?.message) {
-      processedFlashRef.current = false;
+      processedFlashRef.current = null;
       return;
     }
 
-    if (processedFlashRef.current) {
+    const flashKey = [
+      routePath,
+      routeFlash.type || "info",
+      routeFlash.message,
+    ].join("|");
+
+    if (processedFlashRef.current === flashKey) {
       return; // Already processed this state flash to prevent stacking/duplication
     }
-    processedFlashRef.current = true;
+    processedFlashRef.current = flashKey;
 
-    setTimeout(() => {
-      showNotification(
-        routeFlash.message,
-        routeFlash.type || "info",
-        routeFlash.duration || 5000,
-      );
-    }, 400);
+    showNotification(
+      routeFlash.message,
+      routeFlash.type || "info",
+      routeFlash.duration || 5000,
+    );
 
     const nextState = { ...(location.state || {}) };
     delete nextState.flash;

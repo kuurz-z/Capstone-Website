@@ -53,6 +53,26 @@ export const reservationApi = {
   getTenantActionContext: (reservationId) =>
     authFetch(`/reservations/${reservationId}/tenant-actions/context`),
 
+  getVisitAvailability: (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+    ).toString();
+    return authFetch(`/reservations/visit-availability${queryString ? `?${queryString}` : ""}`);
+  },
+
+  getVisitAvailabilitySettings: (branch) => {
+    const queryString = new URLSearchParams({ branch }).toString();
+    return authFetch(`/reservations/visit-availability/settings?${queryString}`);
+  },
+
+  updateVisitAvailabilitySettings: (branch, data) => {
+    const queryString = new URLSearchParams({ branch }).toString();
+    return authFetch(`/reservations/visit-availability/settings?${queryString}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
   /**
    * Get reservation by ID
    */

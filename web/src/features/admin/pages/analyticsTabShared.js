@@ -94,11 +94,11 @@ export function AnalyticsInsightSection({
  return (
  <ReportChartPanel
  title="AI summary"
- subtitle={`Simple explanation of this ${reportLabel} report`}
+ subtitle={`AI-generated insight for this ${reportLabel} report`}
  >
  <AnalyticsInsightPanel
  title={summaryTitle}
- subtitle="Simple AI explanation"
+ subtitle="AI-generated report insight"
  data={data}
  isLoading={isLoading}
  isError={isError}

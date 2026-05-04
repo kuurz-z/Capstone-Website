@@ -7,6 +7,7 @@ import {
  Wrench,
  DollarSign,
  ShieldAlert,
+ PanelsTopLeft,
 } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import PageShell from "../components/shared/PageShell";
@@ -17,6 +18,7 @@ import {
 import AnalyticsOccupancyTab from "./AnalyticsOccupancyTab";
 import AnalyticsBillingTab from "./AnalyticsBillingTab";
 import AnalyticsOperationsTab from "./AnalyticsOperationsTab";
+import AnalyticsConsolidatedTab from "./AnalyticsConsolidatedTab";
 import AnalyticsFinancialsTab from "./AnalyticsFinancialsTab";
 import AnalyticsMonitoringTab from "./AnalyticsMonitoringTab";
 import "../styles/admin-reports.css";
@@ -28,6 +30,7 @@ const BASE_TABS = [
 ];
 
 const OWNER_TABS = [
+ { key: "consolidated", label: "Consolidated", icon: PanelsTopLeft },
  { key: "financials", label: "Financials", icon: DollarSign },
  { key: "monitoring", label: "System Monitoring", icon: ShieldAlert },
 ];
@@ -38,6 +41,8 @@ function resolveTabComponent(tabKey, sharedProps) {
  return <AnalyticsBillingTab {...sharedProps} />;
  case "operations":
  return <AnalyticsOperationsTab {...sharedProps} />;
+ case "consolidated":
+ return <AnalyticsConsolidatedTab {...sharedProps} />;
  case "financials":
  return <AnalyticsFinancialsTab {...sharedProps} />;
  case "monitoring":
