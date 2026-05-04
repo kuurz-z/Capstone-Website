@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.log
+error.txt
+uploads/bills/*.pdf
+.DS_Store
+serviceAccountKey.json
+google-vision-key.json
+config/google-vision-key.json

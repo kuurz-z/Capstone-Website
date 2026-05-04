@@ -1,0 +1,44 @@
+@import "../../styles/design-tokens.css";
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 52px 24px;
+  text-align: center;
+  gap: 12px;
+}
+
+.empty-state__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-inset);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.empty-state__icon svg {
+  width: 24px;
+  height: 24px;
+  opacity: 0.6;
+}
+
+.empty-state__title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.empty-state__description {
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 300px;
+  line-height: 1.5;
+}

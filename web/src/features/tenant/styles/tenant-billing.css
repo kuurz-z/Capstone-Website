@@ -1,0 +1,629 @@
+/* ============================================================================
+   TENANT BILLING DASHBOARD (UI Tokens V2)
+   ============================================================================ */
+
+.tenant-billing {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  color: var(--text-primary);
+}
+
+.tenant-billing .billing-page-header {
+  margin-bottom: 2rem;
+}
+
+.tenant-billing .billing-page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 0.25rem;
+}
+
+.tenant-billing .billing-page-header p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* ─── Current Bill Section ─── */
+
+.current-bill-hero {
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.bill-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.bill-period {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.bill-period strong {
+  font-size: 1.1rem;
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-heading);
+}
+
+/* Badges */
+.bill-status-badge {
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid var(--border-card);
+}
+.bill-status-badge.pending { background: var(--surface-card); color: var(--color-warning); border-color: var(--color-warning); }
+.bill-status-badge.paid { background: var(--surface-card); color: var(--color-success); border-color: var(--color-success); }
+.bill-status-badge.overdue { background: var(--surface-card); color: var(--color-danger); border-color: var(--color-danger); }
+.bill-status-badge.partially-paid { background: var(--surface-card); color: var(--color-success); border-color: var(--color-success); }
+.bill-status-badge.pending-verification { background: var(--surface-card); color: var(--color-accent); border-color: var(--color-accent); }
+
+.bill-hero-amount {
+  font-size: 2.25rem;
+  font-weight: 500;
+  color: var(--text-heading);
+  margin-bottom: 0.5rem;
+}
+
+.bill-hero-due {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.bill-hero-due strong {
+  color: var(--color-danger);
+}
+
+.bill-hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.btn-pay-online {
+  background: var(--color-success);
+  color: #fff;
+  border: 1px solid transparent;
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.btn-pay-online:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.btn-pay-online:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-upload-proof {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-card);
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.btn-upload-proof:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.btn-upload-proof:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.proof-status-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+  font-size: 0.8rem;
+  border: 1px solid var(--border-card);
+}
+
+/* ─── Charge Breakdown Card ─── */
+
+.charges-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.charges-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.charge-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--surface-hover);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.charge-line:last-child {
+  border-bottom: none;
+}
+.charge-line .charge-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.charge-line .charge-amount {
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+.charge-line.penalty { color: var(--color-danger); }
+.charge-line.penalty .charge-amount { color: var(--color-danger); font-weight: 600; }
+.charge-line.discount { color: var(--color-success); }
+.charge-line.discount .charge-amount { color: var(--color-success); }
+
+.charge-line.total {
+  border-top: 1px solid var(--border-card);
+  border-bottom: none;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-heading);
+}
+.charge-line.total .charge-amount {
+  font-size: 1.1rem;
+}
+
+.prorate-info {
+  background: var(--surface-page);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.prorate-info svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ─── Bill History ─── */
+
+.bill-history-section {
+  margin-top: 2rem;
+}
+.bill-history-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bill-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bill-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.bill-history-item:hover {
+  border-color: var(--text-secondary);
+}
+
+.bill-history-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.bill-history-left .bill-month {
+  font-weight: 500;
+  color: var(--text-heading);
+  font-size: 0.9rem;
+}
+.bill-history-left .bill-room {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.bill-history-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.bill-history-right .bill-amount {
+  font-weight: 600;
+  color: var(--text-heading);
+  font-size: 0.95rem;
+}
+
+/* ─── Payment Proof Modal ─── */
+
+.proof-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.proof-modal {
+  background: var(--surface-card);
+  border-radius: var(--radius-md);
+  max-width: 480px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 2rem;
+  border: 1px solid var(--border-card);
+}
+.proof-modal h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 0.25rem;
+}
+.proof-modal .modal-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0 0 1.5rem;
+}
+.proof-upload-zone {
+  border: 2px dashed var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+}
+.proof-upload-zone:hover {
+  border-color: var(--text-secondary);
+}
+.proof-upload-zone.has-image {
+  padding: 0.5rem;
+  border-style: solid;
+}
+.upload-placeholder {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.form-group {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-heading);
+}
+.form-group input, .form-group select {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  background: var(--surface-page);
+  color: var(--text-primary);
+}
+.proof-modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+.btn-cancel-proof {
+  background: transparent;
+  border: 1px solid var(--border-card);
+  color: var(--text-secondary);
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 500;
+}
+.btn-submit-proof {
+  background: var(--text-heading);
+  color: var(--surface-card);
+  border: none;
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 500;
+}
+.btn-submit-proof:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── State Modifiers ─── */
+.no-bills-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+/* ─── Receipt Card ─── */
+.receipt-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.receipt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--surface-hover);
+}
+.btn-download-receipt {
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.btn-download-receipt:hover {
+  background: var(--surface-hover);
+}
+.receipt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+.receipt-label {
+  color: var(--text-secondary);
+}
+.receipt-value {
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+/* ─── Utilities Segment Expansion ─── */
+.electricity-breakdown-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+.electricity-breakdown-toggle {
+  width: 100%;
+  background: var(--surface-hover);
+  border: none;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-card);
+  transition: background-color 0.2s ease, opacity 0.2s;
+}
+
+.electricity-breakdown-toggle:hover {
+  background: var(--surface-card);
+}
+
+.electricity-breakdown-toggle:active {
+  opacity: 0.8;
+}
+.electricity-breakdown-toggle__label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+.electricity-breakdown-body {
+  padding: 1.5rem;
+}
+
+.electricity-breakdown-summary {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--surface-hover);
+}
+.electricity-breakdown-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.electricity-breakdown-stat__label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.electricity-breakdown-stat__value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.electricity-segment-table-wrap {
+  overflow-x: auto;
+}
+.electricity-segment-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.electricity-segment-table th, .electricity-segment-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--surface-hover);
+  font-size: 0.85rem;
+}
+.electricity-segment-table th {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.electricity-segment-table td {
+  color: var(--text-primary);
+}
+
+/* History rows */
+.elec-history {
+  margin-top: 2rem;
+}
+.elec-history__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 1rem;
+}
+.elec-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.elec-period-row {
+  background: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.elec-period-row__header {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.elec-period-row__header:hover {
+  background: var(--surface-hover);
+}
+
+.elec-period-row__header:active {
+  background: var(--border-card);
+}
+.elec-period-row__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+}
+.elec-period-row__room {
+  font-weight: 500;
+  color: var(--text-heading);
+}
+.elec-period-row__date {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.elec-period-row__stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-right: 1rem;
+}
+.elec-period-row__amount {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.elec-period-row__body {
+  padding: 1.25rem;
+  background: var(--surface-page);
+  border-top: 1px solid var(--border-card);
+}
+.elec-period-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.breakdown-anim-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease-out;
+}
+.breakdown-anim-wrapper.is-open {
+  grid-template-rows: 1fr;
+}
+.breakdown-anim-inner {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease-out, visibility 0.2s ease-out;
+}
+.breakdown-anim-wrapper.is-open .breakdown-anim-inner {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.3s ease-in, visibility 0s;
+}

@@ -1,0 +1,748 @@
+/* ============================================
+   FLOATING INPUT — Material-style labels
+   ============================================ */
+
+:root {
+  --fi-border: #e2e8f0;
+  --fi-border-focus: #b0bec5;
+  --fi-focus: #D4AF37;
+  --fi-valid: #10b981;
+  --fi-error: #ef4444;
+  --fi-label: #94a3b8;
+  --fi-label-active: #64748b;
+  --fi-text: #1e293b;
+  --fi-bg: #ffffff;
+  --fi-radius: 12px;
+}
+
+/* ── Container ── */
+.floating-field {
+  position: relative;
+  margin-bottom: 0;
+}
+
+/* ── Wrapper (input + label) ── */
+.floating-field__wrapper {
+  position: relative;
+  border: 1px solid var(--border-color, var(--fi-border));
+  border-radius: var(--fi-radius);
+  background: var(--fi-bg);
+  transition: border-color 0.2s ease;
+}
+
+.floating-field__wrapper.focused {
+  border-color: #cbd5e1;
+}
+
+/* ── Input ── */
+.floating-field__input {
+  width: 100%;
+  padding: 26px 16px 8px;
+  font-size: 15px;
+  font-weight: 450;
+  color: var(--fi-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  line-height: 1.4;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.floating-field__input::placeholder {
+  color: transparent;
+}
+
+/* Kill Chrome autofill blue background — uses fi-bg so it works in both themes */
+.floating-field__input:-webkit-autofill,
+.floating-field__input:-webkit-autofill:hover,
+.floating-field__input:-webkit-autofill:focus,
+.floating-field__input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  -webkit-text-fill-color: var(--fi-text) !important;
+  caret-color: var(--fi-text) !important;
+  transition: background-color 600000s 0s, color 600000s 0s !important;
+}
+.floating-field__input:autofill {
+  -webkit-box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  box-shadow: 0 0 0 9999px var(--fi-bg) inset !important;
+  -webkit-text-fill-color: var(--fi-text) !important;
+}
+
+.floating-field__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Floating Label ── */
+.floating-field__label {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--fi-label);
+  pointer-events: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: left center;
+  line-height: 1;
+}
+
+/* Float up when focused or has value — inside the field, no bg needed */
+.floating-field__input:focus ~ .floating-field__label,
+.floating-field__input:not(:placeholder-shown) ~ .floating-field__label {
+  top: 8px;
+  transform: scale(0.72);
+  color: var(--fi-label-active);
+  font-weight: 500;
+  padding: 0;
+}
+
+.floating-field__wrapper.focused .floating-field__label {
+  color: var(--fi-focus);
+}
+
+.floating-field__wrapper.has-error .floating-field__label {
+  color: var(--fi-error);
+}
+
+.floating-field__wrapper.is-valid:not(.focused) .floating-field__label {
+  color: var(--fi-valid);
+}
+
+/* ── End Adornment (eye toggle, etc.) ── */
+.floating-field__adornment {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.floating-field__adornment button {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #94a3b8;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.floating-field__adornment button:hover {
+  color: #64748b;
+}
+
+/* ── Error Message ── */
+.floating-field__error {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fi-error);
+  margin-top: 6px;
+  padding-left: 4px;
+}
+
+/* ── Character Counter ── */
+.floating-field__counter {
+  font-size: 12px;
+  margin-top: 6px;
+  padding-right: 4px;
+}
+
+/* ── Textarea Variant ── */
+.floating-field__textarea {
+  min-height: 100px;
+  line-height: 1.6;
+}
+
+.floating-field__label--textarea {
+  top: 18px;
+  transform: translateY(0);
+}
+
+.floating-field__textarea:focus ~ .floating-field__label--textarea,
+.floating-field__textarea:not(:placeholder-shown) ~ .floating-field__label--textarea {
+  top: 0;
+  transform: translateY(-50%) scale(0.72);
+}
+
+/* ── Select Variant ── */
+.floating-field__select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 40px;
+}
+
+/* Always float label for select when it has a value */
+.floating-field__wrapper.active .floating-field__select ~ .floating-field__label {
+  top: 0;
+  transform: translateY(-50%) scale(0.72);
+  color: var(--fi-label-active);
+  font-weight: 500;
+  background: var(--fi-bg);
+  padding: 0 6px;
+}
+
+/* ── Fix: use variable bg instead of hardcoded white ── */
+.floating-field__input:focus ~ .floating-field__label,
+.floating-field__input:not(:placeholder-shown) ~ .floating-field__label {
+  background: var(--fi-bg);
+}
+
+/* ── Password input needs right padding for adornment ── */
+.floating-field__wrapper:has(.floating-field__adornment) .floating-field__input {
+  padding-right: 48px;
+}
+
+/* ============================================
+   DARK MODE — Landing Page Floating Inputs
+   ============================================ */
+.landing-page[data-theme="dark"] {
+  --fi-border: #1E293B;
+  --fi-focus: #D4AF37;
+  --fi-valid: #10b981;
+  --fi-error: #ef4444;
+  --fi-label: #64748b;
+  --fi-label-active: #94a3b8;
+  --fi-text: #f1f5f9;
+  --fi-bg: #0B1120;
+}
+
+/* Light mode for landing page (explicit, in case auth-forms sets different global) */
+.landing-page[data-theme="light"] {
+  --fi-border: #e2e8f0;
+  --fi-focus: #D4AF37;
+  --fi-valid: #10b981;
+  --fi-error: #ef4444;
+  --fi-label: #94a3b8;
+  --fi-label-active: #64748b;
+  --fi-text: #1e293b;
+  --fi-bg: #ffffff;
+}
+
+/* ============================================
+   AUTH FORMS — Shared refreshed styles
+   ============================================ */
+
+/* ── Auth Form Container ── */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ── Auth Header ── */
+.auth-header {
+  margin-bottom: 8px;
+}
+
+.auth-header__title {
+  font-size: 32px;
+  font-weight: 600;
+  color: #0A1628;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+.auth-header__subtitle {
+  font-size: 15px;
+  color: #64748b;
+  margin: 0;
+  font-weight: 400;
+}
+
+.auth-header__subtitle a,
+.auth-header__subtitle button {
+  color: #D4AF37;
+  font-weight: 500;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+}
+
+.auth-header__subtitle a:hover,
+.auth-header__subtitle button:hover {
+  text-decoration: underline;
+}
+
+/* ── Submit Button ── */
+.auth-btn-primary {
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 12px;
+  background: #D4AF37;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-btn-primary:hover:not(:disabled) {
+  background: #B9921F;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
+}
+
+.auth-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
+}
+
+.auth-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Divider ── */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.auth-divider__text {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Google Button ── */
+.auth-btn-google {
+  width: 100%;
+  padding: 14px 24px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.auth-btn-google:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.auth-btn-google:active:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.auth-btn-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-btn-google svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* ── Remember Me / Forgot Password Row ── */
+.auth-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.auth-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.auth-remember input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid #D4AF37;
+  background: transparent;
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.auth-remember input[type="checkbox"]:checked {
+  background: #D4AF37;
+  border-color: #D4AF37;
+}
+
+.auth-remember input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 5px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+
+.auth-remember span {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.auth-forgot-link {
+  font-size: 14px;
+  color: #D4AF37;
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-forgot-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Terms checkbox ── */
+.auth-terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.auth-terms input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 2px;
+  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid #D4AF37;
+  background: transparent;
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.auth-terms input[type="checkbox"]:checked {
+  background: #D4AF37;
+  border-color: #D4AF37;
+}
+
+.auth-terms input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 6px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+
+.auth-terms span {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.auth-terms button {
+  color: #D4AF37;
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+}
+
+.auth-terms button:hover {
+  text-decoration: underline;
+}
+
+/* ── Password Strength (compact) ── */
+.password-strength {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  margin-top: 8px;
+}
+
+.password-strength__bar-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.password-strength__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.password-strength__level {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.password-strength__track {
+  height: 4px;
+  border-radius: 4px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.password-strength__fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.password-strength__checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+
+.password-strength__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  transition: color 0.2s ease;
+}
+
+.password-strength__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+/* ── Spinner ── */
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+.auth-spinner {
+  animation: auth-spin 1s linear infinite;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .auth-form .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-header__title {
+    font-size: 26px;
+  }
+}
+
+/* ============================================
+   DARK MODE — Auth Forms (Sign-In / Sign-Up)
+   ============================================ */
+
+html[data-theme="dark"] {
+  --fi-border: #1E293B;
+  --fi-border-focus: #3d4f66;
+  --fi-label: #64748b;
+  --fi-label-active: #94a3b8;
+  --fi-text: #f1f5f9;
+  --fi-bg: #0B1120;
+}
+
+/* Form container (the white right panel) */
+html[data-theme="dark"] .bg-white {
+  background-color: var(--surface-card) !important;
+}
+
+/* Auth header */
+html[data-theme="dark"] .auth-header__title {
+  color: #f1f5f9 !important;
+}
+html[data-theme="dark"] .auth-header__subtitle {
+  color: #94a3b8 !important;
+}
+
+/* Floating input wrapper */
+html[data-theme="dark"] .floating-field__wrapper {
+  background: var(--fi-bg) !important;
+  border-color: var(--fi-border) !important;
+}
+
+/* Floating input text */
+html[data-theme="dark"] .floating-field__input {
+  color: var(--fi-text) !important;
+  -webkit-text-fill-color: var(--fi-text) !important;
+}
+
+/* Adornment (eye icon, etc.) */
+html[data-theme="dark"] .floating-field__adornment button {
+  color: #64748b !important;
+}
+html[data-theme="dark"] .floating-field__adornment button:hover {
+  color: #94a3b8 !important;
+}
+
+/* Google button */
+html[data-theme="dark"] .auth-btn-google {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-card) !important;
+  color: var(--text-body) !important;
+}
+html[data-theme="dark"] .auth-btn-google:hover:not(:disabled) {
+  background: var(--surface-hover) !important;
+  border-color: #64748b !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Divider */
+html[data-theme="dark"] .auth-divider::before,
+html[data-theme="dark"] .auth-divider::after {
+  background: var(--border-card) !important;
+}
+html[data-theme="dark"] .auth-divider__text {
+  color: #64748b !important;
+}
+
+/* Remember me / Terms */
+html[data-theme="dark"] .auth-remember span {
+  color: #94a3b8 !important;
+}
+html[data-theme="dark"] .auth-remember input[type="checkbox"] {
+  border-color: #D4AF37 !important;
+}
+html[data-theme="dark"] .auth-terms span {
+  color: #94a3b8 !important;
+}
+html[data-theme="dark"] .auth-terms input[type="checkbox"] {
+  border-color: #D4AF37 !important;
+}
+
+/* Password strength box */
+html[data-theme="dark"] .password-strength {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-card) !important;
+}
+html[data-theme="dark"] .password-strength__label {
+  color: #94a3b8 !important;
+}
+html[data-theme="dark"] .password-strength__track {
+  background: #1E293B !important;
+}
+html[data-theme="dark"] .password-strength__check {
+  color: #94a3b8 !important;
+}
+
+/* ============================================
+   DARK MODE — PhoneInput Country Dropdown
+   ============================================ */
+
+html[data-theme="dark"] .pi-dropdown {
+  background: #0f172a !important;
+  border-color: #1E293B !important;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-theme="dark"] .pi-dropdown-search {
+  border-bottom-color: #1E293B !important;
+}
+
+html[data-theme="dark"] .pi-dropdown-search input {
+  color: #f1f5f9 !important;
+  caret-color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .pi-dropdown-search input::placeholder {
+  color: #475569 !important;
+}
+
+html[data-theme="dark"] .pi-section-label {
+  color: #475569 !important;
+}
+
+html[data-theme="dark"] .pi-option {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .pi-option:hover {
+  background: #1E293B !important;
+}
+
+html[data-theme="dark"] .pi-option span:nth-child(2) {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .pi-option span:nth-child(3) {
+  color: #64748b !important;
+}
+
+/* Selected option in dark mode */
+html[data-theme="dark"] .pi-option[style*="rgba(255,140,66"] span:nth-child(3) {
+  color: #FF8C42 !important;
+}

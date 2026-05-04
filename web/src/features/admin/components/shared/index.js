@@ -1,0 +1,19 @@
+// Shared admin design system components
+export { default as PageShell } from "./PageShell";
+export { default as SummaryBar } from "./SummaryBar";
+export { default as ActionBar } from "./ActionBar";
+export { default as DataTable } from "./DataTable";
+export { default as DetailDrawer } from "./DetailDrawer";
+export { default as StatusBadge } from "./StatusBadge";
+export { default as EmptyState } from "./EmptyState";
+export { default as ReportMetricCard } from "./ReportMetricCard";
+export { default as ReportChartPanel } from "./ReportChartPanel";
+export { default as ReportFilterBar } from "./ReportFilterBar";
+export { default as AnalyticsEmptyState } from "./AnalyticsEmptyState";
+export { default as AnalyticsToolbar } from "./AnalyticsToolbar";
+export { default as AnalyticsTabLayout } from "./AnalyticsTabLayout";
+export { default as AnalyticsInsightPanel } from "./AnalyticsInsightPanel";
+export { default as AnalyticsLineChart } from "./AnalyticsLineChart";
+export { default as AnalyticsBarChart } from "./AnalyticsBarChart";
+export { default as AnalyticsDonutChart } from "./AnalyticsDonutChart";
+export { default as AnalyticsComparisonChart } from "./AnalyticsComparisonChart";

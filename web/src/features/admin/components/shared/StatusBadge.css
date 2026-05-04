@@ -1,0 +1,43 @@
+@import "../../styles/design-tokens.css";
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+/* ── Success (Active, Approved, Paid, Moved In) ── */
+.status-badge--success {
+  background: var(--status-success-bg);
+  color: var(--status-success);
+}
+
+/* ── Warning (Pending, Partial, Moving Out) ── */
+.status-badge--warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+}
+
+/* ── Error (Overdue, Cancelled, Denied, Banned) ── */
+.status-badge--error {
+  background: var(--status-error-bg);
+  color: var(--status-error);
+}
+
+/* ── Info (Reserved, Confirmed, New) ── */
+.status-badge--info {
+  background: var(--status-info-bg);
+  color: var(--status-info);
+}
+
+/* ── Neutral (Unknown, Inactive, Suspended) ── */
+.status-badge--neutral {
+  background: var(--status-neutral-bg);
+  color: var(--status-neutral);
+}

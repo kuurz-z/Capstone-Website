@@ -1,0 +1,198 @@
+/* =============================================================================
+   ADMIN LAYOUT — Refined light-mode content area
+   ============================================================================= */
+@import "design-tokens.css";
+
+/* When admin layout is active, body must not scroll — only .admin-content scrolls */
+html:has(.admin-layout),
+html:has(.admin-layout) body {
+  overflow: hidden;
+  height: 100vh;
+}
+
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  height: 100vh;
+  background: var(--bg-page);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Content shifts based on sidebar state */
+.admin-layout-main {
+  flex: 1;
+  margin-left: 256px;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.3s var(--ease-out);
+}
+
+.admin-layout--collapsed .admin-layout-main {
+  margin-left: 64px;
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+.admin-topbar {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-page);
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.admin-topbar-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.admin-menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.admin-menu-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.admin-topbar-title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.admin-topbar-copy {
+  min-width: 0;
+}
+
+.admin-topbar-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  max-width: 720px;
+}
+
+.admin-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-topbar-date {
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ── Content area ─────────────────────────────────────────────────────────── */
+.admin-content {
+  --admin-topbar-height: 64px;
+  --admin-content-padding: var(--spacing-page);
+  --admin-content-viewport-budget: calc(100dvh - var(--admin-topbar-height));
+  --admin-content-inner-height: calc(
+    var(--admin-content-viewport-budget) - (var(--admin-content-padding) * 2)
+  );
+  flex: 1;
+  padding: var(--admin-content-padding);
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  background: var(--bg-page);
+  min-height: calc(100vh - 64px);
+}
+
+/* Subtle custom scrollbar for the content area */
+.admin-content::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+}
+.admin-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+/* ── Page entry animation ─────────────────────────────────────────────────── */
+
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-layout-main {
+    margin-left: 0 !important;
+  }
+
+  .admin-menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-topbar {
+    padding: 0 16px;
+    min-height: 64px;
+  }
+
+  .admin-content {
+    --admin-topbar-height: 64px;
+    --admin-content-padding: 16px;
+    padding: var(--admin-content-padding);
+    min-height: calc(100vh - 64px);
+  }
+
+  .admin-topbar-subtitle {
+    display: none;
+  }
+
+  .admin-topbar-date {
+    display: none;
+  }
+}
+
+/* ── Tablet ───────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .admin-topbar {
+    padding: 0 20px;
+  }
+
+  .admin-content {
+    --admin-content-padding: 20px;
+    padding: var(--admin-content-padding);
+  }
+}
+
+/* ── Print ────────────────────────────────────────────────────────────────── */
+@media print {
+  .admin-topbar,
+  .sb {
+    display: none;
+  }
+
+  .admin-layout-main {
+    margin-left: 0 !important;
+  }
+
+  .admin-content {
+    padding: 0;
+  }
+}

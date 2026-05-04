@@ -1,0 +1,917 @@
+/* ============================================================
+   Admin Billing Page - Workspace Shell
+   ============================================================ */
+
+.admin-billing-page {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-billing-page__hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 24px;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+
+.admin-billing-page__hero-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-billing-page__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-hover);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-billing-page__heading {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.admin-billing-page__subtitle {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.admin-billing-page__hero-actions {
+  display: flex;
+  align-self: center;
+}
+
+.admin-billing-page__workspace-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-card);
+}
+
+.admin-billing-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 7px 13px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
+  white-space: nowrap;
+}
+
+.admin-billing-tab:hover:not(.is-active) {
+  background: var(--surface-hover);
+  color: var(--text-heading);
+}
+
+.admin-billing-tab.is-active {
+  background: var(--surface-card);
+  color: var(--color-accent);
+  border-color: var(--border-card);
+  box-shadow: 0 1px 3px rgba(10, 22, 40, 0.05);
+}
+
+.admin-billing-tab__icon {
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+
+.admin-billing-tab.is-active .admin-billing-tab__icon {
+  opacity: 1;
+}
+
+.admin-billing-tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.admin-billing-tab--publish.is-active {
+  color: var(--text-heading);
+  border-color: var(--border-card);
+}
+
+.admin-billing-tab--publish:hover:not(.is-active) {
+  color: var(--text-heading);
+  background: var(--surface-hover);
+}
+
+.admin-billing-page__workspace-panel {
+  display: grid;
+  gap: 12px;
+  min-height: 680px;
+}
+
+.admin-billing-page__workspace-panel.is-active {
+  animation: admin-billing-workspace-swap 160ms ease;
+}
+
+@keyframes admin-billing-workspace-swap {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-billing-page__hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-billing-page__hero-actions {
+    align-self: flex-start;
+  }
+
+  .admin-billing-page__workspace-tabs {
+    flex-wrap: wrap;
+  }
+
+  .admin-billing-tab {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 560px) {
+}
+
+.rent-billing {
+  display: grid;
+  gap: 14px;
+}
+
+.rent-billing__summary,
+.rent-billing__toolbar,
+.rent-billing__batch-summary,
+.rent-billing__panel {
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  background: var(--surface-card);
+}
+
+.rent-billing__summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 20px;
+}
+
+.rent-billing__eyebrow {
+  color: var(--color-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rent-billing__summary h2,
+.rent-billing__panel h3 {
+  margin: 0;
+  color: var(--text-heading);
+}
+
+.rent-billing__summary p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.rent-billing__kpis {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.rent-billing__kpis span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.rent-billing__kpis strong {
+  color: var(--text-heading);
+  font-size: 1.15rem;
+}
+
+.rent-billing__toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+}
+
+.rent-billing__toolbar label,
+.rent-billing__amount {
+  display: grid;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.rent-billing__toolbar input,
+.rent-billing__toolbar select,
+.rent-billing__amount input {
+  min-height: 36px;
+  border: 1px solid var(--border-card);
+  border-radius: 7px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: 7px 10px;
+  font: inherit;
+}
+
+.rent-billing__search {
+  position: relative;
+}
+
+.rent-billing__search svg {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  color: var(--text-muted);
+}
+
+.rent-billing__search input {
+  padding-left: 30px;
+}
+
+.rent-billing__toolbar button,
+.rent-billing__tenant-row button,
+.rent-billing__table button,
+.rent-billing__batch-summary button,
+.rent-billing__modal button {
+  min-height: 36px;
+  border: 1px solid var(--border-card);
+  border-radius: 7px;
+  background: var(--surface-card);
+  color: var(--text-heading);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rent-billing__primary {
+  background: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+  color: #fff !important;
+}
+
+.rent-billing button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.rent-billing__notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.84rem;
+}
+
+.rent-billing__notice--warning {
+  margin-top: 12px;
+}
+
+.rent-billing__batch-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto;
+  gap: 10px;
+  align-items: stretch;
+  padding: 12px;
+}
+
+.rent-billing__batch-summary > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "icon label"
+    "icon value";
+  column-gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.rent-billing__batch-summary svg {
+  grid-area: icon;
+  color: var(--color-accent);
+}
+
+.rent-billing__batch-summary span {
+  grid-area: label;
+  color: var(--text-secondary);
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.rent-billing__batch-summary strong {
+  grid-area: value;
+  color: var(--text-heading);
+  font-size: 1rem;
+}
+
+.rent-billing__panel {
+  overflow: hidden;
+}
+
+.rent-billing__panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.rent-billing__panel-header span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.rent-billing__empty {
+  padding: 28px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.rent-billing__tenant-list {
+  display: grid;
+}
+
+.rent-billing__tenant-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 190px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.rent-billing__tenant-row:last-child {
+  border-bottom: 0;
+}
+
+.rent-billing__tenant-main {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.rent-billing__tenant-main strong,
+.rent-billing__table strong {
+  display: block;
+  color: var(--text-heading);
+  font-size: 0.86rem;
+}
+
+.rent-billing__tenant-main span,
+.rent-billing__table span {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.rent-billing__amount em {
+  color: #dc2626;
+  font-style: normal;
+  font-size: 0.72rem;
+}
+
+.rent-billing__amount--inline {
+  min-width: 130px;
+}
+
+.rent-billing__amount--inline input {
+  width: 130px;
+}
+
+.rent-billing__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #047857;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.rent-billing__table-wrap {
+  overflow-x: auto;
+}
+
+.rent-billing__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rent-billing__table th,
+.rent-billing__table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-card);
+  text-align: left;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.rent-billing__table th {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rent-billing__tenant-dashboard td {
+  vertical-align: middle;
+}
+
+.rent-billing__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.rent-billing__badge,
+.rent-billing__delivery {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.rent-billing__badge--paid,
+.rent-billing__delivery--sent {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.rent-billing__badge--pending,
+.rent-billing__badge--partially-paid,
+.rent-billing__delivery--not_attempted {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.rent-billing__badge--overdue,
+.rent-billing__delivery--failed {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.rent-billing__spin {
+  animation: rent-billing-spin 850ms linear infinite;
+}
+
+.rent-billing__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.rent-billing__modal {
+  width: min(720px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  background: var(--surface-card);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.rent-billing__modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.rent-billing__modal-header h3 {
+  margin: 2px 0 0;
+  color: var(--text-heading);
+}
+
+.rent-billing__preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.rent-billing__preview-grid > div,
+.rent-billing__breakdown {
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.rent-billing__preview-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.rent-billing__preview-grid span,
+.rent-billing__breakdown span {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rent-billing__preview-grid strong,
+.rent-billing__breakdown strong {
+  color: var(--text-heading);
+  font-size: 0.9rem;
+}
+
+.rent-billing__preview-grid small {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.rent-billing__breakdown {
+  display: grid;
+  gap: 8px;
+  margin: 0 16px 16px;
+  padding: 12px;
+}
+
+.rent-billing__breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.rent-billing__breakdown-total {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-card);
+}
+
+.rent-billing__breakdown-total strong {
+  color: var(--color-accent);
+  font-size: 1.05rem;
+}
+
+.rent-billing__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--border-card);
+}
+
+@keyframes rent-billing-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .rent-billing__summary,
+  .rent-billing__tenant-row {
+    grid-template-columns: 1fr;
+  }
+
+  .rent-billing__batch-summary,
+  .rent-billing__preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rent-billing__summary {
+    align-items: stretch;
+  }
+
+  .rent-billing__kpis {
+    justify-items: start;
+  }
+}
+
+.rent-billing--workspace {
+  gap: 12px;
+}
+
+.rent-billing--workspace .eb-layout {
+  min-height: 680px;
+}
+
+.rent-billing--workspace .eb-room__kwh {
+  display: block;
+  line-height: 1.35;
+}
+
+.eb-room__badge--rent-no_active,
+.rent-billing__room-status--no_active,
+.rent-billing__badge--missing_data {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #e5e7eb;
+}
+
+.eb-room__badge--rent-ready,
+.rent-billing__room-status--ready,
+.rent-billing__badge--ready {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.eb-room__badge--rent-generated,
+.rent-billing__room-status--generated,
+.rent-billing__badge--generated,
+.rent-billing__badge--already_billed {
+  background: #f8fafc;
+  color: #334155;
+  border-color: #e2e8f0;
+}
+
+.eb-room__badge--rent-sent,
+.rent-billing__room-status--sent,
+.rent-billing__badge--sent,
+.rent-billing__delivery--sent {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.eb-room__badge--rent-paid,
+.rent-billing__room-status--paid,
+.rent-billing__badge--paid {
+  background: #f0fdf4;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.eb-room__badge--rent-overdue,
+.rent-billing__room-status--overdue,
+.rent-billing__badge--overdue,
+.rent-billing__delivery--failed {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.rent-billing__room-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rent-billing__room-snapshot {
+  margin-bottom: 12px;
+}
+
+.rent-billing__cycle-panel,
+.rent-billing__batch-bar {
+  border: 1px solid var(--border-card, #e5e7eb);
+  border-radius: 10px;
+  background: var(--surface-card, #fff);
+  margin-bottom: 14px;
+}
+
+.rent-billing__cycle-panel {
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.rent-billing__cycle-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.rent-billing__cycle-panel h3 {
+  margin: 0;
+  color: var(--text-heading, #0a1628);
+  font-size: 0.9rem;
+}
+
+.rent-billing__cycle-panel p {
+  margin: 4px 0 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.rent-billing__cycle-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(190px, 240px));
+  gap: 12px;
+}
+
+.rent-billing__cycle-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rent-billing__cycle-grid > div,
+.rent-billing__batch-bar > div:not(.rent-billing__batch-actions) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-card, #e5e7eb);
+  border-radius: 8px;
+  background: var(--surface-muted, #f8fafc);
+}
+
+.rent-billing__cycle-grid span,
+.rent-billing__batch-bar span {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rent-billing__cycle-grid strong,
+.rent-billing__batch-bar strong {
+  color: var(--text-heading, #0f172a);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.rent-billing__batch-bar {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(110px, 140px) minmax(130px, 170px) auto;
+  gap: 10px;
+  align-items: stretch;
+  padding: 12px;
+}
+
+.rent-billing__batch-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rent-billing__tenant-section {
+  padding-top: 16px;
+}
+
+.rent-billing__table--room {
+  min-width: 1180px;
+  table-layout: auto;
+}
+
+.rent-billing__table--room th,
+.rent-billing__table--room td {
+  white-space: normal;
+  vertical-align: top;
+}
+
+.rent-billing__table--room td:nth-child(4),
+.rent-billing__table--room td:nth-child(8) {
+  white-space: nowrap;
+}
+
+.rent-billing__table--room .rent-billing__actions {
+  min-width: 230px;
+}
+
+.rent-billing__payment-note {
+  margin: 0 16px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-card, #e5e7eb);
+  border-radius: 8px;
+  background: var(--surface-muted, #f8fafc);
+  color: var(--text-secondary, #64748b);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.rent-billing__history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.rent-billing__history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border-card, #e5e7eb);
+  border-radius: 8px;
+  background: var(--surface-card, #fff);
+}
+
+.rent-billing__history-row div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rent-billing__history-row strong {
+  color: var(--text-heading, #0f172a);
+  font-size: 0.84rem;
+}
+
+.rent-billing__history-row span:not(.rent-billing__delivery) {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.76rem;
+}
+
+.rent-billing__delivery {
+  border: 1px solid;
+}
+
+.rent-billing__delivery--not_attempted {
+  border-color: #e2e8f0;
+}
+
+@media (max-width: 1180px) {
+  .rent-billing__cycle-grid,
+  .rent-billing__batch-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rent-billing__batch-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .rent-billing__cycle-panel-header,
+  .rent-billing__batch-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rent-billing__cycle-controls,
+  .rent-billing__cycle-grid,
+  .rent-billing__batch-bar,
+  .rent-billing__history-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+

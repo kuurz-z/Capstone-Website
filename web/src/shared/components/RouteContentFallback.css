@@ -1,0 +1,63 @@
+.route-content-fallback {
+  display: grid;
+  gap: 18px;
+}
+
+.route-content-fallback-bar,
+.route-content-fallback-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.route-content-fallback-bar::after,
+.route-content-fallback-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: route-content-fallback-shimmer 1.4s linear infinite;
+}
+
+.route-content-fallback-bar {
+  height: 14px;
+  border-radius: 999px;
+}
+
+.route-content-fallback-bar-lg {
+  width: min(360px, 72%);
+}
+
+.route-content-fallback-bar-md {
+  width: min(240px, 48%);
+}
+
+.route-content-fallback-card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.route-content-fallback-card {
+  min-height: 160px;
+  border-radius: 18px;
+}
+
+@keyframes route-content-fallback-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-content-fallback-bar::after,
+  .route-content-fallback-card::after {
+    animation: none;
+  }
+}

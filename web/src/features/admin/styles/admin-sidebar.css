@@ -1,0 +1,70 @@
+@import "design-tokens.css";
+
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: #d9dde3;
+}
+
+.sidebar-scroll::-webkit-scrollbar-button {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.sb-tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 1100;
+  transform: translateY(-50%);
+  padding: 7px 12px;
+  border: 1px solid var(--border-subtle, var(--border-light));
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated, var(--bg-card));
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-lg);
+  animation: sbTooltipIn 0.16s var(--ease-out);
+}
+
+.sb-tooltip::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: var(--surface-elevated, var(--bg-card));
+  border-left: 0;
+}
+
+@keyframes sbTooltipIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}

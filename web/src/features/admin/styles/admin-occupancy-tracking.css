@@ -1,0 +1,338 @@
+/* ═══════════════════════════════════════════════════
+   Occupancy Tracking — Refactored with Design Tokens
+   Used by OccupancyTrackingPage (embedded in Rooms)
+   ═══════════════════════════════════════════════════ */
+@import "design-tokens.css";
+
+/* ── Section wrapper ──────────────────────────────── */
+.occupancy-tracking-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Section headings ─────────────────────────────── */
+.occupancy-section-heading {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+
+/* ── Overall occupancy bar ────────────────────────── */
+.occupancy-overall-bar-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.occupancy-overall-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+/* ── Room occupancy bars (shared) ─────────────────── */
+.room-occupancy-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.room-occupancy-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-active);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.room-occupancy-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s var(--ease-out);
+}
+
+/* ── Room type breakdown ──────────────────────────── */
+.occupancy-type-breakdown {
+  margin-bottom: 20px;
+}
+
+.occupancy-type-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.occupancy-type-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.occupancy-type-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.occupancy-type-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.occupancy-type-name {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.occupancy-type-count {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.occupancy-type-stat {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ── Badge counts ─────────────────────────────────── */
+.occupancy-occupied-count {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.occupancy-available-count {
+  font-weight: 600;
+  color: var(--status-success);
+}
+
+/* ── Room name cell (shared w/ room table) ────────── */
+.room-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-name-primary {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.room-name-sub {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* ── Occupancy Room Modal ─────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  animation: occFadeIn 0.2s var(--ease-out);
+}
+
+@keyframes occFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+  animation: occSlideUp 0.25s var(--ease-out);
+}
+
+@keyframes occSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.modal-header h2 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-light);
+}
+
+.modal-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+}
+
+/* ── Details grid (in modal) ──────────────────────── */
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-item label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detail-item span {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ── Bed lists (in modal) ─────────────────────────── */
+.occupied-beds-section,
+.available-beds-section {
+  margin-bottom: 20px;
+}
+
+.occupied-beds-section h3,
+.available-beds-section h3 {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+}
+
+.beds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bed-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.bed-item.occupied {
+  border-left: 3px solid var(--status-warning);
+}
+
+.bed-item.available {
+  border-left: 3px solid var(--status-success);
+}
+
+.bed-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.bed-info {
+  flex: 1;
+}
+
+.bed-info h4 {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+
+.bed-info p {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.small-text {
+  font-size: var(--font-size-xs) !important;
+  color: var(--text-muted) !important;
+}
+
+.available-text {
+  color: var(--status-success) !important;
+}
+
+.info-text {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+  font-size: var(--font-size-md);
+}
+
+/* ── Responsive ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .occupancy-type-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}

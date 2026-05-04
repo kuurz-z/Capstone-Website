@@ -1,0 +1,414 @@
+/* GPuyat Rooms & Rates Page Styles */
+
+.gpuyat-rooms-page {
+  width: 100%;
+  background-color: #fff;
+}
+
+.gpuyat-rooms-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Navigation */
+.gpuyat-rooms-navbar {
+  background-color: #fff;
+  padding: 15px 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.gpuyat-rooms-nav-content {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+}
+
+.gpuyat-rooms-nav-link {
+  text-decoration: none;
+  color: #333;
+  font-weight: 500;
+  font-size: 14px;
+  transition: color 0.3s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.gpuyat-rooms-nav-link:hover,
+.gpuyat-rooms-nav-link.active {
+  color: #FF8C42;
+}
+
+/* Breadcrumb */
+.gpuyat-rooms-breadcrumb {
+  padding: 15px 0;
+  background-color: #f9f9f9;
+  font-size: 14px;
+}
+
+.breadcrumb-link {
+  color: #666;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.breadcrumb-link:hover {
+  color: #FF8C42;
+}
+
+.breadcrumb-separator {
+  margin: 0 8px;
+  color: #999;
+}
+
+.breadcrumb-current {
+  color: #FF8C42;
+  font-weight: 500;
+}
+
+/* Header Section */
+.gpuyat-rooms-header {
+  padding: 40px 0 20px;
+  text-align: center;
+}
+
+.gpuyat-rooms-header h1 {
+  font-size: 42px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 15px;
+}
+
+.gpuyat-rooms-location {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: #666;
+}
+
+/* About Section */
+.gpuyat-rooms-about {
+  padding: 40px 0;
+  background-color: #f9f9f9;
+}
+
+.gpuyat-rooms-about h2 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.gpuyat-rooms-about p {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #666;
+  margin-bottom: 15px;
+  text-align: center;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Location Section */
+.gpuyat-rooms-location-section {
+  padding: 60px 0;
+}
+
+.gpuyat-rooms-location-section h2 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.gpuyat-rooms-map {
+  max-width: 800px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.gpuyat-rooms-map img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.gpuyat-rooms-map-address {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  background-color: #fff;
+  font-size: 15px;
+  color: #666;
+}
+
+/* Room Types Section */
+.gpuyat-rooms-types {
+  padding: 60px 0;
+  background-color: #f9f9f9;
+}
+
+.gpuyat-rooms-types h2 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 50px;
+  text-align: center;
+}
+
+.gpuyat-room-type-card {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 40px;
+  margin-bottom: 50px;
+  background-color: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.gpuyat-room-type-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.gpuyat-room-type-card-reverse {
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.gpuyat-room-type-image {
+  height: 100%;
+  min-height: 350px;
+}
+
+.gpuyat-room-type-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gpuyat-room-type-content {
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+.gpuyat-room-type-content h3 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 20px;
+}
+
+.gpuyat-room-type-features {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.gpuyat-room-type-features .feature {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #666;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 20px;
+}
+
+.gpuyat-room-type-description {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #666;
+  margin-bottom: 25px;
+  flex: 1;
+}
+
+.gpuyat-room-type-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.gpuyat-room-type-price {
+  display: flex;
+  flex-direction: column;
+}
+
+.gpuyat-room-type-price .price {
+  font-size: 32px;
+  font-weight: 700;
+  color: #FF8C42;
+}
+
+.gpuyat-room-type-price .period {
+  font-size: 14px;
+  color: #999;
+}
+
+.gpuyat-btn-view-room-details {
+  padding: 12px 28px;
+  background-color: #FF8C42;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gpuyat-btn-view-room-details:hover {
+  background-color: #e55a00;
+  transform: translateX(5px);
+}
+
+/* CTA Section */
+.gpuyat-rooms-cta {
+  padding: 80px 0;
+  background: linear-gradient(135deg, #1B5E92 0%, #0F3B66 100%);
+  color: white;
+  text-align: center;
+}
+
+.gpuyat-rooms-cta h2 {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.gpuyat-rooms-cta p {
+  font-size: 18px;
+  margin-bottom: 35px;
+  opacity: 0.9;
+}
+
+.gpuyat-rooms-cta-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.gpuyat-btn-book-tour {
+  padding: 14px 35px;
+  background-color: #FF8C42;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gpuyat-btn-book-tour:hover {
+  background-color: #e55a00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 105, 0, 0.3);
+}
+
+.gpuyat-btn-contact-us {
+  padding: 14px 35px;
+  background-color: transparent;
+  color: white;
+  border: 2px solid white;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gpuyat-btn-contact-us:hover {
+  background-color: white;
+  color: #0F3B66;
+  transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+  .gpuyat-room-type-card,
+  .gpuyat-room-type-card-reverse {
+    grid-template-columns: 1fr;
+  }
+
+  .gpuyat-room-type-image {
+    min-height: 300px;
+  }
+
+  .gpuyat-room-type-content {
+    padding: 30px;
+  }
+}
+
+@media (max-width: 768px) {
+  .gpuyat-rooms-nav-content {
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .gpuyat-rooms-header h1 {
+    font-size: 32px;
+  }
+
+  .gpuyat-rooms-about h2,
+  .gpuyat-rooms-location-section h2,
+  .gpuyat-rooms-types h2 {
+    font-size: 28px;
+  }
+
+  .gpuyat-room-type-content h3 {
+    font-size: 24px;
+  }
+
+  .gpuyat-room-type-footer {
+    flex-direction: column;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .gpuyat-rooms-cta h2 {
+    font-size: 28px;
+  }
+
+  .gpuyat-rooms-cta-buttons {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: 300px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .gpuyat-rooms-header h1 {
+    font-size: 28px;
+  }
+
+  .gpuyat-room-type-content {
+    padding: 20px;
+  }
+
+  .gpuyat-room-type-features {
+    flex-direction: column;
+    gap: 10px;
+  }
+}

@@ -1,0 +1,18 @@
+/* ==========================================================================
+   SKELETON PULSE — Gentle loading placeholder (Apple / Notion style)
+   ========================================================================== */
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.skeleton-pulse {
+  background: #E5E7EB;
+  animation: skeleton-pulse 2.2s ease-in-out infinite;
+}
+
+/* ── Dark mode ── */
+html[data-theme="dark"] .skeleton-pulse {
+  background: #1e293b;
+}

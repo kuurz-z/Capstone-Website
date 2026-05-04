@@ -1,0 +1,476 @@
+/* ═══════════════════════════════════════════════════
+   Tenant Detail Modal — Design Token Migration
+   ═══════════════════════════════════════════════════ */
+@import "design-tokens.css";
+
+/* Overlay */
+.tenant-detail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  animation: tdmFadeIn 0.2s var(--ease-out);
+}
+
+@keyframes tdmFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.tenant-detail-modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 900px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+  position: relative;
+  animation: tdmSlideUp 0.25s var(--ease-out);
+}
+
+@keyframes tdmSlideUp {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tenant-detail-modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+  z-index: 10;
+}
+
+.tenant-detail-modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Modal Header */
+.tenant-detail-modal-header {
+  padding: 32px 32px 24px 32px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.tenant-detail-modal-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tenant-detail-modal-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.tenant-detail-modal-profile-info {
+  flex: 1;
+}
+
+.tenant-detail-modal-name {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+  letter-spacing: -0.01em;
+}
+
+.tenant-detail-modal-label {
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+}
+
+.tenant-detail-modal-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tenant-detail-modal-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-success);
+}
+
+.tenant-detail-modal-status-text {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--status-success);
+}
+
+/* Modal Content */
+.tenant-detail-modal-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  padding: 32px;
+}
+
+.tenant-detail-modal-left,
+.tenant-detail-modal-right {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Section Styles */
+.tenant-detail-modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tenant-detail-modal-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.tenant-detail-modal-section-title svg {
+  color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+/* Form Styles */
+.tenant-detail-modal-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.tenant-detail-modal-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tenant-detail-modal-form-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tenant-detail-modal-form-input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  background: var(--bg-inset);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.tenant-detail-modal-form-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 3px rgba(46, 124, 246, 0.08);
+}
+
+/* Contract Details */
+.tenant-detail-modal-contract {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tenant-detail-modal-contract-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tenant-detail-modal-contract-name {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tenant-detail-modal-contract-status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background: var(--status-success-bg);
+  color: var(--status-success);
+}
+
+.tenant-detail-modal-contract-status.active {
+  background: var(--status-success-bg);
+  color: var(--status-success);
+}
+
+.tenant-detail-modal-contract-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.tenant-detail-modal-contract-date {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tenant-detail-modal-contract-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.tenant-detail-modal-contract-value {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tenant-detail-modal-contract-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--accent-blue-bg);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--accent-blue);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.tenant-detail-modal-contract-download:hover {
+  background: rgba(46, 124, 246, 0.12);
+}
+
+/* Documents */
+.tenant-detail-modal-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tenant-detail-modal-document-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.tenant-detail-modal-document-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.tenant-detail-modal-document-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tenant-detail-modal-document-name {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tenant-detail-modal-document-date {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.tenant-detail-modal-document-download {
+  padding: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.tenant-detail-modal-document-download:hover {
+  background: var(--accent-blue-bg);
+}
+
+.tenant-detail-modal-edit-docs {
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.tenant-detail-modal-edit-docs:hover {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-bg);
+}
+
+/* Room Assignment Card */
+.tenant-detail-modal-room-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background: var(--bg-inset);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tenant-detail-modal-room-number {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tenant-detail-modal-room-type {
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
+}
+
+.tenant-detail-modal-room-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.tenant-detail-modal-room-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tenant-detail-modal-room-detail-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tenant-detail-modal-room-detail-value {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tenant-detail-modal-room-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.tenant-detail-modal-room-date {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tenant-detail-modal-room-date-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tenant-detail-modal-room-date-value {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tenant-detail-modal {
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: var(--radius-lg);
+  }
+
+  .tenant-detail-modal-content {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 24px;
+  }
+
+  .tenant-detail-modal-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tenant-detail-modal-room-details,
+  .tenant-detail-modal-room-dates {
+    grid-template-columns: 1fr;
+  }
+
+  .tenant-detail-modal-contract-dates {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Scrollbar */
+.tenant-detail-modal::-webkit-scrollbar { width: 5px; }
+.tenant-detail-modal::-webkit-scrollbar-track { background: transparent; }
+.tenant-detail-modal::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 4px; }
+.tenant-detail-modal::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.14); }

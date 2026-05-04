@@ -1,0 +1,437 @@
+/* ============================================================
+   SUPER ADMIN BRANCHES PAGE
+   ============================================================ */
+@import "../../admin/styles/design-tokens.css";
+
+.sa-branches-header-copy {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-md);
+  line-height: 1.6;
+}
+
+.sa-branches-refresh-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+}
+
+.sa-branches-refresh-btn:hover:not(:disabled) {
+  border-color: var(--muted-foreground);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.sa-branches-refresh-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+/* ── Overview strip ── */
+.sa-branches-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.sa-branches-overview-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.sa-branches-overview-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.sa-branches-overview-value {
+  display: block;
+  margin-top: 12px;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.sa-branches-overview-meta {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+/* ── Branch grid ── */
+.sa-branches-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.sa-branch-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  transition:
+    box-shadow var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out),
+    border-color var(--duration-normal) var(--ease-out);
+}
+
+.sa-branch-card:hover {
+  border-color: var(--muted-foreground);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.sa-branch-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.sa-branch-card-heading {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sa-branch-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+}
+
+.sa-branch-card-name {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.sa-branch-card-id {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sa-branch-health-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--success-light);
+  color: var(--success-dark);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sa-branch-warning-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sa-branch-warning-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--warning-light);
+  color: var(--warning-dark);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+/* ── Occupancy block ── */
+.sa-branch-occupancy {
+  margin-bottom: 20px;
+  padding: 18px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sa-branch-occupancy-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.sa-branch-occupancy-rate {
+  font-size: 28px;
+  letter-spacing: -0.05em;
+  font-weight: 700;
+}
+
+.sa-branch-occupancy-detail {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-sm);
+}
+
+/* ── Stats grid ── */
+.sa-branch-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.sa-branch-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+
+.sa-branch-stat-icon {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.sa-branch-stat-value {
+  display: block;
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sa-branch-stat-label {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Admins + Links sections ── */
+.sa-branch-admins,
+.sa-branch-links {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.sa-branch-admins-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sa-branch-admins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sa-branch-admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--muted);
+}
+
+.sa-branch-admin-name {
+  display: block;
+  color: var(--foreground);
+  font-size: var(--font-size-md);
+  font-weight: 700;
+}
+
+.sa-branch-admin-email {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-xs);
+}
+
+.sa-branch-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--info-light);
+  color: var(--info-dark);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* ── Quick link cards ── */
+.sa-branch-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sa-branch-link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 108px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--info) 20%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--info) 4%, var(--card));
+  text-decoration: none;
+  transition:
+    border-color var(--duration-normal) var(--ease-out),
+    box-shadow var(--duration-normal) var(--ease-out),
+    transform var(--duration-normal) var(--ease-out);
+}
+
+.sa-branch-link-card:hover {
+  border-color: color-mix(in srgb, var(--info) 50%, var(--border));
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--info) 12%, transparent);
+  transform: translateY(-1px);
+}
+
+.sa-branch-link-card strong {
+  color: var(--foreground);
+  font-size: var(--font-size-md);
+  font-weight: 800;
+}
+
+.sa-branch-link-card span {
+  color: var(--muted-foreground);
+  font-size: var(--font-size-xs);
+  line-height: 1.55;
+}
+
+/* ── State (loading / error) ── */
+.sa-branches-state {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.sa-branches-state p {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+}
+
+.sa-branches-state--error {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+  background: var(--warning-light);
+  color: var(--warning-dark);
+}
+
+.sa-branches-state--error p {
+  color: var(--warning-dark);
+}
+
+.sa-branches-state-spinner {
+  animation: sa-branches-spin 0.9s linear infinite;
+  color: var(--muted-foreground);
+}
+
+@keyframes sa-branches-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Also fix BRANCH_META in the JSX ── */
+
+/* ── Responsive ── */
+@media (max-width: 1200px) {
+  .sa-branches-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .sa-branches-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .sa-branches-overview,
+  .sa-branch-stats,
+  .sa-branch-link-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sa-branch-card {
+    padding: 18px;
+  }
+
+  .sa-branch-card-heading,
+  .sa-branch-admin-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sa-branch-warning-badges {
+    justify-content: flex-start;
+  }
+}

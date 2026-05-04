@@ -1,0 +1,151 @@
+/* =============================================================================
+   Dashboard
+   ============================================================================= */
+@import "design-tokens.css";
+
+.dashboard-page-bg {
+  min-height: 100%;
+  margin: calc(var(--admin-content-padding, 24px) * -1);
+  padding: var(--admin-content-padding, 24px);
+}
+
+.dash-error {
+  padding: 12px 16px;
+  background: var(--status-error-bg);
+  color: var(--status-error);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  margin-bottom: var(--spacing-lg);
+}
+
+.dash-loading {
+  padding: 12px 16px;
+  background: var(--status-info-bg);
+  color: var(--status-info);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  margin-bottom: var(--spacing-lg);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dash-loading__spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  animation: dash-loading-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.dash-loading__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dash-loading__ellipsis {
+  display: inline-flex;
+  min-width: 18px;
+}
+
+.dash-loading__ellipsis span {
+  animation: dash-loading-bounce 1.2s ease-in-out infinite;
+  opacity: 0.25;
+}
+
+.dash-loading__ellipsis span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dash-loading__ellipsis span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dash-loading-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dash-loading-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.25;
+  }
+
+  40% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+
+.admin-dashboard-reservation-status-section {
+  padding: 0;
+}
+
+.admin-dashboard-section-title {
+  font-size: var(--font-size-md);
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 0 0 14px;
+  letter-spacing: -0.01em;
+}
+
+.admin-dashboard-donut-container {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.admin-dashboard-donut-chart {
+  width: 140px;
+  height: 140px;
+}
+
+.admin-dashboard-reservation-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.admin-dashboard-reservation-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+}
+
+.admin-dashboard-reservation-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.admin-dashboard-reservation-legend-dot.green { background: var(--status-success); }
+.admin-dashboard-reservation-legend-dot.orange { background: var(--status-warning); }
+.admin-dashboard-reservation-legend-dot.red { background: var(--status-error); }
+
+.admin-dashboard-reservation-legend-label {
+  font-weight: 550;
+}
+
+.admin-dashboard-reservation-legend-value {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-left: auto;
+}
