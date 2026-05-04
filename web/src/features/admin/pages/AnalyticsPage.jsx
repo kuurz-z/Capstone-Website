@@ -201,7 +201,7 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
  tone: "blue",
  },
  {
- label: "Collected Revenue",
+ label: "Collected",
  value: billingQuery.isLoading
  ? "..."
  : billingKpis.collectedRevenueLabel || "PHP 0",
@@ -347,8 +347,8 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
  ]}
  height={92}
  valueFormatter={(value) => formatPeso(value)}
- emptyTitle="No billing revenue data"
- emptyDescription="Revenue history will appear once billing data is available."
+ emptyTitle="No billing collection data"
+ emptyDescription="Collection history will appear once billing data is available."
  />
  </SummaryOverviewBlock>
 
@@ -439,8 +439,8 @@ function AnalyticsSummaryDashboard({ clearLegacyOverview = false }) {
  ]}
  height={180}
  valueFormatter={(value) => formatPeso(value)}
- emptyTitle="No billing revenue data"
- emptyDescription="Revenue history will appear once billing data is available for this scope."
+ emptyTitle="No billing collection data"
+ emptyDescription="Collection history will appear once billing data is available for this scope."
  />
  </div>
  </ReportChartPanel>

@@ -102,7 +102,7 @@ export default function AnalyticsOverviewTab({
 
  const metricCards = [
  { label: "Occupancy Rate", value: kpis.occupancyRateLabel || "0%", tone: "blue" },
- { label: "Revenue", value: kpis.revenueLabel || "PHP 0", tone: "green" },
+ { label: "Collected", value: kpis.revenueLabel || "PHP 0", tone: "green" },
  { label: "Active Tickets", value: kpis.activeTickets || 0, tone: "amber" },
  { label: "Inquiries", value: kpis.inquiries || 0, tone: "rose" },
  ];

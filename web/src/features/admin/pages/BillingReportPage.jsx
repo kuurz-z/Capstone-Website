@@ -88,7 +88,7 @@ export default function BillingReportPage() {
  const pagedRows = overdueAccounts.slice((page - 1) * 10, page * 10);
 
  const metricCards = [
- { label: "Collected Revenue", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
+ { label: "Collected", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
  { label: "Billed Amount", value: data?.kpis?.billedAmountLabel || "PHP 0", tone: "blue" },
  { label: "Outstanding", value: data?.kpis?.outstandingBalanceLabel || "PHP 0", tone: "rose" },
  { label: "Collection Rate", value: data?.kpis?.collectionRateLabel || "0%", tone: "amber" },
@@ -115,7 +115,7 @@ export default function BillingReportPage() {
  kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
  sections: [
  {
- title: "Monthly Revenue",
+ title: "Monthly Collections",
  rows: revenueByMonth.map(
  (item) =>
  `${item.label}: collected ${formatPeso(item.collectedRevenue)}, billed ${formatPeso(item.billedAmount)}`,
@@ -199,7 +199,7 @@ export default function BillingReportPage() {
  <div className="admin-reports__grid">
  <ReportChartPanel
  title="Month-over-month revenue"
- subtitle="Collected revenue in the selected billing window"
+ subtitle="Collected payments in the selected billing window"
  >
  <BarList
  items={revenueByMonth.map((item) => ({

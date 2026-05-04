@@ -155,7 +155,7 @@ export default function AnalyticsConsolidatedTab({
       tone: "blue",
     },
     {
-      label: "Collected Revenue",
+      label: "Collected",
       value: billingData?.kpis?.collectedRevenueLabel || dashboardData?.kpis?.revenueLabel || "PHP 0",
       tone: "green",
     },
@@ -179,7 +179,7 @@ export default function AnalyticsConsolidatedTab({
         { key: "occupancyRate", label: "Occupancy Rate", formatter: (value) => `${value}%` },
         { key: "totalCapacity", label: "Total Capacity" },
         { key: "availableBeds", label: "Available Beds" },
-        { key: "collectedRevenue", label: "Collected Revenue", formatter: (value) => formatPeso(value) },
+        { key: "collectedRevenue", label: "Collected", formatter: (value) => formatPeso(value) },
         { key: "overdueAmount", label: "Overdue Amount", formatter: (value) => formatPeso(value) },
         { key: "collectionRate", label: "Collection Rate", formatter: (value) => `${value}%` },
         { key: "activeTickets", label: "Open Maintenance" },
@@ -274,8 +274,8 @@ export default function AnalyticsConsolidatedTab({
         </ReportChartPanel>
 
         <ReportChartPanel
-          title="Revenue trend"
-          subtitle="Collected and billed revenue across the selected owner scope"
+          title="Collection trend"
+          subtitle="Collected and billed amounts across the selected owner scope"
           actions={<DrilldownLink tab="billing" range={range} branch={branch} label="Open billing" />}
         >
           <AnalyticsBarChart
@@ -289,8 +289,8 @@ export default function AnalyticsConsolidatedTab({
               { key: "billed", label: "Billed", color: "#2563eb" },
             ]}
             valueFormatter={(value) => formatPeso(value)}
-            emptyTitle="No revenue trend"
-            emptyDescription="Revenue history will appear once billing records exist for this scope."
+            emptyTitle="No collection trend"
+            emptyDescription="Collection history will appear once billing records exist for this scope."
           />
         </ReportChartPanel>
       </div>

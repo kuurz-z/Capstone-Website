@@ -96,6 +96,15 @@ router.patch(
   updateVisitAvailabilityRules,
 );
 
+router.put(
+  "/visit-availability/settings",
+  verifyToken,
+  verifyAdmin,
+  filterByBranch,
+  requirePermission("manageReservations"),
+  updateVisitAvailabilityRules,
+);
+
 router.get(
   "/current-residents",
   verifyToken,

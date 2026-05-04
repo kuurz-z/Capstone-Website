@@ -63,7 +63,7 @@ export default function AnalyticsBillingTab({
  const overdueAging = data?.series?.overdueAging || [];
 
  const metricCards = [
- { label: "Collected Revenue", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
+ { label: "Collected", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
  { label: "Billed Amount", value: data?.kpis?.billedAmountLabel || "PHP 0", tone: "blue" },
  { label: "Outstanding", value: data?.kpis?.outstandingBalanceLabel || "PHP 0", tone: "rose" },
  { label: "Collection Rate", value: data?.kpis?.collectionRateLabel || "0%", tone: "amber" },
@@ -95,7 +95,7 @@ export default function AnalyticsBillingTab({
  sections: [
  ...buildInsightPdfSections(insightData, "AI Billing Summary"),
  {
- title: "Monthly Revenue",
+ title: "Monthly Collections",
  rows: revenueByMonth.map(
  (item) => `${item.label}: collected ${formatPeso(item.collectedRevenue)}, billed ${formatPeso(item.billedAmount)}`,
  ),
@@ -140,7 +140,7 @@ export default function AnalyticsBillingTab({
  />
 
  <div className="admin-reports__grid">
- <ReportChartPanel title="Monthly revenue" subtitle="Collected and billed revenue in the selected window">
+ <ReportChartPanel title="Monthly collections" subtitle="Collected and billed amounts in the selected window">
  <AnalyticsBarChart
  data={revenueByMonth.map((item) => ({
  label: item.label,
@@ -152,8 +152,8 @@ export default function AnalyticsBillingTab({
  { key: "billed", label: "Billed", color: "#0f766e" },
  ]}
  valueFormatter={(value) => formatPeso(value)}
- emptyTitle="No billing revenue data"
- emptyDescription="Revenue history will appear once billing records exist for this branch and range."
+ emptyTitle="No billing collection data"
+ emptyDescription="Collection history will appear once billing records exist for this branch and range."
  />
  </ReportChartPanel>
 

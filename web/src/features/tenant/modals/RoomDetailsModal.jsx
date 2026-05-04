@@ -15,11 +15,13 @@ import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 
 function getAvailabilityLabel(room) {
  const beds = room.beds || [];
- const totalBeds = beds.length || 0;
- const availableBeds = beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available)).length;
+ const totalBeds = room.capacity || beds.length || 0;
+ const availableBeds = room.availableBeds ?? beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available)).length;
 
  if (!totalBeds) return "Available";
- if (availableBeds === 0) return "Full";
+ if (availableBeds === 0) {
+ return room.unavailableBeds > 0 ? "Unavailable" : "Full";
+ }
  if (availableBeds <= Math.max(1, Math.ceil(totalBeds * 0.25))) {
  return "Limited";
  }
@@ -29,6 +31,7 @@ function getAvailabilityLabel(room) {
 function getAvailabilityColor(room) {
  const label = getAvailabilityLabel(room);
  if (label === "Full") return "#EF4444";
+ if (label === "Unavailable") return "#6B7280";
  if (label === "Limited") return "#D4AF37";
  return "#10B981";
 }
@@ -63,10 +66,10 @@ export default function RoomDetailsModal({
  room.beds && room.beds.length > 1 && room.type !== "Private";
  const proceedDisabled =
  isOverbooked || (requiresBedSelection && !selectedBed);
- const totalBeds = room.beds?.length || 0;
- const availableBeds = room.beds
+ const totalBeds = room.capacity || room.beds?.length || 0;
+ const availableBeds = room.availableBeds ?? (room.beds
  ? room.beds.filter((bed) => bed.status === "available" || (bed.status === undefined && bed.available)).length
- : 0;
+ : 0);
  const occupancyPercentage = totalBeds
  ? ((totalBeds - availableBeds) / totalBeds) * 100
  : 0;
@@ -81,8 +84,8 @@ export default function RoomDetailsModal({
  )
  : [];
  const hasBunkPreference = upperBeds.length > 0 || lowerBeds.length > 0;
- const hasAvailableUpper = upperBeds.some((bed) => bed.available);
- const hasAvailableLower = lowerBeds.some((bed) => bed.available);
+ const hasAvailableUpper = upperBeds.some((bed) => bed.status === "available" || (bed.status === undefined && bed.available));
+ const hasAvailableLower = lowerBeds.some((bed) => bed.status === "available" || (bed.status === undefined && bed.available));
 
  const handlePrevImage = () => {
  if (!images.length) return;
@@ -230,7 +233,7 @@ export default function RoomDetailsModal({
  <div className="flex justify-between text-sm text-muted-foreground mb-2">
  <span>Current Occupancy</span>
  <span>
- {totalBeds - availableBeds} / {totalBeds} Occupied
+ {totalBeds - availableBeds} / {totalBeds} Unavailable
  </span>
  </div>
  <div className="w-full h-3 bg-border rounded-full overflow-hidden">

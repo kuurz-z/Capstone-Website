@@ -25,8 +25,15 @@ const RoomCard = React.memo(({ room, onClick }) => {
  ? room.beds.filter((b) => b.status === "occupied" || b.available === false).length
  : parseInt(room.occupancy?.split("/")[0]) || 0
  );
- const availableBeds = Math.max(0, totalBeds - occupied);
- const takenBeds = totalBeds - availableBeds;
+ const lockedBeds = room.unavailableBeds ?? (
+ room.beds
+ ? room.beds.filter((b) => ["locked", "maintenance"].includes(String(b.status || ""))).length
+ : 0
+ );
+ const availableBeds = Math.max(0, totalBeds - occupied - lockedBeds);
+ const takenBeds = Math.min(totalBeds, occupied);
+ const availabilityLabel =
+ availableBeds === 0 && lockedBeds > 0 ? "Unavailable" : "Full";
 
  return (
  <div className="ca-card" onClick={onClick}>
@@ -91,10 +98,13 @@ const RoomCard = React.memo(({ room, onClick }) => {
  {Array.from({ length: takenBeds }).map((_, i) => (
  <div key={`t-${i}`} className="ca-bed-dot taken" />
  ))}
+ {Array.from({ length: lockedBeds }).map((_, i) => (
+ <div key={`l-${i}`} className="ca-bed-dot locked" />
+ ))}
  </div>
  <span className="label">
  {availableBeds === 0
- ? "Full"
+ ? availabilityLabel
  : `${availableBeds} of ${totalBeds} open`}
  </span>
  </div>

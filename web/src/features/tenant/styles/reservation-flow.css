@@ -250,11 +250,30 @@ html[data-theme="dark"] {
 html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
 
 /* ── Visit step: date picker ── */
-.rf-date-grid {
+.rf-date-grid,
+.rf-calendar-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(7, minmax(82px, 1fr));
+  gap: 8px;
   margin-bottom: 8px;
+}
+.rf-calendar-grid {
+  overflow-x: auto;
+  padding-top: 2px;
+  padding-bottom: 4px;
+}
+.rf-calendar-weekday {
+  min-width: 0;
+  padding: 0 4px 2px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--rf-text-muted);
+  text-transform: uppercase;
+}
+.rf-date-empty {
+  min-height: 80px;
+  border-radius: 10px;
 }
 .rf-date-btn {
   all: unset;
@@ -264,16 +283,34 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   cursor: pointer;
   position: relative;
 }
+.rf-date-btn:disabled {
+  cursor: not-allowed;
+}
 .rf-date-card {
-  padding: 12px 10px;
+  box-sizing: border-box;
+  height: 80px;
+  padding: 9px 8px;
   border-radius: 10px;
   border: 2px solid var(--rf-border-card);
   background: var(--rf-surface);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   text-align: center;
   transition: all 0.15s ease;
   cursor: pointer;
 }
 .rf-date-card:hover { background: var(--rf-hover-bg); border-color: var(--rf-text-muted); }
+.rf-date-card.disabled {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+.rf-date-card.disabled:hover {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+}
 .rf-date-card.selected {
   border-color: var(--rf-selection-border);
   background: var(--rf-selection-bg);
@@ -290,8 +327,23 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   font-size: 16px;
   font-weight: 700;
   color: var(--rf-text-secondary);
+  white-space: nowrap;
 }
 .rf-date-card.selected .rf-date-num { color: var(--rf-text-heading); }
+.rf-date-reason {
+  max-width: 100%;
+  min-height: 20px;
+  margin-top: 3px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.12;
+  color: var(--rf-error-text, #b91c1c);
+  opacity: 0.78;
+}
 .rf-today-pill {
   position: absolute;
   top: -9px;
@@ -320,11 +372,18 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   width: 100%;
   cursor: pointer;
 }
+.rf-time-btn:disabled {
+  cursor: not-allowed;
+}
 .rf-time-slot {
+  min-height: 62px;
   padding: 10px 12px;
   border-radius: 8px;
   border: 2px solid var(--rf-border-card);
   background: var(--rf-surface);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   cursor: pointer;
   text-align: center;
   font-size: 14px;
@@ -332,7 +391,33 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   color: var(--rf-text-secondary);
   transition: all 0.15s ease;
 }
+.rf-time-slot span,
+.rf-time-slot small {
+  display: block;
+}
+.rf-time-slot small {
+  min-height: 14px;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--rf-success-text-alt);
+}
+.rf-time-slot.disabled small {
+  color: var(--rf-error-text);
+}
 .rf-time-slot:hover    { background: var(--rf-hover-bg); border-color: var(--rf-text-muted); }
+.rf-time-slot.disabled {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+  color: var(--rf-text-muted);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.rf-time-slot.disabled:hover {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+}
 .rf-time-slot.selected {
   border-color: var(--rf-selection-border);
   background: var(--rf-selection-bg);
@@ -799,7 +884,8 @@ html[data-theme="dark"] .rf-receipt-header__badge { color: var(--color-success);
 
 /* ── Responsive: date grid ── */
 @media (max-width: 640px) {
-  .rf-date-grid { grid-template-columns: repeat(3, 1fr); }
+  .rf-date-grid,
+  .rf-calendar-grid { grid-template-columns: repeat(7, minmax(78px, 1fr)); }
   .rf-summary-grid { grid-template-columns: 1fr; gap: 8px; }
   .rf-conf-buttons-row { flex-direction: column; }
   .rf-conf-primary-btn, .rf-conf-secondary-btn { flex: unset; width: 100%; }
@@ -1113,7 +1199,7 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 
 /* Complete = green (fully done / confirmed) */
 .rf-stepper-step.complete .rf-stepper-dot {
-  background: none 0%, #10b981 100%);
+  background: #10b981;
   border-color: var(--color-success);
   color: white;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
@@ -1121,7 +1207,7 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 
 /* Ongoing = blue (locked / in-progress, not yet fully complete) */
 .rf-stepper-step.ongoing .rf-stepper-dot {
-  background: none 0%, var(--color-accent) 100%);
+  background: var(--color-accent);
   border-color: var(--color-accent);
   color: white;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
@@ -1129,7 +1215,7 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 
 /* Active = orange (currently selected step) */
 .rf-stepper-step.active .rf-stepper-dot {
-  background: none 0%, #ff8c2e 100%);
+  background: #ff8c2e;
   border-color: var(--color-accent);
   color: white;
   box-shadow:
@@ -1275,6 +1361,10 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
   animation-delay: 0.05s;
 }
 
+.rf-visit-step {
+  animation: rfSlideIn 0.4s ease both;
+}
+
 .main-header {
   margin-bottom: 28px;
 }
@@ -1316,6 +1406,10 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
   padding: 28px;
   margin-bottom: 20px;
   animation: rfSlideIn 0.4s ease both;
+}
+
+.rf-visit-step .content-card {
+  border-color: var(--rf-border-card);
 }
 
 @keyframes rfSlideIn {

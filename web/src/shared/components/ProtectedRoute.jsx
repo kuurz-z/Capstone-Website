@@ -29,8 +29,15 @@ import { USER_ROLES } from "../utils/constants";
  * @returns {React.ReactNode} Protected content or redirect
  */
 const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
- const { isAuthenticated, loading, isAdmin, isOwner, getDefaultRoute } =
- useAuth();
+ const {
+ isAuthenticated,
+ loading,
+ isAdmin,
+ isOwner,
+ getDefaultRoute,
+ logoutIntent,
+ getLogoutIntent,
+ } = useAuth();
 
  // Show loading spinner while checking authentication
  if (loading) {
@@ -40,17 +47,23 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
  // Check authentication requirement
  if (requireAuth && !isAuthenticated) {
  const redirectPath = requiredRole === "applicant" ? "/" : "/signin";
+ const activeLogoutIntent =
+ logoutIntent || (typeof getLogoutIntent === "function" ? getLogoutIntent() : null);
  return (
  <Navigate
  to={redirectPath}
  replace
- state={{
+ state={
+ activeLogoutIntent
+ ? undefined
+ : {
  flash: {
  type: "info",
  message:
  "Sign in to discover available rooms and reserve your space",
  },
- }}
+ }
+ }
  />
  );
  }
