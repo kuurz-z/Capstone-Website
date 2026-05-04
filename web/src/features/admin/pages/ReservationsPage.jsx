@@ -77,30 +77,6 @@ function initials(name = "") {
 
 // formatShortDate moved to shared/utils/dateFormat — imported at top of file
 
-function getIdValidationLabel(status) {
-  switch (status) {
-    case "passed":
-      return "ID Passed";
-    case "warning":
-      return "ID Warning";
-    case "failed":
-      return "ID Failed";
-    case "manual_review":
-      return "Manual Review";
-    default:
-      return "Not Checked";
-  }
-}
-
-function IdValidationPill({ status }) {
-  const normalized = status || "not_validated";
-  return (
-    <span className={`res-id-pill res-id-pill--${normalized}`}>
-      {getIdValidationLabel(normalized)}
-    </span>
-  );
-}
-
 const SUMMARY_FILTERS = ["all", "in_progress", "reserved", "moveIn", "overdue"];
 function ReservationsPage() {
   const { user } = useAuth();
@@ -382,15 +358,6 @@ function ReservationsPage() {
         validIDBackUrl: reservation.validIDBackUrl,
         validIDType: reservation.validIDType,
         idType: reservation.idType,
-        idValidationStatus: reservation.idValidationStatus,
-        idExtractedName: reservation.idExtractedName,
-        idExtractedNumber: reservation.idExtractedNumber,
-        idNameMatchScore: reservation.idNameMatchScore,
-        idMismatchFlag: reservation.idMismatchFlag,
-        idValidationNotes: reservation.idValidationNotes,
-        idValidatedAt: reservation.idValidatedAt,
-        idValidationProvider: reservation.idValidationProvider,
-        idValidationDocumentUrl: reservation.idValidationDocumentUrl,
         nbiClearanceUrl: reservation.nbiClearanceUrl,
         nbiReason: reservation.nbiReason,
         companyIDUrl: reservation.companyIDUrl,
@@ -511,11 +478,6 @@ function ReservationsPage() {
         render: (row) => (
           <StatusBadge status={checkOverdueReservation(row) ? "overdue" : row.status} />
         ),
-      },
-      {
-        key: "idValidationStatus",
-        label: "ID Check",
-        render: (row) => <IdValidationPill status={row.idValidationStatus} />,
       },
       {
         key: "moveInDate",

@@ -84,7 +84,6 @@ await jest.unstable_mockModule("../controllers/reservationsController.js", () =>
   updateReservation: noop,
   updateReservationByUser: noop,
   cancelReservationByUser: noop,
-  validateReservationIdByUser: noop,
   deleteReservation: noop,
   extendReservation: noop,
   releaseSlot: noop,

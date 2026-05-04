@@ -31,7 +31,7 @@ import {
   getFirebaseErrorMessage,
 } from "../../../shared/utils/authValidation";
 import {
-  buildAuthSuccessFlash,
+  AUTH_TOAST_DURATION,
   buildAuthSuccessMessage,
 } from "../../../shared/utils/authToasts";
 import {
@@ -186,12 +186,11 @@ function SignIn() {
     Boolean(tokenResult?.claims?.branch_admin || tokenResult?.claims?.owner);
 
   const navigateAfterAuth = (user, fallbackName = "there") => {
-    const successFlash = buildAuthSuccessFlash(
-      buildAuthSuccessMessage(user, fallbackName),
-    );
+    const successMessage = buildAuthSuccessMessage(user, fallbackName);
 
     if (user.role === "branch_admin" || user.role === "owner") {
-      appNavigate("/admin/dashboard", successFlash);
+      showNotification(successMessage, "success", AUTH_TOAST_DURATION);
+      appNavigate("/admin/dashboard");
       return;
     }
 
@@ -206,7 +205,8 @@ function SignIn() {
       return;
     }
 
-    appNavigate("/applicant/check-availability", successFlash);
+    showNotification(successMessage, "success", AUTH_TOAST_DURATION);
+    appNavigate("/applicant/check-availability");
   };
 
   const validateForm = () => {

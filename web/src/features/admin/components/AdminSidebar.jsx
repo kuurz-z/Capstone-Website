@@ -5,7 +5,10 @@ import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { showNotification } from "../../../shared/utils/notification";
-import { buildSignOutSuccessFlash } from "../../../shared/utils/authToasts";
+import {
+  AUTH_TOAST_DURATION,
+  SIGN_OUT_SUCCESS_MESSAGE,
+} from "../../../shared/utils/authToasts";
 import LilycrestLogo from "../../../shared/components/LilycrestLogo";
 import { LogOut, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import {
@@ -43,9 +46,13 @@ export default function AdminSidebar({
     try {
       const result = await logout();
       if (result?.success) {
+        showNotification(
+          SIGN_OUT_SUCCESS_MESSAGE,
+          "success",
+          AUTH_TOAST_DURATION,
+        );
         appNavigate("/signin", {
           replace: true,
-          ...buildSignOutSuccessFlash(),
         });
       }
     } catch (error) {

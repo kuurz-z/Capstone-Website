@@ -158,14 +158,6 @@ const ID_TYPE_LABELS = {
   other: "Other",
 };
 
-const ID_STATUS_LABELS = {
-  passed: "Passed",
-  warning: "Warning",
-  failed: "Failed",
-  manual_review: "Manual Review",
-  not_validated: "Not Checked",
-};
-
 export default function ReservationDetailsModal({
   reservation,
   onClose,
@@ -206,11 +198,6 @@ export default function ReservationDetailsModal({
     : 0;
   const docs = buildDocs(reservation);
   const guestName = reservation.customer ?? "Unknown";
-  const applicantInputName =
-    [reservation.firstName, reservation.middleName, reservation.lastName]
-      .filter(Boolean)
-      .join(" ") || guestName;
-  const idStatus = reservation.idValidationStatus || "not_validated";
   const guestInitials = getInitials(guestName);
   const stageGuide = STAGE_GUIDANCE[status];
   const bookingDetails = [
@@ -563,64 +550,6 @@ export default function ReservationDetailsModal({
             </button>
             {showDocs && (
               <div className="rdm-expand-content">
-                <div className="rdm-id-review">
-                  <div className="rdm-id-review__header">
-                    <div>
-                      <div className="rdm-id-review__eyebrow">AI-assisted ID check</div>
-                      <div className="rdm-id-review__title">
-                        {ID_TYPE_LABELS[reservation.idType || reservation.validIDType] ||
-                          reservation.idType ||
-                          reservation.validIDType ||
-                          "ID type not provided"}
-                      </div>
-                    </div>
-                    <span className={`rdm-id-status rdm-id-status--${idStatus}`}>
-                      {ID_STATUS_LABELS[idStatus] || idStatus}
-                    </span>
-                  </div>
-                  <div className="rdm-id-review__grid">
-                    <div>
-                      <span>Applicant input</span>
-                      <strong>{fmt(applicantInputName)}</strong>
-                    </div>
-                    <div>
-                      <span>Extracted name</span>
-                      <strong>{fmt(reservation.idExtractedName)}</strong>
-                    </div>
-                    <div>
-                      <span>Extracted ID number</span>
-                      <strong>{fmt(reservation.idExtractedNumber)}</strong>
-                    </div>
-                    <div>
-                      <span>Name match</span>
-                      <strong>
-                        {typeof reservation.idNameMatchScore === "number"
-                          ? `${Math.round(reservation.idNameMatchScore * 100)}%`
-                          : "\u2014"}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Validated at</span>
-                      <strong>{fmtDateTime(reservation.idValidatedAt)}</strong>
-                    </div>
-                    <div>
-                      <span>Provider</span>
-                      <strong>{fmt(reservation.idValidationProvider)}</strong>
-                    </div>
-                  </div>
-                  {reservation.idMismatchFlag && (
-                    <div className="rdm-id-review__warning">
-                      Name mismatch detected. Please manually review before approval.
-                    </div>
-                  )}
-                  {Array.isArray(reservation.idValidationNotes) && reservation.idValidationNotes.length > 0 && (
-                    <ul className="rdm-id-review__notes">
-                      {reservation.idValidationNotes.slice(0, 4).map((note) => (
-                        <li key={note}>{note}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
                 {docs.map((doc, index) => (
                   <div key={`${doc.label}-${index}`} className="rdm-doc-row">
                     <span className="rdm-doc-label">{doc.label}</span>

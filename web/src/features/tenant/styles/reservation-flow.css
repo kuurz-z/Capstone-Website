@@ -891,45 +891,6 @@ html[data-theme="dark"] .rf-receipt-header__badge { color: var(--color-success);
   margin-top: 4px;
 }
 
-.rf-id-validation {
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--rf-border-card);
-  border-radius: 8px;
-  background: #fff;
-  font-size: 12px;
-}
-.rf-id-validation__title {
-  font-weight: 700;
-  color: var(--rf-text-secondary);
-}
-.rf-id-validation__meta {
-  margin-top: 3px;
-  color: var(--rf-text-muted);
-}
-.rf-id-validation__notes {
-  margin: 6px 0 0;
-  padding-left: 18px;
-  color: var(--rf-text-muted);
-}
-.rf-id-validation--passed {
-  border-color: var(--rf-success);
-  background: var(--rf-success-bg);
-}
-.rf-id-validation--warning {
-  border-color: #f59e0b;
-  background: #fffbeb;
-}
-.rf-id-validation--failed {
-  border-color: var(--rf-error-text);
-  background: var(--rf-error-bg);
-}
-.rf-id-validation--manual_review,
-.rf-id-validation--validating {
-  border-color: #d6dde6;
-  background: #f8fafc;
-}
-
 .rf-address-heading-wrap { margin-top: 8px; margin-bottom: 4px; }
 .rf-address-heading {
   font-size: 14px;

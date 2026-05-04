@@ -92,17 +92,6 @@ export const reservationApi = {
       }),
     ),
 
-  /**
-   * Validate applicant valid ID using backend OCR/Google Vision.
-   */
-  validateIdDocument: (reservationId, data) =>
-    withLifecycleNormalization(
-      authFetch(`/reservations/${reservationId}/id-validation`, {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    ),
-
   cancelByUser: (reservationId, reason = "") =>
     withLifecycleNormalization(
       authFetch(`/reservations/${reservationId}/cancel`, {

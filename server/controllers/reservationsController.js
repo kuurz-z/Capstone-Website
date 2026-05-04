@@ -73,11 +73,6 @@ import {
   transferStayWorkflow,
 } from "../utils/tenantActionService.js";
 import { ensureCurrentCycleRentBill } from "../utils/rentGenerator.js";
-import {
-  ID_TYPES,
-  validateReservationIdDocument as runIdValidation,
-} from "../services/idValidationService.js";
-
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
   "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
@@ -110,12 +105,6 @@ const ADMIN_LIST_FIELDS = [
   "reservationFeeForfeited",
   "idType",
   "validIDType",
-  "idValidationStatus",
-  "idMismatchFlag",
-  "idNameMatchScore",
-  "idValidatedAt",
-  "idValidationProvider",
-  "idValidationNotes",
 ].join(" ");
 const POPULATE_USER = ["userId", "firstName lastName email phone"];
 const POPULATE_ROOM = ["roomId", "name branch type price capacity beds floor"];
@@ -1471,31 +1460,6 @@ const APPLICANT_CANCELLABLE_STATUSES = new Set([
   "reserved",
 ]);
 
-const ID_VALIDATION_ACCEPTED_STATUSES = new Set([
-  "passed",
-  "warning",
-  "manual_review",
-]);
-
-const buildIdValidationUpdate = (result, documentUrl) => ({
-  idType: result.idType || null,
-  validIDType: result.idType || null,
-  idValidationStatus: result.status,
-  idExtractedText: result.extractedText || "",
-  idExtractedName: result.extractedName || "",
-  idExtractedNumber: result.extractedIdNumber || "",
-  idNameMatchScore: result.matchScore || 0,
-  idMismatchFlag: result.status === "warning" && (result.matchScore || 0) < 0.67,
-  idValidationNotes: Array.isArray(result.validationNotes)
-    ? result.validationNotes
-    : result.validationNotes
-      ? [String(result.validationNotes)]
-      : [],
-  idValidatedAt: new Date(),
-  idValidationProvider: result.provider || "google_vision",
-  idValidationDocumentUrl: documentUrl || null,
-});
-
 export const cancelReservationByUser = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
@@ -1606,100 +1570,6 @@ export const cancelReservationByUser = async (req, res, next) => {
 };
 
 /* ─── VALIDATE reservation ID (user self-update) ───── */
-export const validateReservationIdByUser = async (req, res, next) => {
-  try {
-    const { reservationId } = req.params;
-    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
-
-    const dbUser = await findDbUser(req.user.uid);
-    if (!dbUser) {
-      return res
-        .status(404)
-        .json({ error: "User not found.", code: "USER_NOT_FOUND" });
-    }
-
-    const reservation = await Reservation.findById(reservationId).populate(
-      "userId",
-      "firstName lastName email",
-    );
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found.",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
-
-    if (String(reservation.userId?._id || reservation.userId) !== String(dbUser._id)) {
-      return res.status(403).json({
-        error: "You can only validate your own reservation ID.",
-        code: "RESERVATION_ACCESS_DENIED",
-      });
-    }
-
-    if (
-      hasReservationStatus(reservation.status, "cancelled", "moveIn", "moveOut") ||
-      reservation.isArchived
-    ) {
-      return res.status(409).json({
-        error: "ID validation is not available for this reservation state.",
-        code: "ID_VALIDATION_NOT_ALLOWED",
-      });
-    }
-
-    const idType = String(req.body.idType || req.body.validIDType || "").trim();
-    const documentUrl = String(
-      req.body.documentUrl || req.body.validIDFrontUrl || "",
-    ).trim();
-
-    if (!idType || !ID_TYPES.includes(idType)) {
-      return res.status(422).json({
-        error: "ID type is required.",
-        code: "ID_TYPE_REQUIRED",
-      });
-    }
-
-    if (!documentUrl) {
-      return res.status(422).json({
-        error: "Valid ID front image is required.",
-        code: "ID_DOCUMENT_REQUIRED",
-      });
-    }
-
-    const result = await runIdValidation({
-      reservation,
-      idType,
-      documentUrl,
-      applicantPayload: req.body,
-    });
-    const update = buildIdValidationUpdate(result, documentUrl);
-
-    const updatedReservation = await Reservation.findByIdAndUpdate(
-      reservationId,
-      {
-        $set: {
-          ...update,
-          validIDFrontUrl: documentUrl,
-        },
-      },
-      { new: true, runValidators: true },
-    )
-      .populate(...POPULATE_USER)
-      .populate(...POPULATE_ROOM);
-
-    return res.json({
-      validationStatus: result.status,
-      message: result.message,
-      extractedName: result.extractedName || "",
-      extractedIdNumber: result.extractedIdNumber || "",
-      matchScore: result.matchScore || 0,
-      notes: result.validationNotes || [],
-      reservation: serializeReservation(updatedReservation),
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 /* ─── UPDATE reservation (user self-update) ──────── */
 export const updateReservationByUser = async (req, res, next) => {
   try {
@@ -1925,55 +1795,7 @@ export const updateReservationByUser = async (req, res, next) => {
         });
       }
 
-      const nextIdDocumentUrl = updates.validIDFrontUrl || reservation.validIDFrontUrl;
-      const validationStatus = reservation.idValidationStatus || "not_validated";
-      const validationAlreadyCurrent =
-        nextIdDocumentUrl &&
-        reservation.idValidationDocumentUrl === nextIdDocumentUrl &&
-        ID_VALIDATION_ACCEPTED_STATUSES.has(validationStatus);
-
-      if (
-        validationStatus === "failed" &&
-        (!reservation.idValidationDocumentUrl ||
-          reservation.idValidationDocumentUrl === nextIdDocumentUrl)
-      ) {
-        return res.status(422).json({
-          error: "ID image is unclear. Please upload a clearer photo.",
-          code: "ID_VALIDATION_FAILED",
-        });
-      }
-
-      if (nextIdDocumentUrl && submittedIdType && !validationAlreadyCurrent) {
-        const validation = await runIdValidation({
-          reservation,
-          idType: submittedIdType,
-          documentUrl: nextIdDocumentUrl,
-          applicantPayload: {
-            ...req.body,
-            firstName: updates.firstName || reservation.firstName,
-            middleName: updates.middleName || reservation.middleName,
-            lastName: updates.lastName || reservation.lastName,
-          },
-        });
-
-        if (validation.status === "failed") {
-          const validationUpdate = buildIdValidationUpdate(validation, nextIdDocumentUrl);
-          Object.assign(updates, validationUpdate);
-          await Reservation.findByIdAndUpdate(
-            reservationId,
-            { $set: { ...validationUpdate, validIDFrontUrl: nextIdDocumentUrl } },
-            { runValidators: true },
-          );
-          return res.status(422).json({
-            error: validation.message || "ID image is unclear. Please upload a clearer photo.",
-            code: "ID_VALIDATION_FAILED",
-            validationStatus: validation.status,
-            notes: validation.validationNotes || [],
-          });
-        }
-
-        Object.assign(updates, buildIdValidationUpdate(validation, nextIdDocumentUrl));
-      } else if (validationAlreadyCurrent) {
+      if (submittedIdType) {
         updates.idType = submittedIdType;
         updates.validIDType = submittedIdType;
       }

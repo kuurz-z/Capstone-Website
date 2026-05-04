@@ -31,13 +31,11 @@ export function useRouteFlash() {
     }
     processedFlashRef.current = flashKey;
 
-    const timer = window.setTimeout(() => {
-      showNotification(
-        routeFlash.message,
-        routeFlash.type || "info",
-        routeFlash.duration || 5000,
-      );
-    }, 400);
+    showNotification(
+      routeFlash.message,
+      routeFlash.type || "info",
+      routeFlash.duration || 5000,
+    );
 
     const nextState = { ...(location.state || {}) };
     delete nextState.flash;
@@ -47,7 +45,6 @@ export function useRouteFlash() {
       state: Object.keys(nextState).length > 0 ? nextState : undefined,
     });
 
-    return () => window.clearTimeout(timer);
   }, [location.state, navigate, routePath]);
 
   return {

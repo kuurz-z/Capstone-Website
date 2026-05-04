@@ -115,8 +115,6 @@ export default function useReservationFlow() {
   const [validIDFront, setValidIDFront] = useState(null);
   const [validIDBack, setValidIDBack] = useState(null);
   const [validIDType, setValidIDType] = useState("");
-  const [idValidationResult, setIdValidationResult] = useState(null);
-  const [isValidatingId, setIsValidatingId] = useState(false);
   const [nbiClearance, setNbiClearance] = useState(null);
   const [nbiReason, setNbiReason] = useState("");
   const [personalNotes, setPersonalNotes] = useState("");
@@ -308,23 +306,6 @@ export default function useReservationFlow() {
     if (r.companyIDReason) setCompanyIDReason(r.companyIDReason);
     if (r.personalNotes) setPersonalNotes(r.personalNotes);
     if (r.idType || r.validIDType) setValidIDType(r.idType || r.validIDType);
-    if (r.idValidationStatus && r.idValidationStatus !== "not_validated") {
-      setIdValidationResult({
-        validationStatus: r.idValidationStatus,
-        message:
-          r.idValidationStatus === "passed"
-            ? "ID verified successfully."
-            : r.idValidationStatus === "failed"
-              ? "ID image is unclear. Please upload a clearer photo."
-              : r.idValidationStatus === "manual_review"
-                ? "ID uploaded. It will be manually reviewed by admin."
-                : "Name mismatch detected. Please review your information or upload a clearer ID.",
-        extractedName: r.idExtractedName || "",
-        extractedIdNumber: r.idExtractedNumber || "",
-        matchScore: r.idNameMatchScore || 0,
-        notes: r.idValidationNotes || [],
-      });
-    }
     // NOTE: agreedToPrivacy / agreedToCertification are NOT restored
     // from saved data — consent must be re-affirmed each session.
   };
@@ -889,89 +870,6 @@ export default function useReservationFlow() {
   };
 
   // ── Auto-save (stages 3-4) ─────────────────────────────
-  const validateApplicantIdDocument = useCallback(
-    async ({ documentUrl, idType } = {}) => {
-      const targetReservationId = reservationId || reservationData?._id || reservationData?.id;
-      const selectedIdType = idType || validIDType;
-
-      if (!targetReservationId || !documentUrl || !selectedIdType) {
-        const message = !selectedIdType
-          ? "ID type is required."
-          : "Valid ID front image is required.";
-        setIdValidationResult({
-          validationStatus: "failed",
-          message,
-          notes: [],
-        });
-        return null;
-      }
-
-      setIsValidatingId(true);
-      setIdValidationResult({
-        validationStatus: "validating",
-        message: "Validating ID...",
-        notes: [],
-      });
-
-      try {
-        const result = await reservationApi.validateIdDocument(targetReservationId, {
-          documentUrl,
-          idType: selectedIdType,
-          firstName,
-          middleName,
-          lastName,
-        });
-        const normalizedResult = {
-          validationStatus: result.validationStatus || "manual_review",
-          message:
-            result.message ||
-            "ID uploaded. It will be manually reviewed by admin.",
-          extractedName: result.extractedName || "",
-          extractedIdNumber: result.extractedIdNumber || "",
-          matchScore: result.matchScore || 0,
-          notes: result.notes || [],
-        };
-
-        setIdValidationResult(normalizedResult);
-
-        if (normalizedResult.validationStatus === "passed") {
-          showNotification("ID verified successfully.", "success", 3000);
-        } else if (normalizedResult.validationStatus === "failed") {
-          showNotification("ID image is unclear. Please upload a clearer photo.", "error", 4000);
-        } else if (normalizedResult.validationStatus === "manual_review") {
-          showNotification("ID uploaded. It will be manually reviewed by admin.", "info", 4000);
-        } else {
-          showNotification("Name mismatch detected. Please review your information or upload a clearer ID.", "warning", 5000);
-        }
-
-        return normalizedResult;
-      } catch (error) {
-        const message = getFriendlyError(
-          error,
-          "ID requires manual verification.",
-        );
-        const fallback = {
-          validationStatus: "manual_review",
-          message,
-          notes: ["ID validation could not be completed. Admin manual review is required."],
-        };
-        setIdValidationResult(fallback);
-        showNotification(message, "warning", 4000);
-        return fallback;
-      } finally {
-        setIsValidatingId(false);
-      }
-    },
-    [
-      firstName,
-      lastName,
-      middleName,
-      reservationData,
-      reservationId,
-      validIDType,
-    ],
-  );
-
   const buildDraftPayload = useCallback(
     () => ({
       visitDate,
@@ -1263,18 +1161,6 @@ export default function useReservationFlow() {
             { key: "addressBarangay", label: "Barangay", isMissing: !hasText(addressBarangay) },
             { key: "validIDType", label: "ID Type", isMissing: !hasText(validIDType) },
             { key: "validIDFront", label: "Valid ID (Front)", isMissing: !validIDFront },
-            {
-              key: "validIDFront",
-              label: "Valid ID validation",
-              isMissing: idValidationResult?.validationStatus === "failed",
-              message: "ID image is unclear. Please upload a clearer photo.",
-            },
-            {
-              key: "validIDFront",
-              label: "Valid ID validation",
-              isMissing: isValidatingId,
-              message: "Please wait until ID validation finishes.",
-            },
             { key: "validIDBack", label: "Valid ID (Back)", isMissing: !validIDBack },
             {
               key: "nbiClearance",
@@ -1657,8 +1543,6 @@ export default function useReservationFlow() {
     validIDFront, setValidIDFront,
     validIDBack, setValidIDBack,
     validIDType, setValidIDType,
-    idValidationResult,
-    isValidatingId,
     nbiClearance, setNbiClearance,
     nbiReason, setNbiReason,
     personalNotes, setPersonalNotes,

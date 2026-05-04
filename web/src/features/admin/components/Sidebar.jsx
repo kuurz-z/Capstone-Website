@@ -5,7 +5,10 @@ import { useAuth } from "../../../shared/hooks/useAuth";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
 import { showNotification } from "../../../shared/utils/notification";
-import { buildSignOutSuccessFlash } from "../../../shared/utils/authToasts";
+import {
+  AUTH_TOAST_DURATION,
+  SIGN_OUT_SUCCESS_MESSAGE,
+} from "../../../shared/utils/authToasts";
 import LilycrestLogo from "../../../shared/components/LilycrestLogo";
 import {
   LayoutDashboard,
@@ -82,9 +85,13 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
     try {
       const result = await logout();
       if (result?.success) {
+        showNotification(
+          SIGN_OUT_SUCCESS_MESSAGE,
+          "success",
+          AUTH_TOAST_DURATION,
+        );
         appNavigate("/signin", {
           replace: true,
-          ...buildSignOutSuccessFlash(),
         });
       }
     } catch (error) {

@@ -19,14 +19,6 @@ const ID_TYPE_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
-const ID_VALIDATION_MESSAGES = {
-  validating: "Validating ID...",
-  passed: "ID verified successfully.",
-  warning: "Name mismatch detected. Please review your information or upload a clearer ID.",
-  failed: "ID image is unclear. Please upload a clearer photo.",
-  manual_review: "ID uploaded. It will be manually reviewed by admin.",
-};
-
 /**
  * Section 2: Personal Information — names, phone, birthday, marital status,
  * nationality, education, address fields (PSGC cascading), ID uploads, NBI, notes.
@@ -46,9 +38,6 @@ const PersonalInfoSection = ({
   validIDFront, setValidIDFront,
   validIDBack, setValidIDBack,
   validIDType, setValidIDType,
-  idValidationResult,
-  isValidatingId,
-  onValidateIdDocument,
   nbiClearance, setNbiClearance,
   nbiReason, setNbiReason,
   personalNotes, setPersonalNotes,
@@ -227,13 +216,7 @@ const PersonalInfoSection = ({
       <select
         className="form-select"
         value={validIDType}
-        onChange={(e) => {
-          const nextType = e.target.value;
-          setValidIDType(nextType);
-          if (typeof validIDFront === "string" && validIDFront.startsWith("http") && nextType) {
-            onValidateIdDocument?.({ documentUrl: validIDFront, idType: nextType });
-          }
-        }}
+        onChange={(e) => setValidIDType(e.target.value)}
         style={{ border: errBorder(showValidationErrors, validIDType) }}
       >
         <option value="">Select ID type...</option>
@@ -250,24 +233,12 @@ const PersonalInfoSection = ({
       <FileUploadField
         label="Valid ID (Front)"
         value={validIDFront}
-        onChange={(url) => {
-          setValidIDFront(url);
-          if (typeof url === "string" && url.startsWith("http") && validIDType) {
-            onValidateIdDocument?.({ documentUrl: url, idType: validIDType });
-          }
-        }}
+        onChange={setValidIDFront}
         hint="Government-issued ID (Front side)"
-        disabled={!validIDType || isValidatingId}
-        disabledMessage={!validIDType ? "Select an ID type before uploading." : "Validating ID..."}
-        hasError={
-          (showValidationErrors && !validIDFront) ||
-          idValidationResult?.validationStatus === "failed"
-        }
+        disabled={!validIDType}
+        disabledMessage="Select an ID type before uploading."
+        hasError={showValidationErrors && !validIDFront}
         required
-      />
-      <IdValidationFeedback
-        result={idValidationResult}
-        isValidating={isValidatingId}
       />
     </div>
     <div data-field="validIDBack">
@@ -330,40 +301,6 @@ const PersonalInfoSection = ({
 );
 
 // ─── Shared sub-components ───────────────────────────────────
-
-const IdValidationFeedback = ({ result, isValidating }) => {
-  const status = isValidating ? "validating" : result?.validationStatus;
-  if (!status) return null;
-
-  const message =
-    result?.message ||
-    ID_VALIDATION_MESSAGES[status] ||
-    "ID uploaded. It will be manually reviewed by admin.";
-  const notes = Array.isArray(result?.notes) ? result.notes.filter(Boolean) : [];
-
-  return (
-    <div className={`rf-id-validation rf-id-validation--${status}`}>
-      <div className="rf-id-validation__title">{message}</div>
-      {result?.extractedName && (
-        <div className="rf-id-validation__meta">
-          Extracted name: {result.extractedName}
-        </div>
-      )}
-      {typeof result?.matchScore === "number" && status !== "validating" && (
-        <div className="rf-id-validation__meta">
-          Name match score: {Math.round(result.matchScore * 100)}%
-        </div>
-      )}
-      {notes.length > 0 && (
-        <ul className="rf-id-validation__notes">
-          {notes.slice(0, 3).map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
 
 const FieldError = ({ error }) => {
   if (!error) return null;

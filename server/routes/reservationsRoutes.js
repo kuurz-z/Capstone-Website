@@ -39,7 +39,6 @@ import {
   updateReservation,
   updateReservationByUser,
   cancelReservationByUser,
-  validateReservationIdByUser,
   deleteReservation,
   extendReservation,
   releaseSlot,
@@ -221,19 +220,6 @@ router.put(
   verifyToken,
   verifyApplicant,
   updateReservationByUser,
-);
-
-/**
- * POST /api/reservations/:reservationId/id-validation
- *
- * Applicant-owned ID OCR validation. AI is assistive only; failed IDs block
- * applicant submission, while warnings/manual review remain visible to admin.
- */
-router.post(
-  "/:reservationId/id-validation",
-  verifyToken,
-  verifyApplicant,
-  validateReservationIdByUser,
 );
 
 /**

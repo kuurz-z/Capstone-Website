@@ -74,22 +74,6 @@
 .res-step-pill--purple { background: var(--accent-purple-bg); color: var(--accent-purple); }
 .res-step-pill--gray   { background: var(--bg-active);        color: var(--text-secondary); }
 
-.res-id-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 9px;
-  border-radius: 999px;
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  white-space: nowrap;
-  background: #f3f4f6;
-  color: #4b5563;
-}
-.res-id-pill--passed        { background: #dcfce7; color: #166534; }
-.res-id-pill--warning       { background: #fef3c7; color: #92400e; }
-.res-id-pill--failed        { background: #fee2e2; color: #991b1b; }
-.res-id-pill--manual_review { background: #ffedd5; color: #9a3412; }
-
 /* ── Icon action buttons ── */
 .res-actions {
   display: flex;
