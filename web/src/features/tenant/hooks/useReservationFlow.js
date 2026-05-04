@@ -238,6 +238,36 @@ export default function useReservationFlow() {
   };
 
   // ── Helpers to populate state from a reservation object ────
+  const validateApplicantIdDocument = useCallback(() => {
+    const hasText = (value) => Boolean(value?.trim?.() || value);
+
+    if (!hasText(validIDType)) {
+      return {
+        valid: false,
+        field: "validIDType",
+        message: "ID type is required.",
+      };
+    }
+
+    if (!validIDFront) {
+      return {
+        valid: false,
+        field: "validIDFront",
+        message: "Valid ID front image is required.",
+      };
+    }
+
+    if (!validIDBack) {
+      return {
+        valid: false,
+        field: "validIDBack",
+        message: "Valid ID back image is required.",
+      };
+    }
+
+    return { valid: true, field: null, message: null };
+  }, [validIDBack, validIDFront, validIDType]);
+
   const populateFromReservation = (r) => {
     if (r.firstName) setFirstName(r.firstName);
     if (r.lastName) setLastName(r.lastName);

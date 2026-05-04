@@ -1,8 +1,9 @@
 import React from "react";
+import { Check, Lock } from "lucide-react";
 import "../styles/bed-selector.css";
 
 /**
- * Visual Bed Selector — minimalist double-deck bunk bed layout.
+ * Visual Bed Selector - minimalist double-deck bunk bed layout.
  */
 const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => {
   if (!beds.length) return null;
@@ -19,7 +20,7 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
 
   const getStatus = (bed) => {
     if (!bed) return "empty";
-    if (bed.status === 'maintenance') return 'locked';
+    if (bed.status === "maintenance") return "locked";
     if (bed.status) return bed.status; // available, occupied, reserved, locked
     return bed.available === false ? "occupied" : "available";
   };
@@ -29,11 +30,41 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
     const status = getStatus(bed);
     return status === "available";
   };
+
   const isSelected = (bed) => bed && selectedBed?.id === bed.id;
 
   const handleClick = (bed) => {
     if (!isSelectable(bed)) return;
     onSelect?.({ id: bed.id, position: bed.position });
+  };
+
+  const renderStatusBadge = (status, selected) => {
+    if (selected) {
+      return (
+        <>
+          <Check className="bs-badge-icon" aria-hidden="true" />
+          Selected
+        </>
+      );
+    }
+    if (status === "occupied") return "Occupied";
+    if (status === "reserved") {
+      return (
+        <>
+          <Lock className="bs-badge-icon" aria-hidden="true" />
+          Reserved
+        </>
+      );
+    }
+    if (status === "locked") {
+      return (
+        <>
+          <Lock className="bs-badge-icon" aria-hidden="true" />
+          Locked
+        </>
+      );
+    }
+    return "Available";
   };
 
   const renderBed = (bed, label) => {
@@ -63,17 +94,7 @@ const BedSelector = ({ beds = [], selectedBed, onSelect, readOnly = false }) => 
               <div className="bs-id">{bed.id}</div>
             </div>
           </div>
-          <div className="bs-badge">
-            {selected
-              ? "✓ Selected"
-              : status === "occupied"
-                ? "Occupied"
-                : status === "reserved"
-                  ? "🔒 Reserved"
-                  : status === "locked"
-                    ? "� Locked"
-                    : "Available"}
-          </div>
+          <div className="bs-badge">{renderStatusBadge(status, selected)}</div>
         </div>
       </div>
     );
