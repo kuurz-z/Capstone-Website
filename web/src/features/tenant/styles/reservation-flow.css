@@ -265,10 +265,15 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   position: relative;
 }
 .rf-date-card {
-  padding: 12px 10px;
+  box-sizing: border-box;
+  height: 74px;
+  padding: 10px 10px;
   border-radius: 10px;
   border: 2px solid var(--rf-border-card);
   background: var(--rf-surface);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   text-align: center;
   transition: all 0.15s ease;
   cursor: pointer;
@@ -306,10 +311,16 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
 }
 .rf-date-card.selected .rf-date-num { color: var(--rf-text-heading); }
 .rf-date-reason {
-  margin-top: 5px;
-  font-size: 10px;
-  line-height: 1.2;
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.1;
   color: var(--rf-error-text, #b91c1c);
+  opacity: 0.85;
 }
 .rf-today-pill {
   position: absolute;
