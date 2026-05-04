@@ -40,19 +40,19 @@ export const validatePhoneNumber = (phone) => {
 };
 
 /**
- * Validate Philippine local mobile number format: 09XXXXXXXXX (11 digits).
+ * Validate Philippine mobile number format.
  * Used for all phone fields in the reservation flow.
- * Accepts digits-only input (no +63 prefix).
+ * Accepts the local format saved by the backend and the E.164 format emitted
+ * by PhoneInput.
  */
 export const validatePHPhoneLocal = (phone) => {
   if (!phone || !phone.trim())
-    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
+    return { valid: false, error: "Enter a valid mobile number (e.g. 9123456789)" };
   const digits = phone.replace(/\D/g, "");
-  if (!digits.startsWith("09"))
-    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
-  if (digits.length !== 11)
-    return { valid: false, error: "Enter a valid mobile number (e.g. 09123456789)" };
-  return { valid: true };
+  const valid = /^09\d{9}$/.test(digits) || /^639\d{9}$/.test(digits);
+  return valid
+    ? { valid: true }
+    : { valid: false, error: "Enter a valid mobile number (e.g. 9123456789)" };
 };
 
 export const validateBirthday = (birthday) => {
@@ -107,10 +107,17 @@ export const validateAddressField = (address) => {
  return { valid: true };
 };
 
+const parseDateInputValue = (date) => {
+ if (typeof date !== "string") return new Date(date);
+ const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+ if (!match) return new Date(date);
+ return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+};
+
 export const validateTargetMoveInDate = (date) => {
  if (!date) return { valid: false, error: "This field is required" };
 
- const selectedDate = new Date(date);
+ const selectedDate = parseDateInputValue(date);
  const minimumAllowedDate = new Date();
  minimumAllowedDate.setHours(0, 0, 0, 0);
  minimumAllowedDate.setDate(minimumAllowedDate.getDate() + 3);
@@ -188,6 +195,7 @@ export const validatePHPhoneOrLandline = (value) => {
   if (!value || !String(value).trim()) return false;
   const digits = String(value).replace(/[\s\-()]/g, "");
   if (/^09\d{9}$/.test(digits)) return true;
+  if (/^\+?639\d{9}$/.test(digits)) return true;
   if (/^0[2-8]\d{7,8}$/.test(digits)) return true;
   return false;
 };

@@ -18,8 +18,18 @@ import {
   handlePaymongoWebhook,
   handlePaymongoSourceWebhook,
 } from "../controllers/webhookController.js";
+import logger from "../middleware/logger.js";
 
 const router = express.Router();
+const paymongoRawBody = express.raw({ type: "*/*", limit: "1mb" });
+
+const acknowledgePaymongoBodyError = (err, req, res, next) => {
+  logger.warn(
+    { err },
+    "PayMongo webhook raw body parsing failed - acknowledging with 200",
+  );
+  return res.status(200).json({ received: true });
+};
 
 // ============================================================================
 // PAYMONGO WEBHOOK
@@ -36,7 +46,8 @@ const router = express.Router();
 // POST /api/webhooks/paymongo — checkout_session.payment.paid
 router.post(
   "/paymongo",
-  express.raw({ type: "application/json" }),
+  paymongoRawBody,
+  acknowledgePaymongoBodyError,
   handlePaymongoWebhook,
 );
 
@@ -44,7 +55,15 @@ router.post(
 // (mounted at /api/paymongo in server.js)
 router.post(
   "/webhook",
-  express.raw({ type: "application/json" }),
+  paymongoRawBody,
+  acknowledgePaymongoBodyError,
+  handlePaymongoSourceWebhook,
+);
+
+router.post(
+  "/",
+  paymongoRawBody,
+  acknowledgePaymongoBodyError,
   handlePaymongoSourceWebhook,
 );
 

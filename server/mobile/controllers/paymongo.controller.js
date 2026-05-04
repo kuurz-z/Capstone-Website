@@ -17,13 +17,16 @@ function verifyWebhookSignature(req) {
     console.warn('[PayMongo] PAYMONGO_WEBHOOK_SECRET not set — skipping signature verification');
     return true;
   }
-  const header = req.headers['x-paymongo-signature'];
+  const header = req.headers['paymongo-signature'] || req.headers['x-paymongo-signature'];
   if (!header) return false;
-  const tPart = header.split(',').find((p) => p.startsWith('t='));
-  const v1Part = header.split(',').find((p) => p.startsWith('v1='));
-  if (!tPart || !v1Part) return false;
-  const timestamp = tPart.slice(2);
-  const received = v1Part.slice(3);
+  const parts = {};
+  header.split(',').forEach((part) => {
+    const [key, ...valueParts] = part.split('=');
+    parts[key.trim()] = valueParts.join('=');
+  });
+  const timestamp = parts.t;
+  const received = parts.li || parts.te || parts.v1;
+  if (!timestamp || !received) return false;
   const rawBody = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
   const expected = crypto.createHmac('sha256', _webhookSecret).update(`${timestamp}.${rawBody}`).digest('hex');
   try {
@@ -436,8 +439,8 @@ async function getCheckoutStatus(req, res) {
 // PayMongo webhook handler — receives events from PayMongo
 async function handleWebhook(req, res) {
   if (!verifyWebhookSignature(req)) {
-    console.warn('[PayMongo] Webhook signature mismatch — request rejected');
-    return res.status(400).json({ detail: 'Invalid signature' });
+    console.warn('[PayMongo] Webhook signature mismatch - acknowledging without processing');
+    return res.status(200).json({ received: true });
   }
   try {
     const event = req.body?.data;

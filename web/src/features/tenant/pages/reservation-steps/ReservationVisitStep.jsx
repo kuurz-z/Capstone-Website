@@ -341,11 +341,6 @@ const ReservationVisitStep = ({
  <div className="rf-date-num">
  {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
  </div>
- {disabled && (
- <div className="rf-date-reason">
- {dateRow.disabledReason || "Unavailable"}
- </div>
- )}
  </div>
  </button>
  );
@@ -387,13 +382,9 @@ const ReservationVisitStep = ({
  >
  <div className={`rf-time-slot${selected ? " selected" : ""}${disabled ? " disabled" : ""}`}>
  <span>{slot.label}</span>
- <small>
- {disabled
- ? slot.disabledReason || "Unavailable"
- : slot.remaining != null
- ? `${slot.remaining} of ${slot.capacity ?? slot.remaining} slots left`
- : ""}
- </small>
+ {!disabled && slot.remaining != null && (
+ <small>{`${slot.remaining} of ${slot.capacity ?? slot.remaining} slots left`}</small>
+ )}
  </div>
  </button>
  );

@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const verifyWebhookSignature = jest.fn();
 const reservationFindById = jest.fn();
+const reservationFindOne = jest.fn();
 const reservationUpdateOne = jest.fn().mockResolvedValue({ modifiedCount: 1 });
 const billFindById = jest.fn();
+const billFindOne = jest.fn();
 const userFindById = jest.fn();
 const sendPaymentReceiptEmail = jest.fn();
 const updateOccupancyOnReservationChange = jest.fn();
@@ -15,8 +17,12 @@ await jest.unstable_mockModule("../config/paymongo.js", () => ({
 }));
 
 await jest.unstable_mockModule("../models/index.js", () => ({
-  Reservation: { findById: reservationFindById, updateOne: reservationUpdateOne },
-  Bill: { findById: billFindById },
+  Reservation: {
+    findById: reservationFindById,
+    findOne: reservationFindOne,
+    updateOne: reservationUpdateOne,
+  },
+  Bill: { findById: billFindById, findOne: billFindOne },
   User: { findById: userFindById },
 }));
 
@@ -52,7 +58,10 @@ await jest.unstable_mockModule("../utils/billSettlement.js", () => ({
   settlePaymongoBill,
 }));
 
-const { handlePaymongoWebhook } = await import("./webhookController.js");
+const {
+  handlePaymongoWebhook,
+  handlePaymongoSourceWebhook,
+} = await import("./webhookController.js");
 
 const createResponse = () => {
   const res = {
@@ -96,9 +105,11 @@ describe("handlePaymongoWebhook", () => {
   beforeEach(() => {
     verifyWebhookSignature.mockReset();
     reservationFindById.mockReset();
+    reservationFindOne.mockReset();
     reservationUpdateOne.mockReset();
     reservationUpdateOne.mockResolvedValue({ modifiedCount: 1 });
     billFindById.mockReset();
+    billFindOne.mockReset();
     userFindById.mockReset();
     sendPaymentReceiptEmail.mockReset();
     updateOccupancyOnReservationChange.mockReset();
@@ -337,6 +348,20 @@ describe("handlePaymongoWebhook", () => {
     const res = createResponse();
 
     await handlePaymongoWebhook(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ received: true });
+  });
+
+  test("payment-level webhook also returns 200 when signature verification fails", async () => {
+    verifyWebhookSignature.mockImplementation(() => {
+      throw new Error("invalid signature");
+    });
+
+    const req = { body: Buffer.from("{}"), headers: { "paymongo-signature": "bad" } };
+    const res = createResponse();
+
+    await handlePaymongoSourceWebhook(req, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ received: true });

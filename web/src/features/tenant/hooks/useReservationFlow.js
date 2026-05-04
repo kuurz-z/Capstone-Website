@@ -37,6 +37,21 @@ import {
 const getActiveResKey = (uid) =>
   uid ? `activeReservationId_${uid}` : "activeReservationId";
 
+const PAYMENT_RETURN_MIN_LOADING_MS = 900;
+const PAYMENT_RETURN_POLL_INTERVAL_MS = 1500;
+const PAYMENT_RETURN_MAX_WAIT_MS = 60000;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isReservationPaymentConfirmed = (reservation) => {
+  const status = normalizeReservationStatus(reservation?.status);
+  return (
+    reservation?.paymentStatus === "paid" ||
+    status === "reserved" ||
+    status === "moveIn"
+  );
+};
+
 export default function useReservationFlow() {
   const navigate = useNavigate();
   const appNavigate = useAppNavigation();
@@ -65,6 +80,9 @@ export default function useReservationFlow() {
       Boolean(sessionStorage.getItem("activeReservationId")) ||
       // Also check user-scoped keys (set after login is known)
       Object.keys(sessionStorage).some((k) => k.startsWith("activeReservationId_"))
+  );
+  const [paymentReturnLoading, setPaymentReturnLoading] = useState(
+    () => new URLSearchParams(window.location.search).has("payment")
   );
   const [visitApproved, setVisitApproved] = useState(false);
   const [visitCompleted, setVisitCompleted] = useState(false);
@@ -463,6 +481,7 @@ export default function useReservationFlow() {
         // Returning from PayMongo ΓÇö load reservation data for display,
         // and verify payment using the reservation's stored session ID.
         paymentVerifyingRef.current = true; // block re-init from hook's setSearchParams
+        setPaymentReturnLoading(true);
         isPaymentReturnRef.current = false; // consume the flag
         const storedResId =
           sessionStorage.getItem(getActiveResKey(user?.firebaseUid)) ||
@@ -470,7 +489,7 @@ export default function useReservationFlow() {
         if (storedResId) {
           loadExistingReservation(storedResId, true);
         } else {
-          loadActiveReservation();
+          loadActiveReservation(true);
         }
       } else {
         const stored = sessionStorage.getItem("pendingReservation");
@@ -501,7 +520,7 @@ export default function useReservationFlow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, location.key]);
 
-  const loadActiveReservation = async () => {
+  const loadActiveReservation = async (verifyPaymentReturn = false) => {
     try {
       const all = await reservationApi.getAll();
       const list = Array.isArray(all)
@@ -515,6 +534,10 @@ export default function useReservationFlow() {
         appNavigate("/applicant/check-availability", {
           flash: { type: "warning", message: "No active reservation found." },
         });
+        return;
+      }
+      if (verifyPaymentReturn) {
+        await loadExistingReservation(found._id, true);
         return;
       }
       const active = await reservationApi.getById(found._id);
@@ -552,6 +575,43 @@ export default function useReservationFlow() {
         flash: { type: "warning", message: "No room selected. Redirecting..." },
       });
     }
+  };
+
+  const waitForDepositPaymentValidation = async (resId, sessionId) => {
+    const startedAt = Date.now();
+    let lastResult = null;
+    let lastReservation = null;
+
+    while (Date.now() - startedAt < PAYMENT_RETURN_MAX_WAIT_MS) {
+      if (sessionId) {
+        lastResult = await billingApi.checkPaymentStatus(sessionId);
+        if (lastResult?.status === "paid") {
+          return { result: lastResult, reservation: null };
+        }
+      }
+
+      try {
+        lastReservation = await reservationApi.getById(resId);
+        if (isReservationPaymentConfirmed(lastReservation)) {
+          return {
+            result: {
+              status: "paid",
+              paymentMethod:
+                lastResult?.paymentMethod ||
+                lastReservation.paymentMethod ||
+                "paymongo",
+            },
+            reservation: lastReservation,
+          };
+        }
+      } catch {
+        // A transient refresh error should not stop PayMongo polling.
+      }
+
+      await wait(PAYMENT_RETURN_POLL_INTERVAL_MS);
+    }
+
+    return { result: lastResult, reservation: lastReservation };
   };
 
   const loadExistingReservation = async (resId, skipStageSet = false) => {
@@ -650,29 +710,33 @@ export default function useReservationFlow() {
         // Payment redirect ΓÇö verify using the reservation's stored paymongoSessionId
         // Set highest to 5 immediately so the stepper renders all stages green from the start
         setHighestStageReached(5);
-        // Verify payment status with PayMongo
-        if (reservation.paymongoSessionId) {
+        // Verify payment status with PayMongo/webhook state before leaving the loader.
+        if (reservation.paymongoSessionId || isReservationPaymentConfirmed(reservation)) {
           try {
-            const result = await billingApi.checkPaymentStatus(reservation.paymongoSessionId);
-            if (result.status === "paid") {
+            const { result, reservation: validatedReservation } =
+              isReservationPaymentConfirmed(reservation)
+                ? {
+                    result: {
+                      status: "paid",
+                      paymentMethod: reservation.paymentMethod || "paymongo",
+                    },
+                    reservation,
+                  }
+                : await waitForDepositPaymentValidation(
+                    resId,
+                    reservation.paymongoSessionId,
+                  );
+            if (result?.status === "paid") {
               sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
               sessionStorage.removeItem("activeReservationId"); // legacy cleanup
-              // Back button ΓåÆ redirect to dashboard; Return to merchant ΓåÆ show step 5
-              if (paymentReturnStatusRef.current === "cancelled") {
-                appNavigate("/applicant/profile", {
-                  flash: {
-                    type: "success",
-                    message: "Payment successful! Your reservation is secured.",
-                  },
-                });
-                return;
-              }
               // Re-fetch reservation to get the newly generated reservationCode
               // (the pre-save hook creates it when status transitions to "reserved")
               try {
-                const updated = await reservationApi.getById(resId);
+                const updated =
+                  validatedReservation || (await reservationApi.getById(resId));
                 if (updated?.reservationCode) setReservationCode(updated.reservationCode);
               } catch { /* non-critical ΓÇö code just won't display */ }
+              await wait(PAYMENT_RETURN_MIN_LOADING_MS);
               setCurrentStage(5);
               setHighestStageReached(5);
               setPaymentSubmitted(true);
@@ -682,13 +746,13 @@ export default function useReservationFlow() {
               showNotification("Payment successful! Your reservation is secured.", "success", 5000);
               return;
             } else {
-              console.warn("[PAYMENT] Session not yet paid:", reservation.paymongoSessionId, "status:", result.status);
+              console.warn("[PAYMENT] Session not yet paid:", reservation.paymongoSessionId, "status:", result?.status);
               setCurrentStage(4);
               // Show appropriate toast based on how the user returned
               if (paymentReturnStatusRef.current === "cancelled") {
-                showNotification("Payment cancelled. You can try again anytime.", "info", 5000);
+                showNotification("Payment was not confirmed yet. You can try again from the payment step.", "info", 5000);
               } else {
-                showNotification("Payment is being processed. Please wait or try again.", "info", 5000);
+                showNotification("Payment is still being validated. Please try again in a moment.", "info", 5000);
               }
               return;
             }
@@ -742,6 +806,7 @@ export default function useReservationFlow() {
       }
     } finally {
       paymentVerifyingRef.current = false;
+      setPaymentReturnLoading(false);
       setIsLoading(false);
     }
   };
@@ -1174,7 +1239,7 @@ export default function useReservationFlow() {
               key: "mobileNumber",
               label: "Mobile Number",
               isMissing: !isValidPhone(mobileNumber),
-              message: "Enter a valid mobile number (e.g. 09123456789).",
+              message: "Enter a valid mobile number (e.g. 9123456789).",
             },
             {
               key: "birthday",
@@ -1488,6 +1553,7 @@ export default function useReservationFlow() {
     currentStage,
     highestStageReached, setHighestStageReached,
     isLoading,
+    paymentReturnLoading,
     visitApproved,
     visitCompleted, setVisitCompleted,
     scheduleRejected,

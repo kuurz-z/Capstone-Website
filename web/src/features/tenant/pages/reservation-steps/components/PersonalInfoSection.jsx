@@ -27,6 +27,7 @@ const PersonalInfoSection = ({
  addressProvince, setAddressProvince,
  validIDFront, setValidIDFront,
  validIDBack, setValidIDBack,
+ validIDType, setValidIDType,
  nbiClearance, setNbiClearance,
  nbiReason, setNbiReason,
  personalNotes, setPersonalNotes,
@@ -203,6 +204,28 @@ const PersonalInfoSection = ({
  />
 
  {/* ID & document uploads */}
+ <div className="form-group" data-field="validIDType">
+ <label className="form-label">
+ ID Type <span className="rf-required">*</span>
+ </label>
+ <select
+ className="form-select"
+ value={validIDType}
+ onChange={(e) => setValidIDType(e.target.value)}
+ style={{ border: errBorder(showValidationErrors, validIDType) }}
+ >
+ <option value="">Select ID type...</option>
+ <option value="national_id">National ID</option>
+ <option value="drivers_license">Driver's License</option>
+ <option value="passport">Passport</option>
+ <option value="sss_id">SSS ID</option>
+ <option value="umid">UMID</option>
+ <option value="school_id">School ID</option>
+ <option value="other">Other Government-issued ID</option>
+ </select>
+ <FieldError error={showValidationErrors && !validIDType ? "ID type is required" : null} />
+ </div>
+
  <div data-field="validIDFront">
  <FileUploadField
  label="Valid ID (Front)"
