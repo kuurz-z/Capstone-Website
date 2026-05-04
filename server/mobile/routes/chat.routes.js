@@ -7,5 +7,6 @@ router.post('/start', authMiddleware, chatController.startConversation);
 router.get('/me', authMiddleware, chatController.getMyConversations);
 router.get('/:conversationId/messages', authMiddleware, chatController.getConversationMessages);
 router.post('/:conversationId/messages', authMiddleware, chatController.sendMessage);
+router.patch('/:conversationId/close', authMiddleware, chatController.closeConversation);
 
 module.exports = router;

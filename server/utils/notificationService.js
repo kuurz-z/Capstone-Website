@@ -18,6 +18,8 @@ import {
   buildMaintenanceNotificationBody,
   buildMaintenanceNotificationTitle,
 } from "../config/maintenance.js";
+import logger from "../middleware/logger.js";
+import { sendMobilePushBill } from "./mobilePushService.js";
 
 /**
  * Create a notification (generic)
@@ -45,6 +47,44 @@ async function createNotification(userId, type, title, message, options = {}) {
     console.error("⚠️ Failed to create notification:", error.message);
     return null;
   }
+}
+
+async function createNotificationWithPush(
+  userId,
+  type,
+  title,
+  message,
+  options = {},
+  pushSender = null,
+) {
+  const notification = await createNotification(userId, type, title, message, options);
+
+  if (typeof pushSender !== "function") {
+    return notification;
+  }
+
+  try {
+    const delivered = await pushSender();
+    logger.info(
+      {
+        userId: String(userId || ""),
+        type,
+        delivered,
+      },
+      "[Notification] Mobile push delivery completed",
+    );
+  } catch (error) {
+    logger.warn(
+      {
+        err: error,
+        userId: String(userId || ""),
+        type,
+      },
+      "[Notification] Mobile push delivery failed",
+    );
+  }
+
+  return notification;
 }
 
 // ============================================================================
@@ -103,8 +143,8 @@ const notify = {
   /**
    * Bill generated
    */
-  billGenerated: (userId, billingMonth, totalAmount, dueDate, options = {}) =>
-    createNotification(
+  billGenerated: async (userId, billingMonth, totalAmount, dueDate, options = {}) =>
+    createNotificationWithPush(
       userId,
       "bill_generated",
       "New Bill Available",
@@ -116,6 +156,13 @@ const notify = {
         entityId: options.billId || null,
         actionUrl: options.actionUrl || null,
       },
+      () => sendMobilePushBill(userId, null, {
+        billingMonth,
+        totalAmount,
+        dueDate,
+        billId: options.billId || null,
+        billType: options.billType || "bill",
+      }),
     ),
 
   utilityChargeAvailable: (

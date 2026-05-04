@@ -132,7 +132,7 @@ export default function AdminChatPage() {
   const { user } = useAuth();
   const isOwner = user?.role === "owner" || user?.role === "superadmin";
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");

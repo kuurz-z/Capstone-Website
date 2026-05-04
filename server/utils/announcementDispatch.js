@@ -2,6 +2,7 @@ import { Announcement, AcknowledgmentAccount, User } from "../models/index.js";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import { createNotification } from "./notificationService.js";
 import { emitToUser } from "./socket.js";
+import { sendMobilePushAnnouncement } from "./mobilePushService.js";
 import logger from "../middleware/logger.js";
 
 export const ANNOUNCEMENT_NOTIFICATION_URL = "/applicant/announcements";
@@ -145,6 +146,23 @@ export const dispatchAnnouncementNotifications = async (
     }
     await announcement.save();
   }
+
+  // Fire mobile push notifications in background — does not block the HTTP response.
+  // Targets the same recipient list already resolved for in-app notifications.
+  setImmediate(async () => {
+    try {
+      const recipientIds = resolvedRecipients.map((r) => r._id);
+      const pushCount = await sendMobilePushAnnouncement(announcement, recipientIds);
+      if (pushCount > 0) {
+        logger.info(
+          { announcementId: String(announcement._id), pushCount },
+          "Mobile push delivered for announcement",
+        );
+      }
+    } catch (err) {
+      logger.warn({ err }, "Mobile push for announcement failed (non-fatal)");
+    }
+  });
 
   return {
     recipients: resolvedRecipients,
