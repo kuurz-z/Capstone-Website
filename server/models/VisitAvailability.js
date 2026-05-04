@@ -13,6 +13,7 @@ export const DEFAULT_VISIT_SLOTS = Object.freeze([
 ]);
 
 export const DEFAULT_VISIT_WEEKDAYS = Object.freeze([1, 2, 3, 4, 5]);
+export const VISIT_WEEKDAY_SYSTEM = "js-get-day";
 
 const changedBySchema = new mongoose.Schema(
   {
@@ -52,6 +53,10 @@ const visitAvailabilitySchema = new mongoose.Schema(
     enabledWeekdays: {
       type: [Number],
       default: () => [...DEFAULT_VISIT_WEEKDAYS],
+    },
+    weekdaySystem: {
+      type: String,
+      default: VISIT_WEEKDAY_SYSTEM,
     },
     slots: {
       type: [visitSlotSchema],

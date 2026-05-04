@@ -851,6 +851,7 @@ const buildGeminiPrompt = ({ reportType, scope, filters, question, snapshot }) =
       ? "Generate one consolidated AI Insights Hub response across occupancy, billing, operations, forecasts, and allowed monitoring data."
       : "Generate a practical management insight for the selected report.",
     "Use only the JSON snapshot data. Do not invent facts, tenants, amounts, dates, or policy.",
+    "When referencing collectedRevenue or collection amounts, call them collected payments or collections, not revenue.",
     "Keep recommendations operational and human-review focused. Do not say that records were changed.",
     "For owner/all-branch scope, include planning or branch-comparison implications when supported by the data.",
     reportType === "hub"

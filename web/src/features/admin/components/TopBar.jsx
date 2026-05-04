@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { User, LogOut, Moon, Sun, ChevronDown, Clock, Menu } from "lucide-react";
 import NotificationBell from "../../../shared/components/NotificationBell";
+import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { useTheme } from "../../public/context/ThemeContext";
-import { buildSignOutSuccessFlash } from "../../../shared/utils/authToasts";
+import {
+  AUTH_TOAST_DURATION,
+  SIGN_OUT_SUCCESS_MESSAGE,
+} from "../../../shared/utils/authToasts";
+import { showNotification } from "../../../shared/utils/notification";
 
 export default function TopBar({
   darkMode,
@@ -16,6 +21,7 @@ export default function TopBar({
   const { user, logout } = useAuth();
   const appNavigate = useAppNavigation();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutInProgress, setLogoutInProgress] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const menuRef = useRef(null);
@@ -101,21 +107,32 @@ export default function TopBar({
       hour12: true,
     });
 
+  const handleLogoutClick = () => {
+    if (logoutInProgress) return;
+    setShowUserMenu(false);
+    setShowLogoutConfirm(true);
+  };
+
   const handleLogout = async () => {
     if (logoutInProgress) return;
     setLogoutInProgress(true);
     try {
       const result = await logout();
       if (result?.success) {
+        showNotification(
+          SIGN_OUT_SUCCESS_MESSAGE,
+          "success",
+          AUTH_TOAST_DURATION,
+        );
         appNavigate("/signin", {
           replace: true,
-          ...buildSignOutSuccessFlash(),
         });
       }
     } catch (error) {
       console.error("Admin logout error:", error);
     } finally {
       setLogoutInProgress(false);
+      setShowLogoutConfirm(false);
       setShowUserMenu(false);
     }
   };
@@ -251,7 +268,7 @@ export default function TopBar({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={handleLogout}
+                  onClick={handleLogoutClick}
                   disabled={logoutInProgress}
                   className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm transition-colors hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ color: "var(--status-error)" }}
@@ -264,6 +281,19 @@ export default function TopBar({
           ) : null}
         </div>
       </div>
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => {
+          if (!logoutInProgress) setShowLogoutConfirm(false);
+        }}
+        onConfirm={handleLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out of your account?"
+        variant="warning"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        loading={logoutInProgress}
+      />
     </header>
   );
 }

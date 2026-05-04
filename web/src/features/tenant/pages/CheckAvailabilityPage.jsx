@@ -6,6 +6,7 @@ import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { useRouteFlash } from "../../../shared/hooks/useRouteFlash";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
+import { buildSignOutSuccessFlash } from "../../../shared/utils/authToasts";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
 import { queryClient } from "../../../shared/lib/queryClient";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
@@ -88,17 +89,26 @@ function CheckAvailabilityPage() {
  const primaryImage = images[0] || getPrimaryImage(normalizedType);
  const roomNumber = room.roomNumber || room.room_number || displayName;
  const beds = room.beds?.length
- ? room.beds
+ ? room.beds.map((bed) => ({
+ ...bed,
+ available:
+ bed.status !== undefined
+ ? bed.status === "available"
+ : bed.available !== false,
+ }))
  : buildBedsFromCapacity(
  roomNumber,
  normalizedType,
  room.currentOccupancy || 0,
  );
- // Use server-tracked occupancy (kept in sync by auto-heal) instead of
- // the unreliable beds[].status which drifts when reservations change
+ const unavailableBeds = beds.filter((bed) =>
+ ["locked", "maintenance"].includes(String(bed.status || "")),
+ ).length;
+ // Use server-tracked occupancy for tenant presence, then subtract explicit
+ // bed blocks such as maintenance/temporary locks.
  const totalBeds = room.capacity || beds.length || 0;
  const occupied = room.currentOccupancy || 0;
- const availableBeds = Math.max(0, totalBeds - occupied);
+ const availableBeds = Math.max(0, totalBeds - occupied - unavailableBeds);
  return {
  id: roomNumber,
  roomId: room._id,
@@ -108,10 +118,14 @@ function CheckAvailabilityPage() {
  type: mappedType,
  capacity: totalBeds,
  currentOccupancy: occupied,
+ unavailableBeds,
+ availableBeds,
  occupancy: `${occupied}/${totalBeds}`,
  bedsLeft:
  availableBeds === 0
- ? "Full"
+ ? unavailableBeds > 0
+ ? "Unavailable"
+ : "Full"
  : `${availableBeds} bed${availableBeds === 1 ? "" : "s"} available`,
  price: typeof room.price === "number" ? room.price : 0,
  image: primaryImage,
@@ -558,9 +572,7 @@ function CheckAvailabilityPage() {
  setShowLogoutConfirm(false);
  try {
  await logout();
- appNavigate("/signin", {
- flash: { type: "success", message: "Signed out successfully" },
- });
+ appNavigate("/signin", buildSignOutSuccessFlash());
  } catch (err) {
  console.error("Logout error:", err);
  }

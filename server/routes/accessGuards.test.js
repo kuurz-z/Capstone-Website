@@ -260,6 +260,33 @@ describe("route access guards", () => {
     expect(getRouteIndex(reservationsRoutes, "/occupancy/:roomId", "get")).toBeLessThan(detailIndex);
     expect(getRouteIndex(reservationsRoutes, "/stats/occupancy", "get")).toBeLessThan(detailIndex);
     expect(getRouteIndex(reservationsRoutes, "/vacancy-forecast", "get")).toBeLessThan(detailIndex);
+    expect(getRouteIndex(reservationsRoutes, "/visit-availability/settings", "get")).toBeLessThan(detailIndex);
+    expect(getRouteIndex(reservationsRoutes, "/visit-availability/settings", "patch")).toBeLessThan(detailIndex);
+    expect(getRouteIndex(reservationsRoutes, "/visit-availability/settings", "put")).toBeLessThan(detailIndex);
+  });
+
+  test("visit availability settings updates enforce reservation permissions", () => {
+    const patchHandlers = getRouteHandlers(
+      reservationsRoutes,
+      "/visit-availability/settings",
+      "patch",
+    );
+    const putHandlers = getRouteHandlers(
+      reservationsRoutes,
+      "/visit-availability/settings",
+      "put",
+    );
+
+    for (const handlers of [patchHandlers, putHandlers]) {
+      expect(handlers).toContain(verifyToken);
+      expect(handlers).toContain(verifyAdmin);
+      expect(handlers).toContain(filterByBranch);
+      expect(
+        handlers.some(
+          (handler) => handler.requiredPermission === "manageReservations",
+        ),
+      ).toBe(true);
+    }
   });
 
   test("room, announcement, audit, and digital twin routes use module permissions", () => {

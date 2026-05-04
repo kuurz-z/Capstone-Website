@@ -68,8 +68,8 @@ export const reservationApi = {
   updateVisitAvailabilitySettings: (branch, data) => {
     const queryString = new URLSearchParams({ branch }).toString();
     return authFetch(`/reservations/visit-availability/settings?${queryString}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
+      method: "PUT",
+      body: JSON.stringify({ ...data, weekdaySystem: "js-get-day" }),
     });
   },
 

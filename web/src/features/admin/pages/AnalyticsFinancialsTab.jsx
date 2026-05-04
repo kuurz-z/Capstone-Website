@@ -10,11 +10,14 @@ import {
 } from "../components/shared";
 import { buildRangeLabel, formatBranch, formatPeso } from "./reportCommon";
 import {
+ AnalyticsInsightSection,
+ buildInsightPdfSections,
  ExportButtons,
  handleCsvExport,
  handlePdfExport,
  MetricGrid,
  RANGE_OPTIONS_LONG,
+ useReportInsights,
 } from "./analyticsTabShared";
 
 const OVERDUE_ROOM_COLUMNS = [
@@ -34,6 +37,15 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  const [page, setPage] = useState(1);
  const params = useMemo(() => ({ branch, range }), [branch, range]);
  const { data, isLoading, isError } = useFinancialsAnalytics(params);
+ const {
+ data: insightData,
+ isLoading: isInsightLoading,
+ isError: isInsightError,
+ } = useReportInsights({
+ reportType: "financials",
+ range,
+ branch,
+ });
  const branchComparison = data?.series?.branchComparison || [];
  const revenueByMonth = data?.series?.revenueByMonth || [];
  const overdueAging = data?.series?.overdueAging || [];
@@ -41,7 +53,7 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  const pagedRooms = overdueRooms.slice((page - 1) * 10, page * 10);
 
  const metricCards = [
- { label: "Collected Revenue", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
+ { label: "Collected", value: data?.kpis?.collectedRevenueLabel || "PHP 0", tone: "green" },
  { label: "Outstanding", value: data?.kpis?.outstandingBalanceLabel || "PHP 0", tone: "rose" },
  { label: "Overdue", value: data?.kpis?.overdueAmountLabel || "PHP 0", tone: "amber" },
  { label: "Collection Rate", value: data?.kpis?.collectionRateLabel || "0%", tone: "blue" },
@@ -68,6 +80,7 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  filename: `financial-overview-${range}.pdf`,
  kpis: metricCards.map((item) => ({ label: item.label, value: item.value })),
  sections: [
+ ...buildInsightPdfSections(insightData, "AI Financial Summary"),
  {
  title: "Branch Comparison",
  rows: branchComparison.map(
@@ -110,6 +123,14 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  >
  <MetricGrid items={metricCards} />
 
+ <AnalyticsInsightSection
+ reportLabel="financials"
+ summaryTitle="Financial Summary"
+ data={insightData}
+ isLoading={isInsightLoading}
+ isError={isInsightError}
+ />
+
  <div className="admin-reports__grid">
  <ReportChartPanel title="Branch comparison" subtitle="Collections, overdue exposure, and collection rate by branch">
  <AnalyticsComparisonChart
@@ -140,7 +161,7 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  </div>
 
  <div className="admin-reports__grid">
- <ReportChartPanel title="Monthly collections" subtitle="Collected revenue over the selected period">
+ <ReportChartPanel title="Monthly collections" subtitle="Collected payments over the selected period">
  <AnalyticsBarChart
  data={revenueByMonth.map((item) => ({
  label: item.label,
@@ -157,7 +178,7 @@ export default function AnalyticsFinancialsTab({ branch, range, onBranchChange, 
  />
  </ReportChartPanel>
 
- <ReportChartPanel title="Net position" subtitle="Collected revenue less currently overdue balances">
+ <ReportChartPanel title="Net position" subtitle="Collected payments less currently overdue balances">
  <div className="admin-reports__meta-grid">
  <div className="admin-reports__meta-card">
  <span className="admin-reports__meta-label">Net position</span>

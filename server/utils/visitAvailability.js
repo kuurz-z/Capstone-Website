@@ -2,6 +2,7 @@ import { Reservation, Room, VisitAvailability, ROOM_BRANCHES } from "../models/i
 import {
   DEFAULT_VISIT_SLOTS,
   DEFAULT_VISIT_WEEKDAYS,
+  VISIT_WEEKDAY_SYSTEM,
 } from "../models/VisitAvailability.js";
 import { reservationStatusesForQuery } from "./lifecycleNaming.js";
 
@@ -53,10 +54,24 @@ export const normalizeVisitBranch = (branch) => {
   return ROOM_BRANCHES.includes(normalized) ? normalized : "";
 };
 
-const normalizeWeekdays = (value) => {
+const LEGACY_MONDAY_ZERO_WEEKDAYS = Object.freeze([0, 1, 2, 3, 4]);
+
+const sameWeekdaySet = (left, right) =>
+  left.length === right.length && left.every((day, index) => day === right[index]);
+
+const normalizeWeekdays = (value, weekdaySystem = "") => {
   const source = Array.isArray(value) ? value : DEFAULT_VISIT_WEEKDAYS;
-  return [...new Set(source.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))]
+  const normalized = [...new Set(source.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))]
     .sort((left, right) => left - right);
+
+  if (
+    weekdaySystem !== VISIT_WEEKDAY_SYSTEM &&
+    sameWeekdaySet(normalized, LEGACY_MONDAY_ZERO_WEEKDAYS)
+  ) {
+    return [...DEFAULT_VISIT_WEEKDAYS];
+  }
+
+  return normalized;
 };
 
 const normalizeSlots = (value) => {
@@ -86,7 +101,8 @@ const normalizeBlackouts = (value) => {
 
 export const serializeVisitAvailabilitySettings = (settings) => ({
   branch: settings.branch,
-  enabledWeekdays: normalizeWeekdays(settings.enabledWeekdays),
+  enabledWeekdays: normalizeWeekdays(settings.enabledWeekdays, settings.weekdaySystem),
+  weekdaySystem: settings.weekdaySystem || VISIT_WEEKDAY_SYSTEM,
   slots: normalizeSlots(settings.slots),
   blackoutDates: normalizeBlackouts(settings.blackoutDates),
   changedBy: settings.changedBy || null,
@@ -115,7 +131,8 @@ export async function updateVisitAvailabilitySettings(branch, payload, actor = n
   const settings = await getVisitAvailabilitySettings(branch);
 
   if (payload.enabledWeekdays !== undefined) {
-    settings.enabledWeekdays = normalizeWeekdays(payload.enabledWeekdays);
+    settings.enabledWeekdays = normalizeWeekdays(payload.enabledWeekdays, VISIT_WEEKDAY_SYSTEM);
+    settings.weekdaySystem = VISIT_WEEKDAY_SYSTEM;
   }
   if (payload.slots !== undefined) {
     settings.slots = normalizeSlots(payload.slots);
@@ -204,7 +221,7 @@ export function getDateClosureReason({ dateKey, settings, now = new Date() }) {
     };
   }
 
-  const enabledWeekdays = new Set(normalizeWeekdays(settings.enabledWeekdays));
+  const enabledWeekdays = new Set(normalizeWeekdays(settings.enabledWeekdays, settings.weekdaySystem));
   if (!enabledWeekdays.has(date.getDay())) {
     return { code: "VISIT_DATE_CLOSED", reason: "Visits are closed on that date." };
   }
