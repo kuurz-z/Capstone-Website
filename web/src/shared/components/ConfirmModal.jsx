@@ -26,6 +26,7 @@ export default function ConfirmModal({
   cancelText = "Cancel",
   variant = "info",
   loading = false,
+  children = null,
 }) {
   // Close on Escape key
   useEffect(() => {
@@ -225,6 +226,16 @@ export default function ConfirmModal({
             >
               {message}
             </p>
+          )}
+          {children && (
+            <div
+              style={{
+                marginTop: 12,
+                paddingLeft: 46,
+              }}
+            >
+              {children}
+            </div>
           )}
         </div>
 

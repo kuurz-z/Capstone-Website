@@ -1,4 +1,4 @@
-ï»¿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmtShortDate as formatShortDate } from "../../../shared/utils/dateFormat";
 import {
   AlertTriangle,
@@ -76,7 +76,7 @@ function initials(name = "") {
     : (parts[0]?.[0] || "?").toUpperCase();
 }
 
-// formatShortDate moved to shared/utils/dateFormat â€” imported at top of file
+// formatShortDate moved to shared/utils/dateFormat — imported at top of file
 
 const SUMMARY_FILTERS = ["all", "in_progress", "reserved", "moveIn", "overdue"];
 function ReservationsPage() {
@@ -107,6 +107,7 @@ function ReservationsPage() {
     variant: "info",
     onConfirm: null,
   });
+  const permanentDeleteRef = useRef(false);
   const itemsPerPage = 12;
 
   const {
@@ -416,6 +417,7 @@ function ReservationsPage() {
 
   const handleDelete = useCallback((reservation) => {
     const isPermanentDelete = reservation?.isArchived === true;
+    permanentDeleteRef.current = isPermanentDelete;
     setConfirmModal({
       open: true,
       title: isPermanentDelete ? "Permanently Delete Reservation" : "Archive Reservation",
@@ -425,14 +427,16 @@ function ReservationsPage() {
           : "This archives the reservation and preserves billing history. Use the Archived filter if you need to permanently delete it later.",
       variant: "danger",
       confirmText: isPermanentDelete ? "Delete Permanently" : "Archive",
+      showPermanentDeleteOption: !isPermanentDelete,
       onConfirm: async () => {
         setConfirmModal((previous) => ({ ...previous, open: false }));
+        const hardDelete = isPermanentDelete || permanentDeleteRef.current;
         try {
           await reservationApi.delete(reservation.id, {
-            hardDelete: isPermanentDelete,
+            hardDelete,
           });
           showNotification(
-            isPermanentDelete
+            hardDelete
               ? "Reservation permanently deleted"
               : "Reservation archived",
             "success",
@@ -441,7 +445,7 @@ function ReservationsPage() {
         } catch (error) {
           showNotification(
             error?.message ||
-              (isPermanentDelete
+              (hardDelete
                 ? "Failed to permanently delete reservation"
                 : "Failed to archive reservation"),
             "error",
@@ -509,7 +513,7 @@ function ReservationsPage() {
           <div className="res-room-cell">
             <span className="res-room-name">{row.room}</span>
             <span className="res-room-meta">
-              {row.roomType || "Room"} Â· {row.branch}
+              {row.roomType || "Room"} · {row.branch}
             </span>
           </div>
         ),
@@ -694,7 +698,41 @@ function ReservationsPage() {
         message={confirmModal.message}
         variant={confirmModal.variant}
         confirmText={confirmModal.confirmText || "Confirm"}
-      />
+      >
+        {confirmModal.showPermanentDeleteOption && (
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              fontSize: 13,
+              lineHeight: 1.4,
+              color: "var(--text-secondary, #475569)",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              onChange={(event) => {
+                const checked = event.target.checked;
+                permanentDeleteRef.current = checked;
+                setConfirmModal((previous) => ({
+                  ...previous,
+                  confirmText: checked ? "Delete Permanently" : "Archive",
+                }));
+              }}
+              style={{
+                width: 15,
+                height: 15,
+                marginTop: 2,
+                accentColor: "#DC2626",
+                cursor: "pointer",
+              }}
+            />
+            <span>Permanently delete this reservation instead of archiving it.</span>
+          </label>
+        )}
+      </ConfirmModal>
       {error && <div className="sr-only">{error}</div>}
     </>
   );
