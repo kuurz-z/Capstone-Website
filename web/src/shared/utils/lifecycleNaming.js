@@ -167,10 +167,18 @@ export const readMoveInDate = (value) => value?.moveInDate ?? null;
 
 export const readMoveOutDate = (value) => value?.moveOutDate ?? null;
 
-export const getReservationStatusLabel = (status) =>
-  RESERVATION_STATUS_LABELS[normalizeReservationStatus(status)] ||
-  normalizeReservationStatus(status) ||
-  "Unknown";
+export const getReservationStatusLabel = (status) => {
+  const normalized = normalizeReservationStatus(status);
+  if (!normalized) return "Unknown";
+
+  return String(normalized)
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
 
 export const getReservationStatusAppearance = (status) =>
   RESERVATION_STATUS_APPEARANCE[normalizeReservationStatus(status)] ||

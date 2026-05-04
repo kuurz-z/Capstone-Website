@@ -14,9 +14,6 @@ const ERROR_MAP = [
   [/timeout|ETIMEDOUT|ECONNABORTED/i, "The request took too long. Please try again."],
   [/CORS|cross-origin/i, "Unable to connect to the server. Please try again later."],
 
-  // Reservation scheduling
-  [/visits?\s+must\s+be\s+scheduled\s+at\s+least\s+one\s+day\s+in\s+advance/i, "Please choose a visit date at least one day from today."],
-
   // Auth
   [/not\s*authenticated|no\s*auth|unauthorized|401/i, "Your session has expired. Please sign in again."],
   [/forbidden|403|not\s*allowed/i, "You don't have permission to perform this action."],
@@ -39,7 +36,6 @@ const ERROR_MAP = [
   // Server
   [/500|internal\s*server/i, "Something went wrong on our end. Please try again later."],
   [/503|service\s*unavailable/i, "The service is temporarily unavailable. Please try again later."],
-  [/ReferenceError|TypeError|SyntaxError|is\s+not\s+defined/i, "Something went wrong. Please check the form and try again."],
 
   // Firebase auth (these come through getFirebaseErrorMessage usually, but just in case)
   [/auth\/email-already-in-use/i, "This email is already registered. Please sign in instead."],
@@ -62,21 +58,17 @@ export function getFriendlyError(error, fallback = "Something went wrong. Please
   if (!error) return fallback;
 
   // Extract the raw message string
-  const serverError = error?.response?.data?.error;
-  const serverMsg =
-    typeof serverError === "string"
-      ? serverError
-      : serverError?.message || error?.response?.data?.message;
+  const serverMsg = error?.response?.data?.error || error?.response?.data?.message;
   const rawMsg = typeof error === "string" ? error : (serverMsg || error?.message || "");
-
-  // Try pattern matching
-  for (const [pattern, friendly] of ERROR_MAP) {
-    if (pattern.test(rawMsg)) return friendly;
-  }
 
   // If the server sent a clean, short message (likely already user-friendly), use it
   if (serverMsg && serverMsg.length < 120 && !/error|exception|stack|at\s+\w/i.test(serverMsg)) {
     return serverMsg;
+  }
+
+  // Try pattern matching
+  for (const [pattern, friendly] of ERROR_MAP) {
+    if (pattern.test(rawMsg)) return friendly;
   }
 
   // If the raw message is short + clean (no stack trace / code-like content), use it

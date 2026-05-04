@@ -55,7 +55,6 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import branchSummaryRoutes from "./routes/branchSummaryRoutes.js";
 import { initSocket } from "./utils/socket.js";
-import mobileRoutes from "./mobile/mobileRoutes.mjs";
 
 dotenv.config();
 
@@ -255,9 +254,6 @@ app.use("/api/financial", financialRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/branches", branchSummaryRoutes);
-
-// ─── Mobile App Routes (LilyCrest-Clean backend bridge) ─────────────────────
-app.use("/api/m", mobileRoutes);
 
 app.get("/api/health", async (req, res) => {
   const checks = {};

@@ -10,11 +10,8 @@ const maintenanceFind = jest.fn();
 const userCountDocuments = jest.fn();
 const billAggregate = jest.fn();
 const billFind = jest.fn();
-const auditCountDocuments = jest.fn();
 const auditFind = jest.fn();
-const loginLogCountDocuments = jest.fn();
 const loginLogFind = jest.fn();
-const userSessionCountDocuments = jest.fn();
 const getUserBranchInfo = jest.fn();
 const getBranchOccupancyStats = jest.fn();
 const sendSuccess = jest.fn();
@@ -32,7 +29,6 @@ const createLeanChain = (result) => {
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   AuditLog: {
-    countDocuments: auditCountDocuments,
     find: auditFind,
   },
   Bill: {
@@ -44,7 +40,6 @@ await jest.unstable_mockModule("../models/index.js", () => ({
     find: inquiryFind,
   },
   LoginLog: {
-    countDocuments: loginLogCountDocuments,
     find: loginLogFind,
   },
   MaintenanceRequest: {
@@ -60,9 +55,6 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   },
   User: {
     countDocuments: userCountDocuments,
-  },
-  UserSession: {
-    countDocuments: userSessionCountDocuments,
   },
 }));
 
@@ -95,7 +87,6 @@ const {
   getOccupancyForecast,
   getOccupancyReport,
   getOperationsReport,
-  getSystemPerformance,
 } = await import("./analyticsController.js");
 
 describe("analyticsController", () => {
@@ -109,12 +100,9 @@ describe("analyticsController", () => {
     maintenanceFind.mockReset();
     userCountDocuments.mockReset();
     billAggregate.mockReset();
-    auditCountDocuments.mockReset();
     billFind.mockReset();
-    loginLogCountDocuments.mockReset();
     auditFind.mockReset();
     loginLogFind.mockReset();
-    userSessionCountDocuments.mockReset();
     getUserBranchInfo.mockReset();
     getBranchOccupancyStats.mockReset();
     sendSuccess.mockReset();
@@ -328,74 +316,9 @@ describe("analyticsController", () => {
           occupancyRate: 100,
         }),
         tables: expect.objectContaining({
-          inventory: expect.objectContaining({
-            rows: expect.arrayContaining([
-              expect.objectContaining({ roomNumber: "101", roomTypeLabel: "Private" }),
-            ]),
-            pagination: expect.objectContaining({ total: 1 }),
-          }),
-        }),
-      }),
-    );
-  });
-
-  test("paginates and sorts occupancy table rows from query parameters", async () => {
-    getUserBranchInfo.mockResolvedValue({
-      role: "branch_admin",
-      branch: "gil-puyat",
-      isOwner: false,
-    });
-    roomFind.mockReturnValueOnce(
-      createLeanChain([
-        {
-          _id: "room-101",
-          name: "Room 101",
-          roomNumber: "101",
-          branch: "gil-puyat",
-          type: "private",
-          capacity: 1,
-          currentOccupancy: 1,
-          beds: [],
-        },
-        {
-          _id: "room-103",
-          name: "Room 103",
-          roomNumber: "103",
-          branch: "gil-puyat",
-          type: "private",
-          capacity: 1,
-          currentOccupancy: 0,
-          beds: [],
-        },
-      ]),
-    );
-    reservationFind.mockReturnValue(createLeanChain([]));
-
-    const req = {
-      user: { uid: "firebase-admin-table" },
-      query: {
-        range: "30d",
-        tableLimit: "1",
-        tableOffset: "1",
-        tableSort: "roomNumber",
-        tableDirection: "desc",
-      },
-    };
-    const res = { req };
-
-    await getOccupancyReport(req, res, jest.fn());
-
-    const [, payload] = sendSuccess.mock.calls.at(-1);
-    expect(payload.tables.inventory).toEqual(
-      expect.objectContaining({
-        rows: [expect.objectContaining({ roomNumber: "101" })],
-        pagination: expect.objectContaining({
-          total: 2,
-          limit: 1,
-          offset: 1,
-          sort: "roomNumber",
-          direction: "desc",
-          hasMore: false,
+          inventory: expect.arrayContaining([
+            expect.objectContaining({ roomNumber: "101", roomTypeLabel: "Private" }),
+          ]),
         }),
       }),
     );
@@ -458,15 +381,12 @@ describe("analyticsController", () => {
       expect.objectContaining({
         scope: expect.objectContaining({ branch: "guadalupe" }),
         tables: expect.objectContaining({
-          overdueAccounts: expect.objectContaining({
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                tenantName: "Mika Cruz",
-                balance: 10500,
-              }),
-            ]),
-            pagination: expect.objectContaining({ total: 1 }),
-          }),
+          overdueAccounts: expect.arrayContaining([
+            expect.objectContaining({
+              tenantName: "Mika Cruz",
+              balance: 10500,
+            }),
+          ]),
         }),
       }),
     );
@@ -692,51 +612,6 @@ describe("analyticsController", () => {
           suspiciousIps: expect.arrayContaining([
             expect.objectContaining({ ipAddress: "203.0.113.10", attempts: 3 }),
           ]),
-          recentSecurityEvents: expect.objectContaining({
-            rows: expect.any(Array),
-            pagination: expect.objectContaining({ total: 2 }),
-          }),
-        }),
-      }),
-    );
-  });
-
-  test("returns owner system performance metrics", async () => {
-    getUserBranchInfo.mockResolvedValue({
-      role: "owner",
-      branch: "gil-puyat",
-      isOwner: true,
-    });
-    userSessionCountDocuments.mockResolvedValue(7);
-    loginLogCountDocuments.mockResolvedValue(3);
-    auditCountDocuments.mockResolvedValue(2);
-
-    const req = { user: { uid: "owner-performance" }, query: {} };
-    const res = { req };
-
-    await getSystemPerformance(req, res, jest.fn());
-
-    expect(userSessionCountDocuments).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isActive: true,
-      }),
-    );
-    expect(sendSuccess).toHaveBeenCalledWith(
-      res,
-      expect.objectContaining({
-        scope: expect.objectContaining({
-          role: "owner",
-        }),
-        kpis: expect.objectContaining({
-          activeSessions: 7,
-          failedLogins24h: 3,
-          highSeverityAudit24h: 2,
-          serviceStatus: expect.any(String),
-          databaseStatus: expect.any(String),
-        }),
-        checks: expect.objectContaining({
-          api: expect.objectContaining({ status: "ok" }),
-          database: expect.objectContaining({ readyState: expect.any(Number) }),
         }),
       }),
     );
@@ -819,208 +694,6 @@ describe("analyticsController", () => {
     const [, payload] = sendSuccess.mock.calls.at(-1);
     expect(JSON.stringify(payload.snapshotMeta)).not.toContain("ana@example.com");
     expect(JSON.stringify(payload.snapshotMeta)).not.toContain("mia@example.com");
-  });
-
-  test("builds AI insights for owner financial analytics", async () => {
-    getUserBranchInfo.mockResolvedValue({
-      role: "owner",
-      branch: "gil-puyat",
-      isOwner: true,
-    });
-    billFind
-      .mockReturnValueOnce(
-        createLeanChain([
-          {
-            _id: "bill-fin-1",
-            branch: "gil-puyat",
-            status: "paid",
-            totalAmount: 16000,
-            paidAmount: 14000,
-            remainingAmount: 2000,
-            billingMonth: "2026-03-01T00:00:00.000Z",
-            dueDate: "2026-03-08T00:00:00.000Z",
-            roomId: { name: "Room 201", branch: "gil-puyat" },
-          },
-        ]),
-      )
-      .mockReturnValueOnce(
-        createLeanChain([
-          {
-            _id: "bill-fin-2",
-            branch: "gil-puyat",
-            status: "overdue",
-            totalAmount: 12000,
-            paidAmount: 2000,
-            remainingAmount: 10000,
-            dueDate: "2026-03-05T00:00:00.000Z",
-            roomId: { name: "Room 202", branch: "gil-puyat" },
-          },
-        ]),
-      );
-
-    const req = {
-      user: { uid: "owner-ai-financials", owner: true },
-      query: {},
-      body: {
-        reportType: "financials",
-        range: "3m",
-        branch: "gil-puyat",
-      },
-    };
-    const res = { req };
-    const next = jest.fn();
-
-    await getAnalyticsInsights(req, res, next);
-
-    expect(next).not.toHaveBeenCalled();
-    expect(sendSuccess).toHaveBeenCalledWith(
-      res,
-      expect.objectContaining({
-        snapshotMeta: expect.objectContaining({
-          reportType: "financials",
-          provider: "heuristic-fallback",
-          usedFallback: true,
-        }),
-        insight: expect.objectContaining({
-          headline: expect.any(String),
-          keyFindings: expect.any(Array),
-          recommendedActions: expect.any(Array),
-        }),
-      }),
-    );
-  });
-
-  test("builds the consolidated AI hub without leaking branch-admin scope", async () => {
-    process.env.AI_INSIGHTS_PROVIDER = "heuristic";
-    getUserBranchInfo.mockResolvedValue({
-      role: "branch_admin",
-      branch: "gil-puyat",
-      isOwner: false,
-    });
-
-    const rooms = [
-      {
-        _id: "room-1",
-        name: "Room 101",
-        roomNumber: "101",
-        branch: "gil-puyat",
-        type: "private",
-        capacity: 2,
-        currentOccupancy: 2,
-        available: true,
-        beds: [],
-      },
-    ];
-    roomFind
-      .mockReturnValueOnce(createLeanChain(rooms))
-      .mockReturnValueOnce(createLeanChain(rooms))
-      .mockReturnValueOnce(createLeanChain(rooms));
-    reservationFind.mockReturnValue(
-      createLeanChain([
-        {
-          _id: "res-1",
-          roomId: { _id: "room-1", branch: "gil-puyat", type: "private" },
-          userId: { firstName: "Masked", lastName: "Tenant" },
-          status: "moveIn",
-          createdAt: "2026-01-01T08:00:00.000Z",
-          moveInDate: "2026-01-05T08:00:00.000Z",
-          moveOutDate: "2026-02-20T08:00:00.000Z",
-        },
-      ]),
-    );
-    billFind
-      .mockReturnValueOnce(
-        createLeanChain([
-          {
-            _id: "bill-1",
-            branch: "gil-puyat",
-            status: "partially-paid",
-            totalAmount: 10000,
-            paidAmount: 6000,
-            remainingAmount: 4000,
-            billingMonth: "2026-03-01T00:00:00.000Z",
-            dueDate: "2026-03-05T00:00:00.000Z",
-            roomId: { name: "Room 101", branch: "gil-puyat" },
-          },
-        ]),
-      )
-      .mockReturnValueOnce(
-        createLeanChain([
-          {
-            _id: "bill-2",
-            branch: "gil-puyat",
-            status: "overdue",
-            totalAmount: 9000,
-            paidAmount: 1000,
-            remainingAmount: 8000,
-            dueDate: "2026-03-05T00:00:00.000Z",
-            roomId: { name: "Room 101", branch: "gil-puyat" },
-          },
-        ]),
-      );
-    inquiryFind.mockReturnValue(createLeanChain([]));
-    maintenanceFind.mockReturnValue(
-      createLeanChain([
-        {
-          _id: "maint-1",
-          request_id: "MR-1",
-          request_type: "plumbing",
-          urgency: "high",
-          status: "open",
-          branch: "gil-puyat",
-          created_at: "2026-03-01T00:00:00.000Z",
-        },
-      ]),
-    );
-
-    const req = {
-      user: { uid: "branch-ai-hub" },
-      query: {},
-      body: {
-        reportType: "hub",
-        range: "30d",
-        billingRange: "3m",
-        branch: "guadalupe",
-      },
-    };
-    const res = { req };
-    const next = jest.fn();
-
-    await getAnalyticsInsights(req, res, next);
-
-    expect(next).not.toHaveBeenCalled();
-    expect(roomFind).toHaveBeenCalledWith(
-      expect.objectContaining({
-        branch: { $in: ["gil-puyat"] },
-      }),
-    );
-    expect(sendSuccess).toHaveBeenCalledWith(
-      res,
-      expect.objectContaining({
-        scope: expect.objectContaining({
-          role: "branch_admin",
-          branch: "gil-puyat",
-          branchesIncluded: ["gil-puyat"],
-        }),
-        filters: expect.objectContaining({
-          range: "30d",
-          billingRange: "3m",
-        }),
-        snapshotMeta: expect.objectContaining({
-          reportType: "hub",
-        }),
-        insight: expect.objectContaining({
-          riskAlerts: expect.any(Array),
-          forecastHighlights: expect.any(Array),
-          recommendedActions: expect.any(Array),
-        }),
-      }),
-    );
-
-    const [, payload] = sendSuccess.mock.calls.at(-1);
-    expect(payload.snapshotMeta.promptPreview.metricsIncluded).not.toContain(
-      "criticalSecurityEvents",
-    );
   });
 
   test("returns deterministic occupancy forecast when enough history exists", async () => {

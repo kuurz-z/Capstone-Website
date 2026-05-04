@@ -15,7 +15,7 @@ import {
   createCheckoutSession,
   getCheckoutSession,
 } from "../config/paymongo.js";
-import { Bill, Payment, Reservation, User } from "../models/index.js";
+import { Bill, Reservation, User } from "../models/index.js";
 import logger from "../middleware/logger.js";
 import {
   sendPaymentApprovedEmail,
@@ -30,7 +30,6 @@ import {
   getVisibleBillSnapshot,
   resolveBillStatus,
 } from "../utils/billingPolicy.js";
-import { notify } from "../utils/notificationService.js";
 import { sendSuccess, AppError } from "../middleware/errorHandler.js";
 
 const FRONTEND_URL =
@@ -55,12 +54,6 @@ function canAutoReserveReservation(status) {
 async function getDbUser(firebaseUid) {
   return User.findOne({ firebaseUid }).lean();
 }
-
-const hasBillingPermission = (user) =>
-  user?.role === "owner" ||
-  (user?.role === "branch_admin" &&
-    Array.isArray(user.permissions) &&
-    user.permissions.includes("manageBilling"));
 
 async function resolveSessionResourceAccess(metadata, dbUser) {
   if (metadata.userId && String(metadata.userId) !== String(dbUser._id)) {
@@ -344,12 +337,10 @@ export const checkSessionStatus = async (req, res, next) => {
           } else {
             logger.info({ billId: metadata.billId }, "Marking bill as paid");
 
-            const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
-
-            // Email + in-app notification to tenant
             try {
               const tenant = await User.findById(bill.userId).lean();
               if (tenant?.email) {
+                const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
                 const tenantName =
                   `${tenant.firstName || ""} ${tenant.lastName || ""}`.trim() ||
                   "Tenant";
@@ -373,38 +364,6 @@ export const checkSessionStatus = async (req, res, next) => {
               }
             } catch (emailErr) {
               logger.warn({ err: emailErr }, "Bill email error");
-            }
-
-            // In-app notification to branch admins and owner
-            try {
-              const admins = await User.find({
-                accountStatus: "active",
-                $or: [
-                  { role: "branch_admin", branch: bill.branch },
-                  { role: "owner" },
-                ],
-              }).select("_id firstName lastName").lean();
-
-              if (admins.length > 0) {
-                const tenantUser = await User.findById(bill.userId)
-                  .select("firstName lastName")
-                  .lean();
-                const tenantName = tenantUser
-                  ? `${tenantUser.firstName || ""} ${tenantUser.lastName || ""}`.trim() || "A tenant"
-                  : "A tenant";
-                await Promise.all(
-                  admins.map((admin) =>
-                    notify.general(
-                      admin._id,
-                      "Payment Received",
-                      `${tenantName} paid ₱${settlement.appliedAmount.toLocaleString()} for the ${monthStr} bill.`,
-                      { entityType: "bill", actionUrl: "/admin/billing" },
-                    )
-                  )
-                );
-              }
-            } catch (adminNotifErr) {
-              logger.warn({ err: adminNotifErr }, "Admin payment notification error");
             }
           }
         }
@@ -493,37 +452,6 @@ export const checkSessionStatus = async (req, res, next) => {
       { err: error, sessionId: req.params.sessionId },
       "checkSessionStatus error",
     );
-    next(error);
-  }
-};
-
-export const getPaymentsForBill = async (req, res, next) => {
-  try {
-    const { billId } = req.params;
-    const dbUser = await getDbUser(req.user.uid);
-    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
-
-    const bill = await Bill.findById(billId).lean();
-    if (!bill) throw new AppError("Bill not found", 404, "BILL_NOT_FOUND");
-
-    const isOwnBill = String(bill.userId) === String(dbUser._id);
-    const isOwner = dbUser.role === "owner";
-    const isBranchBillingAdmin =
-      dbUser.role === "branch_admin" &&
-      hasBillingPermission(dbUser) &&
-      bill.branch === dbUser.branch;
-
-    if (!isOwnBill && !isOwner && !isBranchBillingAdmin) {
-      throw new AppError(
-        "You are not allowed to view payments for this bill",
-        403,
-        "FORBIDDEN",
-      );
-    }
-
-    const payments = await Payment.getPaymentsForBill(bill._id);
-    sendSuccess(res, { data: payments });
-  } catch (error) {
     next(error);
   }
 };

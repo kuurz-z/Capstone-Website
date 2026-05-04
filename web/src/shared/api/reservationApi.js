@@ -53,26 +53,6 @@ export const reservationApi = {
   getTenantActionContext: (reservationId) =>
     authFetch(`/reservations/${reservationId}/tenant-actions/context`),
 
-  getVisitAvailability: (params = {}) => {
-    const queryString = new URLSearchParams(
-      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ""),
-    ).toString();
-    return authFetch(`/reservations/visit-availability${queryString ? `?${queryString}` : ""}`);
-  },
-
-  getVisitAvailabilitySettings: (branch) => {
-    const queryString = new URLSearchParams({ branch }).toString();
-    return authFetch(`/reservations/visit-availability/settings?${queryString}`);
-  },
-
-  updateVisitAvailabilitySettings: (branch, data) => {
-    const queryString = new URLSearchParams({ branch }).toString();
-    return authFetch(`/reservations/visit-availability/settings?${queryString}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
-  },
-
   /**
    * Get reservation by ID
    */
@@ -112,6 +92,17 @@ export const reservationApi = {
       }),
     ),
 
+  /**
+   * Validate applicant valid ID using backend OCR/Google Vision.
+   */
+  validateIdDocument: (reservationId, data) =>
+    withLifecycleNormalization(
+      authFetch(`/reservations/${reservationId}/id-validation`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    ),
+
   cancelByUser: (reservationId, reason = "") =>
     withLifecycleNormalization(
       authFetch(`/reservations/${reservationId}/cancel`, {
@@ -136,14 +127,10 @@ export const reservationApi = {
   /**
    * Delete reservation
    */
-  delete: (reservationId, options = {}) => {
-    const searchParams = new URLSearchParams();
-    if (options.hardDelete) searchParams.set("hardDelete", "true");
-    const query = searchParams.toString();
-    return authFetch(`/reservations/${reservationId}${query ? `?${query}` : ""}`, {
+  delete: (reservationId) =>
+    authFetch(`/reservations/${reservationId}`, {
       method: "DELETE",
-    });
-  },
+    }),
 
   /**
    * Extend reservation move-in date (admin only)

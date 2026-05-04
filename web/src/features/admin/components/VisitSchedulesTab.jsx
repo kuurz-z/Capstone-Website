@@ -1,11 +1,16 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Ban,
-  CalendarDays,
-  CheckCircle2,
+  Calendar,
+  Check,
+  CheckCircle,
+  Clock,
   RotateCcw,
+  Search,
   Trash2,
-  XCircle,
+  X as XIcon,
+  AlertCircle,
+  CalendarDays,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { reservationApi } from "../../../shared/api/apiClient";
@@ -13,28 +18,24 @@ import { showNotification } from "../../../shared/utils/notification";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
 import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import VisitDetailsModal from "./VisitDetailsModal";
-import { ActionBar, DataTable, StatusBadge, SummaryBar } from "./shared";
+import { StatusBadge } from "./shared";
 import { mapVisitScheduleRows } from "../utils/reservationRows";
 import "../styles/design-tokens.css";
 import "../styles/admin-reservations.css";
 
-const AVATAR_COLORS = [
-  "#f97316",
-  "#8b5cf6",
-  "#0ea5e9",
-  "#10b981",
-  "#ef4444",
-  "#f59e0b",
-  "#6366f1",
-  "#ec4899",
-  "#14b8a6",
-  "#84cc16",
-];
-
-function avatarColor(name = "") {
-  const code = (name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0);
-  return AVATAR_COLORS[code % AVATAR_COLORS.length];
-}
+const getAvatarColor = (initials = "") => {
+  const colors = [
+    "bg-[color:var(--chart-5)] text-white",
+    "bg-[color:var(--chart-1)] text-white",
+    "bg-[color:var(--chart-4)] text-white",
+    "bg-[color:var(--danger)] text-white",
+    "bg-[color:var(--chart-2)] text-white",
+    "bg-[color:var(--warning)] text-white",
+  ];
+  const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
+  const index = charCode % colors.length;
+  return colors[index];
+};
 
 function initials(name = "") {
   const parts = name.trim().split(" ");
@@ -54,10 +55,12 @@ function VisitSchedulesTab() {
     onConfirm: null,
   });
   const [selectedSchedule, setSelectedSchedule] = useState(null);
-  const [activeFilter, setActiveFilter] = useState(-1);
+  const [activeFilter, setActiveFilter] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const { data: rawReservations = [], isLoading: loading } = useReservations({
     view: "admin-list",
@@ -108,8 +111,18 @@ function VisitSchedulesTab() {
       ),
     [schedules],
   );
+  const cancelled = useMemo(
+    () =>
+      schedules.filter(
+        (schedule) =>
+          (schedule.isHistorical && schedule.historyStatus === "cancelled") ||
+          (!schedule.isHistorical && schedule.status === "cancelled"),
+      ),
+    [schedules],
+  );
 
-  const refetchAll = () => queryClient.invalidateQueries({ queryKey: ["reservations"] });
+  const refetchAll = () =>
+    queryClient.invalidateQueries({ queryKey: ["reservations"] });
 
   const confirmAction = (
     title,
@@ -175,7 +188,7 @@ function VisitSchedulesTab() {
         });
       },
       "Verification revoked successfully",
-      "Failed to revoke verification. Please try again.",
+      "Failed to verify attendance. Please try again.",
     );
   };
 
@@ -200,7 +213,9 @@ function VisitSchedulesTab() {
       "danger",
       "Delete",
       async () => {
-        await reservationApi.update(reservationId, { removeVisitHistoryIndex: historyIndex });
+        await reservationApi.update(reservationId, {
+          removeVisitHistoryIndex: historyIndex,
+        });
       },
       "History entry removed",
       "Failed to remove history entry. Please try again.",
@@ -209,20 +224,51 @@ function VisitSchedulesTab() {
 
   const summaryItems = useMemo(
     () => [
-      { label: "Upcoming Visits", value: upcoming.length, icon: CalendarDays, color: "blue" },
-      { label: "Completed", value: completed.length, icon: CheckCircle2, color: "green" },
-      { label: "No Shows", value: noShows.length, icon: XCircle, color: "red" },
-      { label: "Rejected", value: rejected.length, icon: Ban, color: "orange" },
+      { label: "All", value: schedules.length, icon: Calendar, color: "blue" },
+      {
+        label: "Pending",
+        value: upcoming.length,
+        icon: Clock,
+        color: "orange",
+      },
+      {
+        label: "Approved",
+        value: completed.length,
+        icon: CheckCircle,
+        color: "green",
+      },
+      {
+        label: "Rejected",
+        value: rejected.length,
+        icon: XIcon,
+        color: "red",
+      },
+      {
+        label: "No-Show",
+        value: noShows.length,
+        icon: AlertCircle,
+        color: "red",
+      },
+      { label: "Cancelled", value: cancelled.length, icon: Ban, color: "red" },
     ],
-    [completed.length, noShows.length, rejected.length, upcoming.length],
+    [
+      cancelled.length,
+      completed.length,
+      rejected.length,
+      noShows.length,
+      schedules.length,
+      upcoming.length,
+    ],
   );
 
   const displayData = useMemo(() => {
     let base;
-    if (activeFilter === 0) base = upcoming;
-    else if (activeFilter === 1) base = completed;
-    else if (activeFilter === 2) base = noShows;
+    if (activeFilter === 0) base = schedules;
+    else if (activeFilter === 1) base = upcoming;
+    else if (activeFilter === 2) base = completed;
     else if (activeFilter === 3) base = rejected;
+    else if (activeFilter === 4) base = noShows;
+    else if (activeFilter === 5) base = cancelled;
     else base = schedules;
 
     const query = searchTerm.trim().toLowerCase();
@@ -241,325 +287,479 @@ function VisitSchedulesTab() {
 
     if (sortBy === "oldest") {
       result = [...result].sort(
-        (left, right) => new Date(left.scheduledDate || 0) - new Date(right.scheduledDate || 0),
+        (left, right) =>
+          new Date(left.scheduledDate || 0) -
+          new Date(right.scheduledDate || 0),
       );
     } else if (sortBy === "name-az") {
-      result = [...result].sort((left, right) => left.customer.localeCompare(right.customer));
+      result = [...result].sort((left, right) =>
+        left.customer.localeCompare(right.customer),
+      );
     } else if (sortBy === "name-za") {
-      result = [...result].sort((left, right) => right.customer.localeCompare(left.customer));
+      result = [...result].sort((left, right) =>
+        right.customer.localeCompare(left.customer),
+      );
     }
 
     return result;
-  }, [activeFilter, branchFilter, completed, noShows, rejected, schedules, searchTerm, sortBy, upcoming]);
+  }, [
+    activeFilter,
+    branchFilter,
+    cancelled,
+    completed,
+    noShows,
+    rejected,
+    schedules,
+    searchTerm,
+    sortBy,
+    upcoming,
+  ]);
 
-  const visitFilters = useMemo(
-    () => [
-      {
-        key: "branch",
-        options: [
-          { value: "all", label: "All Branches" },
-          { value: "Gil Puyat", label: "Gil Puyat" },
-          { value: "Guadalupe", label: "Guadalupe" },
-        ],
-        value: branchFilter,
-        onChange: (value) => setBranchFilter(value),
-      },
-      {
-        key: "sort",
-        options: [
-          { value: "recent", label: "Most Recent" },
-          { value: "oldest", label: "Oldest First" },
-          { value: "name-az", label: "Name A-Z" },
-          { value: "name-za", label: "Name Z-A" },
-        ],
-        value: sortBy,
-        onChange: (value) => setSortBy(value),
-      },
-    ],
-    [branchFilter, sortBy],
+  const totalPages = Math.max(1, Math.ceil(displayData.length / itemsPerPage));
+  const paginatedData = useMemo(
+    () =>
+      displayData.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage,
+      ),
+    [currentPage, displayData],
   );
 
-  const columns = useMemo(
-    () => [
-      {
-        key: "customer",
-        label: "Visitor",
-        render: (row) => (
-          <div className="res-applicant-cell" style={{ opacity: row.isHistorical ? 0.55 : 1 }}>
-            <div className="res-avatar" style={{ background: avatarColor(row.customer) }}>
-              {initials(row.customer)}
-            </div>
-            <div className="res-applicant-info">
-              <span className="res-applicant-name">
-                {row.customer}
-                {row.historyStatus === "cancelled" ? (
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      padding: "1px 6px",
-                      borderRadius: 8,
-                      background: "#FEF2F2",
-                      color: "#DC2626",
-                    }}
-                  >
-                    Cancelled
-                  </span>
-                ) : row.attemptNumber != null ? (
-                  <span
-                    style={{
-                      marginLeft: 6,
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      padding: "1px 6px",
-                      borderRadius: 8,
-                      background: row.isHistorical ? "#F3F4F6" : "#EEF2FF",
-                      color: row.isHistorical ? "#9CA3AF" : "#4F46E5",
-                    }}
-                  >
-                    Attempt {row.attemptNumber}
-                  </span>
-                ) : null}
-              </span>
-              <span className="res-applicant-code">{row.email}</span>
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "branch",
-        label: "Branch",
-        render: (row) => <span style={{ opacity: row.isHistorical ? 0.55 : 1 }}>{row.branch}</span>,
-      },
-      {
-        key: "room",
-        label: "Room",
-        render: (row) => <span style={{ opacity: row.isHistorical ? 0.55 : 1 }}>{row.room}</span>,
-      },
-      {
-        key: "scheduledDate",
-        label: "Requested",
-        render: (row) => {
-          const dateValue = row.scheduledDate;
-          if (!dateValue) {
-            return (
-              <span style={{ color: "var(--text-muted)", opacity: row.isHistorical ? 0.55 : 1 }}>
-                -
-              </span>
-            );
-          }
-          const date = new Date(dateValue);
-          return (
-            <div style={{ lineHeight: 1.5, opacity: row.isHistorical ? 0.55 : 1 }}>
-              <div
-                style={{
-                  fontWeight: 500,
-                  color: "var(--text-primary)",
-                  fontSize: "var(--font-size-sm)",
-                }}
-              >
-                {date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </div>
-              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-                {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        key: "visitDate",
-        label: "Visit Appointment",
-        render: (row) => (
-          <div style={{ lineHeight: 1.5, opacity: row.isHistorical ? 0.55 : 1 }}>
-            <div style={{ fontWeight: 500, color: "var(--text-primary)" }}>
-              {row.visitDate
-                ? new Date(row.visitDate).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                : "-"}
-            </div>
-            <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-              {row.visitTime}
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "status",
-        label: "Status",
-        render: (row) => {
-          const ActionedTime = () => {
-            if (!row.actionedAt) return null;
-            const date = new Date(row.actionedAt);
-            return (
-              <div style={{ marginTop: 4, lineHeight: 1.4 }}>
-                <div
-                  style={{
-                    fontSize: "var(--font-size-xs)",
-                    color: "var(--text-primary)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {date.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </div>
-                <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-                  {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                </div>
-              </div>
-            );
-          };
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter, searchTerm, branchFilter, sortBy]);
 
-          if (row.isHistorical) {
-            const historyMap = {
-              rejected: { status: "overdue", label: "Rejected" },
-              approved: { status: "verified", label: "Approved" },
-              cancelled: { status: "overdue", label: "Cancelled" },
-              pending: { status: "pending", label: "Scheduled" },
-            };
-            const config = historyMap[row.historyStatus] || historyMap.pending;
-            return (
-              <div style={{ opacity: 0.55 }}>
-                <StatusBadge status={config.status} label={config.label} />
-                <ActionedTime />
-              </div>
-            );
-          }
-
-          if (row.scheduleRejected) {
-            return <StatusBadge status="overdue" label="Rejected" />;
-          }
-
-          const isUpcoming = !row.visitApproved && new Date(row.visitDate) >= new Date();
-          const status = row.visitApproved ? "verified" : isUpcoming ? "pending" : "overdue";
-          const label = row.visitApproved ? "Completed" : isUpcoming ? "Upcoming" : "No Show";
-          return (
-            <div>
-              <StatusBadge status={status} label={label} />
-              <ActionedTime />
-            </div>
-          );
-        },
-      },
-      {
-        key: "actions",
-        label: "",
-        width: "180px",
-        align: "right",
-        render: (row) => {
-          if (row.isHistorical) {
-            return (
-              <div className="res-actions" style={{ opacity: 0.55 }}>
-                <button
-                  className="res-icon-btn res-icon-btn--danger"
-                  title="Delete this history entry"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleDeleteHistoryEntry(row.reservationId, row.historyIndex);
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            );
-          }
-
-          const now = new Date();
-          const visitDate = new Date(row.visitDate);
-          const isUpcoming = !row.visitApproved && !row.scheduleRejected && visitDate >= now;
-          return (
-            <div className="res-actions">
-              {isUpcoming && (
-                <>
-                  <button
-                    className="res-action-btn res-action-btn--success"
-                    disabled={actionLoading === row.id}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleVerify(row.id);
-                    }}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="res-icon-btn"
-                    title="Reject schedule"
-                    style={{ color: "#DC2626" }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedSchedule(row);
-                    }}
-                  >
-                    <Ban size={14} />
-                  </button>
-                </>
-              )}
-              {row.visitApproved && (
-                <button
-                  className="res-icon-btn"
-                  title="Revoke verification"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleRevoke(row.id);
-                  }}
-                >
-                  <RotateCcw size={14} />
-                </button>
-              )}
-              <button
-                className="res-icon-btn res-icon-btn--danger"
-                title="Delete schedule"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleDelete(row.id);
-                }}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          );
-        },
-      },
-    ],
-    [actionLoading],
-  );
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-lg)" }}>
-      <SummaryBar items={summaryItems} onItemClick={setActiveFilter} activeIndex={activeFilter} />
-      <ActionBar
-        search={{
-          value: searchTerm,
-          onChange: (value) => setSearchTerm(value),
-          placeholder: "Search by name, email, code, or room...",
+    <div className="space-y-6">
+      <div className="grid grid-flow-col auto-cols-[minmax(150px,1fr)] gap-3 overflow-x-auto pb-1">
+        {summaryItems.map((item, index) => {
+          const Icon = item.icon;
+          const isActive = activeFilter === index;
+
+          return (
+            <div
+              key={item.label}
+              onClick={() => setActiveFilter(index)}
+              style={{
+                backgroundColor: "var(--bg-card)",
+                borderColor: isActive
+                  ? "color-mix(in srgb, var(--primary) 55%, var(--border-light))"
+                  : "var(--border-light)",
+              }}
+              className="border rounded-xl p-3 hover:shadow-md transition-shadow cursor-pointer min-h-[108px]"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <Icon
+                  className={`w-5 h-5 ${
+                    item.color === "blue"
+                      ? "text-[color:var(--info)]"
+                      : item.color === "orange"
+                        ? "text-[color:var(--warning)]"
+                        : item.color === "green"
+                          ? "text-[color:var(--success)]"
+                          : "text-[color:var(--danger)]"
+                  }`}
+                />
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-right">
+                  {item.label}
+                </span>
+              </div>
+              <div
+                className={`text-[28px] font-medium leading-none ${
+                  item.color === "blue"
+                    ? "text-[color:var(--info)]"
+                    : item.color === "orange"
+                      ? "text-[color:var(--warning)]"
+                      : item.color === "green"
+                        ? "text-[color:var(--success)]"
+                        : "text-[color:var(--danger)]"
+                }`}
+              >
+                {item.value}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        className="border rounded-lg p-6"
+        style={{
+          backgroundColor: "var(--bg-card)",
+          borderColor: "var(--border-light)",
         }}
-        filters={visitFilters}
-      />
-      <DataTable
-        columns={columns}
-        data={displayData}
-        loading={loading}
-        sorting="external"
-        emptyState={{
-          icon: CalendarDays,
-          title: "No visit schedules",
-          description: "Visit schedules will appear here.",
-        }}
-      />
+      >
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search by name, email, code, or room..."
+              style={{
+                backgroundColor: "var(--input-background)",
+                borderColor: "var(--border-light)",
+              }}
+              className="w-full pl-10 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <select
+              value={branchFilter}
+              onChange={(event) => setBranchFilter(event.target.value)}
+              style={{
+                backgroundColor: "var(--input-background)",
+                borderColor: "var(--border-light)",
+              }}
+              className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="all">All Branches</option>
+              <option value="Gil Puyat">Gil Puyat</option>
+              <option value="Guadalupe">Guadalupe</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value)}
+              style={{
+                backgroundColor: "var(--input-background)",
+                borderColor: "var(--border-light)",
+              }}
+              className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="recent">Most Recent</option>
+              <option value="oldest">Oldest First</option>
+              <option value="name-az">Name A-Z</option>
+              <option value="name-za">Name Z-A</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="p-12 text-center">
+              <p className="text-base text-muted-foreground">
+                Loading visit schedules...
+              </p>
+            </div>
+          ) : displayData.length === 0 ? (
+            <div className="p-12 text-center">
+              <CalendarDays className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
+              <p className="text-base font-medium text-foreground">
+                No visit schedules
+              </p>
+              <p className="mt-1 text-base text-muted-foreground">
+                Visit schedules will appear here.
+              </p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr
+                  className="border-b"
+                  style={{
+                    borderColor: "var(--border-light)",
+                    backgroundColor:
+                      "color-mix(in srgb, var(--bg-inset) 30%, transparent)",
+                  }}
+                >
+                  <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Visitor
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Branch
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Room
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Requested
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Visit Appointment
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedData.map((row) => {
+                  const isDim = row.isHistorical ? "opacity-55" : "";
+                  const now = new Date();
+                  const visitDate = new Date(row.visitDate);
+                  const isUpcoming =
+                    !row.visitApproved &&
+                    !row.scheduleRejected &&
+                    visitDate >= now;
+                  const actionedDate = row.actionedAt
+                    ? new Date(row.actionedAt)
+                    : null;
+
+                  let statusNode;
+                  if (row.isHistorical) {
+                    const historyMap = {
+                      rejected: { status: "overdue", label: "Rejected" },
+                      approved: { status: "verified", label: "Approved" },
+                      cancelled: { status: "overdue", label: "Cancelled" },
+                      pending: { status: "pending", label: "Scheduled" },
+                    };
+                    const config =
+                      historyMap[row.historyStatus] || historyMap.pending;
+                    statusNode = (
+                      <div className="opacity-60">
+                        <StatusBadge
+                          status={config.status}
+                          label={config.label}
+                        />
+                        {actionedDate && (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {actionedDate.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                            <div>
+                              {actionedDate.toLocaleTimeString("en-US", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } else if (row.scheduleRejected) {
+                    statusNode = (
+                      <StatusBadge status="rejected" label="Rejected" />
+                    );
+                  } else {
+                    const status = row.visitApproved
+                      ? "completed"
+                      : isUpcoming
+                        ? "pending"
+                        : "no-show";
+                    const label = row.visitApproved
+                      ? "Completed"
+                      : isUpcoming
+                        ? "Pending Approval"
+                        : "No-Show";
+                    statusNode = (
+                      <div>
+                        <StatusBadge status={status} label={label} />
+                        {actionedDate && (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {actionedDate.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                            <div>
+                              {actionedDate.toLocaleTimeString("en-US", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-b border-[var(--border-light)] hover:bg-muted transition-colors"
+                    >
+                      <td className="py-4 px-4">
+                        <div className={`flex items-center gap-3 ${isDim}`}>
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm ${getAvatarColor(initials(row.customer))}`}
+                          >
+                            {initials(row.customer)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-foreground">
+                              {row.customer}
+                              {row.historyStatus === "cancelled" ? (
+                                <span className="ml-2 rounded-full bg-error-light px-2 py-0.5 text-[10px] font-semibold text-error-dark">
+                                  Cancelled
+                                </span>
+                              ) : row.attemptNumber != null ? (
+                                <span
+                                  className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    row.isHistorical
+                                      ? "bg-muted text-muted-foreground"
+                                      : "bg-info-light text-info-dark"
+                                  }`}
+                                >
+                                  Attempt {row.attemptNumber}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {row.email}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-sm text-foreground">
+                        <span className={isDim}>{row.branch}</span>
+                      </td>
+                      <td className="py-4 px-4 text-sm text-foreground">
+                        <span className={isDim}>{row.room}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className={`leading-5 ${isDim}`}>
+                          <div className="text-sm text-foreground">
+                            {row.scheduledDate
+                              ? new Date(row.scheduledDate).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  },
+                                )
+                              : "-"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.scheduledDate
+                              ? new Date(row.scheduledDate).toLocaleTimeString(
+                                  "en-US",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )
+                              : "-"}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className={`leading-5 ${isDim}`}>
+                          <div className="text-sm text-foreground">
+                            {row.visitDate
+                              ? new Date(row.visitDate).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  },
+                                )
+                              : "-"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.visitTime || "-"}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">{statusNode}</td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center justify-end gap-2">
+                          {row.isHistorical ? (
+                            <button
+                              className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-600 rounded-md transition-colors"
+                              title="Delete this history entry"
+                              onClick={() =>
+                                handleDeleteHistoryEntry(
+                                  row.reservationId,
+                                  row.historyIndex,
+                                )
+                              }
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <>
+                              {isUpcoming && (
+                                <>
+                                  <button
+                                    className="px-2.5 py-1.5 bg-[color:var(--success-light)] hover:bg-[color:var(--success)]/20 text-[color:var(--success-dark)] dark:text-[color:var(--success-dark)] font-medium rounded-md transition-colors flex items-center gap-1.5 text-sm"
+                                    disabled={actionLoading === row.id}
+                                    onClick={() => handleVerify(row.id)}
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    Complete
+                                  </button>
+                                  <button
+                                    className="px-2.5 py-1.5 bg-[color:var(--danger-light)] hover:bg-[color:var(--danger)]/20 text-[color:var(--danger-dark)] dark:text-[color:var(--danger-dark)] font-medium rounded-md transition-colors flex items-center gap-1.5 text-sm"
+                                    title="Reject schedule"
+                                    onClick={() => setSelectedSchedule(row)}
+                                  >
+                                    <XIcon className="w-3.5 h-3.5" />
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              {row.visitApproved && (
+                                <button
+                                  className="p-1.5 hover:bg-muted rounded-md transition-colors"
+                                  title="Revoke verification"
+                                  onClick={() => handleRevoke(row.id)}
+                                >
+                                  <RotateCcw className="w-4 h-4 text-muted-foreground" />
+                                </button>
+                              )}
+                              <button
+                                className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-600 rounded-md transition-colors"
+                                title="Delete schedule"
+                                onClick={() => handleDelete(row.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-[var(--border-light)]">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+              className="px-3 py-1 text-sm border border-[var(--border-light)] rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1 text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => p + 1)}
+              className="px-3 py-1 text-sm border border-[var(--border-light)] rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+
       <ConfirmModal
         isOpen={confirmModal.open}
-        onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
+        onClose={() =>
+          setConfirmModal((previous) => ({ ...previous, open: false }))
+        }
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}
@@ -576,4 +776,3 @@ function VisitSchedulesTab() {
 }
 
 export default VisitSchedulesTab;
-

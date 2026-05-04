@@ -288,6 +288,7 @@ function SignUp() {
         formData.password,
       );
       firebaseUser = userCredential.user;
+      console.log("✅ Firebase account created:", firebaseUser.uid);
       try {
         await registerUserInBackend(
           firebaseUser,
@@ -296,17 +297,20 @@ function SignUp() {
           formData.lastName,
         );
         try {
+          const continueUrl = `${getWebBaseUrl()}/auth-action`;
+          console.log("📧 Sending verification email, continueUrl:", continueUrl);
           const actionCodeSettings = {
-            url: `${getWebBaseUrl()}/auth-action`,
+            url: continueUrl,
             handleCodeInApp: true,
           };
           await sendEmailVerification(firebaseUser, actionCodeSettings);
+          console.log("✅ Verification email sent successfully");
         } catch (emailError) {
           console.error("⚠️ Failed to send verification email:", emailError);
           showNotification(
-            "Account created, but we couldn't send the verification email. You can request a new one from the sign-in page.",
+            "Account created, but we couldn't send the verification email. Please try signing in — you can request a new verification email from there.",
             "warning",
-            6000,
+            8000,
           );
         }
         // Save email so sign-in page can pre-fill it after verification
@@ -317,7 +321,7 @@ function SignUp() {
           flash: {
             type: "success",
             message:
-              "Account created! Please check your email and verify before logging in.",
+              "Account created! Please check your inbox (and spam folder) for the verification email.",
           },
         });
       } catch (backendError) {

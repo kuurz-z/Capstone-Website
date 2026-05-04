@@ -1,10 +1,6 @@
-import * as XLSX from "xlsx";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-
 /**
  * ============================================================================
- * EXPORT UTILITIES (CSV, EXCEL, PDF)
+ * CSV EXPORT UTILITY
  * ============================================================================
  *
  * Client-side CSV generation and download utility.
@@ -43,94 +39,6 @@ export function exportToCSV(data, columns, filename = "export") {
 
   const csvContent = [header, ...rows].join("\n");
   downloadFile(csvContent, `${filename}.csv`, "text/csv;charset=utf-8;");
-}
-
-/**
- * Filter out columns not meant for export (e.g., action columns)
- */
-function getExportableColumns(columns) {
-  return columns.filter((col) => {
-    if (col.excludeFromExport) return false;
-    if (col.key === "actions" || col.label === "Actions" || col.key === "action") return false;
-    return true;
-  });
-}
-
-/**
- * Extract textual data from a row dynamically for non-CSV exports.
- */
-function getExportCellText(row, col) {
-  if (typeof col.exportFormatter === "function") {
-    return col.exportFormatter(row, col);
-  }
-  if (typeof col.formatter === "function") {
-    return col.formatter(row[col.key], row);
-  }
-  const val = row[col.key || col.accessor];
-  if (val === null || val === undefined) return "";
-  if (typeof val === "object") {
-    // If it's a deeply nested object, we can stringify, but often it's not meant to be exported.
-    if (Object.keys(val).length > 0) return JSON.stringify(val);
-    return "";
-  }
-  return String(val);
-}
-
-/**
- * Convert array of objects to Excel format (.xlsx) and trigger download.
- * @param {Array<Object>} data - Array of row objects
- * @param {Array<{key: string, label: string}>} columns - Column definitions
- * @param {string} filename - Filename without extension
- */
-export function exportToExcel(data, columns, filename = "export") {
-  if (!data || data.length === 0) return;
-
-  const exportCols = getExportableColumns(columns);
-  const headers = exportCols.map((c) => c.label || c.key);
-  const rows = data.map((row) =>
-    exportCols.map((col) => getExportCellText(row, col))
-  );
-
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  
-  XLSX.writeFile(wb, `${filename}.xlsx`);
-}
-
-/**
- * Convert array of objects to PDF format and trigger download.
- * @param {Array<Object>} data - Array of row objects
- * @param {Array<{key: string, label: string}>} columns - Column definitions
- * @param {string} filename - Filename without extension
- * @param {string} title - Optional title at top of PDF
- */
-export function exportToPDF(data, columns, filename = "export", title = "Export Data") {
-  if (!data || data.length === 0) return;
-
-  const exportCols = getExportableColumns(columns);
-  const headers = exportCols.map((c) => c.label || c.key);
-  const rows = data.map((row) =>
-    exportCols.map((col) => getExportCellText(row, col))
-  );
-
-  const doc = new jsPDF("landscape");
-  
-  if (title) {
-    doc.setFontSize(14);
-    doc.text(title, 14, 15);
-  }
-  
-  autoTable(doc, {
-    startY: title ? 20 : 10,
-    head: [headers],
-    body: rows,
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [52, 73, 94] },
-    margin: { top: 20 },
-  });
-  
-  doc.save(`${filename}.pdf`);
 }
 
 /**

@@ -47,11 +47,6 @@ export const utilityApi = {
       authFetch(`/utilities/${utilityType}/periods/${periodId}/send`, { method: "POST" }),
     ),
 
-  getElectricityAiReview: (periodId) =>
-    withLifecycleNormalization(
-      authFetch(`/utilities/electricity/periods/${periodId}/ai-review`, { method: "POST" }),
-    ),
-
   batchClose: (utilityType, data) =>
     withLifecycleNormalization(
       authFetch(`/utilities/${utilityType}/batch-close`, { method: "POST", body: JSON.stringify(data) }),

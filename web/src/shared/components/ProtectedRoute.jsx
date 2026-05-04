@@ -16,7 +16,7 @@ import { USER_ROLES } from "../utils/constants";
  * - Strict role separation enforced
  *
  * REDIRECT BEHAVIOR:
- * - Unauthenticated on user routes: redirect to "/" (public landing page)
+ * - Unauthenticated on user routes: redirect to "/" (landing page) with notification
  * - Unauthenticated on admin routes: redirect to "/signin" with notification
  * - Admin trying to access user routes: redirect to "/admin/dashboard"
  * - User trying to access admin routes: redirect to "/signin"
@@ -29,44 +29,50 @@ import { USER_ROLES } from "../utils/constants";
  * @returns {React.ReactNode} Protected content or redirect
  */
 const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
-  const {
-    isAuthenticated,
-    loading,
-    isAdmin,
-    isOwner,
-    getDefaultRoute,
-  } = useAuth();
+ const { isAuthenticated, loading, isAdmin, isOwner, getDefaultRoute } =
+ useAuth();
 
-  // Show loading spinner while checking authentication
-  if (loading) {
-    return <GlobalLoading />;
-  }
+ // Show loading spinner while checking authentication
+ if (loading) {
+ return <GlobalLoading />;
+ }
 
-  // Check authentication requirement
-  if (requireAuth && !isAuthenticated) {
-    const redirectPath = requiredRole === "applicant" ? "/" : "/signin";
+ // Check authentication requirement
+ if (requireAuth && !isAuthenticated) {
+ const redirectPath = requiredRole === "applicant" ? "/" : "/signin";
+ return (
+ <Navigate
+ to={redirectPath}
+ replace
+ state={{
+ flash: {
+ type: "info",
+ message:
+ "Sign in to discover available rooms and reserve your space",
+ },
+ }}
+ />
+ );
+ }
 
-    return <Navigate to={redirectPath} replace />;
-  }
+ // Check role requirements using custom claims from ID token
+ if (requiredRole) {
+ if (requiredRole === USER_ROLES.BRANCH_ADMIN) {
+ if (!isAdmin()) {
+ return <Navigate to={getDefaultRoute()} replace />;
+ }
+ } else if (requiredRole === USER_ROLES.OWNER) {
+ if (!isOwner()) {
+ return <Navigate to={getDefaultRoute()} replace />;
+ }
+ } else if (requiredRole === USER_ROLES.APPLICANT) {
+ if (isAdmin()) {
+ return <Navigate to="/admin/dashboard" replace />;
+ }
+ }
+ }
 
-  // Check role requirements using custom claims from ID token
-  if (requiredRole) {
-    if (requiredRole === USER_ROLES.BRANCH_ADMIN) {
-      if (!isAdmin()) {
-        return <Navigate to={getDefaultRoute()} replace />;
-      }
-    } else if (requiredRole === USER_ROLES.OWNER) {
-      if (!isOwner()) {
-        return <Navigate to={getDefaultRoute()} replace />;
-      }
-    } else if (requiredRole === USER_ROLES.APPLICANT) {
-      if (isAdmin()) {
-        return <Navigate to="/admin/dashboard" replace />;
-      }
-    }
-  }
-
-  return children;
+ return children;
 };
 
 export default ProtectedRoute;

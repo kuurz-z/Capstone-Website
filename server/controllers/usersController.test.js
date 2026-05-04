@@ -94,8 +94,6 @@ const {
   updatePermissions,
   deleteUser,
   restoreUser,
-  suspendUser,
-  reactivateUser,
 } = await import("./usersController.js");
 
 const createResponse = () => {
@@ -325,78 +323,6 @@ describe("usersController", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual(user);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  test("suspendUser denies branch admins outside their branch scope", async () => {
-    const save = jest.fn();
-    const targetUser = {
-      _id: "507f1f77bcf86cd799439011",
-      branch: "guadalupe",
-      role: "tenant",
-      save,
-      suspend: jest.fn(),
-      toObject: () => ({ branch: "guadalupe", role: "tenant" }),
-    };
-    userModel.findById.mockResolvedValue(targetUser);
-    roomModel.find.mockReturnValue({
-      distinct: jest.fn().mockResolvedValue(["room-1"]),
-    });
-    reservationModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({
-        lean: jest.fn().mockResolvedValue(null),
-      }),
-    });
-
-    const req = {
-      params: { userId: "507f1f77bcf86cd799439011" },
-      body: { reason: "Policy review" },
-      branchFilter: "gil-puyat",
-      isOwner: false,
-    };
-    const res = createResponse();
-    const next = jest.fn();
-
-    await suspendUser(req, res, next);
-
-    expect(res.statusCode).toBe(404);
-    expect(res.body.code).toBe("USER_NOT_FOUND");
-    expect(targetUser.suspend).not.toHaveBeenCalled();
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  test("reactivateUser denies branch admins outside their branch scope", async () => {
-    const targetUser = {
-      _id: "507f1f77bcf86cd799439011",
-      branch: "guadalupe",
-      role: "tenant",
-      accountStatus: "suspended",
-      reactivate: jest.fn(),
-      toObject: () => ({ branch: "guadalupe", role: "tenant" }),
-    };
-    userModel.findById.mockResolvedValue(targetUser);
-    roomModel.find.mockReturnValue({
-      distinct: jest.fn().mockResolvedValue(["room-1"]),
-    });
-    reservationModel.findOne.mockReturnValue({
-      select: jest.fn().mockReturnValue({
-        lean: jest.fn().mockResolvedValue(null),
-      }),
-    });
-
-    const req = {
-      params: { userId: "507f1f77bcf86cd799439011" },
-      branchFilter: "gil-puyat",
-      isOwner: false,
-    };
-    const res = createResponse();
-    const next = jest.fn();
-
-    await reactivateUser(req, res, next);
-
-    expect(res.statusCode).toBe(404);
-    expect(res.body.code).toBe("USER_NOT_FOUND");
-    expect(targetUser.reactivate).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
   });
 

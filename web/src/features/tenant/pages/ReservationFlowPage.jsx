@@ -27,22 +27,20 @@ import { reservationApi } from "../../../shared/api/reservationApi";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// ─────────────────────────────────────────────────────────
-// ReservationFlowPage — thin JSX orchestrator
+// ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ReservationFlowPage ΓÇö thin JSX orchestrator
 // All state/effects/handlers live in useReservationFlow hook.
-// ─────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 function ReservationFlowPage() {
   const flow = useReservationFlow();
 
-  // ── Loading ────────────────────────────────────────────
-  if (!flow.reservationData || flow.paymentVerificationActive) {
-    return <GlobalLoading message={flow.paymentVerificationMessage} />;
-  }
+  // ΓöÇΓöÇ Loading ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  if (!flow.reservationData || flow.paymentVerifyingRef.current) return <GlobalLoading />;
 
-  // ── Render ─────────────────────────────────────────────
+  // ΓöÇΓöÇ Render ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   return (
     <div className="reservation-flow-container">
-      {/* ── Success Overlay ── */}
+      {/* ΓöÇΓöÇ Success Overlay ΓöÇΓöÇ */}
       {flow.successOverlay.show && (
         <div className="rf-success-overlay">
           <div className="rf-success-overlay-content">
@@ -247,6 +245,9 @@ function ReservationFlowPage() {
                   setValidIDBack: flow.setValidIDBack,
                   validIDType: flow.validIDType,
                   setValidIDType: flow.setValidIDType,
+                  idValidationResult: flow.idValidationResult,
+                  isValidatingId: flow.isValidatingId,
+                  onValidateIdDocument: flow.validateApplicantIdDocument,
                   nbiClearance: flow.nbiClearance,
                   setNbiClearance: flow.setNbiClearance,
                   nbiReason: flow.nbiReason,
@@ -308,7 +309,6 @@ function ReservationFlowPage() {
                 }}
                 onPrev={() => flow.navigate("/applicant/profile")}
                 onNext={() => flow.handleNextStage()}
-                onSaveDraft={flow.handleSaveAndExit}
                 readOnly={flow.isStageLocked(3)}
                 onEditApplication={() => flow.setEditingApplication(true)}
               />
@@ -373,8 +373,14 @@ function ReservationFlowPage() {
                   }
                   const { checkoutUrl } = await billingApi.createDepositCheckout(flow.reservationId);
                   flow.navigatingAwayRef.current = true;
-                  // Persist reservation ID so we can reload on return from PayMongo
-                  sessionStorage.setItem("activeReservationId", flow.reservationId);
+                  // Persist reservation ID so we can reload on return from PayMongo.
+                  // Key is scoped to the Firebase UID to prevent cross-user contamination
+                  // on shared devices (e.g. User B signing in while User A is on PayMongo).
+                  const uid = flow.user?.firebaseUid;
+                  sessionStorage.setItem(
+                    uid ? `activeReservationId_${uid}` : "activeReservationId",
+                    flow.reservationId,
+                  );
                   window.location.href = checkoutUrl;
                 } catch (error) {
                   console.error("Failed to create deposit checkout:", error);

@@ -29,10 +29,6 @@ export const analyticsApi = {
     const query = new URLSearchParams(params).toString();
     return authFetch(`/analytics/audit${query ? `?${query}` : ""}`);
   },
-  getSystemPerformance: (params = {}) => {
-    const query = new URLSearchParams(params).toString();
-    return authFetch(`/analytics/system-performance${query ? `?${query}` : ""}`);
-  },
   getInsights: (payload = {}) =>
     authFetch("/analytics/insights", {
       method: "POST",

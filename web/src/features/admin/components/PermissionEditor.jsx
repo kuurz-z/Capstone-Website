@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Shield, Check, X, Save, Loader } from "lucide-react";
+import {
+  Shield, Check, X, Save, Loader,
+  CalendarCheck, Users, Receipt, BedDouble,
+  Wrench, Megaphone, BarChart2, KeyRound,
+} from "lucide-react";
 import "../styles/permission-editor.css";
 
 /**
@@ -10,49 +14,49 @@ const PERMISSIONS = [
     key: "manageReservations",
     label: "Manage Reservations",
     description: "View, update, and cancel reservations",
-    icon: "📋",
+    icon: CalendarCheck,
   },
   {
     key: "manageTenants",
     label: "Manage Tenants",
     description: "View/edit tenant profiles, account actions",
-    icon: "👥",
+    icon: Users,
   },
   {
     key: "manageBilling",
     label: "Manage Billing",
     description: "Generate bills, verify payments, apply penalties",
-    icon: "💰",
+    icon: Receipt,
   },
   {
     key: "manageRooms",
     label: "Manage Rooms",
     description: "Edit rooms, beds, and occupancy",
-    icon: "🏠",
+    icon: BedDouble,
   },
   {
     key: "manageMaintenance",
     label: "Manage Maintenance",
     description: "Handle maintenance requests",
-    icon: "🔧",
+    icon: Wrench,
   },
   {
     key: "manageAnnouncements",
     label: "Manage Announcements",
     description: "Create, edit, and delete announcements",
-    icon: "📢",
+    icon: Megaphone,
   },
   {
     key: "viewReports",
     label: "View Reports",
     description: "Access reports and analytics",
-    icon: "📊",
+    icon: BarChart2,
   },
   {
     key: "manageUsers",
     label: "Manage Users",
     description: "Create, edit, and delete user accounts",
-    icon: "🔐",
+    icon: KeyRound,
   },
 ];
 
@@ -146,8 +150,7 @@ export default function PermissionEditor({
 
       <div className="pe-grid">
         {PERMISSIONS.map((perm) => {
-          const isActive =
-            isOwnerTarget || localPermissions.includes(perm.key);
+          const isActive = isOwnerTarget || localPermissions.includes(perm.key);
 
           return (
             <div
@@ -157,7 +160,9 @@ export default function PermissionEditor({
               role="button"
               tabIndex={0}
             >
-              <div className="pe-item-icon">{perm.icon}</div>
+              <div className="pe-item-icon">
+  <perm.icon size={16} />
+</div>
               <div className="pe-item-content">
                 <span className="pe-item-label">{perm.label}</span>
                 <span className="pe-item-desc">{perm.description}</span>

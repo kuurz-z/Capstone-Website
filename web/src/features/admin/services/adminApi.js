@@ -29,30 +29,30 @@ import { API_BASE_URL } from "../../../shared/api/baseUrl";
  * @deprecated Use apiClient.js inquiryApi, reservationApi, userApi instead
  */
 export const adminApi = {
-  /**
-   * Get all inquiries for admin's branch
-   * @deprecated Use inquiryApi.getAll() from apiClient.js
-   */
-  getInquiries: async () => {
-    const response = await axios.get(`${API_BASE_URL}/inquiries`);
-    return response.data;
-  },
+ /**
+ * Get all inquiries for admin's branch
+ * @deprecated Use inquiryApi.getAll() from apiClient.js
+ */
+ getInquiries: async () => {
+ const response = await axios.get(`${API_BASE_URL}/inquiries`);
+ return response.data;
+ },
 
-  /**
-   * Get all reservations for admin's branch
-   * @deprecated Use reservationApi.getAll() from apiClient.js
-   */
-  getReservations: async () => {
-    const response = await axios.get(`${API_BASE_URL}/reservations`);
-    return response.data;
-  },
+ /**
+ * Get all reservations for admin's branch
+ * @deprecated Use reservationApi.getAll() from apiClient.js
+ */
+ getReservations: async () => {
+ const response = await axios.get(`${API_BASE_URL}/reservations`);
+ return response.data;
+ },
 
-  /**
-   * Get all tenants/users for admin's branch
-   * @deprecated Use userApi.getAll() from apiClient.js
-   */
-  getTenants: async () => {
-    const response = await axios.get(`${API_BASE_URL}/users`);
-    return response.data;
-  },
+ /**
+ * Get all tenants/users for admin's branch
+ * @deprecated Use userApi.getAll() from apiClient.js
+ */
+ getTenants: async () => {
+ const response = await axios.get(`${API_BASE_URL}/users`);
+ return response.data;
+ },
 };

@@ -181,7 +181,7 @@ export const createUser = async (req, res, next) => {
   let firebaseUid = null; // track for rollback
 
   try {
-    const { email, username, firstName, lastName, phone, role, password, branch } =
+    const { email, username, firstName, lastName, phone, role, password } =
       req.body;
 
     // --- Validate required fields ---
@@ -219,20 +219,6 @@ export const createUser = async (req, res, next) => {
       return res.status(400).json({
         error: "Role must be 'applicant' or 'branch_admin'",
         code: "INVALID_ROLE",
-      });
-    }
-
-    const assignedBranch = branch ? String(branch).trim() : "";
-    if (assignedBranch && !VALID_BRANCHES.includes(assignedBranch)) {
-      return res.status(400).json({
-        error: `Invalid branch. Must be one of: ${VALID_BRANCHES.join(", ")}`,
-        code: "INVALID_BRANCH",
-      });
-    }
-    if (allowedRole === "branch_admin" && !assignedBranch) {
-      return res.status(400).json({
-        error: "Branch is required when creating a branch admin account",
-        code: "BRANCH_REQUIRED",
       });
     }
 
@@ -283,7 +269,7 @@ export const createUser = async (req, res, next) => {
       firstName,
       lastName,
       phone: phone || null,
-      branch: assignedBranch || null,
+      branch: null, // branch is assigned when user becomes tenant
       role: allowedRole,
       isEmailVerified: false,
       isActive: true,
@@ -1118,17 +1104,6 @@ export const suspendUser = async (req, res, next) => {
         .status(404)
         .json({ error: "User not found", code: "USER_NOT_FOUND" });
 
-    const canAccessTarget = await hasBranchAccessToTargetUser(
-      targetUser,
-      req.isOwner ? null : req.branchFilter,
-    );
-    if (!canAccessTarget) {
-      return res.status(404).json({
-        error: "User not found or access denied",
-        code: "USER_NOT_FOUND",
-      });
-    }
-
     // Prevent suspending admins unless you're the owner
     if (
       (targetUser.role === "branch_admin" || targetUser.role === "owner") &&
@@ -1181,17 +1156,6 @@ export const reactivateUser = async (req, res, next) => {
       return res
         .status(404)
         .json({ error: "User not found", code: "USER_NOT_FOUND" });
-
-    const canAccessTarget = await hasBranchAccessToTargetUser(
-      targetUser,
-      req.isOwner ? null : req.branchFilter,
-    );
-    if (!canAccessTarget) {
-      return res.status(404).json({
-        error: "User not found or access denied",
-        code: "USER_NOT_FOUND",
-      });
-    }
 
     if (targetUser.accountStatus === "active")
       return res

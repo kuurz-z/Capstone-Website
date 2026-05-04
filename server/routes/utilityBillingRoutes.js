@@ -10,7 +10,6 @@ import {
   getUtilityLatestReading,
   getUtilityPeriods,
   getUtilityResult,
-  exportUtilityRows,
   deleteUtilityPeriod,
   updateUtilityPeriod,
   deleteUtilityReading,
@@ -18,7 +17,6 @@ import {
   reviseUtilityResult,
   getRoomHistory,
   sendUtilityPeriod,
-  getUtilityAiReview,
 } from "../controllers/utilityBillingController.js";
 import { verifyToken, verifyAdmin } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/permissions.js";
@@ -40,9 +38,7 @@ router.get("/:utilityType/readings/:roomId/latest", getUtilityLatestReading);
 router.get("/:utilityType/readings/:roomId", getUtilityReadings);
 router.get("/:utilityType/periods/:roomId", getUtilityPeriods);
 router.get("/:utilityType/results/:periodId", getUtilityResult);
-router.get("/:utilityType/export", exportUtilityRows);
 router.get("/:utilityType/rooms/:roomId/history", getRoomHistory);
-router.post("/:utilityType/periods/:periodId/ai-review", getUtilityAiReview);
 
 // Utility agnostic routes
 router.post("/:utilityType/periods", openUtilityPeriod);

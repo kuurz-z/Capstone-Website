@@ -1,5 +1,4 @@
 ﻿import dayjs from "dayjs";
-import mongoose from "mongoose";
 import {
   AuditLog,
   Bill,
@@ -9,7 +8,6 @@ import {
   Reservation,
   Room,
   User,
-  UserSession,
 } from "../models/index.js";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import { OPEN_MAINTENANCE_STATUSES } from "../config/maintenance.js";
@@ -36,9 +34,6 @@ const REPORT_MONTH_RANGES = Object.freeze({
   "6m": 6,
   "12m": 12,
 });
-
-const TABLE_PAGE_DEFAULT_LIMIT = 10;
-const TABLE_PAGE_MAX_LIMIT = 100;
 
 const PENDING_RESERVATION_STATUSES = Object.freeze([
   "pending",
@@ -105,83 +100,6 @@ const formatWeekLabel = (value) =>
   `Week of ${dayjs(value).format("MMM D")}`;
 
 const toNumber = (value) => Number(value || 0);
-
-const parsePositiveInteger = (value, fallback, max = Number.POSITIVE_INFINITY) => {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-  return Math.min(parsed, max);
-};
-
-const parseTableRequest = (query = {}) => ({
-  limit: parsePositiveInteger(
-    query.tableLimit ?? query.limit,
-    TABLE_PAGE_DEFAULT_LIMIT,
-    TABLE_PAGE_MAX_LIMIT,
-  ),
-  offset: parsePositiveInteger(query.tableOffset ?? query.offset, 0),
-  sort: String(query.tableSort ?? query.sort ?? "").trim(),
-  direction:
-    String(query.tableDirection ?? query.direction ?? "asc").toLowerCase() === "desc"
-      ? "desc"
-      : "asc",
-});
-
-const getSortableValue = (row, key) => {
-  if (!key) return null;
-  return key.split(".").reduce((value, segment) => value?.[segment], row);
-};
-
-const sortRows = (rows, { sort, direction }) => {
-  if (!sort) return rows;
-  const multiplier = direction === "desc" ? -1 : 1;
-
-  return [...rows].sort((left, right) => {
-    const leftValue = getSortableValue(left, sort);
-    const rightValue = getSortableValue(right, sort);
-
-    if (leftValue == null && rightValue == null) return 0;
-    if (leftValue == null) return 1;
-    if (rightValue == null) return -1;
-
-    const leftNumber = Number(leftValue);
-    const rightNumber = Number(rightValue);
-    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-      return (leftNumber - rightNumber) * multiplier;
-    }
-
-    const leftDate = Date.parse(leftValue);
-    const rightDate = Date.parse(rightValue);
-    if (Number.isFinite(leftDate) && Number.isFinite(rightDate)) {
-      return (leftDate - rightDate) * multiplier;
-    }
-
-    return String(leftValue).localeCompare(String(rightValue)) * multiplier;
-  });
-};
-
-const buildPaginatedTable = (rows, tableRequest, defaults = {}) => {
-  const request = {
-    ...tableRequest,
-    sort: tableRequest.sort || defaults.sort || "",
-    direction: tableRequest.sort ? tableRequest.direction : defaults.direction || tableRequest.direction,
-  };
-  const sortedRows = sortRows(rows, request);
-  const total = sortedRows.length;
-  const offset = total > 0 ? request.offset : 0;
-  const pageRows = sortedRows.slice(offset, offset + request.limit);
-
-  return {
-    rows: pageRows,
-    pagination: {
-      total,
-      limit: request.limit,
-      offset,
-      sort: request.sort || null,
-      direction: request.direction,
-      hasMore: offset + pageRows.length < total,
-    },
-  };
-};
 
 const getRemainingBalance = (bill) =>
   Math.max(
@@ -1127,7 +1045,7 @@ const buildBranchComparison = async (scope, sinceDate) => {
   return comparisons;
 };
 
-const buildOccupancyReportData = async (scope, rangeKey, tableRequest = parseTableRequest()) => {
+const buildOccupancyReportData = async (scope, rangeKey) => {
   const rangeDays = parseReportDays(rangeKey);
   const sinceDate = dayjs().subtract(rangeDays - 1, "day").startOf("day").toDate();
 
@@ -1182,16 +1100,13 @@ const buildOccupancyReportData = async (scope, rangeKey, tableRequest = parseTab
       }),
     },
     tables: {
-      inventory: buildPaginatedTable(inventory, tableRequest, {
-        sort: "roomNumber",
-        direction: "asc",
-      }),
+      inventory,
       roomTypes,
     },
   };
 };
 
-const buildBillingReportData = async (scope, rangeKey, tableRequest = parseTableRequest()) => {
+const buildBillingReportData = async (scope, rangeKey) => {
   const rangeMonths = parseReportMonths(rangeKey);
   const sinceMonth = dayjs()
     .subtract(rangeMonths - 1, "month")
@@ -1261,16 +1176,13 @@ const buildBillingReportData = async (scope, rangeKey, tableRequest = parseTable
       overdueAging: buildOverdueAging(openBills),
     },
     tables: {
-      overdueAccounts: buildPaginatedTable(overdueRows, tableRequest, {
-        sort: "daysOverdue",
-        direction: "desc",
-      }),
+      overdueAccounts: overdueRows,
       unpaidBalances: unpaidRows,
     },
   };
 };
 
-const buildOperationsReportData = async (scope, rangeKey, tableRequest = parseTableRequest()) => {
+const buildOperationsReportData = async (scope, rangeKey) => {
   const rangeDays = parseReportDays(rangeKey);
   const sinceDate = dayjs().subtract(rangeDays - 1, "day").startOf("day").toDate();
 
@@ -1359,16 +1271,13 @@ const buildOperationsReportData = async (scope, rangeKey, tableRequest = parseTa
     },
     tables: {
       peakInquiryWindows: inquiryWindows,
-      maintenanceIssues: buildPaginatedTable(maintenanceRows, tableRequest, {
-        sort: "createdAt",
-        direction: "desc",
-      }),
+      maintenanceIssues: maintenanceRows,
       reservations: reservationRows,
     },
   };
 };
 
-const buildAuditSummaryData = async (scope, rangeKey, tableRequest = parseTableRequest()) => {
+const buildAuditSummaryData = async (scope, rangeKey) => {
   if (!scope.isOwner) {
     throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
   }
@@ -1445,95 +1354,7 @@ const buildAuditSummaryData = async (scope, rangeKey, tableRequest = parseTableR
     },
     tables: {
       suspiciousIps,
-      recentSecurityEvents: buildPaginatedTable(recentSecurityEvents, tableRequest, {
-        sort: "timestamp",
-        direction: "desc",
-      }),
-    },
-  };
-};
-
-const buildFinancialsReportData = async (scope, rangeKey, tableRequest = parseTableRequest()) => {
-  if (!scope.isOwner) {
-    throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
-  }
-
-  const rangeMonths = parseReportMonths(rangeKey);
-  const sinceMonth = dayjs()
-    .subtract(rangeMonths - 1, "month")
-    .startOf("month")
-    .toDate();
-
-  const [periodBills, openBills] = await Promise.all([
-    fetchScopedBills(scope.branchesIncluded, {
-      billingMonth: { $gte: sinceMonth },
-    }),
-    fetchScopedBills(scope.branchesIncluded, {
-      status: { $in: ["pending", "overdue", "partially-paid"] },
-    }),
-  ]);
-
-  const branchComparison = buildFinancialBranchSummaries({
-    periodBills,
-    openBills,
-    branches: scope.branchesIncluded,
-  });
-  const billedAmount = periodBills.reduce(
-    (sum, bill) => sum + toNumber(bill.totalAmount),
-    0,
-  );
-  const collectedRevenue = periodBills.reduce(
-    (sum, bill) => sum + toNumber(bill.paidAmount),
-    0,
-  );
-  const outstandingBalance = openBills.reduce(
-    (sum, bill) => sum + getRemainingBalance(bill),
-    0,
-  );
-  const overdueBills = openBills.filter(
-    (bill) => bill.dueDate && dayjs(bill.dueDate).isBefore(dayjs(), "day"),
-  );
-  const overdueAmount = overdueBills.reduce(
-    (sum, bill) => sum + getRemainingBalance(bill),
-    0,
-  );
-  const collectionRate =
-    billedAmount > 0 ? Math.round((collectedRevenue / billedAmount) * 100) : 0;
-  const netPosition = collectedRevenue - overdueAmount;
-
-  return {
-    ...buildRangeEnvelope(scope, {
-      range: rangeKey,
-      since: sinceMonth.toISOString(),
-    }),
-    kpis: {
-      billedAmount,
-      billedAmountLabel: formatCurrency(billedAmount),
-      collectedRevenue,
-      collectedRevenueLabel: formatCurrency(collectedRevenue),
-      outstandingBalance,
-      outstandingBalanceLabel: formatCurrency(outstandingBalance),
-      overdueAmount,
-      overdueAmountLabel: formatCurrency(overdueAmount),
-      collectionRate,
-      collectionRateLabel: `${collectionRate}%`,
-      netPosition,
-      netPositionLabel: formatCurrency(netPosition),
-    },
-    series: {
-      revenueByMonth: buildBillingMonthSeries(periodBills, rangeMonths),
-      overdueAging: buildOverdueAging(openBills),
-      branchComparison,
-    },
-    tables: {
-      overdueRooms: buildPaginatedTable(buildOverdueRoomRows(openBills), tableRequest, {
-        sort: "outstandingBalance",
-        direction: "desc",
-      }),
-      unpaidBalances: openBills
-        .map(buildBillingTableRow)
-        .sort((left, right) => right.balance - left.balance)
-        .slice(0, 20),
+      recentSecurityEvents,
     },
   };
 };
@@ -1552,78 +1373,10 @@ const resolveInsightScope = async (req, branchOverride) => {
   });
 };
 
-const buildOccupancyForecastData = async (
-  scope,
-  { projectionMonths = 3, historyMonths = 12 } = {},
-) => {
-  const rooms = await Room.find({
-    isArchived: false,
-    branch: { $in: scope.branchesIncluded },
-  })
-    .select("_id branch type capacity")
-    .lean();
-  const roomIds = rooms.map((room) => room._id);
-  const reservations = roomIds.length
-    ? await fetchScopedReservations(roomIds)
-    : [];
-
-  const forecast = buildOccupancyForecast({
-    rooms,
-    reservations,
-    projectionMonths,
-    historyMonths,
-    scope,
-  });
-
-  return {
-    ...buildRangeEnvelope(scope, {
-      months: projectionMonths,
-      historyMonths,
-    }),
-    forecast,
-  };
-};
-
-const buildAnalyticsHubReportData = async (scope, rangeKey, options = {}) => {
-  const billingRange = String(options.billingRange || "3m").trim().toLowerCase();
-  const forecastMonths = Math.max(
-    1,
-    Math.min(Number.parseInt(options.forecastMonths, 10) || 3, 6),
-  );
-  const tableRequest = parseTableRequest({ tableLimit: 20, tableOffset: 0 });
-
-  const [occupancy, billing, operations, forecastData, audit] = await Promise.all([
-    buildOccupancyReportData(scope, rangeKey, tableRequest),
-    buildBillingReportData(scope, billingRange, tableRequest),
-    buildOperationsReportData(scope, rangeKey, tableRequest),
-    buildOccupancyForecastData(scope, { projectionMonths: forecastMonths }),
-    scope.isOwner
-      ? buildAuditSummaryData(scope, rangeKey, tableRequest)
-      : Promise.resolve(null),
-  ]);
-
-  return {
-    ...buildRangeEnvelope(scope, {
-      range: rangeKey,
-      billingRange,
-      forecastMonths,
-    }),
-    reports: {
-      occupancy,
-      billing,
-      operations,
-      ...(audit ? { audit } : {}),
-    },
-    forecast: forecastData.forecast,
-  };
-};
-
 const REPORT_BUILDERS = Object.freeze({
-  hub: { defaultRange: "30d", build: buildAnalyticsHubReportData },
   occupancy: { defaultRange: "30d", build: buildOccupancyReportData },
   billing: { defaultRange: "3m", build: buildBillingReportData },
   operations: { defaultRange: "30d", build: buildOperationsReportData },
-  financials: { defaultRange: "3m", build: buildFinancialsReportData },
   audit: { defaultRange: "30d", build: buildAuditSummaryData },
 });
 
@@ -1756,7 +1509,7 @@ export const getOccupancyReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
     const rangeKey = String(req.query.range || "30d").trim().toLowerCase();
-    sendSuccess(res, await buildOccupancyReportData(scope, rangeKey, parseTableRequest(req.query)));
+    sendSuccess(res, await buildOccupancyReportData(scope, rangeKey));
   } catch (error) {
     next(error);
   }
@@ -1766,7 +1519,7 @@ export const getBillingReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
     const rangeKey = String(req.query.range || "3m").trim().toLowerCase();
-    sendSuccess(res, await buildBillingReportData(scope, rangeKey, parseTableRequest(req.query)));
+    sendSuccess(res, await buildBillingReportData(scope, rangeKey));
   } catch (error) {
     next(error);
   }
@@ -1776,7 +1529,7 @@ export const getOperationsReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
     const rangeKey = String(req.query.range || "30d").trim().toLowerCase();
-    sendSuccess(res, await buildOperationsReportData(scope, rangeKey, parseTableRequest(req.query)));
+    sendSuccess(res, await buildOperationsReportData(scope, rangeKey));
   } catch (error) {
     next(error);
   }
@@ -1785,8 +1538,86 @@ export const getOperationsReport = async (req, res, next) => {
 export const getFinancialsReport = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
+    if (!scope.isOwner) {
+      throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
+    }
+
     const rangeKey = String(req.query.range || "3m").trim().toLowerCase();
-    sendSuccess(res, await buildFinancialsReportData(scope, rangeKey, parseTableRequest(req.query)));
+    const rangeMonths = parseReportMonths(rangeKey);
+    const sinceMonth = dayjs()
+      .subtract(rangeMonths - 1, "month")
+      .startOf("month")
+      .toDate();
+
+    const [periodBills, openBills] = await Promise.all([
+      fetchScopedBills(scope.branchesIncluded, {
+        billingMonth: { $gte: sinceMonth },
+      }),
+      fetchScopedBills(scope.branchesIncluded, {
+        status: { $in: ["pending", "overdue", "partially-paid"] },
+      }),
+    ]);
+
+    const branchComparison = buildFinancialBranchSummaries({
+      periodBills,
+      openBills,
+      branches: scope.branchesIncluded,
+    });
+    const billedAmount = periodBills.reduce(
+      (sum, bill) => sum + toNumber(bill.totalAmount),
+      0,
+    );
+    const collectedRevenue = periodBills.reduce(
+      (sum, bill) => sum + toNumber(bill.paidAmount),
+      0,
+    );
+    const outstandingBalance = openBills.reduce(
+      (sum, bill) => sum + getRemainingBalance(bill),
+      0,
+    );
+    const overdueBills = openBills.filter(
+      (bill) => bill.dueDate && dayjs(bill.dueDate).isBefore(dayjs(), "day"),
+    );
+    const overdueAmount = overdueBills.reduce(
+      (sum, bill) => sum + getRemainingBalance(bill),
+      0,
+    );
+    const collectionRate =
+      billedAmount > 0 ? Math.round((collectedRevenue / billedAmount) * 100) : 0;
+    const netPosition = collectedRevenue - overdueAmount;
+
+    sendSuccess(res, {
+      ...buildRangeEnvelope(scope, {
+        range: rangeKey,
+        since: sinceMonth.toISOString(),
+      }),
+      kpis: {
+        billedAmount,
+        billedAmountLabel: formatCurrency(billedAmount),
+        collectedRevenue,
+        collectedRevenueLabel: formatCurrency(collectedRevenue),
+        outstandingBalance,
+        outstandingBalanceLabel: formatCurrency(outstandingBalance),
+        overdueAmount,
+        overdueAmountLabel: formatCurrency(overdueAmount),
+        collectionRate,
+        collectionRateLabel: `${collectionRate}%`,
+        netPosition,
+        netPositionLabel: formatCurrency(netPosition),
+      },
+      series: {
+        revenueByMonth: buildBillingMonthSeries(periodBills, rangeMonths),
+        overdueAging: buildOverdueAging(openBills),
+        branchComparison,
+      },
+      tables: {
+        overdueRooms: buildOverdueRoomRows(openBills),
+        unpaidBalances: openBills
+          .map(buildBillingTableRow)
+          .sort((left, right) => right.balance - left.balance)
+          .slice(0, 20),
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -1796,95 +1627,7 @@ export const getAuditSummary = async (req, res, next) => {
   try {
     const scope = await resolveAnalyticsScope(req);
     const rangeKey = String(req.query.range || "30d").trim().toLowerCase();
-    sendSuccess(res, await buildAuditSummaryData(scope, rangeKey, parseTableRequest(req.query)));
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getSystemPerformance = async (req, res, next) => {
-  try {
-    const scope = await resolveAnalyticsScope(req);
-    if (!scope.isOwner) {
-      throw new AppError("Owner access required", 403, "OWNER_ACCESS_REQUIRED");
-    }
-
-    const sinceDate = dayjs().subtract(24, "hour").toDate();
-    const memory = process.memoryUsage();
-    const [activeSessions, failedLogins24h, highSeverityAudit24h] =
-      await Promise.all([
-        UserSession.countDocuments({
-          isActive: true,
-          $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
-        }),
-        LoginLog.countDocuments({
-          success: false,
-          createdAt: { $gte: sinceDate },
-        }),
-        AuditLog.countDocuments({
-          timestamp: { $gte: sinceDate },
-          severity: { $in: ["high", "critical"] },
-        }),
-      ]);
-
-    const mongoReadyState = mongoose.connection?.readyState ?? 0;
-    const mongoStatusMap = {
-      0: "disconnected",
-      1: "connected",
-      2: "connecting",
-      3: "disconnecting",
-    };
-    const memoryUsedMb = Number((memory.heapUsed / 1024 / 1024).toFixed(1));
-    const memoryTotalMb = Number((memory.heapTotal / 1024 / 1024).toFixed(1));
-    const memoryUsageRate =
-      memoryTotalMb > 0 ? Math.round((memoryUsedMb / memoryTotalMb) * 100) : 0;
-    const uptimeSeconds = Math.round(process.uptime());
-
-    sendSuccess(res, {
-      ...buildRangeEnvelope(scope, {
-        range: "24h",
-        since: sinceDate.toISOString(),
-      }),
-      kpis: {
-        serviceStatus: mongoReadyState === 1 ? "healthy" : "degraded",
-        databaseStatus: mongoStatusMap[mongoReadyState] || "unknown",
-        uptimeSeconds,
-        uptimeHours: Number((uptimeSeconds / 3600).toFixed(1)),
-        memoryUsedMb,
-        memoryTotalMb,
-        memoryUsageRate,
-        activeSessions,
-        failedLogins24h,
-        highSeverityAudit24h,
-      },
-      series: {
-        resourceUsage: [
-          { label: "Heap used", value: memoryUsedMb },
-          { label: "Heap available", value: Math.max(memoryTotalMb - memoryUsedMb, 0) },
-        ],
-      },
-      checks: {
-        api: {
-          status: "ok",
-          uptimeSeconds,
-        },
-        database: {
-          status: mongoReadyState === 1 ? "ok" : "degraded",
-          readyState: mongoReadyState,
-          label: mongoStatusMap[mongoReadyState] || "unknown",
-        },
-        sessions: {
-          status: "ok",
-          activeCount: activeSessions,
-        },
-        securitySignals: {
-          status:
-            failedLogins24h > 20 || highSeverityAudit24h > 10 ? "review" : "ok",
-          failedLogins24h,
-          highSeverityAudit24h,
-        },
-      },
-    });
+    sendSuccess(res, await buildAuditSummaryData(scope, rangeKey));
   } catch (error) {
     next(error);
   }
@@ -1910,15 +1653,8 @@ export const getAnalyticsInsights = async (req, res, next) => {
     const rangeKey = String(req.body?.range || reportConfig.defaultRange)
       .trim()
       .toLowerCase();
-    const insightBuildOptions = {
-      billingRange: req.body?.billingRange,
-      forecastMonths: req.body?.forecastMonths,
-    };
     const question = String(req.body?.question || "").trim();
-    const reportData =
-      reportType === "hub"
-        ? await reportConfig.build(scope, rangeKey, insightBuildOptions)
-        : await reportConfig.build(scope, rangeKey);
+    const reportData = await reportConfig.build(scope, rangeKey);
     const { snapshotMeta, insight } = await generateAnalyticsInsight({
       reportType,
       scope,
@@ -1945,10 +1681,34 @@ export const getOccupancyForecast = async (req, res, next) => {
       1,
       Math.min(Number.parseInt(req.query.months, 10) || 3, 6),
     );
-    sendSuccess(
-      res,
-      await buildOccupancyForecastData(scope, { projectionMonths }),
-    );
+    const historyMonths = 12;
+
+    const rooms = await Room.find({
+      isArchived: false,
+      branch: { $in: scope.branchesIncluded },
+    })
+      .select("_id branch type capacity")
+      .lean();
+    const roomIds = rooms.map((room) => room._id);
+    const reservations = roomIds.length
+      ? await fetchScopedReservations(roomIds)
+      : [];
+
+    const forecast = buildOccupancyForecast({
+      rooms,
+      reservations,
+      projectionMonths,
+      historyMonths,
+      scope,
+    });
+
+    sendSuccess(res, {
+      ...buildRangeEnvelope(scope, {
+        months: projectionMonths,
+        historyMonths,
+      }),
+      forecast,
+    });
   } catch (error) {
     next(error);
   }
@@ -1961,7 +1721,6 @@ export default {
   getOperationsReport,
   getFinancialsReport,
   getAuditSummary,
-  getSystemPerformance,
   getAnalyticsInsights,
   getOccupancyForecast,
 };

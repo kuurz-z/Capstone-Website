@@ -34,8 +34,6 @@ export const queryKeys = {
     tenantWorkspace: (params) => ["reservations", "tenantWorkspace", params || {}],
     tenantWorkspaceDetail: (id) => ["reservations", "tenantWorkspaceDetail", id],
     tenantActionContext: (id) => ["reservations", "tenantActionContext", id],
-    visitAvailability: (params) => ["reservations", "visitAvailability", params || {}],
-    visitAvailabilitySettings: (branch) => ["reservations", "visitAvailabilitySettings", branch || ""],
   },
 
   // ── Billing ──
@@ -96,7 +94,6 @@ export const queryKeys = {
     occupancyForecast: (params) => ["analytics", "occupancy-forecast", params || {}],
     financials: (params) => ["analytics", "financials", params || {}],
     audit: (params) => ["analytics", "audit", params || {}],
-    systemPerformance: (params) => ["analytics", "system-performance", params || {}],
     insights: (params) => ["analytics", "insights", params || {}],
   },
 

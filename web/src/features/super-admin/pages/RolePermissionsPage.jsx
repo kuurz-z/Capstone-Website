@@ -1,8 +1,11 @@
 import { useEffect } from "react";
-import { Shield, UserCog } from "lucide-react";
+import { Shield, UserCog, GitBranch, Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import PermissionEditor from "../../admin/components/PermissionEditor";
-import { useUsers, useUpdatePermissions } from "../../../shared/hooks/queries/useUsers";
+import {
+  useUsers,
+  useUpdatePermissions,
+} from "../../../shared/hooks/queries/useUsers";
 import "../styles/superadmin-dashboard.css";
 import "../styles/superadmin-permissions.css";
 
@@ -16,12 +19,17 @@ const formatBranch = (branch) => {
 
 export default function RolePermissionsPage() {
   const [searchParams] = useSearchParams();
-  const { data: usersResponse, isLoading, error } = useUsers({ role: "branch_admin" });
+  const {
+    data: usersResponse,
+    isLoading,
+    error,
+  } = useUsers({ role: "branch_admin" });
   const updatePermissions = useUpdatePermissions();
   const users = usersResponse?.users || usersResponse || [];
   const focusedUserId = searchParams.get("userId");
   const hasFocusedUser = Boolean(
-    focusedUserId && users.some((user) => String(user._id) === String(focusedUserId)),
+    focusedUserId &&
+    users.some((user) => String(user._id) === String(focusedUserId)),
   );
 
   useEffect(() => {
@@ -49,22 +57,38 @@ export default function RolePermissionsPage() {
         <div className="sa2-section-head">
           <div>
             <h2 className="sa2-card-title">
-              <Shield size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
+              <Shield
+                size={16}
+                style={{ marginRight: 6, verticalAlign: "middle" }}
+              />
               Branch Admin Access
             </h2>
             <p className="sa2-subtle">
-              Review and update the permissions assigned to each branch admin account.
+              Review and update the permissions assigned to each branch admin
+              account.
             </p>
-            {hasFocusedUser ? (
+            {hasFocusedUser && (
               <p className="sa-perm-focus-note">
+                <Info
+                  size={13}
+                  style={{
+                    display: "inline",
+                    marginRight: 5,
+                    verticalAlign: "middle",
+                  }}
+                />
                 Focused on the branch admin selected from Accounts.
               </p>
-            ) : null}
+            )}
           </div>
         </div>
 
-        {isLoading ? <p className="sa2-empty">Loading branch admin accounts...</p> : null}
-        {!isLoading && error ? <p className="sa2-empty">Failed to load permissions data.</p> : null}
+        {isLoading ? (
+          <p className="sa2-empty">Loading branch admin accounts...</p>
+        ) : null}
+        {!isLoading && error ? (
+          <p className="sa2-empty">Failed to load permissions data.</p>
+        ) : null}
         {!isLoading && !error && users.length === 0 ? (
           <p className="sa2-empty">No branch admin accounts found.</p>
         ) : null}
@@ -94,13 +118,19 @@ export default function RolePermissionsPage() {
                     </div>
                   </div>
                   <div className="sa-perm-meta">
-                    <span className="sa-perm-branch">{formatBranch(user.branch)}</span>
+                    <span className="sa-perm-branch">
+                      <GitBranch size={11} />
+                      {formatBranch(user.branch)}
+                    </span>
                   </div>
                 </div>
 
                 <PermissionEditor
                   permissions={user.permissions || []}
-                  saving={updatePermissions.isPending && updatePermissions.variables?.userId === user._id}
+                  saving={
+                    updatePermissions.isPending &&
+                    updatePermissions.variables?.userId === user._id
+                  }
                   onSave={(permissions) =>
                     updatePermissions.mutate({ userId: user._id, permissions })
                   }

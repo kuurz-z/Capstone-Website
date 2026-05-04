@@ -27,7 +27,6 @@ export const utilityKeys = {
   latestReading: (utilityType, roomId) => [...utilityKeys.all(utilityType), "latestReading", roomId],
   periods: (utilityType, roomId) => [...utilityKeys.all(utilityType), "periods", roomId],
   result: (utilityType, periodId) => [...utilityKeys.all(utilityType), "result", periodId],
-  aiReview: (periodId) => ["utilities", "electricity", "aiReview", periodId],
   diagnostics: (branch) => ["utilities", "diagnostics", branch],
   myBills: (utilityType) => [...utilityKeys.all(utilityType), "myBills"],
   myBreakdown: (utilityType, periodId) => [...utilityKeys.all(utilityType), "myBreakdown", periodId],
@@ -79,14 +78,6 @@ export function useUtilityResult(utilityType, periodId, options) {
     queryKey: utilityKeys.result(utilityType, periodId),
     queryFn: () => utilityApi.getResult(utilityType, periodId),
     ...buildQueryOptions(!!utilityType && !!periodId, options),
-  });
-}
-
-export function useElectricityAiReview(periodId, options) {
-  return useQuery({
-    queryKey: utilityKeys.aiReview(periodId),
-    queryFn: () => utilityApi.getElectricityAiReview(periodId),
-    ...buildQueryOptions(!!periodId, options),
   });
 }
 

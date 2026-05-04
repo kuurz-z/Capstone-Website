@@ -55,14 +55,6 @@ export function useAuditAnalytics(params) {
   });
 }
 
-export function useSystemPerformance(params) {
-  return useQuery({
-    queryKey: queryKeys.analytics.systemPerformance(params),
-    queryFn: () => analyticsApi.getSystemPerformance(params),
-    ...DEFAULT_OPTIONS,
-  });
-}
-
 export function useAnalyticsInsights(params, options = {}) {
   return useQuery({
     queryKey: queryKeys.analytics.insights(params),
@@ -71,14 +63,4 @@ export function useAnalyticsInsights(params, options = {}) {
     ...DEFAULT_OPTIONS,
     ...options,
   });
-}
-
-export function useAnalyticsInsightsHub(params, options = {}) {
-  return useAnalyticsInsights(
-    {
-      ...params,
-      reportType: "hub",
-    },
-    options,
-  );
 }

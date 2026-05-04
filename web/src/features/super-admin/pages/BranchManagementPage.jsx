@@ -73,17 +73,13 @@ const buildBranchLinks = (branch) => [
 ];
 
 const formatAdminName = (admin) =>
-  `${admin.firstName || ""} ${admin.lastName || ""}`.trim() || admin.email || "Branch admin";
+  `${admin.firstName || ""} ${admin.lastName || ""}`.trim() ||
+  admin.email ||
+  "Branch admin";
 
 export default function BranchManagementPage() {
   const { authFetch } = useApiClient();
-  const {
-    data,
-    error,
-    isLoading,
-    isFetching,
-    refetch,
-  } = useQuery({
+  const { data, error, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["branches", "summary"],
     queryFn: () => authFetch("/branches/summary"),
     staleTime: 60_000,
@@ -134,7 +130,10 @@ export default function BranchManagementPage() {
 
   const comparisonRate =
     comparisonSummary.totalBeds > 0
-      ? ((comparisonSummary.occupiedBeds / comparisonSummary.totalBeds) * 100).toFixed(1)
+      ? (
+          (comparisonSummary.occupiedBeds / comparisonSummary.totalBeds) *
+          100
+        ).toFixed(1)
       : "0.0";
 
   return (
@@ -144,8 +143,8 @@ export default function BranchManagementPage() {
           <p className="sa2-eyebrow">System Control Hub</p>
           <h1 className="sa2-title">Branches</h1>
           <p className="sa-branches-header-copy">
-            Compare fixed branch health side by side, then jump directly into the
-            filtered owner workflows that need attention.
+            Compare fixed branch health side by side, then jump directly into
+            the filtered owner workflows that need attention.
           </p>
         </div>
         <button
@@ -161,9 +160,12 @@ export default function BranchManagementPage() {
       <div className="sa-branches-overview">
         <article className="sa-branches-overview-card">
           <span className="sa-branches-overview-label">Network Occupancy</span>
-          <strong className="sa-branches-overview-value">{comparisonRate}%</strong>
+          <strong className="sa-branches-overview-value">
+            {comparisonRate}%
+          </strong>
           <span className="sa-branches-overview-meta">
-            {comparisonSummary.occupiedBeds} of {comparisonSummary.totalBeds} beds occupied
+            {comparisonSummary.occupiedBeds} of {comparisonSummary.totalBeds}{" "}
+            beds occupied
           </span>
         </article>
         <article className="sa-branches-overview-card">
@@ -208,7 +210,10 @@ export default function BranchManagementPage() {
           <AlertTriangle size={20} />
           <div>
             <strong>Unable to load branch summaries</strong>
-            <p>{error.message || "The branch summary endpoint could not be loaded."}</p>
+            <p>
+              {error.message ||
+                "The branch summary endpoint could not be loaded."}
+            </p>
           </div>
         </section>
       ) : (
@@ -265,7 +270,8 @@ export default function BranchManagementPage() {
                   />
                 </div>
                 <div className="sa-branch-occupancy-detail">
-                  {branch.occupancy?.occupiedBeds || 0} / {branch.occupancy?.totalBeds || 0} beds occupied
+                  {branch.occupancy?.occupiedBeds || 0} /{" "}
+                  {branch.occupancy?.totalBeds || 0} beds occupied
                 </div>
               </div>
 
@@ -273,7 +279,9 @@ export default function BranchManagementPage() {
                 <div className="sa-branch-stat-item">
                   <BedDouble size={16} className="sa-branch-stat-icon" />
                   <div>
-                    <span className="sa-branch-stat-value">{branch.totalRooms}</span>
+                    <span className="sa-branch-stat-value">
+                      {branch.totalRooms}
+                    </span>
                     <span className="sa-branch-stat-label">Rooms</span>
                   </div>
                 </div>
@@ -289,7 +297,9 @@ export default function BranchManagementPage() {
                 <div className="sa-branch-stat-item">
                   <Users size={16} className="sa-branch-stat-icon" />
                   <div>
-                    <span className="sa-branch-stat-value">{branch.tenantCount}</span>
+                    <span className="sa-branch-stat-value">
+                      {branch.tenantCount}
+                    </span>
                     <span className="sa-branch-stat-label">Tenants</span>
                   </div>
                 </div>
@@ -299,7 +309,9 @@ export default function BranchManagementPage() {
                     <span className="sa-branch-stat-value">
                       {branch.assignedAdminCount}
                     </span>
-                    <span className="sa-branch-stat-label">Assigned Admins</span>
+                    <span className="sa-branch-stat-label">
+                      Assigned Admins
+                    </span>
                   </div>
                 </div>
                 <div className="sa-branch-stat-item">
@@ -308,7 +320,9 @@ export default function BranchManagementPage() {
                     <span className="sa-branch-stat-value">
                       {branch.overdueBillingCount}
                     </span>
-                    <span className="sa-branch-stat-label">Overdue Billing</span>
+                    <span className="sa-branch-stat-label">
+                      Overdue Billing
+                    </span>
                   </div>
                 </div>
                 <div className="sa-branch-stat-item">
@@ -317,7 +331,9 @@ export default function BranchManagementPage() {
                     <span className="sa-branch-stat-value">
                       {branch.openMaintenanceCount}
                     </span>
-                    <span className="sa-branch-stat-label">Open Maintenance</span>
+                    <span className="sa-branch-stat-label">
+                      Open Maintenance
+                    </span>
                   </div>
                 </div>
                 <div className="sa-branch-stat-item">
@@ -326,7 +342,9 @@ export default function BranchManagementPage() {
                     <span className="sa-branch-stat-value">
                       {branch.pendingReservationsCount}
                     </span>
-                    <span className="sa-branch-stat-label">Pending Reservations</span>
+                    <span className="sa-branch-stat-label">
+                      Pending Reservations
+                    </span>
                   </div>
                 </div>
                 <div className="sa-branch-stat-item">
@@ -335,7 +353,9 @@ export default function BranchManagementPage() {
                     <span className="sa-branch-stat-value">
                       {branch.pendingInquiriesCount}
                     </span>
-                    <span className="sa-branch-stat-label">Pending Inquiries</span>
+                    <span className="sa-branch-stat-label">
+                      Pending Inquiries
+                    </span>
                   </div>
                 </div>
               </div>
@@ -353,15 +373,20 @@ export default function BranchManagementPage() {
                           <span className="sa-branch-admin-name">
                             {formatAdminName(admin)}
                           </span>
-                          <span className="sa-branch-admin-email">{admin.email}</span>
+                          <span className="sa-branch-admin-email">
+                            {admin.email}
+                          </span>
                         </div>
-                        <span className="sa-branch-admin-badge">branch admin</span>
+                        <span className="sa-branch-admin-badge">
+                          branch admin
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <p className="sa2-empty">
-                    No branch admin is assigned. Review Accounts to add coverage.
+                    No branch admin is assigned. Review Accounts to add
+                    coverage.
                   </p>
                 )}
               </div>
@@ -373,7 +398,11 @@ export default function BranchManagementPage() {
                 </div>
                 <div className="sa-branch-link-grid">
                   {branch.quickLinks.map((link) => (
-                    <Link key={link.label} to={link.to} className="sa-branch-link-card">
+                    <Link
+                      key={link.label}
+                      to={link.to}
+                      className="sa-branch-link-card"
+                    >
                       <strong>{link.label}</strong>
                       <span>{link.description}</span>
                     </Link>

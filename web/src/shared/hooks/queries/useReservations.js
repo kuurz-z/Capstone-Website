@@ -84,39 +84,6 @@ export function useReservation(reservationId) {
   });
 }
 
-export function useVisitAvailability(params = {}, options = {}) {
-  return useQuery({
-    queryKey: queryKeys.reservations.visitAvailability(params),
-    queryFn: () => reservationApi.getVisitAvailability(params),
-    enabled: !!params.branch,
-    staleTime: 15 * 1000,
-    ...options,
-  });
-}
-
-export function useVisitAvailabilitySettings(branch, options = {}) {
-  return useQuery({
-    queryKey: queryKeys.reservations.visitAvailabilitySettings(branch),
-    queryFn: () => reservationApi.getVisitAvailabilitySettings(branch),
-    enabled: !!branch,
-    staleTime: 30 * 1000,
-    ...options,
-  });
-}
-
-export function useUpdateVisitAvailabilitySettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ branch, data }) =>
-      reservationApi.updateVisitAvailabilitySettings(branch, data),
-    onSuccess: (_data, { branch }) =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.reservations.visitAvailabilitySettings(branch) }),
-        qc.invalidateQueries({ queryKey: ["reservations", "visitAvailability"] }),
-      ]),
-  });
-}
-
 /** Create a new reservation */
 export function useCreateReservation() {
   const qc = useQueryClient();

@@ -30,6 +30,8 @@ export function ThemeProvider({ children }) {
     // Apply to <html>
     const resolved = getResolved(theme);
     document.documentElement.setAttribute("data-theme", resolved);
+    document.documentElement.classList.toggle("dark", resolved === "dark"); // ADD THIS
+
 
     // If system, watch for media changes while this mode is active
     if (theme === "system") {
@@ -39,6 +41,7 @@ export function ThemeProvider({ children }) {
           "data-theme",
           e.matches ? "dark" : "light"
         );
+        document.documentElement.classList.toggle("dark", e.matches);
       };
       mq.addEventListener("change", handler);
       return () => mq.removeEventListener("change", handler);
