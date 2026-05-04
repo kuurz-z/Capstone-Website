@@ -107,10 +107,34 @@ export const validateAddressField = (address) => {
   return { valid: true };
 };
 
+const parseDateInputAsLocalDay = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, month, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+};
+
 export const validateTargetMoveInDate = (date) => {
   if (!date) return { valid: false, error: "This field is required" };
 
-  const selectedDate = new Date(date);
+  const selectedDate = parseDateInputAsLocalDay(date);
+  if (!selectedDate) {
+    return { valid: false, error: "Invalid date" };
+  }
+
   const minimumAllowedDate = new Date();
   minimumAllowedDate.setHours(0, 0, 0, 0);
   minimumAllowedDate.setDate(minimumAllowedDate.getDate() + 3);
@@ -125,6 +149,7 @@ export const validateTargetMoveInDate = (date) => {
 
   // Must be within 3 months
   const threeMonthsLater = new Date();
+  threeMonthsLater.setHours(0, 0, 0, 0);
   threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
 
   if (selectedDate > threeMonthsLater) {

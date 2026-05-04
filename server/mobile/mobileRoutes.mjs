@@ -30,7 +30,7 @@ const __dirname = path.dirname(__filename);
 const MOBILE_ROOT = __dirname;
 
 // ─── Create a require function scoped to the mobile source ──────────────────
-const mobileRequire = createRequire(path.join(MOBILE_ROOT, "routes", "index.js"));
+const mobileRequire = createRequire(path.join(MOBILE_ROOT, "mobileRoutes.mjs"));
 
 // ─── Shim: mobile config/database → use Mongoose's native connection ────────
 const databaseModulePath = path.join(MOBILE_ROOT, "config", "database.js");
@@ -47,7 +47,7 @@ const databaseShim = {
   },
 };
 // Inject shim BEFORE any mobile module is loaded
-require.cache[databaseModulePath] = {
+mobileRequire.cache[databaseModulePath] = {
   id: databaseModulePath,
   filename: databaseModulePath,
   loaded: true,
@@ -82,7 +82,7 @@ const firebaseShim = {
   },
   admin,
 };
-require.cache[firebaseModulePath] = {
+mobileRequire.cache[firebaseModulePath] = {
   id: firebaseModulePath,
   filename: firebaseModulePath,
   loaded: true,
@@ -184,7 +184,7 @@ const authShim = {
     return next();
   },
 };
-require.cache[authMiddlewarePath] = {
+mobileRequire.cache[authMiddlewarePath] = {
   id: authMiddlewarePath,
   filename: authMiddlewarePath,
   loaded: true,
@@ -194,7 +194,7 @@ require.cache[authMiddlewarePath] = {
 // ─── Shim: mobile utils/socket → delegate to the Capstone socket module ─────
 // Lets mobile chat.controller.js emit real-time events to the web admin panel.
 const socketShimPath = path.join(MOBILE_ROOT, "utils", "socket.js");
-require.cache[socketShimPath] = {
+mobileRequire.cache[socketShimPath] = {
   id: socketShimPath,
   filename: socketShimPath,
   loaded: true,

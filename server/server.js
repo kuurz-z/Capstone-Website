@@ -55,7 +55,7 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import branchSummaryRoutes from "./routes/branchSummaryRoutes.js";
 import { initSocket } from "./utils/socket.js";
-import mobileRoutes from "./mobile/mobileRoutes.js";
+import mobileRoutes from "./mobile/mobileRoutes.mjs";
 
 dotenv.config();
 

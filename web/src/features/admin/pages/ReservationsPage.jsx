@@ -88,6 +88,7 @@ function ReservationsPage() {
   const [activeTab, setActiveTab] = useState("reservations");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [archiveFilter, setArchiveFilter] = useState("active");
   const requestedBranch = searchParams.get("branch");
   const [branchFilter, setBranchFilter] = useState(() =>
     normalizeBranchFilterValue({
@@ -112,7 +113,7 @@ function ReservationsPage() {
     data: rawReservations = [],
     isLoading: loading,
     error: queryError,
-  } = useReservations({ view: "admin-list" });
+  } = useReservations({ view: "admin-list", archive: archiveFilter });
   const error = queryError?.message || null;
 
   const reservations = useMemo(
@@ -219,6 +220,13 @@ function ReservationsPage() {
     setSearchParams(nextParams, { replace: true });
   }, [branchFilter, isOwner, searchParams, setSearchParams, user?.role]);
 
+  useEffect(() => {
+    if (statusFilter === "archived") {
+      setStatusFilter("all");
+      setCurrentPage(1);
+    }
+  }, [statusFilter]);
+
   const summaryItems = useMemo(
     () => [
       { label: "Total", value: counts.total, icon: CalendarCheck, color: "blue" },
@@ -257,12 +265,28 @@ function ReservationsPage() {
           ]
         : []),
       {
+        key: "archive",
+        options: [
+          { value: "active", label: "Active Records" },
+          { value: "archived", label: "Archived Records" },
+          { value: "all", label: "All Records" },
+        ],
+        value: archiveFilter,
+        onChange: (value) => {
+          setArchiveFilter(value);
+          setStatusFilter("all");
+          setCurrentPage(1);
+        },
+      },
+      {
         key: "status",
         options: [
           { value: "all", label: "All Status" },
           { value: "in_progress", label: "In Progress" },
           { value: "overdue", label: "Overdue" },
-          ...CANONICAL_RESERVATION_STATUSES.map((status) => ({
+          ...CANONICAL_RESERVATION_STATUSES.filter(
+            (status) => status !== "archived",
+          ).map((status) => ({
             value: status,
             label: RESERVATION_STATUS_LABELS[status] || status,
           })),
@@ -274,7 +298,7 @@ function ReservationsPage() {
         },
       },
     ],
-    [branchFilter, isOwner, statusFilter],
+    [archiveFilter, branchFilter, isOwner, statusFilter],
   );
 
   const prefetchReservationDetail = useCallback(async (reservationId) => {
@@ -390,22 +414,38 @@ function ReservationsPage() {
     [queryClient],
   );
 
-  const handleDelete = useCallback((reservationId) => {
+  const handleDelete = useCallback((reservation) => {
+    const isPermanentDelete = reservation?.isArchived === true;
     setConfirmModal({
       open: true,
-      title: "Archive Reservation",
+      title: isPermanentDelete ? "Permanently Delete Reservation" : "Archive Reservation",
       message:
-        "This action archives the reservation and preserves billing history. Permanent deletion is restricted when issued bills exist.",
+        isPermanentDelete
+          ? "This permanently removes the archived reservation. It cannot be restored, and the server will block deletion if issued bills exist."
+          : "This archives the reservation and preserves billing history. Use the Archived filter if you need to permanently delete it later.",
       variant: "danger",
-      confirmText: "Archive",
+      confirmText: isPermanentDelete ? "Delete Permanently" : "Archive",
       onConfirm: async () => {
         setConfirmModal((previous) => ({ ...previous, open: false }));
         try {
-          await reservationApi.delete(reservationId);
-          showNotification("Reservation archived", "success");
+          await reservationApi.delete(reservation.id, {
+            hardDelete: isPermanentDelete,
+          });
+          showNotification(
+            isPermanentDelete
+              ? "Reservation permanently deleted"
+              : "Reservation archived",
+            "success",
+          );
           refetchReservations();
         } catch (error) {
-          showNotification(error?.message || "Failed to archive reservation", "error");
+          showNotification(
+            error?.message ||
+              (isPermanentDelete
+                ? "Failed to permanently delete reservation"
+                : "Failed to archive reservation"),
+            "error",
+          );
         }
       },
     });
@@ -482,6 +522,13 @@ function ReservationsPage() {
         ),
       },
       {
+        key: "record",
+        label: "Record",
+        render: (row) => (
+          <StatusBadge status={row.isArchived ? "archived" : "active"} />
+        ),
+      },
+      {
         key: "moveInDate",
         label: "Move-In",
         sortable: true,
@@ -510,8 +557,8 @@ function ReservationsPage() {
             {can("manageReservations") && (
               <button
                 className="res-icon-btn res-icon-btn--danger"
-                title="Delete"
-                onClick={() => handleDelete(row.id)}
+                title={row.isArchived ? "Delete permanently" : "Archive"}
+                onClick={() => handleDelete(row)}
               >
                 <Trash2 size={14} />
               </button>

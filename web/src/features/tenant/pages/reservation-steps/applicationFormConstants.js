@@ -46,6 +46,16 @@ export const LEASE_OPTIONS = [
   { value: "1", label: "1 month" },
 ];
 
+const formatDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const addCalendarDays = (date, days) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+
 /** Compute date constraints relative to today */
 export function getDateConstraints() {
   const today = new Date();
@@ -53,21 +63,18 @@ export function getDateConstraints() {
     today.getFullYear() - 18,
     today.getMonth(),
     today.getDate(),
-  )
-    .toISOString()
-    .split("T")[0];
+  );
   const birthdayMin = new Date(
     today.getFullYear() - 80,
     today.getMonth(),
     today.getDate(),
-  )
-    .toISOString()
-    .split("T")[0];
-  const moveInMin = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0];
-  const moveInMax = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0];
-  return { birthdayMin, birthdayMax, moveInMin, moveInMax };
+  );
+  const moveInMin = addCalendarDays(today, 3);
+  const moveInMax = addCalendarDays(today, 90);
+  return {
+    birthdayMin: formatDateInputValue(birthdayMin),
+    birthdayMax: formatDateInputValue(birthdayMax),
+    moveInMin: formatDateInputValue(moveInMin),
+    moveInMax: formatDateInputValue(moveInMax),
+  };
 }

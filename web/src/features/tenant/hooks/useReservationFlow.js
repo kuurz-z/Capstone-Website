@@ -163,6 +163,9 @@ export default function useReservationFlow() {
         ? "Confirming your payment..."
         : "",
   );
+  const [paymentVerificationActive, setPaymentVerificationActive] = useState(
+    () => new URLSearchParams(window.location.search).has("payment"),
+  );
 
   // Stage 5
   const [reservationCode, setReservationCode] = useState("");
@@ -353,11 +356,12 @@ export default function useReservationFlow() {
         r.targetMoveInDate.split?.("T")?.[0] || r.targetMoveInDate,
       );
     if (r.leaseDuration) setLeaseDuration(String(r.leaseDuration));
-    // Restore agreements ONLY if the application was previously submitted
-    // (prevents step 2's agreedToPrivacy from pre-checking step 3's consent)
-    const hasApplication = Boolean(r.applicationSubmittedAt);
-    if (hasApplication && r.agreedToPrivacy) setAgreedToPrivacy(true);
-    if (hasApplication && r.agreedToCertification) setAgreedToCertification(true);
+    if (typeof r.agreedToPrivacy === "boolean") {
+      setAgreedToPrivacy(r.agreedToPrivacy);
+    }
+    if (typeof r.agreedToCertification === "boolean") {
+      setAgreedToCertification(r.agreedToCertification);
+    }
     // File URLs
     if (r.selfiePhotoUrl) setSelfiePhoto(r.selfiePhotoUrl);
     if (r.validIDFrontUrl) setValidIDFront(r.validIDFrontUrl);
@@ -496,13 +500,14 @@ export default function useReservationFlow() {
         // Returning from PayMongo — load reservation data for display,
         // and verify payment using the reservation's stored session ID.
         paymentVerifyingRef.current = true; // block re-init from hook's setSearchParams
+        setPaymentVerificationActive(true);
         setPaymentVerificationMessage("Confirming your payment...");
         isPaymentReturnRef.current = false; // consume the flag
         const storedResId = sessionStorage.getItem("activeReservationId");
         if (storedResId) {
           loadExistingReservation(storedResId, true);
         } else {
-          loadActiveReservation();
+          loadActiveReservation(true);
         }
       } else {
         const stored = sessionStorage.getItem("pendingReservation");
@@ -531,7 +536,7 @@ export default function useReservationFlow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, location.key]);
 
-  const loadActiveReservation = async () => {
+  const loadActiveReservation = async (verifyPaymentReturn = false) => {
     try {
       const all = await reservationApi.getAll();
       const list = Array.isArray(all)
@@ -545,6 +550,10 @@ export default function useReservationFlow() {
         appNavigate("/applicant/check-availability", {
           flash: { type: "warning", message: "No active reservation found." },
         });
+        return;
+      }
+      if (verifyPaymentReturn) {
+        await loadExistingReservation(found._id, true);
         return;
       }
       const active = await reservationApi.getById(found._id);
@@ -679,6 +688,8 @@ export default function useReservationFlow() {
       if (skipStageSet) {
         // Payment redirect — verify using the reservation's stored paymongoSessionId
         // Set highest to 5 immediately so the stepper renders all stages green from the start
+        setPaymentVerificationActive(true);
+        setPaymentVerificationMessage("Validating your payment...");
         setHighestStageReached(5);
         // Verify payment status with PayMongo
         if (reservation.paymongoSessionId) {
@@ -773,6 +784,7 @@ export default function useReservationFlow() {
       }
     } finally {
       paymentVerifyingRef.current = false;
+      setPaymentVerificationActive(false);
       setPaymentVerificationMessage("");
       setIsLoading(false);
     }
@@ -1627,6 +1639,7 @@ export default function useReservationFlow() {
     paymentMethod,
     paymentSubmitted,
     paymentVerificationMessage,
+    paymentVerificationActive,
     agreedToFeePolicy, setAgreedToFeePolicy,
 
     // Stage 5

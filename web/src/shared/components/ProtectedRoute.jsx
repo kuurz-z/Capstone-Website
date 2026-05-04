@@ -3,7 +3,6 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import GlobalLoading from "./GlobalLoading";
 import { USER_ROLES } from "../utils/constants";
-import { buildSignOutSuccessFlash } from "../utils/authToasts";
 
 /**
  * Protected Route Component
@@ -17,7 +16,7 @@ import { buildSignOutSuccessFlash } from "../utils/authToasts";
  * - Strict role separation enforced
  *
  * REDIRECT BEHAVIOR:
- * - Unauthenticated on user routes: redirect to "/" (landing page) with notification
+ * - Unauthenticated on user routes: redirect to "/" (public landing page)
  * - Unauthenticated on admin routes: redirect to "/signin" with notification
  * - Admin trying to access user routes: redirect to "/admin/dashboard"
  * - User trying to access admin routes: redirect to "/signin"
@@ -36,8 +35,6 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
     isAdmin,
     isOwner,
     getDefaultRoute,
-    logoutIntent,
-    getLogoutIntent,
   } = useAuth();
 
   // Show loading spinner while checking authentication
@@ -48,20 +45,8 @@ const ProtectedRoute = ({ children, requiredRole, requireAuth = true }) => {
   // Check authentication requirement
   if (requireAuth && !isAuthenticated) {
     const redirectPath = requiredRole === "applicant" ? "/" : "/signin";
-    const isIntentionalLogout = Boolean(logoutIntent || getLogoutIntent?.());
-    const redirectState = isIntentionalLogout
-      ? buildSignOutSuccessFlash()
-      : requiredRole === USER_ROLES.APPLICANT
-        ? {
-            flash: {
-              type: "info",
-              message:
-                "Sign in to discover available rooms and reserve your space",
-            },
-          }
-        : undefined;
 
-    return <Navigate to={redirectPath} replace state={redirectState} />;
+    return <Navigate to={redirectPath} replace />;
   }
 
   // Check role requirements using custom claims from ID token

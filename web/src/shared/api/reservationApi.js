@@ -136,10 +136,14 @@ export const reservationApi = {
   /**
    * Delete reservation
    */
-  delete: (reservationId) =>
-    authFetch(`/reservations/${reservationId}`, {
+  delete: (reservationId, options = {}) => {
+    const searchParams = new URLSearchParams();
+    if (options.hardDelete) searchParams.set("hardDelete", "true");
+    const query = searchParams.toString();
+    return authFetch(`/reservations/${reservationId}${query ? `?${query}` : ""}`, {
       method: "DELETE",
-    }),
+    });
+  },
 
   /**
    * Extend reservation move-in date (admin only)

@@ -142,6 +142,15 @@ const ReservationApplicationStep = ({
     setEstimatedMoveInTime(value);
   };
   const handleTargetDateInput = (value) => {
+    if (value && value < moveInMin) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        targetMoveInDate: "Date must be at least 3 days from today",
+      }));
+      setTargetMoveInDate("");
+      return;
+    }
+
     validateField("targetMoveInDate", value, validateTargetMoveInDate);
     setTargetMoveInDate(value);
   };

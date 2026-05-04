@@ -36,6 +36,8 @@ export function mapReservationAdminRow(reservation) {
     totalPrice: reservation.totalPrice,
     paymentStatus: reservation.paymentStatus,
     createdAt: reservation.createdAt,
+    isArchived: reservation.isArchived === true,
+    archivedAt: reservation.archivedAt,
     _raw: reservation,
   };
 }

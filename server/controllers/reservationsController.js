@@ -111,6 +111,8 @@ const ADMIN_LIST_FIELDS = [
   "cancellationReason",
   "reservationFeeRefundable",
   "reservationFeeForfeited",
+  "isArchived",
+  "archivedAt",
   "idType",
   "validIDType",
 ].join(" ");
@@ -533,21 +535,29 @@ export const updateVisitAvailabilityRules = async (req, res, next) => {
 export const getReservations = async (req, res, next) => {
   try {
     const isAdminListView = req.query.view === "admin-list";
+    const archiveFilter = String(req.query.archive || "active").toLowerCase();
     const dbUser = await findDbUser(req.user.uid);
     if (!dbUser)
       return res
         .status(404)
         .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
 
+    const archiveQuery =
+      isAdminListView && archiveFilter === "archived"
+        ? { isArchived: true }
+        : isAdminListView && archiveFilter === "all"
+          ? {}
+          : { isArchived: { $ne: true } };
+
     let query;
     if (dbUser.role === "owner" || dbUser.role === "superadmin") {
       // Owner/superadmin: see all branches
-      query = { isArchived: { $ne: true } };
+      query = { ...archiveQuery };
     } else if (dbUser.role === "branch_admin") {
       const roomIds = (
         await Room.find({ branch: dbUser.branch }).select("_id")
       ).map((r) => r._id);
-      query = { roomId: { $in: roomIds }, isArchived: { $ne: true } };
+      query = { roomId: { $in: roomIds }, ...archiveQuery };
     } else {
       query = { userId: dbUser._id, isArchived: { $ne: true } };
     }
@@ -2047,7 +2057,10 @@ export const deleteReservation = async (req, res, next) => {
       });
 
     const isOwner = String(reservation.userId) === String(dbUser._id);
-    const isAdmin = dbUser.role === "branch_admin" || dbUser.role === "owner";
+    const isAdmin =
+      dbUser.role === "branch_admin" ||
+      dbUser.role === "owner" ||
+      dbUser.role === "superadmin";
     if (!isOwner && !isAdmin)
       return res.status(403).json({
         error: "Access denied. You can only delete your own reservation.",
