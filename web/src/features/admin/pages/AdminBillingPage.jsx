@@ -1,59 +1,40 @@
 import { useState } from "react";
-import { Droplets, Zap, Home } from "lucide-react";
+import { Droplets, Home, Zap } from "lucide-react";
 import UtilityBillingTab from "../components/billing/UtilityBillingTab";
 import RentBillingTab from "../components/billing/RentBillingTab";
+import "./AdminBillingPage.css";
 
 const tabs = [
   { id: "electricity", label: "Electricity", icon: Zap },
-  { id: "water",       label: "Water",       icon: Droplets },
-  { id: "rent",        label: "Rent",        icon: Home },
+  { id: "water", label: "Water", icon: Droplets },
+  { id: "rent", label: "Rent", icon: Home },
 ];
 
 const AdminBillingPage = () => {
   const [activeTab, setActiveTab] = useState("electricity");
 
+  // Visual contract:
+  // hero shell + tablist + workspace panel
   return (
-    <div>
-      <header className="space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Billing</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Generate statements, review balances, and follow payment progress
-            without leaving the admin workspace
+    <div className="admin-billing-page">
+      <header className="admin-billing-page__hero">
+        <div className="admin-billing-page__hero-copy">
+          <span className="admin-billing-page__eyebrow">Billing Workspace</span>
+          <h1 className="admin-billing-page__heading">Billing Management</h1>
+          <p className="admin-billing-page__subtitle">
+            Create billing cycles, review results, and send charges in a few
+            clear steps.
           </p>
         </div>
 
-        <div
-          className="flex flex-col gap-4 rounded-xl border border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-          style={{ background: "color-mix(in srgb, var(--primary) 8%, transparent)" }}
-        >
-          <div className="flex items-start gap-3">
-            <Zap size={20} style={{ color: "var(--warning-dark)", marginTop: "2px", flexShrink: 0 }} />
-            <div>
-              <span
-                className="text-xs font-semibold uppercase tracking-[0.2em]"
-                style={{ color: "var(--warning-dark)" }}
-              >
-                Billing Workspace
-              </span>
-              <h2 className="mt-1 text-base font-semibold text-foreground">
-                Billing Management
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Create billing cycles, review results, and send charges in a few
-                clear steps.
-              </p>
-            </div>
-          </div>
-
+        <div className="admin-billing-page__hero-actions">
           <div
-            className="inline-flex items-center gap-1 rounded-lg border border-border bg-card p-1"
+            className="admin-billing-page__workspace-tabs"
             role="tablist"
             aria-label="Billing type"
           >
             {tabs.map((tab) => {
               const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
@@ -61,27 +42,14 @@ const AdminBillingPage = () => {
                   role="tab"
                   id={`billing-tab-${tab.id}`}
                   aria-controls={`billing-panel-${tab.id}`}
-                  aria-selected={isActive}
-                  tabIndex={isActive ? 0 : -1}
-                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition"
-                  style={
-                    isActive
-                      ? {
-                          background: "var(--primary)",
-                          color: "var(--primary-foreground)",
-                          boxShadow: "var(--shadow-sm)",
-                        }
-                      : { color: "var(--muted-foreground)" }
-                  }
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = "var(--muted)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.background = "";
-                  }}
+                  aria-selected={activeTab === tab.id}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
+                  className={`admin-billing-tab${activeTab === tab.id ? " is-active" : ""}`}
                   onClick={() => setActiveTab(tab.id)}
                 >
-                  <Icon size={15} />
+                  <span className="admin-billing-tab__icon">
+                    <Icon size={14} />
+                  </span>
                   {tab.label}
                 </button>
               );
@@ -90,30 +58,37 @@ const AdminBillingPage = () => {
         </div>
       </header>
 
-      <div className="mt-5 min-h-[680px]">
+      <div className="admin-billing-page__workspace-container" style={{ minHeight: "680px" }}>
         <section
           role="tabpanel"
           id="billing-panel-electricity"
           aria-labelledby="billing-tab-electricity"
-          className={activeTab === "electricity" ? "block" : "hidden"}
+          className={`admin-billing-page__workspace-panel ${activeTab === "electricity" ? "is-active" : ""}`}
+          style={{ display: activeTab === "electricity" ? "grid" : "none" }}
         >
-          <UtilityBillingTab utilityType="electricity" isActive={activeTab === "electricity"} />
+          <UtilityBillingTab
+            utilityType="electricity"
+            isActive={activeTab === "electricity"}
+          />
         </section>
-
         <section
           role="tabpanel"
           id="billing-panel-water"
           aria-labelledby="billing-tab-water"
-          className={activeTab === "water" ? "block" : "hidden"}
+          className={`admin-billing-page__workspace-panel ${activeTab === "water" ? "is-active" : ""}`}
+          style={{ display: activeTab === "water" ? "grid" : "none" }}
         >
-          <UtilityBillingTab utilityType="water" isActive={activeTab === "water"} />
+          <UtilityBillingTab
+            utilityType="water"
+            isActive={activeTab === "water"}
+          />
         </section>
-
         <section
           role="tabpanel"
           id="billing-panel-rent"
           aria-labelledby="billing-tab-rent"
-          className={activeTab === "rent" ? "block" : "hidden"}
+          className={`admin-billing-page__workspace-panel ${activeTab === "rent" ? "is-active" : ""}`}
+          style={{ display: activeTab === "rent" ? "grid" : "none" }}
         >
           <RentBillingTab isActive={activeTab === "rent"} />
         </section>

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { fmtDateTime as formatDateTime } from "../../../shared/utils/dateFormat";
 import {
   AlertTriangle,
   Download,
@@ -50,17 +51,7 @@ const SECURITY_WINDOW_OPTIONS = [
   { value: "168", label: "Last 7 days" },
 ];
 
-const formatDateTime = (value) => {
-  if (!value) return "Not available";
-
-  return new Date(value).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+// formatDateTime imported from shared/utils/dateFormat
 
 const renderMetadata = (metadata) => {
   if (!metadata || Object.keys(metadata).length === 0) {
@@ -102,8 +93,9 @@ const AuditLogsPage = () => {
   const statsBranch =
     isOwner && filters.branch !== "all" ? filters.branch : undefined;
 
-  const { data: logsEnvelope, isLoading: auditLoading } =
-    usePaginatedAuditLogs(queryParams);
+  const { data: logsEnvelope, isLoading: auditLoading } = usePaginatedAuditLogs(
+    queryParams,
+  );
   const { data: auditStats } = useAuditStats(statsBranch);
   const { data: securitySignals, isLoading: securityLoading } =
     useFailedLoginSignals(Number(securityWindowHours), {
@@ -216,19 +208,13 @@ const AuditLogsPage = () => {
       label: "Type",
       width: "150px",
       render: (row) => (
-        <span className="audit-type-badge">
-          {formatAuditLabel(row.type, "Unknown")}
-        </span>
+        <span className="audit-type-badge">{formatAuditLabel(row.type, "Unknown")}</span>
       ),
     },
     {
       key: "action",
       label: "Event",
-      render: (row) => (
-        <span className="audit-message">
-          {row.action || "No action recorded"}
-        </span>
-      ),
+      render: (row) => <span className="audit-message">{row.action || "No action recorded"}</span>,
     },
     {
       key: "user",
@@ -453,8 +439,7 @@ const AuditLogsPage = () => {
             emptyState={{
               icon: FileText,
               title: "No audit events found",
-              description:
-                "Try adjusting the branch, role, date, or severity filters.",
+              description: "Try adjusting the branch, role, date, or severity filters.",
             }}
           />
         ) : (
@@ -469,10 +454,7 @@ const AuditLogsPage = () => {
                 <div className="audit-panel__header">
                   <div>
                     <h3>Suspicious IPs</h3>
-                    <p>
-                      IPs with repeated failed login attempts in the selected
-                      window.
-                    </p>
+                    <p>IPs with repeated failed login attempts in the selected window.</p>
                   </div>
                 </div>
                 <DataTable
@@ -482,8 +464,7 @@ const AuditLogsPage = () => {
                   emptyState={{
                     icon: Shield,
                     title: "No suspicious IPs",
-                    description:
-                      "No IPs crossed the current suspicious-attempt threshold.",
+                    description: "No IPs crossed the current suspicious-attempt threshold.",
                   }}
                 />
               </section>
@@ -492,10 +473,7 @@ const AuditLogsPage = () => {
                 <div className="audit-panel__header">
                   <div>
                     <h3>Recent Failed Logins</h3>
-                    <p>
-                      Latest warning-level login failures returned by the
-                      existing audit backend.
-                    </p>
+                    <p>Latest warning-level login failures returned by the existing audit backend.</p>
                   </div>
                 </div>
                 <DataTable
@@ -505,8 +483,7 @@ const AuditLogsPage = () => {
                   emptyState={{
                     icon: AlertTriangle,
                     title: "No failed logins",
-                    description:
-                      "No failed login attempts were recorded in the selected window.",
+                    description: "No failed login attempts were recorded in the selected window.",
                   }}
                 />
               </section>
@@ -517,8 +494,8 @@ const AuditLogsPage = () => {
                 <div>
                   <h3>Retention Cleanup</h3>
                   <p>
-                    Delete non-critical audit logs older than the selected
-                    retention window. Critical logs are retained.
+                    Delete non-critical audit logs older than the selected retention
+                    window. Critical logs are retained.
                   </p>
                 </div>
               </div>
@@ -539,8 +516,8 @@ const AuditLogsPage = () => {
                 </label>
 
                 <div className="audit-retention__copy">
-                  Safe defaults start at 90 days. Cleanup requires explicit
-                  confirmation before anything is deleted.
+                  Safe defaults start at 90 days. Cleanup requires explicit confirmation
+                  before anything is deleted.
                 </div>
 
                 <button
@@ -561,9 +538,7 @@ const AuditLogsPage = () => {
       <DetailDrawer
         open={Boolean(selectedLog)}
         onClose={() => setSelectedLog(null)}
-        title={
-          selectedLog ? selectedLog.action || "Audit Event" : "Audit Event"
-        }
+        title={selectedLog ? selectedLog.action || "Audit Event" : "Audit Event"}
         width={760}
       >
         {selectedLog ? (
@@ -585,10 +560,7 @@ const AuditLogsPage = () => {
             </div>
 
             <DetailDrawer.Section label="Event Context">
-              <DetailDrawer.Row
-                label="User"
-                value={selectedLog.user || "System"}
-              />
+              <DetailDrawer.Row label="User" value={selectedLog.user || "System"} />
               <DetailDrawer.Row
                 label="Role"
                 value={formatAuditLabel(selectedLog.userRole, "Unknown")}
@@ -597,10 +569,7 @@ const AuditLogsPage = () => {
                 label="Recorded"
                 value={formatDateTime(selectedLog.timestamp)}
               />
-              <DetailDrawer.Row
-                label="IP Address"
-                value={selectedLog.ip || "Unknown"}
-              />
+              <DetailDrawer.Row label="IP Address" value={selectedLog.ip || "Unknown"} />
               <DetailDrawer.Row
                 label="User Agent"
                 value={selectedLog.userAgent || "Unknown"}

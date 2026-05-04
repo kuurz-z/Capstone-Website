@@ -126,6 +126,43 @@ describe("roomsController", () => {
     expect(next.mock.calls[0][0].code).toBe("ROOM_SYSTEM_FIELDS_FORBIDDEN");
   });
 
+  test("createRoom gives private rooms one single bed by default", async () => {
+    roomFindOne.mockReturnValue({
+      select: jest.fn(() => ({
+        lean: jest.fn().mockResolvedValue(null),
+      })),
+    });
+    roomSave.mockResolvedValue();
+
+    const req = {
+      body: {
+        name: "GP Private 101",
+        roomNumber: "101",
+        branch: "gil-puyat",
+        type: "private",
+        capacity: 1,
+        price: 12000,
+      },
+      branchFilter: "gil-puyat",
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await createRoom(req, res, next);
+
+    expect(Room).toHaveBeenCalledWith(
+      expect.objectContaining({
+        beds: [{ id: "bed-1", position: "single", status: "available" }],
+      }),
+    );
+    expect(sendSuccess).toHaveBeenCalledWith(
+      res,
+      expect.objectContaining({ message: "Room created successfully" }),
+      201,
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test("updateRoom rejects generic bed writes", async () => {
     roomFindOne.mockResolvedValue({
       _id: "507f1f77bcf86cd799439011",

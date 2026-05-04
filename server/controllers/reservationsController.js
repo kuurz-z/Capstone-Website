@@ -74,10 +74,13 @@ import {
 } from "../utils/tenantActionService.js";
 import { ensureCurrentCycleRentBill } from "../utils/rentGenerator.js";
 import {
-  ID_TYPES,
-  validateReservationIdDocument as runIdValidation,
-} from "../services/idValidationService.js";
-
+  buildVisitAvailability,
+  getVisitAvailabilitySettings,
+  normalizeVisitBranch,
+  serializeVisitAvailabilitySettings,
+  updateVisitAvailabilitySettings,
+  validateVisitSelection,
+} from "../utils/visitAvailability.js";
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
   "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
@@ -110,12 +113,6 @@ const ADMIN_LIST_FIELDS = [
   "reservationFeeForfeited",
   "idType",
   "validIDType",
-  "idValidationStatus",
-  "idMismatchFlag",
-  "idNameMatchScore",
-  "idValidatedAt",
-  "idValidationProvider",
-  "idValidationNotes",
 ].join(" ");
 const POPULATE_USER = ["userId", "firstName lastName email phone"];
 const POPULATE_ROOM = ["roomId", "name branch type price capacity beds floor"];
@@ -413,6 +410,124 @@ const findDbUser = async (uid) => {
 
 /** Invalidate a cached user entry (call when user data changes) */
 export const invalidateUserCache = (uid) => userCache.delete(uid);
+
+const buildVisitAvailabilityActor = (req, dbUser) => ({
+  userId: dbUser?._id ? String(dbUser._id) : req?.user?.uid || null,
+  email: dbUser?.email || req?.user?.email || "",
+  role: dbUser?.role || req?.user?.role || "",
+});
+
+const resolveVisitAvailabilityBranch = (req, dbUser, fallbackBranch = "") => {
+  const requestedBranch = normalizeVisitBranch(
+    req.query.branch || req.body.branch || fallbackBranch,
+  );
+
+  if (!requestedBranch) {
+    return { error: "A valid branch is required.", code: "INVALID_BRANCH" };
+  }
+
+  if (dbUser?.role === "branch_admin" && requestedBranch !== dbUser.branch) {
+    return {
+      error: `Access denied. You can only manage ${dbUser.branch} branch availability.`,
+      code: "BRANCH_ACCESS_DENIED",
+    };
+  }
+
+  return { branch: requestedBranch };
+};
+
+export const getVisitAvailability = async (req, res, next) => {
+  try {
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    const branchResult = resolveVisitAvailabilityBranch(req, dbUser);
+    if (branchResult.error) {
+      return res
+        .status(branchResult.code === "BRANCH_ACCESS_DENIED" ? 403 : 400)
+        .json(branchResult);
+    }
+
+    const availability = await buildVisitAvailability({
+      branch: branchResult.branch,
+      from: req.query.from,
+      days: req.query.days,
+      roomId: req.query.roomId || null,
+      excludeReservationId: req.query.reservationId || null,
+    });
+
+    return sendSuccess(res, availability);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getVisitAvailabilityRules = async (req, res, next) => {
+  try {
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    const branchResult = resolveVisitAvailabilityBranch(req, dbUser);
+    if (branchResult.error) {
+      return res
+        .status(branchResult.code === "BRANCH_ACCESS_DENIED" ? 403 : 400)
+        .json(branchResult);
+    }
+
+    const settings = await getVisitAvailabilitySettings(branchResult.branch);
+    return sendSuccess(res, serializeVisitAvailabilitySettings(settings));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateVisitAvailabilityRules = async (req, res, next) => {
+  try {
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    const branchResult = resolveVisitAvailabilityBranch(req, dbUser);
+    if (branchResult.error) {
+      return res
+        .status(branchResult.code === "BRANCH_ACCESS_DENIED" ? 403 : 400)
+        .json(branchResult);
+    }
+
+    const beforeSettings = await getVisitAvailabilitySettings(branchResult.branch);
+    const beforePayload = serializeVisitAvailabilitySettings(beforeSettings);
+    const settings = await updateVisitAvailabilitySettings(
+      branchResult.branch,
+      req.body || {},
+      buildVisitAvailabilityActor(req, dbUser),
+    );
+    const afterPayload = serializeVisitAvailabilitySettings(settings);
+
+    await auditLogger.logModification(
+      req,
+      "visit_availability",
+      branchResult.branch,
+      beforePayload,
+      afterPayload,
+      "Updated visit availability rules",
+    );
+
+    return sendSuccess(res, afterPayload);
+  } catch (error) {
+    next(error);
+  }
+};
 
 /* ─── GET all reservations ───────────────────────── */
 export const getReservations = async (req, res, next) => {
@@ -1021,6 +1136,27 @@ export const updateReservation = async (req, res, next) => {
       });
     }
 
+    if (req.body.visitDate || req.body.visitTime) {
+      const validation = await validateVisitSelection({
+        branch: existingReservation.roomId?.branch,
+        visitDate: req.body.visitDate || existingReservation.visitDate,
+        visitTime: req.body.visitTime || existingReservation.visitTime,
+        roomId: existingReservation.roomId?._id || existingReservation.roomId,
+        excludeReservationId: reservationId,
+      });
+
+      if (!validation.ok) {
+        return res.status(validation.status).json({
+          error: validation.error,
+          code: validation.code,
+        });
+      }
+
+      if (req.body.visitDate) {
+        req.body.visitDate = validation.date;
+      }
+    }
+
     // Status transition side-effects
     if (
       req.body.status === "reserved" &&
@@ -1471,31 +1607,6 @@ const APPLICANT_CANCELLABLE_STATUSES = new Set([
   "reserved",
 ]);
 
-const ID_VALIDATION_ACCEPTED_STATUSES = new Set([
-  "passed",
-  "warning",
-  "manual_review",
-]);
-
-const buildIdValidationUpdate = (result, documentUrl) => ({
-  idType: result.idType || null,
-  validIDType: result.idType || null,
-  idValidationStatus: result.status,
-  idExtractedText: result.extractedText || "",
-  idExtractedName: result.extractedName || "",
-  idExtractedNumber: result.extractedIdNumber || "",
-  idNameMatchScore: result.matchScore || 0,
-  idMismatchFlag: result.status === "warning" && (result.matchScore || 0) < 0.67,
-  idValidationNotes: Array.isArray(result.validationNotes)
-    ? result.validationNotes
-    : result.validationNotes
-      ? [String(result.validationNotes)]
-      : [],
-  idValidatedAt: new Date(),
-  idValidationProvider: result.provider || "google_vision",
-  idValidationDocumentUrl: documentUrl || null,
-});
-
 export const cancelReservationByUser = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
@@ -1606,100 +1717,6 @@ export const cancelReservationByUser = async (req, res, next) => {
 };
 
 /* ─── VALIDATE reservation ID (user self-update) ───── */
-export const validateReservationIdByUser = async (req, res, next) => {
-  try {
-    const { reservationId } = req.params;
-    if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
-
-    const dbUser = await findDbUser(req.user.uid);
-    if (!dbUser) {
-      return res
-        .status(404)
-        .json({ error: "User not found.", code: "USER_NOT_FOUND" });
-    }
-
-    const reservation = await Reservation.findById(reservationId).populate(
-      "userId",
-      "firstName lastName email",
-    );
-    if (!reservation) {
-      return res.status(404).json({
-        error: "Reservation not found.",
-        code: "RESERVATION_NOT_FOUND",
-      });
-    }
-
-    if (String(reservation.userId?._id || reservation.userId) !== String(dbUser._id)) {
-      return res.status(403).json({
-        error: "You can only validate your own reservation ID.",
-        code: "RESERVATION_ACCESS_DENIED",
-      });
-    }
-
-    if (
-      hasReservationStatus(reservation.status, "cancelled", "moveIn", "moveOut") ||
-      reservation.isArchived
-    ) {
-      return res.status(409).json({
-        error: "ID validation is not available for this reservation state.",
-        code: "ID_VALIDATION_NOT_ALLOWED",
-      });
-    }
-
-    const idType = String(req.body.idType || req.body.validIDType || "").trim();
-    const documentUrl = String(
-      req.body.documentUrl || req.body.validIDFrontUrl || "",
-    ).trim();
-
-    if (!idType || !ID_TYPES.includes(idType)) {
-      return res.status(422).json({
-        error: "ID type is required.",
-        code: "ID_TYPE_REQUIRED",
-      });
-    }
-
-    if (!documentUrl) {
-      return res.status(422).json({
-        error: "Valid ID front image is required.",
-        code: "ID_DOCUMENT_REQUIRED",
-      });
-    }
-
-    const result = await runIdValidation({
-      reservation,
-      idType,
-      documentUrl,
-      applicantPayload: req.body,
-    });
-    const update = buildIdValidationUpdate(result, documentUrl);
-
-    const updatedReservation = await Reservation.findByIdAndUpdate(
-      reservationId,
-      {
-        $set: {
-          ...update,
-          validIDFrontUrl: documentUrl,
-        },
-      },
-      { new: true, runValidators: true },
-    )
-      .populate(...POPULATE_USER)
-      .populate(...POPULATE_ROOM);
-
-    return res.json({
-      validationStatus: result.status,
-      message: result.message,
-      extractedName: result.extractedName || "",
-      extractedIdNumber: result.extractedIdNumber || "",
-      matchScore: result.matchScore || 0,
-      notes: result.validationNotes || [],
-      reservation: serializeReservation(updatedReservation),
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 /* ─── UPDATE reservation (user self-update) ──────── */
 export const updateReservationByUser = async (req, res, next) => {
   try {
@@ -1768,6 +1785,37 @@ export const updateReservationByUser = async (req, res, next) => {
       updates.visitScheduledAt = new Date();
     }
 
+    if (updates.visitDate || updates.visitTime) {
+      const targetVisitDate = updates.visitDate || reservation.visitDate;
+      const targetVisitTime = updates.visitTime || reservation.visitTime;
+      const room = await Room.findById(reservation.roomId).select("branch").lean();
+      if (!room?.branch) {
+        return res.status(400).json({
+          error: "Unable to resolve the room branch for this visit.",
+          code: "ROOM_BRANCH_REQUIRED",
+        });
+      }
+
+      const validation = await validateVisitSelection({
+        branch: room.branch,
+        visitDate: targetVisitDate,
+        visitTime: targetVisitTime,
+        roomId: reservation.roomId,
+        excludeReservationId: reservationId,
+      });
+
+      if (!validation.ok) {
+        return res.status(validation.status).json({
+          error: validation.error,
+          code: validation.code,
+        });
+      }
+
+      if (updates.visitDate) {
+        updates.visitDate = validation.date;
+      }
+    }
+
     // ── Visit date: reject past dates ───────────────────────
     if (updates.visitDate) {
       const todayStart = new Date();
@@ -1785,26 +1833,8 @@ export const updateReservationByUser = async (req, res, next) => {
     if (updates.visitDate) {
       const targetVisitTime = updates.visitTime || reservation.visitTime;
 
-      // 1. Check max 5 visits per hour slot globally
-      const hourlyCount = await Reservation.countDocuments({
-        _id: { $ne: reservationId },
-        visitDate: updates.visitDate,
-        visitTime: targetVisitTime,
-        status: {
-          $in: reservationStatusesForQuery("visit_pending", "visit_approved"),
-        },
-        isArchived: { $ne: true },
-      });
-
-      if (hourlyCount >= 5) {
-        return res.status(400).json({
-          error:
-            "This time slot has reached its maximum capacity. Please select an alternative time for your visit.",
-          code: "VISIT_CAPACITY_REACHED",
-        });
-      }
-
-      // 2. Check room-specific conflict
+      // Configured capacity is validated by validateVisitSelection above.
+      // Keep the room-specific conflict check for existing audit behavior.
       const conflicting = await Reservation.findOne({
         _id: { $ne: reservationId },
         roomId: reservation.roomId,
@@ -1872,48 +1902,10 @@ export const updateReservationByUser = async (req, res, next) => {
       const hasVal = (v) => v != null && String(v).trim().length > 0;
       const isValidPHPhone = (v) => v != null && /^09\d{9}$/.test(String(v));
 
-      // — Profile photo
-      if (!hasVal(updates.selfiePhotoUrl ?? reservation.selfiePhotoUrl))
-        missingRequired.push("profile photo");
-
-      // — Names
-      if (!hasVal(updates.firstName ?? reservation.firstName))
-        missingRequired.push("first name");
-      if (!hasVal(updates.lastName ?? reservation.lastName))
-        missingRequired.push("last name");
-
-      // — Mobile number (must be normalized to 09XXXXXXXXX)
-      const effectiveMobile = updates.mobileNumber ?? reservation.mobileNumber;
-      if (!isValidPHPhone(effectiveMobile))
-        missingRequired.push("mobile number (must be in 09XXXXXXXXX format)");
-
-      // — Birthday: required and applicant must be at least 18
-      const effectiveBirthday = updates.birthday ?? reservation.birthday;
-      if (!effectiveBirthday) {
-        missingRequired.push("birthday");
-      } else {
-        const ageYears = dayjs().diff(dayjs(effectiveBirthday), "year");
-        if (isNaN(ageYears) || ageYears < 18)
-          missingRequired.push("birthday (applicant must be at least 18 years old)");
-      }
-
-      // — Emergency contact (dot-notation keys from buildUserUpdatePayload)
-      const effectiveEmergencyName =
-        updates["emergencyContact.name"] ?? reservation.emergencyContact?.name;
-      const effectiveEmergencyPhone =
-        updates["emergencyContact.contactNumber"] ?? reservation.emergencyContact?.contactNumber;
-      if (!hasVal(effectiveEmergencyName))
-        missingRequired.push("emergency contact name");
-      if (!isValidPHPhone(effectiveEmergencyPhone))
-        missingRequired.push("emergency contact phone (must be in 09XXXXXXXXX format)");
-
-      // — Valid ID: both sides required
-      if (!hasVal(updates.validIDFrontUrl ?? reservation.validIDFrontUrl))
-        missingRequired.push("valid ID (front)");
-      if (!hasVal(updates.validIDBackUrl ?? reservation.validIDBackUrl))
-        missingRequired.push("valid ID (back)");
-
-      // — ID type
+      if (!hasVal(updates.selfiePhotoUrl || reservation.selfiePhotoUrl))          missingRequired.push("profile photo");
+      if (!hasVal(updates["emergencyContact.name"] || reservation.emergencyContact?.name))    missingRequired.push("emergency contact name");
+      if (!hasVal(updates["emergencyContact.contactNumber"] || reservation.emergencyContact?.contactNumber))  missingRequired.push("emergency contact phone");
+      if (!hasVal(updates.validIDFrontUrl || reservation.validIDFrontUrl))         missingRequired.push("valid ID (front)");
       const submittedIdType =
         updates.idType ||
         updates.validIDType ||
@@ -1963,55 +1955,7 @@ export const updateReservationByUser = async (req, res, next) => {
         });
       }
 
-      const nextIdDocumentUrl = updates.validIDFrontUrl || reservation.validIDFrontUrl;
-      const validationStatus = reservation.idValidationStatus || "not_validated";
-      const validationAlreadyCurrent =
-        nextIdDocumentUrl &&
-        reservation.idValidationDocumentUrl === nextIdDocumentUrl &&
-        ID_VALIDATION_ACCEPTED_STATUSES.has(validationStatus);
-
-      if (
-        validationStatus === "failed" &&
-        (!reservation.idValidationDocumentUrl ||
-          reservation.idValidationDocumentUrl === nextIdDocumentUrl)
-      ) {
-        return res.status(422).json({
-          error: "ID image is unclear. Please upload a clearer photo.",
-          code: "ID_VALIDATION_FAILED",
-        });
-      }
-
-      if (nextIdDocumentUrl && submittedIdType && !validationAlreadyCurrent) {
-        const validation = await runIdValidation({
-          reservation,
-          idType: submittedIdType,
-          documentUrl: nextIdDocumentUrl,
-          applicantPayload: {
-            ...req.body,
-            firstName: updates.firstName || reservation.firstName,
-            middleName: updates.middleName || reservation.middleName,
-            lastName: updates.lastName || reservation.lastName,
-          },
-        });
-
-        if (validation.status === "failed") {
-          const validationUpdate = buildIdValidationUpdate(validation, nextIdDocumentUrl);
-          Object.assign(updates, validationUpdate);
-          await Reservation.findByIdAndUpdate(
-            reservationId,
-            { $set: { ...validationUpdate, validIDFrontUrl: nextIdDocumentUrl } },
-            { runValidators: true },
-          );
-          return res.status(422).json({
-            error: validation.message || "ID image is unclear. Please upload a clearer photo.",
-            code: "ID_VALIDATION_FAILED",
-            validationStatus: validation.status,
-            notes: validation.validationNotes || [],
-          });
-        }
-
-        Object.assign(updates, buildIdValidationUpdate(validation, nextIdDocumentUrl));
-      } else if (validationAlreadyCurrent) {
+      if (submittedIdType) {
         updates.idType = submittedIdType;
         updates.validIDType = submittedIdType;
       }
@@ -2586,6 +2530,7 @@ export const renewContract = async (req, res, next) => {
 export const moveOutReservation = async (req, res, next) => {
   try {
     const { reservationId } = req.params;
+    const { meterReading } = req.body || {};
     if (!isValidObjectId(reservationId)) return invalidIdResponse(res);
 
     const reservation = await Reservation.findById(reservationId)

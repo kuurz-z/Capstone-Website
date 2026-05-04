@@ -34,12 +34,14 @@ import {
   getTenantWorkspace,
   getTenantWorkspaceById,
   getTenantActionContext,
+  getVisitAvailability,
+  getVisitAvailabilityRules,
   getReservationById,
   createReservation,
+  updateVisitAvailabilityRules,
   updateReservation,
   updateReservationByUser,
   cancelReservationByUser,
-  validateReservationIdByUser,
   deleteReservation,
   extendReservation,
   releaseSlot,
@@ -72,6 +74,29 @@ const router = express.Router();
 router.get("/", verifyToken, getReservations);
 
 router.get(
+  "/visit-availability",
+  verifyToken,
+  getVisitAvailability,
+);
+
+router.get(
+  "/visit-availability/settings",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageReservations"),
+  getVisitAvailabilityRules,
+);
+
+router.patch(
+  "/visit-availability/settings",
+  verifyToken,
+  verifyAdmin,
+  filterByBranch,
+  requirePermission("manageReservations"),
+  updateVisitAvailabilityRules,
+);
+
+router.get(
   "/current-residents",
   verifyToken,
   verifyAdmin,
@@ -102,6 +127,53 @@ router.get(
   filterByBranch,
   requireAnyPermission(["manageReservations", "manageTenants"]),
   getTenantActionContext,
+);
+
+// ============================================================================
+// OCCUPANCY MANAGEMENT ROUTES
+// ============================================================================
+
+/**
+ * GET /api/reservations/occupancy/:roomId
+ *
+ * Get occupancy status of a specific room, including bed assignments.
+ *
+ * Access: Authenticated users (typically admin)
+ *
+ * @param {string} roomId - MongoDB ObjectId of the room
+ * @returns {Object} Room occupancy status with bed details
+ */
+router.get("/occupancy/:roomId", verifyToken, getRoomOccupancy);
+
+/**
+ * GET /api/reservations/stats/occupancy
+ *
+ * Get occupancy statistics for a branch.
+ * Query parameter: branch (optional) - 'gil-puyat' or 'guadalupe'
+ *
+ * Access: Authenticated users (typically admin)
+ *
+ * @query {string} branch - Optional branch filter
+ * @returns {Object} Branch occupancy statistics with all rooms
+ */
+router.get("/stats/occupancy", verifyToken, getBranchOccupancyStatistics);
+
+/**
+ * GET /api/reservations/vacancy-forecast
+ *
+ * Get expected vacancy dates per occupied bed.
+ * Query: ?branch=gil-puyat or ?roomId=<id>
+ *
+ * Access: Admin | Owner
+ *
+ * @returns {Object} Vacancy forecast per room/bed
+ */
+router.get(
+  "/vacancy-forecast",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageReservations"),
+  getVacancyForecast,
 );
 
 /**
@@ -174,19 +246,6 @@ router.put(
   verifyToken,
   verifyApplicant,
   updateReservationByUser,
-);
-
-/**
- * POST /api/reservations/:reservationId/id-validation
- *
- * Applicant-owned ID OCR validation. AI is assistive only; failed IDs block
- * applicant submission, while warnings/manual review remain visible to admin.
- */
-router.post(
-  "/:reservationId/id-validation",
-  verifyToken,
-  verifyApplicant,
-  validateReservationIdByUser,
 );
 
 /**
@@ -342,53 +401,6 @@ router.put(
   filterByBranch,
   requirePermission("manageReservations"),
   transferTenant,
-);
-
-// ============================================================================
-// OCCUPANCY MANAGEMENT ROUTES
-// ============================================================================
-
-/**
- * GET /api/reservations/occupancy/:roomId
- *
- * Get occupancy status of a specific room, including bed assignments.
- *
- * Access: Authenticated users (typically admin)
- *
- * @param {string} roomId - MongoDB ObjectId of the room
- * @returns {Object} Room occupancy status with bed details
- */
-router.get("/occupancy/:roomId", verifyToken, getRoomOccupancy);
-
-/**
- * GET /api/reservations/stats/occupancy
- *
- * Get occupancy statistics for a branch.
- * Query parameter: branch (optional) - 'gil-puyat' or 'guadalupe'
- *
- * Access: Authenticated users (typically admin)
- *
- * @query {string} branch - Optional branch filter
- * @returns {Object} Branch occupancy statistics with all rooms
- */
-router.get("/stats/occupancy", verifyToken, getBranchOccupancyStatistics);
-
-/**
- * GET /api/reservations/vacancy-forecast
- *
- * Get expected vacancy dates per occupied bed.
- * Query: ?branch=gil-puyat or ?roomId=<id>
- *
- * Access: Admin | Owner
- *
- * @returns {Object} Vacancy forecast per room/bed
- */
-router.get(
-  "/vacancy-forecast",
-  verifyToken,
-  verifyAdmin,
-  requirePermission("manageReservations"),
-  getVacancyForecast,
 );
 
 export default router;

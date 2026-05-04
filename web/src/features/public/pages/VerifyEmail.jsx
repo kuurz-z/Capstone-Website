@@ -148,9 +148,7 @@ function VerifyEmail() {
       const response = await authApi.verifyOtp(otp);
       redirectAfterOtp(response.user);
     } catch (error) {
-      const code =
-        error.response?.data?.code ||
-        error.response?.data?.error?.code;
+      const code = error.response?.data?.code;
       setOtpVerified(false);
       if (code === "OTP_INVALID") {
         setOtpDigits(Array(6).fill(""));
@@ -234,16 +232,9 @@ function VerifyEmail() {
       setResendCooldown(30);
       setOtpNotice("Code sent. Please check your email.");
     } catch (error) {
-      const code =
-        error.response?.data?.code ||
-        error.response?.data?.error?.code;
       const retryAfter = error.response?.data?.retryAfterSeconds;
       if (retryAfter) setResendCooldown(retryAfter);
-      setErrorMessage(
-        code === "OTP_EMAIL_SEND_FAILED"
-          ? "Unable to send OTP. Please contact support."
-          : error.message || "Could not resend OTP. Please try again.",
-      );
+      setErrorMessage(error.message || "Could not resend OTP. Please try again.");
     } finally {
       setResending(false);
     }

@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * useReservationFlow ΓÇö Custom Hook
+ * useReservationFlow — Custom Hook
  * =============================================================================
  *
  * Extracted from ReservationFlowPage.jsx.
@@ -29,13 +29,7 @@ import {
   validateEstimatedTime,
   validateTargetMoveInDate,
   validatePHPhoneLocal,
-  validatePHPhoneOrLandline,
 } from "../utils/reservationValidation";
-
-// Returns a sessionStorage key scoped to the Firebase UID when known,
-// falling back to the legacy unscoped key for backward compatibility.
-const getActiveResKey = (uid) =>
-  uid ? `activeReservationId_${uid}` : "activeReservationId";
 
 export default function useReservationFlow() {
   const navigate = useNavigate();
@@ -55,16 +49,14 @@ export default function useReservationFlow() {
         : null;
   const isStepMode = Boolean(stepOverride);
 
-  // ΓöÇΓöÇ Core state ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Core state ─────────────────────────────────────────
   const [reservationData, setReservationData] = useState(null);
   const [currentStage, setCurrentStage] = useState(1);
   const [highestStageReached, setHighestStageReached] = useState(1);
   const [isLoading, setIsLoading] = useState(
     () =>
       new URLSearchParams(window.location.search).has("payment") ||
-      Boolean(sessionStorage.getItem("activeReservationId")) ||
-      // Also check user-scoped keys (set after login is known)
-      Object.keys(sessionStorage).some((k) => k.startsWith("activeReservationId_"))
+      Boolean(sessionStorage.getItem("activeReservationId"))
   );
   const [visitApproved, setVisitApproved] = useState(false);
   const [visitCompleted, setVisitCompleted] = useState(false);
@@ -123,8 +115,6 @@ export default function useReservationFlow() {
   const [validIDFront, setValidIDFront] = useState(null);
   const [validIDBack, setValidIDBack] = useState(null);
   const [validIDType, setValidIDType] = useState("");
-  const [idValidationResult, setIdValidationResult] = useState(null);
-  const [isValidatingId, setIsValidatingId] = useState(false);
   const [nbiClearance, setNbiClearance] = useState(null);
   const [nbiReason, setNbiReason] = useState("");
   const [personalNotes, setPersonalNotes] = useState("");
@@ -158,7 +148,7 @@ export default function useReservationFlow() {
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [agreedToCertification, setAgreedToCertification] = useState(false);
 
-  // Stage 4: Payment ΓÇö tenant must acknowledge the non-refundable fee policy
+  // Stage 4: Payment — tenant must acknowledge the non-refundable fee policy
   const [agreedToFeePolicy, setAgreedToFeePolicy] = useState(false);
   const [finalMoveInDate, setFinalMoveInDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -182,13 +172,13 @@ export default function useReservationFlow() {
     billingEmail: "",
   });
 
-  // ΓöÇΓöÇ Capture payment redirect flag + status at render time (before effects clear URL) ΓöÇΓöÇ
+  // ── Capture payment redirect flag + status at render time (before effects clear URL) ──
   const paymentReturnStatusRef = useRef(
     new URLSearchParams(window.location.search).get("payment")
   );
   const isPaymentReturnRef = useRef(Boolean(paymentReturnStatusRef.current));
 
-  // ΓöÇΓöÇ Payment redirect hook (must be after all useState) ΓöÇΓöÇΓöÇΓöÇ
+  // ── Payment redirect hook (must be after all useState) ────
   const { searchParams, setSearchParams } = usePaymentRedirect({
     user,
     showNotification,
@@ -204,7 +194,7 @@ export default function useReservationFlow() {
   const isFirstRenderRef = useRef(true);
   const navigatingAwayRef = useRef(false);
 
-  // ΓöÇΓöÇ Warn before leaving mid-flow (skip if intentional navigation) ΓöÇΓöÇ
+  // ── Warn before leaving mid-flow (skip if intentional navigation) ──
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (navigatingAwayRef.current) return;
@@ -217,7 +207,7 @@ export default function useReservationFlow() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isFormDirty, currentStage]);
 
-  // ΓöÇΓöÇ Stepper locking ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Stepper locking ────────────────────────────────────
   const isStageLocked = (stageId) => {
     if (paymentApproved) return stageId < 5;
     if (stageId === 1) return visitCompleted;
@@ -247,7 +237,37 @@ export default function useReservationFlow() {
     setCurrentStage(stageId);
   };
 
-  // ΓöÇΓöÇ Helpers to populate state from a reservation object ΓöÇΓöÇΓöÇΓöÇ
+  // ── Helpers to populate state from a reservation object ────
+  const validateApplicantIdDocument = useCallback(() => {
+    const hasText = (value) => Boolean(value?.trim?.() || value);
+
+    if (!hasText(validIDType)) {
+      return {
+        valid: false,
+        field: "validIDType",
+        message: "ID type is required.",
+      };
+    }
+
+    if (!validIDFront) {
+      return {
+        valid: false,
+        field: "validIDFront",
+        message: "Valid ID front image is required.",
+      };
+    }
+
+    if (!validIDBack) {
+      return {
+        valid: false,
+        field: "validIDBack",
+        message: "Valid ID back image is required.",
+      };
+    }
+
+    return { valid: true, field: null, message: null };
+  }, [validIDBack, validIDFront, validIDType]);
+
   const populateFromReservation = (r) => {
     if (r.firstName) setFirstName(r.firstName);
     if (r.lastName) setLastName(r.lastName);
@@ -303,7 +323,7 @@ export default function useReservationFlow() {
     if (r.leaseDuration) setLeaseDuration(String(r.leaseDuration));
     // Restore agreements ONLY if the application was previously submitted
     // (prevents step 2's agreedToPrivacy from pre-checking step 3's consent)
-    const hasApplication = Boolean(r.firstName && r.lastName && r.mobileNumber);
+    const hasApplication = Boolean(r.applicationSubmittedAt);
     if (hasApplication && r.agreedToPrivacy) setAgreedToPrivacy(true);
     if (hasApplication && r.agreedToCertification) setAgreedToCertification(true);
     // File URLs
@@ -316,30 +336,11 @@ export default function useReservationFlow() {
     if (r.companyIDReason) setCompanyIDReason(r.companyIDReason);
     if (r.personalNotes) setPersonalNotes(r.personalNotes);
     if (r.idType || r.validIDType) setValidIDType(r.idType || r.validIDType);
-    if (r.idValidationStatus && r.idValidationStatus !== "not_validated") {
-      setIdValidationResult({
-        validationStatus: r.idValidationStatus,
-        message:
-          r.idValidationStatus === "passed"
-            ? "ID verified successfully."
-            : r.idValidationStatus === "failed"
-              ? "ID image is unclear. Please upload a clearer photo."
-              : r.idValidationStatus === "manual_review"
-                ? "ID uploaded. It will be manually reviewed by admin."
-                : "Name mismatch detected. Please review your information or upload a clearer ID.",
-        extractedName: r.idExtractedName || "",
-        extractedIdNumber: r.idExtractedNumber || "",
-        // Force null for manual_review so historical DB rows with stored 0 don't
-        // display a misleading "0%" score in the UI.
-        matchScore: r.idValidationStatus === "manual_review" ? null : (r.idNameMatchScore ?? null),
-        notes: r.idValidationNotes || [],
-      });
-    }
     // NOTE: agreedToPrivacy / agreedToCertification are NOT restored
-    // from saved data ΓÇö consent must be re-affirmed each session.
+    // from saved data — consent must be re-affirmed each session.
   };
 
-  // ΓöÇΓöÇ Pre-fill empty fields from user profile (for new reservations) ΓöÇΓöÇ
+  // ── Pre-fill empty fields from user profile (for new reservations) ──
   const prefillFromProfile = async () => {
     try {
       const profile = await authApi.getCurrentUser();
@@ -359,7 +360,7 @@ export default function useReservationFlow() {
       if (!emergencyContactNumber && profile.emergencyPhone)
         setEmergencyContactNumber(profile.emergencyPhone);
     } catch {
-      // Non-critical ΓÇö silently skip if profile fetch fails
+      // Non-critical — silently skip if profile fetch fails
     }
   };
 
@@ -414,7 +415,7 @@ export default function useReservationFlow() {
     };
   };
 
-  // ΓöÇΓöÇ Data loading ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Data loading ───────────────────────────────────────
   const processedKeyRef = useRef(null);
   const paymentVerifyingRef = useRef(false);
   const justPaidRef = useRef(false);
@@ -441,7 +442,7 @@ export default function useReservationFlow() {
     const editMode = location.state?.editMode;
     const resId = location.state?.reservationId;
 
-    // ΓöÇΓöÇ ALWAYS reset session-specific fields first ΓöÇΓöÇ
+    // ── ALWAYS reset session-specific fields first ──
     // For new reservations, these stay blank.
     // For continuing, the async load functions below will repopulate from DB.
     setTargetMoveInDate("");
@@ -454,19 +455,17 @@ export default function useReservationFlow() {
       loadExistingReservation(resId);
     } else {
       const state = location.state?.roomData;
-      // Check if this is a PayMongo return ΓÇö defer stage logic to usePaymentRedirect
+      // Check if this is a PayMongo return — defer stage logic to usePaymentRedirect
       const paymentParam = new URLSearchParams(window.location.search).get("payment");
       if (state) {
         setReservationData(state);
         prefillFromProfile(); // Pre-fill Step 3 from profile for new reservations
       } else if (isPaymentReturnRef.current) {
-        // Returning from PayMongo ΓÇö load reservation data for display,
+        // Returning from PayMongo — load reservation data for display,
         // and verify payment using the reservation's stored session ID.
         paymentVerifyingRef.current = true; // block re-init from hook's setSearchParams
         isPaymentReturnRef.current = false; // consume the flag
-        const storedResId =
-          sessionStorage.getItem(getActiveResKey(user?.firebaseUid)) ||
-          sessionStorage.getItem("activeReservationId"); // legacy fallback
+        const storedResId = sessionStorage.getItem("activeReservationId");
         if (storedResId) {
           loadExistingReservation(storedResId, true);
         } else {
@@ -474,9 +473,7 @@ export default function useReservationFlow() {
         }
       } else {
         const stored = sessionStorage.getItem("pendingReservation");
-        const storedResId =
-          sessionStorage.getItem(getActiveResKey(user?.firebaseUid)) ||
-          sessionStorage.getItem("activeReservationId"); // legacy fallback
+        const storedResId = sessionStorage.getItem("activeReservationId");
         if (stored) {
           setReservationData(JSON.parse(stored));
         } else if (storedResId) {
@@ -604,7 +601,7 @@ export default function useReservationFlow() {
       };
       let targetStage = STAGE_BY_STATUS[reservationStatus] || 1;
 
-      // visit_pending: tenant must wait ΓÇö redirect to profile (unless rejected)
+      // visit_pending: tenant must wait — redirect to profile (unless rejected)
       if (reservationStatus === "visit_pending" && !reservation.scheduleRejected) {
         appNavigate("/applicant/profile", {
           flash: {
@@ -647,7 +644,7 @@ export default function useReservationFlow() {
         targetStage = 2;
       }
       if (skipStageSet) {
-        // Payment redirect ΓÇö verify using the reservation's stored paymongoSessionId
+        // Payment redirect — verify using the reservation's stored paymongoSessionId
         // Set highest to 5 immediately so the stepper renders all stages green from the start
         setHighestStageReached(5);
         // Verify payment status with PayMongo
@@ -655,9 +652,8 @@ export default function useReservationFlow() {
           try {
             const result = await billingApi.checkPaymentStatus(reservation.paymongoSessionId);
             if (result.status === "paid") {
-              sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
-              sessionStorage.removeItem("activeReservationId"); // legacy cleanup
-              // Back button ΓåÆ redirect to dashboard; Return to merchant ΓåÆ show step 5
+              sessionStorage.removeItem("activeReservationId");
+              // Back button → redirect to dashboard; Return to merchant → show step 5
               if (paymentReturnStatusRef.current === "cancelled") {
                 appNavigate("/applicant/profile", {
                   flash: {
@@ -672,7 +668,7 @@ export default function useReservationFlow() {
               try {
                 const updated = await reservationApi.getById(resId);
                 if (updated?.reservationCode) setReservationCode(updated.reservationCode);
-              } catch { /* non-critical ΓÇö code just won't display */ }
+              } catch { /* non-critical — code just won't display */ }
               setCurrentStage(5);
               setHighestStageReached(5);
               setPaymentSubmitted(true);
@@ -693,7 +689,7 @@ export default function useReservationFlow() {
               return;
             }
           } catch (err) {
-            console.error("Γ¥î [VERIFY] Payment check failed ΓÇö sessionId:", reservation.paymongoSessionId, err);
+            console.error("❌ [VERIFY] Payment check failed — sessionId:", reservation.paymongoSessionId, err);
             setCurrentStage(4);
             if (paymentReturnStatusRef.current !== "cancelled") {
               showNotification("Could not verify payment. Please check your profile.", "warning", 5000);
@@ -701,10 +697,10 @@ export default function useReservationFlow() {
             return;
           }
         } else {
-          // No stored session ID ΓÇö skip generic toast, just navigate to correct stage
+          // No stored session ID — skip generic toast, just navigate to correct stage
           console.warn("[PAYMENT] skipStageSet=true but paymongoSessionId is empty for reservation:", resId);
           setCurrentStage(targetStage);
-          return; // ΓåÉ prevent double-toast: skip the generic notification below
+          return; // ← prevent double-toast: skip the generic notification below
         }
       } else {
         if (stepOverride && stepOverride <= highest)
@@ -719,11 +715,10 @@ export default function useReservationFlow() {
         3000,
       );
     } catch (err) {
-      console.error("Γ¥î [LOAD_RESERVATION] Failed to load reservation id:", resId, "| status:", err?.response?.status, "| message:", err?.message, err);
+      console.error("❌ [LOAD_RESERVATION] Failed to load reservation id:", resId, "| status:", err?.response?.status, "| message:", err?.message, err);
       const status = err?.response?.status;
       if (status === 404) {
-        sessionStorage.removeItem(getActiveResKey(user?.firebaseUid));
-        sessionStorage.removeItem("activeReservationId"); // legacy cleanup
+        sessionStorage.removeItem("activeReservationId");
         appNavigate("/applicant/check-availability", {
           flash: {
             type: "error",
@@ -746,7 +741,7 @@ export default function useReservationFlow() {
     }
   };
 
-  // ΓöÇΓöÇ Form change tracking (Stage 1) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Form change tracking (Stage 1) ─────────────────────
   useEffect(() => {
     if (currentStage === 1) {
       setIsFormDirty(
@@ -763,7 +758,7 @@ export default function useReservationFlow() {
     currentStage,
   ]);
 
-  // ΓöÇΓöÇ API helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── API helpers ────────────────────────────────────────
   const advanceStage = async (nextStage, message) => {
     setHighestStageReached((prev) => Math.max(prev, nextStage));
     await queryClient.invalidateQueries({ queryKey: ["reservations"] });
@@ -904,90 +899,7 @@ export default function useReservationFlow() {
     return response?.reservation || response;
   };
 
-  // ΓöÇΓöÇ Auto-save (stages 3-4) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-  const validateApplicantIdDocument = useCallback(
-    async ({ documentUrl, idType } = {}) => {
-      const targetReservationId = reservationId || reservationData?._id || reservationData?.id;
-      const selectedIdType = idType || validIDType;
-
-      if (!targetReservationId || !documentUrl || !selectedIdType) {
-        const message = !selectedIdType
-          ? "ID type is required."
-          : "Valid ID front image is required.";
-        setIdValidationResult({
-          validationStatus: "failed",
-          message,
-          notes: [],
-        });
-        return null;
-      }
-
-      setIsValidatingId(true);
-      setIdValidationResult({
-        validationStatus: "validating",
-        message: "Validating ID...",
-        notes: [],
-      });
-
-      try {
-        const result = await reservationApi.validateIdDocument(targetReservationId, {
-          documentUrl,
-          idType: selectedIdType,
-          firstName,
-          middleName,
-          lastName,
-        });
-        const normalizedResult = {
-          validationStatus: result.validationStatus || "manual_review",
-          message:
-            result.message ||
-            "ID uploaded. It will be manually reviewed by admin.",
-          extractedName: result.extractedName || "",
-          extractedIdNumber: result.extractedIdNumber || "",
-          matchScore: result.matchScore ?? null,
-          notes: result.notes || [],
-        };
-
-        setIdValidationResult(normalizedResult);
-
-        if (normalizedResult.validationStatus === "passed") {
-          showNotification("ID verified successfully.", "success", 3000);
-        } else if (normalizedResult.validationStatus === "failed") {
-          showNotification("ID image is unclear. Please upload a clearer photo.", "error", 4000);
-        } else if (normalizedResult.validationStatus === "manual_review") {
-          showNotification("ID uploaded. It will be manually reviewed by admin.", "info", 4000);
-        } else {
-          showNotification("Name mismatch detected. Please review your information or upload a clearer ID.", "warning", 5000);
-        }
-
-        return normalizedResult;
-      } catch (error) {
-        const message = getFriendlyError(
-          error,
-          "ID requires manual verification.",
-        );
-        const fallback = {
-          validationStatus: "manual_review",
-          message,
-          notes: ["ID validation could not be completed. Admin manual review is required."],
-        };
-        setIdValidationResult(fallback);
-        showNotification(message, "warning", 4000);
-        return fallback;
-      } finally {
-        setIsValidatingId(false);
-      }
-    },
-    [
-      firstName,
-      lastName,
-      middleName,
-      reservationData,
-      reservationId,
-      validIDType,
-    ],
-  );
-
+  // ── Auto-save (stages 3-4) ─────────────────────────────
   const buildDraftPayload = useCallback(
     () => ({
       visitDate,
@@ -1007,7 +919,6 @@ export default function useReservationFlow() {
       educationLevel,
       addressUnitHouseNo,
       addressStreet,
-      addressRegion,
       addressBarangay,
       addressCity,
       addressProvince,
@@ -1030,7 +941,7 @@ export default function useReservationFlow() {
       workSchedule,
       workScheduleOther,
       targetMoveInDate,
-      ...(leaseDuration ? { leaseDuration } : {}),
+      leaseDuration,
       finalMoveInDate,
       agreedToPrivacy,
       agreedToCertification,
@@ -1105,7 +1016,93 @@ export default function useReservationFlow() {
     };
   }, [buildDraftPayload, currentStage, reservationId]);
 
-  // ΓöÇΓöÇ Stage handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ── Stage handler ──────────────────────────────────────
+  const handleSaveAndExit = async () => {
+    setIsLoading(true);
+    setSaveStatus("saving");
+    try {
+      if (currentStage === 3) {
+        // Save without the submit flag to keep it as a draft
+        await updateReservationDraft({
+          firstName,
+          lastName,
+          middleName,
+          nickname,
+          mobileNumber,
+          birthday,
+          maritalStatus,
+          nationality,
+          educationLevel,
+          addressUnitHouseNo,
+          addressStreet,
+          addressRegion,
+          addressBarangay,
+          addressCity,
+          addressProvince,
+          emergencyContactName,
+          emergencyRelationship,
+          emergencyContactNumber,
+          healthConcerns,
+          employerSchool,
+          employerAddress,
+          employerContact,
+          startDate,
+          occupation,
+          previousEmployment,
+          roomType,
+          preferredRoomNumber,
+          referralSource,
+          referrerName,
+          estimatedMoveInTime,
+          workSchedule,
+          workScheduleOther,
+          targetMoveInDate,
+          leaseDuration,
+          agreedToPrivacy,
+          agreedToCertification,
+          selfiePhotoUrl,
+          validIDFrontUrl,
+          validIDBackUrl,
+          nbiClearanceUrl,
+          nbiReason,
+          personalNotes,
+          companyIDUrl,
+          companyIDReason,
+          validIDType,
+          idType: validIDType,
+          submitApplication: false, 
+        });
+      }
+      
+      setSaveStatus("saved");
+      setSuccessOverlay({
+        show: true,
+        title: "Draft Saved",
+        subtitle: "Your progress has been saved. You can complete it anytime.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      
+      setTimeout(() => {
+        appNavigate("/applicant/profile", {
+          flash: {
+            type: "info",
+            title: "Draft Saved",
+            message: "Your application is saved as a draft.",
+          },
+        });
+      }, 1500);
+
+    } catch (error) {
+      showNotification(
+        getFriendlyError(error, "Failed to save draft."),
+        "error",
+        3000
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleNextStage = async () => {
     try {
       if (currentStage === 1) {
@@ -1164,12 +1161,13 @@ export default function useReservationFlow() {
       } else if (currentStage === 3) {
         if (!devBypassValidation) {
           const hasText = (value) => Boolean(value?.trim?.() || value);
-          // 09XXXXXXXXX format ΓÇö matches backend normalization and new input constraint.
+          // 09XXXXXXXXX format — matches backend normalization and new input constraint.
           const isValidPhone = (value) => validatePHPhoneLocal(value).valid;
           const requiredFields = [
             { key: "selfiePhoto", label: "Selfie Photo", isMissing: !selfiePhoto },
             { key: "lastName", label: "Last Name", isMissing: !hasText(lastName) },
             { key: "firstName", label: "First Name", isMissing: !hasText(firstName) },
+            { key: "middleName", label: "Middle Name", isMissing: !hasText(middleName) },
             {
               key: "mobileNumber",
               label: "Mobile Number",
@@ -1193,18 +1191,6 @@ export default function useReservationFlow() {
             { key: "addressBarangay", label: "Barangay", isMissing: !hasText(addressBarangay) },
             { key: "validIDType", label: "ID Type", isMissing: !hasText(validIDType) },
             { key: "validIDFront", label: "Valid ID (Front)", isMissing: !validIDFront },
-            {
-              key: "validIDFront",
-              label: "Valid ID validation",
-              isMissing: idValidationResult?.validationStatus === "failed",
-              message: "ID image is unclear. Please upload a clearer photo.",
-            },
-            {
-              key: "validIDFront",
-              label: "Valid ID validation",
-              isMissing: isValidatingId,
-              message: "Please wait until ID validation finishes.",
-            },
             { key: "validIDBack", label: "Valid ID (Back)", isMissing: !validIDBack },
             {
               key: "nbiClearance",
@@ -1231,12 +1217,7 @@ export default function useReservationFlow() {
             { key: "healthConcerns", label: "Health Concerns", isMissing: !hasText(healthConcerns) },
             { key: "employerSchool", label: "Current Employer", isMissing: !hasText(employerSchool) },
             { key: "employerAddress", label: "Employer Address", isMissing: !hasText(employerAddress) },
-            {
-              key: "employerContact",
-              label: "Employer Contact Number",
-              isMissing: hasText(employerContact) && !validatePHPhoneOrLandline(employerContact),
-              message: "Enter a valid phone number (e.g. 09123456789 or 02-1234567).",
-            },
+            { key: "employerContact", label: "Employer Contact", isMissing: !hasText(employerContact) },
             { key: "occupation", label: "Occupation", isMissing: !hasText(occupation) },
             {
               key: "companyID",
@@ -1396,6 +1377,63 @@ export default function useReservationFlow() {
         navigate("/applicant/profile");
       }
     } catch (error) {
+      const errorMsg = error?.message || "";
+      if (errorMsg.includes("The following required fields are missing:")) {
+        const match = errorMsg.match(/missing:\s*(.*)/i);
+        if (match && match[1]) {
+          const fieldsStr = match[1].replace(/\.$/, "");
+          const fields = fieldsStr.split(",").map((s) => s.trim());
+          const firstFieldStr = fields[0];
+          
+          let fieldKey = null;
+          const lowerField = firstFieldStr.toLowerCase();
+          if (lowerField.includes("first name")) fieldKey = "firstName";
+          else if (lowerField.includes("last name")) fieldKey = "lastName";
+          else if (lowerField.includes("middle name")) fieldKey = "middleName";
+          else if (lowerField.includes("mobile number")) fieldKey = "mobileNumber";
+          else if (lowerField.includes("birthday")) fieldKey = "birthday";
+          else if (lowerField.includes("marital status")) fieldKey = "maritalStatus";
+          else if (lowerField.includes("nationality")) fieldKey = "nationality";
+          else if (lowerField.includes("education level")) fieldKey = "educationLevel";
+          else if (lowerField.includes("address unit") || lowerField.includes("house no")) fieldKey = "addressUnitHouseNo";
+          else if (lowerField.includes("address street")) fieldKey = "addressStreet";
+          else if (lowerField.includes("address region")) fieldKey = "addressRegion";
+          else if (lowerField.includes("address barangay")) fieldKey = "addressBarangay";
+          else if (lowerField.includes("address city")) fieldKey = "addressCity";
+          else if (lowerField.includes("address province")) fieldKey = "addressProvince";
+          else if (lowerField.includes("emergency contact name")) fieldKey = "emergencyContactName";
+          else if (lowerField.includes("emergency phone") || lowerField.includes("emergency contact phone") || lowerField.includes("emergency contact number")) fieldKey = "emergencyContactNumber";
+          else if (lowerField.includes("emergency relationship")) fieldKey = "emergencyRelationship";
+          else if (lowerField.includes("health concerns")) fieldKey = "healthConcerns";
+          else if (lowerField.includes("employer") || lowerField.includes("school")) fieldKey = "employerSchool";
+          else if (lowerField.includes("occupation")) fieldKey = "occupation";
+          else if (lowerField.includes("referral")) fieldKey = "referralSource";
+          else if (lowerField.includes("target move-in date")) fieldKey = "targetMoveInDate";
+          else if (lowerField.includes("estimated time") || lowerField.includes("move-in time")) fieldKey = "estimatedMoveInTime";
+          else if (lowerField.includes("work schedule")) fieldKey = "workSchedule";
+          else if (lowerField.includes("company id")) fieldKey = "companyID";
+          else if (lowerField.includes("valid id front")) fieldKey = "validIDFront";
+          else if (lowerField.includes("valid id back")) fieldKey = "validIDBack";
+          else if (lowerField.includes("selfie photo")) fieldKey = "selfiePhoto";
+
+          showNotification(
+            `"${firstFieldStr.charAt(0).toUpperCase() + firstFieldStr.slice(1)}" is required. Please fill it in to continue.`,
+            "error",
+            5000,
+          );
+          
+          if (fieldKey || firstFieldStr) {
+            setTimeout(() => {
+              const selector = fieldKey ? `[data-field="${fieldKey}"]` : `[data-field="${firstFieldStr}"]`;
+              const el = document.querySelector(selector);
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 300);
+          }
+          setIsLoading(false);
+          return;
+        }
+      }
+
       showNotification(
         getFriendlyError(error, "Failed to process reservation. Please try again."),
         "error",
@@ -1477,7 +1515,7 @@ export default function useReservationFlow() {
     setPendingStageAction(null);
   };
 
-  // ΓöÇΓöÇΓöÇ Return everything the page component needs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ─── Return everything the page component needs ────────
   return {
     // Navigation
     navigate,
@@ -1535,8 +1573,6 @@ export default function useReservationFlow() {
     validIDFront, setValidIDFront,
     validIDBack, setValidIDBack,
     validIDType, setValidIDType,
-    idValidationResult,
-    isValidatingId,
     nbiClearance, setNbiClearance,
     nbiReason, setNbiReason,
     personalNotes, setPersonalNotes,
@@ -1589,6 +1625,7 @@ export default function useReservationFlow() {
 
     // Handlers
     handleNextStage,
+    handleSaveAndExit,
     handlePrevStage,
     handleStageConfirm,
     validateApplicantIdDocument,

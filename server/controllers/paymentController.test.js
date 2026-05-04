@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 const createCheckoutSession = jest.fn();
 const getCheckoutSession = jest.fn();
 const billFindById = jest.fn();
+const paymentGetPaymentsForBill = jest.fn();
 const reservationFindById = jest.fn();
 const userFindOne = jest.fn();
 const userFindById = jest.fn();
@@ -23,6 +24,7 @@ await jest.unstable_mockModule("../config/paymongo.js", () => ({
 
 await jest.unstable_mockModule("../models/index.js", () => ({
   Bill: { findById: billFindById },
+  Payment: { getPaymentsForBill: paymentGetPaymentsForBill },
   Reservation: { findById: reservationFindById },
   User: { findOne: userFindOne, findById: userFindById },
 }));
@@ -78,13 +80,14 @@ await jest.unstable_mockModule("../middleware/errorHandler.js", () => ({
   },
 }));
 
-const { createBillCheckout, checkSessionStatus } = await import("./paymentController.js");
+const { createBillCheckout, checkSessionStatus, getPaymentsForBill } = await import("./paymentController.js");
 
 describe("paymentController", () => {
   beforeEach(() => {
     createCheckoutSession.mockReset();
     getCheckoutSession.mockReset();
     billFindById.mockReset();
+    paymentGetPaymentsForBill.mockReset();
     reservationFindById.mockReset();
     userFindOne.mockReset();
     userFindById.mockReset();
@@ -456,5 +459,94 @@ describe("paymentController", () => {
       expect.objectContaining({ sessionId: "cs_bill", status: "paid" }),
     );
     expect(next).not.toHaveBeenCalled();
+  });
+
+  test("returns payments for a tenant-owned bill", async () => {
+    const bill = {
+      _id: "bill_own",
+      userId: "tenant_1",
+      branch: "gil-puyat",
+    };
+    const payments = [{ paymentId: "PAY-1", amount: 2500 }];
+
+    userFindOne.mockReturnValue(mockLean({ _id: "tenant_1", role: "tenant" }));
+    billFindById.mockReturnValue(mockLean(bill));
+    paymentGetPaymentsForBill.mockResolvedValue(payments);
+
+    const req = { params: { billId: "bill_own" }, user: { uid: "firebase-1" } };
+    const res = {};
+    const next = jest.fn();
+
+    await getPaymentsForBill(req, res, next);
+
+    expect(paymentGetPaymentsForBill).toHaveBeenCalledWith("bill_own");
+    expect(sendSuccess).toHaveBeenCalledWith(res, { data: payments });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("denies payments for another tenant's bill", async () => {
+    userFindOne.mockReturnValue(mockLean({ _id: "tenant_1", role: "tenant" }));
+    billFindById.mockReturnValue(
+      mockLean({ _id: "bill_other", userId: "tenant_2", branch: "gil-puyat" }),
+    );
+
+    const req = { params: { billId: "bill_other" }, user: { uid: "firebase-1" } };
+    const res = {};
+    const next = jest.fn();
+
+    await getPaymentsForBill(req, res, next);
+
+    expect(paymentGetPaymentsForBill).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0].code).toBe("FORBIDDEN");
+  });
+
+  test("allows branch billing admins only for their branch", async () => {
+    userFindOne.mockReturnValue(
+      mockLean({
+        _id: "admin_1",
+        role: "branch_admin",
+        branch: "gil-puyat",
+        permissions: ["manageBilling"],
+      }),
+    );
+    billFindById.mockReturnValue(
+      mockLean({ _id: "bill_branch", userId: "tenant_1", branch: "gil-puyat" }),
+    );
+    paymentGetPaymentsForBill.mockResolvedValue([]);
+
+    const req = { params: { billId: "bill_branch" }, user: { uid: "admin-fb" } };
+    const res = {};
+    const next = jest.fn();
+
+    await getPaymentsForBill(req, res, next);
+
+    expect(paymentGetPaymentsForBill).toHaveBeenCalledWith("bill_branch");
+    expect(sendSuccess).toHaveBeenCalledWith(res, { data: [] });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("denies branch admins without billing permission", async () => {
+    userFindOne.mockReturnValue(
+      mockLean({
+        _id: "admin_1",
+        role: "branch_admin",
+        branch: "gil-puyat",
+        permissions: ["manageRooms"],
+      }),
+    );
+    billFindById.mockReturnValue(
+      mockLean({ _id: "bill_branch", userId: "tenant_1", branch: "gil-puyat" }),
+    );
+
+    const req = { params: { billId: "bill_branch" }, user: { uid: "admin-fb" } };
+    const res = {};
+    const next = jest.fn();
+
+    await getPaymentsForBill(req, res, next);
+
+    expect(paymentGetPaymentsForBill).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0].code).toBe("FORBIDDEN");
   });
 });

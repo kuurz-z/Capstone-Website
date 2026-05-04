@@ -1,15 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import {
-  Users,
-  UserPlus,
-  Search,
-  Key,
-  Shield,
-  Edit2,
-  Lock,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Users, UserPlus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { usePermissions } from "../../../shared/hooks/usePermissions";
@@ -21,6 +11,7 @@ import { useUsers, useUserStats } from "../../../shared/hooks/queries/useUsers";
 import EditUserModal from "../components/users/EditUserModal";
 import AddUserModal from "../components/users/AddUserModal";
 import HardDeleteUserModal from "../components/users/HardDeleteUserModal";
+import DeleteUserModal from "../components/users/DeleteUserModal";
 import RestoreUserModal from "../components/users/RestoreUserModal";
 import AccountActionModal from "../components/users/AccountActionModal";
 import AccountRowActions from "../components/users/AccountRowActions";
@@ -53,6 +44,7 @@ function UserManagementPage() {
   const [accessDrawerUser, setAccessDrawerUser] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isHardDeleteModalOpen, setIsHardDeleteModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [accountAction, setAccountAction] = useState({
     type: null,
@@ -89,9 +81,7 @@ function UserManagementPage() {
       allValue: "all",
     });
 
-    setBranchFilter((current) =>
-      current === nextBranch ? current : nextBranch,
-    );
+    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
   }, [isOwner, requestedBranch, user?.branch]);
 
   useEffect(() => {
@@ -104,34 +94,7 @@ function UserManagementPage() {
 
     if (nextParams.toString() === searchParams.toString()) return;
     setSearchParams(nextParams, { replace: true });
-  }, [
-    branchFilter,
-    isOwner,
-    permissionOwner,
-    searchParams,
-    setSearchParams,
-    user?.role,
-  ]);
-
-  const AVATAR_COLORS = [
-  "#e11d48", // rose
-  "#d97706", // amber
-  "#16a34a", // green
-  "#2563eb", // blue
-  "#7c3aed", // violet
-  "#db2777", // pink
-  "#0891b2", // cyan
-  "#ea580c", // orange
-];
-
-function getAvatarColor(user) {
-  const seed = user._id || user.id || user.email || user.username || "x";
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
+  }, [branchFilter, isOwner, permissionOwner, searchParams, setSearchParams, user?.role]);
 
   const [editForm, setEditForm] = useState({
     username: "",
@@ -164,6 +127,7 @@ function getAvatarColor(user) {
     email: "",
     phone: "",
     role: "applicant",
+    branch: "",
     password: "",
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -193,16 +157,33 @@ function getAvatarColor(user) {
           : value.length < 6
             ? "Min 6 characters"
             : "";
+      case "branch":
+        return addForm.role === "branch_admin" && !value
+          ? "Branch is required for branch admins"
+          : "";
       default:
         return "";
     }
   };
 
   const handleAddFormChange = (field, value) => {
-    setAddForm((prev) => ({ ...prev, [field]: value }));
+    const nextForm = {
+      ...addForm,
+      [field]: value,
+      ...(field === "role" && value !== "branch_admin" ? { branch: "" } : {}),
+    };
+    setAddForm(nextForm);
     setAddFormErrors((prev) => ({
       ...prev,
       [field]: validateAddField(field, value),
+      ...(field === "role" || field === "branch"
+        ? {
+            branch:
+              nextForm.role === "branch_admin" && !nextForm.branch
+                ? "Branch is required for branch admins"
+                : "",
+          }
+        : {}),
     }));
   };
 
@@ -244,16 +225,13 @@ function getAvatarColor(user) {
   const refetchAll = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["users"] }),
-      queryClient.invalidateQueries({
-        queryKey: ["reservations", "currentResidents"],
-      }),
+      queryClient.invalidateQueries({ queryKey: ["reservations", "currentResidents"] }),
       queryClient.invalidateQueries({ queryKey: ["reservations"] }),
     ]);
 
   const formatUserLabel = (userData) => {
     if (!userData) return "User";
-    const fullName =
-      `${userData.firstName || ""} ${userData.lastName || ""}`.trim();
+    const fullName = `${userData.firstName || ""} ${userData.lastName || ""}`.trim();
     return fullName || userData.username || userData.email || "User";
   };
 
@@ -288,8 +266,7 @@ function getAvatarColor(user) {
       hasActiveStay: Boolean(userData.hasActiveStay),
       hasLifecycleReservation: Boolean(userData.hasLifecycleReservation),
       lifecycleManaged:
-        userData.lifecycleManaged ??
-        ["applicant", "tenant"].includes(userData.role),
+        userData.lifecycleManaged ?? ["applicant", "tenant"].includes(userData.role),
     });
     setIsEditModalOpen(true);
   };
@@ -302,10 +279,7 @@ function getAvatarColor(user) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
       });
-      if (
-        selectedUser?._id &&
-        String(selectedUser._id) === String(user?.id || user?._id || "")
-      ) {
+      if (selectedUser?._id && String(selectedUser._id) === String(user?.id || user?._id || "")) {
         await refreshUser();
       }
       showNotification("User updated successfully", "success", 3000);
@@ -314,6 +288,11 @@ function getAvatarColor(user) {
     } catch (error) {
       showNotification(error.message || "Failed to update user", "error", 3000);
     }
+  };
+
+  const handleDeleteClick = (userData) => {
+    setSelectedUser(userData);
+    setIsDeleteModalOpen(true);
   };
 
   const handleHardDeleteClick = (userData) => {
@@ -339,29 +318,13 @@ function getAvatarColor(user) {
 
       const userLabel = formatUserLabel(selectedUser);
       if (response?.blocked) {
-        showNotification(
-          `${userLabel} was blocked successfully.`,
-          "success",
-          3000,
-        );
+        showNotification(`${userLabel} was blocked successfully.`, "success", 3000);
       } else if (response?.archived) {
-        showNotification(
-          `${userLabel} was archived successfully.`,
-          "success",
-          3000,
-        );
+        showNotification(`${userLabel} was archived successfully.`, "success", 3000);
       } else if (response?.forceDeleted) {
-        showNotification(
-          `${userLabel} was force deleted successfully.`,
-          "success",
-          3000,
-        );
+        showNotification(`${userLabel} was force deleted successfully.`, "success", 3000);
       } else {
-        showNotification(
-          `${userLabel} was permanently deleted.`,
-          "success",
-          3000,
-        );
+        showNotification(`${userLabel} was permanently deleted.`, "success", 3000);
       }
 
       setIsDeleteModalOpen(false);
@@ -373,11 +336,7 @@ function getAvatarColor(user) {
         const summary = [
           ["reservation(s)", safeguards.reservations],
           ["utility reading(s)", safeguards.utilityReadings],
-          [
-            "bill(s)",
-            Number(safeguards.issuedBills || 0) +
-              Number(safeguards.draftBills || 0),
-          ],
+          ["bill(s)", Number(safeguards.issuedBills || 0) + Number(safeguards.draftBills || 0)],
           ["maintenance record(s)", safeguards.maintenanceRequests],
         ]
           .filter(([, count]) => Number(count || 0) > 0)
@@ -389,17 +348,9 @@ function getAvatarColor(user) {
           5500,
         );
       } else if (error?.code === "FORCE_DELETE_CONFIRMATION_REQUIRED") {
-        showNotification(
-          "Type DELETE exactly to force delete this account.",
-          "error",
-          3500,
-        );
+        showNotification("Type DELETE exactly to force delete this account.", "error", 3500);
       } else {
-        showNotification(
-          error.message || "Failed to delete user",
-          "error",
-          3000,
-        );
+        showNotification(error.message || "Failed to delete user", "error", 3000);
       }
     }
   };
@@ -407,7 +358,7 @@ function getAvatarColor(user) {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     const errors = {};
-    ["username", "email", "firstName", "lastName", "password"].forEach((f) => {
+    ["username", "email", "firstName", "lastName", "password", "branch"].forEach((f) => {
       const err = validateAddField(f, addForm[f]);
       if (err) errors[f] = err;
     });
@@ -430,6 +381,7 @@ function getAvatarColor(user) {
           email: addForm.email,
           phone: addForm.phone || undefined,
           role: addForm.role,
+          branch: addForm.branch || undefined,
           password: addForm.password,
         }),
       });
@@ -503,6 +455,13 @@ function getAvatarColor(user) {
           "success",
           3000,
         );
+      } else if (action === "restore") {
+        await authFetch(`/users/${userId}/restore`, { method: "PATCH" });
+        showNotification(
+          `${actionUserLabel} was restored successfully.`,
+          "success",
+          3000,
+        );
       }
       refetchAll();
     } catch (error) {
@@ -524,9 +483,14 @@ function getAvatarColor(user) {
       },
       { label: "Active", value: stats?.activeCount || 0, color: "green" },
       {
-        label: "Admin Accounts",
-        value: (stats?.byRole?.branch_admin || 0) + (stats?.byRole?.owner || 0),
+        label: "Branch Admins",
+        value: stats?.byRole?.branch_admin || 0,
         color: "blue",
+      },
+      {
+        label: "Owners",
+        value: stats?.byRole?.owner || 0,
+        color: "purple",
       },
       {
         label: "Blocked",
@@ -580,13 +544,13 @@ function getAvatarColor(user) {
     {
       key: "status",
       options: [
-        { value: "all", label: "All Status" },
+        { value: "all", label: "All Statuses" },
         { value: "active", label: "Active" },
-        { value: "restricted", label: "Blocked (All)" },
-        { value: "suspended", label: "Suspended" },
-        { value: "banned", label: "Blocked account" },
         { value: "pending_verification", label: "Pending Verification" },
-        { value: "archived", label: "Archived/Deleted" },
+        { value: "restricted", label: "All Restricted (Blocked/Suspended)" },
+        { value: "suspended", label: "Suspended (Temporary)" },
+        { value: "banned", label: "Banned (Permanent)" },
+        { value: "archived", label: "Archived" },
       ],
       value: statusFilter,
       onChange: (v) => {
@@ -635,8 +599,7 @@ function getAvatarColor(user) {
         <StatusBadge
           status={row.accountStatus || (row.isActive ? "active" : "suspended")}
           label={
-            (row.accountStatus || (row.isActive ? "active" : "suspended")) ===
-            "banned"
+            (row.accountStatus || (row.isActive ? "active" : "suspended")) === "banned"
               ? "Blocked account"
               : undefined
           }
@@ -651,18 +614,13 @@ function getAvatarColor(user) {
       render: (row) => {
         const isCurrentUser = row._id === (user?._id || user?.uid);
         const isArchived = row.isArchived === true;
-        const isPrivilegedAccount = ["branch_admin", "owner"].includes(
-          row.role,
-        );
+        const isPrivilegedAccount = ["branch_admin", "owner"].includes(row.role);
         const status =
           row.accountStatus || (row.isActive ? "active" : "suspended");
         const canManagePermissions =
           isOwner && row.role === "branch_admin" && !isArchived;
         const canBlock =
-          canManageUsers &&
-          !isCurrentUser &&
-          !isArchived &&
-          status === "active";
+          canManageUsers && !isCurrentUser && !isArchived && status === "active";
         const canUnblock =
           canManageUsers &&
           !isCurrentUser &&
@@ -673,22 +631,22 @@ function getAvatarColor(user) {
           !isCurrentUser &&
           isArchived &&
           (isOwner || !isPrivilegedAccount);
-        const canHardDelete =
+        const canDelete =
           canManageUsers &&
           !isCurrentUser &&
-          isArchived &&
+          !isArchived &&
           (!isPrivilegedAccount || isOwner);
+        const canHardDelete = canManageUsers && !isCurrentUser && isArchived && (!isPrivilegedAccount || isOwner);
 
         return (
           <AccountRowActions
             canViewAccess
             canManagePermissions={canManagePermissions}
-            canEdit={
-              canManageUsers && !isArchived && (isOwner || !isPrivilegedAccount)
-            }
+            canEdit={canManageUsers && !isArchived && (isOwner || !isPrivilegedAccount)}
             canBlock={canBlock}
             canUnblock={canUnblock}
             canRestore={canRestore}
+            canDelete={canDelete}
             canHardDelete={canHardDelete}
             onViewAccess={() => setAccessDrawerUser(row)}
             onManagePermissions={() => handleOpenPermissions(row)}
@@ -697,7 +655,10 @@ function getAvatarColor(user) {
             onUnblock={() =>
               setAccountAction({ type: "reactivate", user: row })
             }
-            onRestore={() => setAccountAction({ type: "restore", user: row })}
+            onRestore={() =>
+              setAccountAction({ type: "restore", user: row })
+            }
+            onDelete={() => handleDeleteClick(row)}
             onHardDelete={() => handleHardDeleteClick(row)}
           />
         );
@@ -718,6 +679,7 @@ function getAvatarColor(user) {
               email: "",
               phone: "",
               role: "applicant",
+              branch: "",
               password: "",
             });
             setAddFormErrors({});
@@ -729,349 +691,66 @@ function getAvatarColor(user) {
     : [];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1
-          className="mb-2 text-2xl font-semibold"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          Accounts
-        </h1>
-        <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          Manage access, verify account states, and resolve sign-in or lifecycle
-          issues
-        </p>
-      </div>
+    <PageShell>
+      <PageShell.Summary>
+        <SummaryBar items={summaryItems} />
+      </PageShell.Summary>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {summaryItems.map((item) => (
+      <PageShell.Actions>
+        {!isOwner ? (
           <div
-            key={item.label}
-            className="rounded-lg p-6"
             style={{
-              backgroundColor: "var(--card)",
-              border: "1px solid var(--color-border-default)",
+              marginBottom: 16,
+              padding: "12px 14px",
+              borderRadius: 12,
+              background: "#FFF7ED",
+              color: "#9A3412",
+              fontSize: 13,
+              border: "1px solid #FED7AA",
             }}
           >
-            <div
-              className="text-4xl mb-2 font-semibold"
-              style={{ color: "var(--color-text-primary)" }}
-            >
-              {item.value}
-            </div>
-            <div
-              className="text-sm uppercase tracking-wide"
-              style={{ color: "var(--color-text-secondary)" }}
-            >
-              {item.label}
-            </div>
+            Branch admins can manage applicant and tenant account status inside their own branch.
+            Owner-only role changes and cross-branch updates are intentionally hidden here.
           </div>
-        ))}
-      </div>
+        ) : null}
+        <ActionBar
+          search={{
+            value: searchQuery,
+            onChange: (value) => {
+              setSearchQuery(value);
+              setCurrentPage(1);
+            },
+            placeholder: "Search users...",
+          }}
+          filters={filters}
+          actions={actions}
+        />
+      </PageShell.Actions>
 
-      {/* Filters and Search */}
-      <div
-        className="rounded-lg p-6 space-y-4"
-        style={{
-          backgroundColor: "var(--card)",
-          border: "1px solid var(--color-border-default)",
-        }}
-      >
-        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-          <div className="relative flex-1 max-w-md w-full">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
-              style={{ color: "var(--muted-foreground)" }}
-            />
-            <input
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search users..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg focus:outline-none h-11"
-              style={{
-                backgroundColor: "var(--input-background)",
-                border: "1px solid var(--color-border-default)",
-                color: "var(--color-text-primary)",
-              }}
-            />
-          </div>
+      <PageShell.Content>
+        <DataTable
+          columns={columns}
+          data={users}
+          loading={loading}
+          exportable={true}
+          exportFilename="System_Users"
+          exportTitle="System Users Export"
+          pagination={{
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            total: totalUsers,
+            onPageChange: setCurrentPage,
+          }}
+          serverPagination
+          emptyState={{
+            icon: Users,
+            title: "No users found",
+            description: "Try adjusting your filters.",
+          }}
+          onRowClick={(row) => setAccessDrawerUser(row)}
+        />
+      </PageShell.Content>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setIsAddModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg"
-              style={{
-                backgroundColor: "var(--primary)",
-                color: "var(--primary-foreground)",
-              }}
-            >
-              <UserPlus className="h-4 w-4" />
-              Add User
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          {filters.map((f) => (
-            <div key={f.key}>
-              {f.component || (
-                <select
-                  value={f.value || "all"}
-                  onChange={(e) => f.onChange(e.target.value)}
-                  className="px-4 py-2 rounded-lg"
-                  style={{
-                    backgroundColor: "var(--card)",
-                    border: "1px solid var(--color-border-default)",
-                    color: "var(--color-text-primary)",
-                  }}
-                >
-                  {f.options?.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Table */}
-      <div
-        className="rounded-lg overflow-hidden"
-        style={{
-          backgroundColor: "var(--card)",
-          border: "1px solid var(--color-border-default)",
-        }}
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
-            <thead>
-              <tr
-                style={{
-                  borderBottom: "1px solid var(--border)",
-                  backgroundColor: "var(--background)",
-                }}
-              >
-                <th
-                  className="text-left px-6 py-4 text-sm uppercase tracking-wider"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  User
-                </th>
-                <th
-                  className="text-left px-6 py-4 text-sm uppercase tracking-wider"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Role
-                </th>
-                <th
-                  className="text-left px-6 py-4 text-sm uppercase tracking-wider"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Branch
-                </th>
-                <th
-                  className="text-left px-6 py-4 text-sm uppercase tracking-wider"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Status
-                </th>
-                <th
-                  className="text-right px-6 py-4 text-sm uppercase tracking-wider"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {users.map((u) => (
-                <tr
-                  key={u._id || u.id}
-                  className="hover:bg-muted/10 transition-colors"
-                  onClick={() => setAccessDrawerUser(u)}
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 flex-none rounded-full overflow-hidden flex items-center justify-center text-white text-sm font-semibold leading-none"
-                        style={{ backgroundColor: getAvatarColor(u) }}
-                      >
-                        {(u.firstName && u.lastName
-                          ? `${u.firstName[0]}${u.lastName[0]}`
-                          : u.initials || "NA"
-                        ).toUpperCase()}
-                      </div>
-                      <div>
-                        <div
-                          className="text-sm font-medium"
-                          style={{ color: "var(--color-text-primary)" }}
-                        >
-                          {u.fullName ||
-                            `${u.firstName} ${u.lastName}` ||
-                            u.username}
-                        </div>
-                        <div
-                          className="text-xs"
-                          style={{ color: "var(--color-text-secondary)" }}
-                        >
-                          {u.email}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-muted text-foreground text-sm">
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">
-                    {u.branch || "—"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-2 text-sm">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full inline-block"
-                        style={{ backgroundColor: "var(--color-success)" }}
-                      />
-                      <span
-                        className="leading-none"
-                        style={{ color: "var(--color-success)" }}
-                      >
-                        {u.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div
-                      className="flex items-center justify-end gap-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {u.role === "branch_admin" && (
-                        <button
-                          className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
-                          onClick={() => handleOpenPermissions(u)}
-                          style={{
-                            border: "1px solid var(--color-border-default)",
-                            color: "var(--color-text-primary)",
-                            backgroundColor: "var(--card)",
-                          }}
-                        >
-                          <Key className="h-4 w-4" />
-                          Permissions
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setAccessDrawerUser(u)}
-                        className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
-                        style={{
-                          border: `1px solid var(--primary)`,
-                          color: "var(--primary)",
-                          backgroundColor: "var(--card)",
-                        }}
-                      >
-                        <Shield className="h-4 w-4" />
-                        Access
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedUser(u);
-                          setIsEditModalOpen(true);
-                        }}
-                        className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
-                        style={{
-                          border: "1px solid var(--color-border-default)",
-                          color: "var(--color-text-primary)",
-                          backgroundColor: "var(--card)",
-                        }}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedUser(u);
-                          setAccountAction({ type: "ban", user: u });
-                        }}
-                        className="h-8 px-3 flex items-center gap-2 text-sm rounded-lg"
-                        style={{
-                          border: "1px solid var(--danger-light)",
-                          color: "var(--color-danger)",
-                          backgroundColor: "var(--card)",
-                        }}
-                      >
-                        <Lock className="h-4 w-4" />
-                        Block
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ borderTop: "1px solid var(--color-border-default)" }}
-        >
-          <div
-            className="text-sm"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            {totalUsers || users.length} results
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-foreground"
-              style={{
-                border: "1px solid var(--color-border-default)",
-                color: "var(--color-text-primary)",
-              }}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span
-              className="text-sm px-3"
-              style={{ color: "var(--color-text-primary)" }}
-            >
-              {currentPage} /{" "}
-              {Math.max(
-                1,
-                Math.ceil((totalUsers || users.length) / ITEMS_PER_PAGE),
-              )}
-            </span>
-            <button
-              disabled={
-                currentPage >=
-                Math.ceil((totalUsers || users.length) / ITEMS_PER_PAGE)
-              }
-              onClick={() => setCurrentPage((p) => p + 1)}
-              className="p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-foreground"
-              style={{
-                border: "1px solid var(--color-border-default)",
-                color: "var(--color-text-primary)",
-              }}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Modals & drawers (preserve existing logic) */}
       {isEditModalOpen && (
         <EditUserModal
           editForm={editForm}
@@ -1090,6 +769,14 @@ function getAvatarColor(user) {
           onFormChange={handleAddFormChange}
           onSubmit={handleCreateUser}
           onClose={() => setIsAddModalOpen(false)}
+        />
+      )}
+      {isDeleteModalOpen && (
+        <DeleteUserModal
+          user={selectedUser}
+          isOwner={isOwner}
+          onDelete={handleDeleteUser}
+          onClose={() => setIsDeleteModalOpen(false)}
         />
       )}
       {isHardDeleteModalOpen && (
@@ -1129,8 +816,9 @@ function getAvatarColor(user) {
         canManagePermissions={isOwner}
         onOpenPermissions={handleOpenPermissions}
       />
-    </div>
+    </PageShell>
   );
 }
 
 export default UserManagementPage;
+

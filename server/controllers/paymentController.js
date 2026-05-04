@@ -15,7 +15,7 @@ import {
   createCheckoutSession,
   getCheckoutSession,
 } from "../config/paymongo.js";
-import { Bill, Reservation, User } from "../models/index.js";
+import { Bill, Payment, Reservation, User } from "../models/index.js";
 import logger from "../middleware/logger.js";
 import {
   sendPaymentApprovedEmail,
@@ -54,6 +54,12 @@ function canAutoReserveReservation(status) {
 async function getDbUser(firebaseUid) {
   return User.findOne({ firebaseUid }).lean();
 }
+
+const hasBillingPermission = (user) =>
+  user?.role === "owner" ||
+  (user?.role === "branch_admin" &&
+    Array.isArray(user.permissions) &&
+    user.permissions.includes("manageBilling"));
 
 async function resolveSessionResourceAccess(metadata, dbUser) {
   if (metadata.userId && String(metadata.userId) !== String(dbUser._id)) {
@@ -452,6 +458,37 @@ export const checkSessionStatus = async (req, res, next) => {
       { err: error, sessionId: req.params.sessionId },
       "checkSessionStatus error",
     );
+    next(error);
+  }
+};
+
+export const getPaymentsForBill = async (req, res, next) => {
+  try {
+    const { billId } = req.params;
+    const dbUser = await getDbUser(req.user.uid);
+    if (!dbUser) throw new AppError("User not found", 404, "USER_NOT_FOUND");
+
+    const bill = await Bill.findById(billId).lean();
+    if (!bill) throw new AppError("Bill not found", 404, "BILL_NOT_FOUND");
+
+    const isOwnBill = String(bill.userId) === String(dbUser._id);
+    const isOwner = dbUser.role === "owner";
+    const isBranchBillingAdmin =
+      dbUser.role === "branch_admin" &&
+      hasBillingPermission(dbUser) &&
+      bill.branch === dbUser.branch;
+
+    if (!isOwnBill && !isOwner && !isBranchBillingAdmin) {
+      throw new AppError(
+        "You are not allowed to view payments for this bill",
+        403,
+        "FORBIDDEN",
+      );
+    }
+
+    const payments = await Payment.getPaymentsForBill(bill._id);
+    sendSuccess(res, { data: payments });
+  } catch (error) {
     next(error);
   }
 };

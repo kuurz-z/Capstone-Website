@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { fmtShortDate as formatShortDate } from "../../../shared/utils/dateFormat";
 import {
-  Calendar,
+  AlertTriangle,
+  CalendarCheck,
   CheckCircle,
   Clock,
   Eye,
-  Download,
+  FileDown,
   Trash2,
-  User,
-  Search,
+  UserCheck,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,13 +27,13 @@ import { useReservations } from "../../../shared/hooks/queries/useReservations";
 import {
   CANONICAL_RESERVATION_STATUSES,
   RESERVATION_STATUS_LABELS,
-  getReservationStatusLabel,
   hasReservationStatus,
   readMoveInDate,
 } from "../../../shared/utils/lifecycleNaming";
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import ReservationDetailsModal from "../components/ReservationDetailsModal";
 import VisitSchedulesTab from "../components/VisitSchedulesTab";
+import VisitAvailabilityTab from "../components/VisitAvailabilityTab";
 import InquiriesPage from "./InquiriesPage";
 import {
   ActionBar,
@@ -50,19 +51,23 @@ import {
 import "../styles/design-tokens.css";
 import "../styles/admin-reservations.css";
 
-const getAvatarColor = (initials = "") => {
-  const colors = [
-    "bg-[color:var(--chart-5)] text-white",
-    "bg-[color:var(--chart-1)] text-white",
-    "bg-[color:var(--secondary)] text-white",
-    "bg-[color:var(--danger)] text-white",
-    "bg-[color:var(--chart-2)] text-white",
-    "bg-[color:var(--warning)] text-white",
-  ];
-  const charCode = initials.length > 0 ? initials.charCodeAt(0) : 0;
-  const index = charCode % colors.length;
-  return colors[index];
-};
+const AVATAR_COLORS = [
+  "#f97316",
+  "#8b5cf6",
+  "#0ea5e9",
+  "#10b981",
+  "#ef4444",
+  "#f59e0b",
+  "#6366f1",
+  "#ec4899",
+  "#14b8a6",
+  "#84cc16",
+];
+
+function avatarColor(name = "") {
+  const code = (name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0);
+  return AVATAR_COLORS[code % AVATAR_COLORS.length];
+}
 
 function initials(name = "") {
   const parts = name.trim().split(" ");
@@ -71,28 +76,14 @@ function initials(name = "") {
     : (parts[0]?.[0] || "?").toUpperCase();
 }
 
-function formatShortDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+// formatShortDate moved to shared/utils/dateFormat — imported at top of file
 
-const SUMMARY_FILTERS = [
-  "all",
-  "visit_pending",
-  "visit_approved",
-  "reserved",
-  "cancelled",
-  "moveIn",
-];
+const SUMMARY_FILTERS = ["all", "in_progress", "reserved", "moveIn", "overdue"];
 function ReservationsPage() {
   const { user } = useAuth();
   const { can } = usePermissions();
   const queryClient = useQueryClient();
-  const isOwner = user?.role === "owner";
+  const isOwner = user?.role === "owner" || user?.role === "superadmin";
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("reservations");
   const [searchTerm, setSearchTerm] = useState("");
@@ -115,7 +106,7 @@ function ReservationsPage() {
     variant: "info",
     onConfirm: null,
   });
-  const itemsPerPage = 10;
+  const itemsPerPage = 12;
 
   const {
     data: rawReservations = [],
@@ -132,21 +123,16 @@ function ReservationsPage() {
   const counts = useMemo(
     () => ({
       total: reservations.length,
-      visitPending: reservations.filter((reservation) =>
-        reservation.status === "visit_pending",
-      ).length,
-      visitApproved: reservations.filter((reservation) =>
-        reservation.status === "visit_approved",
+      inProgress: reservations.filter((reservation) =>
+        IN_PROGRESS_STATUSES.includes(reservation.status),
       ).length,
       reserved: reservations.filter(
         (reservation) => reservation.status === "reserved",
       ).length,
-      cancelled: reservations.filter(
-        (reservation) => reservation.status === "cancelled",
+      movedIn: reservations.filter(
+        (reservation) => hasReservationStatus(reservation.status, "moveIn"),
       ).length,
-      movedIn: reservations.filter((reservation) =>
-        hasReservationStatus(reservation.status, "moveIn"),
-      ).length,
+      overdue: reservations.filter(checkOverdueReservation).length,
     }),
     [reservations],
   );
@@ -169,7 +155,8 @@ function ReservationsPage() {
               ? IN_PROGRESS_STATUSES.includes(reservation.status)
               : hasReservationStatus(reservation.status, statusFilter);
       const matchBranch =
-        branchFilter === "all" || reservation.branchCode === branchFilter;
+        branchFilter === "all" ||
+        reservation.branchCode === branchFilter;
       return matchSearch && matchStatus && matchBranch;
     });
   }, [branchFilter, reservations, searchTerm, statusFilter]);
@@ -217,9 +204,7 @@ function ReservationsPage() {
       allValue: "all",
     });
 
-    setBranchFilter((current) =>
-      current === nextBranch ? current : nextBranch,
-    );
+    setBranchFilter((current) => (current === nextBranch ? current : nextBranch));
   }, [isOwner, requestedBranch, user?.branch]);
 
   useEffect(() => {
@@ -236,32 +221,11 @@ function ReservationsPage() {
 
   const summaryItems = useMemo(
     () => [
-      { label: "All", value: counts.total, icon: Calendar, color: "blue" },
-      {
-        label: "Visit Pending",
-        value: counts.visitPending,
-        icon: Clock,
-        color: "orange",
-      },
-      {
-        label: "Visit Approved",
-        value: counts.visitApproved,
-        icon: CheckCircle,
-        color: "neutral",
-      },
-      {
-        label: "Reserved",
-        value: counts.reserved,
-        icon: CheckCircle,
-        color: "blue",
-      },
-      {
-        label: "Cancelled",
-        value: counts.cancelled,
-        icon: Trash2,
-        color: "red",
-      },
-      { label: "Move In", value: counts.movedIn, icon: User, color: "green" },
+      { label: "Total", value: counts.total, icon: CalendarCheck, color: "blue" },
+      { label: "Pending", value: counts.inProgress, icon: Clock, color: "orange" },
+      { label: "Reserved", value: counts.reserved, icon: CheckCircle, color: "green" },
+      { label: "Checked In", value: counts.movedIn, icon: UserCheck, color: "blue" },
+      { label: "Overdue", value: counts.overdue, icon: AlertTriangle, color: "red" },
     ],
     [counts],
   );
@@ -271,6 +235,7 @@ function ReservationsPage() {
     () => [
       { key: "reservations", label: "Reservations" },
       { key: "visits", label: "Visit Schedules" },
+      { key: "availability", label: "Availability Rules" },
       { key: "inquiries", label: "Inquiries" },
     ],
     [],
@@ -299,7 +264,7 @@ function ReservationsPage() {
           { value: "overdue", label: "Overdue" },
           ...CANONICAL_RESERVATION_STATUSES.map((status) => ({
             value: status,
-            label: getReservationStatusLabel(status),
+            label: RESERVATION_STATUS_LABELS[status] || status,
           })),
         ],
         value: statusFilter,
@@ -312,16 +277,13 @@ function ReservationsPage() {
     [branchFilter, isOwner, statusFilter],
   );
 
-  const prefetchReservationDetail = useCallback(
-    async (reservationId) => {
-      if (!reservationId) return null;
-      return queryClient.fetchQuery({
-        queryKey: queryKeys.reservations.detail(reservationId),
-        queryFn: () => reservationApi.getById(reservationId),
-      });
-    },
-    [queryClient],
-  );
+  const prefetchReservationDetail = useCallback(async (reservationId) => {
+    if (!reservationId) return null;
+    return queryClient.fetchQuery({
+      queryKey: queryKeys.reservations.detail(reservationId),
+      queryFn: () => reservationApi.getById(reservationId),
+    });
+  }, [queryClient]);
 
   useEffect(() => {
     if (!selectedReservation?.id) return;
@@ -359,104 +321,95 @@ function ReservationsPage() {
     });
   }, [reservations, selectedReservation]);
 
-  const handleView = useCallback(
-    async (reservationId) => {
-      try {
-        const reservation = await prefetchReservationDetail(reservationId);
-        setSelectedReservation({
-          ...reservation,
-          id: reservation._id,
-          customer:
-            reservation.customer ||
-            `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
-            "Unknown",
-          email: reservation.email || reservation.userId?.email || "-",
-          room:
-            reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
-          branch: getBranchLabel(reservation.roomId?.branch),
-          branchCode: reservation.roomId?.branch || "",
-          roomType: reservation.roomId?.type || "",
-          status: reservation.status || "pending",
-          totalPrice: reservation.totalPrice,
-          paymentStatus: reservation.paymentStatus,
-          paymentMethod: reservation.paymentMethod,
-          createdAt: reservation.createdAt,
-          reservationCode: reservation.reservationCode || "-",
-          firstName: reservation.firstName,
-          lastName: reservation.lastName,
-          middleName: reservation.middleName,
-          nickname: reservation.nickname,
-          phone: reservation.mobileNumber || reservation.phone,
-          birthday: reservation.birthday,
-          maritalStatus: reservation.maritalStatus,
-          nationality: reservation.nationality,
-          educationLevel: reservation.educationLevel,
-          address: reservation.address,
-          emergencyContact: reservation.emergencyContact,
-          healthConcerns: reservation.healthConcerns,
-          employment: reservation.employment,
-          selfiePhotoUrl: reservation.selfiePhotoUrl,
-          validIDFrontUrl: reservation.validIDFrontUrl,
-          validIDBackUrl: reservation.validIDBackUrl,
-          validIDType: reservation.validIDType,
-          nbiClearanceUrl: reservation.nbiClearanceUrl,
-          nbiReason: reservation.nbiReason,
-          companyIDUrl: reservation.companyIDUrl,
-          companyIDReason: reservation.companyIDReason,
-          finalMoveInDate: reservation.finalMoveInDate,
-          proofOfPaymentUrl: reservation.proofOfPaymentUrl,
-          leaseDuration: reservation.leaseDuration,
-          billingEmail: reservation.billingEmail,
-          moveInDate: reservation.moveInDate,
-          moveOutDate: reservation.moveOutDate,
-          visitDate: reservation.visitDate,
-          visitTime: reservation.visitTime,
-          visitApproved: reservation.visitApproved,
-          notes: reservation.notes,
-        });
-      } catch {
-        const fallbackReservation = reservations.find(
-          (reservation) => reservation.id === reservationId,
-        );
-        if (fallbackReservation) {
-          setSelectedReservation(fallbackReservation);
-        }
+  const handleView = useCallback(async (reservationId) => {
+    try {
+      const reservation = await prefetchReservationDetail(reservationId);
+      setSelectedReservation({
+        ...reservation,
+        id: reservation._id,
+        customer:
+          reservation.customer ||
+          `${reservation.userId?.firstName || ""} ${reservation.userId?.lastName || ""}`.trim() ||
+          "Unknown",
+        email: reservation.email || reservation.userId?.email || "-",
+        room: reservation.roomId?.name || reservation.roomId?.roomNumber || "-",
+        branch: getBranchLabel(reservation.roomId?.branch),
+        branchCode: reservation.roomId?.branch || "",
+        roomType: reservation.roomId?.type || "",
+        status: reservation.status || "pending",
+        totalPrice: reservation.totalPrice,
+        paymentStatus: reservation.paymentStatus,
+        paymentMethod: reservation.paymentMethod,
+        createdAt: reservation.createdAt,
+        reservationCode: reservation.reservationCode || "-",
+        firstName: reservation.firstName,
+        lastName: reservation.lastName,
+        middleName: reservation.middleName,
+        nickname: reservation.nickname,
+        phone: reservation.mobileNumber || reservation.phone,
+        birthday: reservation.birthday,
+        maritalStatus: reservation.maritalStatus,
+        nationality: reservation.nationality,
+        educationLevel: reservation.educationLevel,
+        address: reservation.address,
+        emergencyContact: reservation.emergencyContact,
+        healthConcerns: reservation.healthConcerns,
+        employment: reservation.employment,
+        selfiePhotoUrl: reservation.selfiePhotoUrl,
+        validIDFrontUrl: reservation.validIDFrontUrl,
+        validIDBackUrl: reservation.validIDBackUrl,
+        validIDType: reservation.validIDType,
+        idType: reservation.idType,
+        nbiClearanceUrl: reservation.nbiClearanceUrl,
+        nbiReason: reservation.nbiReason,
+        companyIDUrl: reservation.companyIDUrl,
+        companyIDReason: reservation.companyIDReason,
+        finalMoveInDate: reservation.finalMoveInDate,
+        proofOfPaymentUrl: reservation.proofOfPaymentUrl,
+        leaseDuration: reservation.leaseDuration,
+        billingEmail: reservation.billingEmail,
+        moveInDate: reservation.moveInDate,
+        moveOutDate: reservation.moveOutDate,
+        visitDate: reservation.visitDate,
+        visitTime: reservation.visitTime,
+        visitApproved: reservation.visitApproved,
+        notes: reservation.notes,
+      });
+    } catch {
+      const fallbackReservation = reservations.find(
+        (reservation) => reservation.id === reservationId,
+      );
+      if (fallbackReservation) {
+        setSelectedReservation(fallbackReservation);
       }
-    },
-    [prefetchReservationDetail, reservations],
-  );
+    }
+  }, [prefetchReservationDetail, reservations]);
 
   const refetchReservations = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ["reservations"] }),
     [queryClient],
   );
 
-  const handleDelete = useCallback(
-    (reservationId) => {
-      setConfirmModal({
-        open: true,
-        title: "Archive Reservation",
-        message:
-          "This action archives the reservation and preserves billing history. Permanent deletion is restricted when issued bills exist.",
-        variant: "danger",
-        confirmText: "Archive",
-        onConfirm: async () => {
-          setConfirmModal((previous) => ({ ...previous, open: false }));
-          try {
-            await reservationApi.delete(reservationId);
-            showNotification("Reservation archived", "success");
-            refetchReservations();
-          } catch (error) {
-            showNotification(
-              error?.message || "Failed to archive reservation",
-              "error",
-            );
-          }
-        },
-      });
-    },
-    [refetchReservations],
-  );
+  const handleDelete = useCallback((reservationId) => {
+    setConfirmModal({
+      open: true,
+      title: "Archive Reservation",
+      message:
+        "This action archives the reservation and preserves billing history. Permanent deletion is restricted when issued bills exist.",
+      variant: "danger",
+      confirmText: "Archive",
+      onConfirm: async () => {
+        setConfirmModal((previous) => ({ ...previous, open: false }));
+        try {
+          await reservationApi.delete(reservationId);
+          showNotification("Reservation archived", "success");
+          refetchReservations();
+        } catch (error) {
+          showNotification(error?.message || "Failed to archive reservation", "error");
+        }
+      },
+    });
+  }, [refetchReservations]);
 
   const handleExportReservations = useCallback(() => {
     exportToCSV(
@@ -466,8 +419,7 @@ function ReservationsPage() {
         email: reservation.email,
         branch: reservation.branch,
         room: reservation.room,
-        status:
-          RESERVATION_STATUS_LABELS[reservation.status] || reservation.status,
+        status: RESERVATION_STATUS_LABELS[reservation.status] || reservation.status,
         moveInDate: formatShortDate(readMoveInDate(reservation)),
         createdAt: formatShortDate(reservation.createdAt),
       })),
@@ -492,24 +444,22 @@ function ReservationsPage() {
         sortKey: "customer",
         label: "Applicant",
         sortable: true,
-        render: (row) => {
-          const rowInitials = initials(row.customer);
-          return (
-            <div className="res-applicant-cell">
-              <div
-                className={`res-avatar ${getAvatarColor(rowInitials)}`}
-                aria-label={row.customer}
-              >
-                {rowInitials}
-              </div>
-              <div className="res-applicant-info">
-                <span className="res-applicant-name">{row.customer}</span>
-                <span className="res-applicant-email">{row.email}</span>
-                <span className="res-applicant-code">{row.phone}</span>
-              </div>
+        render: (row) => (
+          <div className="res-applicant-cell">
+            <div
+              className="res-avatar"
+              style={{ background: avatarColor(row.customer) }}
+              aria-label={row.customer}
+            >
+              {initials(row.customer)}
             </div>
-          );
-        },
+            <div className="res-applicant-info">
+              <span className="res-applicant-name">{row.customer}</span>
+              <span className="res-applicant-email">{row.email}</span>
+              <span className="res-applicant-code">{row.reservationCode}</span>
+            </div>
+          </div>
+        ),
       },
       {
         key: "room",
@@ -519,7 +469,7 @@ function ReservationsPage() {
           <div className="res-room-cell">
             <span className="res-room-name">{row.room}</span>
             <span className="res-room-meta">
-              {row.roomType || "Room"}, {row.branch}
+              {row.roomType || "Room"} · {row.branch}
             </span>
           </div>
         ),
@@ -528,9 +478,7 @@ function ReservationsPage() {
         key: "status",
         label: "Status",
         render: (row) => (
-          <StatusBadge
-            status={checkOverdueReservation(row) ? "overdue" : row.status}
-          />
+          <StatusBadge status={checkOverdueReservation(row) ? "overdue" : row.status} />
         ),
       },
       {
@@ -551,10 +499,7 @@ function ReservationsPage() {
         width: "70px",
         align: "right",
         render: (row) => (
-          <div
-            className="res-actions"
-            onClick={(event) => event.stopPropagation()}
-          >
+          <div className="res-actions" onClick={(event) => event.stopPropagation()}>
             <button
               className="res-icon-btn"
               title="View details"
@@ -579,334 +524,113 @@ function ReservationsPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground mb-1">
-          Reservations
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Review applications, confirm documents, and move accepted residents
-          toward assignment.
-        </p>
-      </div>
-
-      <div className="border-b" style={{ borderColor: "var(--border-light)" }}>
-        <div className="flex gap-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`pb-3 px-1 text-sm font-medium transition-colors relative ${
-                activeTab === tab.key
-                  ? "text-[color:var(--primary)]"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+    <>
+      <PageShell tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
+        <PageShell.Content>
+          {activeTab === "reservations" && (
+            <section
+              id="page-shell-panel-reservations"
+              className="page-shell__panel reservations-workspace"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-reservations"
             >
-              {tab.label}
-              {activeTab === tab.key && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[color:var(--primary)]" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {activeTab === "reservations" && (
-        <>
-          <div className="grid grid-flow-col auto-cols-[minmax(150px,1fr)] gap-3 overflow-x-auto pb-1">
-            {summaryItems.map((item, idx) => (
-              <div
-                key={item.label}
-                onClick={() => {
-                  const nextFilter = idx < 0 ? "all" : SUMMARY_FILTERS[idx];
-                  setStatusFilter(nextFilter);
-                  setCurrentPage(1);
-                }}
-                style={{
-                  backgroundColor: "var(--bg-card)",
-                  borderColor:
-                    activeSummaryIndex === idx
-                      ? "color-mix(in srgb, var(--primary) 55%, var(--border-light))"
-                      : "var(--border-light)",
-                }}
-                className={`border
- rounded-xl p-3 hover:shadow-md transition-shadow cursor-pointer min-h-[108px]`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <item.icon
-                    strokeWidth={1.5}
-                    className={`w-5 h-5 ${
-                      item.color === "blue"
-                        ? "text-[color:var(--info)]"
-                        : item.color === "orange"
-                          ? "text-[color:var(--warning)]"
-                          : item.color === "neutral"
-                            ? "text-[color:var(--status-neutral)]"
-                          : item.color === "green"
-                            ? "text-[color:var(--success)]"
-                            : "text-[color:var(--danger)]"
-                    }`}
-                  />
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-right">
-                    {item.label}
-                  </span>
-                </div>
-                <div
-                  className={`text-[28px] font-medium leading-none ${
-                    item.color === "blue"
-                      ? "text-[color:var(--info)]"
-                      : item.color === "orange"
-                        ? "text-[color:var(--warning)]"
-                        : item.color === "neutral"
-                          ? "text-[color:var(--status-neutral)]"
-                        : item.color === "green"
-                          ? "text-[color:var(--success)]"
-                          : "text-[color:var(--danger)]"
-                  }`}
-                >
-                  {item.value}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div
-            style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-light)" }}
-            className="border rounded-lg p-6 overflow-x-auto"
-          >
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search by name, email, code, or room..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
+              <div className="reservations-workspace__summary">
+                <SummaryBar
+                  items={summaryItems}
+                  activeIndex={activeSummaryIndex}
+                  onItemClick={(index) => {
+                    const nextFilter = index < 0 ? "all" : SUMMARY_FILTERS[index];
+                    setStatusFilter(nextFilter);
                     setCurrentPage(1);
                   }}
-                  style={{ backgroundColor: "var(--input-background)", borderColor: "var(--border-light)" }}
-                  className="w-full pl-10 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
-              <div className="flex gap-2">
-                {isOwner && (
-                  <select
-                    value={branchFilter}
-                    onChange={(e) => {
-                      setBranchFilter(e.target.value);
+              <div className="reservations-workspace__toolbar">
+                <ActionBar
+                  search={{
+                    value: searchTerm,
+                    onChange: (value) => {
+                      setSearchTerm(value);
                       setCurrentPage(1);
-                    }}
-                    style={{ backgroundColor: "var(--input-background)", borderColor: "var(--border-light)" }}
-                    className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    {OWNER_BRANCH_FILTER_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
+                    },
+                    placeholder: "Search by name, email, code, or room...",
                   }}
-                  style={{ backgroundColor: "var(--input-background)", borderColor: "var(--border-light)" }}
-                  className="px-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {filters
-                    .find((f) => f.key === "status")
-                    ?.options.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  onClick={handleExportReservations}
-                  className="px-4 py-2 border border-[var(--border-light)]
- rounded-md hover:bg-muted transition-colors flex items-center gap-2 text-sm font-medium"
-                >
-                  <Download className="w-4 h-4" />
-                  Export CSV
-                </button>
+                  filters={filters}
+                  actions={[
+                    {
+                      label: "Export CSV",
+                      icon: FileDown,
+                      onClick: handleExportReservations,
+                    },
+                  ]}
+                />
               </div>
-            </div>
-
-            <div className="overflow-x-auto" style={{ backgroundColor: "var(--bg-card)" }}>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b" style={{ borderColor: "var(--border-light)", backgroundColor: "color-mix(in srgb, var(--bg-inset) 30%, transparent)" }}>
-                    {columns.slice(0, 5).map((col) => (
-                      <th
-                        key={col.key}
-                        className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground"
-                        onClick={() => {
-                          if (col.sortable) {
-                            setSortState((prev) => ({
-                              key: col.sortKey || col.key,
-                              dir:
-                                prev.key === (col.sortKey || col.key) &&
-                                prev.dir === "asc"
-                                  ? "desc"
-                                  : "asc",
-                            }));
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-1">
-                          {col.label}
-                          {col.sortable &&
-                            sortState.key === (col.sortKey || col.key) &&
-                            (sortState.dir === "asc" ? "↑" : "↓")}
-                        </div>
-                      </th>
-                    ))}
-                    <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedReservations
-                    .slice(
-                      (currentPage - 1) * itemsPerPage,
-                      currentPage * itemsPerPage,
-                    )
-                    .map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-[var(--border-light)] hover:bg-muted/30 transition-colors cursor-pointer"
-                        onMouseEnter={() =>
-                          prefetchReservationDetail(row.id).catch(() => {})
-                        }
-                      >
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm ${getAvatarColor(initials(row.customer))}`}
-                            >
-                              {initials(row.customer)}
-                            </div>
-                            <div>
-                              <div className="font-medium text-foreground">
-                                {row.customer}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {row.email}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {row.phone}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="font-medium text-foreground">
-                            {row.room}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {row.roomType || "Room"}, {row.branch}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <StatusBadge
-                            status={
-                              checkOverdueReservation(row)
-                                ? "overdue"
-                                : row.status
-                            }
-                          />
-                        </td>
-                        <td className="py-4 px-4 text-sm text-foreground">
-                          {formatShortDate(row.moveInDate)}
-                        </td>
-                        <td className="py-4 px-4 text-sm text-foreground">
-                          {formatShortDate(row.createdAt)}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleView(row.id);
-                              }}
-                              className="p-1.5 hover:bg-muted rounded-md transition-colors"
-                              title="View details"
-                            >
-                              <Eye className="w-4 h-4 text-muted-foreground" />
-                            </button>
-                            {can("manageReservations") && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(row.id);
-                                }}
-                                className="p-1.5 hover:bg-[color:var(--danger)]/10 text-[color:var(--danger)] rounded-md transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  {sortedReservations.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="py-8 text-center text-muted-foreground"
-                      >
-                        No reservations found. Try adjusting your filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {totalFiltered > itemsPerPage && (
-                <div className="flex justify-end items-center gap-2 mt-4 pt-4 border-t border-[var(--border-light)]">
-                  <button
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                    className="px-3 py-1 text-sm border border-[var(--border-light)]
- rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <span className="px-3 py-1 text-sm text-muted-foreground">
-                    Page {currentPage} of{" "}
-                    {Math.ceil(totalFiltered / itemsPerPage)}
-                  </span>
-                  <button
-                    disabled={
-                      currentPage === Math.ceil(totalFiltered / itemsPerPage)
-                    }
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                    className="px-3 py-1 text-sm border border-[var(--border-light)]
- rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {activeTab === "visits" && (
-        <div className="mt-2">
-          <VisitSchedulesTab />
-        </div>
-      )}
-      {activeTab === "inquiries" && (
-        <div className="mt-2">
-          <InquiriesPage isEmbedded />
-        </div>
-      )}
+              <div className="reservations-workspace__table">
+                <DataTable
+                  columns={columns}
+                  data={sortedReservations}
+                  loading={loading}
+                  exportable={true}
+                  exportFilename="Reservations"
+                  exportTitle="Reservations Export"
+                  disableRowInteraction
+                  sorting="external"
+                  sortKey={sortState.key}
+                  sortDir={sortState.dir}
+                  onSortChange={(key, dir) => setSortState({ key, dir })}
+                  onRowHover={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  onRowFocus={(row) => {
+                    prefetchReservationDetail(row.id).catch(() => {});
+                  }}
+                  pagination={{
+                    page: currentPage,
+                    pageSize: itemsPerPage,
+                    total: totalFiltered,
+                    onPageChange: setCurrentPage,
+                  }}
+                  emptyState={{
+                    icon: CalendarCheck,
+                    title: "No reservations found",
+                    description: "Try adjusting your filters.",
+                  }}
+                />
+              </div>
+            </section>
+          )}
+          {activeTab === "visits" && (
+            <section
+              id="page-shell-panel-visits"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-visits"
+            >
+              <VisitSchedulesTab />
+            </section>
+          )}
+          {activeTab === "availability" && (
+            <section
+              id="page-shell-panel-availability"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-availability"
+            >
+              <VisitAvailabilityTab />
+            </section>
+          )}
+          {activeTab === "inquiries" && (
+            <section
+              id="page-shell-panel-inquiries"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-inquiries"
+            >
+              <InquiriesPage isEmbedded />
+            </section>
+          )}
+        </PageShell.Content>
+      </PageShell>
 
       {selectedReservation && (
         <ReservationDetailsModal
@@ -917,9 +641,7 @@ function ReservationsPage() {
       )}
       <ConfirmModal
         isOpen={confirmModal.open}
-        onClose={() =>
-          setConfirmModal((previous) => ({ ...previous, open: false }))
-        }
+        onClose={() => setConfirmModal((previous) => ({ ...previous, open: false }))}
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}
@@ -927,8 +649,11 @@ function ReservationsPage() {
         confirmText={confirmModal.confirmText || "Confirm"}
       />
       {error && <div className="sr-only">{error}</div>}
-    </div>
+    </>
   );
 }
 
 export default ReservationsPage;
+
+
+

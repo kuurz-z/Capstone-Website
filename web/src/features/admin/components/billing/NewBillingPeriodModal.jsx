@@ -36,20 +36,6 @@ const toInputDate = (value) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-/** Reusable token-aware focus handlers for inputs/selects */
-const ringFocus = {
-  style: { outlineColor: "var(--ring)" },
-  onFocus: (e) => {
-    e.currentTarget.style.borderColor = "var(--ring)";
-    e.currentTarget.style.boxShadow =
-      "0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent)";
-  },
-  onBlur: (e) => {
-    e.currentTarget.style.borderColor = "";
-    e.currentTarget.style.boxShadow = "";
-  },
-};
-
 export default function NewBillingPeriodModal({
   isOpen,
   onClose,
@@ -120,7 +106,9 @@ export default function NewBillingPeriodModal({
     if (Array.isArray(overlaps) && overlaps.length > 0) {
       for (const overlap of overlaps.slice(0, 5)) {
         lines.push(
-          `Bed ${overlap.bedKey}: ${overlap.firstTenantName || "Tenant A"} overlaps ${overlap.secondTenantName || "Tenant B"}`,
+          `Bed ${overlap.bedKey}: ${
+            overlap.firstTenantName || "Tenant A"
+          } overlaps ${overlap.secondTenantName || "Tenant B"}`,
         );
       }
     }
@@ -130,14 +118,18 @@ export default function NewBillingPeriodModal({
     if (Array.isArray(missingMoveIns) && missingMoveIns.length > 0) {
       for (const entry of missingMoveIns.slice(0, 5)) {
         lines.push(
-          `Missing move-in reading: ${entry.tenantName || "Tenant"} (${fmtDate(readMoveInDate(entry)) || "date required"})`,
+          `Missing move-in reading: ${entry.tenantName || "Tenant"} (${
+            fmtDate(readMoveInDate(entry)) || "date required"
+          })`,
         );
       }
     }
     if (Array.isArray(missingMoveOuts) && missingMoveOuts.length > 0) {
       for (const entry of missingMoveOuts.slice(0, 5)) {
         lines.push(
-          `Missing move-out reading: ${entry.tenantName || "Tenant"} (${fmtDate(readMoveOutDate(entry)) || "date required"})`,
+          `Missing move-out reading: ${entry.tenantName || "Tenant"} (${
+            fmtDate(readMoveOutDate(entry)) || "date required"
+          })`,
         );
       }
     }
@@ -153,16 +145,17 @@ export default function NewBillingPeriodModal({
       !periodForm.ratePerUnit ||
       (requiresReadings && (!periodForm.startReading || !periodForm.endReading))
     ) {
-      return notify.warn("All fields (dates, readings, and rate) are required.");
+      return notify.warn(
+        "All fields (dates, readings, and rate) are required.",
+      );
     }
-
     let newlyOpenedPeriodId = null;
     try {
       setGenerationBlocker(null);
-
+      // Auto-clean any leftover open period before creating a new cycle
       if (openPeriodForRoom) {
         if (selectedPeriodId === openPeriodForRoom.id) {
-          onSuccess(null);
+          onSuccess(null); // deselect
         }
         await deletePeriod.mutateAsync(openPeriodForRoom.id);
       }
@@ -180,7 +173,7 @@ export default function NewBillingPeriodModal({
 
       if (newPeriodId) {
         newlyOpenedPeriodId = newPeriodId;
-        onSuccess(newPeriodId);
+        onSuccess(newPeriodId); // select the newly opened period
         await closePeriod.mutateAsync({
           periodId: newPeriodId,
           endReading:
@@ -207,7 +200,7 @@ export default function NewBillingPeriodModal({
             "Cycle finalize failed, so the temporary open period was rolled back.",
           );
         } catch {
-          // Keep primary error context
+          // Keep primary context
         }
       }
       setGenerationBlocker(buildGenerationBlocker(err));
@@ -219,48 +212,101 @@ export default function NewBillingPeriodModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
-      style={{ background: "color-mix(in srgb, var(--background) 60%, transparent)" }}
+      className="modal-overlay"
       onClick={onClose}
+      style={{
+        zIndex: 1000,
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-xl"
-        style={{ boxShadow: "var(--shadow-xl)" }}
+        className="modal-content"
         onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff",
+          borderRadius: "8px",
+          width: "100%",
+          maxWidth: "600px",
+          padding: "24px",
+          boxShadow:
+            "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-base font-semibold text-foreground">
+        <div
+          className="modal-header"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "20px",
+            borderBottom: "1px solid #e2e8f0",
+            paddingBottom: "16px",
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "1.25rem",
+              color: "#1e293b",
+              fontWeight: "600",
+            }}
+          >
             New Billing Period
           </h2>
           <button
-            className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-card-foreground disabled:opacity-50"
+            className="modal-close"
             onClick={onClose}
             disabled={isPending}
-            aria-label="Close"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#64748b",
+            }}
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="space-y-4 px-6 py-4">
-          {/* Error blocker */}
+        <div className="modal-form">
           {generationBlocker && (
             <div
-              className="rounded-lg border px-4 py-3 text-sm"
+              className="eb-panel eb-panel--warning"
               style={{
-                borderColor: "var(--danger)",
-                background: "var(--danger-light)",
-                color: "var(--danger-dark)",
+                background: "#fef2f2",
+                borderLeft: "4px solid #ef4444",
+                padding: "12px",
+                borderRadius: "4px",
+                marginBottom: "20px",
               }}
             >
-              <div className="font-semibold">Why It Didn't Finalize</div>
-              <div className="mt-1">
-                <div className={generationBlocker.lines.length ? "mb-2" : ""}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  color: "#991b1b",
+                  marginBottom: "8px",
+                }}
+              >
+                Why It Didn't Finalize
+              </div>
+              <div style={{ color: "#b91c1c", fontSize: "14px" }}>
+                <div
+                  style={{
+                    marginBottom: generationBlocker.lines.length ? 8 : 0,
+                  }}
+                >
                   {generationBlocker.message}
                 </div>
                 {generationBlocker.lines.length > 0 && (
-                  <ul className="list-disc space-y-1 pl-5">
+                  <ul style={{ margin: 0, paddingLeft: "18px" }}>
                     {generationBlocker.lines.map((line, idx) => (
                       <li key={`${line}-${idx}`}>{line}</li>
                     ))}
@@ -270,21 +316,47 @@ export default function NewBillingPeriodModal({
             </div>
           )}
 
-          <p className="text-sm text-muted-foreground">
+          <p
+            style={{
+              color: "#64748b",
+              fontSize: "0.9rem",
+              marginBottom: "20px",
+              marginTop: "0",
+            }}
+          >
             Define the complete billing cycle (dates, readings, and rate) to
             generate drafts immediately.
           </p>
 
-          {/* Dates + Rate row */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: "16px",
+              marginBottom: "20px",
+            }}
+          >
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  color: "#334155",
+                  marginBottom: "6px",
+                }}
+              >
                 Cycle Start
               </label>
               <input
                 type="date"
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground focus:outline-none disabled:opacity-60"
-                {...ringFocus}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  fontSize: "0.95rem",
+                }}
                 value={periodForm.startDate}
                 onChange={(e) =>
                   setPeriodForm({ ...periodForm, startDate: e.target.value })
@@ -292,15 +364,27 @@ export default function NewBillingPeriodModal({
                 disabled={isPending}
               />
             </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground">
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  color: "#334155",
+                  marginBottom: "6px",
+                }}
+              >
                 Cycle End
               </label>
               <input
                 type="date"
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground focus:outline-none disabled:opacity-60"
-                {...ringFocus}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  fontSize: "0.95rem",
+                }}
                 value={periodForm.endDate}
                 onChange={(e) =>
                   setPeriodForm({ ...periodForm, endDate: e.target.value })
@@ -308,9 +392,24 @@ export default function NewBillingPeriodModal({
                 disabled={isPending}
               />
             </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-muted-foreground">
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  color: "#334155",
+                  marginBottom: "6px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={
+                  utilityType === "water"
+                    ? "Total Water (PHP)"
+                    : `Rate (PHP/${utilityType === "electricity" ? "kWh" : "cu.m."})`
+                }
+              >
                 {utilityType === "water"
                   ? "Total Water (PHP)"
                   : `Rate (PHP/${utilityType === "electricity" ? "kWh" : "cu.m."})`}
@@ -318,8 +417,13 @@ export default function NewBillingPeriodModal({
               <input
                 type="number"
                 step="0.01"
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground focus:outline-none disabled:opacity-60"
-                {...ringFocus}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  fontSize: "0.95rem",
+                }}
                 value={periodForm.ratePerUnit}
                 onChange={(e) =>
                   setPeriodForm({ ...periodForm, ratePerUnit: e.target.value })
@@ -330,17 +434,36 @@ export default function NewBillingPeriodModal({
             </div>
           </div>
 
-          {/* Meter readings — electricity only */}
           {utilityType === "electricity" ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "16px",
+                marginBottom: "20px",
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                    color: "#334155",
+                    marginBottom: "6px",
+                  }}
+                >
                   Opening Meter Reading (kWh)
                 </label>
                 <input
                   type="number"
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground focus:outline-none disabled:opacity-60"
-                  {...ringFocus}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    fontSize: "0.95rem",
+                  }}
                   value={periodForm.startReading}
                   onChange={(e) =>
                     setPeriodForm({
@@ -356,15 +479,27 @@ export default function NewBillingPeriodModal({
                   disabled={isPending}
                 />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                    color: "#334155",
+                    marginBottom: "6px",
+                  }}
+                >
                   Final Reading (kWh)
                 </label>
                 <input
                   type="number"
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground focus:outline-none disabled:opacity-60"
-                  {...ringFocus}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    fontSize: "0.95rem",
+                  }}
                   value={periodForm.endReading}
                   onChange={(e) =>
                     setPeriodForm({ ...periodForm, endReading: e.target.value })
@@ -376,10 +511,13 @@ export default function NewBillingPeriodModal({
             </div>
           ) : (
             <div
-              className="rounded-lg px-4 py-3 text-sm"
               style={{
-                background: "var(--muted)",
-                color: "var(--muted-foreground)",
+                padding: "12px",
+                background: "#f8fafc",
+                borderRadius: "6px",
+                fontSize: "0.875rem",
+                color: "#475569",
+                marginBottom: "20px",
               }}
             >
               Water billing uses room occupancy overlap. Enter the total water
@@ -388,22 +526,42 @@ export default function NewBillingPeriodModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+        <div
+          className="modal-actions"
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "12px",
+            borderTop: "1px solid #e2e8f0",
+            paddingTop: "20px",
+          }}
+        >
           <button
             onClick={onClose}
             disabled={isPending}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
+            style={{
+              padding: "8px 16px",
+              background: "#fff",
+              border: "1px solid #cbd5e1",
+              color: "#475569",
+              borderRadius: "6px",
+              cursor: isPending ? "not-allowed" : "pointer",
+              fontWeight: "500",
+            }}
           >
             Cancel
           </button>
           <button
             onClick={handleGenerateCycle}
             disabled={isPending}
-            className="rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
             style={{
-              background: "var(--primary)",
-              color: "var(--primary-foreground)",
+              padding: "8px 16px",
+              background: "#FF8C42",
+              color: "#fff",
+              border: "none",
+              borderRadius: "6px",
+              cursor: isPending ? "not-allowed" : "pointer",
+              fontWeight: "500",
             }}
           >
             {isPending ? "Processing..." : "Generate Billing Cycle"}

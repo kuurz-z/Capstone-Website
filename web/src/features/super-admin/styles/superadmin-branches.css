@@ -1,34 +1,32 @@
 /* ============================================================
    SUPER ADMIN BRANCHES PAGE
    ============================================================ */
-@import "../../admin/styles/design-tokens.css";
 
 .sa-branches-header-copy {
   max-width: 720px;
   margin: 10px 0 0;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-md);
+  color: #64748b;
+  font-size: 14px;
   line-height: 1.6;
 }
 
 .sa-branches-refresh-btn {
-  border: 1px solid var(--border);
+  border: 1px solid #cbd5e1;
   border-radius: 999px;
-  background: var(--card);
-  color: var(--foreground);
-  font-size: var(--font-size-sm);
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
   font-weight: 700;
   padding: 10px 16px;
-  cursor: pointer;
   transition:
-    border-color var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .sa-branches-refresh-btn:hover:not(:disabled) {
-  border-color: var(--muted-foreground);
-  box-shadow: var(--shadow-md);
+  border-color: #94a3b8;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
 
@@ -37,7 +35,6 @@
   cursor: wait;
 }
 
-/* ── Overview strip ── */
 .sa-branches-overview {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -46,20 +43,22 @@
 }
 
 .sa-branches-overview-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96)),
+    #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
   padding: 18px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
 .sa-branches-overview-label {
   display: block;
-  font-size: var(--font-size-xs);
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted-foreground);
+  color: #64748b;
 }
 
 .sa-branches-overview-value {
@@ -68,19 +67,17 @@
   font-size: 30px;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: var(--foreground);
-  font-weight: 700;
+  color: #0f172a;
 }
 
 .sa-branches-overview-meta {
   display: block;
   margin-top: 10px;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-sm);
+  color: #64748b;
+  font-size: 13px;
   line-height: 1.5;
 }
 
-/* ── Branch grid ── */
 .sa-branches-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -89,20 +86,22 @@
 }
 
 .sa-branch-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
   padding: 24px;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.06);
   transition:
-    box-shadow var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out),
-    border-color var(--duration-normal) var(--ease-out);
+    box-shadow 0.2s ease,
+    transform 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .sa-branch-card:hover {
-  border-color: var(--muted-foreground);
-  box-shadow: var(--shadow-lg);
+  border-color: #cbd5e1;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.1);
   transform: translateY(-2px);
 }
 
@@ -127,13 +126,13 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: var(--radius-lg);
+  border-radius: 14px;
   flex-shrink: 0;
 }
 
 .sa-branch-card-name {
   margin: 0;
-  color: var(--foreground);
+  color: #0f172a;
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -142,8 +141,8 @@
 .sa-branch-card-id {
   display: inline-block;
   margin-top: 6px;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-xs);
+  color: #64748b;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -155,9 +154,9 @@
   justify-content: center;
   padding: 7px 12px;
   border-radius: 999px;
-  background: var(--success-light);
-  color: var(--success-dark);
-  font-size: var(--font-size-xs);
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -175,19 +174,18 @@
   gap: 6px;
   padding: 7px 10px;
   border-radius: 999px;
-  background: var(--warning-light);
-  color: var(--warning-dark);
-  font-size: var(--font-size-xs);
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
   font-weight: 700;
 }
 
-/* ── Occupancy block ── */
 .sa-branch-occupancy {
   margin-bottom: 20px;
   padding: 18px;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
 }
 
 .sa-branch-occupancy-header {
@@ -195,24 +193,22 @@
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 12px;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-sm);
+  color: #64748b;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .sa-branch-occupancy-rate {
   font-size: 28px;
   letter-spacing: -0.05em;
-  font-weight: 700;
 }
 
 .sa-branch-occupancy-detail {
   margin-top: 8px;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-sm);
+  color: #64748b;
+  font-size: 13px;
 }
 
-/* ── Stats grid ── */
 .sa-branch-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -225,19 +221,19 @@
   align-items: center;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--card);
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
 }
 
 .sa-branch-stat-icon {
-  color: var(--muted-foreground);
+  color: #94a3b8;
   flex-shrink: 0;
 }
 
 .sa-branch-stat-value {
   display: block;
-  color: var(--foreground);
+  color: #0f172a;
   font-size: 18px;
   font-weight: 800;
   line-height: 1;
@@ -246,18 +242,17 @@
 .sa-branch-stat-label {
   display: block;
   margin-top: 6px;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-xs);
+  color: #64748b;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-/* ── Admins + Links sections ── */
 .sa-branch-admins,
 .sa-branch-links {
   padding-top: 18px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid #e2e8f0;
 }
 
 .sa-branch-admins-header {
@@ -265,8 +260,8 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 14px;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-xs);
+  color: #475569;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -284,23 +279,23 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--muted);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
 }
 
 .sa-branch-admin-name {
   display: block;
-  color: var(--foreground);
-  font-size: var(--font-size-md);
+  color: #0f172a;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .sa-branch-admin-email {
   display: block;
   margin-top: 4px;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-xs);
+  color: #64748b;
+  font-size: 12px;
 }
 
 .sa-branch-admin-badge {
@@ -309,16 +304,15 @@
   justify-content: center;
   padding: 6px 10px;
   border-radius: 999px;
-  background: var(--info-light);
-  color: var(--info-dark);
-  font-size: var(--font-size-xs);
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
 
-/* ── Quick link cards ── */
 .sa-branch-link-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -331,77 +325,75 @@
   gap: 6px;
   min-height: 108px;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--info) 20%, var(--border));
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--info) 4%, var(--card));
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
   text-decoration: none;
   transition:
-    border-color var(--duration-normal) var(--ease-out),
-    box-shadow var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .sa-branch-link-card:hover {
-  border-color: color-mix(in srgb, var(--info) 50%, var(--border));
-  box-shadow: 0 12px 24px color-mix(in srgb, var(--info) 12%, transparent);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12);
   transform: translateY(-1px);
 }
 
 .sa-branch-link-card strong {
-  color: var(--foreground);
-  font-size: var(--font-size-md);
+  color: #0f172a;
+  font-size: 14px;
   font-weight: 800;
 }
 
 .sa-branch-link-card span {
-  color: var(--muted-foreground);
-  font-size: var(--font-size-xs);
+  color: #64748b;
+  font-size: 12px;
   line-height: 1.55;
 }
 
-/* ── State (loading / error) ── */
 .sa-branches-state {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 22px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--card);
-  color: var(--foreground);
-  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  color: #0f172a;
 }
 
 .sa-branches-state p {
   margin: 4px 0 0;
-  color: var(--muted-foreground);
-  font-size: var(--font-size-sm);
-  font-weight: 400;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .sa-branches-state--error {
-  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
-  background: var(--warning-light);
-  color: var(--warning-dark);
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .sa-branches-state--error p {
-  color: var(--warning-dark);
+  color: #9a3412;
 }
 
 .sa-branches-state-spinner {
   animation: sa-branches-spin 0.9s linear infinite;
-  color: var(--muted-foreground);
 }
 
 @keyframes sa-branches-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* ── Also fix BRANCH_META in the JSX ── */
-
-/* ── Responsive ── */
 @media (max-width: 1200px) {
   .sa-branches-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
