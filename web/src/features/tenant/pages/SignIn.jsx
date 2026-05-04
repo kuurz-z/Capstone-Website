@@ -185,11 +185,18 @@ function SignIn() {
   const hasAdminClaims = (tokenResult) =>
     Boolean(tokenResult?.claims?.branch_admin || tokenResult?.claims?.owner);
 
-  const navigateAfterAuth = (user, fallbackName = "there") => {
+  const navigateAfterAuth = (
+    user,
+    fallbackName = "there",
+    options = {},
+  ) => {
+    const { suppressSuccessToast = false } = options;
     const successMessage = buildAuthSuccessMessage(user, fallbackName);
 
     if (user.role === "branch_admin" || user.role === "owner") {
-      showNotification(successMessage, "success", AUTH_TOAST_DURATION);
+      if (!suppressSuccessToast) {
+        showNotification(successMessage, "success", AUTH_TOAST_DURATION);
+      }
       appNavigate("/admin/dashboard");
       return;
     }
@@ -205,7 +212,9 @@ function SignIn() {
       return;
     }
 
-    showNotification(successMessage, "success", AUTH_TOAST_DURATION);
+    if (!suppressSuccessToast) {
+      showNotification(successMessage, "success", AUTH_TOAST_DURATION);
+    }
     appNavigate("/applicant/check-availability");
   };
 
@@ -243,8 +252,12 @@ function SignIn() {
   };
 
   // ── Auth handlers ──────────────────────────────────────────
-  const handlePostAuthFlow = (loginResponse, fallbackName = "there") => {
-    navigateAfterAuth(loginResponse.user, fallbackName);
+  const handlePostAuthFlow = (
+    loginResponse,
+    fallbackName = "there",
+    options = {},
+  ) => {
+    navigateAfterAuth(loginResponse.user, fallbackName, options);
   };
 
   const handleEmailPasswordLogin = async (e) => {
@@ -353,7 +366,7 @@ function SignIn() {
     }
   };
 
-  const handleSocialLogin = async (provider) => {
+  const handleSocialLogin = async (provider, providerName = "Google") => {
     setSocialLoading(true);
     setGlobalLoading(true);
     sessionStorage.setItem("socialAuthInProgress", "1");
@@ -388,7 +401,14 @@ function SignIn() {
           });
           return;
         }
-        handlePostAuthFlow(loginResponse, firebaseUser.displayName || "there");
+        showNotification(
+          `Signed in with ${providerName} successfully.`,
+          "success",
+          AUTH_TOAST_DURATION,
+        );
+        handlePostAuthFlow(loginResponse, firebaseUser.displayName || "there", {
+          suppressSuccessToast: true,
+        });
       } catch (loginError) {
         // Delete the auto-created Firebase account to keep Firebase ↔ MongoDB in sync
         // signInWithPopup auto-creates a Firebase account; if backend rejects, we must remove it
@@ -464,9 +484,10 @@ function SignIn() {
     }
   };
 
-  const handleGoogleLogin = () => handleSocialLogin(new GoogleAuthProvider());
+  const handleGoogleLogin = () =>
+    handleSocialLogin(new GoogleAuthProvider(), "Google");
   const handleFacebookLogin = () =>
-    handleSocialLogin(new FacebookAuthProvider());
+    handleSocialLogin(new FacebookAuthProvider(), "Facebook");
 
   const inputClass = (name) =>
     `w-full px-4 py-4 rounded-xl bg-gray-50 border focus:outline-none text-gray-900 font-light placeholder:text-gray-400 transition-colors ${touched[name] ? (fieldValid[name] ? "border-green-500" : "border-red-500") : "border-gray-200 focus:border-gray-300"}`;

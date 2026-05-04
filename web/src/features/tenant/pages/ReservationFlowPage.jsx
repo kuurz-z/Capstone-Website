@@ -35,7 +35,9 @@ function ReservationFlowPage() {
   const flow = useReservationFlow();
 
   // ── Loading ────────────────────────────────────────────
-  if (!flow.reservationData || flow.paymentVerifyingRef.current) return <GlobalLoading />;
+  if (!flow.reservationData || flow.paymentVerifyingRef.current) {
+    return <GlobalLoading message={flow.paymentVerificationMessage} />;
+  }
 
   // ── Render ─────────────────────────────────────────────
   return (

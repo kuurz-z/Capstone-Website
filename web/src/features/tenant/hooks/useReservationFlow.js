@@ -31,6 +31,10 @@ import {
   validatePHPhoneLocal,
 } from "../utils/reservationValidation";
 
+const PAYMENT_CONFIRMATION_ATTEMPTS = 12;
+const PAYMENT_CONFIRMATION_DELAY_MS = 1500;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export default function useReservationFlow() {
   const navigate = useNavigate();
   const appNavigate = useAppNavigation();
@@ -153,6 +157,12 @@ export default function useReservationFlow() {
   const [finalMoveInDate, setFinalMoveInDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentSubmitted, setPaymentSubmitted] = useState(false);
+  const [paymentVerificationMessage, setPaymentVerificationMessage] = useState(
+    () =>
+      new URLSearchParams(window.location.search).has("payment")
+        ? "Confirming your payment..."
+        : "",
+  );
 
   // Stage 5
   const [reservationCode, setReservationCode] = useState("");
@@ -267,6 +277,28 @@ export default function useReservationFlow() {
 
     return { valid: true, field: null, message: null };
   }, [validIDBack, validIDFront, validIDType]);
+
+  const focusReservationField = useCallback((fieldKey, fallbackSelector = null) => {
+    setTimeout(() => {
+      const selector = fieldKey ? `[data-field="${fieldKey}"]` : fallbackSelector;
+      if (!selector) return;
+
+      const el = document.querySelector(selector);
+      if (!el) return;
+
+      el.classList.remove("rf-field-emphasis");
+      void el.offsetWidth;
+      el.classList.add("rf-field-emphasis");
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      const focusTarget = el.querySelector(
+        "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      );
+      focusTarget?.focus?.({ preventScroll: true });
+
+      setTimeout(() => el.classList.remove("rf-field-emphasis"), 2200);
+    }, 100);
+  }, []);
 
   const populateFromReservation = (r) => {
     if (r.firstName) setFirstName(r.firstName);
@@ -464,6 +496,7 @@ export default function useReservationFlow() {
         // Returning from PayMongo — load reservation data for display,
         // and verify payment using the reservation's stored session ID.
         paymentVerifyingRef.current = true; // block re-init from hook's setSearchParams
+        setPaymentVerificationMessage("Confirming your payment...");
         isPaymentReturnRef.current = false; // consume the flag
         const storedResId = sessionStorage.getItem("activeReservationId");
         if (storedResId) {
@@ -649,53 +682,56 @@ export default function useReservationFlow() {
         setHighestStageReached(5);
         // Verify payment status with PayMongo
         if (reservation.paymongoSessionId) {
-          try {
-            const result = await billingApi.checkPaymentStatus(reservation.paymongoSessionId);
-            if (result.status === "paid") {
-              sessionStorage.removeItem("activeReservationId");
-              // Back button → redirect to dashboard; Return to merchant → show step 5
-              if (paymentReturnStatusRef.current === "cancelled") {
-                appNavigate("/applicant/profile", {
-                  flash: {
-                    type: "success",
-                    message: "Payment successful! Your reservation is secured.",
-                  },
-                });
+          let lastResult = null;
+          for (let attempt = 0; attempt < PAYMENT_CONFIRMATION_ATTEMPTS; attempt += 1) {
+            try {
+              const result = await billingApi.checkPaymentStatus(reservation.paymongoSessionId);
+              lastResult = result;
+              if (result.status === "paid") {
+                sessionStorage.removeItem("activeReservationId");
+                // Re-fetch reservation to get the newly generated reservationCode
+                // (the pre-save hook creates it when status transitions to "reserved")
+                try {
+                  const updated = await reservationApi.getById(resId);
+                  if (updated?.reservationCode) setReservationCode(updated.reservationCode);
+                } catch { /* non-critical - code just won't display */ }
+                setCurrentStage(5);
+                setHighestStageReached(5);
+                setPaymentSubmitted(true);
+                setPaymentApproved(true);
+                justPaidRef.current = true;
+                setPaymentMethod(result.paymentMethod || "paymongo");
+                showNotification("Payment successful! Your reservation is secured.", "success", 5000);
                 return;
               }
-              // Re-fetch reservation to get the newly generated reservationCode
-              // (the pre-save hook creates it when status transitions to "reserved")
-              try {
-                const updated = await reservationApi.getById(resId);
-                if (updated?.reservationCode) setReservationCode(updated.reservationCode);
-              } catch { /* non-critical — code just won't display */ }
-              setCurrentStage(5);
-              setHighestStageReached(5);
-              setPaymentSubmitted(true);
-              setPaymentApproved(true);
-              justPaidRef.current = true;
-              setPaymentMethod(result.paymentMethod || "paymongo");
-              showNotification("Payment successful! Your reservation is secured.", "success", 5000);
-              return;
-            } else {
+
               console.warn("[PAYMENT] Session not yet paid:", reservation.paymongoSessionId, "status:", result.status);
+              if (attempt < PAYMENT_CONFIRMATION_ATTEMPTS - 1) {
+                await wait(PAYMENT_CONFIRMATION_DELAY_MS);
+                continue;
+              }
               setCurrentStage(4);
-              // Show appropriate toast based on how the user returned
               if (paymentReturnStatusRef.current === "cancelled") {
                 showNotification("Payment cancelled. You can try again anytime.", "info", 5000);
               } else {
-                showNotification("Payment is being processed. Please wait or try again.", "info", 5000);
+                showNotification("Payment is still pending. Please try again from the payment step.", "info", 5000);
               }
               return;
+            } catch (err) {
+              if (attempt < PAYMENT_CONFIRMATION_ATTEMPTS - 1) {
+                await wait(PAYMENT_CONFIRMATION_DELAY_MS);
+                continue;
+              }
+              console.error("Payment verification failed for session:", reservation.paymongoSessionId, err);
+              setCurrentStage(4);
+              showNotification("Could not verify payment. Please try again from the payment step.", "warning", 5000);
+              return;
             }
-          } catch (err) {
-            console.error("❌ [VERIFY] Payment check failed — sessionId:", reservation.paymongoSessionId, err);
-            setCurrentStage(4);
-            if (paymentReturnStatusRef.current !== "cancelled") {
-              showNotification("Could not verify payment. Please check your profile.", "warning", 5000);
-            }
-            return;
           }
+          console.warn("[PAYMENT] Session not yet paid:", reservation.paymongoSessionId, "status:", lastResult?.status);
+          setCurrentStage(4);
+          showNotification("Payment is still pending. Please try again from the payment step.", "info", 5000);
+          return;
         } else {
           // No stored session ID — skip generic toast, just navigate to correct stage
           console.warn("[PAYMENT] skipStageSet=true but paymongoSessionId is empty for reservation:", resId);
@@ -737,6 +773,7 @@ export default function useReservationFlow() {
       }
     } finally {
       paymentVerifyingRef.current = false;
+      setPaymentVerificationMessage("");
       setIsLoading(false);
     }
   };
@@ -901,13 +938,17 @@ export default function useReservationFlow() {
 
   // ── Auto-save (stages 3-4) ─────────────────────────────
   const buildDraftPayload = useCallback(
-    () => ({
-      visitDate,
-      visitTime,
-      viewingType,
-      visitorName,
-      visitorPhone,
-      visitorEmail,
+    ({ includeVisitDetails = false } = {}) => ({
+      ...(includeVisitDetails
+        ? {
+            visitDate,
+            visitTime,
+            viewingType,
+            visitorName,
+            visitorPhone,
+            visitorEmail,
+          }
+        : {}),
       firstName,
       lastName,
       middleName,
@@ -919,6 +960,7 @@ export default function useReservationFlow() {
       educationLevel,
       addressUnitHouseNo,
       addressStreet,
+      addressRegion,
       addressBarangay,
       addressCity,
       addressProvince,
@@ -1002,7 +1044,9 @@ export default function useReservationFlow() {
     autoSaveTimerRef.current = setTimeout(async () => {
       try {
         setSaveStatus("saving");
-        await updateReservationDraft(buildDraftPayload());
+        await updateReservationDraft(
+          buildDraftPayload({ includeVisitDetails: currentStage === 4 }),
+        );
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus(""), 3000);
       } catch (err) {
@@ -1022,52 +1066,22 @@ export default function useReservationFlow() {
     setSaveStatus("saving");
     try {
       if (currentStage === 3) {
+        const selfiePhotoUrl = await uploadIfFile(selfiePhoto);
+        const validIDFrontUrl = await uploadIfFile(validIDFront);
+        const validIDBackUrl = await uploadIfFile(validIDBack);
+        const nbiClearanceUrl = await uploadIfFile(nbiClearance);
+        const companyIDUrl = await uploadIfFile(companyID);
+
         // Save without the submit flag to keep it as a draft
         await updateReservationDraft({
-          firstName,
-          lastName,
-          middleName,
-          nickname,
-          mobileNumber,
-          birthday,
-          maritalStatus,
-          nationality,
-          educationLevel,
-          addressUnitHouseNo,
-          addressStreet,
-          addressRegion,
-          addressBarangay,
-          addressCity,
-          addressProvince,
-          emergencyContactName,
-          emergencyRelationship,
-          emergencyContactNumber,
-          healthConcerns,
-          employerSchool,
-          employerAddress,
-          employerContact,
-          startDate,
-          occupation,
-          previousEmployment,
-          roomType,
-          preferredRoomNumber,
-          referralSource,
-          referrerName,
-          estimatedMoveInTime,
-          workSchedule,
-          workScheduleOther,
-          targetMoveInDate,
-          leaseDuration,
-          agreedToPrivacy,
-          agreedToCertification,
+          ...buildDraftPayload({ includeVisitDetails: false }),
           selfiePhotoUrl,
           validIDFrontUrl,
           validIDBackUrl,
           nbiClearanceUrl,
-          nbiReason,
-          personalNotes,
           companyIDUrl,
-          companyIDReason,
+          roomType,
+          preferredRoomNumber,
           validIDType,
           idType: validIDType,
           submitApplication: false, 
@@ -1093,8 +1107,32 @@ export default function useReservationFlow() {
       }, 1500);
 
     } catch (error) {
+      const friendlyError = getFriendlyError(error, "Failed to save draft.");
+
+      if (/is not defined/i.test(error?.message || "")) {
+        setShowValidationErrors(true);
+        focusReservationField("selfiePhoto");
+        showNotification(
+          "Please check the highlighted application field and try again.",
+          "error",
+          4000,
+        );
+        return;
+      }
+
+      if (/visit|scheduled|one day in advance/i.test(error?.message || friendlyError)) {
+        setCurrentStage(2);
+        focusReservationField("visitDate", "#visit-date-section");
+        showNotification(
+          "Please choose a visit date at least one day from today, then save again.",
+          "error",
+          5000,
+        );
+        return;
+      }
+
       showNotification(
-        getFriendlyError(error, "Failed to save draft."),
+        friendlyError,
         "error",
         3000
       );
@@ -1254,14 +1292,7 @@ export default function useReservationFlow() {
             setShowValidationErrors(true);
 
             if (firstInvalid) {
-              setTimeout(() => {
-                const el = document.querySelector(
-                  `[data-field="${firstInvalid.key}"]`,
-                );
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth", block: "center" });
-                }
-              }, 100);
+              focusReservationField(firstInvalid.key);
               showNotification(
                 firstInvalid.message ||
                   `"${firstInvalid.label}" is required. Please fill it in to continue.`,
@@ -1269,12 +1300,7 @@ export default function useReservationFlow() {
                 4000,
               );
             } else {
-              setTimeout(() => {
-                const el = document.getElementById("section-agreements");
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth", block: "center" });
-                }
-              }, 100);
+              focusReservationField("agreements", "#section-agreements");
               showNotification(
                 "Please agree to both consent items to continue.",
                 "error",
@@ -1423,11 +1449,7 @@ export default function useReservationFlow() {
           );
           
           if (fieldKey || firstFieldStr) {
-            setTimeout(() => {
-              const selector = fieldKey ? `[data-field="${fieldKey}"]` : `[data-field="${firstFieldStr}"]`;
-              const el = document.querySelector(selector);
-              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-            }, 300);
+            focusReservationField(fieldKey || firstFieldStr);
           }
           setIsLoading(false);
           return;
@@ -1452,7 +1474,9 @@ export default function useReservationFlow() {
       if (reservationId && !isStageLocked(currentStage)) {
         try {
           setSaveStatus("saving");
-          await updateReservationDraft(buildDraftPayload());
+          await updateReservationDraft(
+            buildDraftPayload({ includeVisitDetails: currentStage === 2 }),
+          );
           setSaveStatus("saved");
           showNotification("Progress saved", "success", 2000);
           setTimeout(() => setSaveStatus(""), 3000);
@@ -1602,6 +1626,7 @@ export default function useReservationFlow() {
     finalMoveInDate, setFinalMoveInDate,
     paymentMethod,
     paymentSubmitted,
+    paymentVerificationMessage,
     agreedToFeePolicy, setAgreedToFeePolicy,
 
     // Stage 5

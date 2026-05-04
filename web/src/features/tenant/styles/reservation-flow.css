@@ -294,7 +294,11 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   flex-direction: column;
   justify-content: center;
   text-align: center;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
   cursor: pointer;
 }
 .rf-date-card:hover { background: var(--rf-hover-bg); border-color: var(--rf-text-muted); }
@@ -382,7 +386,11 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   font-size: 14px;
   font-weight: 500;
   color: var(--rf-text-secondary);
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 .rf-time-btn:disabled {
   cursor: not-allowed;
@@ -434,6 +442,8 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  animation: rfModalOverlayIn 0.18s ease-out both;
+  contain: layout paint;
 }
 .rf-modal-card {
   background: var(--rf-surface);
@@ -445,6 +455,9 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   overflow: auto;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
   position: relative;
+  animation: rfModalCardIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 .rf-modal-close-btn {
   position: absolute;
@@ -512,6 +525,22 @@ html[data-theme="dark"] .rf-modal-icon-wrap { background: rgba(59, 130, 246, 0.1
 .rf-modal-actions {
   display: flex;
   gap: 12px;
+}
+
+@keyframes rfModalOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rfModalCardIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
 }
 
 /* ── Visit receipt modal ── */
@@ -903,6 +932,30 @@ html[data-theme="dark"] .rf-receipt-header__badge { color: var(--color-success);
 .rf-upload-zone--disabled       { opacity: 0.62; cursor: not-allowed; background: var(--rf-surface-alt); }
 .rf-upload-zone--disabled:hover { background: var(--rf-surface-alt); }
 
+.rf-field-emphasis {
+  border-radius: 10px;
+  animation: rfFieldEmphasis 1.1s ease-in-out 2;
+  scroll-margin: 120px;
+}
+
+.rf-field-emphasis .form-input,
+.rf-field-emphasis .form-select,
+.rf-field-emphasis .form-textarea,
+.rf-field-emphasis .rf-upload-zone {
+  border-color: var(--rf-error-text) !important;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+}
+
+@keyframes rfFieldEmphasis {
+  0%,
+  100% {
+    background: transparent;
+  }
+  45% {
+    background: rgba(220, 38, 38, 0.08);
+  }
+}
+
 .rf-upload-status {
   font-size: 14px;
   font-weight: 500;
@@ -1151,7 +1204,7 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 
 /* Complete = green (fully done / confirmed) */
 .rf-stepper-step.complete .rf-stepper-dot {
-  background: none 0%, #10b981 100%);
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
   border-color: var(--color-success);
   color: white;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
@@ -1159,7 +1212,7 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 
 /* Ongoing = blue (locked / in-progress, not yet fully complete) */
 .rf-stepper-step.ongoing .rf-stepper-dot {
-  background: none 0%, var(--color-accent) 100%);
+  background: linear-gradient(135deg, #2563eb 0%, var(--color-accent) 100%);
   border-color: var(--color-accent);
   color: white;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
@@ -1167,7 +1220,7 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 
 /* Active = orange (currently selected step) */
 .rf-stepper-step.active .rf-stepper-dot {
-  background: none 0%, #ff8c2e 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #ff8c2e 100%);
   border-color: var(--color-accent);
   color: white;
   box-shadow:
@@ -1851,6 +1904,11 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
   gap: 8px;
 }
 
+.btn:focus-visible {
+  outline: 3px solid rgba(27, 77, 74, 0.22);
+  outline-offset: 3px;
+}
+
 .btn-primary {
   background: var(--rf-primary);
   color: white;
@@ -1878,14 +1936,15 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 }
 
 .btn-secondary {
-  background: transparent;
+  background: #fff;
   color: var(--rf-text);
   border: 1.5px solid var(--rf-border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: var(--rf-text-muted);
-  background: rgba(0, 0, 0, 0.02);
+  border-color: var(--rf-primary);
+  background: rgba(27, 77, 74, 0.04);
+  color: var(--rf-primary);
   transform: translateY(-1px);
 }
 
@@ -2179,9 +2238,8 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  animation: rfOverlayIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: rfOverlayIn 0.22s ease-out forwards;
+  contain: layout paint;
 }
 
 @keyframes rfOverlayIn {
@@ -2203,17 +2261,19 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
     0 8px 20px rgba(0, 0, 0, 0.08);
   max-width: 400px;
   width: 90vw;
-  animation: rfContentPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+  animation: rfContentPop 0.28s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
 @keyframes rfContentPop {
   from {
     opacity: 0;
-    transform: scale(0.85) translateY(20px);
+    transform: translate3d(0, 12px, 0) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
@@ -2227,6 +2287,7 @@ html[data-theme="dark"] .rf-policy-link { color: var(--color-success); }
 .rf-success-checkmark svg {
   width: 72px;
   height: 72px;
+  transform: translateZ(0);
 }
 
 .rf-checkmark-circle {

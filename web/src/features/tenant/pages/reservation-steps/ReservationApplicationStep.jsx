@@ -318,7 +318,7 @@ const ReservationApplicationStep = ({
         />
 
         {/* ─── Section 6: Agreements & Consent ─── */}
-        <div ref={(el) => { sectionRefs.current.agreements = el; }}>
+        <div data-field="agreements" ref={(el) => { sectionRefs.current.agreements = el; }}>
           <SectionHeader number={6} title="Agreements & Consent" id="agreements" />
           <AgreementsSection
             {...{ agreedToPrivacy, setAgreedToPrivacy, agreedToCertification, setAgreedToCertification, showValidationErrors }}
@@ -341,11 +341,11 @@ const ReservationApplicationStep = ({
       {!readOnly && (
         <div className="stage-buttons" style={{ justifyContent: "space-between", alignItems: "center" }}>
           
-          <button onClick={onSaveDraft} className="btn" style={{ borderColor: "#ccc", color: "#666" }}>
+          <button type="button" onClick={onSaveDraft} className="btn btn-secondary">
             Save & Exit
           </button>
 
-          <button onClick={onNext} className="btn btn-primary">
+          <button type="button" onClick={onNext} className="btn btn-primary">
             {applicationSubmitted ? "Update Submission" : "Submit Application"}
           </button>
         </div>

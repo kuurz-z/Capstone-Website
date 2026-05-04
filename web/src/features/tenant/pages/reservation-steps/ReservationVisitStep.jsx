@@ -105,8 +105,6 @@ const ReservationVisitStep = ({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [resolvedVisitCode, setResolvedVisitCode] = useState(visitCode || null);
   const [isSaving, setIsSaving] = useState(false);
-  const [hoveredDate, setHoveredDate] = useState(null);
-  const [hoveredTime, setHoveredTime] = useState(null);
 
   const branch = String(reservationData?.room?.branch || "").toLowerCase();
   const roomId = reservationData?.room?._id || reservationData?.roomId || "";
@@ -268,7 +266,7 @@ const ReservationVisitStep = ({
       {/* Form content wrapper */}
       <div className={readOnly ? "rf-readonly-wrapper" : ""}>
         {/* ── Card 1: Select Date ── */}
-        <div className="content-card" id="visit-date-section">
+        <div className="content-card" id="visit-date-section" data-field="visitDate">
           <div className="card-section-title">
             <Calendar size={15} style={{ marginRight: 6, flexShrink: 0 }} />
             Choose a Date
@@ -299,8 +297,6 @@ const ReservationVisitStep = ({
                   disabled={disabled}
                   title={dateRow.disabledReason || ""}
                   onClick={() => { setVisitDate(iso); if (visitTime) setVisitTime(""); }}
-                  onMouseEnter={() => setHoveredDate(iso)}
-                  onMouseLeave={() => setHoveredDate(null)}
                   aria-pressed={selected}
                   aria-label={date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                 >
@@ -328,6 +324,7 @@ const ReservationVisitStep = ({
         <div
           className="content-card"
           id="visit-time-section"
+          data-field="visitTime"
           style={{ opacity: visitDate ? 1 : 0.45, transition: "opacity 0.2s ease", pointerEvents: readOnly ? "none" : (visitDate ? "auto" : "none") }}
         >
           <div className="card-section-title">
@@ -351,8 +348,6 @@ const ReservationVisitStep = ({
                   disabled={disabled}
                   title={slot.disabledReason || ""}
                   onClick={() => setVisitTime(slot.label)}
-                  onMouseEnter={() => setHoveredTime(slot.label)}
-                  onMouseLeave={() => setHoveredTime(null)}
                   aria-pressed={selected}
                   aria-label={slot.label}
                 >
