@@ -144,8 +144,7 @@ const pickFields = (payload, allowedFields) =>
 const generateDefaultBeds = (type, capacity) => {
   if (type === "private") {
     return [
-      { id: "bed-1", position: "upper", status: "available" },
-      { id: "bed-2", position: "lower", status: "available" },
+      { id: "bed-1", position: "single", status: "available" },
     ];
   }
 

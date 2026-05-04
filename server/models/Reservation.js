@@ -227,49 +227,6 @@ const reservationSchema = new mongoose.Schema(
       ],
       default: null,
     },
-    idValidationStatus: {
-      type: String,
-      enum: ["not_validated", "passed", "warning", "failed", "manual_review"],
-      default: "not_validated",
-    },
-    idExtractedText: {
-      type: String,
-      default: "",
-    },
-    idExtractedName: {
-      type: String,
-      default: "",
-    },
-    idExtractedNumber: {
-      type: String,
-      default: "",
-    },
-    idNameMatchScore: {
-      type: Number,
-      min: 0,
-      max: 1,
-      default: 0,
-    },
-    idMismatchFlag: {
-      type: Boolean,
-      default: false,
-    },
-    idValidationNotes: {
-      type: [String],
-      default: [],
-    },
-    idValidatedAt: {
-      type: Date,
-      default: null,
-    },
-    idValidationProvider: {
-      type: String,
-      default: null,
-    },
-    idValidationDocumentUrl: {
-      type: String,
-      default: null,
-    },
     nbiClearanceUrl: String,
     nbiReason: String,
     companyIDUrl: String,
