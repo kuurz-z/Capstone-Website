@@ -34,6 +34,8 @@ export const queryKeys = {
     tenantWorkspace: (params) => ["reservations", "tenantWorkspace", params || {}],
     tenantWorkspaceDetail: (id) => ["reservations", "tenantWorkspaceDetail", id],
     tenantActionContext: (id) => ["reservations", "tenantActionContext", id],
+    visitAvailability: (params) => ["reservations", "visitAvailability", params || {}],
+    visitAvailabilitySettings: (branch) => ["reservations", "visitAvailabilitySettings", branch || ""],
   },
 
   // ── Billing ──

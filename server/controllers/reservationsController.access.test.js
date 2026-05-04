@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const reservationFindById = jest.fn();
 const userFindOne = jest.fn();
+const visitAvailabilityFindOne = jest.fn();
+const visitAvailabilityCreate = jest.fn();
 const utilityReadingFindOne = jest.fn();
 const ensureCurrentCycleRentBill = jest.fn();
 const moveOutStayWorkflow = jest.fn();
@@ -10,7 +12,8 @@ const notifyGeneral = jest.fn();
 await jest.unstable_mockModule("../models/index.js", () => ({
   Reservation: { findById: reservationFindById },
   User: { findOne: userFindOne },
-  Room: {},
+  Room: { find: jest.fn(), findById: jest.fn() },
+  VisitAvailability: { findOne: visitAvailabilityFindOne, create: visitAvailabilityCreate },
   Bill: { countDocuments: jest.fn(), deleteMany: jest.fn() },
   UtilityReading: { findOne: utilityReadingFindOne },
   BedHistory: {},
@@ -85,7 +88,11 @@ await jest.unstable_mockModule("../utils/notificationService.js", () => ({
   notify: { general: notifyGeneral },
 }));
 
-const { moveOutReservation, updateReservation } = await import("./reservationsController.js");
+const {
+  moveOutReservation,
+  updateReservation,
+  updateVisitAvailabilityRules,
+} = await import("./reservationsController.js");
 
 const createResponse = () => ({
   statusCode: 200,
@@ -105,6 +112,8 @@ describe("reservationsController.updateReservation access hardening", () => {
     reservationFindById.mockReset();
     userFindOne.mockReset();
     utilityReadingFindOne.mockReset();
+    visitAvailabilityFindOne.mockReset();
+    visitAvailabilityCreate.mockReset();
     ensureCurrentCycleRentBill.mockReset();
     moveOutStayWorkflow.mockReset();
     notifyGeneral.mockReset();
@@ -183,6 +192,61 @@ describe("reservationsController.updateReservation access hardening", () => {
       actorId: null,
     });
     expect(res.body.message).toBe("Tenant moved out successfully");
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("branch admins cannot update another branch visit availability", async () => {
+    userFindOne.mockResolvedValue({
+      _id: "admin-1",
+      role: "branch_admin",
+      branch: "gil-puyat",
+      email: "admin@example.com",
+    });
+
+    const req = {
+      query: { branch: "guadalupe" },
+      body: { enabledWeekdays: [1, 2, 3, 4, 5] },
+      user: { uid: "admin-uid" },
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await updateVisitAvailabilityRules(req, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.code).toBe("BRANCH_ACCESS_DENIED");
+    expect(visitAvailabilityFindOne).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("owners can update any branch visit availability", async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    userFindOne.mockResolvedValue({
+      _id: "owner-1",
+      role: "owner",
+      branch: null,
+      email: "owner@example.com",
+    });
+    visitAvailabilityFindOne.mockResolvedValue({
+      branch: "guadalupe",
+      enabledWeekdays: [1, 2, 3, 4, 5],
+      slots: [{ label: "09:00 AM", enabled: true, capacity: 5 }],
+      blackoutDates: [],
+      save,
+    });
+
+    const req = {
+      query: { branch: "guadalupe" },
+      body: { enabledWeekdays: [1, 3, 5] },
+      user: { uid: "owner-uid" },
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await updateVisitAvailabilityRules(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(save).toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
   });
 });

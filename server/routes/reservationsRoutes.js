@@ -34,8 +34,11 @@ import {
   getTenantWorkspace,
   getTenantWorkspaceById,
   getTenantActionContext,
+  getVisitAvailability,
+  getVisitAvailabilityRules,
   getReservationById,
   createReservation,
+  updateVisitAvailabilityRules,
   updateReservation,
   updateReservationByUser,
   cancelReservationByUser,
@@ -69,6 +72,29 @@ const router = express.Router();
  * @returns {Array} List of reservations with populated user and room data
  */
 router.get("/", verifyToken, getReservations);
+
+router.get(
+  "/visit-availability",
+  verifyToken,
+  getVisitAvailability,
+);
+
+router.get(
+  "/visit-availability/settings",
+  verifyToken,
+  verifyAdmin,
+  requirePermission("manageReservations"),
+  getVisitAvailabilityRules,
+);
+
+router.patch(
+  "/visit-availability/settings",
+  verifyToken,
+  verifyAdmin,
+  filterByBranch,
+  requirePermission("manageReservations"),
+  updateVisitAvailabilityRules,
+);
 
 router.get(
   "/current-residents",

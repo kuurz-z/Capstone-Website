@@ -274,6 +274,19 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   cursor: pointer;
 }
 .rf-date-card:hover { background: var(--rf-hover-bg); border-color: var(--rf-text-muted); }
+.rf-date-btn:disabled {
+  cursor: not-allowed;
+}
+.rf-date-card.disabled {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+.rf-date-card.disabled:hover {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+}
 .rf-date-card.selected {
   border-color: var(--rf-selection-border);
   background: var(--rf-selection-bg);
@@ -292,6 +305,12 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   color: var(--rf-text-secondary);
 }
 .rf-date-card.selected .rf-date-num { color: var(--rf-text-heading); }
+.rf-date-reason {
+  margin-top: 5px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--rf-error-text, #b91c1c);
+}
 .rf-today-pill {
   position: absolute;
   top: -9px;
@@ -332,7 +351,32 @@ html[data-theme="dark"] .rf-policies-link { color: var(--color-success); }
   color: var(--rf-text-secondary);
   transition: all 0.15s ease;
 }
+.rf-time-btn:disabled {
+  cursor: not-allowed;
+}
+.rf-time-slot span,
+.rf-time-slot small {
+  display: block;
+}
+.rf-time-slot small {
+  min-height: 14px;
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--rf-text-subtle);
+}
 .rf-time-slot:hover    { background: var(--rf-hover-bg); border-color: var(--rf-text-muted); }
+.rf-time-slot.disabled {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+  color: var(--rf-text-muted);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.rf-time-slot.disabled:hover {
+  background: var(--rf-muted-bg, #f3f4f6);
+  border-color: var(--rf-border-card);
+}
 .rf-time-slot.selected {
   border-color: var(--rf-selection-border);
   background: var(--rf-selection-bg);

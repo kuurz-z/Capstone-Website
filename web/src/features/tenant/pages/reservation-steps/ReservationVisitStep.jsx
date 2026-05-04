@@ -3,26 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { Calendar, Clock, FileText, X, CheckCircle, AlertTriangle } from "lucide-react";
 import { showNotification } from "../../../../shared/utils/notification";
 import { PoliciesTermsModal } from "../../modals/PoliciesAndConsent";
+import { useVisitAvailability } from "../../../../shared/hooks/queries/useReservations";
 
 /* ── Available time slots ─────────────────────────────────────────────── */
 const TIME_SLOTS = [
-  "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM",
-  "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM",
+  { label: "08:00 AM", available: true },
+  { label: "09:00 AM", available: true },
+  { label: "10:00 AM", available: true },
+  { label: "11:00 AM", available: true },
+  { label: "01:00 PM", available: true },
+  { label: "02:00 PM", available: true },
+  { label: "03:00 PM", available: true },
+  { label: "04:00 PM", available: true },
 ];
 
 /* ── Helper: generate next N weekdays ───────────────────────────────── */
-function getAvailableDates(count = 10) {
-  const dates = [];
-  const d = new Date();
-  d.setDate(d.getDate() + 1); // start from tomorrow
-  while (dates.length < count) {
-    const day = d.getDay();
-    if (day !== 0 && day !== 6) dates.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
-  return dates;
-}
-
 function fmtDate(date) {
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
@@ -38,6 +33,37 @@ function fmtDateFull(dateStr) {
 function toISODate(date) {
   return date.toISOString().split("T")[0];
 }
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getTomorrowISO() {
+  return toISODate(addDays(new Date(), 1));
+}
+
+function getFallbackAvailabilityDates(count = 14) {
+  return Array.from({ length: count }, (_, index) => {
+    const date = addDays(new Date(), index + 1);
+    return {
+      date: toISODate(date),
+      available: true,
+      disabledReason: "",
+      slots: TIME_SLOTS,
+    };
+  });
+}
+
+const VISIT_ERROR_MESSAGES = {
+  VISIT_DATE_SAME_DAY: "Visits must be scheduled at least one day in advance.",
+  VISIT_DATE_IN_PAST: "That date has already passed.",
+  VISIT_DATE_CLOSED: "Visits are closed on that date.",
+  VISIT_CAPACITY_REACHED: "That time slot is full.",
+  VISIT_SLOT_CONFLICT: "That room already has a visit at that time.",
+  VISIT_SLOT_CLOSED: "This time is outside working hours.",
+};
 
 /**
  * Step 2 — Visit Scheduling & Policies
@@ -63,7 +89,34 @@ const ReservationVisitStep = ({
   const [hoveredDate, setHoveredDate] = useState(null);
   const [hoveredTime, setHoveredTime] = useState(null);
 
-  const availableDates = useMemo(() => getAvailableDates(10), []);
+  const branch = String(reservationData?.room?.branch || "").toLowerCase();
+  const roomId = reservationData?.room?._id || reservationData?.roomId || "";
+  const reservationId = reservationData?._id || "";
+  const availabilityParams = useMemo(
+    () => ({
+      branch,
+      from: getTomorrowISO(),
+      days: 14,
+      roomId,
+      reservationId,
+    }),
+    [branch, roomId, reservationId],
+  );
+  const { data: availability, isLoading: loadingAvailability } = useVisitAvailability(
+    availabilityParams,
+    { enabled: Boolean(branch) && !readOnly },
+  );
+  const availableDates = useMemo(
+    () => availability?.dates?.length ? availability.dates : getFallbackAvailabilityDates(14),
+    [availability],
+  );
+  const selectedDateAvailability = useMemo(
+    () => availableDates.find((date) => date.date === visitDate) || null,
+    [availableDates, visitDate],
+  );
+  const selectedTimeSlots = selectedDateAvailability?.slots?.length
+    ? selectedDateAvailability.slots
+    : TIME_SLOTS;
 
   useEffect(() => {
     if (visitCode) setResolvedVisitCode(visitCode);
@@ -89,7 +142,9 @@ const ReservationVisitStep = ({
     } catch (err) {
       console.error("Failed to save visit:", err);
       // Fallback message ensures we don't dump raw technical errors
+      const errorCode = err?.response?.data?.code;
       const errorMessage =
+        VISIT_ERROR_MESSAGES[errorCode] ||
         err?.response?.data?.error ||
         "We encountered an unexpected issue while scheduling your visit. Please try again.";
       showNotification(errorMessage, "error", 5000);
@@ -124,8 +179,20 @@ const ReservationVisitStep = ({
       document.getElementById("visit-date-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    const dateAvailability = availableDates.find((date) => date.date === visitDate);
+    if (dateAvailability && !dateAvailability.slots?.some((slot) => slot.available)) {
+      showNotification(dateAvailability.disabledReason || "Visits are closed on that date.", "error", 3000);
+      document.getElementById("visit-date-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     if (!visitTime) {
       showNotification("Please select a time slot for your visit.", "error", 3000);
+      document.getElementById("visit-time-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    const slotAvailability = dateAvailability?.slots?.find((slot) => slot.label === visitTime);
+    if (slotAvailability && !slotAvailability.available) {
+      showNotification(slotAvailability.disabledReason || "That time slot is unavailable.", "error", 3000);
       document.getElementById("visit-time-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -183,23 +250,29 @@ const ReservationVisitStep = ({
             <Calendar size={15} style={{ marginRight: 6, flexShrink: 0 }} />
             Choose a Date
           </div>
-          <p className="rf-section-hint">Available weekdays for the next 2 weeks</p>
+          <p className="rf-section-hint">
+            {loadingAvailability ? "Checking branch availability..." : "Future visit dates for the next 2 weeks"}
+          </p>
           <div className="rf-date-grid">
-            {availableDates.map((date, idx) => {
-              const iso = toISODate(date);
+            {availableDates.map((dateRow, idx) => {
+              const iso = dateRow.date;
+              const date = new Date(iso + "T00:00:00");
               const selected = visitDate === iso;
+              const disabled = readOnly || !dateRow.slots?.some((slot) => slot.available);
               return (
                 <button
                   key={iso}
                   type="button"
                   className="rf-date-btn"
+                  disabled={disabled}
+                  title={dateRow.disabledReason || ""}
                   onClick={() => { setVisitDate(iso); if (visitTime) setVisitTime(""); }}
                   onMouseEnter={() => setHoveredDate(iso)}
                   onMouseLeave={() => setHoveredDate(null)}
                   aria-pressed={selected}
                   aria-label={date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                 >
-                  <div className={`rf-date-card${selected ? " selected" : ""}`}>
+                  <div className={`rf-date-card${selected ? " selected" : ""}${disabled ? " disabled" : ""}`}>
                     {idx === 0 && <span className="rf-today-pill">Tomorrow</span>}
                     <div className="rf-date-day">
                       {date.toLocaleDateString("en-US", { weekday: "short" })}
@@ -207,6 +280,11 @@ const ReservationVisitStep = ({
                     <div className="rf-date-num">
                       {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </div>
+                    {disabled && (
+                      <div className="rf-date-reason">
+                        {dateRow.disabledReason || "Unavailable"}
+                      </div>
+                    )}
                   </div>
                 </button>
               );
@@ -230,20 +308,32 @@ const ReservationVisitStep = ({
               : "Select a date first to see available times"}
           </p>
           <div className="rf-time-grid">
-            {TIME_SLOTS.map((slot) => {
-              const selected = visitTime === slot;
+            {selectedTimeSlots.map((slot) => {
+              const selected = visitTime === slot.label;
+              const disabled = readOnly || !slot.available;
               return (
                 <button
-                  key={slot}
+                  key={slot.label}
                   type="button"
                   className="rf-time-btn"
-                  onClick={() => setVisitTime(slot)}
-                  onMouseEnter={() => setHoveredTime(slot)}
+                  disabled={disabled}
+                  title={slot.disabledReason || ""}
+                  onClick={() => setVisitTime(slot.label)}
+                  onMouseEnter={() => setHoveredTime(slot.label)}
                   onMouseLeave={() => setHoveredTime(null)}
                   aria-pressed={selected}
-                  aria-label={slot}
+                  aria-label={slot.label}
                 >
-                  <div className={`rf-time-slot${selected ? " selected" : ""}`}>{slot}</div>
+                  <div className={`rf-time-slot${selected ? " selected" : ""}${disabled ? " disabled" : ""}`}>
+                    <span>{slot.label}</span>
+                    <small>
+                      {disabled
+                        ? slot.disabledReason || "Unavailable"
+                        : slot.remaining != null
+                          ? `${slot.remaining} slots left`
+                          : ""}
+                    </small>
+                  </div>
                 </button>
               );
             })}

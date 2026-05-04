@@ -73,6 +73,14 @@ import {
   transferStayWorkflow,
 } from "../utils/tenantActionService.js";
 import { ensureCurrentCycleRentBill } from "../utils/rentGenerator.js";
+import {
+  buildVisitAvailability,
+  getVisitAvailabilitySettings,
+  normalizeVisitBranch,
+  serializeVisitAvailabilitySettings,
+  updateVisitAvailabilitySettings,
+  validateVisitSelection,
+} from "../utils/visitAvailability.js";
 /* ─── helpers ────────────────────────────────────── */
 const HEAVY_FIELDS =
   "-selfiePhotoUrl -validIDFrontUrl -validIDBackUrl -nbiClearanceUrl -companyIDUrl -__v";
@@ -402,6 +410,124 @@ const findDbUser = async (uid) => {
 
 /** Invalidate a cached user entry (call when user data changes) */
 export const invalidateUserCache = (uid) => userCache.delete(uid);
+
+const buildVisitAvailabilityActor = (req, dbUser) => ({
+  userId: dbUser?._id ? String(dbUser._id) : req?.user?.uid || null,
+  email: dbUser?.email || req?.user?.email || "",
+  role: dbUser?.role || req?.user?.role || "",
+});
+
+const resolveVisitAvailabilityBranch = (req, dbUser, fallbackBranch = "") => {
+  const requestedBranch = normalizeVisitBranch(
+    req.query.branch || req.body.branch || fallbackBranch,
+  );
+
+  if (!requestedBranch) {
+    return { error: "A valid branch is required.", code: "INVALID_BRANCH" };
+  }
+
+  if (dbUser?.role === "branch_admin" && requestedBranch !== dbUser.branch) {
+    return {
+      error: `Access denied. You can only manage ${dbUser.branch} branch availability.`,
+      code: "BRANCH_ACCESS_DENIED",
+    };
+  }
+
+  return { branch: requestedBranch };
+};
+
+export const getVisitAvailability = async (req, res, next) => {
+  try {
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    const branchResult = resolveVisitAvailabilityBranch(req, dbUser);
+    if (branchResult.error) {
+      return res
+        .status(branchResult.code === "BRANCH_ACCESS_DENIED" ? 403 : 400)
+        .json(branchResult);
+    }
+
+    const availability = await buildVisitAvailability({
+      branch: branchResult.branch,
+      from: req.query.from,
+      days: req.query.days,
+      roomId: req.query.roomId || null,
+      excludeReservationId: req.query.reservationId || null,
+    });
+
+    return sendSuccess(res, availability);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getVisitAvailabilityRules = async (req, res, next) => {
+  try {
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    const branchResult = resolveVisitAvailabilityBranch(req, dbUser);
+    if (branchResult.error) {
+      return res
+        .status(branchResult.code === "BRANCH_ACCESS_DENIED" ? 403 : 400)
+        .json(branchResult);
+    }
+
+    const settings = await getVisitAvailabilitySettings(branchResult.branch);
+    return sendSuccess(res, serializeVisitAvailabilitySettings(settings));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateVisitAvailabilityRules = async (req, res, next) => {
+  try {
+    const dbUser = await findDbUser(req.user.uid);
+    if (!dbUser) {
+      return res
+        .status(404)
+        .json({ error: "User not found in database", code: "USER_NOT_FOUND" });
+    }
+
+    const branchResult = resolveVisitAvailabilityBranch(req, dbUser);
+    if (branchResult.error) {
+      return res
+        .status(branchResult.code === "BRANCH_ACCESS_DENIED" ? 403 : 400)
+        .json(branchResult);
+    }
+
+    const beforeSettings = await getVisitAvailabilitySettings(branchResult.branch);
+    const beforePayload = serializeVisitAvailabilitySettings(beforeSettings);
+    const settings = await updateVisitAvailabilitySettings(
+      branchResult.branch,
+      req.body || {},
+      buildVisitAvailabilityActor(req, dbUser),
+    );
+    const afterPayload = serializeVisitAvailabilitySettings(settings);
+
+    await auditLogger.logModification(
+      req,
+      "visit_availability",
+      branchResult.branch,
+      beforePayload,
+      afterPayload,
+      "Updated visit availability rules",
+    );
+
+    return sendSuccess(res, afterPayload);
+  } catch (error) {
+    next(error);
+  }
+};
 
 /* ─── GET all reservations ───────────────────────── */
 export const getReservations = async (req, res, next) => {
@@ -1008,6 +1134,27 @@ export const updateReservation = async (req, res, next) => {
         error: `Invalid reservation status transition from "${normalizeReservationStatus(existingReservation.status)}" to "${normalizeReservationStatus(req.body.status)}".`,
         code: "INVALID_RESERVATION_STATUS_TRANSITION",
       });
+    }
+
+    if (req.body.visitDate || req.body.visitTime) {
+      const validation = await validateVisitSelection({
+        branch: existingReservation.roomId?.branch,
+        visitDate: req.body.visitDate || existingReservation.visitDate,
+        visitTime: req.body.visitTime || existingReservation.visitTime,
+        roomId: existingReservation.roomId?._id || existingReservation.roomId,
+        excludeReservationId: reservationId,
+      });
+
+      if (!validation.ok) {
+        return res.status(validation.status).json({
+          error: validation.error,
+          code: validation.code,
+        });
+      }
+
+      if (req.body.visitDate) {
+        req.body.visitDate = validation.date;
+      }
     }
 
     // Status transition side-effects
@@ -1638,6 +1785,37 @@ export const updateReservationByUser = async (req, res, next) => {
       updates.visitScheduledAt = new Date();
     }
 
+    if (updates.visitDate || updates.visitTime) {
+      const targetVisitDate = updates.visitDate || reservation.visitDate;
+      const targetVisitTime = updates.visitTime || reservation.visitTime;
+      const room = await Room.findById(reservation.roomId).select("branch").lean();
+      if (!room?.branch) {
+        return res.status(400).json({
+          error: "Unable to resolve the room branch for this visit.",
+          code: "ROOM_BRANCH_REQUIRED",
+        });
+      }
+
+      const validation = await validateVisitSelection({
+        branch: room.branch,
+        visitDate: targetVisitDate,
+        visitTime: targetVisitTime,
+        roomId: reservation.roomId,
+        excludeReservationId: reservationId,
+      });
+
+      if (!validation.ok) {
+        return res.status(validation.status).json({
+          error: validation.error,
+          code: validation.code,
+        });
+      }
+
+      if (updates.visitDate) {
+        updates.visitDate = validation.date;
+      }
+    }
+
     // ── Visit date: reject past dates ───────────────────────
     if (updates.visitDate) {
       const todayStart = new Date();
@@ -1655,26 +1833,8 @@ export const updateReservationByUser = async (req, res, next) => {
     if (updates.visitDate) {
       const targetVisitTime = updates.visitTime || reservation.visitTime;
 
-      // 1. Check max 5 visits per hour slot globally
-      const hourlyCount = await Reservation.countDocuments({
-        _id: { $ne: reservationId },
-        visitDate: updates.visitDate,
-        visitTime: targetVisitTime,
-        status: {
-          $in: reservationStatusesForQuery("visit_pending", "visit_approved"),
-        },
-        isArchived: { $ne: true },
-      });
-
-      if (hourlyCount >= 5) {
-        return res.status(400).json({
-          error:
-            "This time slot has reached its maximum capacity. Please select an alternative time for your visit.",
-          code: "VISIT_CAPACITY_REACHED",
-        });
-      }
-
-      // 2. Check room-specific conflict
+      // Configured capacity is validated by validateVisitSelection above.
+      // Keep the room-specific conflict check for existing audit behavior.
       const conflicting = await Reservation.findOne({
         _id: { $ne: reservationId },
         roomId: reservation.roomId,
