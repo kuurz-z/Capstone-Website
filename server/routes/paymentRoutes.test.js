@@ -14,6 +14,7 @@ const requirePermission = jest.fn((permission) => {
 const createBillCheckout = jest.fn(noop);
 const createDepositCheckout = jest.fn(noop);
 const checkSessionStatus = jest.fn(noop);
+const getPaymentsForBillController = jest.fn(noop);
 const getPaymentHistory = jest.fn();
 const getPaymentsForBill = jest.fn();
 const userFindOne = jest.fn();
@@ -33,6 +34,7 @@ await jest.unstable_mockModule("../controllers/paymentController.js", () => ({
   createBillCheckout,
   createDepositCheckout,
   checkSessionStatus,
+  getPaymentsForBill: getPaymentsForBillController,
 }));
 
 await jest.unstable_mockModule("../models/Payment.js", () => ({
@@ -91,6 +93,7 @@ describe("paymentRoutes", () => {
     createBillCheckout.mockClear();
     createDepositCheckout.mockClear();
     checkSessionStatus.mockClear();
+    getPaymentsForBillController.mockClear();
     getPaymentHistory.mockReset();
     getPaymentsForBill.mockReset();
     userFindOne.mockReset();
@@ -127,23 +130,13 @@ describe("paymentRoutes", () => {
   test("bill-payments route returns payment ledger records for a specific bill", async () => {
     const handlers = getRouteHandlers(paymentRoutes, "/bill/:billId/payments", "get");
     const billPaymentsHandler = handlers[handlers.length - 1];
-    const billPayments = [
-      {
-        paymentId: "PAY-BILL-1",
-        billId: "bill_1",
-        amount: 2500,
-        source: "paymongo-polling",
-      },
-    ];
-
-    getPaymentsForBill.mockResolvedValue(billPayments);
 
     const req = { params: { billId: "bill_1" } };
     const res = createRes();
+    const next = jest.fn();
 
-    await billPaymentsHandler(req, res);
+    await billPaymentsHandler(req, res, next);
 
-    expect(getPaymentsForBill).toHaveBeenCalledWith("bill_1");
-    expect(res.payload).toEqual({ success: true, data: billPayments });
+    expect(getPaymentsForBillController).toHaveBeenCalledWith(req, res, next);
   });
 });

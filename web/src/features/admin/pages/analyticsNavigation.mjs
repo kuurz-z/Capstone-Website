@@ -3,11 +3,12 @@ export const ANALYTICS_DETAILS_PATH = "/admin/analytics/details";
 
 export const ANALYTICS_SUMMARY_RANGES = ["30d", "60d", "90d"];
 export const BASE_ANALYTICS_TABS = ["occupancy", "billing", "operations"];
-export const OWNER_ANALYTICS_TABS = ["financials", "monitoring"];
+export const OWNER_ANALYTICS_TABS = ["consolidated", "financials", "monitoring"];
 export const TAB_RANGE_OPTIONS = {
   occupancy: ["30d", "60d", "90d"],
   billing: ["3m", "6m", "12m"],
   operations: ["30d", "60d", "90d"],
+  consolidated: ["30d", "60d", "90d"],
   financials: ["3m", "6m", "12m"],
   monitoring: ["30d", "60d", "90d"],
 };

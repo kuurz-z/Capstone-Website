@@ -240,22 +240,49 @@ async function handleBillPayment(metadata, eventData) {
   }
   logger.info({ billId, paymentId }, "Webhook: Bill payment confirmed");
 
+  const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
+
   // Notify tenant
   try {
-    const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
-    await notify.paymentApproved(
-      bill.userId,
-      `Your payment of ₱${bill.totalAmount.toLocaleString()} for ${monthStr} has been confirmed.`,
-    );
+    await notify.paymentApproved(bill.userId, monthStr, settlement.appliedAmount);
   } catch (notifErr) {
-    logger.error({ err: notifErr }, "Webhook: Failed to send notification");
+    logger.error({ err: notifErr }, "Webhook: Failed to send tenant notification");
+  }
+
+  // Notify branch admins and owner
+  try {
+    const admins = await User.find({
+      accountStatus: "active",
+      $or: [
+        { role: "branch_admin", branch: bill.branch },
+        { role: "owner" },
+      ],
+    }).select("_id").lean();
+
+    if (admins.length > 0) {
+      const tenantUser = await User.findById(bill.userId).select("firstName lastName").lean();
+      const tenantName = tenantUser
+        ? `${tenantUser.firstName || ""} ${tenantUser.lastName || ""}`.trim() || "A tenant"
+        : "A tenant";
+      await Promise.all(
+        admins.map((admin) =>
+          notify.general(
+            admin._id,
+            "Payment Received",
+            `${tenantName} paid ₱${settlement.appliedAmount.toLocaleString()} for the ${monthStr} bill.`,
+            { entityType: "bill", actionUrl: "/admin/billing" },
+          )
+        )
+      );
+    }
+  } catch (adminNotifErr) {
+    logger.error({ err: adminNotifErr }, "Webhook: Failed to send admin notification");
   }
 
   // Send PayMongo-style receipt email
   try {
     const tenant = await User.findById(bill.userId).lean();
     if (tenant?.email) {
-      const monthStr = dayjs(bill.billingMonth).format("MMMM YYYY");
       const paymentDate = new Date().toLocaleDateString("en-PH", {
         month: "long", day: "numeric", year: "numeric",
       });

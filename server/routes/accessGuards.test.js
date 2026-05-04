@@ -79,12 +79,14 @@ await jest.unstable_mockModule("../controllers/reservationsController.js", () =>
   getTenantWorkspace: noop,
   getTenantWorkspaceById: noop,
   getTenantActionContext: noop,
+  getVisitAvailability: noop,
+  getVisitAvailabilityRules: noop,
   getReservationById: noop,
   createReservation: noop,
+  updateVisitAvailabilityRules: noop,
   updateReservation: noop,
   updateReservationByUser: noop,
   cancelReservationByUser: noop,
-  validateReservationIdByUser: noop,
   deleteReservation: noop,
   extendReservation: noop,
   releaseSlot: noop,
@@ -200,6 +202,12 @@ function getRouteHandlers(router, path, method) {
   return layer?.route?.stack?.map((entry) => entry.handle) || [];
 }
 
+function getRouteIndex(router, path, method) {
+  return router.stack.findIndex(
+    (entry) => entry.route?.path === path && entry.route.methods?.[method],
+  );
+}
+
 describe("route access guards", () => {
   test("auth set-role is owner-only", () => {
     const handlers = getRouteHandlers(authRoutes, "/set-role", "post");
@@ -244,6 +252,14 @@ describe("route access guards", () => {
           handler.requiredPermissions.includes("manageTenants"),
       ),
     ).toBe(true);
+  });
+
+  test("reservation static utility routes are registered before dynamic id route", () => {
+    const detailIndex = getRouteIndex(reservationsRoutes, "/:reservationId", "get");
+
+    expect(getRouteIndex(reservationsRoutes, "/occupancy/:roomId", "get")).toBeLessThan(detailIndex);
+    expect(getRouteIndex(reservationsRoutes, "/stats/occupancy", "get")).toBeLessThan(detailIndex);
+    expect(getRouteIndex(reservationsRoutes, "/vacancy-forecast", "get")).toBeLessThan(detailIndex);
   });
 
   test("room, announcement, audit, and digital twin routes use module permissions", () => {
