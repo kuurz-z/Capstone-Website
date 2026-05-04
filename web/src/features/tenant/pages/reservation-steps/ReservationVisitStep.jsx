@@ -17,6 +17,8 @@ const TIME_SLOTS = [
   { label: "04:00 PM", available: true },
 ];
 
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 /* ── Helper: generate next N weekdays ───────────────────────────────── */
 function fmtDate(date) {
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -54,6 +56,23 @@ function getFallbackAvailabilityDates(count = 14) {
       slots: TIME_SLOTS,
     };
   });
+}
+
+function buildCalendarCells(dateRows) {
+  if (!dateRows?.length) return [];
+  const firstDate = new Date(dateRows[0].date + "T00:00:00");
+  const leadingDays = firstDate.getDay();
+  return [
+    ...Array.from({ length: leadingDays }, (_, index) => ({
+      type: "empty",
+      key: `empty-start-${index}`,
+    })),
+    ...dateRows.map((dateRow) => ({
+      type: "date",
+      key: dateRow.date,
+      dateRow,
+    })),
+  ];
 }
 
 const VISIT_ERROR_MESSAGES = {
@@ -109,6 +128,10 @@ const ReservationVisitStep = ({
   const availableDates = useMemo(
     () => availability?.dates?.length ? availability.dates : getFallbackAvailabilityDates(14),
     [availability],
+  );
+  const calendarDateCells = useMemo(
+    () => buildCalendarCells(availableDates),
+    [availableDates],
   );
   const selectedDateAvailability = useMemo(
     () => availableDates.find((date) => date.date === visitDate) || null,
@@ -253,8 +276,17 @@ const ReservationVisitStep = ({
           <p className="rf-section-hint">
             {loadingAvailability ? "Checking branch availability..." : "Future visit dates for the next 2 weeks"}
           </p>
-          <div className="rf-date-grid">
-            {availableDates.map((dateRow, idx) => {
+          <div className="rf-calendar-grid" aria-label="Visit dates by week">
+            {WEEKDAY_LABELS.map((weekday) => (
+              <div key={weekday} className="rf-calendar-weekday">
+                {weekday}
+              </div>
+            ))}
+            {calendarDateCells.map((cell) => {
+              if (cell.type === "empty") {
+                return <div key={cell.key} className="rf-date-empty" aria-hidden="true" />;
+              }
+              const dateRow = cell.dateRow;
               const iso = dateRow.date;
               const date = new Date(iso + "T00:00:00");
               const selected = visitDate === iso;
@@ -273,7 +305,7 @@ const ReservationVisitStep = ({
                   aria-label={date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                 >
                   <div className={`rf-date-card${selected ? " selected" : ""}${disabled ? " disabled" : ""}`}>
-                    {idx === 0 && <span className="rf-today-pill">Tomorrow</span>}
+                    {iso === getTomorrowISO() && <span className="rf-today-pill">Tomorrow</span>}
                     <div className="rf-date-day">
                       {date.toLocaleDateString("en-US", { weekday: "short" })}
                     </div>
