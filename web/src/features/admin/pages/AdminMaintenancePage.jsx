@@ -141,6 +141,20 @@ const createFilterPayload = ({
   return filters;
 };
 
+const AVATAR_PALETTES = [
+  { bg: "#1d4ed8", text: "#ffffff" },
+  { bg: "#047857", text: "#ffffff" },
+  { bg: "#6d28d9", text: "#ffffff" },
+  { bg: "#be123c", text: "#ffffff" },
+  { bg: "#b45309", text: "#ffffff" },
+  { bg: "#0e7490", text: "#ffffff" },
+];
+
+const getAvatarPalette = (name = "") => {
+  const seed = [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return AVATAR_PALETTES[seed % AVATAR_PALETTES.length];
+};
+
 export default function AdminMaintenancePage() {
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
@@ -694,27 +708,38 @@ export default function AdminMaintenancePage() {
       {
         key: "tenant",
         label: "Tenant",
-        render: (row) => (
-          <div className="admin-maintenance__tenant-cell">
-            <div className="admin-maintenance__avatar">
-              {(row.tenant?.full_name || "T")
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((part) => part[0])
-                .join("")
-                .toUpperCase()}
-            </div>
-            <div>
-              <div className="admin-maintenance__tenant-name">
-                {row.tenant?.full_name || "Unknown Tenant"}
+        render: (row) => {
+          const tenantName = row.tenant?.full_name || "Unknown Tenant";
+          const avatarPalette = getAvatarPalette(tenantName);
+
+          return (
+            <div className="admin-maintenance__tenant-cell">
+              <div
+                className="admin-maintenance__avatar"
+                style={{
+                  background: avatarPalette.bg,
+                  color: avatarPalette.text,
+                }}
+              >
+                {(row.tenant?.full_name || "T")
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((part) => part[0])
+                  .join("")
+                  .toUpperCase()}
               </div>
-              <div className="admin-maintenance__tenant-meta">
-                {row.tenant?.user_id || row.user_id}
+              <div>
+                <div className="admin-maintenance__tenant-name">
+                  {tenantName}
+                </div>
+                <div className="admin-maintenance__tenant-meta">
+                  {row.tenant?.user_id || row.user_id}
+                </div>
               </div>
             </div>
-          </div>
-        ),
+          );
+        },
       },
       ...(isOwner
         ? [
