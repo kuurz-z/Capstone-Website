@@ -33,6 +33,7 @@ import {
 import { OWNER_BRANCH_FILTER_OPTIONS } from "../../../shared/utils/constants";
 import ReservationDetailsModal from "../components/ReservationDetailsModal";
 import VisitSchedulesTab from "../components/VisitSchedulesTab";
+import VisitAvailabilityTab from "../components/VisitAvailabilityTab";
 import InquiriesPage from "./InquiriesPage";
 import {
   ActionBar,
@@ -234,6 +235,7 @@ function ReservationsPage() {
     () => [
       { key: "reservations", label: "Reservations" },
       { key: "visits", label: "Visit Schedules" },
+      { key: "availability", label: "Availability Rules" },
       { key: "inquiries", label: "Inquiries" },
     ],
     [],
@@ -605,6 +607,16 @@ function ReservationsPage() {
               aria-labelledby="page-shell-tab-visits"
             >
               <VisitSchedulesTab />
+            </section>
+          )}
+          {activeTab === "availability" && (
+            <section
+              id="page-shell-panel-availability"
+              className="page-shell__panel"
+              role="tabpanel"
+              aria-labelledby="page-shell-tab-availability"
+            >
+              <VisitAvailabilityTab />
             </section>
           )}
           {activeTab === "inquiries" && (
