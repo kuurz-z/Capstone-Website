@@ -1077,20 +1077,34 @@ const BillingTab = () => {
     const sessionId = searchParams.get("session_id");
 
     if (paymentStatus === "success" && sessionId) {
-      billingApi
-        .checkPaymentStatus(sessionId)
-        .then((result) => {
-          if (result.status === "paid") {
-            showNotification("Payment successful! Your bill has been paid.", "success", 5000);
-            loadBills();
-          } else {
-            showNotification("Payment is being processed.", "info", 5000);
-          }
-        })
-        .catch(() => {
-          showNotification("Could not verify payment. Please refresh.", "warning", 5000);
-        });
       setSearchParams({}, { replace: true });
+
+      let attempts = 0;
+      const maxAttempts = 4;
+      const retryDelayMs = 2500;
+
+      const verify = () => {
+        billingApi
+          .checkPaymentStatus(sessionId)
+          .then((result) => {
+            if (result.status === "paid") {
+              showNotification("Payment successful! Your bill has been paid.", "success", 5000);
+              loadBills();
+            } else if (attempts < maxAttempts) {
+              attempts++;
+              setTimeout(verify, retryDelayMs);
+            } else {
+              showNotification("Payment received — your bill will be updated shortly. Please refresh in a moment.", "info", 7000);
+              loadBills();
+            }
+          })
+          .catch(() => {
+            showNotification("Could not verify payment. Please refresh.", "warning", 5000);
+          });
+      };
+
+      // Give PayMongo ~1.5 s to finalize the session before first check
+      setTimeout(verify, 1500);
     } else if (paymentStatus === "cancelled") {
       showNotification("Payment was cancelled.", "info", 3000);
       setSearchParams({}, { replace: true });
