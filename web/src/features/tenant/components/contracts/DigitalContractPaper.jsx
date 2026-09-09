@@ -53,11 +53,11 @@ const normalizeBedDisplay = (value) => {
 };
 
 // Professional 1:1 Legal Contract Typography matching official master template
-const POPULATED_COLOR = "#000000";
+const POPULATED_COLOR = "inherit";
 
 const Populated = ({ children, className = "", style = {} }) => (
   <span
-    className={`font-bold text-slate-900 ${className}`}
+    className={`font-bold text-slate-950 dark:text-white ${className}`}
     style={{ color: POPULATED_COLOR, ...style }}
   >
     {children}
@@ -781,6 +781,7 @@ export default function DigitalContractPaper({
             box-sizing: border-box !important;
           }
           #digital-contract-paper {
+            background: #ffffff !important;
             /* static (not absolute) so a long contract paginates instead of
                being clipped to the first sheet by some print engines */
             position: static !important;
@@ -1041,13 +1042,13 @@ export default function DigitalContractPaper({
                   type="button"
                   disabled={isDownloadingAny}
                   onClick={handlePrintClick}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
                   title={hasCanonicalPdf
                     ? "Print the official Contract PDF (Legal 8.5in × 13in)"
                     : "Print Digital Agreement Preview (Legal 8.5in × 13in)"}
                 >
                   {realPdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500 dark:text-slate-400" /> : <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
-                  <span className="hidden sm:inline">Print</span>
+                  <span>Print</span>
                 </button>
 
                 {/* Download PDF Button */}
@@ -1068,65 +1069,64 @@ export default function DigitalContractPaper({
 
             {/* Scrollable Container (flex-1 fill height). Compact padding on
                 narrow viewports so the document itself gets the width (R5.6). */}
-            <div className="flex-1 min-h-0 px-3 py-4 sm:px-12 sm:py-10 overflow-y-auto overflow-x-auto bg-white flex justify-center">
+            <div className="flex-1 min-h-0 px-3 py-4 sm:px-12 sm:py-10 overflow-y-auto overflow-x-auto bg-slate-100 dark:bg-slate-950 flex justify-center">
               <article
                 id="digital-contract-paper"
-                className="w-full max-w-[840px] bg-white text-black"
+                className="w-full max-w-[840px] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-lg p-6 sm:p-12 shadow-sm"
                 style={{
                   fontFamily: '"Times New Roman", Times, "Liberation Serif", serif',
                   fontSize: `${(14 * digitalZoom) / 100}px`,
                   lineHeight: "1.55",
-                  color: "#000000",
                 }}
               >
                 {/* Header Notice */}
-                <p className="print-header-notice text-xs text-center font-semibold text-slate-600 tracking-wider uppercase mb-3">
+                <p className="print-header-notice text-xs text-center font-semibold text-slate-500 dark:text-slate-400 tracking-wider uppercase mb-3">
                   PREPARED COPY — NOT YET SIGNED OR NOTARIZED
                 </p>
 
                 {/* Main Titles */}
-                <div className="print-title-wrap text-center pb-2 mb-3 border-b border-slate-100">
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-wide uppercase m-0 text-black">
+                <div className="print-title-wrap text-center pb-2 mb-3 border-b border-slate-200 dark:border-slate-800">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-wide uppercase m-0 text-slate-900 dark:text-slate-100">
                     CONTRACT OF LEASE
                   </h1>
-                  <h2 className="text-sm sm:text-base font-bold tracking-wider uppercase mt-1 text-black">
+                  <h2 className="text-sm sm:text-base font-bold tracking-wider uppercase mt-1 text-slate-900 dark:text-slate-100">
                     <Populated>{roomLabel} — {termLabel} LEASE</Populated>
                   </h2>
                 </div>
 
-                <p className="font-bold uppercase tracking-wider text-xs sm:text-sm text-black mt-4 mb-2">
+                <p className="font-bold uppercase tracking-wider text-xs sm:text-sm text-slate-900 dark:text-slate-100 mt-4 mb-2">
                   KNOWN TO ALL MEN BY THESE PRESENTS:
                 </p>
 
-                <p className="text-justify indent-8 text-black mb-2 leading-relaxed">
+                <p className="text-justify indent-8 text-slate-900 dark:text-slate-100 mb-2 leading-relaxed">
                   This <strong>CONTRACT OF LEASE</strong> is made and executed in the City of Makati, this{" "}
                   <Populated>{executionDay}</Populated> day of{" "}
                   <Populated>{executionMonth} {executionYear}</Populated>, by and between:
                 </p>
 
-                <p className="text-justify indent-8 text-black mb-2 leading-relaxed">
+                <p className="text-justify indent-8 text-slate-900 dark:text-slate-100 mb-2 leading-relaxed">
                   <strong>FIRST JRAC PARTNERSHIP CO.</strong>, a general partnership duly organized and existing under and by virtue of the laws of the Republic of the Philippines, with principal office at 9431 Magallanes St., Guadalupe Nuevo, Makati City, represented herein by its General Partner, <strong>JOANNE ONG</strong>, hereinafter referred to as the <strong>LESSOR</strong>;
                 </p>
 
-                <p className="text-center font-bold tracking-widest text-xs my-2.5 text-black">
+                <p className="text-center font-bold tracking-widest text-xs my-2.5 text-slate-900 dark:text-slate-100">
                   — and —
                 </p>
 
-                <p className="text-justify indent-8 text-black mb-2.5 leading-relaxed">
+                <p className="text-justify indent-8 text-slate-900 dark:text-slate-100 mb-2.5 leading-relaxed">
                   <Populated>{tenantName}</Populated>, of legal age, Filipino, with postal and residential address at{" "}
                   <Populated>{tenantAddress}</Populated>, hereinafter referred to as the <strong>LESSEE</strong>;
                 </p>
 
-                <p className="font-bold tracking-wide text-xs sm:text-sm mt-3 mb-2 text-black">
+                <p className="font-bold tracking-wide text-xs sm:text-sm mt-3 mb-2 text-slate-900 dark:text-slate-100">
                   WITNESSETH: That
                 </p>
 
-                <p className="text-justify indent-8 text-black mb-2 leading-relaxed">
+                <p className="text-justify indent-8 text-slate-900 dark:text-slate-100 mb-2 leading-relaxed">
                   <strong>WHEREAS</strong>, the LESSOR is the owner of a residential establishment known as{" "}
                   <Populated>{branchName}</Populated>, located at <Populated>{branchAddress}</Populated>;
                 </p>
 
-                <p className="text-justify indent-8 text-black mb-2 leading-relaxed">
+                <p className="text-justify indent-8 text-slate-900 dark:text-slate-100 mb-2 leading-relaxed">
                   <strong>WHEREAS</strong>, the LESSOR agrees to lease to the LESSEE a <Populated>{roomLabel}</Populated> accommodation known as Room{" "}
                   <Populated>{roomNumber}</Populated>
                   {!isPrivate && (
@@ -1137,15 +1137,15 @@ export default function DigitalContractPaper({
                   (the “LEASED PREMISES”) within the said establishment, and the LESSEE is willing to lease the same for a limited time or period;
                 </p>
 
-                <p className="text-justify indent-8 text-black mb-3 leading-relaxed">
+                <p className="text-justify indent-8 text-slate-900 dark:text-slate-100 mb-3 leading-relaxed">
                   <strong>NOW THEREFORE</strong>, for and in consideration of the foregoing premises, the LESSOR leases unto the LESSEE and the LESSEE hereby accepts from the LESSOR the LEASED PREMISES, subject to the following:
                 </p>
 
-                <div className="print-terms-title text-center font-bold tracking-wider text-xs sm:text-sm uppercase my-3 text-black">
+                <div className="print-terms-title text-center font-bold tracking-wider text-xs sm:text-sm uppercase my-3 text-slate-900 dark:text-slate-100">
                   TERMS AND CONDITIONS
                 </div>
 
-                <div className="print-terms-body text-justify text-[13.5px] sm:text-[14px] leading-relaxed text-black space-y-2">
+                <div className="print-terms-body text-justify text-[13.5px] sm:text-[14px] leading-relaxed text-slate-900 dark:text-slate-100 space-y-2">
                   <p className="indent-8 mb-2">
                     <strong>SECTION 1 – PURPOSE.</strong> The leased premises shall be used exclusively by the LESSEE for residential purposes only and shall not be diverted to other uses. It is hereby expressly agreed that if at any time the premises are used for other purposes, the LESSOR shall have the right to rescind this Contract, without prejudice to its other rights under the law.
                   </p>
@@ -1215,7 +1215,7 @@ export default function DigitalContractPaper({
                   </p>
                 </div>
 
-                <p className="text-justify indent-8 pt-3 text-black text-[13.5px] sm:text-[14px] mb-2 leading-relaxed">
+                <p className="text-justify indent-8 pt-3 text-slate-900 dark:text-slate-100 text-[13.5px] sm:text-[14px] mb-2 leading-relaxed">
                   <strong>IN WITNESS WHEREOF</strong>, both parties herein have affixed their signatures on the date and place first above written.
                 </p>
 
@@ -1224,21 +1224,21 @@ export default function DigitalContractPaper({
                   <div className="grid grid-cols-2 gap-8 sm:gap-14 items-end">
                     {/* LESSEE Column */}
                     <div className="flex flex-col">
-                      <div className="print-lessee-spacer border-b border-black w-full h-10"></div>
-                      <div className="text-black text-xs sm:text-sm font-bold uppercase tracking-wider mt-2">
+                      <div className="print-lessee-spacer border-b border-slate-400 dark:border-slate-600 w-full h-10"></div>
+                      <div className="text-slate-900 dark:text-slate-100 text-xs sm:text-sm font-bold uppercase tracking-wider mt-2">
                         LESSEE
                       </div>
                     </div>
 
                     {/* LESSOR Column */}
                     <div className="flex flex-col">
-                      <div className="font-bold text-black text-xs sm:text-sm">FIRST JRAC PARTNERSHIP CO.</div>
-                      <div className="print-sig-spacer text-xs italic text-black mt-1 mb-5">By:</div>
-                      <div className="border-b border-black w-full h-0"></div>
-                      <div className="font-bold text-black text-sm sm:text-base mt-2">
+                      <div className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">FIRST JRAC PARTNERSHIP CO.</div>
+                      <div className="print-sig-spacer text-xs italic text-slate-600 dark:text-slate-400 mt-1 mb-5">By:</div>
+                      <div className="border-b border-slate-400 dark:border-slate-600 w-full h-0"></div>
+                      <div className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base mt-2">
                         JOANNE ONG
                       </div>
-                      <div className="text-black text-xs font-medium mt-1">
+                      <div className="text-slate-600 dark:text-slate-400 text-xs font-medium mt-1">
                         General Partner – LESSOR
                       </div>
                     </div>
@@ -1246,19 +1246,19 @@ export default function DigitalContractPaper({
 
                   {/* Witnesses */}
                   <div className="print-witness-container pt-6 text-left text-xs sm:text-sm">
-                    <div className="font-bold tracking-wide text-black text-xs sm:text-sm">
+                    <div className="font-bold tracking-wide text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
                       SIGNED IN THE PRESENCE OF:
                     </div>
                     <div className="print-witness-lines grid grid-cols-2 gap-8 sm:gap-14 pt-8 pb-2">
-                      <div className="border-b border-black w-full h-0"></div>
-                      <div className="border-b border-black w-full h-0"></div>
+                      <div className="border-b border-slate-400 dark:border-slate-600 w-full h-0"></div>
+                      <div className="border-b border-slate-400 dark:border-slate-600 w-full h-0"></div>
                     </div>
                   </div>
                 </div>
 
                 {/* Notarial Acknowledgment */}
-                <div className="print-ack-container pt-6 space-y-2 text-xs sm:text-sm text-black leading-relaxed">
-                  <div className="text-center font-bold tracking-wider uppercase text-xs sm:text-sm text-black mb-2">
+                <div className="print-ack-container pt-6 space-y-2 text-xs sm:text-sm text-slate-900 dark:text-slate-100 leading-relaxed">
+                  <div className="text-center font-bold tracking-wider uppercase text-xs sm:text-sm text-slate-900 dark:text-slate-100 mb-2">
                     ACKNOWLEDGMENT
                   </div>
                   <p className="leading-normal mb-2">
@@ -1275,7 +1275,7 @@ export default function DigitalContractPaper({
                     WITNESS MY HAND AND SEAL, on the date and place first above written.
                   </p>
 
-                  <div className="print-notary-stack pt-2 text-xs text-black space-y-1">
+                  <div className="print-notary-stack pt-2 text-xs text-slate-600 dark:text-slate-400 space-y-1">
                     <div>Doc. No. _______;</div>
                     <div>Page No. _______;</div>
                     <div>Book No. _______;</div>

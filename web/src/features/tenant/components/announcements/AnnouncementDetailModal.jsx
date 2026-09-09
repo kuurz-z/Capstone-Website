@@ -185,7 +185,7 @@ export default function AnnouncementDetailModal({
           <div style={styles.footerContainer}>
             <div style={styles.ackPendingWarning}>
               <ShieldAlert size={15} />
-              <span>Resident Acknowledgment Required</span>
+              <span>Tenant Acknowledgment Required</span>
             </div>
 
             <button

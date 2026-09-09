@@ -387,9 +387,31 @@ export default function AnnouncementsTab() {
 
       {/* ── Individual Filter Cards Row & Search ── */}
       <div className="tenant-announcements-filters-bar">
-        {/* Filter Cards Row */}
+        {/* Mobile Filter Selector (< 640px) */}
+        <div className="sm:hidden w-full relative mb-1">
+          <label htmlFor="mobile-announcement-filter" className="sr-only">
+            Filter notices
+          </label>
+          <select
+            id="mobile-announcement-filter"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
+            className="w-full sm:hidden appearance-none px-3.5 py-2.5 pr-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500 transition-all cursor-pointer"
+          >
+            {filterTabs.map((tab) => (
+              <option key={tab.key} value={tab.key}>
+                {tab.label}{tab.count !== undefined ? ` (${tab.count})` : ""}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 dark:text-slate-500">
+            <Filter size={13} />
+          </div>
+        </div>
+
+        {/* Desktop Filter Cards Row (>= 640px) */}
         <div
-          className="tenant-announcements-filter-cards"
+          className="hidden sm:flex tenant-announcements-filter-cards"
           role="tablist"
           aria-label="Filter notices"
         >
@@ -650,7 +672,7 @@ function renderSpotlightSlideshow(
             ) : (
               <span className="tenant-announcement-ack-pending-text">
                 <ShieldAlert size={14} />
-                Resident Acknowledgment Required
+                Tenant Acknowledgment Required
               </span>
             )
           ) : null}
@@ -769,7 +791,7 @@ function renderAnnouncementCard(
             ) : (
               <span className="tenant-announcement-ack-pending-text">
                 <ShieldAlert size={14} />
-                Resident Acknowledgment Required
+                Tenant Acknowledgment Required
               </span>
             )
           ) : null}

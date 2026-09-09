@@ -243,6 +243,17 @@ export default function Sidebar({ isOpen, toggleSidebar, isCollapsed, toggleColl
     return () => window.removeEventListener("resize", handleResize);
   }, [isOpen, toggleSidebar]);
 
+  useEffect(() => {
+    if (!isMobile || !isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        toggleSidebar();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMobile, isOpen, toggleSidebar]);
+
   useBodyScrollLock(isMobile && isOpen);
 
   const isItemActive = (item) => {
@@ -284,7 +295,13 @@ export default function Sidebar({ isOpen, toggleSidebar, isCollapsed, toggleColl
   const renderSidebarContent = () => (
     <>
       <div className="sidebar-header">
-        <Link to="/" className="sidebar-brand">
+        <Link
+          to="/"
+          className="sidebar-brand"
+          onClick={() => {
+            if (isMobile && isOpen) toggleSidebar();
+          }}
+        >
           <div className="sidebar-brand-mark">
             <img src={logo} alt="Lilycrest logo" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
           </div>

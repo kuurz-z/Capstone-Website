@@ -17,6 +17,7 @@ import {
   Unlock,
   Megaphone,
   Info,
+  Filter,
 } from "lucide-react";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import {
@@ -185,18 +186,13 @@ export default function NotificationsPage() {
   return (
     <div style={{ maxWidth: 1100, width: "100%", margin: "0 auto", padding: "24px 20px" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 12 }}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
         <div>
-          <h1
-            style={{
-              fontSize: 22, fontWeight: 700, color: "#0A1628",
-              margin: 0, display: "flex", alignItems: "center", gap: 8,
-            }}
-          >
-            <Bell size={20} color="#0A1628" />
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 m-0 flex items-center gap-2">
+            <Bell size={20} className="text-slate-900 dark:text-slate-100" />
             Notifications
           </h1>
-          <p style={{ fontSize: 13, color: "#6B7280", margin: "4px 0 0" }}>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 mb-0">
             {isApplicant
               ? "Reservation, visit, and application updates from Lilycrest"
               : "Billing, maintenance, contract, and account notices"}
@@ -207,13 +203,7 @@ export default function NotificationsPage() {
           <button
             onClick={() => markAllRead.mutate()}
             disabled={markAllRead.isPending}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "7px 14px", borderRadius: 8,
-              border: "1px solid #E5E7EB", backgroundColor: "white",
-              fontSize: 13, color: "#374151", cursor: "pointer",
-              flexShrink: 0,
-            }}
+            className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-xs cursor-pointer flex-shrink-0"
           >
             <CheckCheck size={14} />
             Mark all read
@@ -221,34 +211,64 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {/* Filter row */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      {/* Mobile Filter Controls (< 640px) */}
+      <div className="sm:hidden flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
+          <label htmlFor="notifications-page-filter" className="sr-only">
+            Filter notifications
+          </label>
+          <select
+            id="notifications-page-filter"
+            value={typeFilter}
+            onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+            className="w-full sm:hidden appearance-none px-3.5 py-2.5 pr-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500 transition-all cursor-pointer"
+          >
+            {filterTabs.map((tab) => (
+              <option key={tab.key} value={tab.key}>
+                {tab.label}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 dark:text-slate-500">
+            <Filter size={13} />
+          </div>
+        </div>
+
+        <button
+          onClick={() => { setUnreadOnly((prev) => !prev); setPage(1); }}
+          type="button"
+          className={`px-3 py-2.5 rounded-xl border text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+            unreadOnly
+              ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 dark:border-slate-100"
+              : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+          }`}
+        >
+          Unread only
+        </button>
+      </div>
+
+      {/* Desktop Filter Row (>= 640px) */}
+      <div className="hidden sm:flex gap-2 mb-4 flex-wrap items-center">
         {filterTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => { setTypeFilter(tab.key); setPage(1); }}
-            style={{
-              padding: "5px 14px", borderRadius: 20, border: "1px solid",
-              fontSize: 12, fontWeight: 500, cursor: "pointer",
-              backgroundColor: typeFilter === tab.key ? "#0A1628" : "white",
-              color: typeFilter === tab.key ? "white" : "#374151",
-              borderColor: typeFilter === tab.key ? "#0A1628" : "#D1D5DB",
-              transition: "all 0.15s",
-            }}
+            className={`px-3.5 py-1.5 rounded-full border text-xs whitespace-nowrap transition-all duration-150 cursor-pointer ${
+              typeFilter === tab.key
+                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 dark:border-slate-100 font-semibold shadow-xs"
+                : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium"
+            }`}
           >
             {tab.label}
           </button>
         ))}
         <button
           onClick={() => { setUnreadOnly((prev) => !prev); setPage(1); }}
-          style={{
-            padding: "5px 14px", borderRadius: 20, border: "1px solid",
-            fontSize: 12, fontWeight: 500, cursor: "pointer",
-            backgroundColor: unreadOnly ? "#0A1628" : "white",
-            color: unreadOnly ? "white" : "#374151",
-            borderColor: unreadOnly ? "#0A1628" : "#D1D5DB",
-            transition: "all 0.15s",
-          }}
+          className={`px-3.5 py-1.5 rounded-full border text-xs whitespace-nowrap transition-all duration-150 cursor-pointer ${
+            unreadOnly
+              ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 dark:border-slate-100 font-semibold shadow-xs"
+              : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium"
+          }`}
         >
           Unread only
         </button>

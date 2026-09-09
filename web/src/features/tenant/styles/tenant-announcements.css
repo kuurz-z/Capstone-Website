@@ -167,6 +167,27 @@
   transform: translateY(-1px);
 }
 
+html[data-theme="dark"] .tenant-announcements-filter-card,
+.dark .tenant-announcements-filter-card {
+  background: var(--card, #1e293b);
+  border-color: var(--border, #334155);
+  color: var(--foreground, #f8fafc);
+}
+
+html[data-theme="dark"] .tenant-announcements-filter-card:hover:not(.tenant-announcements-filter-card--active),
+.dark .tenant-announcements-filter-card:hover:not(.tenant-announcements-filter-card--active) {
+  background: var(--muted, #334155);
+  border-color: #475569;
+}
+
+html[data-theme="dark"] .tenant-announcements-filter-card--active,
+.dark .tenant-announcements-filter-card--active {
+  background: #f8fafc;
+  border-color: #f8fafc;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
 /* Count Badges inside Filter Cards */
 .tenant-announcements-card-badge {
   display: inline-flex;
@@ -184,6 +205,12 @@
 .tenant-announcements-filter-card--active .tenant-announcements-card-badge {
   background: rgba(255, 255, 255, 0.22);
   color: #ffffff;
+}
+
+html[data-theme="dark"] .tenant-announcements-filter-card--active .tenant-announcements-card-badge,
+.dark .tenant-announcements-filter-card--active .tenant-announcements-card-badge {
+  background: #0f172a;
+  color: #f8fafc;
 }
 
 /* Green count badge for Action Required (ACK) */

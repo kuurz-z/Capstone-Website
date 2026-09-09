@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../../shared/hooks/useAuth";
@@ -34,6 +34,17 @@ export default function AdminSidebar({
   const [hoveredItem, setHoveredItem] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutInProgress, setLogoutInProgress] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   const handleLogout = async () => {
     if (logoutInProgress) return;
@@ -76,7 +87,13 @@ export default function AdminSidebar({
   return (
     <aside className={sidebarClasses}>
       <div className="admin-sidebar-header">
-        <Link to="/admin/dashboard" className="admin-sidebar-brand">
+        <Link
+          to="/admin/dashboard"
+          className="admin-sidebar-brand"
+          onClick={() => {
+            if (isOpen) onClose?.();
+          }}
+        >
           <div className="admin-sidebar-brand-mark">
             <LilycrestLogo className="w-full h-full object-contain" aria-hidden="true" />
           </div>
