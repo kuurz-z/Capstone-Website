@@ -426,9 +426,10 @@ function SignUp() {
   };
 
   const completePasswordOnboarding = async (firebaseUser) => {
+    const phoneToSave = (formData.phone || "").trim();
     const response = await registerUserInBackend(
       firebaseUser,
-      formData.phone,
+      phoneToSave,
       formData.firstName,
       formData.lastName,
     );
