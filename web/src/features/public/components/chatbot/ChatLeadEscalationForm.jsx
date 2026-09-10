@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Loader2, Copy, Check } from "lucide-react";
+import { Loader2, Copy, Check, CheckCircle2 } from "lucide-react";
 import { chatbotApi } from "../../../../shared/api/chatbotApi";
 
 const BRANCH_OPTIONS = [
@@ -246,15 +246,36 @@ export function ChatLeadEscalationForm({
 
       const res = await chatbotApi.escalateChatbotLead(payload);
 
-      if (res?.success) {
+      const isSuccess =
+        res?.success === true ||
+        Boolean(res?.inquiryId) ||
+        Boolean(res?.data?.inquiryId) ||
+        (res && typeof res === "object" && !res.error && !res.errors);
+
+      if (isSuccess) {
+        const inquiryId =
+          res?.inquiryId ||
+          res?.data?.inquiryId ||
+          res?._id ||
+          `INQ-${Date.now().toString().slice(-6)}`;
+        const message =
+          res?.message ||
+          res?.data?.message ||
+          "Your inquiry has been successfully sent to front desk staff.";
+
         const submittedData = {
-          inquiryId: res?.data?.inquiryId || `INQ-${Date.now().toString().slice(-6)}`,
-          message: res?.message || "Your inquiry has been successfully sent to front desk staff.",
+          inquiryId,
+          message,
+          name: formData.name.trim(),
           fullName: formData.name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim(),
+          preferredBranch: formData.preferredBranch,
+          concernCategory: formData.concernCategory,
         };
         setSubmittedRequest(submittedData);
         if (typeof onSuccessSubmitted === "function") {
-          onSuccessSubmitted({ ...res.data, ...submittedData });
+          onSuccessSubmitted({ ...res?.data, ...res, ...submittedData });
         }
       } else {
         throw new Error(res?.message || "Failed to submit request");
@@ -281,58 +302,122 @@ export function ChatLeadEscalationForm({
   };
 
   if (submittedRequest) {
+    const selectedBranch =
+      BRANCH_OPTIONS.find((b) => b.value === submittedRequest.preferredBranch)?.label ||
+      "All Branches / General Assistance";
+    const selectedCategory =
+      CONCERN_CATEGORIES.find((c) => c.value === submittedRequest.concernCategory)?.label ||
+      "General Question & Information";
+
     return (
-      <div className="p-4 text-center animate-fadeIn">
-        <h4 className="text-sm font-bold tracking-tight mb-1 text-emerald-600 dark:text-emerald-400">
-          Assistance Request Submitted
+      <div className="p-4 text-center animate-fadeIn flex flex-col items-center">
+        {/* Success Icon */}
+        <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3">
+          <CheckCircle2 className="w-12 h-12 text-emerald-600 dark:text-emerald-400" />
+        </div>
+
+        {/* Heading */}
+        <h4 className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1">
+          Request Submitted Successfully
         </h4>
-        <p className="text-xs leading-relaxed mb-3 text-slate-600 dark:text-slate-300">
-          {submittedRequest?.message ||
-            "Your message has been routed to our Front Desk Admin Team. We will contact you via email or phone shortly."}
+        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300 mb-4 max-w-[290px]">
+          Thank you, <span className="font-semibold text-slate-800 dark:text-slate-200">{submittedRequest.name || "Visitor"}</span>! Your inquiry has been routed to our Front Desk Admin Team. We will contact you promptly.
         </p>
 
-        {submittedRequest?.inquiryId && (
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div
-              className="px-3 py-1.5 rounded-lg text-xs font-mono select-all bg-slate-50 dark:bg-[#162238] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
-            >
-              Ref: {submittedRequest.inquiryId}
+        {/* Structured Details Card */}
+        <div className="w-full text-left p-3.5 rounded-xl bg-slate-50 dark:bg-[#162238] border border-slate-200 dark:border-slate-700 mb-4 space-y-2.5">
+          {/* Reference Row */}
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200/80 dark:border-slate-700/80">
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              Reference ID
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-mono font-semibold text-slate-900 dark:text-slate-100">
+                {submittedRequest.inquiryId}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (submittedRequest?.inquiryId && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(submittedRequest.inquiryId);
+                    setCopiedRef(true);
+                    setTimeout(() => setCopiedRef(false), 2000);
+                  }
+                }}
+                aria-label="Copy reference ID"
+                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+                title="Copy Reference"
+              >
+                {copiedRef ? (
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Copied
+                  </span>
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (submittedRequest?.inquiryId && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-                  navigator.clipboard.writeText(submittedRequest.inquiryId);
-                  setCopiedRef(true);
-                  setTimeout(() => setCopiedRef(false), 2000);
-                }
-              }}
-              aria-label="Copy reference ID"
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Copy Reference"
-            >
-              {copiedRef ? (
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-            </button>
           </div>
-        )}
 
-        <button
-          type="button"
-          onClick={() => {
-            if (typeof onClose === "function") {
-              onClose();
-            } else if (typeof onCancel === "function") {
-              onCancel();
-            }
-          }}
-          className="w-full py-2 px-4 rounded-xl text-xs font-semibold text-white dark:text-[#0A1628] bg-[#0A1628] dark:bg-[#D4AF37] hover:bg-[#162f53] dark:hover:bg-[#E5C358] transition-all cursor-pointer shadow-sm focus:outline-none border border-[#0A1628] dark:border-[#B9921F]"
-        >
-          Return to Conversation
-        </button>
+          {/* Contact Details */}
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div>
+              <span className="block text-slate-500 dark:text-slate-400">Branch</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200 truncate block">
+                {selectedBranch}
+              </span>
+            </div>
+            <div>
+              <span className="block text-slate-500 dark:text-slate-400">Topic</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200 truncate block">
+                {selectedCategory}
+              </span>
+            </div>
+          </div>
+
+          <div className="text-[11px] pt-1">
+            <span className="block text-slate-500 dark:text-slate-400">Contact</span>
+            <span className="font-medium text-slate-800 dark:text-slate-200 truncate block">
+              {submittedRequest.email} {submittedRequest.phone ? `• ${submittedRequest.phone}` : ""}
+            </span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="w-full space-y-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof onClose === "function") {
+                onClose();
+              } else if (typeof onCancel === "function") {
+                onCancel();
+              }
+            }}
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white dark:text-[#0A1628] bg-[#0A1628] dark:bg-[#D4AF37] hover:bg-[#162f53] dark:hover:bg-[#E5C358] transition-all cursor-pointer shadow-sm focus:outline-none border border-[#0A1628] dark:border-[#B9921F]"
+          >
+            Return to Conversation
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSubmittedRequest(null);
+              setFormData({
+                name: "",
+                email: "",
+                phone: "",
+                preferredBranch: initialBranch || "all",
+                concernCategory: "general_inquiry",
+                message: "",
+              });
+              setSubmitError("");
+            }}
+            className="w-full py-1.5 px-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+          >
+            Submit Another Inquiry
+          </button>
+        </div>
       </div>
     );
   }

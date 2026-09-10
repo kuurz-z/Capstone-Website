@@ -45,3 +45,34 @@ test("ChatLeadEscalationForm handles onClose and onCancel navigation", () => {
     "Must fall back to onCancel if onClose is not provided"
   );
 });
+
+test("ChatLeadEscalationForm renders dedicated Submitted UI with Reference ID and details", () => {
+  assert.match(
+    formSource,
+    /Request Submitted Successfully/,
+    "Must render prominent submission success title"
+  );
+  assert.match(
+    formSource,
+    /submittedRequest\.inquiryId/,
+    "Must display the generated inquiry reference ID"
+  );
+  assert.match(
+    formSource,
+    /Return to Conversation/,
+    "Must provide action button to return to chat conversation"
+  );
+  assert.match(
+    formSource,
+    /Submit Another Inquiry/,
+    "Must provide reset option to submit another inquiry"
+  );
+});
+
+test("ChatLeadEscalationForm handles both wrapped and unwrapped API responses", () => {
+  assert.match(
+    formSource,
+    /Boolean\s*\(\s*res\?\.inquiryId\s*\)/,
+    "Must consider inquiryId present in unwrapped response as success"
+  );
+});

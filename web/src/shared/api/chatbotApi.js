@@ -271,7 +271,7 @@ export const escalateChatbotLead = async (leadData) => {
   const normalizedMessage = (leadData?.message || "").trim();
   const normalizedSource = leadData?.source || "chatbot_front_desk_request";
 
-  return publicFetch("/chatbot/public/lead-escalation", {
+  const response = await publicFetch("/chatbot/public/lead-escalation", {
     method: "POST",
     body: JSON.stringify({
       name: normalizedName,
@@ -284,6 +284,19 @@ export const escalateChatbotLead = async (leadData) => {
       source: normalizedSource,
     }),
   });
+
+  if (response && typeof response === "object") {
+    const inquiryId = response?.data?.inquiryId || response?.inquiryId || response?._id;
+    const message = response?.data?.message || response?.message || "Your assistance request has been sent to our front desk admin team. We will contact you promptly.";
+    return {
+      success: response?.success !== false,
+      data: response?.data || response,
+      inquiryId,
+      message,
+    };
+  }
+
+  return response;
 };
 
 /**
