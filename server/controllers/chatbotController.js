@@ -57,6 +57,7 @@ const parseLeadSchema = z.object({
 
 const escalationSchema = z.object({
   name: z.string().min(1, "Name is required").max(150).trim(),
+  fullName: z.string().max(150).trim().optional(),
   email: z
     .string()
     .email("Invalid email format")
@@ -64,7 +65,15 @@ const escalationSchema = z.object({
     .trim()
     .toLowerCase(),
   phone: z.string().min(1, "Phone number is required").max(25).trim(),
-  preferredBranch: z.enum(["gil_puyat", "guadalupe", "any", "all"]).nullable().optional(),
+  contactNumber: z.string().max(25).trim().optional(),
+  preferredBranch: z
+    .enum(["gil_puyat", "gil-puyat", "guadalupe", "general", "any", "all"])
+    .nullable()
+    .optional(),
+  branch: z
+    .enum(["gil_puyat", "gil-puyat", "guadalupe", "general", "any", "all"])
+    .nullable()
+    .optional(),
   message: z.string().min(1, "Message is required").max(5000).trim(),
   preferredRoomType: z
     .string()
@@ -72,9 +81,11 @@ const escalationSchema = z.object({
     .nullable()
     .optional(),
   concernCategory: z.string().max(100).optional(),
+  category: z.string().max(100).optional(),
   targetMoveInDate: z.string().nullable().optional(),
   expectedLengthOfStay: z.string().nullable().optional(),
   preferredViewingDate: z.string().nullable().optional(),
+  chatContext: z.string().max(10000).optional(),
   source: z.string().max(100).default("chatbot_front_desk_request").optional(),
 });
 
@@ -209,17 +220,45 @@ export const handleLeadEscalation = async (req, res, next) => {
   try {
     const validatedData = escalationSchema.parse(req.body);
 
+    const clientName = (validatedData.fullName || validatedData.name).trim();
+    const clientPhone = (validatedData.contactNumber || validatedData.phone).trim();
+    const rawBranch = validatedData.preferredBranch || validatedData.branch;
+
+    let normalizedBranch = null;
+    if (rawBranch === "gil_puyat" || rawBranch === "gil-puyat") {
+      normalizedBranch = "gil-puyat";
+    } else if (rawBranch === "guadalupe") {
+      normalizedBranch = "guadalupe";
+    } else if (rawBranch === "general") {
+      normalizedBranch = "general";
+    }
+
+    const categoryLabel = validatedData.concernCategory || validatedData.category;
+    let subject = "Chatbot: Front Desk Assistance";
+    if (categoryLabel) {
+      const formattedCategory = categoryLabel
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      subject = `Chatbot: ${formattedCategory}`;
+    }
+
+    let inquiryNotes = "";
+    if (validatedData.chatContext) {
+      inquiryNotes = `Chatbot Conversation Context:\n${validatedData.chatContext}`;
+    }
+
     const inquiryPayload = {
-      fullName: validatedData.name,
+      fullName: clientName,
+      name: clientName,
       email: validatedData.email,
-      contactNumber: validatedData.phone,
-      preferredBranch:
-        validatedData.preferredBranch &&
-        validatedData.preferredBranch !== "any" &&
-        validatedData.preferredBranch !== "all"
-          ? validatedData.preferredBranch
-          : null,
+      contactNumber: clientPhone,
+      phone: clientPhone,
+      preferredBranch: normalizedBranch,
+      branch: normalizedBranch,
+      subject,
       message: validatedData.message,
+      notes: inquiryNotes,
+      status: "pending",
       preferredRoomType:
         validatedData.preferredRoomType && validatedData.preferredRoomType !== "undecided"
           ? validatedData.preferredRoomType
@@ -231,7 +270,10 @@ export const handleLeadEscalation = async (req, res, next) => {
     };
 
     if (validatedData.expectedLengthOfStay) {
-      inquiryPayload.expectedLengthOfStay = validatedData.expectedLengthOfStay;
+      const parsedLength = parseInt(validatedData.expectedLengthOfStay, 10);
+      if (!isNaN(parsedLength) && parsedLength > 0) {
+        inquiryPayload.expectedLengthOfStay = parsedLength;
+      }
     }
 
     if (validatedData.targetMoveInDate) {

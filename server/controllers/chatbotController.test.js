@@ -5,10 +5,13 @@ jest.unstable_mockModule("../services/chatbot/chatbotService.js", () => ({
   streamGeminiChatbot: jest.fn(),
 }));
 
+const capturedInquiries = [];
+
 class MockInquiry {
   constructor(data) {
     Object.assign(this, data);
     this._id = "mocked-id-123";
+    capturedInquiries.push(this);
   }
   save = jest.fn().mockResolvedValue(true);
 }
@@ -28,6 +31,7 @@ describe("chatbotController", () => {
   let next;
 
   beforeEach(() => {
+    capturedInquiries.length = 0;
     req = {
       body: {},
       on: jest.fn(),
@@ -238,6 +242,75 @@ describe("chatbotController", () => {
           success: false,
         }),
       );
+    });
+
+    it("should normalize gil_puyat to canonical gil-puyat and populate dual contact and branch fields", async () => {
+      req.body = {
+        name: "Juan Dela Cruz",
+        email: "juan@example.com",
+        phone: "09123456789",
+        preferredBranch: "gil_puyat",
+        message: "I need a room for next semester",
+        concernCategory: "room_availability",
+        chatContext: "user: Is Gil Puyat available?\nmodel: Yes, we have beds available.",
+      };
+
+      await handleLeadEscalation(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(capturedInquiries).toHaveLength(1);
+      const saved = capturedInquiries[0];
+
+      expect(saved.preferredBranch).toBe("gil-puyat");
+      expect(saved.branch).toBe("gil-puyat");
+      expect(saved.fullName).toBe("Juan Dela Cruz");
+      expect(saved.name).toBe("Juan Dela Cruz");
+      expect(saved.contactNumber).toBe("09123456789");
+      expect(saved.phone).toBe("09123456789");
+      expect(saved.status).toBe("pending");
+      expect(saved.source).toBe("website");
+      expect(saved.subject).toBe("Chatbot: Room Availability");
+      expect(saved.notes).toContain("Chatbot Conversation Context:");
+    });
+
+    it("should accept already hyphenated gil-puyat or guadalupe branch", async () => {
+      req.body = {
+        name: "Maria Santos",
+        email: "maria@example.com",
+        phone: "09187654321",
+        preferredBranch: "gil-puyat",
+        message: "General question about rates",
+      };
+
+      await handleLeadEscalation(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(capturedInquiries).toHaveLength(1);
+      const saved = capturedInquiries[0];
+      expect(saved.preferredBranch).toBe("gil-puyat");
+      expect(saved.branch).toBe("gil-puyat");
+    });
+
+    it("should accept payload with fullName and contactNumber aliases", async () => {
+      req.body = {
+        name: "Fallback Name",
+        fullName: "Primary Full Name",
+        email: "primary@example.com",
+        phone: "09111111111",
+        contactNumber: "09222222222",
+        preferredBranch: "guadalupe",
+        message: "Testing aliases",
+      };
+
+      await handleLeadEscalation(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(capturedInquiries).toHaveLength(1);
+      const saved = capturedInquiries[0];
+      expect(saved.fullName).toBe("Primary Full Name");
+      expect(saved.name).toBe("Primary Full Name");
+      expect(saved.contactNumber).toBe("09222222222");
+      expect(saved.phone).toBe("09222222222");
     });
   });
 });

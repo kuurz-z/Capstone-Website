@@ -9,6 +9,11 @@ const PAGE_META = {
     description:
       "Review applications, confirm documents, and move accepted tenants toward assignment.",
   },
+  "/admin/inquiries": {
+    title: "Inquiries & Leads",
+    description:
+      "Review prospective tenant questions, schedule viewings, and respond to incoming leads.",
+  },
   "/admin/tenants": {
     title: "Tenants",
     description:
