@@ -28,3 +28,17 @@ test("SignUp handleSocialSignup auto-onboards and handles instant cancellation",
   assert.match(signUp, /isPopupCancellationError/);
 });
 
+test("SignUp provides friendly Google sign-in message when duplicate account detected", () => {
+  assert.match(
+    signUp,
+    /An account with this email already exists via Google\. Please sign in with Google\./,
+    "Must guide user to sign in with Google when duplicate account collision occurs"
+  );
+  assert.match(
+    signUp,
+    /fetchSignInMethodsForEmail/,
+    "Must import and use fetchSignInMethodsForEmail to identify Google provider accounts"
+  );
+});
+
+
