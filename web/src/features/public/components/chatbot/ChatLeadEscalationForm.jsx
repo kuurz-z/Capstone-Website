@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Copy, Check } from "lucide-react";
 import { chatbotApi } from "../../../../shared/api/chatbotApi";
 
 const BRANCH_OPTIONS = [
@@ -29,6 +29,7 @@ export function ChatLeadEscalationForm({
   initialMessage = "",
   conversationHistory = [],
   onCancel,
+  onClose,
   onSuccessSubmitted,
 }) {
   const [formData, setFormData] = useState({
@@ -47,6 +48,7 @@ export function ChatLeadEscalationForm({
   const [isAutoFilled, setIsAutoFilled] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [copiedRef, setCopiedRef] = useState(false);
 
   // Auto-parse lead info from conversation history on mount
   useEffect(() => {
@@ -229,11 +231,15 @@ export function ChatLeadEscalationForm({
 
     try {
       const payload = {
+        name: formData.name.trim(),
         fullName: formData.name.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
+        contactNumber: formData.phone.trim(),
+        preferredBranch: formData.preferredBranch,
         branch: formData.preferredBranch,
         category: formData.concernCategory,
+        concernCategory: formData.concernCategory,
         message: formData.message.trim(),
         chatContext: conversationHistory.slice(-6).map((m) => `${m.role}: ${m.text}`).join("\n"),
       };
@@ -241,20 +247,33 @@ export function ChatLeadEscalationForm({
       const res = await chatbotApi.escalateChatbotLead(payload);
 
       if (res?.success) {
-        setSubmittedRequest({
+        const submittedData = {
           inquiryId: res?.data?.inquiryId || `INQ-${Date.now().toString().slice(-6)}`,
           message: res?.message || "Your inquiry has been successfully sent to front desk staff.",
-        });
+          fullName: formData.name.trim(),
+        };
+        setSubmittedRequest(submittedData);
         if (typeof onSuccessSubmitted === "function") {
-          onSuccessSubmitted(res.data);
+          onSuccessSubmitted({ ...res.data, ...submittedData });
         }
       } else {
         throw new Error(res?.message || "Failed to submit request");
       }
     } catch (err) {
       console.error("Escalation submit error:", err);
+      const isTechnicalError =
+        !err?.message ||
+        err.message.includes("is not a function") ||
+        err.message.includes("Cannot read") ||
+        err.message.includes("NetworkError") ||
+        err.message.includes("Failed to fetch") ||
+        err.message.includes("undefined") ||
+        err.message.includes("null");
+
       setSubmitError(
-        err?.message || "We could not submit your request at this moment. Please try again shortly."
+        isTechnicalError
+          ? "We could not submit your request at this moment. Please check your connection or contact front desk directly."
+          : err.message
       );
     } finally {
       setIsSubmitting(false);
@@ -273,16 +292,43 @@ export function ChatLeadEscalationForm({
         </p>
 
         {submittedRequest?.inquiryId && (
-          <div
-            className="p-2.5 rounded-lg mb-4 text-xs font-mono select-all bg-slate-50 dark:bg-[#162238] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
-          >
-            Ref: {submittedRequest.inquiryId}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div
+              className="px-3 py-1.5 rounded-lg text-xs font-mono select-all bg-slate-50 dark:bg-[#162238] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+            >
+              Ref: {submittedRequest.inquiryId}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (submittedRequest?.inquiryId && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(submittedRequest.inquiryId);
+                  setCopiedRef(true);
+                  setTimeout(() => setCopiedRef(false), 2000);
+                }
+              }}
+              aria-label="Copy reference ID"
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Copy Reference"
+            >
+              {copiedRef ? (
+                <Check className="w-3.5 h-3.5 text-emerald-500" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
           </div>
         )}
 
         <button
           type="button"
-          onClick={onCancel}
+          onClick={() => {
+            if (typeof onClose === "function") {
+              onClose();
+            } else if (typeof onCancel === "function") {
+              onCancel();
+            }
+          }}
           className="w-full py-2 px-4 rounded-xl text-xs font-semibold text-white dark:text-[#0A1628] bg-[#0A1628] dark:bg-[#D4AF37] hover:bg-[#162f53] dark:hover:bg-[#E5C358] transition-all cursor-pointer shadow-sm focus:outline-none border border-[#0A1628] dark:border-[#B9921F]"
         >
           Return to Conversation

@@ -262,19 +262,34 @@ export const queryPublicChatbot = async ({ message, conversationHistory = [], br
  * @returns {Promise<{inquiryId: string, message: string}>}
  */
 export const escalateChatbotLead = async (leadData) => {
+  const normalizedName = (leadData?.name || leadData?.fullName || "").trim();
+  const normalizedEmail = (leadData?.email || "").trim().toLowerCase();
+  const normalizedPhone = (leadData?.phone || leadData?.contactNumber || "").trim();
+  const normalizedBranch = leadData?.preferredBranch || leadData?.branch || "any";
+  const normalizedRoomType = leadData?.preferredRoomType || "undecided";
+  const normalizedCategory = leadData?.concernCategory || leadData?.category || "General Inquiry";
+  const normalizedMessage = (leadData?.message || "").trim();
+  const normalizedSource = leadData?.source || "chatbot_front_desk_request";
+
   return publicFetch("/chatbot/public/lead-escalation", {
     method: "POST",
     body: JSON.stringify({
-      name: leadData.name?.trim(),
-      email: leadData.email?.trim(),
-      phone: leadData.phone?.trim(),
-      preferredBranch: leadData.preferredBranch || "any",
-      preferredRoomType: leadData.preferredRoomType || "undecided",
-      message: leadData.message?.trim() || "",
-      source: leadData.source || "chatbot_public",
+      name: normalizedName,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      preferredBranch: normalizedBranch,
+      preferredRoomType: normalizedRoomType,
+      concernCategory: normalizedCategory,
+      message: normalizedMessage,
+      source: normalizedSource,
     }),
   });
 };
+
+/**
+ * Backward compatibility alias for legacy callers and cached client bundles.
+ */
+export const escalateToHuman = escalateChatbotLead;
 
 /**
  * Parse structured lead details (name, email, phone, room, branch) from conversation history.
@@ -396,6 +411,7 @@ export const chatbotApi = {
   streamPublicChatbot,
   queryPublicChatbot,
   escalateChatbotLead,
+  escalateToHuman,
   parseChatbotLead,
   queryAdminSop,
   suggestAdminReply,
