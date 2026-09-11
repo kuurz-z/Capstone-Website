@@ -11,7 +11,6 @@ import auditLogger from "../utils/auditLogger.js";
 const WHOLE_NUMBER_FIELDS = new Set([
   "latePaymentGraceDays",
   "noShowGraceDays",
-  "stalePendingHours",
   "staleVisitPendingHours",
   "visitPendingWarnDays",
   "staleVisitApprovedHours",
@@ -124,7 +123,7 @@ const FIELD_LIMITS = Object.freeze({
   checkoutLockDurationMinutes: { min: 5, max: 1440 },
   archiveCancelledAfterDays: { min: 1, max: 365 },
   renewalNoticeRequiredDays: { min: 1, max: 180 },
-  stalePendingHours: { min: 1, max: 720 },
+  stalePendingHours: { min: 0.25, max: 720 },
   staleVisitPendingHours: { min: 1, max: 720 },
   visitPendingWarnDays: { min: 1, max: 90 },
   staleVisitApprovedHours: { min: 1, max: 720 },
