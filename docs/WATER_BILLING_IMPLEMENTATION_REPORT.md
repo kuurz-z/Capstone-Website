@@ -20,6 +20,7 @@
 | `f31206bd` | Concurrent publication guard, corrections and runtime fixes |
 | `a634c74f` | Integrate current main without conflicts |
 | `993c5a1b` | Consistent editable PHP/m³ tariff labels |
+| `a5da99cf` | Cutover guide, A–T report and visual evidence |
 
 Documentation commits follow these implementation commits; the PR commit list is the authoritative complete history.
 
@@ -105,13 +106,24 @@ Statement template v5 includes all three water tables, wrapped cells and truthfu
 
 ## Q. Tests and verification
 
-Final verification results will be recorded here before delivery. The previous full server run completed 351 suites / 3,396 tests with one maintenance timeout; that test could access a live AI service through local environment configuration. It now isolates the deterministic fallback using the existing no-AI helper, and all 86 tests in that suite pass. A fresh full run is in progress.
+Final full local server regression: **351 suites, 3,397 tests passed, zero failures** (756.839 seconds). This includes the integration suites and existing electricity/payment regressions. The earlier environment-dependent maintenance timeout was fixed by isolating that deterministic fallback from live AI configuration; the final full run passed.
+
+Commands run in their respective package directories:
+
+```powershell
+# server: all tests, including isolated MongoDB integration suites
+npm.cmd test -- --maxWorkers=2 --workerIdleMemoryLimit=512MB --forceExit
+# web
+npm.cmd test
+npm.cmd run build
+```
 
 - Final targeted financial/statement/notification safeguards: **6 suites, 50 tests passed**.
 - Transfer regression group: **12 suites, 115 tests passed**.
 - Core water group: **4 suites, 38 tests passed**.
 - Frontend after integrating current main: **995 tests passed, zero failures**.
-- Production web build: **passed** (4m35s). A repeat build is running after the final water settings text-only change.
+- Final production web build: **passed** (3m15s), including the final water tariff labels.
+- Hosted CI on implementation/evidence commit `a5da99cf`: **286 server suites / 2,903 tests passed**, **995 frontend tests passed**, production build and preview deployment passed. Hosted server CI excludes integration tests; the full local run above includes them.
 - Component fixture browser QA: actual React components rendered at 390px and 1440px, including Move-In, Open/Close/New period, Complete Transfer, Move-Out and shared tables. Final renders had no page errors; narrow tables and modal actions remained reachable. This used isolated sample data, not authenticated production workflows.
 
 Test groups overlap and must not be added together. MongoDB integration tests use isolated test fixtures. Existing payment/PayMongo tests use mocks; no live payment was made.
@@ -144,4 +156,4 @@ Follow [WATER_METER_CUTOVER.md](WATER_METER_CUTOVER.md). Review the PHP/m³ rate
 
 ## T. PR status
 
-Draft PR creation and CI verification are pending final local checks. Do not merge until applicable CI and regression checks pass. No merge into main or production deployment is authorized by this report.
+[Draft PR #172](https://github.com/kuurz-z/Capstone-Website/pull/172) is open and unmerged. Hosted server/frontend CI and the preview deployment passed on `a5da99cf`, including 2,903 server tests and 995 frontend tests. The final documentation-only update records the full local regression results and triggers the normal checks again; the PR check panel is authoritative for that final commit. No production deployment or migration was performed.
