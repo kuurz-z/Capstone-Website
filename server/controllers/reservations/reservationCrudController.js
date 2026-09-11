@@ -106,7 +106,13 @@ export const getReservations = async (req, res) => {
       ).map((r) => r._id);
       query = { roomId: { $in: roomIds }, isArchived: { $ne: true } };
     } else {
-      query = { userId: dbUser._id, isArchived: { $ne: true } };
+      if (archiveFilter === "archived") {
+        query = { userId: dbUser._id, isArchived: true };
+      } else if (req.query.includeArchived === "true" || archiveFilter === "all") {
+        query = { userId: dbUser._id };
+      } else {
+        query = { userId: dbUser._id, isArchived: { $ne: true } };
+      }
     }
 
     let reservationsQuery = Reservation.find(query)
