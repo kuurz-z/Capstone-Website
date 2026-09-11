@@ -529,10 +529,18 @@ function validatePreconditions(state, args) {
   assertRepair(!state.deterministicAuditCollision, "REPLACEMENT_ID_COLLISION", "The deterministic AuditLog ID already exists with different metadata.");
 }
 
+function sanitizeRoomForUntouched(room) {
+  if (!room) return null;
+  const clone = { ...room };
+  delete clone.electricityObservationRevision;
+  delete clone.waterObservationRevision;
+  return clone;
+}
+
 function untouchedSnapshot(state) {
   return canonicalize({
     schedule: state.schedule,
-    rooms: [state.sourceRoom, state.destinationRoom],
+    rooms: [sanitizeRoomForUntouched(state.sourceRoom), sanitizeRoomForUntouched(state.destinationRoom)],
     reservation: state.reservation,
     stays: state.stays,
     contracts: state.contracts,
@@ -841,6 +849,7 @@ export async function runTargetedUtilityRepair({
         periodId: objectId(REPLACEMENT_IDS.sourcePeriodId),
         boundaryReadingId: objectId(REPLACEMENT_IDS.sourceStartReadingId),
         session,
+        serialize: false,
       });
       const destinationPeriod = await deps.createOpenPeriod({
         utilityType: "electricity",
@@ -852,6 +861,7 @@ export async function runTargetedUtilityRepair({
         periodId: objectId(REPLACEMENT_IDS.destinationPeriodId),
         boundaryReadingId: objectId(REPLACEMENT_IDS.destinationStartReadingId),
         session,
+        serialize: false,
       });
       assertRepair(sameId(sourcePeriod._id, REPLACEMENT_IDS.sourcePeriodId) && sameId(destinationPeriod._id, REPLACEMENT_IDS.destinationPeriodId), "POSTCONDITION_FAILED", "Canonical lifecycle service did not use the preallocated period IDs.");
 

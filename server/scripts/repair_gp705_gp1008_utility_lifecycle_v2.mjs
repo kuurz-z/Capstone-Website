@@ -201,7 +201,7 @@ export async function runFreshBaselineRepair({ args, models = DEFAULT_MODELS, mo
       await archive(models.Bill, { _id: oid(TARGET.sourceBillId), updatedAt: args.expectedBillUpdatedAt, status: "draft", paidAmount: 0, isArchived: false }, "source Bill");
       await archive(models.UtilityPeriod, { _id: oid(TARGET.destinationPeriodId), updatedAt: args.expectedDestinationUpdatedAt, status: "closed", isArchived: false }, "destination period");
       for (const id of TARGET.destinationReadingIds) await archive(models.UtilityReading, { _id: oid(id), isArchived: false, readingStatus: "locked", updatedAt: new Date(EXPECTED_READINGS[id].updatedAt) }, `destination reading ${id}`);
-      const common = { utilityType: "electricity", startDate: args.observedAt, ratePerUnit: TARGET.ratePerUnit, actorId, startMode: UTILITY_PERIOD_START_MODE.EXACT_OBSERVATION, session: dbSession };
+      const common = { utilityType: "electricity", startDate: args.observedAt, ratePerUnit: TARGET.ratePerUnit, actorId, startMode: UTILITY_PERIOD_START_MODE.EXACT_OBSERVATION, session: dbSession, serialize: false };
       const sourcePeriod = await services.createOpenPeriod({ ...common, room: state.sourceRoom, startReading: args.sourceOpening, periodId: oid(GENERATED_IDS.sourcePeriodId), boundaryReadingId: oid(GENERATED_IDS.sourceReadingId) });
       const destinationPeriod = await services.createOpenPeriod({ ...common, room: state.destinationRoom, startReading: args.destinationOpening, periodId: oid(GENERATED_IDS.destinationPeriodId), boundaryReadingId: oid(GENERATED_IDS.destinationReadingId) });
       await models.UtilityHistoricalGap.create([{

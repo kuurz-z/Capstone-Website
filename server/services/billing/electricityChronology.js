@@ -31,9 +31,9 @@ export function assertElectricityNeighbors({previous,following,same=[],date,read
   return value;
 }
 
-export async function assertElectricityChronology({roomId,date,reading,eventType,meterReset,session=null,excludeIds=[]}) {
+export async function assertElectricityChronology({roomId,date,reading,eventType,meterReset,session=null,excludeIds=[],serialize=true}) {
   // Transactional opening/closing/occupancy writers serialize on the room.
-  if (session) await Room.updateOne({_id:roomId},{$inc:{electricityObservationRevision:1}},{session});
+  if (session && serialize) await Room.updateOne({_id:roomId},{$inc:{electricityObservationRevision:1}},{session, timestamps:false});
   const valid={...validElectricityObservations(roomId),_id:{$nin:excludeIds}};
   const [previous,following,same]=await Promise.all([
     UtilityReading.findOne({...valid,date:{$lt:date}}).sort({date:-1,createdAt:-1}).session(session).lean(),
