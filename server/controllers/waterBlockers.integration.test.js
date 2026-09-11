@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import BusinessSettings from '../models/BusinessSettings.js';
 import {jest, beforeAll,afterAll,beforeEach,test,expect} from '@jest/globals';
 import {MongoMemoryReplSet} from 'mongodb-memory-server';
 import {User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading} from '../models/index.js';
@@ -16,6 +17,7 @@ async function resident(u,n,bed) {
   await BedHistory.create({roomId:room._id,tenantId:u._id,reservationId:r._id,bedId:bed,moveInDate:date(n),observedStartAt:date(n),status:'active'});return r;
 }
 beforeEach(async()=>{
+  await BusinessSettings.findOneAndUpdate({}, {$set:{defaultElectricityRatePerKwh:16,defaultWaterRatePerUnit:50}}, {upsert:true});
   for(const model of [User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading]) await model.deleteMany({});
   admin=await user('Admin','branch_admin');a=await user('A');b=await user('B');
   room=await Room.create({name:'Water test',roomNumber:'WT',branch:'gil-puyat',type:'double-sharing',capacity:2,currentOccupancy:2,price:5000});

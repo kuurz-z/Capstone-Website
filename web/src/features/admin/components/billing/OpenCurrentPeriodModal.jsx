@@ -19,14 +19,17 @@ export default function OpenCurrentPeriodModal({
   latestReading,
   defaultRatePerUnit,
   onSuccess,
+  onRecordOpening,
 }) {
   const notify = useBillingNotifier();
   const openPeriod = useOpenUtilityPeriod(utilityType);
   const [form, setForm] = useState({ startDate: "", startReading: "", ratePerUnit: "" });
   const isElectricity = utilityType === "electricity";
+  const [needsWaterOpening, setNeedsWaterOpening] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
+    setNeedsWaterOpening(false);
     setForm({
       startDate: toInputDate(lastClosedPeriod?.endDate || new Date()),
       startReading: utilityType === "water" ? "" : String(lastClosedPeriod?.endReading ?? latestReading?.reading ?? 0),
@@ -59,6 +62,7 @@ export default function OpenCurrentPeriodModal({
       onSuccess?.(id);
       onClose();
     } catch (error) {
+      setNeedsWaterOpening(!isElectricity && (error?.response?.data?.error?.code || error?.response?.data?.code || error?.code) === 'WATER_VERIFIED_BASELINE_REQUIRED');
       notify.error(error, "Unable to open the current billing period.");
     }
   };
@@ -82,10 +86,12 @@ export default function OpenCurrentPeriodModal({
             <input className={`${inputClass} mt-1`} type="number" min="0" step="0.01" inputMode="decimal" value={form.startReading} onChange={(event) => setForm((current) => ({ ...current, startReading: event.target.value }))} required />
           </label>}
           <label className="block text-xs font-semibold text-foreground">Rate (PHP/{isElectricity ? "kWh" : "m³"})
-            <input className={`${inputClass} mt-1`} type="number" min="0" step="0.01" inputMode="decimal" value={form.ratePerUnit} onChange={(event) => setForm((current) => ({ ...current, ratePerUnit: event.target.value }))} required />
+            <input className={`${inputClass} mt-1`} type="number" value={form.ratePerUnit} disabled />
+            <span className="mt-1 block text-muted-foreground">Current global rate; captured when the cycle is created.</span>
           </label>
         </div>
         <div className="mt-6 flex justify-end gap-2">
+          {needsWaterOpening && onRecordOpening && <button type="button" onClick={onRecordOpening} className="rounded-lg border border-border px-3 py-2 text-sm">Record Opening Reading</button>}
           <button type="button" className="rounded-lg border border-border px-4 py-2 text-sm" onClick={onClose}>Cancel</button>
           <button type="submit" disabled={openPeriod.isPending} className="inline-flex items-center gap-2 rounded-lg bg-[#0A1628] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
             {openPeriod.isPending ? <LoaderCircle size={15} className="animate-spin" /> : null} Initialize Manually

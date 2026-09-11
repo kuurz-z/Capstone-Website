@@ -11,7 +11,7 @@ const mocks = {
   api: 'export const utilityApi = globalThis.__monthlyUtilityTest.api;',
   billingApi: 'export const billingApi = {};',
   billing: 'export const useBillsByBranch = () => ({data:[]}); export const useAdminPayments = () => ({data:[]});',
-  settings: 'export const useBusinessSettings = () => ({data:{defaultWaterRatePerUnit:50}});',
+  settings: 'export const useBusinessSettings = () => ({data:globalThis.__monthlyUtilityTest.settings});',
   auth: 'export const useAuth = () => ({user:{role:"branch_admin",branch:"gil-puyat"}});',
   query: 'export const useQueryClient = () => ({invalidateQueries:async()=>{}}); export const useQuery=()=>({}); export const useMutation=()=>({}); export const keepPreviousData=data=>data;',
   notification: 'export const showNotification = (...args) => globalThis.__monthlyUtilityTest.notifications.push(args);',

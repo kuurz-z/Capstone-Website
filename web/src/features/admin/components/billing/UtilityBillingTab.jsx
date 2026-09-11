@@ -13,6 +13,7 @@ import { useAuth } from "../../../../shared/hooks/useAuth";
 import ConfirmModal from "../../../../shared/components/ConfirmModal";
 import NewBillingPeriodModal from "./NewBillingPeriodModal";
 import OpenCurrentPeriodModal from "./OpenCurrentPeriodModal";
+import RecordWaterOpeningModal from "./RecordWaterOpeningModal";
 import CloseCurrentPeriodModal from "./CloseCurrentPeriodModal";
 import BillingCycleDetailModal from "./BillingCycleDetailModal";
 import {
@@ -150,6 +151,8 @@ const UtilityBillingTab = ({
     onConfirm: null,
   });
   const [isNewPeriodModalOpen, setIsNewPeriodModalOpen] = useState(false);
+  const [isWaterOpeningModalOpen, setIsWaterOpeningModalOpen] = useState(false);
+  const [recoveredWaterOpening, setRecoveredWaterOpening] = useState(null);
   const [isHistoricalGeneration, setIsHistoricalGeneration] = useState(false);
   const [isOpenCurrentPeriodModalOpen, setIsOpenCurrentPeriodModalOpen] = useState(false);
   const [isCloseCurrentPeriodModalOpen, setIsCloseCurrentPeriodModalOpen] = useState(false);
@@ -217,9 +220,9 @@ const UtilityBillingTab = ({
   // Default rates from settings
   const defaultRatePerUnit = useMemo(() => {
     if (utilityType === "electricity") {
-      return Number(settingsData?.utilityRates?.electricityRatePerKwh || 16.0);
+      return settingsData?.defaultElectricityRatePerKwh ?? "";
     }
-    return Number(settingsData?.defaultWaterRatePerUnit ?? 0);
+    return settingsData?.defaultWaterRatePerUnit ?? "";
   }, [settingsData, utilityType]);
 
   // Normalized rooms list (filter out branches like Guadalupe that use fixed-rate billing without separate utilities)
@@ -1280,6 +1283,19 @@ const UtilityBillingTab = ({
         isSaving={updatePeriod.isPending}
       />
 
+      {recoveredWaterOpening?.roomId === selectedRoomId && utilityType === 'water' && <p role="status" className="rounded-lg border border-border bg-muted/20 p-3 text-sm">Verified Water opening: {recoveredWaterOpening.reading} m³ · {new Date(recoveredWaterOpening.observedAt).toLocaleString('en-PH', {timeZone:'Asia/Manila'})} (Philippine time). Earlier consumption remains unknown.</p>}
+      <RecordWaterOpeningModal
+        isOpen={isWaterOpeningModalOpen}
+        onClose={() => setIsWaterOpeningModalOpen(false)}
+        roomId={selectedRoomId}
+        roomName={getRoomLabel(selectedRoom)}
+        onSuccess={response => {
+          setRecoveredWaterOpening({roomId:selectedRoomId, reading:response.reading.reading, observedAt:response.reading.observedAt || response.reading.date});
+          setSelectedPeriodId(response.period.id || response.period._id);
+          setIsHistoricalGeneration(false);
+          setIsNewPeriodModalOpen(true);
+        }}
+      />
       <NewBillingPeriodModal
         isOpen={isNewPeriodModalOpen}
         onClose={() => setIsNewPeriodModalOpen(false)}
@@ -1297,9 +1313,11 @@ const UtilityBillingTab = ({
         activeTenantCount={selectedRoom?.activeTenantCount ?? selectedRoom?.occupants?.length ?? 0}
         periods={periodList}
         onSuccess={handleDraftGenerated}
+        onRecordOpening={() => { setIsNewPeriodModalOpen(false); setIsWaterOpeningModalOpen(true); }}
       />
 
       <OpenCurrentPeriodModal
+        onRecordOpening={() => { setIsOpenCurrentPeriodModalOpen(false); setIsWaterOpeningModalOpen(true); }}
         isOpen={isOpenCurrentPeriodModalOpen}
         onClose={() => setIsOpenCurrentPeriodModalOpen(false)}
         utilityType={utilityType}

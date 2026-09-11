@@ -64,7 +64,8 @@ export default function CloseCurrentPeriodModal({
       notify.success(
         response?.result?.nextPeriodId
           ? "Period closed. Occupancy continues, so the next period was opened from the verified closing reading."
-          : "Period closed. The room is vacant, so no new active period was needed.",
+          : !metered ? "Legacy cycle closed at its saved price. Record a verified opening to start measured Water billing."
+          : "Period closed. No continuation period was created.",
       );
       onSuccess?.(response?.result?.periodId || period.id || period._id);
       onClose();
@@ -80,7 +81,7 @@ export default function CloseCurrentPeriodModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="flex items-center gap-2 text-base font-bold text-card-foreground"><CalendarCheck size={17} /> Close Current Period</h3>
-            <p className="mt-1 text-xs text-muted-foreground">{roomName}. Occupied rooms continue from this reading; vacant rooms remain without an active period until the next move-in.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{roomName}. {isElectricity ? 'Occupied rooms continue from this reading; vacant rooms remain without an active period until the next move-in.' : !metered ? 'This closes the legacy cycle at its saved price. Measured Water billing requires a verified opening after cutover.' : 'The measured cycle closes at its captured rate.'}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>

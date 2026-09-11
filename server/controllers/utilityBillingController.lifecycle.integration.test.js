@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import BusinessSettings from '../models/BusinessSettings.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { BedHistory, Bill, Reservation, Room, User, UtilityPeriod, UtilityReading } from "../models/index.js";
@@ -33,6 +34,7 @@ describe("utility billing lifecycle controller commands", () => {
   }, 120_000);
 
   beforeEach(async () => {
+    await BusinessSettings.findOneAndUpdate({key:'global'}, {$set:{defaultElectricityRatePerKwh:10,defaultWaterRatePerUnit:50}}, {upsert:true});
     await Promise.all([
       BedHistory.deleteMany({}), Bill.deleteMany({}), Reservation.deleteMany({}), Room.deleteMany({}), User.deleteMany({}),
       UtilityPeriod.deleteMany({}), UtilityReading.deleteMany({}),

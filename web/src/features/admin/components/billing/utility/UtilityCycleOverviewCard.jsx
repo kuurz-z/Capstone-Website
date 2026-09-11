@@ -72,15 +72,16 @@ export default function UtilityCycleOverviewCard({
 
         {/* Action CTAs */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          {currentPeriod && <button
             type="button"
             onClick={onOpenNewPeriodModal}
+            data-utility-cycle-action
             disabled={!selectedRoom || isLoadingPeriod}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A1628] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-[#13243D] disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           >
             <Plus size={13} />
             <span>New Billing Period</span>
-          </button>
+          </button>}
           <button
             type="button"
             onClick={onBatchSendReady}
@@ -110,11 +111,12 @@ export default function UtilityCycleOverviewCard({
               <button
                 type="button"
                 onClick={onOpenHistoricalPeriod}
+                data-utility-cycle-action
                 disabled={!selectedRoom || isLoadingPeriod}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
               >
                 <Calendar size={13} />
-                <span>Generate Historical Cycle</span>
+                <span>Start Billing Cycle</span>
               </button>
             </>
           ) : null}

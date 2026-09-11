@@ -1,6 +1,7 @@
 import express from "express";
 import {
   previewWaterBilling,
+  recoverWaterOpening,
   openUtilityPeriod,
   generateHistoricalUtilityPeriod,
   recordUtilityReading,
@@ -39,6 +40,7 @@ router.use(requirePermission("manageBilling"));
 // Diagnostics (Shared)
 router.get("/diagnostics", getUtilityDiagnosticsApi);
 router.post('/water/preview', previewWaterBilling);
+router.post('/water/opening-baseline', recoverWaterOpening);
 
 // Query routes (branch filtering done inside controllers via admin.branch)
 router.get("/:utilityType/rooms", getUtilityRooms);

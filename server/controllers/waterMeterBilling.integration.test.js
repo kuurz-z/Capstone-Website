@@ -7,6 +7,7 @@ import {createOpenUtilityPeriodWithBoundary} from '../services/billing/utilityPe
 import {recordWaterObservation} from '../services/billing/waterObservations.js';
 import {upsertDraftBillsForUtility,publishWaterAllocationBill,sendDraftUtilityBills} from '../utils/utilityBillFlow.js';
 import {getVisibleBillCharges} from '../services/billing/billingPolicy.js';
+import BusinessSettings from '../models/BusinessSettings.js';
 let mongo,admin,room,a,b,ra,rb;
 const date=n=>new Date(`2026-08-${String(n).padStart(2,'0')}T00:00:00+08:00`);
 jest.setTimeout(120000);
@@ -18,6 +19,7 @@ async function resident(u,n,bed) {
   await BedHistory.create({roomId:room._id,tenantId:u._id,reservationId:r._id,bedId:bed,moveInDate:date(n),observedStartAt:date(n),status:'active'});return r;
 }
 beforeEach(async()=>{
+  await BusinessSettings.findOneAndUpdate({}, {$set:{defaultElectricityRatePerKwh:16,defaultWaterRatePerUnit:50}}, {upsert:true});
   for(const model of [User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading]) await model.deleteMany({});
   admin=await user('Admin','branch_admin');a=await user('A');b=await user('B');
   room=await Room.create({name:'Water test',roomNumber:'WT',branch:'gil-puyat',type:'double-sharing',capacity:2,currentOccupancy:2,price:5000});

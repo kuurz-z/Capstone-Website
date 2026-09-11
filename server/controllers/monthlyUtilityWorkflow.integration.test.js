@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import BusinessSettings from '../models/BusinessSettings.js';
 import { jest, beforeAll, afterAll, beforeEach, afterEach, test, expect } from '@jest/globals';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 
@@ -31,6 +32,7 @@ beforeAll(async()=>{
 afterEach(()=>jest.useRealTimers());
 afterAll(async()=>{await mongoose.disconnect();await mongo?.stop();});
 beforeEach(async()=>{
+  await BusinessSettings.findOneAndUpdate({key:'global'},{$set:{defaultElectricityRatePerKwh:16,defaultWaterRatePerUnit:16}},{upsert:true});
   for (const model of [User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading,Notification,Payment]) await model.deleteMany({});
   email.mockClear();push.mockClear();
   const user=role=>User.create({firebaseUid:`${role}-${new mongoose.Types.ObjectId()}`,username:`${role}-${new mongoose.Types.ObjectId()}`,email:`${new mongoose.Types.ObjectId()}@example.test`,firstName:role,lastName:'Monthly',role,branch:'gil-puyat'});

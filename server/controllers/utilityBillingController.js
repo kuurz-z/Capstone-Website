@@ -743,9 +743,11 @@ async function closePeriodAndGenerateDrafts({
     const remainsAfterClose = !moveOut || new Date(moveOut) > closingDate;
     return startsByClose && remainsAfterClose;
   });
-  const shouldOpenNextPeriod =
+  // A legacy Water cycle stores a flat cycle charge, not today's PHP/m3 tariff.
+  // Finish its history; require an explicit measured baseline for the next cycle.
+  const shouldOpenNextPeriod = metered && (
     openNextPeriod === true ||
-    (openNextPeriod === "when_occupied" && continuingOccupants.length > 0);
+    (openNextPeriod === "when_occupied" && continuingOccupants.length > 0));
   let nextPeriod = null;
   if (shouldOpenNextPeriod) {
     await assertUtilityLifecycleActiveIndexReady();
@@ -803,13 +805,14 @@ export const openUtilityPeriod = async (req, res, next) => {
     if (
       !roomId ||
       !startDate ||
-      (!ratePerUnit && ratePerUnit !== 0) ||
       (requiresMeterReading && startReading === undefined)
     ) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    const parsedRate = Number(ratePerUnit);
+    // Submitted rates are retained for API compatibility, but new periods
+    // capture the current global tariff rather than a stale client value.
+    const parsedRate = await resolveCurrentUtilityRate({ utilityType });
     if (!Number.isFinite(parsedRate) || parsedRate < 0) {
       return res.status(400).json({ error: "Utility rate cannot be negative." });
     }
@@ -1102,8 +1105,8 @@ export const generateHistoricalUtilityPeriod = async (req, res, next) => {
     const admin = await getAdminInfo(req);
     const utilityType = req.params.utilityType;
     const { roomId, startDate, startReading, ratePerUnit, endDate, endReading } = req.body;
-    if (!roomId || !startDate || !endDate || ratePerUnit === null || ratePerUnit === undefined || ratePerUnit === "") {
-      return res.status(400).json({ error: "Room, dates, and rate are required." });
+    if (!roomId || !startDate || !endDate) {
+      return res.status(400).json({ error: "Room and dates are required." });
     }
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: "Room not found" });
@@ -1129,7 +1132,7 @@ export const generateHistoricalUtilityPeriod = async (req, res, next) => {
       eventType: "periodEnd",
       fieldLabel: "Final meter reading",
     });
-    const rate = Number(ratePerUnit);
+    const rate = await resolveCurrentUtilityRate({ utilityType });
     const maxRate = utilityType === "electricity" ? 100 : 100000;
     if (!Number.isFinite(rate) || rate < 0 || rate > maxRate) {
       return res.status(400).json({ error: `Rate must be between 0 and ${maxRate.toLocaleString()}.` });
@@ -2708,6 +2711,18 @@ async function correctWaterObservation(req, res, next, original, admin) {
   } catch(error) {next(error);} finally {await session.endSession();}
 }
 
+export const recoverWaterOpening = async (req, res, next) => {
+  try {
+    const admin = await getAdminInfo(req);
+    const { recordWaterOpeningRecovery } = await import('../services/billing/waterOpeningRecovery.js');
+    const { roomId, reading, observedAt, source, reason, evidenceReferences } = req.body;
+    const result = await recordWaterOpeningRecovery({ admin, roomId, reading, observedAt, source, reason, evidenceReferences });
+    res.status(result.idempotent ? 200 : 201).json({ success: true, data: {
+      ...result, period: serializeUtilityPeriod(result.period), reading: serializeUtilityReading(result.reading),
+    } });
+  } catch (error) { next(error); }
+};
+
 export const previewWaterBilling = async (req,res,next) => {
   try {
     const admin=await getAdminInfo(req);
@@ -2725,7 +2740,7 @@ export const previewWaterBilling = async (req,res,next) => {
     if (active) await assertUtilityOpeningChange({period:active,evidence});
     await assertUtilityCycleRange({roomId:room._id,utilityType:'water',startDate:start,endDate:end,periodId:active?._id});
     const closing=parsePhysicalMeterReading(req.body.endReading,{fieldLabel:'Closing water reading'});
-    const period={calculationVersion:'water-meter-v1',startDate:start,ratePerUnit:active?.ratePerUnit ?? req.body.ratePerUnit,pricingSnapshot:active?.pricingSnapshot};
+    const period={calculationVersion:'water-meter-v1',startDate:start,ratePerUnit:active?.ratePerUnit ?? await resolveCurrentUtilityRate({utilityType:'water'}),pricingSnapshot:active?.pricingSnapshot};
     const result=await calculateCanonicalWaterPeriod({room,period,endDate:end,endReading:closing});
     res.json({success:true,data:result,result});
   } catch(error) {next(error);}

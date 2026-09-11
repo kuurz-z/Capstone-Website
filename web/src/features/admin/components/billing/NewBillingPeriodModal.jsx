@@ -33,6 +33,7 @@ const MAX_ELECTRICITY_RATE = 100.0;
 const MAX_WATER_RATE = 100000.0;
 const MAX_CYCLE_USAGE = 50000.0;
 const isBlankValue = (value) => value === "" || value === null || value === undefined;
+const apiErrorCode = error => error?.response?.data?.error?.code || error?.response?.data?.code || error?.code || '';
 
 /** Sanitize numeric string to respect maximum decimal and whole digit lengths */
 const sanitizeNumericInput = (val, maxDecimals = 2, maxWholeDigits = 6) => {
@@ -105,6 +106,7 @@ export default function NewBillingPeriodModal({
   periods = [],
   readings = [],
   onSuccess,
+  onRecordOpening,
 }) {
   const notify = useBillingNotifier();
   const finalReadingInputRef = useRef(null);
@@ -125,7 +127,7 @@ export default function NewBillingPeriodModal({
   const [periodForm, setPeriodForm] = useState({
     startDate: "",
     startReading: "",
-    ratePerUnit: defaultRatePerUnit || "",
+    ratePerUnit: defaultRatePerUnit ?? "",
     endReading: "",
     endDate: "",
   });
@@ -135,16 +137,17 @@ export default function NewBillingPeriodModal({
   const waterRequestKey = JSON.stringify([selectedRoomId, activePeriod?.id || activePeriod?._id, periodForm]);
   const waterPreview = waterPreviewResponse?.key === waterRequestKey ? waterPreviewResponse.result : null;
   const [waterPreviewError,setWaterPreviewError] = useState('');
+  const [waterErrorCode, setWaterErrorCode] = useState('');
   const [waterPreviewPending,setWaterPreviewPending] = useState(false);
   useEffect(()=>{
     if (!isOpen || utilityType !== 'water' || legacyWater || manualReviewPeriod) return;
     let cancelled=false;
-    setWaterPreview(null); setWaterPreviewError(''); setWaterPreviewPending(false);
+    setWaterPreview(null); setWaterPreviewError(''); setWaterErrorCode(''); setWaterPreviewPending(false);
     if (!periodForm.startDate || !periodForm.endDate || periodForm.endReading === '' || periodForm.ratePerUnit === '') return;
     setWaterPreviewPending(true);
     const timer=setTimeout(()=>utilityApi.previewWater({...periodForm,roomId:selectedRoomId,periodId:activePeriod?.id || activePeriod?._id})
       .then(response=>{if(!cancelled) setWaterPreview({key:waterRequestKey,result:response.result || response.data || response});})
-      .catch(error=>{if(!cancelled) setWaterPreviewError(error.message || 'Unable to preview water billing.');})
+      .catch(error=>{if(!cancelled) { setWaterPreviewError(error.message || 'Unable to preview water billing.'); setWaterErrorCode(apiErrorCode(error)); }})
       .finally(()=>{if(!cancelled) setWaterPreviewPending(false);}),350);
     return ()=>{cancelled=true;clearTimeout(timer);};
   },[isOpen,utilityType,selectedRoomId,periodForm,activePeriod,legacyWater,manualReviewPeriod,waterRequestKey]);
@@ -230,14 +233,9 @@ export default function NewBillingPeriodModal({
       const opening = defaultUtilityOpening({activePeriod,lastClosedPeriod,latestReading});
       const startDate = toInputDate(opening?.date) || toInputDate(new Date());
       const initialStartReading = opening?.reading ?? "";
-      const initialRate = activePeriod ? String(activePeriod.pricingSnapshot?.ratePerUnit ?? activePeriod.ratePerUnit ?? "") : utilityType === "water" ? String(defaultRatePerUnit ?? "") :
-        lastClosedPeriod?.ratePerUnit != null
-          ? String(lastClosedPeriod.ratePerUnit)
-          : defaultRatePerUnit !== undefined &&
-              defaultRatePerUnit !== null &&
-              defaultRatePerUnit !== ""
-            ? String(defaultRatePerUnit)
-            : "";
+      const initialRate = activePeriod
+        ? String(activePeriod.pricingSnapshot?.ratePerUnit ?? activePeriod.ratePerUnit ?? "")
+        : String(defaultRatePerUnit ?? "");
 
       const initialValues = {
         startDate,
@@ -266,6 +264,12 @@ export default function NewBillingPeriodModal({
   }, [isOpen, defaultRatePerUnit, lastClosedPeriod, latestReading, activePeriod, utilityType, selectedRoomId, historical]);
 
   // Dirty state checking
+  useEffect(() => {
+    if (isOpen && !activePeriod) {
+      setPeriodForm(current => ({...current, ratePerUnit:String(defaultRatePerUnit ?? "")}));
+    }
+  }, [isOpen, activePeriod, defaultRatePerUnit]);
+
   const isDirty = Boolean(
     initialFormState &&
       (periodForm.endReading !== initialFormState.endReading ||
@@ -528,6 +532,7 @@ export default function NewBillingPeriodModal({
       onClose();
     } catch (err) {
       setGenerationBlocker(buildGenerationBlocker(err));
+      setWaterErrorCode(apiErrorCode(err));
       notify.error(err, "Unable to generate billing period. Please check the entered readings and try again.");
     } finally { setClosingPending(false); }
   };
@@ -572,7 +577,7 @@ export default function NewBillingPeriodModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={historical ? "Generate Historical Cycle" : "New Billing Period"}
+        aria-label={historical ? "Start Billing Cycle" : "New Billing Period"}
         className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-xl overflow-hidden"
         style={{ boxShadow: "var(--shadow-xl)" }}
         onClick={(e) => e.stopPropagation()}
@@ -587,7 +592,7 @@ export default function NewBillingPeriodModal({
             )}
             <div>
               <h2 className="text-base font-semibold text-foreground">
-                {historical ? "Generate Historical Cycle" : "New Billing Period"} · {isElectricity ? "Electricity" : "Water"}
+                {historical ? "Start Billing Cycle" : "New Billing Period"} · {isElectricity ? "Electricity" : "Water"}
               </h2>
               {roomName && (
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -615,6 +620,13 @@ export default function NewBillingPeriodModal({
 
         {/* Modal Body */}
         <div className="space-y-4 px-6 py-4 max-h-[calc(85vh-130px)] overflow-y-auto">
+          {utilityType === 'water' && !legacyWater && !manualReviewPeriod && onRecordOpening &&
+            (waterErrorCode === 'WATER_VERIFIED_BASELINE_REQUIRED' || isBlankValue(periodForm.startReading)) && (
+            <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs">
+              <p>A verified opening observation is required before Water billing can continue.</p>
+              <button type="button" onClick={onRecordOpening} disabled={isPending} className="mt-2 rounded-lg border border-border px-3 py-2 font-semibold">Record Opening Reading</button>
+            </div>
+          )}
           {/* Fixed rate branch warning */}
           {isFixedRateBranch && (
             <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/20 px-3.5 py-2.5 text-xs text-muted-foreground">
@@ -847,8 +859,8 @@ export default function NewBillingPeriodModal({
                   })
                 }
                 onKeyDown={handleKeyDown}
-                placeholder="e.g. 16.00"
-                disabled={isPending || isFixedRateBranch || Boolean(activePeriod)}
+                placeholder="Loading configured rate"
+                disabled
               />
               {isRateInvalid && !isFixedRateBranch ? (
                 <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
@@ -856,9 +868,7 @@ export default function NewBillingPeriodModal({
                 </p>
               ) : (
                 <p className="text-[11px] text-muted-foreground">
-                  {utilityType === "water"
-                    ? (activePeriod ? "Saved price for this cycle; rate changes apply to new cycles" : "Price per cubic metre")
-                    : activePeriod ? "Saved rate for this cycle" : "Applicable unit rate"}
+                  {activePeriod ? "Saved rate for this cycle; rate changes apply to new cycles" : "Current global rate; captured when the cycle is created"}
                 </p>
               )}
             </div>

@@ -13,7 +13,7 @@ const summary = {tenantId:'tenant-1',tenantName:'Monthly Tenant',reservationId:'
 const completed = {...opening,status:'closed',billingState:'ready_to_send',endDate:'2026-09-01T00:00:00+08:00',endReading:118,computedTotalUsage:18,computedTotalCost:900,tenantSummaries:[summary]};
 const next = {...opening,id:'period-next',startDate:completed.endDate,startReading:118};
 const preview = {...completed,meterEvents:[{eventType:'periodStart',date:opening.startDate,reading:100}],segments:[],tenantSummaries:[summary]};
-let Modal, Tab, History, mounted;
+let Modal, Tab, History, Recovery, mounted;
 const state = globalThis.__monthlyUtilityTest = {api:{},notifications:[],calls:[],periods:[],rooms:[],afterClose:null};
 state.hook = (name,type,id) => {
   if (name === 'useUtilityRooms') return {data:state.rooms};
@@ -25,6 +25,11 @@ state.hook = (name,type,id) => {
     state.calls.push({name,type,payload});
     if (name === 'useCloseUtilityPeriod') {state.afterClose?.();return {result:{periodId:'period-1',nextPeriodId:'period-next'}};}
     if (name === 'useGenerateHistoricalUtilityPeriod') return {result:{periodId:'historical-1'}};
+    if (name === 'useRecoverWaterOpening') {
+      const period = {...opening, startDate:payload.observedAt, startReading:payload.reading};
+      state.periods=[period];
+      return {period, reading:{reading:payload.reading,observedAt:payload.observedAt}};
+    }
     return {};
   }};
 };
@@ -32,9 +37,11 @@ before(async()=>{
   ({default:Modal}=await import('./NewBillingPeriodModal.jsx'));
   ({default:Tab}=await import('./UtilityBillingTab.jsx'));
   ({default:History}=await import('./utility/UtilityCycleHistoryPanel.jsx'));
+  ({default:Recovery}=await import('./RecordWaterOpeningModal.jsx'));
 });
 beforeEach(()=>{
   state.calls=[];state.notifications=[];state.afterClose=null;
+  state.settings={defaultElectricityRatePerKwh:23,defaultWaterRatePerUnit:61};
   state.rooms=[room];state.periods=[opening];
   state.api.previewWater=async payload=>{state.calls.push({name:'previewWater',payload});return {result:preview};};
 });
@@ -45,6 +52,69 @@ const click=async element=>act(async()=>{fireEvent.click(element);});
 const fill=(element,value)=>act(()=>{fireEvent.change(element,{target:{value}});});
 const settlePreview=()=>act(async()=>{await new Promise(resolve=>setTimeout(resolve,400));});
 const modal=(type,props={})=>React.createElement(Modal,{isOpen:true,onClose:()=>{},onSuccess:()=>{},utilityType:type,selectedRoomId:room.id,roomName:room.name,roomBranch:room.branch,activeTenantCount:1,openPeriodForRoom:opening,periods:[opening],defaultRatePerUnit:50,...props});
+
+for (const type of ['electricity','water']) {
+  test(`${type}: only the lifecycle-appropriate cycle action is visible`, async()=>{
+    mounted=mount(React.createElement(Tab,{utilityType:type}));
+    assert.ok(button('New Billing Period'));
+    assert.equal(queryByRole(document.body,'button',{name:'Start Billing Cycle',exact:true}),null);
+    state.periods=[completed];
+    mounted.rerender(React.createElement(Tab,{utilityType:type}));
+    assert.equal(queryByRole(document.body,'button',{name:'New Billing Period',exact:true}),null);
+    assert.equal(queryByRole(document.body,'button',{name:'Generate Historical Cycle',exact:true}),null);
+    await click(button('Start Billing Cycle'));
+    assert.ok(getByRole(document.body,'dialog',{name:'Start Billing Cycle'}));
+    const unit=type==='water'?'m\u00b3':'kWh';
+    assert.equal(input(`Rate (PHP/${unit})`).value,type==='water'?'61':'23','Latest flat settings field overrides old captured 50');
+    assert.equal(input(`Rate (PHP/${unit})`).disabled,true);
+  });
+  test(`${type}: zero global tariff is valid and refreshed without resetting readings`,()=>{
+    const unit=type==='water'?'m\u00b3':'kWh';
+    mounted=mount(modal(type,{openPeriodForRoom:null,defaultRatePerUnit:0,lastClosedPeriod:completed}));
+    assert.equal(input(`Rate (PHP/${unit})`).value,'0');
+    fill(input(`Closing Reading (${unit})`),'130');
+    mounted.rerender(modal(type,{openPeriodForRoom:null,defaultRatePerUnit:27,lastClosedPeriod:completed}));
+    assert.equal(input(`Rate (PHP/${unit})`).value,'27');
+    assert.equal(input(`Closing Reading (${unit})`).value,'130');
+    mounted.rerender(modal(type,{defaultRatePerUnit:27}));
+    assert.equal(input(`Rate (PHP/${unit})`).value,'50');
+    mounted.rerender(modal(type,{defaultRatePerUnit:28}));
+    assert.equal(input(`Rate (PHP/${unit})`).value,'50');
+  });
+}
+
+test('missing Water baseline error offers recovery and resumes with the verified opening',async()=>{
+  state.api.previewWater=async()=>{throw Object.assign(new Error('Verified baseline needed'),{response:{data:{error:{code:'WATER_VERIFIED_BASELINE_REQUIRED'}}}});};
+  mounted=mount(React.createElement(Tab,{utilityType:'water'}));
+  await click(button('New Billing Period'));
+  fill(input('Closing Reading (m\u00b3)'),'118');await settlePreview();
+  await click(button('Record Opening Reading'));
+  assert.ok(getByRole(document.body,'dialog',{name:'Record Opening Reading'}));
+  assert.equal(input('Actual Water Reading (m\u00b3)').value,'','Never invent a zero opening');
+  fill(input('Actual Water Reading (m\u00b3)'),'123.45');
+  fill(input('Reading Source'),'documented-history');
+  fill(input('Observation Date and Time (Philippine time)'),'2026-08-20T10:35');
+  fill(input('Reason'),'Recovered signed inspection');
+  fill(input('Evidence Reference (required)'),'Inspection register page 42');
+  await click(button('Save Opening Reading'));
+  assert.deepEqual(state.calls.find(c=>c.name==='useRecoverWaterOpening').payload,{
+    roomId:'room-1',reading:123.45,observedAt:'2026-08-20T02:35:00.000Z',source:'documented-history',
+    reason:'Recovered signed inspection',evidenceReferences:['Inspection register page 42']});
+  assert.equal(state.calls.some(c=>/GenerateHistorical|CloseUtility|SendUtility/.test(c.name)),false);
+  assert.match(getByRole(document.body,'status').textContent,/123.45.*Earlier consumption remains unknown/);
+  assert.ok(getByRole(document.body,'dialog',{name:'New Billing Period'}));
+  assert.equal(input('Opening Reading (m\u00b3)').value,'123.45');
+});
+
+test('recovery requires documented evidence for a historical reading',async()=>{
+  mounted=mount(React.createElement(Recovery,{isOpen:true,onClose:()=>{},roomId:room.id}));
+  fill(input('Reading Source'),'documented-history');
+  fill(input('Actual Water Reading (m\u00b3)'),'0');
+  fill(input('Reason'),'Missing register entry');
+  await act(async()=>{fireEvent.submit(getByRole(document.body,'dialog',{name:'Record Opening Reading'}));});
+  assert.match(getByRole(document.body,'alert').textContent,/requires an evidence reference/);
+  assert.equal(state.calls.length,0);
+});
 
 for (const type of ['electricity','water']) {
   test(`${type}: primary New Billing Period opens monthly context and safely closes the existing ID`,async()=>{

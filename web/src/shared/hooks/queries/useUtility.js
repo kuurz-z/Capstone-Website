@@ -128,6 +128,14 @@ export function useMyUtilityBreakdownByBillId(utilityType, billId) {
 }
 
 // Mutations
+export function useRecoverWaterOpening() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: utilityApi.recordWaterOpening,
+    onSuccess: () => qc.invalidateQueries({ queryKey: utilityKeys.all('water') }),
+  });
+}
+
 export function useRecordUtilityReading(utilityType) {
   const qc = useQueryClient();
   return useMutation({
