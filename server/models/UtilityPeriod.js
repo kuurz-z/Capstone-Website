@@ -139,6 +139,9 @@ const utilityPeriodSchema = new mongoose.Schema(
       capturedAt: Date,
       recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     },
+    pricingAudit: [{previousRate:Number,ratePerUnit:Number,capturedAt:Date,recordedBy:{type:mongoose.Schema.Types.ObjectId,ref:'User'}}],
+    calculationFingerprint: String,
+    calculationInputs: mongoose.Schema.Types.Mixed,
     meterEvents: { type: [mongoose.Schema.Types.Mixed], default: undefined },
     utilityType: {
       type: String,

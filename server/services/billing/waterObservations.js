@@ -1,3 +1,4 @@
+import { assertWaterChronology, validWaterObservations } from './waterChronology.js';
 import { Room, BedHistory, UtilityPeriod, UtilityReading } from '../../models/index.js';
 import { branchSupportsSeparateUtilityBilling } from '../../config/branches.js';
 import { isWaterBillableRoom } from '../../utils/utilityFlowRules.js';
@@ -17,12 +18,8 @@ export async function recordWaterObservation({room,eventAt,reading,eventType,ten
   if (!actorId || !Number.isFinite(date.getTime()) || date > new Date()) reject('A valid observed time and actor are required.','WATER_OBSERVATION_INVALID');
   // Serialize competing occupants and readings on the same physical room meter.
   await Room.updateOne({_id:room._id},{$inc:{waterObservationRevision:1}},{session});
-  const valid = {roomId:room._id,utilityType:'water',isArchived:false,readingStatus:{$nin:['voided','corrected']}};
-  const previous = await UtilityReading.findOne({...valid,date:{$lte:date}}).sort({date:-1,createdAt:-1}).session(session);
-  const following = await UtilityReading.findOne({...valid,date:{$gte:date}}).sort({date:1,createdAt:1}).session(session);
-  if ((previous && value < previous.reading) || (following && value > following.reading)) reject('Water reading must remain between the previous and following valid observations.','WATER_READING_DECREASED');
-  if ((previous?.date?.getTime() === date.getTime() && previous.reading !== value) ||
-      (following?.date?.getTime() === date.getTime() && following.reading !== value)) reject('A different water reading already exists at this timestamp.','WATER_READING_CONFLICT');
+  const valid = validWaterObservations(room._id);
+  await assertWaterChronology({roomId:room._id,date,reading:value,eventType,session});
   const retry = await UtilityReading.findOne({...valid,date,eventType,reservationId}).session(session);
   if (retry) return retry;
   const active = await UtilityPeriod.find({roomId:room._id,utilityType:'water',isArchived:false,status:{$in:['open','manual_review_required']}}).session(session);
@@ -51,4 +48,11 @@ export async function recordWaterObservation({room,eventAt,reading,eventType,ten
     activeTenantIds:[...activeTenantIds],reading:value,unit:'m3',date,observedAt:date,eventType,tenantId,reservationId,stayId,transferId,
     recordedBy:actorId,utilityPeriodId:period._id,source,readingStatus:'locked'}],{session});
   return observation;
+}
+
+export async function getWaterObservationBaseline(room) {
+  if (!requiresWaterObservation(room)) return {required:false};
+  const latest = await UtilityReading.findOne(validWaterObservations(room._id)).sort({date:-1,createdAt:-1}).lean();
+  return {required:true,roomId:String(room._id),unit:'m3',previousReading:latest?.reading ?? null,
+    lastRecordedReadingDate:latest?.observedAt ?? latest?.date ?? null,observationId:latest?._id ?? null};
 }
