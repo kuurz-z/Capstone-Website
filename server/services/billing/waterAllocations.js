@@ -15,7 +15,7 @@ export function refreshWaterAggregate(bill) {
 }
 export function upsertWaterAllocation(bill, {period, room, summary, legacyDispatch}) {
   const allocations = (bill.waterAllocations || []).map(a => a.toObject?.() || {...a});
-  if (!allocations.length && Number(bill.charges?.water) > 0) {
+  if (!allocations.length && Number(bill.charges?.water) > 0 && String(legacyDispatch?.periodId) !== String(period._id)) {
     allocations.push({
       allocationId: `legacy:${bill._id}`, utilityPeriodId: legacyDispatch?.periodId || null,
       roomId: bill.roomId?._id || bill.roomId, reservationId: bill.reservationId,

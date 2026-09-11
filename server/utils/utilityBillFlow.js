@@ -1,7 +1,8 @@
 import dayjs from "dayjs";
+import mongoose from "mongoose";
 import { upsertWaterAllocation, waterAllocationsForPeriod, waterPeriodSent } from '../services/billing/waterAllocations.js';
 import { formatManilaDate, getManilaDayjs } from "./dateUtils.js";
-import { Bill, Reservation, Room, User, UtilityFinalization } from "../models/index.js";
+import { Bill, Reservation, Room, User, UtilityFinalization, UtilityPeriod } from "../models/index.js";
 import {
   sendBillGeneratedEmail,
   sendUtilityChargeAvailableEmail,
@@ -172,7 +173,9 @@ export async function upsertDraftBillsForUtility({
   );
 
   for (const summary of tenantSummaries || []) {
-    const billingContext = await getReservationBillingContextForUser(
+    const billingContext = utilityType === 'water' && summary.reservationId
+      ? await getReservationBillingContextForBill({reservationId:summary.reservationId},period.endDate || period.startDate)
+      : await getReservationBillingContextForUser(
       summary.tenantId,
       period?.endDate || period?.startDate || new Date(),
     );
@@ -226,6 +229,14 @@ export async function upsertDraftBillsForUtility({
     if (session) billQuery = billQuery.session(session);
     let bill = await billQuery;
 
+    let waterSupplementKey = null;
+    if (utilityType === 'water' && bill?.status === 'paid' && !waterPeriodSent(bill, periodId)) {
+      waterSupplementKey = `water:${periodId}:${reservationId}:${summary.tenantId}`;
+      let supplementQuery = Bill.findOne({waterSupplementKey});
+      if (session) supplementQuery = supplementQuery.session(session);
+      bill = await supplementQuery;
+    }
+
     if (bill && (utilityType === 'water' ? waterPeriodSent(bill, periodId) || bill.status === 'paid' : getUtilityDispatchEntry(bill, utilityType).state === "sent")) {
       const error = new Error(
         `Cannot sync ${utilityType} charges because one or more bills were already sent.`,
@@ -236,13 +247,14 @@ export async function upsertDraftBillsForUtility({
 
     if (!bill) {
       bill = new Bill({
+        ...(waterSupplementKey ? {waterSupplementKey} : {}),
         reservationId,
         userId: summary.tenantId,
         branch: room.branch,
         roomId: room._id,
         billingMonth,
         billingCycleStart:
-          billingContext?.cycle?.billingCycleStart || period.startDate,
+          waterSupplementKey ? null : billingContext?.cycle?.billingCycleStart || period.startDate,
         billingCycleEnd:
           billingContext?.cycle?.billingCycleEnd ||
           period.endDate ||
@@ -415,7 +427,10 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
     let notificationError = null;
 
     try {
+      const {buildTenantUtilityBreakdown} = await import('../controllers/billing/_helpers.js');
       pdfPath = await generateBillPdf({
+        waterBreakdown: Number(bill.charges?.water || 0) > 0
+          ? await buildTenantUtilityBreakdown({dbUser:{_id:bill.userId?._id || bill.userId},bill,utilityType:'water'}) : null,
         bill: {
           ...(bill.toObject ? bill.toObject() : bill),
           userId: bill.userId?._id || bill.userId,
@@ -500,6 +515,43 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
   return { sent, issuedAt, dueDate, sentAt, deliveries };
 }
 
+// Re-read and publish inside one transaction so payment or another period's
+// dispatch cannot overwrite this allocation. A paid invoice stays immutable.
+export async function publishWaterAllocationBill({billId,period,publishedAt,issuedAt,dueDate}) {
+  const session=await mongoose.startSession();let published=null;
+  try {
+    await session.withTransaction(async()=>{
+      published=null;
+      let bill=await Bill.findById(billId).session(session);
+      let allocations=waterAllocationsForPeriod(bill,period._id).filter(a=>a.state==='draft');
+      if (!allocations.length) return;
+      if (bill.status==='paid') {
+        const original=bill;
+        const waterSupplementKey=`water:${period._id}:${bill.reservationId}:${bill.userId}`;
+        bill=await Bill.findOne({waterSupplementKey}).session(session);
+        if (!bill) bill=new Bill({waterSupplementKey,reservationId:original.reservationId,userId:original.userId,
+          branch:original.branch,roomId:period.roomId,billingMonth:original.billingMonth,billingCycleStart:null,
+          billingCycleEnd:original.billingCycleEnd,status:'draft',charges:{water:0},paidAmount:0,
+          waterAllocations:allocations.map(a=>a.toObject?.() || {...a})});
+        if (waterPeriodSent(bill,period._id)) return;
+        allocations=waterAllocationsForPeriod(bill,period._id).filter(a=>a.state==='draft');
+        bill.charges.water=roundMoney(bill.waterAllocations.reduce((sum,a)=>sum+a.amount,0));
+        await UtilityPeriod.updateOne({_id:period._id},{$set:{'tenantSummaries.$[summary].billId':bill._id}},
+          {session,arrayFilters:[{'summary.billId':original._id,'summary.tenantId':original.userId}]});
+      }
+      const utilityAmount=roundMoney(allocations.reduce((sum,a)=>sum+Number(a.amount),0));
+      if (utilityAmount<=0) return;
+      for(const allocation of allocations) Object.assign(allocation,{state:'sent',publishedAt,issuedAt,dueDate});
+      setUtilityDispatchEntry(bill,'water',{state:'sent',periodId:period._id,publishedAt,issuedAt,dueDate,amount:utilityAmount});
+      Object.assign(bill,getUtilityCycleFromPeriod(period),{sentAt:publishedAt,issuedAt,dueDate,paymongoSessionId:null});
+      syncBillAmounts(bill,{releasing:true});await bill.save({session});
+      published={bill,utilityAmount,targetAllocations:allocations};
+    });
+    if (published) await published.bill.populate([{path:'userId',select:'firstName lastName email'},{path:'roomId',select:'name roomNumber branch'}]);
+    return published;
+  } finally {await session.endSession();}
+}
+
 export async function sendUtilityPeriodBills({
   bills,
   period,
@@ -526,15 +578,16 @@ export async function sendUtilityPeriodBills({
     populatedBills,
     UTILITY_BILL_SEND_CONCURRENCY,
     async (bill) => {
-      const targetAllocations = utilityType === 'water' && bill.waterAllocations?.length
-        ? waterAllocationsForPeriod(bill, period._id).filter(a => a.state === 'draft') : null;
-      const utilityAmount = targetAllocations ? roundMoney(targetAllocations.reduce((s,a) => s + Number(a.amount),0)) : roundMoney(bill?.charges?.[chargeField] || 0);
-      const currentDispatch = getUtilityDispatchEntry(bill, utilityType);
-      if (utilityAmount <= 0 || (!targetAllocations && currentDispatch.state === "sent")) {
-        return null;
-      }
-
-      for (const allocation of targetAllocations || []) Object.assign(allocation, {state:'sent', publishedAt, issuedAt, dueDate});
+      let targetAllocations=null;
+      let utilityAmount=roundMoney(bill?.charges?.[chargeField] || 0);
+      const currentDispatch=getUtilityDispatchEntry(bill,utilityType);
+      if (utilityType==='water' && bill.waterAllocations?.length) {
+        const published=await publishWaterAllocationBill({billId:bill._id,period,publishedAt,issuedAt,dueDate});
+        if (!published) return null;
+        ({bill,targetAllocations,utilityAmount}=published);
+      } else {
+        if (utilityAmount<=0 || currentDispatch.state==='sent') return null;
+        if (utilityType==='water' && bill.status==='paid') throw Object.assign(new Error('A paid water invoice cannot be changed.'),{statusCode:409});
       setUtilityDispatchEntry(bill, utilityType, {
         state: "sent",
         periodId: period?._id || period?.id || currentDispatch.periodId || null,
@@ -557,6 +610,8 @@ export async function sendUtilityPeriodBills({
       // releasedAt (e.g. a rent+utility bill first released at creation).
       syncBillAmounts(bill, { releasing: true });
       await bill.save();
+
+      }
 
       const tenant =
         bill.userId && typeof bill.userId === "object" ? bill.userId : null;
@@ -602,6 +657,8 @@ export async function sendUtilityPeriodBills({
               dueDateLabel,
               {
                 billId: bill._id,
+                utilityPeriodId: period._id,
+                allocationIds: (targetAllocations || []).map(a=>a.allocationId),
                 eventId: `${utilityType}:${String(period?._id || period?.id || Number(bill.invoiceVersion || 1))}`,
               },
             )

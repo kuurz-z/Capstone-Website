@@ -12,6 +12,7 @@
  */
 
 import dayjs from "dayjs";
+import { computeWaterMeterBilling } from './waterMeterEngine.js';
 import {
   isUtilityEventType,
   readMoveInDate,
@@ -529,6 +530,7 @@ export function computeBilling({
   const { startDate, endDate, startReading, endReading, ratePerUnit } =
     utilityPeriod;
   if (utilityType === "water") {
+    if (utilityPeriod.calculationVersion === 'water-meter-v1') return computeWaterMeterBilling({utilityPeriod,readings,reservations,roomType});
     return buildWaterOccupancyBilling({
       utilityPeriod,
       reservations,

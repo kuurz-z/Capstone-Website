@@ -131,6 +131,7 @@ const formatExportDate = (value) =>
   value ? dayjs(value).format("YYYY-MM-DD") : "";
 
 const buildUtilityExportRow = ({ utilityType, period, summary }) => {
+  const measured = utilityType === "electricity" || period.calculationVersion === "water-meter-v1";
   const room = period.roomId || {};
   const charge =
     summary.billAmount ??
@@ -143,6 +144,8 @@ const buildUtilityExportRow = ({ utilityType, period, summary }) => {
 
   return {
     utilityType,
+    calculationVersion:period.calculationVersion || "legacy",
+    unit:utilityType === "electricity" ? "kWh" : measured ? "m3" : "unknown",
     branch: room.branch || period.branch || "",
     roomId: String(room._id || period.roomId || ""),
     roomName: getRoomLabel(room) || room.name || room.roomNumber || "",
@@ -150,10 +153,10 @@ const buildUtilityExportRow = ({ utilityType, period, summary }) => {
     periodStatus: period.status || "",
     startDate: formatExportDate(period.startDate),
     endDate: formatExportDate(period.endDate),
-    startReading: period.startReading ?? "",
-    endReading: period.endReading ?? "",
-    totalUsage: period.computedTotalUsage ?? "",
-    ratePerUnit: period.ratePerUnit ?? "",
+    startReading: measured ? period.startReading ?? "" : "",
+    endReading: measured ? period.endReading ?? "" : "",
+    totalUsage: measured ? period.computedTotalUsage ?? "" : "",
+    ratePerUnit: measured ? period.ratePerUnit ?? "" : "",
     totalRoomCost: period.computedTotalCost ?? "",
     tenantId: summary.tenantId ? String(summary.tenantId) : "",
     tenantName: summary.tenantName || "",
@@ -162,7 +165,8 @@ const buildUtilityExportRow = ({ utilityType, period, summary }) => {
     bedId: summary.bedId || "",
     bedName: summary.bedName || summary.bedLabel || "",
     durationRange: summary.durationRange || "",
-    usage: summary.totalUsage ?? summary.usage ?? summary.consumption ?? period.computedTotalUsage ?? "",
+    usage: measured ? summary.totalUsage ?? summary.usage ?? summary.consumption ?? period.computedTotalUsage ?? "" : "",
+    legacyBasis: measured ? "" : summary.billingBasis || "historical allocation",
     amount: charge,
     billId: summary.billId ? String(summary.billId) : "",
   };
@@ -394,6 +398,7 @@ export async function resolveRoomScopedReservationsForPeriod({
   periodStart,
   periodEnd,
   utilityType = null,
+  calculationVersion = null,
   session = null,
 }) {
   return resolveRoomScopedReservationsForUtilityPeriod({
@@ -401,6 +406,7 @@ export async function resolveRoomScopedReservationsForPeriod({
     periodStart,
     periodEnd,
     utilityType,
+    calculationVersion,
     session,
   });
 }
@@ -420,6 +426,8 @@ async function closePeriodAndGenerateDrafts({
   deferAudit = false,
   openNextPeriod = "when_occupied",
 }) {
+  const meterWater = utilityType === 'water' && period.calculationVersion === 'water-meter-v1';
+  const metered = utilityType === 'electricity' || meterWater;
   const normalizedClosingDay = toManilaStartOfDay(endDate || new Date());
   const closingDate = normalizedClosingDay?.toDate();
   if (!closingDate) {
@@ -431,12 +439,14 @@ async function closePeriodAndGenerateDrafts({
 
   assertUtilityClosingDate(period.startDate, closingDate);
 
-  if (utilityType === "electricity") {
+  if (metered) {
+    if (meterWater) await Room.updateOne({_id:room._id},{$inc:{waterObservationRevision:1}},{session});
     assertBoundaryReadings({ startReading: period.startReading, endReading });
     let latestReadingQuery = UtilityReading.findOne({
       roomId: room._id,
       utilityType,
       isArchived: false,
+      ...(meterWater ? {readingStatus:{$nin:["voided","corrected"]}} : {}),
       date: { $lte: closingDate },
     }).sort({ date: -1, createdAt: -1 });
     if (session) latestReadingQuery = latestReadingQuery.session(session);
@@ -451,7 +461,7 @@ async function closePeriodAndGenerateDrafts({
 
   assertUtilityRoomEligibility(room, utilityType);
 
-  if (utilityType === "electricity") {
+  if (metered) {
     const endUtilityReading = new UtilityReading({
       utilityType,
       roomId: room._id,
@@ -472,12 +482,13 @@ async function closePeriodAndGenerateDrafts({
   // readings into the canonical cycle.
   const cycleStart = new Date(period.startDate);
   const allReadings =
-    utilityType === "electricity"
+    metered
       ? await (() => {
           let query = UtilityReading.find({
           roomId: room._id,
           utilityType,
           isArchived: false,
+          readingStatus: {$nin:['voided','corrected']},
           date: {
             $gte: cycleStart,
             $lte: closingDate,
@@ -494,21 +505,24 @@ async function closePeriodAndGenerateDrafts({
     periodStart: period.startDate,
     periodEnd: closingDate,
     utilityType,
+    calculationVersion: period.calculationVersion,
     session,
   });
 
   const cyclePeriod = {
+    calculationVersion:period.calculationVersion,
+    pricingSnapshot:period.pricingSnapshot,
     startDate: period.startDate,
     endDate: closingDate,
-    startReading: utilityType === "electricity" ? period.startReading : 0,
+    startReading: metered ? period.startReading : 0,
     endReading:
-      utilityType === "electricity"
+      metered
         ? Number(endReading)
         : Number(period.endReading || period.startReading || 0),
     ratePerUnit: period.ratePerUnit,
   };
 
-  const billableReservations = filterBillableReservationsForPeriod({
+  const billableReservations = meterWater ? reservations : filterBillableReservationsForPeriod({
     reservations,
     cycleStart: period.startDate,
     cycleEnd: closingDate,
@@ -519,11 +533,11 @@ async function closePeriodAndGenerateDrafts({
     cycleStart: period.startDate,
     cycleEnd: closingDate,
   });
-  if (occupancyOverlapResult.hasOverlaps) {
+  if (!meterWater && occupancyOverlapResult.hasOverlaps) {
     throw buildOccupancyOverlapError(occupancyOverlapResult);
   }
 
-  let cycleReadings = [];
+  let cycleReadings = meterWater ? allReadings : [];
   let mappedTenantEvents = [];
   if (utilityType === "electricity") {
     // Build a set of tenant IDs who actually moved in or out DURING this cycle.
@@ -614,13 +628,14 @@ async function closePeriodAndGenerateDrafts({
 
   period.endDate = closingDate;
   period.endReading =
-    utilityType === "electricity"
+    metered
       ? Number(endReading)
       : Number(period.endReading || period.startReading || 0);
   period.computedTotalUsage = computationResult.computedTotalUsage;
   period.computedTotalCost = computationResult.computedTotalCost;
   period.verified = computationResult.verified;
   period.segments = computationResult.segments;
+  if (meterWater) period.meterEvents = computationResult.meterEvents;
   period.tenantSummaries = computationResult.tenantSummaries;
   const carriedVacancyOverhead = (period.overheadSegments || [])
     .filter((segment) => segment.reason === "VACANT_GAP_BEFORE_PERIOD")
@@ -718,7 +733,8 @@ async function closePeriodAndGenerateDrafts({
       room,
       startDate: closingDate,
       startMode: UTILITY_PERIOD_START_MODE.EXACT_OBSERVATION,
-      startReading: utilityType === "electricity" ? Number(endReading) : 0,
+      calculationVersion: period.calculationVersion || (utilityType === "water" ? "water-occupancy-legacy" : undefined),
+      startReading: metered ? Number(endReading) : 0,
       ratePerUnit: nextRate,
       actorId: admin._id,
       session,
@@ -761,7 +777,7 @@ export const openUtilityPeriod = async (req, res, next) => {
     const utilityType = req.params.utilityType;
     const { roomId, startDate, startReading, ratePerUnit } = req.body;
 
-    const requiresMeterReading = utilityType === "electricity";
+    const requiresMeterReading = ["electricity", "water"].includes(utilityType);
     if (
       !roomId ||
       !startDate ||
@@ -815,7 +831,16 @@ export const openUtilityPeriod = async (req, res, next) => {
           periodState: activeResolution.state,
         });
 
-    const parsedStartDate = toManilaStartOfDay(startDate)?.toDate();
+    let parsedStartDate = toManilaStartOfDay(startDate)?.toDate();
+    if (utilityType === 'water') {
+      if (!admin.isOwner && room.branch !== admin.branch) return res.status(403).json({error:'Access denied'});
+      const existing = await UtilityReading.findOne({roomId:room._id,utilityType:'water',unit:'m3',reading:parsedStartReading,isArchived:false,readingStatus:{$nin:['voided','corrected']},date:{$gte:parsedStartDate,$lt:dayjs(parsedStartDate).add(1,'day').toDate()}}).sort({date:1});
+      if (existing) parsedStartDate=existing.date;
+      else if (toManilaStartOfDay(startDate)?.isSame(toManilaStartOfDay(new Date()))) parsedStartDate=new Date();
+      else throw Object.assign(new Error('Water cutover requires a previously verified boundary, or a new physical observation today.'),{statusCode:422,code:'WATER_VERIFIED_BASELINE_REQUIRED'});
+      const previous=await UtilityReading.findOne({roomId:room._id,utilityType:'water',isArchived:false,readingStatus:{$nin:['voided','corrected']},date:{$lte:parsedStartDate}}).sort({date:-1});
+      assertPhysicalMeterContinuity({reading:parsedStartReading,previousReading:previous?.reading,eventType:'periodStart'});
+    }
     assertUtilityStartDate(parsedStartDate);
     const overlappingPeriod = await UtilityPeriod.findOne({
       utilityType,
@@ -838,7 +863,7 @@ export const openUtilityPeriod = async (req, res, next) => {
       startReading: parsedStartReading,
       ratePerUnit: parsedRate,
       actorId: admin._id,
-      startMode: UTILITY_PERIOD_START_MODE.BUSINESS_DATE,
+      startMode: utilityType === "water" ? UTILITY_PERIOD_START_MODE.EXACT_OBSERVATION : UTILITY_PERIOD_START_MODE.BUSINESS_DATE,
     });
 
     res
@@ -874,6 +899,17 @@ export const recordUtilityReading = async (req, res, next) => {
     }
     assertUtilityRoomEligibility(room, utilityType);
 
+    if (!admin.isOwner && room.branch !== admin.branch) return res.status(403).json({error:'Access denied'});
+    if (utilityType === 'water') {
+      if (!['moveIn','moveOut'].includes(normalizeUtilityEventType(eventType))) throw Object.assign(new Error('Use cycle opening or closing for water period boundaries.'),{statusCode:422});
+      const {recordWaterObservation} = await import('../services/billing/waterObservations.js');
+      const session=await mongoose.startSession();
+      try {
+        let observation;
+        await session.withTransaction(async()=>{observation=await recordWaterObservation({room,eventAt:date,reading,eventType:normalizeUtilityEventType(eventType),tenantId,actorId:admin._id,session,source:'admin-observation'});});
+        return res.status(201).json({success:true,reading:serializeUtilityReading(observation)});
+      } finally {await session.endSession();}
+    }
     const normalizedReadingDate = assertUtilityReadingDate(date);
     const result = await resolveRoomUtilityBoundaryContext({
       room,
@@ -908,7 +944,8 @@ export const closeUtilityPeriod = async (req, res, next) => {
     const { id } = req.params;
     const { endReading, endDate } = req.body;
 
-    const parsedEndReading = utilityType === "electricity"
+    const versionPeriod = utilityType === "water" ? await UtilityPeriod.findById(id).lean() : null;
+    const parsedEndReading = utilityType === "electricity" || versionPeriod?.calculationVersion === "water-meter-v1"
       ? parsePhysicalMeterReading(endReading, {
           fieldLabel: "Final meter reading",
           maximum: 999999.99,
@@ -1044,14 +1081,14 @@ export const generateHistoricalUtilityPeriod = async (req, res, next) => {
     }
     assertUtilityRoomEligibility(room, utilityType);
 
-    const start = toManilaStartOfDay(startDate)?.toDate();
+    let start = toManilaStartOfDay(startDate)?.toDate();
     const end = toManilaStartOfDay(endDate)?.toDate();
     assertUtilityStartDate(start);
     assertUtilityClosingDate(start, end);
-    const opening = utilityType === "electricity"
+    const opening = ["electricity", "water"].includes(utilityType)
       ? parsePhysicalMeterReading(startReading, { fieldLabel: "Opening meter reading", maximum: 999999.99 })
       : 0;
-    const closing = utilityType === "electricity"
+    const closing = ["electricity", "water"].includes(utilityType)
       ? parsePhysicalMeterReading(endReading, { fieldLabel: "Final meter reading", maximum: 999999.99 })
       : 0;
     assertPhysicalMeterContinuity({
@@ -1066,6 +1103,12 @@ export const generateHistoricalUtilityPeriod = async (req, res, next) => {
       return res.status(400).json({ error: `Rate must be between 0 and ${maxRate.toLocaleString()}.` });
     }
 
+    if (utilityType === 'water') {
+      const verifiedOpening = await UtilityReading.findOne({roomId:room._id,utilityType:'water',unit:'m3',date:{$gte:start,$lt:dayjs(start).add(1,'day').toDate()},reading:opening,isArchived:false,readingStatus:{$nin:['voided','corrected']}});
+      if (!verifiedOpening) throw Object.assign(new Error('A previously verified water baseline is required. Establish a physical baseline prospectively; historical consumption cannot be invented.'),{statusCode:422,code:'WATER_VERIFIED_BASELINE_REQUIRED'});
+      start = verifiedOpening.date;
+      assertUtilityClosingDate(start,end);
+    }
     let result;
     let createdPeriodId;
     await session.withTransaction(async () => {
@@ -1094,6 +1137,7 @@ export const generateHistoricalUtilityPeriod = async (req, res, next) => {
         utilityType,
         room,
         startDate: start,
+        startMode: utilityType === "water" ? UTILITY_PERIOD_START_MODE.EXACT_OBSERVATION : UTILITY_PERIOD_START_MODE.BUSINESS_DATE,
         startReading: opening,
         ratePerUnit: rate,
         actorId: admin._id,
@@ -1134,9 +1178,7 @@ export const batchCloseUtilityPeriods = async (req, res, next) => {
     for (const item of closures) {
       const session = await mongoose.startSession();
       try {
-        const parsedEndReading = utilityType === "electricity"
-          ? parsePhysicalMeterReading(item.endReading, { fieldLabel: "Final meter reading", maximum: 999999.99 })
-          : 0;
+        let parsedEndReading = 0;
         let closedPeriod;
         let room;
         let closeResult;
@@ -1148,6 +1190,8 @@ export const batchCloseUtilityPeriods = async (req, res, next) => {
           if (!branchSupportsSeparateUtilityBilling(closedPeriod.branch, utilityType)) {
             throw Object.assign(new Error("This branch does not use separate utility periods."), { statusCode: 422, code: "BRANCH_UTILITY_NOT_SUPPORTED" });
           }
+          if (closedPeriod.utilityType !== utilityType || (!admin.isOwner && closedPeriod.branch !== admin.branch)) throw Object.assign(new Error('Access denied'),{statusCode:403});
+          if (utilityType === 'electricity' || closedPeriod.calculationVersion === 'water-meter-v1') parsedEndReading = parsePhysicalMeterReading(item.endReading,{fieldLabel:'Final meter reading',maximum:999999.99});
           room = await Room.findById(closedPeriod.roomId).session(session);
           closeResult = await closePeriodAndGenerateDrafts({
             admin,
@@ -1235,6 +1279,7 @@ export const updateUtilityPeriod = async (req, res, next) => {
 
     if (period.status !== "open") {
       await assertUtilityPeriodNotSent(period, utilityType);
+    if (period.calculationVersion === 'water-meter-v1') throw Object.assign(new Error('Measured water snapshots are immutable. Archive an unpublished cycle and regenerate from verified observations.'),{statusCode:409,code:'WATER_SNAPSHOT_IMMUTABLE'});
     }
 
     const room = await Room.findById(period.roomId);
@@ -1459,7 +1504,7 @@ export const deleteUtilityReading = async (req, res, next) => {
     const { utilityType, id } = req.params;
 
     const reading = await UtilityReading.findById(id);
-    if (!reading || reading.isArchived)
+    if (!reading || reading.isArchived || reading.utilityType !== utilityType)
       return res.status(404).json({ error: "Reading not found" });
 
     if (!admin.isOwner && reading.branch !== admin.branch) {
@@ -1479,6 +1524,7 @@ export const deleteUtilityReading = async (req, res, next) => {
       if (period) await assertUtilityPeriodNotSent(period, utilityType);
     }
 
+    if (utilityType === 'water') throw Object.assign(new Error('Use an audited water correction; physical observations cannot be deleted.'),{statusCode:409});
     reading.isArchived = true;
     await reading.save();
 
@@ -1503,9 +1549,12 @@ export const updateUtilityReading = async (req, res, next) => {
     }
 
     const readingDoc = await UtilityReading.findById(id);
-    if (!readingDoc || readingDoc.isArchived)
+    if (!readingDoc || readingDoc.isArchived || readingDoc.utilityType !== utilityType)
       return res.status(404).json({ error: "Reading not found" });
 
+    if (!admin.isOwner && readingDoc.branch !== admin.branch) return res.status(403).json({error:'Access denied'});
+    if (readingDoc.utilityType !== utilityType) return res.status(404).json({error:'Reading not found'});
+    if (utilityType === 'water') return correctWaterObservation(req, res, next, readingDoc, admin);
     if (!branchSupportsSeparateUtilityBilling(readingDoc.branch, utilityType)) {
       return res.status(422).json({
         error:
@@ -1565,6 +1614,7 @@ export const reviseUtilityResult = async (req, res, next) => {
     if (!period || period.status !== "closed")
       return res.status(400).json({ error: "Invalid or open period" });
     await assertUtilityPeriodNotSent(period, utilityType);
+    if (period.calculationVersion === 'water-meter-v1') throw Object.assign(new Error('Measured water snapshots are immutable. Archive an unpublished cycle and regenerate from verified observations.'),{statusCode:409,code:'WATER_SNAPSHOT_IMMUTABLE'});
 
     const room = await Room.findById(period.roomId);
     if (!branchSupportsSeparateUtilityBilling(period.branch, utilityType)) {
@@ -1933,6 +1983,7 @@ export const getUtilityLatestReading = async (req, res, next) => {
       roomId: room._id,
       utilityType,
       isArchived: false,
+      ...(utilityType === "water" ? {readingStatus:{$nin:["voided","corrected"]}} : {}),
     })
       .sort({ date: -1, createdAt: -1 })
       .lean();
@@ -1978,7 +2029,7 @@ export const getUtilityPeriods = async (req, res, next) => {
     const billMap = new Map();
     if (allBillIds.length > 0) {
       const bills = await Bill.find({ _id: { $in: allBillIds } })
-        .select("charges utilityDispatch status sentAt issuedAt dueDate")
+        .select("charges utilityDispatch waterAllocations status sentAt issuedAt dueDate")
         .lean();
       for (const b of bills) {
         billMap.set(String(b._id), b);
@@ -2010,6 +2061,13 @@ export const getUtilityPeriods = async (req, res, next) => {
 
         return {
           id: p._id,
+          roomId:p.roomId,
+          calculationVersion:p.calculationVersion || (utilityType === "water" ? "water-occupancy-legacy" : null),
+          unit:p.unit || null,
+          pricingSnapshot:p.pricingSnapshot || null,
+          meterEvents:p.meterEvents || [],
+          segments:p.segments || [],
+          tenantSummaries:p.tenantSummaries || [],
           startDate: p.startDate,
           endDate: p.endDate,
           startReading: p.startReading,
@@ -2155,6 +2213,10 @@ export const getUtilityResult = async (req, res, next) => {
     res.json({
       result: {
         id: period._id,
+        calculationVersion:period.calculationVersion || (utilityType === 'water' ? 'water-occupancy-legacy' : null),
+        unit:period.unit || null,
+        meterEvents:period.meterEvents || [],
+        pricingSnapshot:period.pricingSnapshot || null,
         computedTotalUsage: period.computedTotalUsage,
         totalRoomCost: period.computedTotalCost, // Frontend uses this alias
         ratePerUnit: period.ratePerUnit, // Frontend expects ratePerUnit
@@ -2303,7 +2365,7 @@ export const getUtilityAiReview = async (req, res, next) => {
       Bill.find({
         _id: { $in: getUtilitySummaryBillIds(period) },
       })
-        .select("charges utilityDispatch status sentAt issuedAt dueDate")
+        .select("charges utilityDispatch waterAllocations status sentAt issuedAt dueDate")
         .lean(),
     ]);
 
@@ -2573,4 +2635,77 @@ export const getRoomHistory = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+async function correctWaterObservation(req, res, next, original, admin) {
+  const session = await mongoose.startSession();
+  try {
+    if (!String(req.body.correctionReason || '').trim()) throw Object.assign(new Error('A correction reason is required.'),{statusCode:400});
+    if (req.body.date && new Date(req.body.date).getTime() !== original.date.getTime()) throw Object.assign(new Error('An occupancy observation timestamp cannot be moved by a reading correction.'),{statusCode:422});
+    const value = parsePhysicalMeterReading(req.body.reading,{fieldLabel:'Corrected water reading'});
+    let replacement;
+    await session.withTransaction(async () => {
+      await Room.updateOne({_id:original.roomId},{$inc:{waterObservationRevision:1}},{session});
+      const current = await UtilityReading.findById(original._id).session(session);
+      if (!current || current.supersededByReadingId || ['voided','corrected'].includes(current.readingStatus)) throw Object.assign(new Error('This observation has already been superseded.'),{statusCode:409});
+      // A period boundary and an occupancy event may describe the same physical
+      // instant. Supersede that entire instant together, preserving each event.
+      const valid = {roomId:current.roomId,utilityType:'water',isArchived:false,readingStatus:{$nin:['voided','corrected']}};
+      const group = await UtilityReading.find({...valid,date:current.date}).session(session);
+      const prev=await UtilityReading.findOne({...valid,date:{$lt:current.date}}).sort({date:-1}).session(session);
+      const after=await UtilityReading.findOne({...valid,date:{$gt:current.date}}).sort({date:1}).session(session);
+      if ((prev && value<prev.reading)||(after && value>after.reading)) throw Object.assign(new Error('Corrected reading conflicts with surrounding observations.'),{statusCode:422});
+      const linkedPeriods=await UtilityPeriod.find({_id:{$in:group.map(r=>r.utilityPeriodId).filter(Boolean)}}).session(session);
+      for (const period of linkedPeriods) {
+        await assertUtilityPeriodNotSent(period,'water');
+        if (!period.isArchived && period.status !== 'open') throw Object.assign(new Error('Archive the unpublished cycle before correcting its observations. Issued cycles are immutable.'),{statusCode:409});
+        if (!period.isArchived && current.date.getTime() === period.startDate.getTime()) {
+          period.startReading=value; await period.save({session});
+        }
+      }
+      for (const observation of group) {
+        const data=observation.toObject(); delete data._id; delete data.createdAt; delete data.updatedAt;
+        const [corrected]=await UtilityReading.create([{...data,reading:value,recordedBy:admin._id,
+          supersedesReadingId:observation._id,correctionReason:req.body.correctionReason,source:'correction',readingStatus:'locked'}],{session});
+        observation.readingStatus='corrected'; observation.supersededByReadingId=corrected._id;
+        observation.correctedBy=admin._id;observation.correctedAt=new Date();observation.correctionReason=req.body.correctionReason;
+        await observation.save({session});
+        if (String(observation._id)===String(current._id)) replacement=corrected;
+      }
+    });
+    res.json({success:true,reading:serializeUtilityReading(replacement)});
+  } catch(error) {next(error);} finally {await session.endSession();}
+}
+
+export const previewWaterBilling = async (req,res,next) => {
+  try {
+    const admin=await getAdminInfo(req);
+    const room=await Room.findById(req.body.roomId);
+    if (!room) return res.status(404).json({error:'Room not found'});
+    if (!admin.isOwner && room.branch !== admin.branch) return res.status(403).json({error:'Access denied'});
+    if (!branchSupportsSeparateUtilityBilling(room.branch,'water')) return res.status(422).json({error:'This branch is excluded from separate water billing.'});
+    assertUtilityRoomEligibility(room,'water');
+    const active = req.body.periodId ? await UtilityPeriod.findById(req.body.periodId).lean() : null;
+    if (req.body.periodId && !active) throw Object.assign(new Error('Water cycle not found.'),{statusCode:404});
+    if (active && (String(active.roomId)!==String(room._id) || active.calculationVersion!=='water-meter-v1')) throw Object.assign(new Error('Select a measured water cycle for this room.'),{statusCode:422});
+    let start=active?.startDate || toManilaStartOfDay(req.body.startDate)?.toDate();
+    const end=toManilaStartOfDay(req.body.endDate)?.toDate();
+    assertUtilityStartDate(start);
+    if (!active) {
+      const value=parsePhysicalMeterReading(req.body.startReading,{fieldLabel:'Opening water reading'});
+      const baseline=await UtilityReading.findOne({roomId:room._id,utilityType:'water',unit:'m3',isArchived:false,readingStatus:{$nin:['voided','corrected']},reading:value,date:{$gte:start,$lt:dayjs(start).add(1,'day').toDate()}}).sort({date:1}).lean();
+      if (!baseline) throw Object.assign(new Error('Establish a verified water opening boundary before billing.'),{statusCode:422,code:'WATER_VERIFIED_BASELINE_REQUIRED'});
+      start=baseline.date;
+    }
+    assertUtilityClosingDate(start,end);
+    const readings=await UtilityReading.find({roomId:room._id,utilityType:'water',isArchived:false,readingStatus:{$nin:['voided','corrected']},date:{$gte:start,$lte:end}}).lean();
+    const opening=readings.find(r=>new Date(r.date).getTime()===start.getTime() && r.unit==='m3');
+    if (!opening) throw Object.assign(new Error('Establish a verified water opening boundary before billing.'),{statusCode:422,code:'WATER_VERIFIED_BASELINE_REQUIRED'});
+    const closing=parsePhysicalMeterReading(req.body.endReading,{fieldLabel:'Closing water reading'});
+    const period={calculationVersion:'water-meter-v1',startDate:start,endDate:end,startReading:opening.reading,endReading:closing,ratePerUnit:active?.ratePerUnit ?? req.body.ratePerUnit,pricingSnapshot:active?.pricingSnapshot};
+    const reservations=await resolveRoomScopedReservationsForPeriod({room,utilityType:'water',calculationVersion:'water-meter-v1',periodStart:start,periodEnd:end});
+    const result=computeBilling({utilityType:'water',roomType:room.type,utilityPeriod:period,reservations,
+      readings:[...readings,{date:end,reading:closing,eventType:'periodEnd'}]});
+    res.json({success:true,data:result,result});
+  } catch(error) {next(error);}
 };

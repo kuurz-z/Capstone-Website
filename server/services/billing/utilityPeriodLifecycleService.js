@@ -273,13 +273,14 @@ export async function createOpenUtilityPeriodWithBoundary({
   startDate,
   startReading,
   ratePerUnit,
+  calculationVersion = utilityType === "water" ? "water-meter-v1" : undefined,
   actorId,
   periodId = null,
   boundaryReadingId = null,
   startMode = UTILITY_PERIOD_START_MODE.BUSINESS_DATE,
   session = null,
 }) {
-  const reading = utilityType === "water"
+  const reading = utilityType === "water" && calculationVersion !== "water-meter-v1"
     ? 0
     : parsePhysicalMeterReading(startReading, {
         fieldLabel: "Opening meter reading",
@@ -304,6 +305,8 @@ export async function createOpenUtilityPeriodWithBoundary({
     const [period] = await UtilityPeriod.create([{
       ...(periodId ? { _id: periodId } : {}),
       utilityType,
+      calculationVersion,
+      ...(calculationVersion === 'water-meter-v1' ? {unit:'m3',pricingSnapshot:{ratePerUnit,unit:'m3',capturedAt:new Date(),recordedBy:actorId}} : {}),
       roomId: room._id,
       branch: room.branch,
       startDate: normalizedStartDate,
@@ -312,7 +315,7 @@ export async function createOpenUtilityPeriodWithBoundary({
       status: "open",
     }], { session: activeSession });
 
-    if (utilityType === "electricity") {
+    if (utilityType === "electricity" || calculationVersion === "water-meter-v1") {
       await UtilityReading.create([{
         ...(boundaryReadingId ? { _id: boundaryReadingId } : {}),
         utilityType,

@@ -19,6 +19,8 @@ import { isValidOptionalPhysicalMeterReading } from "../utils/physicalMeterReadi
 
 const bedHistorySchema = new mongoose.Schema(
   {
+    observedStartAt: Date,
+    observedEndAt: Date,
     bedId: {
       type: String,
       required: true,

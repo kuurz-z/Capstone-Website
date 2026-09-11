@@ -35,6 +35,7 @@ import { ROOM_BRANCHES } from "../config/branches.js";
 
 const roomSchema = new mongoose.Schema(
   {
+    waterObservationRevision: {type:Number, default:0},
     // --- Basic Info ---
     name: {
       type: String,

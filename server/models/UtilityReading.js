@@ -8,6 +8,18 @@ import { isValidPhysicalMeterReading } from "../utils/physicalMeterReading.js";
 
 const utilityReadingSchema = new mongoose.Schema(
   {
+    unit: {type:String, enum:['m3','kWh']},
+    observedAt: Date,
+    reservationId: {type:mongoose.Schema.Types.ObjectId, ref:'Reservation'},
+    stayId: {type:mongoose.Schema.Types.ObjectId, ref:'Stay'},
+    transferId: {type:mongoose.Schema.Types.ObjectId, ref:'ScheduledRoomTransfer'},
+    source: {type:String, default:'admin'},
+    evidenceReferences: [String],
+    supersedesReadingId: {type:mongoose.Schema.Types.ObjectId, ref:'UtilityReading'},
+    supersededByReadingId: {type:mongoose.Schema.Types.ObjectId, ref:'UtilityReading'},
+    correctionReason: String,
+    correctedBy: {type:mongoose.Schema.Types.ObjectId, ref:'User'},
+    correctedAt: Date,
     utilityType: {
       type: String,
       enum: ["electricity", "water"],
@@ -109,6 +121,13 @@ utilityReadingSchema.index({ utilityType: 1, roomId: 1, readingStatus: 1 });
 utilityReadingSchema.index({ roomId: 1, utilityType: 1, isArchived: 1, date: -1 }, { name: "transfer_meter_lookup" });
 
 utilityReadingSchema.pre("validate", function (next) {
+  if (this.isNew && this.utilityType === 'water') {
+    this.unit = 'm3';
+    this.observedAt = this.date;
+  }
+  if (!this.isNew && this.utilityType === 'water' && ['reading','date','eventType'].some(field => this.isModified(field))) {
+    return next(new Error('Water observations are immutable; append an audited correction.'));
+  }
   if (this.eventType) {
     this.eventType = normalizeUtilityEventType(this.eventType);
   }
