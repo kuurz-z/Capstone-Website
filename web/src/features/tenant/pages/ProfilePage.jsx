@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import ProfilePageSkeleton from "../components/profile/ProfilePageSkeleton";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
+import PaymentVerifyingModal from "../../../shared/components/PaymentVerifyingModal";
 import { authFetch } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import { formatDisplayName } from "../../../shared/utils/formatDate";
@@ -51,6 +52,7 @@ const ProfilePage = () => {
  const [pendingTab, setPendingTab] = useState(null);
  const [receiptModal, setReceiptModal] = useState({ open: false, step: null });
  const [selectedReservationId, setSelectedReservationId] = useState(null);
+ const [verifyingMoveIn, setVerifyingMoveIn] = useState(false);
 
  const [profileData, setProfileData] = useState({
  firstName: "",
@@ -236,6 +238,7 @@ const ProfilePage = () => {
       };
 
       if (sessionId) {
+        setVerifyingMoveIn(true);
         try {
           recoveredMoveInSessionsRef.current.add(sessionId);
           const result = await billingApi.checkPaymentStatus(sessionId);
@@ -254,11 +257,12 @@ const ProfilePage = () => {
             await queryClient.invalidateQueries({ queryKey: ["tenant-contracts"] });
             return;
           }
-          if (result?.status === "paid") {
+          if (result?.status === "paid" || result?.paid) {
+            const refText = result?.referenceNumber ? ` Reference #${result.referenceNumber}.` : "";
             showNotification(
-              "Move-in payment received! Your move-in requirements are fully settled.",
+              `Move-in payment confirmed!${refText} Your move-in requirements are fully settled. Official receipt sent to your email.`,
               "success",
-              5000,
+              6000,
             );
             await flushCaches(active?._id);
             await queryClient.invalidateQueries({ queryKey: ["tenant-contracts"] });
@@ -266,6 +270,8 @@ const ProfilePage = () => {
           }
         } catch (error) {
           console.error("Move-in payment verification failed:", error);
+        } finally {
+          setVerifyingMoveIn(false);
         }
       }
 
@@ -337,11 +343,12 @@ const ProfilePage = () => {
               queryClient.invalidateQueries({ queryKey: ["tenant-contracts"] }),
             ]);
             await refetchReservations();
-            if (!cancelled && result?.status === "paid") {
+            if (!cancelled && (result?.status === "paid" || result?.paid)) {
+              const refText = result?.referenceNumber ? ` Reference #${result.referenceNumber}.` : "";
               showNotification(
-                "Move-in payment confirmed and your balance has been updated.",
+                `Move-in payment confirmed!${refText} Your balance has been updated and official receipt sent to your email.`,
                 "success",
-                5000,
+                6000,
               );
             }
             return;
@@ -677,6 +684,12 @@ const ProfilePage = () => {
       {activeTab === "notifications" && <NotificationsTab onTabChange={handleTabChange} />}
       {activeTab === "settings" && <SettingsTab />}
       {activeTab === "contract" && <ContractTab />}
+
+      <PaymentVerifyingModal
+        show={verifyingMoveIn}
+        step={2}
+        title="Verifying Move-In Payment"
+      />
 
       <ReceiptModal
         isOpen={receiptModal.open}

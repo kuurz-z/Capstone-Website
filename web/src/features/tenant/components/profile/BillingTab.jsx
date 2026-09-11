@@ -9,6 +9,8 @@ import DeadlineBadge from "../../../../shared/components/DeadlineBadge";
 import { useMyUtilityBreakdownByBillId } from "../../../../shared/hooks/queries/useUtility";
 import { showNotification } from "../../../../shared/utils/notification";
 import BillingPageSkeleton from "../billing/BillingPageSkeleton";
+import PaymentTimerBanner from "../../../../shared/components/PaymentTimerBanner";
+import PaymentVerifyingModal from "../../../../shared/components/PaymentVerifyingModal";
 import "../../styles/tenant-billing.css";
 import {
   Zap,
@@ -506,6 +508,12 @@ const PreCheckoutModal = ({
               );
             })}
           </div>
+
+          <PaymentTimerBanner
+            title="Payment Checkout Window"
+            subtitle="Your billing payment checkout session is active for 15 minutes."
+            className="mb-4"
+          />
 
           <div className="precheckout-summary-box">
             <div className="precheckout-summary-row">
@@ -1513,7 +1521,12 @@ export default function BillingTab() {
             try {
               sessionStorage.setItem("lilycrest_last_settled_payment_time", String(Date.now()));
             } catch {}
-            showNotification("Payment successful! Your statement balance has been settled.", "success", 5000);
+            const refText = result?.referenceNumber ? ` Reference #${result.referenceNumber}.` : "";
+            showNotification(
+              `Payment confirmed!${refText} Your statement balance has been settled. Official receipt sent to your email.`,
+              "success",
+              6000,
+            );
             loadBills();
           } else if (result?.status === "unpaid") {
             showNotification("Payment was not completed. You can try again anytime.", "info", 4000);
@@ -1774,7 +1787,17 @@ export default function BillingTab() {
     }
   };
 
-  if (loading || verifyingPayment) {
+  if (verifyingPayment) {
+    return (
+      <PaymentVerifyingModal
+        show={verifyingPayment}
+        step={2}
+        title="Verifying Statement Payment"
+      />
+    );
+  }
+
+  if (loading) {
     return <BillingPageSkeleton />;
   }
 
