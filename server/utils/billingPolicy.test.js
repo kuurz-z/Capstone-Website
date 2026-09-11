@@ -821,14 +821,14 @@ describe("utility billing dates", () => {
     expect(localYmd(getNextWorkingDay(new Date("2026-08-17T08:00:00.000Z"), { includeSameDay: true }))).toBe("2026-8-17");
   });
 
-  test("issues utility bills no earlier than the next working day after reading", () => {
+  test("issues utility bills immediately on the chosen send date", () => {
     const issuedAt = getUtilityIssueDate({
       readingDate: new Date("2026-05-15T00:00:00.000Z"),
       finalizedAt: new Date("2026-05-15T10:00:00.000Z"),
     });
 
-    expect(localYmd(issuedAt)).toBe("2026-5-18");
-    expect(localYmd(getUtilityDueDate(issuedAt))).toBe("2026-5-25");
+    expect(localYmd(issuedAt)).toBe("2026-5-15");
+    expect(localYmd(getUtilityDueDate(issuedAt))).toBe("2026-5-22");
   });
 
   test("uses the actual finalized day when bills are sent after the reading date", () => {

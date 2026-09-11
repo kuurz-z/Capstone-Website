@@ -25,6 +25,7 @@ import {
   readMoveOutDate,
 } from "../../../../shared/utils/lifecycleNaming";
 import { fmtDate, fmtCurrency } from "../../utils/formatters";
+import { nextMonthlyCutoff, utilityDateInput as toInputDate, openingOnDate, defaultUtilityOpening } from "./utility/monthlyUtilitySchedule";
 import { completedUtilityPeriodId } from "./utility/monthlyBillingWorkflow";
 
 const MAX_METER_READING = 999999.99;
@@ -63,67 +64,14 @@ const addDays = (dateStr, days = 1) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const get15th = () => {
-  const d = new Date();
-  d.setDate(15);
-  return d.toISOString().slice(0, 10);
-};
-
-const getDaysInMonth = (year, monthIndex) => {
-  return new Date(year, monthIndex + 1, 0).getDate();
-};
-
-const isMonthEndDate = (dateStr) => {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return false;
-  const lastDay = getDaysInMonth(d.getFullYear(), d.getMonth());
-  return d.getDate() === lastDay;
-};
-
-const addOneMonth = (fromDateStr, preferredAnchorDay = null) => {
-  if (!fromDateStr) return "";
-  const d = new Date(fromDateStr);
-  if (Number.isNaN(d.getTime())) return "";
-  const originalDay = preferredAnchorDay ? Number(preferredAnchorDay) : d.getDate();
-  const currentMonth = d.getMonth();
-  const currentYear = d.getFullYear();
-
-  const targetYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-  const targetMonth = (currentMonth + 1) % 12;
-  const maxDaysInTargetMonth = getDaysInMonth(targetYear, targetMonth);
-
-  // If start date was month-end (e.g. Jan 31, Feb 28/29), keep month-end behavior unless custom anchor is set
-  const isOriginalMonthEnd = isMonthEndDate(fromDateStr);
-  const targetDay =
-    isOriginalMonthEnd && !preferredAnchorDay
-      ? maxDaysInTargetMonth
-      : Math.min(originalDay, maxDaysInTargetMonth);
-
-  const yyyy = targetYear;
-  const mm = String(targetMonth + 1).padStart(2, "0");
-  const dd = String(targetDay).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-
 const getMonthEnd = (startDateStr) => {
   if (!startDateStr) return "";
   const d = new Date(startDateStr);
   if (Number.isNaN(d.getTime())) return "";
   const y = d.getFullYear();
   const m = d.getMonth();
-  const lastDay = getDaysInMonth(y, m);
+  const lastDay = new Date(y, m + 1, 0).getDate();
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-};
-
-const toInputDate = (value) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
 };
 
 /** Reusable token-aware focus handlers for inputs/selects */
@@ -155,6 +103,7 @@ export default function NewBillingPeriodModal({
   roomName,
   activeTenantCount = 0,
   periods = [],
+  readings = [],
   onSuccess,
 }) {
   const notify = useBillingNotifier();
@@ -174,11 +123,11 @@ export default function NewBillingPeriodModal({
   const [durationPreset, setDurationPreset] = useState("1mo");
 
   const [periodForm, setPeriodForm] = useState({
-    startDate: get15th(),
+    startDate: "",
     startReading: "",
     ratePerUnit: defaultRatePerUnit || "",
     endReading: "",
-    endDate: addOneMonth(get15th()),
+    endDate: "",
   });
 
   const [initialFormState, setInitialFormState] = useState(null);
@@ -207,7 +156,7 @@ export default function NewBillingPeriodModal({
 
     let computedEnd = periodForm.endDate;
     if (presetKey === "1mo") {
-      computedEnd = addOneMonth(periodForm.startDate);
+      computedEnd = nextMonthlyCutoff(periodForm.startDate);
     } else if (presetKey === "30d") {
       computedEnd = addDays(periodForm.startDate, 30);
     } else if (presetKey === "monthEnd") {
@@ -230,7 +179,7 @@ export default function NewBillingPeriodModal({
 
     if (newStart) {
       if (durationPreset === "1mo") {
-        newEnd = addOneMonth(newStart);
+        newEnd = nextMonthlyCutoff(newStart);
       } else if (durationPreset === "30d") {
         newEnd = addDays(newStart, 30);
       } else if (durationPreset === "monthEnd") {
@@ -243,6 +192,7 @@ export default function NewBillingPeriodModal({
     setPeriodForm((prev) => ({
       ...prev,
       startDate: newStart,
+      startReading: String(openingOnDate({date:newStart,activePeriod,readings})?.reading ?? ""),
       endDate: newEnd || prev.endDate,
     }));
   };
@@ -250,7 +200,7 @@ export default function NewBillingPeriodModal({
   const handleEndDateChange = (e) => {
     const newEnd = e.target.value;
     if (periodForm.startDate && newEnd) {
-      if (newEnd === addOneMonth(periodForm.startDate)) {
+      if (newEnd === nextMonthlyCutoff(periodForm.startDate)) {
         setDurationPreset("1mo");
       } else if (newEnd === addDays(periodForm.startDate, 30)) {
         setDurationPreset("30d");
@@ -274,12 +224,9 @@ export default function NewBillingPeriodModal({
     if (initializedFor.current === formKey) return;
     initializedFor.current = formKey;
     if (isOpen) {
-      const continuationDate = lastClosedPeriod?.endDate
-        ? toInputDate(lastClosedPeriod.endDate)
-        : null;
-      const continuationReading = lastClosedPeriod?.endReading ?? null;
-      const startDate = activePeriod ? toInputDate(activePeriod.startDate) : continuationDate || toInputDate(new Date());
-      const initialStartReading = activePeriod?.startReading ?? (utilityType === "water" ? latestReading?.reading ?? "" : continuationReading ?? latestReading?.reading ?? 0);
+      const opening = defaultUtilityOpening({activePeriod,lastClosedPeriod,latestReading});
+      const startDate = toInputDate(opening?.date) || toInputDate(new Date());
+      const initialStartReading = opening?.reading ?? "";
       const initialRate = activePeriod ? String(activePeriod.pricingSnapshot?.ratePerUnit ?? activePeriod.ratePerUnit ?? "") : utilityType === "water" ? String(defaultRatePerUnit ?? "") :
         lastClosedPeriod?.ratePerUnit != null
           ? String(lastClosedPeriod.ratePerUnit)
@@ -294,10 +241,10 @@ export default function NewBillingPeriodModal({
         startReading:
           initialStartReading !== undefined && initialStartReading !== null
             ? String(initialStartReading)
-            : "0",
+            : "",
         ratePerUnit: initialRate,
         endReading: "",
-        endDate: addOneMonth(startDate),
+        endDate: nextMonthlyCutoff(startDate),
       };
 
       setPeriodForm(initialValues);
@@ -340,14 +287,6 @@ export default function NewBillingPeriodModal({
 
   const isFixedRateBranch = roomBranch === "guadalupe";
   const isElectricity = utilityType === "electricity";
-
-  // Determine source of start reading for UX contextual badge
-  const startReadingSource =
-    activePeriod ? "Saved opening reading for this cycle" : lastClosedPeriod?.endReading != null
-      ? `Auto-filled from previous cycle (${lastClosedPeriod.endReading} kWh)`
-      : latestReading?.reading != null
-        ? `Pre-filled from latest room meter log (${latestReading.reading} kWh)`
-        : "Baseline starting reading (0 kWh)";
 
   // Calculations for live calculation preview
   const startNum = parseFloat(periodForm.startReading);
@@ -568,7 +507,7 @@ export default function NewBillingPeriodModal({
         return notify.warn("An active period already exists. Historical generation cannot replace or delete it.");
       }
       const generatedData = activePeriod
-        ? await closePeriod.mutateAsync({periodId:activePeriod.id || activePeriod._id,endDate:periodForm.endDate,endReading:Number(periodForm.endReading)})
+        ? await closePeriod.mutateAsync({periodId:activePeriod.id || activePeriod._id,startDate:periodForm.startDate,startReading:Number(periodForm.startReading),endDate:periodForm.endDate,endReading:Number(periodForm.endReading)})
         : await generateHistoricalPeriod.mutateAsync({
         roomId: selectedRoomId,
         startDate: periodForm.startDate,
@@ -770,7 +709,7 @@ export default function NewBillingPeriodModal({
             Define the billing cycle duration, meter readings, and rate to compute draft utility charges for all active room tenants.
           </p>
 
-          {activePeriod && !legacyWater && <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs">The saved cycle start, opening reading and rate are retained. Choose the closing date and reading, then generate drafts for review. Sending later will not extend this cycle.</p>}
+          {activePeriod && !legacyWater && <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs">Cycle starts must match verified meter evidence. The saved rate is retained. Sending later will not extend this cycle.</p>}
           {legacyWater && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">This active cycle uses legacy Water billing. Close it with Close Legacy Cycle before starting measured Water billing from a verified physical baseline. Its recorded amounts and allocation basis will be preserved.</p>}
           {manualReviewPeriod && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">This room has a cycle requiring review: {manualReviewPeriod.manualReviewReason || 'Review its meter continuity before generating drafts.'}</p>}
           {/* Dates & Rate Configuration Grid */}
@@ -795,10 +734,10 @@ export default function NewBillingPeriodModal({
                   } catch {}
                 }}
                 onKeyDown={handleKeyDown}
-                disabled={isPending || isFixedRateBranch || Boolean(activePeriod)}
+                disabled={isPending || isFixedRateBranch}
               />
               <p className="text-[11px] text-muted-foreground">
-                {activePeriod ? "Saved start of the active cycle" : "Start of billing period"}
+                Choose a verified opening boundary. Normal monthly cutoff is the 15th.
               </p>
             </div>
 
@@ -940,7 +879,7 @@ export default function NewBillingPeriodModal({
                     required
                   />
                   <span className="block text-[11px] font-normal text-muted-foreground">
-                    {field === 'startReading' ? (activePeriod ? 'Saved opening reading for this cycle' : isElectricity ? startReadingSource : 'Use a verified physical Water observation') : 'Physical meter reading at cycle end'}
+                    {field === 'startReading' ? (periodForm.startReading === '' ? 'No verified opening found on this date. Record or correct the meter boundary before generating.' : 'Opening reading must match verified evidence for the selected start') : 'Physical meter reading at cycle end'}
                   </span>
                 </label>
               ))}

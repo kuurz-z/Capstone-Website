@@ -617,13 +617,9 @@ export function getNextWorkingDay(date, { includeSameDay = false } = {}) {
 }
 
 export function getUtilityIssueDate({ readingDate, finalizedAt = new Date() } = {}) {
-  const finalizedDay = dayjs(finalizedAt).startOf("day");
-  const earliestIssueDay = readingDate
-    ? dayjs(readingDate).startOf("day").add(1, "day")
-    : finalizedDay;
-  const baseDay = finalizedDay.isAfter(earliestIssueDay) ? finalizedDay : earliestIssueDay;
-
-  return getNextWorkingDay(baseDay.toDate(), { includeSameDay: true });
+  // Publication is immediate on the chosen send date, including weekends.
+  // The reading cutoff is stored separately and never moves with publication.
+  return toManilaStartOfDay(finalizedAt).toDate();
 }
 
 export function getUtilityDueDate(issueDate) {

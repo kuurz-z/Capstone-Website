@@ -54,7 +54,7 @@ for (const type of ['electricity','water']) {
     assert.ok(getByRole(document.body,'dialog',{name:'New Billing Period'}));
     const unit=type==='water'?'m\u00b3':'kWh';
     assert.equal(input('Cycle Start').value,'2026-08-01');
-    assert.equal(input('Cycle Start').disabled,true);
+    assert.equal(input('Cycle Start').disabled,false);
     assert.equal(input(`Opening Reading (${unit})`).value,'100');
     assert.equal(input(`Opening Reading (${unit})`).disabled,true);
     assert.equal(input(`Rate (PHP/${unit})`).disabled,true);
@@ -62,6 +62,8 @@ for (const type of ['electricity','water']) {
     fill(input('Select billing cycle duration preset'),'15d');
     assert.equal(input('Cycle End').value,'2026-08-16');
     fill(input('Select billing cycle duration preset'),'1mo');
+    assert.equal(input('Cycle End').value,'2026-08-15');
+    fill(input('Cycle End'),'2026-09-01');
     fill(input(`Closing Reading (${unit})`),'118');
     if(type==='water') {
       await settlePreview();
@@ -70,7 +72,7 @@ for (const type of ['electricity','water']) {
     }
     assert.match(input('Live Cycle Calculation Preview').textContent,/18.*900/s);
     await click(button('Generate Draft Bills'));
-    assert.deepEqual(state.calls.filter(c=>c.name!=='previewWater'),[{name:'useCloseUtilityPeriod',type,payload:{periodId:'period-1',endDate:'2026-09-01',endReading:118}}]);
+    assert.deepEqual(state.calls.filter(c=>c.name!=='previewWater'),[{name:'useCloseUtilityPeriod',type,payload:{periodId:'period-1',startDate:'2026-08-01',startReading:100,endDate:'2026-09-01',endReading:118}}]);
     // Delayed query refresh: the new open period must not replace the completed selection.
     state.periods=[next,completed];state.rooms=[{...room,readyPeriods:[completed]}];
     mounted.rerender(React.createElement(Tab,{utilityType:type}));
@@ -95,6 +97,21 @@ test('no-active monthly form uses atomic generation without opening/deleting or 
   await click(button('Generate Draft Bills'));
   assert.deepEqual(state.calls.map(c=>c.name),['useGenerateHistoricalUtilityPeriod']);
   assert.equal(focused,'historical-1');
+});
+
+for (const type of ['electricity','water']) test(`${type}: editable starts follow evidence and monthly cutoff, including partial cycles`,async()=>{
+  const unit=type==='water'?'m\u00b3':'kWh';
+  mounted=mount(modal(type,{openPeriodForRoom:null,periods:[],latestReading:{date:'2026-09-20T10:00:00+08:00',reading:120},readings:[{date:'2026-09-20T10:00:00+08:00',reading:120},{date:'2026-10-15T00:00:00+08:00',reading:125}]}));
+  assert.equal(input('Cycle Start').value,'2026-09-20');
+  assert.equal(input('Cycle End').value,'2026-10-15');
+  assert.equal(input(`Opening Reading (${unit})`).value,'120');
+  fill(input('Cycle Start'),'2026-10-15');
+  assert.equal(input('Cycle End').value,'2026-11-15');
+  assert.equal(input(`Opening Reading (${unit})`).value,'125');
+  fill(input('Cycle Start'),'2026-10-16');
+  assert.equal(input(`Opening Reading (${unit})`).value,'');
+  assert.equal(button('Generate Draft Bills').disabled,true);
+  assert.doesNotMatch(document.body.textContent,/recommended send window|wait 3 days|countdown/i);
 });
 
 test('Water rejects stale preview after the closing observation changes',async()=>{

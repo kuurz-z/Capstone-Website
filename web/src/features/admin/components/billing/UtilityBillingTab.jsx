@@ -180,7 +180,7 @@ const UtilityBillingTab = ({
   // Queries
   const { data: settingsData } = useBusinessSettings();
   const { data: roomsData, isLoading: roomsLoading } = useUtilityRooms(utilityType, branchFilter);
-  const { data: readingsData } = useUtilityReadings(utilityType, selectedRoomId, { placeholderData: undefined });
+  const { data: readingsData, isLoading: readingsLoading } = useUtilityReadings(utilityType, selectedRoomId, { placeholderData: undefined });
   const { data: latestData, isLoading: latestLoading } = useUtilityLatestReading(utilityType, selectedRoomId, { placeholderData: undefined });
   const { data: periodsData, isLoading: periodsLoading } = useUtilityPeriods(utilityType, selectedRoomId, { placeholderData: undefined });
 
@@ -1066,7 +1066,7 @@ const UtilityBillingTab = ({
             readyRoomsCount={readyRooms.length}
             onOpenNewPeriodModal={() => { setIsHistoricalGeneration(false); setIsNewPeriodModalOpen(true); }}
             onOpenHistoricalPeriod={() => { setIsHistoricalGeneration(true); setIsNewPeriodModalOpen(true); }}
-            isLoadingPeriod={periodsLoading || latestLoading}
+            isLoadingPeriod={periodsLoading || latestLoading || readingsLoading}
             onBatchSendReady={handleOpenBatchSendModal}
             onExportCsv={handleExportRows}
             onExportPdf={handleExportPdf}
@@ -1284,6 +1284,7 @@ const UtilityBillingTab = ({
         isOpen={isNewPeriodModalOpen}
         onClose={() => setIsNewPeriodModalOpen(false)}
         utilityType={utilityType}
+        readings={readingsData?.readings || readingsData?.data || []}
         historical={isHistoricalGeneration}
         manualReviewPeriod={manualReviewPeriod}
         selectedRoomId={selectedRoomId}
