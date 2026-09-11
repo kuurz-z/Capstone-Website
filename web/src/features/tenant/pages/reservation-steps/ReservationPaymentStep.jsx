@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   formatBranch,
   fmtDate,
@@ -74,6 +75,7 @@ const ReservationPaymentStep = ({
   onUpdateStayPackage,
   roomSelectionLocked = false,
 }) => {
+  const navigate = useNavigate();
   const [isEditingTerm, setIsEditingTerm] = React.useState(false);
   const [isUpdatingTerm, setIsUpdatingTerm] = React.useState(false);
   const [isTimerExpired, setIsTimerExpired] = React.useState(false);
@@ -139,7 +141,7 @@ const ReservationPaymentStep = ({
   const payButtonLabel = payingOnline
     ? "Redirecting to PayMongo..."
     : isTimerExpired
-    ? "Hold Expired — Please Refresh"
+    ? "Room Hold Expired"
     : `Pay ${formatCurrency(reservationFeeAmount)} Securely`;
 
   const handlePayClick = () => {
@@ -185,10 +187,6 @@ const ReservationPaymentStep = ({
           subtitle="Complete your reservation fee payment before this room hold window expires."
           expiresAt={reservationData?.paymentExpiresAt}
           onExpire={() => setIsTimerExpired(true)}
-          onRefresh={async () => {
-            setIsTimerExpired(false);
-            if (onUpdateStayPackage) await onUpdateStayPackage({});
-          }}
           className="mb-2"
         />
       )}
@@ -490,6 +488,16 @@ const ReservationPaymentStep = ({
                       </span>
                     )}
                   </button>
+                  {isTimerExpired && !readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/applicant/check-availability")}
+                      className="w-full mt-3 py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Home size={14} />
+                      <span>Browse Available Rooms</span>
+                    </button>
+                  )}
                 </div>
               )
             )}
