@@ -1,3 +1,4 @@
+import { formatManilaDate } from './dateUtils.js';
 /**
  * ============================================================================
  * PDF GENERATOR — Billing Statement
@@ -133,7 +134,7 @@ function formatSegmentPeriod(seg) {
  * @param {number} opts.rowHeight   - Height per row (default 22)
  * @param {number} opts.fontSize    - Font size for body rows (default 9)
  */
-export function drawTable(doc, { headers, widths, rows, x, rowHeight = 22, fontSize = 9 }) {
+export function drawTable(doc, { headers, widths, rows, x, rowHeight = 22, fontSize = 9, wrapCells = false }) {
   const startX = x || doc.page.margins.left;
   const totalWidth = widths.reduce((a, b) => a + b, 0);
   const pageBottom = () => doc.page.height - doc.page.margins.bottom;
@@ -169,8 +170,9 @@ export function drawTable(doc, { headers, widths, rows, x, rowHeight = 22, fontS
   doc.font("Helvetica").fontSize(fontSize).fillColor(PDF_THEME.body);
 
   rows.forEach((row, rowIdx) => {
-    if (currentY + rowHeight > pageBottom()) {
-      doc.rect(startX, segmentStartY, totalWidth, (segmentRowCount + 1) * rowHeight)
+    const bodyHeight = wrapCells ? Math.max(rowHeight,...row.map((value,i)=>doc.heightOfString(String(value ?? ''),{width:widths[i]-8})+12)) : rowHeight;
+    if (currentY + bodyHeight > pageBottom()) {
+      doc.rect(startX, segmentStartY, totalWidth, currentY - segmentStartY)
         .stroke(PDF_THEME.border);
       doc.addPage();
       currentY = doc.page.margins.top;
@@ -183,10 +185,10 @@ export function drawTable(doc, { headers, widths, rows, x, rowHeight = 22, fontS
 
     const isEven = rowIdx % 2 === 0;
     const bgColor = isEven ? PDF_THEME.surface : "#FFFFFF";
-    doc.rect(startX, currentY, totalWidth, rowHeight).fill(bgColor);
+    doc.rect(startX, currentY, totalWidth, bodyHeight).fill(bgColor);
 
     // Draw light border bottom
-    doc.rect(startX, currentY + rowHeight - 1, totalWidth, 1).fill(PDF_THEME.border);
+    doc.rect(startX, currentY + bodyHeight - 1, totalWidth, 1).fill(PDF_THEME.border);
 
     let colX = startX;
     // Restore text colour (fillColor is shared with rect fill)
@@ -201,16 +203,16 @@ export function drawTable(doc, { headers, widths, rows, x, rowHeight = 22, fontS
       doc.text(String(row[i]), colX + 4, currentY + 6, {
         width: widths[i] - 8,
         align: i === 0 ? "left" : "right",
-        lineBreak: false,
+        lineBreak: wrapCells,
       });
       colX += widths[i];
     }
-    currentY += rowHeight;
+    currentY += bodyHeight;
     segmentRowCount += 1;
   });
 
   // Border around the final page segment (earlier segments were bordered before each page break).
-  doc.rect(startX, segmentStartY, totalWidth, (segmentRowCount + 1) * rowHeight)
+  doc.rect(startX, segmentStartY, totalWidth, currentY - segmentStartY)
     .stroke(PDF_THEME.border);
 
   // Move cursor past the table
@@ -241,7 +243,7 @@ function sectionHeading(doc, title) {
     .fontSize(9)
     .font("Helvetica-Bold")
     .fillColor(PDF_THEME.heading)
-    .text(title.toUpperCase());
+    .text(title.toUpperCase(),doc.page.margins.left,doc.y,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:"left"});
   drawHR(doc, PDF_THEME.heading);
   doc.moveDown(0.2);
 }
@@ -288,7 +290,7 @@ function drawBrandHeader(doc, { x, y, width, documentTitle, branch }) {
  *
  * @returns {Promise<string>} Relative path to the generated PDF file
  */
-export async function generateBillPdf({ bill, billingResult, electricityBreakdown = null, period, room, tenant }) {
+export async function generateBillPdf({ bill, billingResult, electricityBreakdown = null, waterBreakdown = null, period, room, tenant }) {
   // 1. Ensure output directory exists
   fs.mkdirSync(BILLS_DIR, { recursive: true });
 
@@ -529,6 +531,26 @@ export async function generateBillPdf({ bill, billingResult, electricityBreakdow
   const isInitialPayment = bill.billType === "initial_payment";
   const initial = bill.initialPaymentBreakdown || {};
 
+  if (water > 0 && waterBreakdown) {
+    for (const allocation of waterBreakdown.allocations || [waterBreakdown]) {
+      sectionHeading(doc, 'Water Billing Details');
+      if (allocation.calculationVersion !== 'water-meter-v1') {
+        doc.font('Helvetica').fontSize(9).text('Historical water allocation. Physical readings, consumption and price per m³ are unknown.');
+        drawTable(doc,{headers:['Recorded water allocation','Amount'],widths:[360,145],rows:[['Historical charge',formatPeso(allocation.tenantAmount ?? allocation.record?.myShare ?? water)]]});
+        continue;
+      }
+      drawTable(doc,{headers:['Meter event','Observed date','Reading (m³)'],widths:[140,215,150],fontSize:8,
+        rows:(allocation.meterEvents || []).map(e=>[({moveIn:'Move-In',moveOut:'Move-Out',periodStart:'Opening Baseline',periodEnd:'Billing Closing'})[e.eventType] || e.eventType,formatManilaDate(e.date || e.observedAt,'MMM D, YYYY HH:mm'),String(e.reading)])});
+      drawTable(doc,{headers:['Consumption segment','Opening','Closing','m³','Occupants'],widths:[165,60,60,65,155],fontSize:7,wrapCells:true,
+        rows:(allocation.consumptionSegments || []).map(s=>[
+          `${formatManilaDate(s.startDate,'MMM D HH:mm')} - ${formatManilaDate(s.endDate,'MMM D HH:mm')}`,
+          String(s.readingFrom),String(s.readingTo),String(s.unitsConsumed),
+          (s.coveredTenantNames || []).join(', ') || 'Vacant',
+        ])});
+      drawTable(doc,{headers:['Tenant allocation','Share (m³)','PHP/m³','Final charge'],widths:[190,100,95,120],fontSize:8,wrapCells:true,
+        rows:(allocation.tenantAllocations || []).map(a=>[a.tenantName,Number(a.consumptionShare).toFixed(4),formatPeso(a.rate),formatPeso(a.amount)])});
+    }
+  }
   sectionHeading(doc, isInitialPayment ? "Initial Move-In Settlement Breakdown" : "Charges Summary");
 
   const chargeRows = [];

@@ -105,6 +105,7 @@ import {
 } from "./_helpers.js";
 import { cancelReservationByUser } from "./cancellationController.js";
 import { branchHasSubmeter } from "../../config/branches.js";
+import { recordWaterObservation } from '../../services/billing/waterObservations.js';
 import {
   isStructuredInitialPaymentEnabled,
   STRUCTURED_INITIAL_PAYMENT_WORKFLOW,
@@ -678,6 +679,10 @@ export const updateReservation = async (req, res, next) => {
             validateModifiedOnly: true,
             session,
           });
+          await recordWaterObservation({room:existingReservation.roomId,
+            eventAt:reservation.confirmedMoveInDate || reservation.moveInDate,
+            reading:req.body.waterMeterReading,eventType:'moveIn',reservationId:reservation._id,
+            tenantId:reservation.userId?._id || reservation.userId,actorId,session});
           const leaseStartDate = new Date(
             updatedReservation.confirmedMoveInDate || updatedReservation.moveInDate,
           );
@@ -732,6 +737,7 @@ export const updateReservation = async (req, res, next) => {
                 reservationId: updatedReservation._id,
                 branch: existingReservation.roomId.branch,
                 moveInDate: leaseStartDate,
+                observedStartAt: leaseStartDate,
                 effectiveStartDate: leaseStartDate,
                 status: "active",
               },

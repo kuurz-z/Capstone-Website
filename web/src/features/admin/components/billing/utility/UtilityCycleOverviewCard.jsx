@@ -32,7 +32,7 @@ export default function UtilityCycleOverviewCard({
   utilityType,
   isSendingBatch,
 }) {
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : (currentPeriod?.calculationVersion === "water-meter-v1" ? "m³" : "legacy basis");
   const UtilityIcon = utilityType === "electricity" ? Zap : Droplets;
   const roomName = selectedRoom ? getRoomLabel(selectedRoom) : "Select a Room";
   const branchLabel = selectedRoom?.branch ? String(selectedRoom.branch).toUpperCase() : "";

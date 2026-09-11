@@ -1442,6 +1442,8 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
   // ── Form state ────────────────────────────────────────────────────────────
   const [moveOutDate, setMoveOutDate] = useState("");
   const [moveOutTime, setMoveOutTime] = useState("10:00");
+  const [waterReading,setWaterReading] = useState("");
+  const requiresWater = (detail?.basicInfo?.branch || tenant?.branch) === "gil-puyat" && ["private","double-sharing"].includes(detail?.basicInfo?.roomType || tenant?.roomType || detail?.roomInfo?.type);
   const [meterReading, setMeterReading] = useState("");
   const [keyReturned, setKeyReturned] = useState(true);
   const [damageDeductions, setDamageDeductions] = useState("");
@@ -1454,6 +1456,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
     setMoveOutDate(toDateInputValue(new Date()));
     setMoveOutTime("10:00");
     setMeterReading("");
+    setWaterReading("");
     setKeyReturned(true);
     setDamageDeductions("");
     setNotes("");
@@ -1507,7 +1510,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
 
   // ── Step gate validation ──────────────────────────────────────────────────
   const step1Valid = !!moveOutDate && !!moveOutTime;
-  const step2Valid = !!meterReading && !moveOutBelowBaseline;
+  const step2Valid = !!meterReading && !moveOutBelowBaseline && (!requiresWater || (waterReading !== "" && Number.isFinite(Number(waterReading)) && Number(waterReading)>=0));
 
   // -- MoveOut PDF download handler (lazy-import) -----------------------
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -1581,6 +1584,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
                 moveOutDate,
                 moveOutTime,
                 meterReading: Number(meterReading),
+                ...(requiresWater ? {finalWaterReading:Number(waterReading)} : {}),
                 keyReturned,
                 damageDeductions: Number(damageDeductions || 0),
                 notes,
@@ -1695,6 +1699,11 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
                 <span className="twm-meter-hint">Enter the current kWh reading from the room meter.</span>
               )}
             </label>
+            {requiresWater && <label className="tenant-modal-field">
+              <span>Final Water Reading (m³)</span>
+              <input type="number" min="0" step="0.01" value={waterReading} onChange={e=>setWaterReading(e.target.value)} required />
+              <span className="twm-meter-hint">Physical meter observation. Water charges are calculated from the billing cycle.</span>
+            </label>}
             <label className="tenant-modal-field">
               <span>Key / Access Card Returned</span>
               <select

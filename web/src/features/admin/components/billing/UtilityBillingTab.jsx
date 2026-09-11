@@ -214,7 +214,7 @@ const UtilityBillingTab = ({
     if (utilityType === "electricity") {
       return Number(settingsData?.utilityRates?.electricityRatePerKwh || 16.0);
     }
-    return Number(settingsData?.utilityRates?.waterRatePerCubicMeter || 50.0);
+    return Number(settingsData?.defaultWaterRatePerUnit ?? 0);
   }, [settingsData, utilityType]);
 
   // Normalized rooms list (filter out branches like Guadalupe that use fixed-rate billing without separate utilities)
@@ -352,7 +352,7 @@ const UtilityBillingTab = ({
   const currentPeriodUsage = useMemo(() => {
     if (!currentPeriod) return null;
     if (utilityType === "water") {
-      return currentPeriod.totalConsumption ?? currentPeriod.usage ?? null;
+      return currentPeriod.calculationVersion === "water-meter-v1" ? currentPeriod.computedTotalUsage ?? currentPeriod.totalConsumption ?? null : null;
     }
     if (currentPeriod.endReading != null && currentPeriod.startReading != null) {
       return Math.max(0, currentPeriod.endReading - currentPeriod.startReading);
@@ -564,9 +564,9 @@ const UtilityBillingTab = ({
     rooms.forEach((r) => {
       const p = r.activePeriod || r.latestPeriod;
       if (p) {
-        const usage = Number(p.totalConsumption ?? p.consumption ?? 0);
+        const usage = Number(p.computedTotalUsage ?? p.totalConsumption ?? p.consumption ?? 0);
         const amount = Number(p.totalAmount ?? p.amount ?? p.computedTotalCost ?? 0);
-        totalUsage += usage;
+        if (utilityType !== "water" || p.calculationVersion === "water-meter-v1") totalUsage += usage;
         totalBilled += amount;
       }
     });
@@ -751,6 +751,7 @@ const UtilityBillingTab = ({
       reading: String(reading?.reading ?? ""),
       date: toInputDate(reading?.readingDate || reading?.date || new Date()),
       eventType: reading?.eventType || "regularBilling",
+      correctionReason:"",
     });
   };
 
@@ -760,10 +761,9 @@ const UtilityBillingTab = ({
       await updateReading.mutateAsync({
         readingId: editReadingModal.reading.id,
         reading: Number(editReadingForm.reading),
-        readingDate: editReadingForm.date,
-        eventType: editReadingForm.eventType,
+        ...(utilityType === "water" ? {correctionReason:editReadingForm.correctionReason} : {readingDate:editReadingForm.date,eventType:editReadingForm.eventType}),
       });
-      notify.success("Meter reading updated.");
+      notify.success(utilityType === "water" ? "Correction recorded. Original observation preserved." : "Meter reading updated.");
       setEditReadingModal({ open: false, reading: null });
       await queryClient.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
     } catch (err) {
@@ -903,7 +903,7 @@ const UtilityBillingTab = ({
           { key: "tenantName", label: "Tenant" },
           { key: "startDate", label: "Start Date", formatter: fmtDate },
           { key: "endDate", label: "End Date", formatter: fmtDate },
-          { key: "usage", label: `Usage (${utilityType === "electricity" ? "kWh" : "cu.m."})` },
+          { key: "usage", label: `Usage (${utilityType === "electricity" ? "kWh" : "m³"})` },
           { key: "amount", label: "Charge (PHP)", formatter: fmtCurrency },
           { key: "status", label: "Status" },
         ],
@@ -931,12 +931,12 @@ const UtilityBillingTab = ({
         return;
       }
 
-      const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+      const unit = utilityType === "electricity" ? "kWh" : "m³";
       const tableRows = rows.map((r) => ({
         Room: r.roomName || getRoomLabel(selectedRoom) || "Room",
         Tenant: r.tenantName || "Unassigned",
         Cycle: r.startDate && r.endDate ? `${fmtShortDate(r.startDate)} - ${fmtShortDate(r.endDate)}` : "Cycle",
-        Usage: `${Number(r.usage || 0).toFixed(2)} ${unit}`,
+        Usage: r.usage == null || r.usage === "" ? "Unknown (legacy)" : `${Number(r.usage).toFixed(2)} ${unit}`,
         Charge: fmtCurrency(r.amount || 0),
         Status: String(r.status || "Draft").toUpperCase(),
       }));

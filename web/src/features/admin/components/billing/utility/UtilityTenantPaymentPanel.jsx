@@ -40,7 +40,7 @@ export default function UtilityTenantPaymentPanel({
   isBatchReminding = false,
   lastRemindedByBillId = {},
 }) {
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : (monitoringResult?.calculationVersion === "water-meter-v1" ? "m³" : "legacy basis");
   const tenantSummaries = monitoringResult?.tenantSummaries || [];
 
   const pendingReminderTenants = tenantSummaries.filter(

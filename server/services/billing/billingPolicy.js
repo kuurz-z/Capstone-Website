@@ -35,6 +35,14 @@ export function sumBillCharges(charges = {}) {
 }
 
 export function getUtilityDispatchEntry(billLike = {}, utilityType) {
+  if (utilityType === 'water' && billLike.waterAllocations?.length) {
+    const sent = billLike.waterAllocations.filter(a => a.state === 'sent');
+    const latest = [...sent].sort((a,b) => new Date(b.issuedAt || 0) - new Date(a.issuedAt || 0))[0];
+    return {state: sent.length ? 'sent' : 'draft', periodId: latest?.utilityPeriodId || null,
+      publishedAt: latest?.publishedAt || null, issuedAt: latest?.issuedAt || null,
+      dueDate: latest?.dueDate || null,
+      amount: roundMoney((sent.length ? sent : billLike.waterAllocations).reduce((s,a) => s + Number(a.amount),0))};
+  }
   const charges = billLike?.charges || {};
   const amount = Number(charges?.[utilityType] || 0);
   const entry = billLike?.utilityDispatch?.[utilityType];
@@ -89,6 +97,10 @@ export function getVisibleBillCharges(billLike = {}) {
     if (!isUtilityChargeVisible(billLike, utilityType)) {
       charges[utilityType] = 0;
     }
+  }
+
+  if (billLike.waterAllocations?.length) {
+    charges.water = roundMoney(billLike.waterAllocations.filter(a => a.state === 'sent').reduce((s,a) => s + Number(a.amount), 0));
   }
 
   return charges;

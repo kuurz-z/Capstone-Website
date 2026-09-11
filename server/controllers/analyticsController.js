@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import {getVisibleBillCharges} from "../services/billing/billingPolicy.js";
 import mongoose from "mongoose";
 import {
   AuditLog,
@@ -792,7 +793,7 @@ const buildUtilityBreakdownSeries = (bills, months) => {
       const entry = seriesMap.get(billMonthKey);
       const rent = toNumber(bill.charges?.rent ?? (bill.rentAmount || 0));
       const electricity = toNumber(bill.charges?.electricity ?? (bill.electricAmount || 0));
-      const water = toNumber(bill.charges?.water ?? (bill.waterAmount || 0));
+      const water = bill.waterAllocations?.length ? getVisibleBillCharges(bill).water : toNumber(bill.charges?.water ?? (bill.waterAmount || 0));
       const appliance = toNumber(bill.charges?.applianceFees || 0);
       const corkage = toNumber(bill.charges?.corkageFees || 0);
       const penalty = toNumber(bill.charges?.penalty || 0);

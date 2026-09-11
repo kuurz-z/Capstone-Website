@@ -1,3 +1,4 @@
+import { projectWaterPeriod } from '../../services/billing/waterProjection.js';
 import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
@@ -247,6 +248,7 @@ export const formatBill = (bill) => {
     utilityReadingDate: bill.utilityReadingDate || null,
     additionalCharges: bill.additionalCharges || [],
     charges: visible.charges,
+    waterAllocations: bill.waterAllocations || [],
     grossAmount: visible.grossAmount,
     reservationCreditApplied: bill.reservationCreditApplied || 0,
     structuredWorkflowVersion: bill.structuredWorkflowVersion || null,
@@ -445,6 +447,21 @@ export async function buildTenantUtilityBreakdown({ dbUser, bill, utilityType })
     : Number(bill?.charges?.water || 0);
   if (!bill || chargeAmount <= 0) return null;
 
+  if (utilityType === 'water' && bill.waterAllocations?.length) {
+    const visible= bill.waterAllocations.filter(a=>a.state==='sent');
+    const periods=await UtilityPeriod.find({_id:{$in:visible.map(a=>a.utilityPeriodId).filter(Boolean)}}).populate('roomId','name roomNumber').lean();
+    const allocations=visible.map(a=>{
+      const snapshot=periods.find(p=>String(p._id)===String(a.utilityPeriodId));
+      return projectWaterPeriod(snapshot || {_id:a.utilityPeriodId,roomId:a.roomId,startDate:a.cycleStart,endDate:a.cycleEnd,computedTotalCost:a.amount},dbUser._id,a.amount,a.allocationId,a);
+    });
+    if (!allocations.length) return null;
+    const tenantAmount=allocations.reduce((sum,a)=>sum+Number(a.tenantAmount || 0),0);
+    if (allocations.length===1) return {...allocations[0],allocations,tenantAmount};
+    return {calculationVersion:'water-multi-allocation-v1',unit:null,allocations,tenantAmount,
+      openingReading:null,closingReading:null,consumption:null,ratePerCubicMeter:null,totalWaterAmount:null,tenantUsageShare:null,
+      billingBasis:'Independent water allocations; see each period for physical readings and the saved price.',
+      record:{cycleStart:bill.utilityCycleStart,cycleEnd:bill.utilityCycleEnd,readingFrom:null,readingTo:null,usage:null,ratePerUnit:null,roomTotal:null,myShare:tenantAmount}};
+  }
   const period = await findUtilityPeriodForBill({ bill, utilityType });
   if (!period) return null;
 
@@ -487,24 +504,7 @@ export async function buildTenantUtilityBreakdown({ dbUser, bill, utilityType })
     };
   }
 
-  const firstSegment = (period.segments || [])[0] || null;
-  const readingFrom = firstSegment?.readingFrom ?? period.startReading ?? 0;
-  const readingTo = firstSegment?.readingTo ?? period.endReading ?? (readingFrom + (period.computedTotalUsage || 0));
-
-  return {
-    record: {
-      id: period._id,
-      cycleStart: period.startDate,
-      cycleEnd: period.endDate,
-      readingFrom,
-      readingTo,
-      usage: period.computedTotalUsage || 0,
-      ratePerUnit: period.ratePerUnit,
-      roomTotal: period.computedTotalCost || 0,
-      tenantsSharing: firstSegment?.activeTenantCount || period.tenantSummaries?.length || 0,
-      myShare: tenantSummary?.billAmount || chargeAmount,
-    },
-  };
+  return projectWaterPeriod(period,dbUser._id,tenantSummary?.billAmount ?? chargeAmount);
 }
 
 export function hasDraftLinkedSummary(period, draftBillIds) {
@@ -1200,6 +1200,8 @@ export async function generateRentBillPdf({ bill, reservation }) {
     bill: billPayload,
     billingResult: null,
     electricityBreakdown,
+    waterBreakdown: Number(billPayload.charges?.water || 0) > 0
+      ? await buildTenantUtilityBreakdown({dbUser:{_id:bill.userId?._id || bill.userId},bill,utilityType:'water'}) : null,
     period: {
       startDate: bill.billingCycleStart || bill.billingMonth,
       endDate: bill.billingCycleEnd || bill.dueDate,

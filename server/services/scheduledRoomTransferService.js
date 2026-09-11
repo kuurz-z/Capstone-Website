@@ -23,6 +23,7 @@
  */
 
 import mongoose from "mongoose";
+import { requiresWaterObservation } from "./billing/waterObservations.js";
 import logger from "../middleware/logger.js";
 import {
   Room,
@@ -1277,6 +1278,14 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
     );
   }
 
+  for (const [waterRoomId,field,label] of [
+    [record.sourceRoomId,'sourceWaterReading','Source water reading (m\u00b3)'],
+    [record.destinationRoomId,'targetWaterReading','Destination water reading (m\u00b3)'],
+  ]) {
+    const waterRoom = await Room.findById(waterRoomId).select('branch type').lean();
+    if (requiresWaterObservation(waterRoom)) parsePhysicalMeterReading(payload[field],{fieldLabel:label,maximum:999999.99});
+  }
+
   // 4. Recompute the canonical settlement AS OF THE ACTUAL CUTOVER DAY (today),
   //    NOT the scheduled date. If this transfer was scheduled for an earlier
   //    day but is only being completed now (payment/office-hours delay), the
@@ -1582,6 +1591,8 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
         effectiveTransferDate: record.effectiveTransferDate,
         reason: record.reason || "Scheduled room transfer",
         notes: payload.notes || "",
+        sourceWaterReading: payload.sourceWaterReading,
+        targetWaterReading: payload.targetWaterReading,
         sourceRoomMeterReading: sourceMeterReading ?? undefined,
         targetRoomMeterReading: targetMeterReading ?? undefined,
         scheduledTransferBillId: reusableBillId,

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, jest, test } from "@jest/globals";
+import mongoose from "mongoose";
+import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const utilityPeriodFindOne = jest.fn();
 const utilityPeriodFind = jest.fn();
@@ -25,6 +26,7 @@ const getRoomLabel = jest.fn();
 const makeQueryChain = (result) => {
   const chain = {
     sort: jest.fn(() => chain),
+    session: jest.fn(() => chain),
     select: jest.fn(() => chain),
     populate: jest.fn(() => chain),
     lean: jest.fn(() => Promise.resolve(result)),
@@ -526,234 +528,33 @@ describe("exportUtilityRows", () => {
   });
 });
 
-describe("utility cycle root deletion safety", () => {
-  beforeEach(() => {
+
+describe('utility cycle archival safety',()=>{
+  let sessionSpy;
+  beforeEach(()=>{
     jest.clearAllMocks();
-    resolveAdminAccessContext.mockResolvedValue({
-      isOwner: false,
-      branch: "gil-puyat",
-    });
-    utilityReadingUpdateMany.mockResolvedValue({ modifiedCount: 1 });
-    utilityReadingDeleteMany.mockResolvedValue({ deletedCount: 2 });
-    utilityPeriodFindByIdAndDelete.mockResolvedValue({ _id: "period-1" });
-    roomFindById.mockReturnValue(makeQueryChain(baseRoom));
+    resolveAdminAccessContext.mockResolvedValue({isOwner:false,branch:'gil-puyat'});
+    sessionSpy=jest.spyOn(mongoose,'startSession').mockResolvedValue({withTransaction:async fn=>fn(),endSession:async()=>{}});
   });
-
-  test("permanently deletes an unsent cycle, boundary readings, and draft bills at root", async () => {
-    const period = {
-      _id: "period-1",
-      branch: "gil-puyat",
-      roomId: "room-1",
-      tenantSummaries: [
-        {
-          tenantId: "tenant-1",
-          billId: "bill-1",
-        },
-      ],
-    };
-    const draftBill = {
-      _id: "bill-1",
-      charges: { rent: 0, electricity: 500, water: 0, penalty: 0 },
-      utilityDispatch: { electricity: { state: "draft" } },
-      status: "draft",
-      save: jest.fn(),
-    };
-    utilityPeriodFindById.mockResolvedValue(period);
-    billFindById.mockResolvedValue(draftBill);
-    billFindByIdAndDelete.mockResolvedValue(draftBill);
-
-    const res = createRes();
-    const next = jest.fn();
-
-    await deleteUtilityPeriod(
-      { params: { utilityType: "electricity", id: "period-1" } },
-      res,
-      next,
-    );
-
-    expect(billFindByIdAndDelete).toHaveBeenCalledWith("bill-1");
-    expect(utilityReadingUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ utilityPeriodId: "period-1" }),
-      { $set: { utilityPeriodId: null } },
-    );
-    expect(utilityReadingDeleteMany).toHaveBeenCalledWith(
-      expect.objectContaining({ utilityPeriodId: "period-1" }),
-    );
-    expect(utilityPeriodFindByIdAndDelete).toHaveBeenCalledWith("period-1");
-    expect(res.payload).toEqual({
-      success: true,
-      message: "Billing cycle deleted successfully",
-    });
-    expect(next).not.toHaveBeenCalled();
+  afterEach(()=>sessionSpy.mockRestore());
+  const period=()=>({...basePeriod,branch:'gil-puyat',save:jest.fn(),tenantSummaries:[{billId:'b'}]});
+  test('archives an unpaid unsent cycle and retains meter observations',async()=>{
+    const p=period();const bill={charges:{electricity:100},status:'draft',utilityDispatch:{electricity:{state:'draft'}},save:jest.fn()};
+    utilityPeriodFindById.mockReturnValue(makeQueryChain(p));billFind.mockReturnValue(makeQueryChain([bill]));
+    const res=createRes(),next=jest.fn();
+    await deleteUtilityPeriod({params:{utilityType:'electricity',id:'period-1'}},res,next);
+    expect(next).not.toHaveBeenCalled();expect(p.isArchived).toBe(true);expect(bill.charges.electricity).toBe(0);
+    expect(utilityReadingDeleteMany).not.toHaveBeenCalled();expect(billFindByIdAndDelete).not.toHaveBeenCalled();expect(utilityPeriodFindByIdAndDelete).not.toHaveBeenCalled();
   });
-
-  test("denies cross-branch period and reading deletion requests", async () => {
-    const period = {
-      _id: "period-1",
-      branch: "guadalupe",
-      tenantSummaries: [],
-    };
-    const reading = {
-      _id: "reading-1",
-      branch: "guadalupe",
-      isArchived: false,
-      save: jest.fn(),
-    };
-    utilityPeriodFindById.mockResolvedValue(period);
-    utilityReadingFindById.mockResolvedValue(reading);
-
-    const periodRes = createRes();
-    const readingRes = createRes();
-    await deleteUtilityPeriod(
-      { params: { utilityType: "electricity", id: "period-1" } },
-      periodRes,
-      jest.fn(),
-    );
-    await deleteUtilityReading(
-      { params: { utilityType: "electricity", id: "reading-1" } },
-      readingRes,
-      jest.fn(),
-    );
-
-    expect(periodRes.status).toHaveBeenCalledWith(403);
-    expect(readingRes.status).toHaveBeenCalledWith(403);
-    expect(utilityPeriodFindByIdAndDelete).not.toHaveBeenCalled();
-    expect(utilityReadingDeleteMany).not.toHaveBeenCalled();
+  test.each([{status:'paid',paidAmount:100},{status:'partially-paid',paidAmount:1},{status:'pending',issuedAt:new Date()}])('force cannot destroy issued or paid history %j',async bill=>{
+    const p=period();utilityPeriodFindById.mockReturnValue(makeQueryChain(p));billFind.mockReturnValue(makeQueryChain([bill]));
+    const next=jest.fn();await deleteUtilityPeriod({params:{utilityType:'electricity',id:'period-1'},query:{force:'true'}},createRes(),next);
+    expect(next.mock.calls[0][0].code).toBe('UTILITY_FINANCIAL_HISTORY_LOCKED');expect(p.save).not.toHaveBeenCalled();
+    expect(utilityReadingDeleteMany).not.toHaveBeenCalled();expect(billFindByIdAndDelete).not.toHaveBeenCalled();
   });
-
-  test("allows deleting an already-sent cycle if all associated bills are unpaid", async () => {
-    const period = {
-      _id: "period-sent-1",
-      branch: "gil-puyat",
-      roomId: "room-1",
-      status: "closed",
-      tenantSummaries: [
-        {
-          tenantId: "tenant-1",
-          billId: "bill-unpaid-1",
-        },
-      ],
-    };
-    const sentUnpaidBill = {
-      _id: "bill-unpaid-1",
-      charges: { rent: 0, electricity: 600, water: 0, penalty: 0 },
-      utilityDispatch: { electricity: { state: "sent" } },
-      status: "pending",
-      paidAmount: 0,
-      save: jest.fn(),
-    };
-    utilityPeriodFindById.mockResolvedValue(period);
-    billFind.mockReturnValue(makeQueryChain([sentUnpaidBill]));
-    billFindById.mockResolvedValue(sentUnpaidBill);
-    billFindByIdAndDelete.mockResolvedValue(sentUnpaidBill);
-
-    const res = createRes();
-    const next = jest.fn();
-
-    await deleteUtilityPeriod(
-      { params: { utilityType: "electricity", id: "period-sent-1" } },
-      res,
-      next,
-    );
-
-    expect(billFindByIdAndDelete).toHaveBeenCalledWith("bill-unpaid-1");
-    expect(utilityPeriodFindByIdAndDelete).toHaveBeenCalledWith("period-sent-1");
-    expect(res.payload).toEqual({
-      success: true,
-      message: "Billing cycle deleted successfully",
-    });
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  test("blocks deletion of a cycle if a tenant has already made a payment on the bill", async () => {
-    const period = {
-      _id: "period-paid-1",
-      branch: "gil-puyat",
-      roomId: "room-1",
-      status: "closed",
-      tenantSummaries: [
-        {
-          tenantId: "tenant-1",
-          tenantName: "Juan Dela Cruz",
-          billId: "bill-paid-1",
-        },
-      ],
-    };
-    const paidBill = {
-      _id: "bill-paid-1",
-      charges: { rent: 0, electricity: 600, water: 0, penalty: 0 },
-      utilityDispatch: { electricity: { state: "sent" } },
-      status: "paid",
-      paidAmount: 600,
-      userId: { firstName: "Juan", lastName: "Dela Cruz" },
-      save: jest.fn(),
-    };
-    utilityPeriodFindById.mockResolvedValue(period);
-    billFind.mockReturnValue(makeQueryChain([paidBill]));
-    billFindById.mockResolvedValue(paidBill);
-
-    const res = createRes();
-    const next = jest.fn();
-
-    await deleteUtilityPeriod(
-      { params: { utilityType: "electricity", id: "period-paid-1" } },
-      res,
-      next,
-    );
-
-    expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.payload.error).toMatch(/already made a payment/i);
-    expect(utilityPeriodFindByIdAndDelete).not.toHaveBeenCalled();
-    expect(billFindByIdAndDelete).not.toHaveBeenCalled();
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  test("allows force-deleting a cycle with paid bills when force override is enabled", async () => {
-    const period = {
-      _id: "period-paid-force-1",
-      branch: "gil-puyat",
-      roomId: "room-1",
-      status: "closed",
-      tenantSummaries: [
-        {
-          tenantId: "tenant-1",
-          tenantName: "Juan Dela Cruz",
-          billId: "bill-paid-force-1",
-        },
-      ],
-    };
-    const paidBill = {
-      _id: "bill-paid-force-1",
-      charges: { rent: 0, electricity: 600, water: 0, penalty: 0 },
-      utilityDispatch: { electricity: { state: "sent" } },
-      status: "paid",
-      paidAmount: 600,
-      userId: { firstName: "Juan", lastName: "Dela Cruz" },
-      save: jest.fn(),
-    };
-    utilityPeriodFindById.mockResolvedValue(period);
-    billFind.mockReturnValue(makeQueryChain([paidBill]));
-    billFindById.mockResolvedValue(paidBill);
-    billFindByIdAndDelete.mockResolvedValue(paidBill);
-
-    const res = createRes();
-    const next = jest.fn();
-
-    await deleteUtilityPeriod(
-      {
-        params: { utilityType: "electricity", id: "period-paid-force-1" },
-        query: { force: "true" },
-      },
-      res,
-      next,
-    );
-
-    expect(billFindByIdAndDelete).toHaveBeenCalledWith("bill-paid-force-1");
-    expect(utilityPeriodFindByIdAndDelete).toHaveBeenCalledWith("period-paid-force-1");
-    expect(res.payload).toEqual({
-      success: true,
-      message: "Billing cycle deleted successfully",
-    });
-    expect(next).not.toHaveBeenCalled();
+  test('denies another branch before loading bills',async()=>{
+    utilityPeriodFindById.mockReturnValue(makeQueryChain({...period(),branch:'guadalupe'}));const next=jest.fn();
+    await deleteUtilityPeriod({params:{utilityType:'electricity',id:'period-1'}},createRes(),next);
+    expect(next.mock.calls[0][0].statusCode).toBe(403);expect(billFind).not.toHaveBeenCalled();
   });
 });

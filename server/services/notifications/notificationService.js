@@ -38,6 +38,7 @@ async function createNotification(userId, type, title, message, options = {}) {
       title,
       message,
       actionUrl: options.actionUrl || null,
+      data: options.data || undefined,
       entityType: options.entityType || "",
       entityId: options.entityId || null,
       roleAtCreation,
@@ -81,6 +82,7 @@ async function createNotificationOnce(userId, type, title, message, dedupeKey, o
       title,
       message,
       actionUrl: options.actionUrl || null,
+      data: options.data || undefined,
       entityType: options.entityType || "",
       entityId: options.entityId || null,
       roleAtCreation,
@@ -513,6 +515,9 @@ const notify = {
     options = {},
   ) => {
     const billId = options.billId || null;
+    const identity={billId:billId ? String(billId) : '',utilityType,
+      utilityPeriodId:options.utilityPeriodId ? String(options.utilityPeriodId) : '',
+      allocationIds:[...(options.allocationIds || [])].sort().join(',')};
     const title = `${utilityType === "water" ? "Water" : "Electricity"} Charge Available`;
     const message = `Your ${utilityType} charge for ${billingMonth} is ₱${utilityAmount}. Current bill total: ₱${totalAmount}. Due by ${dueDate}.`;
 
@@ -522,13 +527,14 @@ const notify = {
       title,
       message,
       {
+        data:{...identity,screen:"billing",url:billId ? `/bill-details?billId=${String(billId)}` : "/(tabs)/billing"},
         entityType: "bill",
         entityId: billId ? String(billId) : null,
         actionUrl: billId ? `/billing?billId=${String(billId)}` : "/applicant/billing",
         dedupeKey: buildEventDedupeKey(
           "utility_charge_available",
           billId,
-          options.eventId,
+          options.eventId || `${utilityType}:${identity.utilityPeriodId}:${identity.allocationIds}`,
         ),
       },
       (_notification, pushIdentity) =>
@@ -537,6 +543,7 @@ const notify = {
           body: message,
           data: {
             ...pushIdentity,
+            ...identity,
             type: "bill_generated",
             billing_id: billId ? String(billId) : "",
             screen: "billing",

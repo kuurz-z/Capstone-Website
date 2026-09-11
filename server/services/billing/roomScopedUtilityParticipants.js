@@ -15,6 +15,7 @@ export async function resolveRoomScopedReservationsForUtilityPeriod({
   periodStart,
   periodEnd,
   utilityType = null,
+  calculationVersion = null,
   session = null,
 }) {
   let currentQuery = Reservation.find({
@@ -36,6 +37,22 @@ export async function resolveRoomScopedReservationsForUtilityPeriod({
     currentQuery.lean(),
     historyQuery.lean(),
   ]);
+
+  if (utilityType === 'water' && calculationVersion === 'water-meter-v1') {
+    const ids = [...new Set(roomBedHistory.map(h => String(h.reservationId || '')).filter(Boolean))];
+    let query = Reservation.find({_id:{$in:ids}}).populate('userId','firstName lastName email');
+    if (session) query = query.session(session);
+    const historic = await query.lean();
+    const all = new Map([...stillInRoom,...historic].map(r => [String(r._id),r]));
+    return [...all.values()].map(r => {
+      const histories = roomBedHistory.filter(h => String(h.reservationId) === String(r._id));
+      return {...r, _roomOccupancyIntervals:histories.length ? histories.map(h => ({
+        start:h.observedStartAt || h.moveInDate || h.effectiveStartDate,
+        end:h.observedEndAt || h.moveOutDate || h.effectiveEndDate || null,
+        bedId:h.bedId, stayId:h.stayId,
+      })) : [{start:r.confirmedMoveInDate || r.moveInDate,end:r.moveOutDate || null}]};
+    });
+  }
 
   // A same-calendar-day Room A -> B -> C transfer intentionally retains the
   // middle room's audit row, but that transferred occupancy interval has no

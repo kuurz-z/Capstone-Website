@@ -1604,6 +1604,7 @@ export const earlyTerminationAction = async (req, res, next) => {
         moveOutDate,
         actualVacateTime,
         finalUtilityReading: parsedFinalUtilityReading,
+        finalWaterReading: req.body.finalWaterReading,
         finalNotes,
         keyReturned,
         damageDeductions,

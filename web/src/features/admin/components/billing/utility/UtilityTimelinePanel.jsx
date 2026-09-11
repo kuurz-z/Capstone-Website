@@ -47,7 +47,7 @@ export default function UtilityTimelinePanel({
   onExportPdf,
   isExporting,
 }) {
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : "m³";
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs space-y-4">
@@ -160,11 +160,11 @@ export default function UtilityTimelinePanel({
                       type="button"
                       className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-card-foreground hover:bg-muted active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                       onClick={() => onEditReading(row.rawReading)}
-                      disabled={isBoundary || isCurrentCycleLocked}
+                      disabled={(utilityType !== "water" && isBoundary) || isCurrentCycleLocked || ["corrected","voided"].includes(row.rawReading?.readingStatus)}
                       title={
                         isCurrentCycleLocked
                           ? "This billing cycle is locked."
-                          : isBoundary
+                          : isBoundary && utilityType !== "water"
                             ? "Opening/closing boundary readings are locked to preserve audit integrity."
                             : "Manage reading"
                       }

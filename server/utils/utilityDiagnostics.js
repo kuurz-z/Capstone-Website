@@ -1,3 +1,4 @@
+import { waterPeriodSent } from '../services/billing/waterAllocations.js';
 import {
   Bill,
   Reservation,
@@ -44,11 +45,12 @@ export function deriveUtilityPeriodBillingState({
     };
   }
 
+  const wasSent = bill => utilityType === "water" && bill.waterAllocations?.length ? waterPeriodSent(bill,period._id) : getUtilityDispatchEntry(bill,utilityType).state === "sent";
   const hasDraftBills = linkedBills.some(
-    (bill) => getUtilityDispatchEntry(bill, utilityType).state !== "sent",
+    (bill) => !wasSent(bill),
   );
   const hasSentBills = linkedBills.some(
-    (bill) => getUtilityDispatchEntry(bill, utilityType).state === "sent",
+    (bill) => wasSent(bill),
   );
 
   let billingState = "closed";
@@ -276,6 +278,8 @@ function buildRoomDiagnostic({
     billingState: latestPeriodBillingState,
     billingLabel: latestPeriodBillingLabel,
     billingBlockingReason,
+    activePeriod:openPeriod,
+    latestPeriod,
     targetCloseDate: openPeriod
       ? getUtilityTargetCloseDate(openPeriod.startDate)
       : null,
@@ -322,7 +326,7 @@ export async function getUtilityRoomDiagnostics(roomId, utilityType) {
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
     const bills = await Bill.find({ _id: { $in: allBillIds } })
-      .select("status utilityDispatch sentAt issuedAt dueDate charges")
+      .select("status utilityDispatch waterAllocations sentAt issuedAt dueDate charges")
       .lean();
     for (const b of bills) billStatusMap.set(String(b._id), b);
   }
@@ -379,7 +383,7 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
     const bills = await Bill.find({ _id: { $in: allBillIds } })
-      .select("status utilityDispatch sentAt issuedAt dueDate charges")
+      .select("status utilityDispatch waterAllocations sentAt issuedAt dueDate charges")
       .lean();
     for (const b of bills) billStatusMap.set(String(b._id), b);
   }
