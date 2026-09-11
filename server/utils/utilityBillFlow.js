@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { upsertWaterAllocation, waterAllocationsForPeriod, waterPeriodSent } from '../services/billing/waterAllocations.js';
 import { formatManilaDate, getManilaDayjs } from "./dateUtils.js";
 import { Bill, Reservation, Room, User, UtilityFinalization } from "../models/index.js";
 import {
@@ -177,7 +178,7 @@ export async function upsertDraftBillsForUtility({
     );
     const billingMonth =
       billingContext?.cycle?.billingMonth || period.startDate;
-    const reservationId = billingContext?.reservation?._id || null;
+    const reservationId = utilityType === 'water' ? summary.reservationId || billingContext?.reservation?._id || null : billingContext?.reservation?._id || null;
 
     // ── Transfer-day finalization: suppress the duplicate draft Bill ────────
     const finalization =
@@ -225,7 +226,7 @@ export async function upsertDraftBillsForUtility({
     if (session) billQuery = billQuery.session(session);
     let bill = await billQuery;
 
-    if (bill && getUtilityDispatchEntry(bill, utilityType).state === "sent") {
+    if (bill && (utilityType === 'water' ? waterPeriodSent(bill, periodId) || bill.status === 'paid' : getUtilityDispatchEntry(bill, utilityType).state === "sent")) {
       const error = new Error(
         `Cannot sync ${utilityType} charges because one or more bills were already sent.`,
       );
@@ -268,7 +269,9 @@ export async function upsertDraftBillsForUtility({
       });
     }
 
-    bill.charges[chargeField] = roundMoney(summary.billAmount || 0);
+    if (utilityType === 'water') {
+      upsertWaterAllocation(bill, {period, room, summary, legacyDispatch:getUtilityDispatchEntry(bill, 'water')});
+    } else bill.charges[chargeField] = roundMoney(summary.billAmount || 0);
     setUtilityDispatchEntry(bill, utilityType, {
       state: "draft",
       periodId: period?._id || period?.id || null,
@@ -376,6 +379,15 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
     bill.sentAt = sentAt;
     bill.status = "pending";
     bill.publicationState = "published"; // Phase 3: mark as published (tenant-visible)
+    for (const type of ['electricity', 'water']) {
+      if (Number(bill.charges?.[type] || 0) <= 0) continue;
+      if (type === 'water' && bill.waterAllocations?.length) {
+        for (const allocation of bill.waterAllocations) {
+          if (allocation.state === 'draft') Object.assign(allocation, {state:'sent', publishedAt:sentAt, issuedAt, dueDate});
+        }
+      }
+      setUtilityDispatchEntry(bill, type, {state:'sent', publishedAt:sentAt, issuedAt, dueDate});
+    }
     // releasing: true — this is the actual draft->published transition for
     // this bill (see the releasedAt guard in services/billing/billingPolicy.js).
     syncBillAmounts(bill, { releasing: true });
@@ -514,12 +526,15 @@ export async function sendUtilityPeriodBills({
     populatedBills,
     UTILITY_BILL_SEND_CONCURRENCY,
     async (bill) => {
-      const utilityAmount = roundMoney(bill?.charges?.[chargeField] || 0);
+      const targetAllocations = utilityType === 'water' && bill.waterAllocations?.length
+        ? waterAllocationsForPeriod(bill, period._id).filter(a => a.state === 'draft') : null;
+      const utilityAmount = targetAllocations ? roundMoney(targetAllocations.reduce((s,a) => s + Number(a.amount),0)) : roundMoney(bill?.charges?.[chargeField] || 0);
       const currentDispatch = getUtilityDispatchEntry(bill, utilityType);
-      if (utilityAmount <= 0 || currentDispatch.state === "sent") {
+      if (utilityAmount <= 0 || (!targetAllocations && currentDispatch.state === "sent")) {
         return null;
       }
 
+      for (const allocation of targetAllocations || []) Object.assign(allocation, {state:'sent', publishedAt, issuedAt, dueDate});
       setUtilityDispatchEntry(bill, utilityType, {
         state: "sent",
         periodId: period?._id || period?.id || currentDispatch.periodId || null,

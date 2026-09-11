@@ -1,3 +1,5 @@
+import { refreshWaterAggregate, waterPeriodSent } from '../services/billing/waterAllocations.js';
+import { assertUtilityHistoryMutable } from '../services/billing/utilityHistorySafety.js';
 /**
  * ============================================================================
  * UNIFIED UTILITY BILLING CONTROLLER
@@ -342,8 +344,9 @@ async function assertUtilityPeriodNotSent(period, utilityType) {
   if (billIds.length === 0) return;
 
   const linkedBills = await Bill.find({ _id: { $in: billIds } }).select(
-    "charges utilityDispatch status sentAt issuedAt dueDate",
+    "charges utilityDispatch waterAllocations status paidAmount releasedAt sentAt issuedAt dueDate",
   );
+  assertUtilityHistoryMutable(linkedBills, utilityType);
   const alreadySent = linkedBills.some(
     (bill) => getUtilityDispatchEntry(bill, utilityType).state === "sent",
   );
@@ -1180,150 +1183,38 @@ export const batchCloseUtilityPeriods = async (req, res, next) => {
 };
 
 export const deleteUtilityPeriod = async (req, res, next) => {
+  const session = await mongoose.startSession();
   try {
     const admin = await getAdminInfo(req);
     const { utilityType, id } = req.params;
-    const isForce =
-      String(req.query?.force || req.body?.force || "").toLowerCase() ===
-        "true" ||
-      req.query?.force === true ||
-      req.body?.force === true;
-
-    const period = await UtilityPeriod.findById(id);
-    if (!period)
-      return res.status(404).json({ error: "Period not found" });
-
-    if (!admin.isOwner && period.branch !== admin.branch) {
-      return res.status(403).json({ error: "Access denied" });
-    }
-
-    if (!branchSupportsSeparateUtilityBilling(period.branch, utilityType)) {
-      return res.status(422).json({
-        error:
-          "Guadalupe uses a fixed-rate billing setup. Separate electricity and water utility billing are not used for this branch.",
-        code: "BRANCH_UTILITY_NOT_SUPPORTED",
-      });
-    }
-
-    // Check if any associated tenant bills have already been paid (partially or in full)
-    const billIds = getUtilitySummaryBillIds(period);
-    if (billIds.length > 0) {
-      const linkedBills = await Bill.find({ _id: { $in: billIds } }).populate(
-        "userId",
-        "firstName lastName email",
-      );
-
-      const paidBill = linkedBills.find((b) => {
-        return (
-          b.status === "paid" ||
-          b.status === "partially-paid" ||
-          Number(b.paidAmount || 0) > 0
-        );
-      });
-
-      if (paidBill && !isForce) {
-        const tenantName = paidBill.userId
-          ? `${paidBill.userId.firstName || ""} ${paidBill.userId.lastName || ""}`.trim()
-          : "a tenant";
-        return res.status(409).json({
-          error: `Cannot delete this ${utilityType} period because ${tenantName || "a tenant"} has already made a payment for this bill. Please void or refund the payment before deleting.`,
-          code: "UTILITY_PERIOD_HAS_PAID_BILLS",
-        });
+    await session.withTransaction(async () => {
+      const period = await UtilityPeriod.findById(id).session(session);
+      if (!period || period.utilityType !== utilityType) throw Object.assign(new Error('Period not found'), {statusCode:404});
+      if (!admin.isOwner && period.branch !== admin.branch) throw Object.assign(new Error('Access denied'), {statusCode:403});
+      const bills = await Bill.find({$or:[
+        {_id:{$in:getUtilitySummaryBillIds(period)}},
+        {'waterAllocations.utilityPeriodId':period._id},
+        {[`utilityDispatch.${utilityType}.periodId`]:period._id},
+      ]}).session(session);
+      assertUtilityHistoryMutable(bills, utilityType);
+      for (const bill of bills) {
+        if (utilityType === 'water' && bill.waterAllocations?.length) {
+          bill.waterAllocations = bill.waterAllocations.filter(a => String(a.utilityPeriodId) !== String(period._id));
+          refreshWaterAggregate(bill);
+        } else bill.charges[utilityType] = 0;
+        if (bill.utilityDispatch) bill.utilityDispatch[utilityType] = undefined;
+        syncBillAmounts(bill, {preserveStatus:bill.status === 'draft'});
+        await bill.save({session});
       }
-
-      const chargeField = utilityType === "water" ? "water" : "electricity";
-      const otherUtilityField = utilityType === "water" ? "electricity" : "water";
-      const summariesWithBills = (period.tenantSummaries || []).filter((s) => s.billId);
-
-      await Promise.all(
-        summariesWithBills.map(async (summary) => {
-          const bill = await Bill.findById(summary.billId);
-          if (bill) {
-            bill.charges = bill.charges || {};
-            bill.charges[chargeField] = 0;
-            if (bill.utilityDispatch) {
-              delete bill.utilityDispatch[utilityType];
-            }
-            const remainingRent = Number(bill.charges?.rent || 0);
-            const remainingOtherUtility = Number(bill.charges?.[otherUtilityField] || 0);
-            const remainingPenalty = Number(bill.charges?.penalty || 0);
-            const remainingAppliance = Number(bill.charges?.applianceFees || 0);
-            const remainingCorkage = Number(bill.charges?.corkageFees || 0);
-            const remainingChargesTotal =
-              remainingRent +
-              remainingOtherUtility +
-              remainingPenalty +
-              remainingAppliance +
-              remainingCorkage;
-
-            // If the bill was generated solely for this utility cycle, remove it at its root
-            if (
-              remainingChargesTotal === 0 &&
-              (bill.status === "draft" ||
-                bill.status === "pending" ||
-                bill.status === "overdue" ||
-                bill.isArchived ||
-                isForce)
-            ) {
-              await Bill.findByIdAndDelete(bill._id);
-            } else {
-              syncBillAmounts(bill, { preserveStatus: bill.status === "draft" });
-              await bill.save();
-            }
-          }
-        })
-      );
-    }
-
-    // Keep tenant lifecycle readings (move-in/move-out) detached from deleted periods
-    // so deleting a cycle does not erase tenant-level check-in/out history.
-    await UtilityReading.updateMany(
-      {
-        utilityPeriodId: period._id,
-        eventType: { $in: utilityEventTypesForQuery("moveIn", "moveOut") },
-      },
-      { $set: { utilityPeriodId: null } },
-    );
-
-    // Hard-delete cycle boundary and regular billing readings created for this period
-    await UtilityReading.deleteMany({
-      utilityPeriodId: period._id,
-      eventType: {
-        $in: utilityEventTypesForQuery(
-          "periodStart",
-          "periodEnd",
-          "regularBilling",
-        ),
-      },
+      // Keep both period and physical observations as auditable history.
+      period.isArchived = true;
+      await period.save({session});
     });
-
-    // Permanently delete the utility period document at root
-    await UtilityPeriod.findByIdAndDelete(period._id);
-
-    const room = await Room.findById(period.roomId);
-    await logBillingAudit(req, {
-      admin,
-      action: isForce ? "utility_period_force_deleted" : "utility_period_deleted",
-      severity: isForce ? "critical" : "high",
-      entityId: period._id,
-      branch: period.branch,
-      details: isForce
-        ? `Administrative force deletion of ${utilityType} billing cycle with payment lock override for room ${getRoomLabel(room || {})}.`
-        : `Deleted ${utilityType} billing cycle for room ${getRoomLabel(room || {})}.`,
-      metadata: {
-        utilityType,
-        roomId: period.roomId,
-        periodId: period._id,
-        startDate: period.startDate,
-        endDate: period.endDate,
-        ...(isForce ? { isForce: true } : {}),
-      },
-    });
-
-    res.json({ success: true, message: "Billing cycle deleted successfully" });
-  } catch (err) {
-    next(err);
-  }
+    await logBillingAudit(req, {admin, action:'utility_period_archived', severity:'high',
+      entityId:id, branch:admin.branch, details:`Archived unpublished ${utilityType} cycle; observations retained.`,
+      metadata:{utilityType,periodId:id}});
+    res.json({success:true, message:'Unpublished billing cycle archived; physical observations retained.'});
+  } catch (err) { next(err); } finally { await session.endSession(); }
 };
 
 export const updateUtilityPeriod = async (req, res, next) => {
@@ -1828,7 +1719,7 @@ export const sendUtilityPeriod = async (req, res, next) => {
       const chargeField = utilityType === "water" ? "water" : "electricity";
       return (
         Number(bill?.charges?.[chargeField] || 0) > 0 &&
-        getUtilityDispatchEntry(bill, utilityType).state !== "sent"
+        (utilityType === "water" && bill.waterAllocations?.length ? !waterPeriodSent(bill, period._id) : getUtilityDispatchEntry(bill, utilityType).state !== "sent")
       );
     });
 

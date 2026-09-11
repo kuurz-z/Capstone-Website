@@ -130,6 +130,16 @@ const tenantSummarySchema = new mongoose.Schema(
 
 const utilityPeriodSchema = new mongoose.Schema(
   {
+    // No default: existing occupancy-day and migrated legacy snapshots stay legacy.
+    calculationVersion: { type: String },
+    unit: { type: String, enum: ['m3', 'kWh'] },
+    pricingSnapshot: {
+      ratePerUnit: Number,
+      unit: String,
+      capturedAt: Date,
+      recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    },
+    meterEvents: { type: [mongoose.Schema.Types.Mixed], default: undefined },
     utilityType: {
       type: String,
       enum: ["electricity", "water"],
