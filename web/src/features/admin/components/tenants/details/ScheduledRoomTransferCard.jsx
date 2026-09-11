@@ -468,10 +468,13 @@ function CompleteTransferDialog({ transfer, onClose, onDone }) {
 
   const submit = async () => {
     const body = { notes: notes.trim() || undefined };
-    for (const [required,value,field,label] of [[preview?.water?.required,sourceWater,'sourceWaterReading','source'],[preview?.destinationWater?.required,targetWater,'targetWaterReading','destination']]) {
+    for (const [required,value,field,label,baseline] of [[preview?.water?.required,sourceWater,'sourceWaterReading','source',preview?.water?.previousReading],[preview?.destinationWater?.required,targetWater,'targetWaterReading','destination',preview?.destinationWater?.previousReading]]) {
       if (!required) continue;
       if (value === '' || !Number.isFinite(Number(value)) || Number(value)<0) {
         showNotification(`Enter a valid ${label} water reading (m³).`,'warning'); return;
+      }
+      if (baseline != null && Number(value) < Number(baseline)) {
+        showNotification(`The ${label} water reading cannot be lower than the latest recorded reading (${baseline} m³).`,'warning'); return;
       }
       body[field]=Number(value);
     }
@@ -575,8 +578,8 @@ function CompleteTransferDialog({ transfer, onClose, onDone }) {
           </p>
         ) : anyMeterInput ? (
           <p className="text-[11px] text-muted-foreground">
-            Enter the electricity meter readings taken now, at the real cutover. Water is not
-            finalized here; it follows the normal end-of-cycle billing.
+            Enter the required meter readings taken now, at the real cutover. Water charges
+            are calculated when the water billing period closes.
           </p>
         ) : (
           <p className="text-[11px] text-muted-foreground">
@@ -586,12 +589,25 @@ function CompleteTransferDialog({ transfer, onClose, onDone }) {
           </p>
         )}
 
-        {[[preview?.water?.required,sourceWater,setSourceWater,'Source'],[preview?.destinationWater?.required,targetWater,setTargetWater,'Destination']].map(([required,value,setValue,label])=>required ? (
-          <label key={label} className="block text-xs font-medium text-foreground mt-3">
-            {label} Water Reading (m³)
-            <input type="number" min="0" step="0.01" value={value} onChange={e=>setValue(e.target.value)} disabled={busy}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" required />
-          </label>
+        {[[preview?.water,sourceWater,setSourceWater,'Source'],[preview?.destinationWater,targetWater,setTargetWater,'Destination']].map(([baseline,value,setValue,label])=>baseline?.required ? (
+          <div key={label} className="space-y-1">
+            <label htmlFor={`transfer-${label}-water`} className="text-[11px] text-muted-foreground">
+              {label} Water Reading *
+            </label>
+            <div className="flex items-center gap-2">
+              <input id={`transfer-${label}-water`} type="number" min={baseline.previousReading ?? 0} step="0.01" inputMode="decimal"
+                value={value} onChange={e=>setValue(e.target.value)} disabled={busy} className={fieldCls} required />
+              <span className="text-[11px] text-muted-foreground">m³</span>
+              {baseline.previousReading != null ? <button type="button" disabled={busy}
+                aria-label={`Use ${label.toLowerCase()} water baseline`} title="Click to auto-fill previous reading baseline"
+                onClick={()=>setValue(String(baseline.previousReading))}
+                className="text-muted-foreground hover:text-foreground text-sm px-1">ⓘ</button> : null}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {baseline.previousReading != null ? <>Latest recorded: {Number(baseline.previousReading).toFixed(2)} m³
+                {baseline.lastRecordedReadingDate ? ` · ${formatDate(baseline.lastRecordedReadingDate)}` : ''}</> : 'No previous water observation recorded.'}
+            </p>
+          </div>
         ) : null)}
         {sourceSubMetered ? (
           <div className="space-y-1">

@@ -1,4 +1,4 @@
-import { recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
+import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
 import dayjs from "dayjs";
 import logger from "../middleware/logger.js";
@@ -275,6 +275,7 @@ export async function computeRoomTransferPreview({
   ]);
   if (!reservation || !targetRoom) return null;
 
+  const [sourceWaterBaseline,destinationWaterBaseline] = await Promise.all([getWaterObservationBaseline(reservation.roomId),getWaterObservationBaseline(targetRoom)]);
   const activeStay = await resolveCurrentStayForReservation(reservationId).lean();
   const predecessorContract = await resolveAuthoritativeCurrentContract({
     reservationId, tenantId: reservation.userId,
@@ -539,9 +540,9 @@ export async function computeRoomTransferPreview({
         ? "Enter/confirm the CURRENT destination-room electricity reading during Complete Transfer — it becomes the tenant's opening baseline there."
         : "This branch bills electricity at a fixed rate — no destination opening reading is required.",
     },
-    destinationWater: {required:requiresWaterObservation(targetRoom)},
+    destinationWater: destinationWaterBaseline,
     water: {
-      required:requiresWaterObservation(reservation.roomId),
+      ...sourceWaterBaseline,
       // Water CANNOT be finalized on transfer day — its period total and
       // covered-day denominator are unknowable until the water period closes.
       // The transferee is billed for their room-scoped occupancy days at the
