@@ -1693,7 +1693,13 @@ export default function useReservationFlow() {
               setPaymentApproved(true);
               justPaidRef.current = true;
               setPaymentMethod(result.paymentMethod || "paymongo");
-              showNotification("Payment confirmed. Your reservation details are being finalized.", "success", 5000);
+              const refNumber = result?.referenceNumber;
+              const refText = refNumber ? ` Reference #${refNumber}.` : "";
+              const userEmail = updatedReservation?.user?.email || updatedReservation?.applicantEmail;
+              const receiptNotice = userEmail
+                ? ` Your official receipt has been sent to ${userEmail}.`
+                : " Your official receipt has been sent to your email.";
+              showNotification(`Payment confirmed!${refText}${receiptNotice}`, "success", 6000);
               return;
             } else {
               console.warn("[PAYMENT] Session not yet paid:", verificationSessionId, "status:", result?.status);

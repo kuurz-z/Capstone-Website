@@ -629,6 +629,7 @@ export default function ReservationDashboard({
         <CheckoutLockBanner
           roomId={roomName}
           bedId={reservation.bedId || "1"}
+          expiresAt={reservation.paymentExpiresAt}
         />
       )}
 

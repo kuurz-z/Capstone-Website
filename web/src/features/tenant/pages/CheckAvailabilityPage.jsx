@@ -620,24 +620,37 @@ function CheckAvailabilityPage() {
  message: `Room changed to ${selectedRoom.title}`,
  },
  });
- } catch (err) {
- console.error("Failed to change room:", err);
- const isLocked =
- err?.response?.data?.code === "RESERVATION_ROOM_SELECTION_LOCKED";
- showNotification(
- isLocked
- ? ROOM_SELECTION_LOCKED_MESSAGE
- : getFriendlyError(err, "Failed to change room. Please try again."),
- isLocked ? "info" : "error",
- 4000,
- );
- if (isLocked) {
- appNavigate("/applicant/profile", {
- state: { tab: "dashboard" },
- flash: { type: "info", message: ROOM_SELECTION_LOCKED_MESSAGE },
- });
- }
- }
+  } catch (err) {
+  console.error("Failed to change room:", err);
+  const isLocked =
+  err?.response?.data?.code === "RESERVATION_ROOM_SELECTION_LOCKED";
+  const isBedUnavailable =
+  err?.response?.data?.code === "BED_UNAVAILABLE" ||
+  err?.response?.data?.error === "BED_UNAVAILABLE" ||
+  /bed.*unavailable/i.test(err?.response?.data?.message || "");
+
+  if (isBedUnavailable) {
+    showNotification(
+      "This bed is currently unavailable. Please select another available bed or room.",
+      "warning",
+      5000,
+    );
+    return;
+  }
+  showNotification(
+  isLocked
+  ? ROOM_SELECTION_LOCKED_MESSAGE
+  : getFriendlyError(err, "Failed to change room. Please try again."),
+  isLocked ? "info" : "error",
+  4000,
+  );
+  if (isLocked) {
+  appNavigate("/applicant/profile", {
+  state: { tab: "dashboard" },
+  flash: { type: "info", message: ROOM_SELECTION_LOCKED_MESSAGE },
+  });
+  }
+  }
  return;
  }
 
@@ -699,21 +712,32 @@ function CheckAvailabilityPage() {
   },
   });
   } catch (err) {
-  console.error("Failed to reserve room:", err);
-  if (err?.response?.data?.code === "RESERVATION_ALREADY_EXISTS") {
-  showNotification(
-  "You already have an ongoing reservation. Go to your profile to continue.",
-  "warning",
-  4000,
-  );
-  } else {
-  showNotification(
-  getFriendlyError(err, "Failed to reserve room. Please try again."),
-  "error",
-  4000,
-  );
-  }
-  }
+   console.error("Failed to reserve room:", err);
+   const isBedUnavailable =
+     err?.response?.data?.code === "BED_UNAVAILABLE" ||
+     err?.response?.data?.error === "BED_UNAVAILABLE" ||
+     /bed.*unavailable/i.test(err?.response?.data?.message || "");
+
+   if (isBedUnavailable) {
+     showNotification(
+       "This bed is currently unavailable. Please select another available bed or room.",
+       "warning",
+       5000,
+     );
+   } else if (err?.response?.data?.code === "RESERVATION_ALREADY_EXISTS") {
+   showNotification(
+   "You already have an ongoing reservation. Go to your profile to continue.",
+   "warning",
+   4000,
+   );
+   } else {
+   showNotification(
+   getFriendlyError(err, "Failed to reserve room. Please try again."),
+   "error",
+   4000,
+   );
+   }
+   }
  };
 
   // ── Render ─────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import GlobalLoading from "../../../shared/components/GlobalLoading";
+import PaymentVerifyingModal from "../../../shared/components/PaymentVerifyingModal";
 import "../../../shared/styles/notification.css";
 import "../styles/reservation-flow.css";
 
@@ -39,16 +40,25 @@ function ReservationFlowPage() {
   // pressed Back. Show Step 4 immediately with the inline recovery banner.
   const isPaymentCancellation = flow.paymentCancelled;
 
-  if (
-    !flow.reservationData ||
-    flow.isLoading ||
-    (!isPaymentCancellation && flow.paymentReturnLoading) ||
-    (!isPaymentCancellation && flow.paymentVerifyingRef.current)
-  ) {
+  const isPaymentVerifying =
+    !isPaymentCancellation &&
+    Boolean(flow.paymentReturnLoading || flow.paymentVerifyingRef.current);
+
+  if (isPaymentVerifying) {
+    return (
+      <PaymentVerifyingModal
+        show={true}
+        step={2}
+        title="Verifying Reservation Payment"
+      />
+    );
+  }
+
+  if (!flow.reservationData || flow.isLoading) {
     return <GlobalLoading />;
   }
 
-  // ΓöÇΓöÇ Render ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ΓöÇΓöÇ Render ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   return (
     <div className="reservation-flow-container">
       {/* ΓöÇΓöÇ Success Overlay ΓöÇΓöÇ */}
