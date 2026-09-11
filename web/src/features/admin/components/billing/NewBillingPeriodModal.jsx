@@ -1,3 +1,5 @@
+import WaterBillingTables from '../../../../shared/components/WaterBillingTables';
+import { utilityApi } from '../../../../shared/api/utilityApi';
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -40,6 +42,7 @@ const sanitizeNumericInput = (val, maxDecimals = 2, maxWholeDigits = 6) => {
   if (parts.length > 2) {
     clean = parts[0] + "." + parts.slice(1).join("");
   }
+  const [closingPending,setClosingPending] = useState(false);
   const [whole, decimal] = clean.split(".");
   const limitedWhole = whole ? whole.slice(0, maxWholeDigits) : "";
   if (decimal !== undefined) {
@@ -172,6 +175,22 @@ export default function NewBillingPeriodModal({
   });
 
   const [initialFormState, setInitialFormState] = useState(null);
+  const [waterPreview,setWaterPreview] = useState(null);
+  const [waterPreviewError,setWaterPreviewError] = useState('');
+  const [waterPreviewPending,setWaterPreviewPending] = useState(false);
+  useEffect(()=>{
+    if (!isOpen || utilityType !== 'water') return;
+    let cancelled=false;
+    setWaterPreview(null); setWaterPreviewError('');
+    if (!periodForm.startDate || !periodForm.endDate || periodForm.endReading === '' || periodForm.ratePerUnit === '') return;
+    setWaterPreviewPending(true);
+    const timer=setTimeout(()=>utilityApi.previewWater({...periodForm,roomId:selectedRoomId,periodId:openPeriodForRoom?.id || openPeriodForRoom?._id})
+      .then(response=>{if(!cancelled) setWaterPreview(response.result || response.data || response);})
+      .catch(error=>{if(!cancelled) setWaterPreviewError(error.message || 'Unable to preview water billing.');})
+      .finally(()=>{if(!cancelled) setWaterPreviewPending(false);}),350);
+    return ()=>{cancelled=true;clearTimeout(timer);};
+  },[isOpen,utilityType,selectedRoomId,periodForm]);
+
 
   const handlePresetChange = (presetKey) => {
     setDurationPreset(presetKey);
@@ -246,10 +265,9 @@ export default function NewBillingPeriodModal({
         ? toInputDate(lastClosedPeriod.endDate)
         : null;
       const continuationReading = lastClosedPeriod?.endReading ?? null;
-      const startDate = continuationDate || toInputDate(new Date());
-      const initialStartReading =
-        continuationReading ?? latestReading?.reading ?? 0;
-      const initialRate =
+      const startDate = utilityType === "water" && openPeriodForRoom ? toInputDate(openPeriodForRoom.startDate) : continuationDate || toInputDate(new Date());
+      const initialStartReading = utilityType === "water" ? openPeriodForRoom?.startReading ?? latestReading?.reading ?? "" : continuationReading ?? latestReading?.reading ?? 0;
+      const initialRate = utilityType === "water" ? String(openPeriodForRoom?.pricingSnapshot?.ratePerUnit ?? openPeriodForRoom?.ratePerUnit ?? defaultRatePerUnit ?? "") :
         lastClosedPeriod?.ratePerUnit != null
           ? String(lastClosedPeriod.ratePerUnit)
           : defaultRatePerUnit !== undefined &&
@@ -295,7 +313,7 @@ export default function NewBillingPeriodModal({
   );
 
   const handleRequestClose = () => {
-    if (isDirty && !generateHistoricalPeriod.isPending) {
+    if (isDirty && !generateHistoricalPeriod.isPending && !closingPending) {
       setShowCloseConfirm(true);
     } else {
       onClose();
@@ -493,8 +511,8 @@ export default function NewBillingPeriodModal({
     if (
       !periodForm.startDate ||
       !periodForm.endDate ||
-      !periodForm.ratePerUnit ||
-      (isElectricity && (isBlankValue(periodForm.startReading) || isBlankValue(periodForm.endReading)))
+      isBlankValue(periodForm.ratePerUnit) ||
+      (isBlankValue(periodForm.startReading) || isBlankValue(periodForm.endReading))
     ) {
       return notify.warn("All fields (dates, readings, and rate) are required.");
     }
@@ -528,34 +546,38 @@ export default function NewBillingPeriodModal({
     }
 
     try {
+      setClosingPending(true);
       setGenerationBlocker(null);
-      if (openPeriodForRoom) {
+      if (openPeriodForRoom && utilityType !== "water") {
         return notify.warn("An active period already exists. Historical generation cannot replace or delete it.");
       }
-      const generatedData = await generateHistoricalPeriod.mutateAsync({
+      const generatedData = openPeriodForRoom && utilityType === "water"
+        ? await utilityApi.closePeriod("water",openPeriodForRoom.id || openPeriodForRoom._id,{endDate:periodForm.endDate,endReading:Number(periodForm.endReading)})
+        : await generateHistoricalPeriod.mutateAsync({
         roomId: selectedRoomId,
         startDate: periodForm.startDate,
         startReading:
-          utilityType === "water" ? 0 : Number(periodForm.startReading),
+          Number(periodForm.startReading),
         ratePerUnit: Number(periodForm.ratePerUnit),
         endReading:
-          utilityType === "water" ? 0 : Number(periodForm.endReading),
+          Number(periodForm.endReading),
         endDate: periodForm.endDate,
       });
       const newPeriodId =
-        generatedData?.period?._id || generatedData?.period?.id || generatedData?.id;
+        generatedData?.period?._id || generatedData?.period?.id || generatedData?.result?.periodId || generatedData?.id;
       onSuccess(newPeriodId || null);
-      notify.success("Historical billing cycle generated transactionally. Ready for review.");
+      notify.success("Billing cycle generated. Ready for review.");
       setGenerationBlocker(null);
       onClose();
     } catch (err) {
       setGenerationBlocker(buildGenerationBlocker(err));
       notify.error(err, "Unable to generate billing period. Please check the entered readings and try again.");
-    }
+    } finally { setClosingPending(false); }
   };
 
-  const isPending = generateHistoricalPeriod.isPending;
+  const isPending = generateHistoricalPeriod.isPending || closingPending;
   const isActionDisabled =
+    (utilityType === "water" && (!waterPreview || waterPreviewPending)) ||
     isPending ||
     isReadingLower ||
     isDateInvalid ||
@@ -567,8 +589,8 @@ export default function NewBillingPeriodModal({
     isDateOverlapping ||
     !periodForm.startDate ||
     !periodForm.endDate ||
-    !periodForm.ratePerUnit ||
-    (isElectricity && (isBlankValue(periodForm.startReading) || isBlankValue(periodForm.endReading)));
+    isBlankValue(periodForm.ratePerUnit) ||
+    (isBlankValue(periodForm.startReading) || isBlankValue(periodForm.endReading));
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !isActionDisabled) {
@@ -748,7 +770,7 @@ export default function NewBillingPeriodModal({
                   } catch {}
                 }}
                 onKeyDown={handleKeyDown}
-                disabled={isPending || isFixedRateBranch}
+                disabled={isPending || isFixedRateBranch || (utilityType === "water" && !!openPeriodForRoom)}
               />
               <p className="text-[11px] text-muted-foreground">
                 Start of billing period
@@ -830,8 +852,8 @@ export default function NewBillingPeriodModal({
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-foreground">
                   {utilityType === "water"
-                    ? "Total Water (PHP)"
-                    : `Rate (PHP/${isElectricity ? "kWh" : "cu.m."})`}
+                    ? "Rate (PHP/m³)"
+                    : `Rate (PHP/${isElectricity ? "kWh" : "m³"})`}
                 </label>
               </div>
               <input
@@ -857,7 +879,7 @@ export default function NewBillingPeriodModal({
                 }
                 onKeyDown={handleKeyDown}
                 placeholder="e.g. 16.00"
-                disabled={isPending || isFixedRateBranch}
+                disabled={isPending || isFixedRateBranch || (utilityType === "water" && !!openPeriodForRoom)}
               />
               {isRateInvalid && !isFixedRateBranch ? (
                 <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
@@ -866,7 +888,7 @@ export default function NewBillingPeriodModal({
               ) : (
                 <p className="text-[11px] text-muted-foreground">
                   {utilityType === "water"
-                    ? "Total amount to divide"
+                    ? (openPeriodForRoom ? "Saved price for this cycle; rate changes apply to new cycles" : "Price per cubic metre")
                     : "Applicable unit rate"}
                 </p>
               )}
@@ -1079,50 +1101,20 @@ export default function NewBillingPeriodModal({
             </div>
           ) : (
             <div className="space-y-3 pt-1">
-              <div
-                className="rounded-lg px-4 py-3 text-xs border border-border bg-muted/30 text-muted-foreground"
-              >
-                Water billing uses room occupancy overlap. Enter the total water
-                charge above and the billing engine will split it by covered calendar days for all active tenants.
+              <div className="grid gap-3.5 md:grid-cols-2">
+                {['startReading','endReading'].map(field=><label key={field} className="text-xs font-semibold text-foreground">
+                  {field==='startReading'?'Opening':'Closing'} Reading (m³)
+                  <input type="number" min="0" step="0.01" disabled={isPending || (field === "startReading" && !!openPeriodForRoom)} value={periodForm[field]}
+                    onChange={e=>setPeriodForm(current=>({...current,[field]:e.target.value}))}
+                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm" required />
+                </label>)}
               </div>
-
-              {/* Enhanced Live Preview for Water */}
-              <div className="rounded-xl border border-border bg-muted/30 p-3.5 text-sm">
-                <div className="flex items-center justify-between text-xs text-muted-foreground mb-2.5">
-                  <span className="font-semibold uppercase tracking-wider text-[10px] text-foreground">
-                    Water Billing Summary
-                  </span>
-                  {cycleDays > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {cycleDays} days duration
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-center">
-                  <div className="rounded-lg bg-card border border-border p-2.5">
-                    <div className="text-[10px] font-medium text-muted-foreground uppercase">
-                      Total Water Charge
-                    </div>
-                    <div className="text-base font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
-                      {hasValidRate && !isFixedRateBranch
-                        ? fmtCurrency(rateNum)
-                        : "₱0.00"}
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-card border border-border p-2.5">
-                    <div className="text-[10px] font-medium text-muted-foreground uppercase">
-                      Est. Per Tenant
-                    </div>
-                    <div className="text-base font-bold text-sky-700 dark:text-sky-400 mt-0.5">
-                      {hasValidRate && !isFixedRateBranch
-                        ? tenantCount > 0
-                          ? fmtCurrency(rateNum / tenantCount)
-                          : "₱0.00 (Overhead)"
-                        : "₱0.00"}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {waterPreviewPending && <p role="status" className="animate-pulse text-xs">Calculating measured segments...</p>}
+              {waterPreviewError && <p role="alert" className="text-xs text-rose-600">{waterPreviewError}</p>}
+              {waterPreview && <>
+                <p className="rounded-lg border border-border p-3 text-sm">Consumption: {waterPreview.computedTotalUsage} m³ · Rate: {fmtCurrency(waterPreview.ratePerUnit)} / m³ · Calculated Water Amount: {fmtCurrency(waterPreview.computedTotalCost)}</p>
+                <WaterBillingTables data={waterPreview}/>
+              </>}
             </div>
           )}
         </div>

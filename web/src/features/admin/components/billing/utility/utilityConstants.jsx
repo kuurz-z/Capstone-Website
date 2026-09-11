@@ -250,15 +250,15 @@ export const getRoomBadgeLabel = (room) => {
 };
 
 export const canEditPeriod = (period) =>
-  Boolean(period) && (period.canEdit ?? getDisplayStatus(period) !== "sent");
+  Boolean(period) && period.calculationVersion !== "water-meter-v1" && (period.canEdit ?? getDisplayStatus(period) !== "sent");
 
-export const canDeletePeriod = (period) => Boolean(period);
+export const canDeletePeriod = (period) => Boolean(period) && getDisplayStatus(period) !== "sent";
 
 export const getMeterRangeLabel = (period, utilityType) =>
   period
-    ? utilityType === "water"
+    ? utilityType === "water" && period.calculationVersion !== "water-meter-v1"
       ? `${fmtCurrency(period.ratePerUnit)} total water charge`
-      : `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "cu.m."}` : EMPTY_VALUE}`
+      : `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "m³"} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "m³"}` : EMPTY_VALUE}`
     : EMPTY_VALUE;
 
 export const getExpectedPeriodEndDate = (period) =>

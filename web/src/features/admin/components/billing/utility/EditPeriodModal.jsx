@@ -65,7 +65,7 @@ export default function EditPeriodModal({
     !editForm.endDate ||
     !editForm.ratePerUnit;
 
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : "legacy basis";
 
   if (!isOpen || !periodId || typeof document === "undefined") return null;
 

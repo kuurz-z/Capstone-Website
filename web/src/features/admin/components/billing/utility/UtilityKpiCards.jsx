@@ -14,7 +14,7 @@ export default function UtilityKpiCards({
     coveredRoomsCount: 0,
   },
 }) {
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : "m³ (verified periods)";
   const UtilityIcon = utilityType === "electricity" ? Zap : Droplets;
 
   return (

@@ -228,11 +228,11 @@ export default function UtilityCycleHistoryPanel({
 
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span>{getMeterRangeLabel(p, utilityType)}</span>
-                    {utilityType !== "water" && (
+                    {(utilityType !== "water" || p.calculationVersion === "water-meter-v1") && (
                       <DeltaChip
                         start={p.startReading}
                         end={p.endReading}
-                        unit={utilityType === "electricity" ? "kWh" : "cu.m."}
+                        unit={utilityType === "electricity" ? "kWh" : "m³"}
                       />
                     )}
                   </div>
@@ -242,9 +242,9 @@ export default function UtilityCycleHistoryPanel({
                 <div className="flex flex-wrap items-center gap-2.5">
                   {/* Structured Rate Tag */}
                   <div className="flex items-center gap-1 rounded border border-border/70 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-                    <span>Rate:</span>
+                    <span>{utilityType === "water" && p.calculationVersion !== "water-meter-v1" ? "Legacy room total:" : "Rate:"}</span>
                     <strong className="font-semibold text-foreground">{fmtCurrency(p.ratePerUnit)}</strong>
-                    <span className="text-[10px] text-muted-foreground">/{utilityType === "electricity" ? "kWh" : "cu.m."}</span>
+                    <span className="text-[10px] text-muted-foreground">{utilityType === "electricity" ? "/kWh" : p.calculationVersion === "water-meter-v1" ? "/m³" : ""}</span>
                   </div>
 
                   {/* Status badge with semantic icon and dot */}

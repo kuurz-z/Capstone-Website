@@ -29,8 +29,8 @@ export default function OpenCurrentPeriodModal({
     if (!isOpen) return;
     setForm({
       startDate: toInputDate(lastClosedPeriod?.endDate || new Date()),
-      startReading: String(lastClosedPeriod?.endReading ?? latestReading?.reading ?? 0),
-      ratePerUnit: String(lastClosedPeriod?.ratePerUnit ?? defaultRatePerUnit ?? ""),
+      startReading: utilityType === "water" ? "" : String(lastClosedPeriod?.endReading ?? latestReading?.reading ?? 0),
+      ratePerUnit: String(defaultRatePerUnit ?? ""),
     });
   }, [isOpen, lastClosedPeriod, latestReading, defaultRatePerUnit]);
 
@@ -43,7 +43,7 @@ export default function OpenCurrentPeriodModal({
       notify.warn("Room, start date, and a valid non-negative rate are required.");
       return;
     }
-    if (isElectricity && !isFiniteNonNegative(form.startReading)) {
+    if (!isFiniteNonNegative(form.startReading)) {
       notify.warn("Opening meter reading must be a finite, non-negative number. Zero is allowed.");
       return;
     }
@@ -51,7 +51,7 @@ export default function OpenCurrentPeriodModal({
       const response = await openPeriod.mutateAsync({
         roomId: selectedRoomId,
         startDate: form.startDate,
-        startReading: isElectricity ? Number(form.startReading) : 0,
+        startReading: Number(form.startReading),
         ratePerUnit: Number(form.ratePerUnit),
       });
       const id = response?.period?._id || response?.period?.id || response?.id || null;
@@ -78,10 +78,10 @@ export default function OpenCurrentPeriodModal({
           <label className="block text-xs font-semibold text-foreground">Start date
             <input className={`${inputClass} mt-1`} type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} required />
           </label>
-          {isElectricity ? <label className="block text-xs font-semibold text-foreground">Opening meter reading (kWh)
+          {<label className="block text-xs font-semibold text-foreground">Opening meter reading ({isElectricity ? "kWh" : "m³"})
             <input className={`${inputClass} mt-1`} type="number" min="0" step="0.01" inputMode="decimal" value={form.startReading} onChange={(event) => setForm((current) => ({ ...current, startReading: event.target.value }))} required />
-          </label> : null}
-          <label className="block text-xs font-semibold text-foreground">Rate per unit
+          </label>}
+          <label className="block text-xs font-semibold text-foreground">Rate (PHP/{isElectricity ? "kWh" : "m³"})
             <input className={`${inputClass} mt-1`} type="number" min="0" step="0.01" inputMode="decimal" value={form.ratePerUnit} onChange={(event) => setForm((current) => ({ ...current, ratePerUnit: event.target.value }))} required />
           </label>
         </div>

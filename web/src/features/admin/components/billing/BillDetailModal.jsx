@@ -92,6 +92,17 @@ export default function BillDetailModal({
  </div>
  )}
 
+  {bill.waterAllocations?.length > 0 && <div className="overflow-x-auto my-4"><table className="w-full text-xs text-foreground">
+    <caption className="text-left font-semibold py-2">Water allocations</caption>
+    <thead><tr>{['Cycle','Calculation','Consumption (m\u00b3)','Rate (PHP/m\u00b3)','Amount','Dispatch'].map(label=><th key={label} scope="col" className="text-left p-2 border-b border-border">{label}</th>)}</tr></thead>
+    <tbody>{bill.waterAllocations.map(a=><tr key={a.allocationId}>
+      <td className="p-2">{fmtDate(a.cycleStart)} - {fmtDate(a.cycleEnd)}</td>
+      <td className="p-2">{a.calculationVersion === 'water-meter-v1' ? 'Measured water' : 'Historical allocation'}</td>
+      <td className="p-2">{a.calculationVersion === 'water-meter-v1' ? a.usage : 'Unknown'}</td>
+      <td className="p-2">{a.calculationVersion === 'water-meter-v1' ? fmtCurrency(a.pricingSnapshot?.ratePerUnit) : 'Unknown'}</td>
+      <td className="p-2">{fmtCurrency(a.amount)}</td><td className="p-2">{a.state}</td>
+    </tr>)}</tbody>
+  </table></div>}
   {/* Charges breakdown */}
   {(() => {
     const rentAmt = Number(bill.charges?.rent || 0);
@@ -131,7 +142,7 @@ export default function BillDetailModal({
         )}
         {waterAmt > 0 && (
           <div className="charge-row">
-            <span>Water (room reading)</span>
+            <span>Water</span>
             <span>{fmtCurrency(waterAmt)}</span>
           </div>
         )}

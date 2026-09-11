@@ -5,6 +5,7 @@ const withLifecycleNormalization = (promise) =>
   promise.then((payload) => normalizeLifecyclePayload(payload));
 
 export const utilityApi = {
+  previewWater: data => authFetch('/utilities/water/preview',{method:'POST',body:JSON.stringify(data)}),
   // ── Meter Readings ──
   recordReading: (utilityType, data) =>
     withLifecycleNormalization(

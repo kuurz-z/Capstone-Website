@@ -39,7 +39,7 @@ export default function BatchSendReadyModal({
     }
   }, [isOpen, readyRooms]);
 
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : "m³";
   const UtilityIcon = utilityType === "electricity" ? Zap : Droplets;
   const utilityTitle = utilityType === "water" ? "Water" : "Electricity";
 
@@ -233,7 +233,7 @@ export default function BatchSendReadyModal({
               const branch = room.branch ? String(room.branch).toUpperCase() : "";
               const period = room.activePeriod || room.latestPeriod;
               const cycleLabel = period ? getCycleLabel(period) : (room.billingLabel || "Finalized Statement");
-              const usage = period?.totalConsumption ?? period?.usage ?? room.latestReading;
+              const usage = utilityType === "water" && period?.calculationVersion !== "water-meter-v1" ? null : period?.computedTotalUsage ?? period?.totalConsumption ?? period?.usage;
               const amount = period?.totalAmount ?? period?.computedTotalCost ?? room.latestPeriodAmount;
               const tenantCount = room.activeTenantCount || 0;
 

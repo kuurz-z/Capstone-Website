@@ -26,9 +26,9 @@ const UTILITY_COLUMNS = [
     key: "consumed",
     label: "Consumed",
     formatter: (v, row) => {
-      if (v == null || v === "" || v === "-") return row.utilityType === "water" ? "Flat / N/A" : "-";
+      if (v == null || v === "" || v === "-") return row.utilityType === "water" ? "Unknown (legacy)" : "-";
       if (!isNaN(v)) {
-        return row.utilityType === "water" ? `${v} cu.m.` : `${v} kWh`;
+        return row.utilityType === "water" ? `${v} m³` : `${v} kWh`;
       }
       return String(v);
     },
@@ -176,7 +176,7 @@ const normalizeUtilityRows = (data, utilityType = "electricity") => {
     if (String(branch).toLowerCase() === "guadalupe") continue;
     const period = room.activePeriod || room.latestPeriod || null;
     const amount = period?.totalAmount ?? period?.amount ?? period?.computedTotalCost ?? room.latestPeriodAmount ?? 0;
-    const consumed = period?.totalConsumption ?? period?.consumption ?? (utilityType === "water" ? "Flat / N/A" : "-");
+    const consumed = period?.totalConsumption ?? period?.consumption ?? (utilityType === "water" ? "Unknown (legacy)" : "-");
     rows.push({
       rawStartDate: period?.startDate,
       utilityType,
@@ -377,7 +377,7 @@ const AdminBillingPage = () => {
           branch:   r.branch     || "-",
           tenant:   r.tenantName || r.tenant || "-",
           period:   r.startDate && r.endDate ? `${r.startDate} to ${r.endDate}` : (r.period || r.billingPeriod || "-"),
-          consumed: r.usage      ?? r.totalUsage ?? r.consumed ?? r.totalConsumption ?? (activeTab === "water" ? "Flat / N/A" : "-"),
+          consumed: r.usage      ?? r.totalUsage ?? r.consumed ?? r.totalConsumption ?? (activeTab === "water" ? "Unknown (legacy)" : "-"),
           amount:   r.billAmount ?? r.amount     ?? r.totalAmount ?? r.totalRoomCost ?? r.computedTotalCost ?? r.waterCharge ?? r.electricityCharge ?? 0,
           status:   r.periodStatus || r.status || "-",
         }));

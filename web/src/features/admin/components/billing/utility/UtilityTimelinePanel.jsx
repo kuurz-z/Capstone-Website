@@ -47,7 +47,7 @@ export default function UtilityTimelinePanel({
   onExportPdf,
   isExporting,
 }) {
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : "m³";
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs space-y-4">

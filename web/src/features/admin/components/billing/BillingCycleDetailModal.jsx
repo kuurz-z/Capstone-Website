@@ -1,3 +1,4 @@
+import WaterBillingTables from '../../../../shared/components/WaterBillingTables';
 import { createPortal } from "react-dom";
 import {
   X,
@@ -57,14 +58,15 @@ const BillingCycleDetailModal = ({
           ).toLocaleDateString()}`
         : "-"));
 
-  const unitLabel = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const meterWater = (result?.calculationVersion || period?.calculationVersion) === "water-meter-v1";
+  const unitLabel = utilityType === "electricity" ? "kWh" : meterWater ? "m³" : "legacy basis";
   const UtilityIcon = utilityType === "electricity" ? Zap : Droplets;
   const periodEnd = period.endDate || period.targetCloseDate;
   const rangeLabel = `${fmtShortDate(period.startDate)} - ${
     fmtShortDate(periodEnd) || "Ongoing"
   }`;
   const summaryTotalLabel =
-    utilityType === "electricity" ? "TOTAL KWH" : "TOTAL CU.M.";
+    utilityType === "electricity" ? "TOTAL KWH" : meterWater ? "TOTAL m³" : "LEGACY BASIS";
 
   const computedTotalUsage =
     result?.computedTotalUsage ??
@@ -78,7 +80,7 @@ const BillingCycleDetailModal = ({
     result?.computedTotalCost ??
     period?.computedTotalCost ??
     period?.totalAmount ??
-    (computedTotalUsage != null &&
+    (utilityType === "electricity" && computedTotalUsage != null &&
     (result?.ratePerUnit ?? period?.ratePerUnit) != null
       ? computedTotalUsage * Number(result?.ratePerUnit ?? period?.ratePerUnit)
       : null);
@@ -166,9 +168,9 @@ const BillingCycleDetailModal = ({
                 colorClass: "text-sky-600 dark:text-sky-400",
               },
               {
-                label: "CURRENT RATE",
+                label: utilityType === "water" && !meterWater ? "ORIGINAL ROOM TOTAL" : "SAVED RATE",
                 value: ratePerUnit != null ? fmtCurrency(ratePerUnit) : "-",
-                sub: `per ${unitLabel}`,
+                sub: utilityType === "water" && !meterWater ? "legacy allocation basis" : `per ${unitLabel}`,
                 icon: Tag,
                 colorClass: "text-amber-600 dark:text-amber-400",
               },
@@ -208,8 +210,9 @@ const BillingCycleDetailModal = ({
             ))}
           </div>
 
+          {utilityType === "water" && <WaterBillingTables data={{...period,...result}}/>}
           {/* Segment Breakdown */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {utilityType === "electricity" && <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-5 py-3">
               <div className="flex items-center gap-2 text-sm font-bold text-foreground">
                 <Layers size={15} className="text-muted-foreground" />
@@ -391,7 +394,7 @@ const BillingCycleDetailModal = ({
                 ))
               )}
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Footer - Single clean close action */}

@@ -32,7 +32,7 @@ export default function UtilityRoomSelector({
   roomsLoading = false,
   utilityType = "electricity",
 }) {
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : "m³";
   const UtilityIcon = utilityType === "electricity" ? Zap : Droplets;
 
   const hasActiveFilters =

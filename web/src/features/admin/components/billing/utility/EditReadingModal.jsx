@@ -34,7 +34,7 @@ export default function EditReadingModal({
   const isSaveDisabled =
     isSaving || isBelowBaseline || isExceedsMax || !editForm.reading;
 
-  const unit = utilityType === "electricity" ? "kWh" : "cu.m.";
+  const unit = utilityType === "electricity" ? "kWh" : "m³";
 
   if (!isOpen || !reading || typeof document === "undefined") return null;
 

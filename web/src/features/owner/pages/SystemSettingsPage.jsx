@@ -126,7 +126,7 @@ const FIELD_LIMITS = Object.freeze({
   penaltyRatePerDay: { min: 0, max: 5000, maxDigits: 5, unit: "PHP/day", label: "Daily Late Penalty" },
   latePaymentGraceDays: { min: 0, max: 30, maxDigits: 2, unit: "days", label: "Late Payment Grace Period" },
   defaultElectricityRatePerKwh: { min: 0, max: 500, maxDigits: 6, unit: "PHP/kWh", label: "Default Electricity Rate" },
-  defaultWaterRatePerUnit: { min: 0, max: 500, maxDigits: 6, unit: "PHP/unit", label: "Default Water Rate" },
+  defaultWaterRatePerUnit: { min: 0, max: 500, maxDigits: 6, unit: "PHP/m³", label: "Default Water Rate" },
   rfidReplacementCharge: { min: 0, max: 5000, maxDigits: 5, unit: "PHP", label: "RFID Replacement Charge" },
   depositRefundProcessingDays: { min: 1, max: 90, maxDigits: 2, unit: "days", label: "Deposit Refund Target Window" },
   longTermLeaseMinMonths: { min: 1, max: 24, maxDigits: 2, unit: "months", label: "Long-Term Lease Threshold" },
