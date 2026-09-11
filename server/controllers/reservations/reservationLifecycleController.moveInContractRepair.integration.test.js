@@ -122,7 +122,7 @@ describe("moveIn transition — draft Contract repair backstop", () => {
     });
   });
 
-  async function seedReservedReservation() {
+  async function seedReservedReservation(roomType = "quadruple-sharing") {
     const tenant = await User.create({
       firebaseUid: `firebase-${new mongoose.Types.ObjectId()}`,
       email: `tenant-${new mongoose.Types.ObjectId()}@example.test`,
@@ -131,7 +131,7 @@ describe("moveIn transition — draft Contract repair backstop", () => {
     });
     const room = await Room.create({
       name: "Room 401", roomNumber: "401", branch: "gil-puyat",
-      type: "quadruple-sharing", capacity: 4, price: 6300,
+      type: roomType, capacity: roomType === "private" ? 1 : 4, price: 6300,
     });
     // Written directly as already "reserved" — this test starts after the
     // point settlement would already have run, to isolate the moveIn repair
@@ -142,7 +142,7 @@ describe("moveIn transition — draft Contract repair backstop", () => {
       status: "reserved",
       leaseDuration: 12,
       reservationFeeAmount: 2000,
-      preferredRoomType: "quadruple-sharing",
+      preferredRoomType: roomType,
       agreedToPrivacy: true,
       agreedToCertification: true,
       totalPrice: 6300,
@@ -151,6 +151,55 @@ describe("moveIn transition — draft Contract repair backstop", () => {
     });
     return { tenant, room, reservation };
   }
+
+
+  test('private move-in creates a water baseline in the occupancy transaction', async () => {
+    const {reservation,tenant,room}=await seedReservedReservation('private');
+    const next=jest.fn();
+    await updateReservation(requestFor(String(reservation._id),{status:'moveIn',meterReading:100,waterMeterReading:42}),response(),next);
+    expect(next).not.toHaveBeenCalled();
+    expect((await Reservation.findById(reservation._id)).status).toBe('moveIn');
+    expect((await User.findById(tenant._id)).role).toBe('tenant');
+    const water=await UtilityReading.findOne({roomId:room._id,utilityType:'water'});
+    expect(water).toMatchObject({reading:42,unit:'m3',eventType:'moveIn'});
+    expect(await Stay.countDocuments({reservationId:reservation._id,status:'active'})).toBe(1);
+  },30000);
+
+  test.each([undefined,'',-1])('private move-in rejects missing/invalid water %s atomically',async waterMeterReading=>{
+    const {reservation,tenant,room}=await seedReservedReservation('private');
+    const next=jest.fn();
+    const res=response();
+    await updateReservation(requestFor(String(reservation._id),{status:'moveIn',meterReading:100,waterMeterReading}),res,next);
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+    expect((await Reservation.findById(reservation._id)).status).toBe('reserved');
+    expect((await User.findById(tenant._id)).role).toBe('applicant');
+    expect(await Stay.countDocuments({reservationId:reservation._id})).toBe(0);
+    expect(await BedHistory.countDocuments({reservationId:reservation._id})).toBe(0);
+    expect(await UtilityReading.countDocuments({roomId:room._id})).toBe(0);
+    expect((await Room.findById(room._id)).currentOccupancy).toBe(0);
+  });
+
+  test('water storage failure rolls back electricity, reservation, stay, history and role',async()=>{
+    const {reservation,tenant,room}=await seedReservedReservation('private');
+    const originalCreate=UtilityReading.create.bind(UtilityReading);
+    const spy=jest.spyOn(UtilityReading,'create').mockImplementation((docs,...args)=>{
+      if (docs[0]?.utilityType === 'water') throw new Error('injected water storage failure');
+      return originalCreate(docs,...args);
+    });
+    const next=jest.fn();
+    const res=response();
+    try {
+      await updateReservation(requestFor(String(reservation._id),{status:'moveIn',meterReading:100,waterMeterReading:42}),res,next);
+    } finally {spy.mockRestore();}
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+    expect((await Reservation.findById(reservation._id)).status).toBe('reserved');
+    expect((await User.findById(tenant._id)).role).toBe('applicant');
+    expect(await Stay.countDocuments({reservationId:reservation._id})).toBe(0);
+    expect(await BedHistory.countDocuments({reservationId:reservation._id})).toBe(0);
+    expect(await UtilityReading.countDocuments({roomId:room._id})).toBe(0);
+    expect(await UtilityPeriod.countDocuments({roomId:room._id})).toBe(0);
+    expect((await Room.findById(room._id)).currentOccupancy).toBe(0);
+  });
 
   test("moveIn repairs a missing draft Contract when settlement never created one", async () => {
     const { reservation, tenant } = await seedReservedReservation();

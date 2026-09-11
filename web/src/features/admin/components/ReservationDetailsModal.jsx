@@ -545,6 +545,7 @@ export default function ReservationDetailsModal({
   const [rescheduleMoveInDate, setRescheduleMoveInDate] = useState("");
   const [showExtendPrompt, setShowExtendPrompt] = useState(false);
   const [meterReadingVal, setMeterReadingVal] = useState("");
+  const [waterReadingVal, setWaterReadingVal] = useState("");
   const [actualMoveInDate, setActualMoveInDate] = useState(scheduledMoveInStr);
   const isFutureMoveInDate = Boolean(actualMoveInDate && actualMoveInDate > todayDateStr);
   const [houseRulesPrepared, setHouseRulesPrepared] = useState(false);
@@ -640,6 +641,10 @@ export default function ReservationDetailsModal({
     visitRoomId,
     { enabled: Boolean(visitRoomId) && branchUsesSubmeter },
   );
+  const waterRoomType = reservation?.roomId?.type || reservation?.room?.type || reservation?.roomType;
+  const requiresWater = branchUsesSubmeter && ['private','double-sharing'].includes(waterRoomType);
+  const {data:latestWaterRes} = useUtilityLatestReading('water',visitRoomId,{enabled:Boolean(visitRoomId) && requiresWater});
+  const previousWaterReading = latestWaterRes?.reading?.reading ?? latestWaterRes?.data?.reading?.reading ?? null;
   const previousMeterReading = useMemo(() => {
     const raw =
       latestUtilityRes?.reading?.reading ??
@@ -2031,10 +2036,12 @@ export default function ReservationDetailsModal({
                     {branchUsesSubmeter && (
                       <div className="rdm-inline-field">
                         <div className="rdm-inline-label-group">
-                          <label className="rdm-inline-label">
-                            Starting Meter Reading <span className="rdm-asterisk">*</span>
+                          <label htmlFor="movein-electricity-reading" className="rdm-inline-label">
+                            Starting Electricity Reading <span className="rdm-asterisk">*</span>
                           </label>
-                          <div
+                          <button type="button"
+                            style={{border:0,padding:0}}
+                            disabled={isSubmitting}
                             className="rdm-meter-info-badge"
                             onClick={() => {
                               if (previousMeterReading != null) {
@@ -2058,7 +2065,7 @@ export default function ReservationDetailsModal({
                                   : "Enter initial room meter reading"}
                               </span>
                             </div>
-                          </div>
+                          </button>
                         </div>
                         <div className="rdm-inline-addon-group">
                           <input
@@ -2066,6 +2073,7 @@ export default function ReservationDetailsModal({
                             min="0"
                             max="99999"
                             step="0.01"
+                            id="movein-electricity-reading"
                             value={meterReadingVal}
                             onChange={(event) => setMeterReadingVal(event.target.value)}
                             className="rdm-inline-addon-input"
@@ -2077,6 +2085,61 @@ export default function ReservationDetailsModal({
                             autoFocus
                           />
                           <span className="rdm-inline-addon-label">kWh</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {requiresWater && (
+                      <div className="rdm-inline-field">
+                        <div className="rdm-inline-label-group">
+                          <label htmlFor="movein-water-reading" className="rdm-inline-label">
+                            Starting Water Reading <span className="rdm-asterisk">*</span>
+                          </label>
+                          <button type="button"
+                            style={{border:0,padding:0}}
+                            disabled={isSubmitting}
+                            className="rdm-meter-info-badge"
+                            onClick={() => {
+                              if (previousWaterReading != null) {
+                                setWaterReadingVal(String(previousWaterReading));
+                              }
+                            }}
+                            title={previousWaterReading != null ? "Click to auto-fill previous reading baseline" : "No previous reading logged"}
+                          >
+                            <Info size={16} className="rdm-meter-info-icon" />
+                            <div className="rdm-meter-tooltip">
+                              <span>
+                                {previousWaterReading != null ? (
+                                  <>Last Recorded: <strong>{Number(previousWaterReading).toLocaleString("en-PH")} m³</strong></>
+                                ) : (
+                                  "No previous reading logged yet for this room."
+                                )}
+                              </span>
+                              <span className="rdm-meter-tooltip-hint">
+                                {previousWaterReading != null
+                                  ? "Click to auto-fill starting baseline"
+                                  : "Enter initial room meter reading"}
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                        <div className="rdm-inline-addon-group">
+                          <input
+                            type="number"
+                            min="0"
+                            max="99999"
+                            step="0.01"
+                            id="movein-water-reading"
+                            value={waterReadingVal}
+                            onChange={(event) => setWaterReadingVal(event.target.value)}
+                            className="rdm-inline-addon-input"
+                            placeholder={
+                              previousWaterReading != null && !Number.isNaN(Number(previousWaterReading))
+                                ? `e.g. ${Number(previousWaterReading).toLocaleString("en-PH")}`
+                                : "e.g. 1250"
+                            }
+                          />
+                          <span className="rdm-inline-addon-label">m³</span>
                         </div>
                       </div>
                     )}
@@ -2099,6 +2162,11 @@ export default function ReservationDetailsModal({
                               "Cannot move in tenant: A cancellation request is pending review. Please approve or reject the request first.",
                               "warning",
                             );
+                            return;
+                          }
+                          const waterReading = Number(waterReadingVal);
+                          if (requiresWater && (!waterReadingVal.trim() || !Number.isFinite(waterReading) || waterReading < 0 || (previousWaterReading != null && waterReading < Number(previousWaterReading)))) {
+                            showNotification('A valid water reading (m³), at least the previous room reading, is required.','error',5000);
                             return;
                           }
                           const reading = branchUsesSubmeter ? Number(meterReadingVal) : null;
@@ -2136,6 +2204,7 @@ export default function ReservationDetailsModal({
                                 await reservationApi.update(reservation.id, {
                                   status: "moveIn",
                                   ...(branchUsesSubmeter && reading !== null ? { meterReading: reading } : {}),
+                                  ...(requiresWater ? {waterMeterReading:waterReading} : {}),
                                   actualMoveInDate,
                                   confirmedMoveInDate: actualMoveInDate,
                                   houseRulesPrepared: true,

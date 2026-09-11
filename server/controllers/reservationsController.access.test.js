@@ -233,6 +233,8 @@ await jest.unstable_mockModule("../utils/notificationService.js", () => ({
   },
 }));
 
+await jest.unstable_mockModule('../services/billing/waterObservations.js',()=>({recordWaterObservation:jest.fn(),requiresWaterObservation:jest.fn(()=>false)}));
+
 const {
   createReservation,
   manageReservationVisit,
