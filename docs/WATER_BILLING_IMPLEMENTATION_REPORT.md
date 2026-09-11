@@ -1,0 +1,147 @@
+# Water billing implementation report
+
+2026-09-11. Scope: versioned, measured water billing for Gil Puyat Private and Double/Sharing rooms. Quad and Guadalupe remain excluded. API, web, statements and backend mobile projections are implemented. Native clients are blocked. No production database migration or deployment was performed.
+
+## A. Branch
+
+`feat/versioned-water-meter-billing`, based on main with the latest main changes integrated through `625645f0`. The feature has not been merged into main.
+
+## B. Commit SHAs
+
+| Commit | Change |
+| --- | --- |
+| `a499c592` | Historical safety and additive allocation identity |
+| `75fea5d0` | Versioned observations, canonical measured engine and allocation dispatch |
+| `2554c177` | Atomic move-in observation and existing inline panel |
+| `9d0f49a2` | Physical transfer and move-out boundaries; rollback coverage |
+| `37fe5d36` | Admin canonical previews and audit tables |
+| `f95a81b0` | Tenant web and mobile API projections |
+| `a77792fd` | Notification identity, statements and reports |
+| `f31206bd` | Concurrent publication guard, corrections and runtime fixes |
+| `a634c74f` | Integrate current main without conflicts |
+| `993c5a1b` | Consistent editable PHP/m³ tariff labels |
+
+Documentation commits follow these implementation commits; the PR commit list is the authoritative complete history.
+
+## C. Files changed
+
+The complete implementation file list is in [WATER_BILLING_CHANGED_FILES.txt](WATER_BILLING_CHANGED_FILES.txt), relative to current main. Changes are concentrated in utility billing, occupancy lifecycle, additive model fields, tenant projection, notifications, statement generation and their tests. Existing electricity calculations retain their original engine path.
+
+## D. Schema and index changes
+
+| Model | Additive contract |
+| --- | --- |
+| UtilityPeriod | Calculation version, unit, immutable pricing snapshot, canonical meter events |
+| UtilityReading | m3 unit, observed timestamp, reservation/stay/transfer references, source/evidence and supersession audit metadata |
+| Bill | Independently identified water allocations, dispatch state and supplemental invoice key; existing charges.water remains the aggregate |
+| BedHistory | Exact observed occupancy start/end timestamps for water, alongside existing date fields |
+| Room | Observation revision used to serialize concurrent meter writes |
+| Reservation | Separate physical final electricity/water readings and water liability status |
+| Notification | Persisted additive data payload matching realtime/push identity |
+
+New index: unique sparse `Bill.waterSupplementKey`, named `unique_water_supplement`. Existing utility lifecycle indexes remain required. See the cutover guide for the explicit index command; it has not been run against production. No new occupancy or meter authority was introduced.
+
+## E. Historical compatibility
+
+An absent calculation version retains legacy semantics. Old recorded money remains money; unknown readings, physical consumption and unit prices remain null in canonical projections. New allocations can coexist with preserved legacy money. Issued, released, sent, partially paid and paid utility history cannot be destructively removed, including through force deletion. Unpublished correction workflows retain observations and supersession metadata.
+
+Draft water is excluded from tenant balances and payment amounts. Dispatch includes each allocation once. If the original invoice is paid before dispatch, the water charge goes to a separately identified supplemental invoice and the paid document remains unchanged. Combined publication rechecks stale drafts transactionally.
+
+## F. Move-in
+
+The existing Move-In Details inline panel now shows Actual Move-In Date, Starting Electricity Reading (kWh), then Starting Water Reading (m³), with the same single Move In submission. There is no price field in this panel. Labeled inputs, keyboard-operable previous-reading helpers, required/non-negative validation and backend continuity validation apply. Water creation shares the reservation, Stay, BedHistory, role and occupancy transaction; injected water failures roll everything back.
+
+![Existing inline move-in panel with water added](water-billing-evidence/movein-390.png)
+
+## G. Transfer
+
+Scheduling stores no water reading. Physical Complete Transfer requires fresh readings for each eligible source/destination room, using the existing completion dialog. Both observations and occupancy history commit atomically. Eligibility is evaluated separately for the two rooms. The architecture uses room meters; it has no separate shared-meter entity. Observations for the same room and instant must agree.
+
+## H. Move-out
+
+Eligible move-out requires a final physical water observation and closes the occupancy interval inside the transaction. Raw meter values are stored separately from financial amounts. Water liability remains pending period closing; this does not fabricate a settlement charge or modify paid history. The tenant workspace DTO includes the room identity/type needed to show the correct fields.
+
+## I. Calculation formula
+
+`water-meter-v1` uses consecutive verified observations:
+
+```
+segment usage = closing reading - opening reading
+tenant segment usage = segment usage / occupants present in that segment
+tenant charge = sum(tenant segment usage) * saved PHP/m³ rate
+```
+
+Private has one occupant; Double has at most two. All room occupancy intervals are resolved, including leave/return and transfers. Occupancy identifies the people in each measured interval; elapsed days never stand in for consumption. Missing change boundaries, decreasing readings and conflicting simultaneous observations block calculation. Vacancy consumption is room overhead. Tenant currency totals use deterministic largest-remainder cent allocation.
+
+The approved 100 → 106 → 118 example yields A=12 m³ and B=6 m³. At PHP50/m³ the charges are PHP600 and PHP300. One backend engine powers preview, persisted close, review, tenant/mobile projections and PDF tables.
+
+## J. Rate configuration
+
+The existing authorized settings workflow edits the water tariff in PHP/m³ with decimal validation and its existing audit trail. Period creation captures the rate, unit, actor and timestamp. Existing active periods preview and close using their saved rate. Updating the current setting does not reprice historical bills. Review the configured value before cutover because an older room-total value must not silently become a unit tariff.
+
+## K. Admin UI
+
+Water retains the electricity billing layout and shared component language. Opening/closing readings, consumption, PHP/m³ rate and calculated amount use the canonical API preview. The three auditable tables are Meter Reading History, Consumption Segments and Tenant Allocation. Cycle detail, generic bill detail, tenant payment tables, exports and KPI units distinguish measured and legacy periods. Water correction requires a reason and preserves the observation time/event; issued snapshots remain protected.
+
+## L. Tenant web
+
+Tenant water details show canonical meter history, consumption segments and allocation tables. Multiple period/room allocations remain individually identifiable, without pretending they share one opening reading or rate. Legacy displays unknown physical values and recorded money. The `billId` query parameter resets filters, expands and focuses the matching bill card. Browser-side water calculation is not used.
+
+## M. Android status
+
+**BLOCKED:** Android/shared mobile client source is absent. Backend payload tests passed; no Android screen or installed-device notification tap was validated.
+
+## N. iOS status
+
+**BLOCKED:** iOS/shared mobile client source is absent. Backend payload tests passed; no iOS screen or installed-device notification tap was validated.
+
+## O. Notifications
+
+Water dispatch retains the canonical bill notification lifecycle. Persisted data, realtime and push payloads include bill, utility, period/allocation identity and billing detail routing. Smoke tests verify one event across repeated dispatch and a separate event for a different allocation/period on the same bill. Existing read, clear, unread and role-filter behavior stays under regression coverage. Web exact-bill focus is implemented; authenticated end-to-end notification tapping and native device routing are not claimed.
+
+## P. PDF and reports
+
+Statement template v5 includes all three water tables, wrapped cells and truthful legacy fallback. Payment receipt meaning is unchanged. A generated [sample PDF](water-billing-evidence/water-statement-sample.pdf) was rendered and visually inspected for clipping and alignment. Report tests reconcile visible sent water with billed, paid and outstanding totals, excluding unsent draft allocations. New exports report measured units and price; legacy physical fields stay blank.
+
+## Q. Tests and verification
+
+Final verification results will be recorded here before delivery. The previous full server run completed 351 suites / 3,396 tests with one maintenance timeout; that test could access a live AI service through local environment configuration. It now isolates the deterministic fallback using the existing no-AI helper, and all 86 tests in that suite pass. A fresh full run is in progress.
+
+- Final targeted financial/statement/notification safeguards: **6 suites, 50 tests passed**.
+- Transfer regression group: **12 suites, 115 tests passed**.
+- Core water group: **4 suites, 38 tests passed**.
+- Frontend after integrating current main: **995 tests passed, zero failures**.
+- Production web build: **passed** (4m35s). A repeat build is running after the final water settings text-only change.
+- Component fixture browser QA: actual React components rendered at 390px and 1440px, including Move-In, Open/Close/New period, Complete Transfer, Move-Out and shared tables. Final renders had no page errors; narrow tables and modal actions remained reachable. This used isolated sample data, not authenticated production workflows.
+
+Test groups overlap and must not be added together. MongoDB integration tests use isolated test fixtures. Existing payment/PayMongo tests use mocks; no live payment was made.
+
+| Requested scenarios | Evidence |
+| --- | --- |
+| 1–4: move-in, missing/lower baseline, rollback | reservationLifecycleController.moveInContractRepair.integration; waterMeterBilling.integration |
+| 5–12: Private, Double, arrivals/departures/replacement/return | waterMeterEngine.test; room-scoped utility integration suites |
+| 13: Quad exclusion | waterMeterEngine.test; lifecycle/transfer fixtures; move-in visual fixture |
+| 14–16: immediate/scheduled transfer and rollback | transferAtomicCutover.integration; scheduledRoomTransfer.meterTiming.integration |
+| 17: move-out boundary | transferThenRenewMoveOut.integration; move-out fixture |
+| 18–19: editable rate and historical snapshot | existing settings regression; waterMeterEngine.test; waterMeterBilling.integration |
+| 20–23: duplicates, additive allocations, draft/sent visibility | waterAllocations.test; waterMeterBilling.integration; billingPolicy tests |
+| 24–25: partial payment and immutable paid history | existing billing/payment ledger suites; utilityHistorySafety.test; dispatch race integration |
+| 26–27: dedupe and exact bill identity | billReleaseNotificationSmoke.test; tenant billId focus implementation; native/runtime gap above |
+| 28–29: tenant tables and mobile backend | WaterBillingTables.test.mjs plus visual fixture; mobileBillingBridge.test |
+| 30–31: Android/iOS | BLOCKED: client source/device validation unavailable |
+| 32–35: PDF, reports, mixed history and units | pdfGenerator.statement.test; analyticsController.test; waterAllocations/mobile projection tests; UI source review and visual fixtures |
+
+## R. Migration and cutover
+
+Follow [WATER_METER_CUTOVER.md](WATER_METER_CUTOVER.md). Review the PHP/m³ rate and indexes, finish legacy cycles under their original rules, and start each measured cycle prospectively at a verified physical boundary. Rooms without trustworthy historical measurements start at the new observation. Do not backfill fictional readings or relabel old usage.
+
+## S. Known blockers and limits
+
+- Native clients and installed-device routing remain blocked as described above.
+- Production index execution, configuration review, physical baseline collection and deployment have not been performed.
+- Fixture browser checks do not claim authenticated end-to-end operation, live push delivery or live PayMongo settlement.
+- Missing historic occupancy-change observations intentionally block measured closing; they require a prospective cutover, not interpolation.
+
+## T. PR status
+
+Draft PR creation and CI verification are pending final local checks. Do not merge until applicable CI and regression checks pass. No merge into main or production deployment is authorized by this report.
