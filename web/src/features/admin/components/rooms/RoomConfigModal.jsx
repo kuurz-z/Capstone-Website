@@ -20,6 +20,7 @@ import {
   ImagePlus,
   Loader2,
   Lock,
+  Maximize2,
   MoreVertical,
   Pencil,
   Plus,
@@ -33,7 +34,9 @@ import {
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
 import { roomApi } from "../../../../shared/api/roomApi";
 import { showNotification } from "../../../../shared/utils/notification";
+import { getThumbnailUrl, getImageFallbackUrl, prefetchOptimizedImage } from "../../../../shared/utils/imageOptimizer";
 import BedOccupantDetailModal from "./BedOccupantDetailModal";
+import RoomImageLightboxModal from "./RoomImageLightboxModal";
 
 const makeImageId = () =>
   `room-img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -41,7 +44,7 @@ const makeImageId = () =>
 const buildImageState = (value) => ({
   id: makeImageId(),
   value,
-  preview: typeof value === "string" ? value : URL.createObjectURL(value),
+  preview: typeof value === "string" ? getThumbnailUrl(value) : URL.createObjectURL(value),
   name: typeof value === "string" ? "Uploaded image" : value.name,
 });
 
@@ -79,6 +82,7 @@ export default function RoomConfigModal({
   const [draftRoom, setDraftRoom] = useState(room);
   const [isEditing, setIsEditing] = useState(false);
   const [imagesState, setImagesState] = useState([]);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [activeMenuBedIndex, setActiveMenuBedIndex] = useState(null);
   const [selectedOccupantBed, setSelectedOccupantBed] = useState(null);
   const [newAmenityInput, setNewAmenityInput] = useState("");
@@ -187,7 +191,7 @@ export default function RoomConfigModal({
     }
   };
 
-  useEscapeClose(true, handleAttemptClose);
+  useEscapeClose(lightboxIndex === null, handleAttemptClose);
 
   const { data: freshRoom } = useRoom(room?._id);
 
@@ -211,7 +215,15 @@ export default function RoomConfigModal({
   };
 
   useEffect(() => {
-    setDraftRoom(room);
+    if (!room) return;
+    const initialRoom = {
+      ...room,
+      beds: (room.beds || []).map((bed) => ({
+        ...bed,
+        originalId: bed.originalId || bed.id,
+      })),
+    };
+    setDraftRoom(initialRoom);
     const imgs = getInitialImages(room);
     setImagesState(imgs.map(buildImageState));
   }, [room]);
@@ -219,15 +231,29 @@ export default function RoomConfigModal({
   useEffect(() => {
     if (!freshRoom) return;
     setDraftRoom((prev) => {
+      const prevBeds = prev?.beds || [];
+      const prevBedMap = new Map(
+        prevBeds.map((b) => [b._id ? String(b._id) : b.id, b]),
+      );
+      const mappedFreshBeds = (freshRoom.beds || []).map((bed) => {
+        const prevBed = prevBedMap.get(bed._id ? String(bed._id) : bed.id);
+        return {
+          ...bed,
+          originalId: prevBed?.originalId || bed.originalId || bed.id,
+        };
+      });
+
       if (isEditing) {
         return {
           ...freshRoom,
           ...prev,
+          beds: prev?.beds || mappedFreshBeds,
           images: prev?.images || freshRoom.images,
         };
       }
       return {
         ...freshRoom,
+        beds: mappedFreshBeds,
         images: freshRoom.images || prev?.images,
       };
     });
@@ -308,7 +334,17 @@ export default function RoomConfigModal({
 
   const handleBedFieldChange = (targetIndex, field, value) => {
     setBeds((beds) =>
-      beds.map((bed, idx) => (idx === targetIndex ? { ...bed, [field]: value } : bed)),
+      beds.map((bed, idx) => {
+        if (idx !== targetIndex) return bed;
+        if (field === "id") {
+          return {
+            ...bed,
+            id: value,
+            originalId: bed.originalId || bed.id,
+          };
+        }
+        return { ...bed, [field]: value };
+      }),
     );
   };
 
@@ -528,7 +564,8 @@ export default function RoomConfigModal({
   );
 
   return createPortal(
-    <div className="admin-modal-overlay" onClick={handleAttemptClose}>
+    <>
+      <div className="admin-modal-overlay" onClick={handleAttemptClose}>
       <div
         className="admin-modal-content room-config-modal-wide"
         onClick={(e) => e.stopPropagation()}
@@ -772,31 +809,91 @@ export default function RoomConfigModal({
 
           {/* Section: Photos */}
           <div className="rfm-section">
-            <div className="rfm-section-label">
-              <ImagePlus size={13} />
-              Room Photos ({imagesState.length})
+            <div className="rfm-section-label flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <ImagePlus size={13} />
+                <span>Room Photos ({imagesState.length})</span>
+              </div>
+              {imagesState.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(0)}
+                  className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer"
+                  title="Open full view photo gallery"
+                >
+                  <Maximize2 size={12} />
+                  <span>Full View</span>
+                </button>
+              )}
             </div>
 
             {isEditing ? (
               imagesState.length > 0 ? (
                 <div className="image-preview-grid">
-                  {imagesState.map((entry) => (
-                    <article key={entry.id} className="image-preview-card">
-                      <img
-                        src={entry.preview}
-                        alt="Room"
-                        className="image-preview-card__img"
-                      />
+                  {imagesState.map((entry, idx) => (
+                    <article
+                      key={entry.id}
+                      className="image-preview-card group"
+                      style={{ animationDelay: `${Math.min(idx, 8) * 45}ms` }}
+                    >
+                      <div
+                        className="relative cursor-pointer overflow-hidden"
+                        onClick={() => setLightboxIndex(idx)}
+                        onMouseEnter={() => prefetchOptimizedImage(entry.value)}
+                        role="button"
+                        tabIndex={0}
+                        title="Click to view full photo"
+                        aria-label={`View full photo ${entry.name}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setLightboxIndex(idx);
+                          }
+                        }}
+                      >
+                        <img
+                          src={entry.preview}
+                          alt="Room"
+                          className="image-preview-card__img"
+                          loading="lazy"
+                          decoding="async"
+                          ref={(node) => {
+                            if (node && node.complete) node.classList.add("is-loaded");
+                          }}
+                          onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                          onError={(e) => {
+                            const fb = getImageFallbackUrl(entry.preview);
+                            if (fb && fb !== e.currentTarget.src) {
+                              e.currentTarget.src = fb;
+                            }
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-[11px] font-semibold pointer-events-none">
+                          <Maximize2 size={13} />
+                          <span>Full View</span>
+                        </div>
+                      </div>
                       <div className="image-preview-card__footer">
-                        <span className="image-preview-card__name">{entry.name}</span>
-                        <button
-                          type="button"
-                          className="image-preview-card__remove"
-                          onClick={() => handleRemoveImage(entry.id)}
-                          aria-label="Remove image"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <span className="image-preview-card__name" title={entry.name}>{entry.name}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                            onClick={() => setLightboxIndex(idx)}
+                            aria-label={`View full size ${entry.name}`}
+                            title="View full size photo"
+                          >
+                            <Maximize2 size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="image-preview-card__remove"
+                            onClick={() => handleRemoveImage(entry.id)}
+                            aria-label="Remove image"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -832,13 +929,53 @@ export default function RoomConfigModal({
             ) : (
               imagesState.length > 0 ? (
                 <div className="image-preview-grid">
-                  {imagesState.map((entry) => (
-                    <div key={entry.id} className="image-preview-card" style={{ height: "80px" }}>
+                  {imagesState.map((entry, idx) => (
+                    <div
+                      key={entry.id}
+                      className="image-preview-card relative group cursor-pointer"
+                      style={{
+                        height: imagesState.length === 1 ? "160px" : "100px",
+                        animationDelay: `${Math.min(idx, 8) * 45}ms`,
+                      }}
+                      onClick={() => setLightboxIndex(idx)}
+                      onMouseEnter={() => prefetchOptimizedImage(entry.value)}
+                      role="button"
+                      tabIndex={0}
+                      title="Click to view full photo"
+                      aria-label={`View full size ${entry.name || "room photo"}`}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setLightboxIndex(idx);
+                        }
+                      }}
+                    >
                       <img
                         src={entry.preview}
                         alt="Room photo"
                         className="image-preview-card__img"
+                        style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                        loading="lazy"
+                        decoding="async"
+                        ref={(node) => {
+                          if (node && node.complete) node.classList.add("is-loaded");
+                        }}
+                        onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                        onError={(e) => {
+                          const fb = getImageFallbackUrl(entry.preview);
+                          if (fb && fb !== e.currentTarget.src) {
+                            e.currentTarget.src = fb;
+                          }
+                        }}
                       />
+                      <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-[11px] font-semibold pointer-events-none">
+                        <Maximize2 size={13} />
+                        <span>Full View</span>
+                      </div>
+                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium flex items-center gap-1 opacity-85 group-hover:opacity-0 transition-opacity pointer-events-none">
+                        <Maximize2 size={10} />
+                        <span>Full View</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1217,7 +1354,18 @@ export default function RoomConfigModal({
           </div>
         </div>
       )}
-    </div>,
+      </div>
+
+      {lightboxIndex !== null && (
+        <RoomImageLightboxModal
+          images={imagesState}
+          initialIndex={lightboxIndex}
+          roomNumber={draftRoom?.roomNumber || draftRoom?.name || room?.roomNumber || room?.name}
+          roomType={draftRoom?.type || room?.type}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+    </>,
     document.body
   );
 }

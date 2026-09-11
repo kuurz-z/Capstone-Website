@@ -85,6 +85,7 @@ export {
   extendReservation,
   releaseSlot,
   manageReservationVisit,
+  touchReservationActivity,
 } from "./reservationLifecycleController.js";
 
 // 7. Visit Scheduling Domain

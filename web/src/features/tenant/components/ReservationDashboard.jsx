@@ -36,6 +36,8 @@ import {
 import { fmtShortDate, APP_LOCALE } from "../../../shared/utils/dateFormat";
 import CheckoutLockBanner from "./CheckoutLockBanner";
 import MoveInSettlementCard from "./profile/MoveInSettlementCard";
+import { useReservationInactivity } from "../hooks/useReservationInactivity";
+import ReservationInactivityModal from "./ReservationInactivityModal";
 
 const getReservationStatus = (reservation) =>
   reservation?.reservationStatus || reservation?.status || "pending";
@@ -531,9 +533,47 @@ export default function ReservationDashboard({
   const [showCancelModal, setShowCancelModal] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
   const [showRequestCancelModal, setShowRequestCancelModal] = React.useState(false);
+  const [cancelReason, setCancelReason] = React.useState("");
   const [isRequesting, setIsRequesting] = React.useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = React.useState(false);
   const [isWithdrawing, setIsWithdrawing] = React.useState(false);
+
+  const isHoldMonitored =
+    Boolean(reservation?._id) &&
+    getReservationStatus(reservation) === "pending" &&
+    !hasSubmittedApplication(reservation);
+
+  const handleInactivityExpired = React.useCallback(async () => {
+    // Defense-in-depth: only cancel/redirect if this specific reservation is strictly an unsubmitted draft
+    const status = getReservationStatus(reservation);
+    if (!reservation?._id || status !== "pending" || hasSubmittedApplication(reservation)) {
+      return;
+    }
+    try {
+      const { reservationApi } = await import("../../../shared/api/reservationApi");
+      await reservationApi.updateByUser(reservation._id, {
+        cancelReservation: true,
+      });
+    } catch (err) {
+      console.warn("Auto-cancellation on inactivity expired failed:", err);
+    }
+    showNotification("Your room hold expired due to 30 minutes of inactivity.", "info", 5000);
+    queryClient.invalidateQueries({ queryKey: ["reservations"] });
+    navigate("/applicant/check-availability");
+  }, [reservation, queryClient, navigate]);
+
+  const {
+    isWarningOpen: isInactivityWarningOpen,
+    secondsRemaining: inactivitySecondsRemaining,
+    isExtending: isExtendingInactivity,
+    extendHold: extendInactivityHold,
+    releaseNow: releaseInactivityNow,
+  } = useReservationInactivity({
+    reservationId: reservation?._id,
+    updatedAt: reservation?.updatedAt,
+    isActive: isHoldMonitored,
+    onExpired: handleInactivityExpired,
+  });
 
   const [isMobile, setIsMobile] = React.useState(
     () => typeof window !== "undefined" && window.innerWidth <= 768
@@ -1342,11 +1382,24 @@ export default function ReservationDashboard({
         </p>
       </BaseModal>
 
+      {/* ── Reservation Inactivity Warning Modal ── */}
+      <ReservationInactivityModal
+        isOpen={isInactivityWarningOpen}
+        roomName={roomName}
+        secondsRemaining={inactivitySecondsRemaining}
+        isExtending={isExtendingInactivity}
+        onExtend={extendInactivityHold}
+        onRelease={releaseInactivityNow}
+      />
+
       {/* ── Request Cancellation Modal (paid reservations) ───────────────── */}
       <BaseModal
         isOpen={showRequestCancelModal}
         onClose={() => {
-          if (!isRequesting) setShowRequestCancelModal(false);
+          if (!isRequesting) {
+            setShowRequestCancelModal(false);
+            setCancelReason("");
+          }
         }}
         title="Request Cancellation?"
         subtitle={`Room: ${roomName}`}
@@ -1361,8 +1414,9 @@ export default function ReservationDashboard({
             const { reservationApi } = await import(
               "../../../shared/api/reservationApi"
             );
-            await reservationApi.requestCancellation(reservation._id);
+            await reservationApi.requestCancellation(reservation._id, cancelReason.trim());
             setShowRequestCancelModal(false);
+            setCancelReason("");
             showNotification(
               "Cancellation request submitted. Pending admin review.",
               "success",
@@ -1383,11 +1437,44 @@ export default function ReservationDashboard({
           }
         }}
       >
-        <p style={{ margin: 0, color: "var(--text-secondary, #475569)", lineHeight: 1.5 }}>
+        <p style={{ margin: "0 0 12px", color: "var(--text-secondary, #475569)", lineHeight: 1.5 }}>
           Your reservation fee for <strong>{roomName}</strong> is{" "}
           <strong>non-refundable</strong>. Submitting this request will
           place it under admin review. Your bed will only be released once an admin approves.
         </p>
+        <div style={{ marginTop: 12 }}>
+          <label
+            htmlFor="tenant-cancellation-reason-input"
+            style={{
+              display: "block",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--text-primary, #1e293b)",
+              marginBottom: 6,
+            }}
+          >
+            Reason for Cancellation (Optional)
+          </label>
+          <textarea
+            id="tenant-cancellation-reason-input"
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Let us know why you are requesting cancellation..."
+            rows={3}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: "6px",
+              border: "1px solid var(--border, #cbd5e1)",
+              background: "var(--card-bg, #ffffff)",
+              color: "var(--text-primary, #1e293b)",
+              fontSize: 13,
+              fontFamily: "inherit",
+              resize: "vertical",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
       </BaseModal>
 
       <BaseModal

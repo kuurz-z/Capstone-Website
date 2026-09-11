@@ -7,3 +7,5 @@ uploads/bills/*.pdf
 serviceAccountKey.json
 google-vision-key.json
 config/google-vision-key.json
+tmp/
+

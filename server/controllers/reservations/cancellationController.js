@@ -240,7 +240,9 @@ export const requestCancellationByUser = async (req, res, next) => {
     reservation.cancellationRequestedAt = now;
     reservation.cancellationRequestedBy = dbUser._id;
     reservation.cancellationStatus = "pending";
-    reservation.cancellationReason = req.body.reason || null;
+    const userReason =
+      typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    reservation.cancellationReason = userReason || "Cancellation requested by tenant";
     await reservation.save();
 
     await auditLogger.logModification(
@@ -388,6 +390,15 @@ export const approveCancellationRequest = async (req, res, next) => {
     reservation.cancellationReviewedAt = now;
     reservation.cancellationReviewedBy = dbUser._id;
     reservation.cancellationAdminNote = adminNote;
+
+    const existingReason =
+      typeof reservation.cancellationReason === "string"
+        ? reservation.cancellationReason.trim()
+        : "";
+    const noteReason =
+      typeof adminNote === "string" ? adminNote.trim() : "";
+    reservation.cancellationReason =
+      existingReason || noteReason || "Tenant cancellation request approved by admin";
     if (visitHistoryUpdate.length > 0) reservation.visitHistory = visitHistoryUpdate;
     reservation.visitDate = null;
     reservation.visitTime = null;

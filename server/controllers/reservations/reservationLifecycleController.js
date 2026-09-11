@@ -19,6 +19,7 @@ import {
 } from "../../models/index.js";
 import logger from "../../middleware/logger.js";
 import auditLogger from "../../utils/auditLogger.js";
+import { AppError } from "../../middleware/errorHandler.js";
 import { getBusinessSettings } from "../../utils/businessSettings.js";
 import {
   generatePaymentReference,
@@ -3019,7 +3020,7 @@ export const touchReservationActivity = async (req, res, next) => {
     }
     const dbUser = await findDbUser(req.user?.uid);
     if (!dbUser) {
-      return res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
+      throw new AppError("User not found", 404, "USER_NOT_FOUND");
     }
 
     const reservation = await Reservation.findOne({
@@ -3029,24 +3030,32 @@ export const touchReservationActivity = async (req, res, next) => {
     });
 
     if (!reservation) {
-      return res.status(404).json({ error: "Reservation not found", code: "RESERVATION_NOT_FOUND" });
+      throw new AppError("Reservation not found", 404, "RESERVATION_NOT_FOUND");
     }
 
     if (reservation.status !== "pending") {
-      return res.status(400).json({
-        error: "Heartbeat only applies to pending reservations.",
-        code: "HEARTBEAT_NOT_APPLICABLE",
-      });
+      throw new AppError(
+        "Heartbeat only applies to pending reservations.",
+        400,
+        "HEARTBEAT_NOT_APPLICABLE"
+      );
     }
 
     reservation.updatedAt = new Date();
     await reservation.save();
 
+    const expiresAt = dayjs(reservation.updatedAt).add(30, "minute").toDate();
+
     return res.status(200).json({
       success: true,
       code: "RESERVATION_HEARTBEAT_RECORDED",
+      data: {
+        code: "RESERVATION_HEARTBEAT_RECORDED",
+        renewedAt: reservation.updatedAt,
+        expiresAt,
+      },
       renewedAt: reservation.updatedAt,
-      expiresAt: dayjs(reservation.updatedAt).add(30, "minute").toDate(),
+      expiresAt,
     });
   } catch (err) {
     next(err);

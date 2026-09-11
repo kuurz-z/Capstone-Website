@@ -16,6 +16,7 @@ import { fileURLToPath } from "url";
 import sharp from "sharp";
 import { AppError } from "../middleware/errorHandler.js";
 import logger from "../middleware/logger.js";
+import { resolveFirebaseStorageBucket } from "../config/firebase.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,8 @@ export const ALLOWED_IMAGE_HOSTS = new Set([
   "storage.googleapis.com",
   "firebasestorage.googleapis.com",
 ]);
+
+export const MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 
 const DEFAULT_IMAGE_CACHE_DIR = path.resolve(__dirname, "../tmp/image-cache");
 
@@ -49,7 +52,62 @@ export const validateImageUrl = (rawUrl) => {
     if (parsed.username || parsed.password) {
       return false;
     }
-    return ALLOWED_IMAGE_HOSTS.has(parsed.hostname.toLowerCase());
+    const hostname = parsed.hostname.toLowerCase();
+    if (!ALLOWED_IMAGE_HOSTS.has(hostname)) {
+      return false;
+    }
+
+    const pathname = parsed.pathname;
+    if (!pathname || pathname === "/" || pathname.trim() === "") {
+      return false;
+    }
+
+    // Guard against directory traversal attacks
+    let decodedPathname;
+    try {
+      decodedPathname = decodeURIComponent(pathname);
+    } catch {
+      return false;
+    }
+    if (pathname.includes("..") || decodedPathname.includes("..")) {
+      return false;
+    }
+
+    // Verify valid storage resource structure
+    if (hostname === "firebasestorage.googleapis.com") {
+      if (!pathname.startsWith("/v0/b/")) {
+        return false;
+      }
+      const segments = pathname.split("/").filter(Boolean);
+      if (segments.length < 3 || !segments[2]) {
+        return false;
+      }
+    } else if (hostname === "storage.googleapis.com") {
+      const segments = pathname.split("/").filter(Boolean);
+      if (segments.length < 2 || !segments[0] || !segments[1]) {
+        return false;
+      }
+    }
+
+    // Production bucket confinement check
+    if (process.env.NODE_ENV === "production") {
+      const configuredBucket = resolveFirebaseStorageBucket();
+      if (configuredBucket) {
+        const lowerBucket = configuredBucket.toLowerCase();
+        const lowerPath = pathname.toLowerCase();
+        const isFirebaseBucket =
+          lowerPath.startsWith(`/v0/b/${lowerBucket}/`) ||
+          lowerPath === `/v0/b/${lowerBucket}`;
+        const isGcsBucket =
+          lowerPath.startsWith(`/${lowerBucket}/`) ||
+          lowerPath === `/${lowerBucket}`;
+        if (!isFirebaseBucket && !isGcsBucket) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   } catch {
     return false;
   }
@@ -98,6 +156,8 @@ const memoryCache = new Map();
 
 export const clearMemoryCache = () => {
   memoryCache.clear();
+  inFlightRequests.clear();
+  inFlightOriginFetches.clear();
 };
 
 export const getMemoryCacheSize = () => memoryCache.size;
@@ -131,8 +191,10 @@ const setToMemoryCache = (key, buffer) => {
 // IN-FLIGHT DEDUPLICATION
 // ============================================================================
 const inFlightRequests = new Map();
+const inFlightOriginFetches = new Map();
 
 export const getInFlightRequestsCount = () => inFlightRequests.size;
+export const getInFlightOriginFetchesCount = () => inFlightOriginFetches.size;
 
 // ============================================================================
 // CONTROLLER HANDLER
@@ -157,7 +219,8 @@ export const optimizeRoomPhoto = async (req, res, next) => {
     const quality = clampNumber(req.query?.q, 50, 95, 80);
     const format = "webp";
 
-    const cacheKey = getCacheKey(rawUrl, width, quality, format);
+    const normalizedUrl = normalizeOriginImageUrl(rawUrl);
+    const cacheKey = getCacheKey(normalizedUrl, width, quality, format);
     const etag = `W/"${cacheKey}"`;
 
     const clientEtag =
@@ -207,54 +270,113 @@ export const optimizeRoomPhoto = async (req, res, next) => {
       optimizedBuffer = await inFlightRequests.get(cacheKey);
     } else {
       const workPromise = (async () => {
-        const fetchUrl = normalizeOriginImageUrl(rawUrl);
-        let originResponse;
-        try {
-          originResponse = await fetch(fetchUrl, {
-            signal: AbortSignal.timeout(25000),
-          });
-        } catch (fetchErr) {
-          if (fetchErr.name === "TimeoutError" || fetchErr.name === "AbortError") {
-            throw new AppError(
-              "Image fetch timed out from origin storage",
-              504,
-              "IMAGE_FETCH_TIMEOUT",
-            );
-          }
-          throw new AppError(
-            `Failed to fetch image from origin: ${fetchErr.message}`,
-            502,
-            "IMAGE_FETCH_FAILED",
-          );
-        }
+        const fetchUrl = normalizedUrl;
 
-        if (
-          !originResponse.ok &&
-          (originResponse.status === 404 || originResponse.status === 403) &&
-          /-thumb\.(webp|jpe?g|png)/i.test(rawUrl)
-        ) {
-          // Companion thumbnail not found in storage — fall back to full original image and resize on the fly
-          const originalUrl = rawUrl.replace(/-thumb\.(webp|jpe?g|png)/i, ".$1");
-          try {
-            const fallbackRes = await fetch(originalUrl, {
-              signal: AbortSignal.timeout(25000),
-            });
-            if (fallbackRes.ok) {
-              originResponse = fallbackRes;
+        let originBuffer;
+        if (inFlightOriginFetches.has(fetchUrl)) {
+          originBuffer = await inFlightOriginFetches.get(fetchUrl);
+        } else {
+          const fetchPromise = (async () => {
+            let originResponse;
+            try {
+              originResponse = await fetch(fetchUrl, {
+                signal: AbortSignal.timeout(25000),
+              });
+            } catch (fetchErr) {
+              if (fetchErr.name === "TimeoutError" || fetchErr.name === "AbortError") {
+                throw new AppError(
+                  "Image fetch timed out from origin storage",
+                  504,
+                  "IMAGE_FETCH_TIMEOUT",
+                );
+              }
+              throw new AppError(
+                `Failed to fetch image from origin: ${fetchErr.message}`,
+                502,
+                "IMAGE_FETCH_FAILED",
+              );
             }
-          } catch {}
-        }
 
-        if (!originResponse.ok) {
-          throw new AppError(
-            `Failed to fetch image from origin storage (status: ${originResponse.status})`,
-            originResponse.status === 404 ? 404 : 502,
-            originResponse.status === 404 ? "IMAGE_NOT_FOUND" : "ORIGIN_FETCH_FAILED",
-          );
-        }
+            if (
+              !originResponse.ok &&
+              (originResponse.status === 404 || originResponse.status === 403) &&
+              /-thumb\.(webp|jpe?g|png)/i.test(fetchUrl)
+            ) {
+              // Companion thumbnail not found in storage — fall back to full original image and resize on the fly
+              const originalUrl = fetchUrl.replace(/-thumb\.(webp|jpe?g|png)/i, ".$1");
+              try {
+                const fallbackRes = await fetch(originalUrl, {
+                  signal: AbortSignal.timeout(25000),
+                });
+                if (fallbackRes.ok) {
+                  originResponse = fallbackRes;
+                }
+              } catch {}
+            }
 
-        const arrayBuffer = await originResponse.arrayBuffer();
-        const originBuffer = Buffer.from(arrayBuffer);
+            if (!originResponse.ok) {
+              throw new AppError(
+                `Failed to fetch image from origin storage (status: ${originResponse.status})`,
+                originResponse.status === 404 ? 404 : 502,
+                originResponse.status === 404 ? "IMAGE_NOT_FOUND" : "ORIGIN_FETCH_FAILED",
+              );
+            }
+
+            // Pre-buffering payload guards: Content-Length and Content-Type
+            const contentLengthHeader =
+              typeof originResponse.headers?.get === "function"
+                ? originResponse.headers.get("content-length")
+                : originResponse.headers?.["content-length"] || originResponse.headers?.["Content-Length"];
+
+            if (contentLengthHeader) {
+              const contentLength = parseInt(contentLengthHeader, 10);
+              if (!Number.isNaN(contentLength) && contentLength > MAX_IMAGE_SIZE_BYTES) {
+                throw new AppError(
+                  "Image exceeds maximum allowed size (15MB)",
+                  413,
+                  "IMAGE_TOO_LARGE",
+                );
+              }
+            }
+
+            const contentTypeHeader =
+              typeof originResponse.headers?.get === "function"
+                ? originResponse.headers.get("content-type")
+                : originResponse.headers?.["content-type"] || originResponse.headers?.["Content-Type"];
+
+            if (contentTypeHeader) {
+              const cleanContentType = contentTypeHeader.split(";")[0].trim().toLowerCase();
+              if (
+                !cleanContentType.startsWith("image/") &&
+                cleanContentType !== "application/octet-stream"
+              ) {
+                throw new AppError(
+                  "Remote asset is not a valid image",
+                  415,
+                  "UNSUPPORTED_MEDIA_TYPE",
+                );
+              }
+            }
+
+            const arrayBuffer = await originResponse.arrayBuffer();
+            if (arrayBuffer.byteLength > MAX_IMAGE_SIZE_BYTES) {
+              throw new AppError(
+                "Image exceeds maximum allowed size (15MB)",
+                413,
+                "IMAGE_TOO_LARGE",
+              );
+            }
+
+            return Buffer.from(arrayBuffer);
+          })();
+
+          inFlightOriginFetches.set(fetchUrl, fetchPromise);
+          try {
+            originBuffer = await fetchPromise;
+          } finally {
+            inFlightOriginFetches.delete(fetchUrl);
+          }
+        }
 
         let buf;
         try {

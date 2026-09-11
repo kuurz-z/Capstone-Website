@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { ImagePlus, LoaderCircle, Trash2, Star, Check } from "lucide-react";
+import { ImagePlus, LoaderCircle, Trash2, Star, Check, Maximize2 } from "lucide-react";
 import { uploadIfFile } from "../../../../shared/utils/firebaseStorageUpload";
+import { getThumbnailUrl, getImageFallbackUrl, prefetchOptimizedImage } from "../../../../shared/utils/imageOptimizer";
+import RoomImageLightboxModal from "./RoomImageLightboxModal";
 
 const makeImageId = () =>
   `room-img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -8,11 +10,12 @@ const makeImageId = () =>
 const buildImageState = (value) => ({
   id: makeImageId(),
   value,
-  preview: typeof value === "string" ? value : URL.createObjectURL(value),
+  preview: typeof value === "string" ? getThumbnailUrl(value) : URL.createObjectURL(value),
   name: typeof value === "string" ? "Uploaded image" : value.name,
 });
 
 export default function RoomPublicEditForm({ room, onUpdateDraft, onSavePublic, saving }) {
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [form, setForm] = useState({
     name: room.name || "",
     description: room.description || "",
@@ -232,17 +235,47 @@ export default function RoomPublicEditForm({ room, onUpdateDraft, onSavePublic, 
 
           {form.images?.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mt-3">
-              {form.images.map((entry) => (
-                <div key={entry.id} className="relative group rounded-md overflow-hidden border border-border h-20 bg-slate-100 dark:bg-slate-800">
+              {form.images.map((entry, index) => (
+                <div
+                  key={entry.id}
+                  className="relative group rounded-md overflow-hidden border border-border h-20 bg-slate-100 dark:bg-slate-800 cursor-pointer"
+                  onClick={() => setLightboxIndex(index)}
+                  onMouseEnter={() => prefetchOptimizedImage(entry.value)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View full photo ${entry.name || "Room image"}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setLightboxIndex(index);
+                    }
+                  }}
+                  title="Click to view full photo"
+                >
                   <img
                     src={entry.preview}
                     alt="Room"
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => {
+                      const fb = getImageFallbackUrl(entry.preview);
+                      if (fb && fb !== e.currentTarget.src) {
+                        e.currentTarget.src = fb;
+                      }
+                    }}
                   />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 text-white text-[10px] font-semibold pointer-events-none">
+                    <Maximize2 size={12} />
+                    <span>View</span>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => handleRemoveImage(entry.id)}
-                    className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-80 hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveImage(entry.id);
+                    }}
+                    className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-80 hover:opacity-100 transition-opacity z-10 cursor-pointer"
                     title="Remove image"
                   >
                     <Trash2 size={12} />
@@ -253,6 +286,16 @@ export default function RoomPublicEditForm({ room, onUpdateDraft, onSavePublic, 
           )}
         </div>
       </div>
+
+      {lightboxIndex !== null && (
+        <RoomImageLightboxModal
+          images={form.images}
+          initialIndex={lightboxIndex}
+          roomNumber={form.name || room?.roomNumber || "Room"}
+          roomType={room?.type}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
   );
 }

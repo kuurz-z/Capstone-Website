@@ -368,6 +368,116 @@ textarea {
   font-size: var(--font-size-md);
 }
 
+/* ── Notification Filter Pills Carousel & Arrows ── */
+.notif-filter-carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Mobile: Strictly hide the filter cards and carousel to avoid redundancy with the mobile dropdown select */
+@media (max-width: 639px) {
+  .notif-filter-carousel,
+  .notif-filter-scroll {
+    display: none !important;
+  }
+}
+
+/* Carousel navigation chevron buttons (positioned absolutely to guarantee zero layout shifts) */
+.notif-filter-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: var(--card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  color: var(--text-heading, #0f172a);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  user-select: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.85);
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0s linear 0.22s,
+              background-color 0.15s,
+              border-color 0.15s;
+}
+
+.notif-filter-carousel-arrow--left {
+  left: 2px;
+}
+
+.notif-filter-carousel-arrow--right {
+  right: 2px;
+}
+
+.notif-filter-carousel-arrow.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0s linear 0s,
+              background-color 0.15s,
+              border-color 0.15s;
+}
+
+.notif-filter-carousel-arrow.is-visible:hover {
+  background: var(--muted, #f1f5f9);
+  border-color: #cbd5e1;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.dark .notif-filter-carousel-arrow,
+html[data-theme="dark"] .notif-filter-carousel-arrow {
+  background: var(--card, #1e293b);
+  border-color: var(--border, #334155);
+  color: var(--foreground, #f8fafc);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.dark .notif-filter-carousel-arrow.is-visible:hover,
+html[data-theme="dark"] .notif-filter-carousel-arrow.is-visible:hover {
+  background: var(--muted, #334155);
+  border-color: #475569;
+}
+
+.notif-filter-scroll {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 4px;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  cursor: grab;
+}
+
+.notif-filter-scroll.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+  scroll-behavior: auto !important;
+}
+
 .notif-filter-scroll::-webkit-scrollbar {
   display: none;
 }

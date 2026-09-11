@@ -22,6 +22,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Layers,
+  Maximize2,
 } from "lucide-react";
 import { BRANCH_OPTIONS } from "../../../../shared/utils/constants";
 import { uploadRoomPhotoIfFile } from "../../../../shared/utils/firebaseStorageUpload";
@@ -37,6 +38,8 @@ import {
 } from "../../utils/roomNumberingUtils";
 import { showNotification } from "../../../../shared/utils/notification";
 import getFriendlyError from "../../../../shared/utils/friendlyError";
+import { getThumbnailUrl, getImageFallbackUrl, prefetchOptimizedImage } from "../../../../shared/utils/imageOptimizer";
+import RoomImageLightboxModal from "./RoomImageLightboxModal";
 
 /**
  * Generate default beds based on room type and capacity.
@@ -142,7 +145,7 @@ const makeImageId = () =>
 const buildImageState = (value) => ({
   id: makeImageId(),
   value,
-  preview: typeof value === "string" ? value : URL.createObjectURL(value),
+  preview: typeof value === "string" ? getThumbnailUrl(value) : URL.createObjectURL(value),
   name: typeof value === "string" ? "Uploaded image" : value.name,
 });
 
@@ -182,6 +185,7 @@ export default function RoomFormModal({ room, onClose, onSave }) {
   const [touched, setTouched] = useState({});
   const [saving, setSaving] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
   // Custom tags input state
   const [customAmenity, setCustomAmenity] = useState("");
@@ -360,7 +364,7 @@ export default function RoomFormModal({ room, onClose, onSave }) {
   }, [isFormDirty, onClose]);
 
   // Escape key handler
-  useEscapeClose(true, () => {
+  useEscapeClose(lightboxIndex === null, () => {
     if (showConfirmClose) {
       setShowConfirmClose(false);
     } else {
@@ -1089,28 +1093,75 @@ export default function RoomFormModal({ room, onClose, onSave }) {
                   {form.images?.length > 0 ? (
                     <div className="image-preview-grid">
                       {form.images.map((entry, index) => (
-                        <article key={entry.id} className="image-preview-card">
+                        <article
+                          key={entry.id}
+                          className="image-preview-card group"
+                          style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+                        >
                           {index === 0 && (
                             <span className="rfm-cover-photo-badge">
                               <Star size={10} />
                               Cover Photo
                             </span>
                           )}
-                          <img
-                            src={entry.preview}
-                            alt={entry.name || "Room image"}
-                            className="image-preview-card__img"
-                          />
+                          <div
+                            className="relative cursor-pointer overflow-hidden"
+                            onClick={() => setLightboxIndex(index)}
+                            onMouseEnter={() => prefetchOptimizedImage(entry.value)}
+                            role="button"
+                            tabIndex={0}
+                            title="Click to view full photo"
+                            aria-label={`View full photo ${entry.name || "Room image"}`}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setLightboxIndex(index);
+                              }
+                            }}
+                          >
+                            <img
+                              src={entry.preview}
+                              alt={entry.name || "Room image"}
+                              className="image-preview-card__img"
+                              loading="lazy"
+                              decoding="async"
+                              ref={(node) => {
+                                if (node && node.complete) node.classList.add("is-loaded");
+                              }}
+                              onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                              onError={(e) => {
+                                const fb = getImageFallbackUrl(entry.preview);
+                                if (fb && fb !== e.currentTarget.src) {
+                                  e.currentTarget.src = fb;
+                                }
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-[11px] font-semibold pointer-events-none">
+                              <Maximize2 size={13} />
+                              <span>Full View</span>
+                            </div>
+                          </div>
                           <div className="image-preview-card__footer">
                             <span className="image-preview-card__name" title={entry.name}>{entry.name}</span>
-                            <button
-                              type="button"
-                              className="image-preview-card__remove"
-                              onClick={() => handleRemoveImage(entry.id)}
-                              aria-label={`Remove photo ${entry.name}`}
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                onClick={() => setLightboxIndex(index)}
+                                aria-label={`View full size photo ${entry.name}`}
+                                title="View full size photo"
+                              >
+                                <Maximize2 size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="image-preview-card__remove"
+                                onClick={() => handleRemoveImage(entry.id)}
+                                aria-label={`Remove photo ${entry.name}`}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         </article>
                       ))}
@@ -1457,6 +1508,16 @@ export default function RoomFormModal({ room, onClose, onSave }) {
             </div>
           </div>
         </div>
+      )}
+
+      {lightboxIndex !== null && (
+        <RoomImageLightboxModal
+          images={form.images}
+          initialIndex={lightboxIndex}
+          roomNumber={form.roomNumber || form.name || "New Room"}
+          roomType={form.type}
+          onClose={() => setLightboxIndex(null)}
+        />
       )}
     </>,
     document.body

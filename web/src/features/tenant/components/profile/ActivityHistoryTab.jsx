@@ -26,15 +26,28 @@ import {
 } from "../../../../shared/utils/lifecycleNaming";
 import Pagination from "../../../../shared/components/Pagination";
 import SkeletonPulse from "../../../../shared/components/SkeletonPulse";
+import { getRoomImages } from "../../pages/check-availability/checkAvailabilityConstants";
+import RoomTransferRequestPanel from "./RoomTransferRequestPanel.jsx";
+import { generateReservationCode } from "../../../../shared/utils/reservationCode";
 
-/* ── Date helpers ────────────────────────────────── */
-const fmtDate = (d) =>
- new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+/* ── Defensive Date helpers ──────────────────────── */
+const isValidDate = (d) => {
+  if (!d) return false;
+  const time = new Date(d).getTime();
+  return !Number.isNaN(time);
+};
 
-const fmtDateTime = (d) =>
- new Date(d).toLocaleDateString("en-PH", {
- year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
- });
+const fmtDate = (d) => {
+  if (!isValidDate(d)) return "—";
+  return new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+};
+
+const fmtDateTime = (d) => {
+  if (!isValidDate(d)) return "—";
+  return new Date(d).toLocaleDateString("en-PH", {
+    year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+};
 
 const formatMethod = (m) => {
  const map = {
@@ -328,7 +341,9 @@ const buildTimeline = (r, direction = "desc") => {
     return stepOrder[id] ?? 99;
   };
   events.sort((a, b) => {
-    const timeDiff = new Date(a.date) - new Date(b.date);
+    const timeA = isValidDate(a.date) ? new Date(a.date).getTime() : 0;
+    const timeB = isValidDate(b.date) ? new Date(b.date).getTime() : 0;
+    const timeDiff = timeA - timeB;
     return timeDiff !== 0 ? timeDiff : getOrder(a.id) - getOrder(b.id);
   });
   return direction === "desc" ? [...events].reverse() : events;
@@ -389,6 +404,7 @@ const ReservationCard = ({ reservation, isOpen, onToggle, timelineSort, onTimeli
  : room.branch === "guadalupe" ? "Guadalupe"
  : room.branch || "—";
  const monthlyRent = r.monthlyRent || r.totalPrice || room.price || 0;
+ const reservationCodeDisplay = r.reservationCode || generateReservationCode(r._id || r.id);
 
  return (
  <div style={{
@@ -431,7 +447,7 @@ const ReservationCard = ({ reservation, isOpen, onToggle, timelineSort, onTimeli
  {room.name || "—"}
  </span>
  <span style={{ fontSize: 11, fontFamily: "monospace", color: "#94A3B8", letterSpacing: "0.03em" }}>
- {r.reservationCode || "—"}
+ {reservationCodeDisplay}
  </span>
  <span style={{
  display: "inline-flex",
@@ -620,12 +636,136 @@ const ReservationCardSkeleton = () => (
   </div>
 );
 
+/* ── Current Stay Card ───────────────────────────── */
+const CurrentStayCard = ({ reservation }) => {
+  const room = reservation?.roomId || {};
+  const branchDisplay =
+    room.branch === "gil-puyat" ? "Gil Puyat"
+    : room.branch === "guadalupe" ? "Guadalupe"
+    : room.branch || "—";
+
+  const storedImages = Array.isArray(room.images)
+    ? room.images.filter((img) => typeof img === "string" && img.trim())
+    : [];
+  const roomImage =
+    storedImages.length > 0
+      ? storedImages[0]
+      : room.type && room.branch
+      ? getRoomImages(room.type, room.branch)[0]
+      : null;
+
+  const monthlyRent = reservation?.monthlyRent || reservation?.totalPrice || room.price || 0;
+  const moveInDate = readMoveInDate(reservation);
+
+  return (
+    <div
+      style={{
+        backgroundColor: "var(--surface-card, #fff)",
+        borderRadius: 12,
+        border: "1px solid var(--border-card, #E8EBF0)",
+        padding: "20px 24px",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 16,
+        marginBottom: 16,
+        transition: "box-shadow 0.15s ease",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = "none";
+      }}
+    >
+      <div
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 12,
+          overflow: "hidden",
+          flexShrink: 0,
+          background: "var(--surface-muted, #F1F5F9)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {roomImage ? (
+          <img
+            src={roomImage}
+            alt={room.name || "Room"}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        ) : (
+          <Home size={22} color="var(--text-muted, #94A3B8)" />
+        )}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-heading, #0A1628)" }}>
+            {room.name || (room.roomNumber ? `Room ${room.roomNumber}` : "Active Room")}
+          </span>
+          {(reservation?.reservationCode || reservation?._id) && (
+            <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-muted, #94A3B8)", letterSpacing: "0.03em" }}>
+              {reservation.reservationCode || generateReservationCode(reservation._id || reservation.id)}
+            </span>
+          )}
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#059669",
+              background: "transparent",
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#059669" }} />
+            Official Tenant
+          </span>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 6 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary, #64748B)" }}>
+            <MapPin size={12} /> {branchDisplay}
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary, #64748B)" }}>
+            <Bed size={12} /> {room.type || "—"}
+          </span>
+          {moveInDate && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-secondary, #64748B)" }}>
+              <Calendar size={12} /> Moved in {fmtDate(moveInDate)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {monthlyRent > 0 && (
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-heading, #0A1628)" }}>
+            ₱{monthlyRent.toLocaleString()}
+          </span>
+          <span style={{ display: "block", fontSize: 11, color: "var(--text-muted, #94A3B8)", marginTop: 2 }}>
+            /month
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ── Main Component ──────────────────────────────── */
 const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [openId, setOpenId] = useState(null);
   const [timelineSort, setTimelineSort] = useState("desc");
+  const [historyFilter, setHistoryFilter] = useState("all");
   const listTopRef = useRef(null);
 
   const sorted = useMemo(
@@ -633,7 +773,33 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
     [reservations]
   );
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / itemsPerPage));
+  const filterCounts = useMemo(() => {
+    const completed = sorted.filter((r) => hasReservationStatus(r.status, "moveOut")).length;
+    const cancelled = sorted.filter(
+      (r) =>
+        hasReservationStatus(r.status, "cancelled", "rejected") ||
+        r.reservationStatus === "cancelled" ||
+        r.reservationStatus === "rejected",
+    ).length;
+    return { all: sorted.length, completed, cancelled };
+  }, [sorted]);
+
+  const filteredReservations = useMemo(() => {
+    if (historyFilter === "completed") {
+      return sorted.filter((r) => hasReservationStatus(r.status, "moveOut"));
+    }
+    if (historyFilter === "cancelled") {
+      return sorted.filter(
+        (r) =>
+          hasReservationStatus(r.status, "cancelled", "rejected") ||
+          r.reservationStatus === "cancelled" ||
+          r.reservationStatus === "rejected",
+      );
+    }
+    return sorted;
+  }, [sorted, historyFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredReservations.length / itemsPerPage));
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -643,16 +809,19 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
 
   const paginatedReservations = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return sorted.slice(startIndex, startIndex + itemsPerPage);
-  }, [sorted, currentPage, itemsPerPage]);
+    return filteredReservations.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredReservations, currentPage, itemsPerPage]);
 
   useEffect(() => {
     if (paginatedReservations.length > 0) {
-      setOpenId(paginatedReservations[0]._id);
+      setOpenId((prev) => {
+        const exists = paginatedReservations.some((r) => r._id === prev);
+        return exists ? prev : paginatedReservations[0]._id;
+      });
     } else {
       setOpenId(null);
     }
-  }, [currentPage, itemsPerPage, sorted]);
+  }, [currentPage, itemsPerPage, filteredReservations]);
 
   const toggle = (id) => setOpenId((prev) => (prev === id ? null : id));
 
@@ -668,6 +837,11 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
     setCurrentPage(1);
   };
 
+  const handleFilterChange = (filter) => {
+    setHistoryFilter(filter);
+    setCurrentPage(1);
+  };
+
   const IN_PROGRESS = [
     "pending",
     "viewing_preference_selected",
@@ -680,8 +854,12 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
     "reserved",
   ];
 
+  const activeStay = useMemo(
+    () => reservations.find((r) => hasReservationStatus(r.status, "moveIn")),
+    [reservations],
+  );
+
   const tenantStats = useMemo(() => {
-    const activeStay = reservations.find((r) => hasReservationStatus(r.status, "moveIn"));
     const activeBooking = reservations.find((r) => IN_PROGRESS.includes(r.status));
 
     let activeStayValue = "No Active Stay";
@@ -725,7 +903,7 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
       completedStays,
       memberSince,
     };
-  }, [reservations]);
+  }, [reservations, activeStay]);
 
   if (isLoading && sorted.length === 0) {
     return (
@@ -736,7 +914,7 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
             Activity & History
           </h1>
           <p style={{ fontSize: 13, color: "var(--text-muted, #9CA3AF)", margin: 0 }}>
-            Your application timeline, reservation history, and activity log
+            Your current stay details, room transfer options, and reservation activity log
           </p>
         </div>
 
@@ -783,7 +961,7 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
             Activity & History
           </h1>
           <p style={{ fontSize: 13, color: "var(--text-muted, #9CA3AF)", margin: 0 }}>
-            Your application timeline, reservation history, and activity log
+            Your current stay details, room transfer options, and reservation activity log
           </p>
         </div>
         <div
@@ -819,7 +997,7 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
           Activity & History
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-muted, #9CA3AF)", margin: 0 }}>
-          Your application timeline, reservation history, and activity log
+          Your current stay details, room transfer options, and reservation activity log
         </p>
       </div>
 
@@ -909,26 +1087,118 @@ const ActivityHistoryTab = ({ reservations = [], isLoading = false }) => {
         ))}
       </div>
 
-      {/* Accordion list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {paginatedReservations.map((r) => (
-          <ReservationCard
-            key={r._id}
-            reservation={r}
-            isOpen={openId === r._id}
-            onToggle={() => toggle(r._id)}
-            timelineSort={timelineSort}
-            onTimelineSortChange={setTimelineSort}
-          />
-        ))}
+      {/* Current Stay & Room Transfer Request Panel */}
+      {activeStay && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading, #0A1628)", margin: 0 }}>
+              Current Stay
+            </h2>
+            <span style={{ fontSize: 12, color: "var(--text-secondary, #64748B)" }}>
+              Active Room Assignment
+            </span>
+          </div>
+          <CurrentStayCard reservation={activeStay} />
+          <RoomTransferRequestPanel hasCurrentStay={Boolean(activeStay)} currentStay={activeStay} />
+        </div>
+      )}
+
+      {/* Complete Activity & Reservation History Section */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading, #0A1628)", margin: "0 0 2px" }}>
+              Activity Timeline
+            </h2>
+            <p style={{ fontSize: 12, color: "var(--text-muted, #9CA3AF)", margin: 0 }}>
+              Chronological log of your bookings, viewing schedules, and milestones
+            </p>
+          </div>
+
+          {/* Filter tabs */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--surface-muted, #F8FAFC)", padding: 4, borderRadius: 8, border: "1px solid var(--border-card, #E2E8F0)" }}>
+            {[
+              { key: "all", label: "All Records", count: filterCounts.all },
+              { key: "completed", label: "Completed Stays", count: filterCounts.completed },
+              { key: "cancelled", label: "Cancelled", count: filterCounts.cancelled },
+            ].map(({ key, label, count }) => {
+              const isSelected = historyFilter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleFilterChange(key)}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: isSelected ? 600 : 500,
+                    color: isSelected ? "var(--text-heading, #0A1628)" : "var(--text-secondary, #64748B)",
+                    background: isSelected ? "var(--surface-card, #fff)" : "transparent",
+                    border: isSelected ? "1px solid var(--border-subtle, #CBD5E1)" : "1px solid transparent",
+                    boxShadow: isSelected ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span>{label}</span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "0 5px",
+                      borderRadius: 10,
+                      background: isSelected ? "#F1F5F9" : "#E2E8F0",
+                      color: "var(--text-secondary, #475569)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {paginatedReservations.length === 0 ? (
+          <div
+            style={{
+              padding: "36px 20px",
+              textAlign: "center",
+              background: "var(--surface-card, #fff)",
+              borderRadius: 10,
+              border: "1px solid var(--border-card, #E8EBF0)",
+            }}
+          >
+            <p style={{ fontSize: 13, color: "var(--text-muted, #94A3B8)", margin: 0 }}>
+              No {historyFilter === "all" ? "" : historyFilter} records found.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {paginatedReservations.map((r) => (
+              <ReservationCard
+                key={r._id}
+                reservation={r}
+                isOpen={openId === r._id}
+                onToggle={() => toggle(r._id)}
+                timelineSort={timelineSort}
+                onTimelineSortChange={setTimelineSort}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Pagination */}
-      {sorted.length > 0 && (
+      {filteredReservations.length > 0 && (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
-          totalItems={sorted.length}
+          totalItems={filteredReservations.length}
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}

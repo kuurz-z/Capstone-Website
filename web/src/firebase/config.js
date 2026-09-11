@@ -22,7 +22,7 @@
  */
 
 import { initializeApp } from "firebase/app";
-import { connectAuthEmulator, getAuth } from "firebase/auth";
+import { connectAuthEmulator, getAuth, signInWithCustomToken } from "firebase/auth";
 import { resolveAuthEmulatorConfig } from "./authEmulatorConfig.js";
 
 /**
@@ -103,7 +103,7 @@ try {
  *   import { auth } from './firebase/config';
  *   await signInWithEmailAndPassword(auth, email, password);
  */
-export { auth, isFirebaseConfigured };
+export { auth, isFirebaseConfigured, signInWithCustomToken };
 
 /**
  * Export Firebase app instance

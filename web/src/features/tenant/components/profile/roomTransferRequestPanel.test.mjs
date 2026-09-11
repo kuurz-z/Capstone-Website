@@ -37,7 +37,7 @@ test("tenant web uses the authenticated safe preference projection and Manila sc
   assert.match(source, /year: "numeric"/);
   assert.match(profileSource, /activeTab === "stays"/);
   assert.match(profileSource, /location\.search/);
-  assert.match(sidebarSource, /label: "My Stays"/);
+  assert.match(sidebarSource, /label: "Activity & History"/);
 });
 
 test("tenant web sends intent fields only and exposes pending cancellation route", () => {

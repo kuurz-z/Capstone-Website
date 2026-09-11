@@ -1,5 +1,6 @@
-import React from "react";
-import { ArrowRight, Star, Check } from "lucide-react";
+import { ArrowRight, Star, Check, Maximize2 } from "lucide-react";
+import { getThumbnailUrl, getImageFallbackUrl, prefetchOptimizedImage } from "../../../../shared/utils/imageOptimizer";
+import RoomImageLightboxModal from "./RoomImageLightboxModal";
 import privateRoomImg from "../../../../assets/images/branches/gil-puyat/Private - GP/private room copy.webp";
 import doubleRoomImg from "../../../../assets/images/branches/gil-puyat/Double - GP/Double sharing room1.webp";
 import quadRoomImg from "../../../../assets/images/branches/gil-puyat/Quadruple - GP/Pic quad.webp";
@@ -10,6 +11,13 @@ import guadalupeSharedRoomImg from "../../../../assets/images/branches/guadalupe
  */
 export default function RoomPublicPreviewCard({ room }) {
   if (!room) return null;
+
+  const [isLoaded, setIsLoaded] = React.useState(false);
+  const [showLightbox, setShowLightbox] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsLoaded(false);
+  }, [room._id || room.id, room.image, room.images]);
 
   const title = formatRoomTypeLabel(room.type);
   const branchLabel = room.branch === "guadalupe" ? "Guadalupe Branch" : "Gil Puyat Branch";
@@ -48,9 +56,11 @@ export default function RoomPublicPreviewCard({ room }) {
       ? doubleRoomImg
       : quadRoomImg;
 
-  const displayImage = (room.images && room.images.length > 0)
+  const rawDisplayImage = (room.images && room.images.length > 0)
     ? (typeof room.images[0] === "string" ? room.images[0] : room.images[0]?.preview)
     : (room.image || defaultImage);
+
+  const displayImage = getThumbnailUrl(rawDisplayImage, { width: 600, quality: 80 });
 
   return (
     <div className="flex flex-col gap-3">
@@ -71,13 +81,62 @@ export default function RoomPublicPreviewCard({ room }) {
         }}
       >
         {/* Card Image Banner */}
-        <div className="relative h-52 sm:h-56 overflow-hidden bg-slate-100 dark:bg-slate-800">
+        <div
+          className="relative h-52 sm:h-56 overflow-hidden bg-slate-100 dark:bg-slate-800 group cursor-pointer"
+          onClick={() => setShowLightbox(true)}
+          onMouseEnter={() => prefetchOptimizedImage(rawDisplayImage)}
+          role="button"
+          tabIndex={0}
+          title="Click to view full photo"
+          aria-label={`View full photo for ${title}`}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setShowLightbox(true);
+            }
+          }}
+        >
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "var(--card-muted, #f1f5f9)",
+              opacity: isLoaded ? 0 : 1,
+              transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+              pointerEvents: "none",
+              zIndex: 1,
+            }}
+          />
           <img
             src={displayImage}
             alt={title}
             className="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+            ref={(node) => {
+              if (node && node.complete && !isLoaded) setIsLoaded(true);
+            }}
+            onLoad={() => setIsLoaded(true)}
+            onError={(e) => {
+              const fb = getImageFallbackUrl(displayImage);
+              if (fb && fb !== e.currentTarget.src) {
+                e.currentTarget.src = fb;
+                return;
+              }
+              setIsLoaded(true);
+            }}
+            style={{
+              opacity: isLoaded ? 1 : 0,
+              transform: isLoaded ? "scale(1)" : "scale(1.04)",
+              transition: "opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+              willChange: "opacity, transform",
+            }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-semibold pointer-events-none z-10">
+            <Maximize2 size={15} />
+            <span>Full View</span>
+          </div>
 
           {/* Price Badge */}
           <div
@@ -153,6 +212,19 @@ export default function RoomPublicPreviewCard({ room }) {
           </button>
         </div>
       </div>
+
+      {showLightbox && (
+        <RoomImageLightboxModal
+          images={
+            room.images && room.images.length > 0
+              ? room.images
+              : [rawDisplayImage]
+          }
+          roomNumber={title}
+          roomType={branchLabel}
+          onClose={() => setShowLightbox(false)}
+        />
+      )}
     </div>
   );
 }

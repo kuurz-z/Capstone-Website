@@ -478,7 +478,7 @@ function SignUp() {
   };
 
   const redirectExistingAccountToSignIn = async (isGoogle = false) => {
-    await auth.signOut().catch(() => {});
+    await authApi.logout().catch(() => auth.signOut().catch(() => {}));
     appNavigate("/signin", {
       replace: true,
       state: { email: formData.email },
@@ -603,13 +603,17 @@ function SignUp() {
     }
     try {
       await authApi.checkUser();
-      // User already exists — sign out and redirect to sign-in
-      await auth.signOut();
+      // User already exists — perform full logout (both Firebase and backend session)
+      // and redirect to sign-in with prefilled email
+      await authApi.logout().catch(() => auth.signOut().catch(() => {}));
       socialAuthRef.current = false;
+      sessionStorage.removeItem("socialAuthInProgress");
       appNavigate("/signin", {
+        state: { email: firebaseUser.email },
         flash: {
           type: "info",
-          message: "An account already exists with this email address. Please sign in instead.",
+          message:
+            "An account with this email already exists. Please sign in with Google or your password to continue.",
         },
         replace: true,
       });
@@ -668,13 +672,15 @@ function SignUp() {
             errMsg.includes("already") ||
             errMsg.includes("duplicate")
           ) {
-            await auth.signOut();
+            await authApi.logout().catch(() => auth.signOut().catch(() => {}));
             socialAuthRef.current = false;
+            sessionStorage.removeItem("socialAuthInProgress");
             appNavigate("/signin", {
+              state: { email: firebaseUser.email },
               flash: {
                 type: "info",
                 message:
-                  "An account already exists with this email address. Please sign in instead.",
+                  "An account with this email already exists. Please sign in with Google or your password to continue.",
               },
               replace: true,
             });

@@ -35,6 +35,7 @@ import {
 } from "../utils/reservationFormatters";
 import ProfileAvatar from "../../../shared/components/ProfileAvatar";
 import { resolveApplianceBreakdown } from "../../tenant/utils/roomDetailsPricing.js";
+import { getThumbnailUrl, getImageFallbackUrl } from "../../../shared/utils/imageOptimizer";
 import "../styles/reservation-details-modal.css";
 
  const ACTION_MSGS = {
@@ -1696,10 +1697,17 @@ export default function ReservationDetailsModal({
                           title={`Click to view Room Photo ${index + 1}`}
                         >
                           <img
-                            src={imageUrl}
+                            src={getThumbnailUrl(imageUrl, { width: 160, quality: 75 })}
                             alt={`Room photo ${index + 1}`}
+                            loading="lazy"
+                            decoding="async"
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                             onError={(event) => {
+                              const fb = getImageFallbackUrl(event.target.src);
+                              if (fb && fb !== event.target.src) {
+                                event.target.src = fb;
+                                return;
+                              }
                               event.target.style.display = "none";
                               if (event.target.nextSibling) event.target.nextSibling.style.display = "flex";
                             }}

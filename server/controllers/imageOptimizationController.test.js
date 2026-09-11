@@ -12,6 +12,8 @@ import {
   setMemoryCacheLimit,
   optimizeRoomPhoto,
   ALLOWED_IMAGE_HOSTS,
+  normalizeOriginImageUrl,
+  MAX_IMAGE_SIZE_BYTES,
 } from "./imageOptimizationController.js";
 import { AppError } from "../middleware/errorHandler.js";
 
@@ -127,6 +129,69 @@ describe("imageOptimizationController", () => {
       expect(validateImageUrl("https://user:pass@storage.googleapis.com/photo.jpg")).toBe(false);
     });
 
+    test("rejects empty pathname or root path", () => {
+      expect(validateImageUrl("https://storage.googleapis.com")).toBe(false);
+      expect(validateImageUrl("https://storage.googleapis.com/")).toBe(false);
+      expect(validateImageUrl("https://firebasestorage.googleapis.com")).toBe(false);
+      expect(validateImageUrl("https://firebasestorage.googleapis.com/")).toBe(false);
+    });
+
+    test("rejects path traversal attempts with .. or encoded traversal", () => {
+      expect(
+        validateImageUrl("https://storage.googleapis.com/lilycrest-bucket/../secret.jpg"),
+      ).toBe(false);
+      expect(
+        validateImageUrl("https://storage.googleapis.com/lilycrest-bucket/%2e%2e/secret.jpg"),
+      ).toBe(false);
+      expect(
+        validateImageUrl(
+          "https://firebasestorage.googleapis.com/v0/b/lilycrest-bucket/o/..%2Fsecret.jpg",
+        ),
+      ).toBe(false);
+    });
+
+    test("rejects storage URLs targeting incomplete or invalid resources", () => {
+      // storage.googleapis.com requires at least bucket and object segments
+      expect(validateImageUrl("https://storage.googleapis.com/only-bucket")).toBe(false);
+      // firebasestorage.googleapis.com requires /v0/b/<bucket>/...
+      expect(validateImageUrl("https://firebasestorage.googleapis.com/v0/b/")).toBe(false);
+      expect(validateImageUrl("https://firebasestorage.googleapis.com/v0/")).toBe(false);
+      expect(validateImageUrl("https://firebasestorage.googleapis.com/other/path")).toBe(false);
+    });
+
+    describe("production bucket confinement", () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalBucket = process.env.FIREBASE_STORAGE_BUCKET;
+
+      beforeEach(() => {
+        process.env.NODE_ENV = "production";
+        process.env.FIREBASE_STORAGE_BUCKET = "authorized-prod-bucket.appspot.com";
+      });
+
+      afterEach(() => {
+        process.env.NODE_ENV = originalEnv;
+        process.env.FIREBASE_STORAGE_BUCKET = originalBucket;
+      });
+
+      test("allows URLs targeting the authorized bucket in production", () => {
+        const gcsUrl =
+          "https://storage.googleapis.com/authorized-prod-bucket.appspot.com/rooms/room-1.jpg";
+        const firebaseUrl =
+          "https://firebasestorage.googleapis.com/v0/b/authorized-prod-bucket.appspot.com/o/rooms%2Froom-1.jpg";
+        expect(validateImageUrl(gcsUrl)).toBe(true);
+        expect(validateImageUrl(firebaseUrl)).toBe(true);
+      });
+
+      test("rejects URLs targeting an unauthorized bucket in production", () => {
+        const unauthorizedGcs =
+          "https://storage.googleapis.com/unauthorized-bucket/rooms/room-1.jpg";
+        const unauthorizedFirebase =
+          "https://firebasestorage.googleapis.com/v0/b/unauthorized-bucket/o/rooms%2Froom-1.jpg";
+        expect(validateImageUrl(unauthorizedGcs)).toBe(false);
+        expect(validateImageUrl(unauthorizedFirebase)).toBe(false);
+      });
+    });
+
     test("rejects null, undefined, non-string, or empty input", () => {
       expect(validateImageUrl(null)).toBe(false);
       expect(validateImageUrl(undefined)).toBe(false);
@@ -167,6 +232,15 @@ describe("imageOptimizationController", () => {
       const explicitWebp = getCacheKey(url, 480, 80, "webp");
 
       expect(withDefault).toBe(explicitWebp);
+    });
+
+    test("produces the exact same key for a Firebase storage URL whether or not alt=media is pre-appended when normalized", () => {
+      const urlWithoutAlt = "https://firebasestorage.googleapis.com/v0/b/bucket/o/room.jpg";
+      const urlWithAlt = "https://firebasestorage.googleapis.com/v0/b/bucket/o/room.jpg?alt=media";
+      const key1 = getCacheKey(normalizeOriginImageUrl(urlWithoutAlt), 480, 80);
+      const key2 = getCacheKey(normalizeOriginImageUrl(urlWithAlt), 480, 80);
+
+      expect(key1).toBe(key2);
     });
   });
 
@@ -521,6 +595,225 @@ describe("imageOptimizationController", () => {
       await optimizeRoomPhoto(req, res, next);
 
       expect(capturedUrl).toContain("alt=media");
+    });
+  });
+
+  // ==========================================================================
+  // 11. In-flight origin fetch deduplication
+  // ==========================================================================
+  describe("In-flight origin fetch deduplication", () => {
+    test("deduplicates origin fetch when concurrent requests ask for different dimensions of the same image", async () => {
+      let fetchCount = 0;
+      globalThis.fetch = jest.fn(async () => {
+        fetchCount++;
+        // Small artificial delay to simulate network latency
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          arrayBuffer: async () => sampleImageBuffer,
+        };
+      });
+
+      const url = "https://storage.googleapis.com/lilycrest-bucket/rooms/room-concurrent.jpg";
+      const req480 = createMockReq({ query: { url, w: "480", q: "75" } });
+      const req1200 = createMockReq({ query: { url, w: "1200", q: "82" } });
+      const res480 = createMockRes();
+      const res1200 = createMockRes();
+      const next480 = jest.fn();
+      const next1200 = jest.fn();
+
+      await Promise.all([
+        optimizeRoomPhoto(req480, res480, next480),
+        optimizeRoomPhoto(req1200, res1200, next1200),
+      ]);
+
+      expect(fetchCount).toBe(1);
+      expect(res480.statusCode).toBe(200);
+      expect(res1200.statusCode).toBe(200);
+    });
+  });
+
+  // ==========================================================================
+  // 12. Payload size (413) and MIME type (415) guards
+  // ==========================================================================
+  describe("optimizeRoomPhoto - Payload size and MIME type guards", () => {
+    const validUrl = "https://storage.googleapis.com/lilycrest-bucket/rooms/room-guard.jpg";
+
+    test("rejects origin assets with Content-Length header > 15MB with 413 IMAGE_TOO_LARGE", async () => {
+      globalThis.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({
+          "content-length": String(15 * 1024 * 1024 + 1), // 1 byte over 15MB
+          "content-type": "image/jpeg",
+        }),
+        arrayBuffer: jest.fn(), // Should not even be called
+      });
+
+      const req = createMockReq({ query: { url: validUrl } });
+      const res = createMockRes();
+      const next = jest.fn();
+
+      await optimizeRoomPhoto(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 413,
+          code: "IMAGE_TOO_LARGE",
+          message: "Image exceeds maximum allowed size (15MB)",
+        }),
+      );
+    });
+
+    test("rejects origin assets with byteLength > 15MB (secondary guard) with 413 IMAGE_TOO_LARGE", async () => {
+      // Simulate chunked transfer or missing content-length where body is oversized
+      const oversizedBuffer = new ArrayBuffer(15 * 1024 * 1024 + 50);
+
+      globalThis.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({
+          "content-type": "image/jpeg",
+          // content-length omitted
+        }),
+        arrayBuffer: async () => oversizedBuffer,
+      });
+
+      const req = createMockReq({ query: { url: validUrl } });
+      const res = createMockRes();
+      const next = jest.fn();
+
+      await optimizeRoomPhoto(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 413,
+          code: "IMAGE_TOO_LARGE",
+          message: "Image exceeds maximum allowed size (15MB)",
+        }),
+      );
+    });
+
+    test("rejects origin assets with non-image Content-Type (e.g. application/pdf) with 415 UNSUPPORTED_MEDIA_TYPE", async () => {
+      globalThis.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({
+          "content-length": "1024",
+          "content-type": "application/pdf",
+        }),
+        arrayBuffer: async () => sampleImageBuffer,
+      });
+
+      const req = createMockReq({ query: { url: validUrl } });
+      const res = createMockRes();
+      const next = jest.fn();
+
+      await optimizeRoomPhoto(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 415,
+          code: "UNSUPPORTED_MEDIA_TYPE",
+          message: "Remote asset is not a valid image",
+        }),
+      );
+    });
+
+    test("rejects origin assets with text/html Content-Type with 415 UNSUPPORTED_MEDIA_TYPE", async () => {
+      globalThis.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({
+          "content-type": "text/html; charset=utf-8",
+        }),
+        arrayBuffer: async () => sampleImageBuffer,
+      });
+
+      const req = createMockReq({ query: { url: validUrl } });
+      const res = createMockRes();
+      const next = jest.fn();
+
+      await optimizeRoomPhoto(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 415,
+          code: "UNSUPPORTED_MEDIA_TYPE",
+        }),
+      );
+    });
+
+    test("allows origin assets with Content-Type application/octet-stream", async () => {
+      globalThis.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({
+          "content-length": String(sampleImageBuffer.length),
+          "content-type": "application/octet-stream",
+        }),
+        arrayBuffer: async () => sampleImageBuffer,
+      });
+
+      const req = createMockReq({ query: { url: validUrl } });
+      const res = createMockRes();
+      const next = jest.fn();
+
+      await optimizeRoomPhoto(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/webp");
+    });
+  });
+
+  // ==========================================================================
+  // 13. Pre-normalized cache key consistency in optimizeRoomPhoto
+  // ==========================================================================
+  describe("Pre-normalized cache key consistency in optimizeRoomPhoto", () => {
+    test("requests for Firebase URL with and without alt=media share identical cache entry and ETag", async () => {
+      globalThis.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({
+          "content-type": "image/jpeg",
+        }),
+        arrayBuffer: async () => sampleImageBuffer,
+      });
+
+      const firebaseUrlWithoutAlt =
+        "https://firebasestorage.googleapis.com/v0/b/lilycrest.appspot.com/o/rooms%2Fcanonical-test.jpg";
+      const firebaseUrlWithAlt =
+        "https://firebasestorage.googleapis.com/v0/b/lilycrest.appspot.com/o/rooms%2Fcanonical-test.jpg?alt=media";
+
+      // First request without alt=media
+      const req1 = createMockReq({ query: { url: firebaseUrlWithoutAlt, w: "400" } });
+      const res1 = createMockRes();
+      await optimizeRoomPhoto(req1, res1, jest.fn());
+
+      expect(res1.statusCode).toBe(200);
+      expect(res1.setHeader).toHaveBeenCalledWith("X-Cache", "MISS");
+      const etag1 = res1.headers["etag"];
+
+      // Second request with alt=media
+      const req2 = createMockReq({ query: { url: firebaseUrlWithAlt, w: "400" } });
+      const res2 = createMockRes();
+      await optimizeRoomPhoto(req2, res2, jest.fn());
+
+      expect(res2.statusCode).toBe(200);
+      // Must be a memory hit because both URLs normalized to the same cache key
+      expect(res2.setHeader).toHaveBeenCalledWith("X-Cache", "HIT-MEMORY");
+      const etag2 = res2.headers["etag"];
+
+      expect(etag1).toBe(etag2);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1); // Fetch called only once
     });
   });
 });

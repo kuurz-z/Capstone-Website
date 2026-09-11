@@ -35,6 +35,7 @@ import RoomFormModal from "../components/rooms/RoomFormModal";
 import DeleteRoomModal from "../components/rooms/DeleteRoomModal";
 import DoubleDeckRoomCard from "../components/rooms/DoubleDeckRoomCard";
 import RoomBedHistoryDrawer from "../components/rooms/RoomBedHistoryDrawer";
+import RoomImageLightboxModal from "../components/rooms/RoomImageLightboxModal";
 import AdminPageHeader from "../../../shared/components/AdminPageHeader";
 import { AdminRoomAvailabilitySkeleton } from "../components/AdminContentSkeletons";
 import { ExportButtons } from "./analyticsTabShared.js";
@@ -146,6 +147,7 @@ function RoomAvailabilityPage() {
   const [editingRoom, setEditingRoom] = useState(null);
   const [deletingRoom, setDeletingRoom] = useState(null);
   const [historyRoomId, setHistoryRoomId] = useState(null);
+  const [lightboxRoom, setLightboxRoom] = useState(null);
   const [showVacancyModal, setShowVacancyModal] = useState(false);
   const [vacancySearch, setVacancySearch] = useState("");
   const [vacancyUrgencyFilter, setVacancyUrgencyFilter] = useState("all");
@@ -484,44 +486,52 @@ function RoomAvailabilityPage() {
         isPopular: updatedRoom.isPopular,
       });
 
-      const originalRoom = rooms.find((room) => room._id === updatedRoom._id);
+      const originalRoom =
+        rooms.find((room) => room._id === updatedRoom._id) || selectedRoom;
       const originalBeds = originalRoom?.beds || [];
       const updatedBeds = updatedRoom.beds || [];
-      const originalById = new Map(originalBeds.map((bed) => [bed.id, bed]));
-      const keptOriginalIds = new Set(
-        updatedBeds.map((bed) => bed.originalId).filter(Boolean),
+
+      // Match updated beds to original beds with robust fallback precedence:
+      // 1. By subdocument _id (immutable MongoDB ObjectId)
+      // 2. By originalId (if bed.id was renamed)
+      // 3. By bed.id (string code e.g. "bed-1")
+      const findMatchedOriginalBed = (updatedBed) => {
+        if (updatedBed._id) {
+          const matchById = originalBeds.find(
+            (orig) => String(orig._id) === String(updatedBed._id),
+          );
+          if (matchById) return matchById;
+        }
+        if (updatedBed.originalId) {
+          const matchByOrigId = originalBeds.find(
+            (orig) => orig.id === updatedBed.originalId,
+          );
+          if (matchByOrigId) return matchByOrigId;
+        }
+        return originalBeds.find((orig) => orig.id === updatedBed.id) || null;
+      };
+
+      const matchedPairs = [];
+      const newBeds = [];
+
+      for (const updatedBed of updatedBeds) {
+        const matched = findMatchedOriginalBed(updatedBed);
+        if (matched) {
+          matchedPairs.push({ updatedBed, originalBed: matched });
+        } else {
+          newBeds.push(updatedBed);
+        }
+      }
+
+      // Any original bed that was NOT matched by any updated bed is truly removed
+      const matchedOriginalKeys = new Set(
+        matchedPairs.map((p) => String(p.originalBed._id || p.originalBed.id)),
       );
       const removedBeds = originalBeds.filter(
-        (bed) => !keptOriginalIds.has(bed.id),
+        (orig) => !matchedOriginalKeys.has(String(orig._id || orig.id)),
       );
-      const newBeds = updatedBeds.filter((bed) => !bed.originalId);
-      const existingBeds = updatedBeds.filter((bed) => bed.originalId);
 
-      for (const bed of removedBeds) {
-        await roomApi.deleteBed(updatedRoom._id, bed.id);
-      }
-
-      for (const bed of existingBeds) {
-        const previousBed = originalById.get(bed.originalId);
-        if (!previousBed) continue;
-
-        if (
-          previousBed.id !== bed.id ||
-          previousBed.position !== bed.position
-        ) {
-          await roomApi.updateBed(updatedRoom._id, previousBed.id, {
-            id: bed.id,
-            position: bed.position,
-          });
-        }
-
-        if (
-          (previousBed.status || "available") !== (bed.status || "available")
-        ) {
-          await roomApi.updateBedStatus(updatedRoom._id, bed.id, bed.status);
-        }
-      }
-
+      // Step A: Add new beds first (so room never drops below required bed count)
       for (const bed of newBeds) {
         await roomApi.addBed(updatedRoom._id, {
           id: bed.id,
@@ -532,10 +542,37 @@ function RoomAvailabilityPage() {
         }
       }
 
-      await roomApi.reorderBeds(
-        updatedRoom._id,
-        updatedBeds.map((bed) => bed.id),
-      );
+      // Step B: Update existing beds (id, position, status)
+      for (const { updatedBed, originalBed } of matchedPairs) {
+        if (
+          originalBed.id !== updatedBed.id ||
+          originalBed.position !== updatedBed.position
+        ) {
+          await roomApi.updateBed(updatedRoom._id, originalBed.id, {
+            id: updatedBed.id,
+            position: updatedBed.position,
+          });
+        }
+
+        const origStatus = originalBed.status || "available";
+        const newStatus = updatedBed.status || "available";
+        if (origStatus !== newStatus) {
+          await roomApi.updateBedStatus(updatedRoom._id, updatedBed.id, newStatus);
+        }
+      }
+
+      // Step C: Delete removed beds (safe to do after additions)
+      for (const bed of removedBeds) {
+        await roomApi.deleteBed(updatedRoom._id, bed.id);
+      }
+
+      // Step D: Reorder beds if beds exist
+      if (updatedBeds.length > 0) {
+        await roomApi.reorderBeds(
+          updatedRoom._id,
+          updatedBeds.map((bed) => bed.id),
+        );
+      }
 
       showNotification("Room bed configuration updated successfully.", "success", 3000);
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
@@ -1146,6 +1183,7 @@ function RoomAvailabilityPage() {
                               room={room}
                               onConfigure={handleConfigure}
                               onViewHistory={(id) => setHistoryRoomId(id)}
+                              onViewPhotos={(roomToView) => setLightboxRoom(roomToView)}
                               canManageRooms={can("manageRooms")}
                             />
                           ))}
@@ -1261,6 +1299,19 @@ function RoomAvailabilityPage() {
           room={deletingRoom}
           onClose={() => setDeletingRoom(null)}
           onDelete={handleDeleteRoom}
+        />
+      )}
+
+      {lightboxRoom && (
+        <RoomImageLightboxModal
+          images={
+            Array.isArray(lightboxRoom.images) && lightboxRoom.images.filter(Boolean).length > 0
+              ? lightboxRoom.images.filter(Boolean)
+              : (lightboxRoom.image ? [lightboxRoom.image] : [])
+          }
+          roomNumber={lightboxRoom.roomNumber || lightboxRoom.name}
+          roomType={lightboxRoom.type}
+          onClose={() => setLightboxRoom(null)}
         />
       )}
 
@@ -1515,7 +1566,7 @@ function RoomAvailabilityPage() {
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-900 hover:text-white dark:hover:bg-slate-700 dark:hover:text-white transition-all cursor-pointer shadow-xs ms-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                               onClick={() => {
                                 setShowVacancyModal(false);
-                                setSelectedRoom(item.roomObj);
+                                handleConfigure(item.roomObj);
                               }}
                             >
                               Manage Room

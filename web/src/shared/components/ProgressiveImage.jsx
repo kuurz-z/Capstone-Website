@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { getOptimizedUrl } from "../utils/imageOptimizer";
+import { useState, useRef, useEffect } from "react";
+import { getOptimizedUrl, getImageFallbackUrl } from "../utils/imageOptimizer.js";
 
 /**
  * ProgressiveImage
@@ -30,8 +30,32 @@ export function ProgressiveImage({
 }) {
   const [status, setStatus] = useState("loading"); // "loading" | "loaded" | "error"
   const imgRef = useRef(null);
+  const hasRetriedRef = useRef(false);
 
   const optimizedSrc = getOptimizedUrl(src, optimizerOpts);
+  const [currentSrc, setCurrentSrc] = useState(optimizedSrc);
+
+  useEffect(() => {
+    setCurrentSrc(optimizedSrc);
+    setStatus("loading");
+    hasRetriedRef.current = false;
+  }, [optimizedSrc]);
+
+  const handleError = () => {
+    if (
+      !hasRetriedRef.current &&
+      currentSrc &&
+      currentSrc.includes("/api/rooms/photos/optimize")
+    ) {
+      hasRetriedRef.current = true;
+      const fallback = getImageFallbackUrl(currentSrc);
+      if (fallback && fallback !== currentSrc) {
+        setCurrentSrc(fallback);
+        return;
+      }
+    }
+    setStatus("error");
+  };
 
   // ── Solid neutral placeholder (strictly no gradients, no CPU animation overhead) ────
   const placeholderStyle = {
@@ -39,10 +63,11 @@ export function ProgressiveImage({
     inset: 0,
     backgroundColor: "var(--card-muted, #f1f5f9)",
     borderRadius: "inherit",
-    transition: "opacity 0.3s ease",
+    transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
     opacity: status === "loaded" ? 0 : 1,
     pointerEvents: "none",
     zIndex: 1,
+    willChange: "opacity",
   };
 
   // ── Error fallback ─────────────────────────────────────────────────────────
@@ -79,20 +104,21 @@ export function ProgressiveImage({
       {/* Actual image */}
       <img
         ref={imgRef}
-        src={optimizedSrc}
+        src={currentSrc}
         alt={alt}
         loading={priority ? "eager" : "lazy"}
         fetchpriority={priority ? "high" : "low"}
         decoding="async"
         onLoad={() => setStatus("loaded")}
-        onError={() => setStatus("error")}
+        onError={handleError}
         style={{
           width: "100%",
           height: "100%",
           objectFit: "inherit",
           objectPosition: "inherit",
           opacity: status === "loaded" ? 1 : 0,
-          transition: "opacity 0.3s ease",
+          transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+          willChange: "opacity",
           display: "block",
         }}
         {...rest}

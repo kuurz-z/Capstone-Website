@@ -29,7 +29,6 @@ import {
  ContractTab,
  ReservationAgreementPage,
   AnnouncementsTab,
-  StaysTab,
 } from "../components/profile";
 
 const ProfilePage = () => {
@@ -39,13 +38,14 @@ const ProfilePage = () => {
  const queryClient = useQueryClient();
  const recoveredMoveInSessionsRef = useRef(new Set());
  const canViewAnnouncements = authUser?.role === "tenant";
- const requestedTab = location.state?.tab || new URLSearchParams(location.search).get("tab");
+  const rawRequestedTab = location.state?.tab || new URLSearchParams(location.search).get("tab");
+  const requestedTab = rawRequestedTab === "stays" ? "history" : rawRequestedTab;
 
- const [activeTab, setActiveTab] = useState(
- requestedTab === "announcements" && !canViewAnnouncements
- ? "dashboard"
- : requestedTab || "dashboard",
- );
+  const [activeTab, setActiveTab] = useState(
+    requestedTab === "announcements" && !canViewAnnouncements
+      ? "dashboard"
+      : requestedTab || "dashboard",
+  );
  const [saving, setSaving] = useState(false);
  const [isEditingProfile, setIsEditingProfile] = useState(false);
  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
@@ -98,11 +98,11 @@ const ProfilePage = () => {
  });
 
  const { data: profile, isLoading: profileLoading } = useCurrentUser();
- const {
- data: reservationsData,
- isLoading: reservationsLoading,
- refetch: refetchReservations,
- } = useReservations();
+  const {
+    data: reservationsData,
+    isLoading: reservationsLoading,
+    refetch: refetchReservations,
+  } = useReservations({ includeArchived: "true" });
  const loading = (!profile && profileLoading) || (!reservationsData && reservationsLoading);
 
  useEffect(() => {
@@ -127,14 +127,16 @@ const ProfilePage = () => {
     });
   }, [profile]);
 
- useEffect(() => {
- const nextTab =
- requestedTab === "announcements" && !canViewAnnouncements
- ? "dashboard"
- : requestedTab || "dashboard";
+  useEffect(() => {
+    const rawTab = location.state?.tab || new URLSearchParams(location.search).get("tab");
+    const resolvedTab = rawTab === "stays" ? "history" : rawTab;
+    const nextTab =
+      resolvedTab === "announcements" && !canViewAnnouncements
+        ? "dashboard"
+        : resolvedTab || "dashboard";
 
- setActiveTab(nextTab);
- }, [canViewAnnouncements, location.search, location.state, requestedTab]);
+    setActiveTab(nextTab);
+  }, [canViewAnnouncements, location.search, location.state]);
 
  useEffect(() => {
  const refreshReservations = () => {
@@ -502,11 +504,12 @@ const ProfilePage = () => {
       return;
     }
 
-    setActiveTab(nextTab);
+    const targetTab = nextTab === "stays" ? "history" : nextTab;
+    setActiveTab(targetTab);
     setIsEditingProfile(false);
-    navigate("/applicant/profile", {
+    navigate(`/applicant/profile?tab=${targetTab}`, {
       replace: true,
-      state: { tab: nextTab },
+      state: { tab: targetTab },
     });
   };
 
@@ -515,10 +518,11 @@ const ProfilePage = () => {
     handleCancelEdit();
 
     if (pendingTab) {
-      setActiveTab(pendingTab);
-      navigate("/applicant/profile", {
+      const targetTab = pendingTab === "stays" ? "history" : pendingTab;
+      setActiveTab(targetTab);
+      navigate(`/applicant/profile?tab=${targetTab}`, {
         replace: true,
-        state: { tab: pendingTab },
+        state: { tab: targetTab },
       });
       setPendingTab(null);
     }
@@ -670,14 +674,12 @@ const ProfilePage = () => {
         />
       )}
 
-      {activeTab === "history" && (
+      {(activeTab === "history" || activeTab === "stays") && (
         <ActivityHistoryTab
           reservations={reservations}
           isLoading={reservationsLoading}
         />
       )}
-
-      {activeTab === "stays" && <StaysTab />}
 
       {activeTab === "maintenance" && <TenantMaintenanceWorkspace embedded />}
       {activeTab === "announcements" && canViewAnnouncements && <AnnouncementsTab />}

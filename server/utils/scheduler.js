@@ -519,10 +519,10 @@ async function expireStaleReservations() {
     const tiers = [
       {
         statuses: ["pending"],
-        // 2 hours after creation
+        // 30 minutes of inactivity (rolling timer checking updatedAt)
         filter: {
-          createdAt: {
-            $lt: now.subtract(policy.stalePendingHours, "hour").toDate(),
+          updatedAt: {
+            $lt: now.subtract(policy.stalePendingHours ?? 0.5, "hour").toDate(),
           },
         },
       },
@@ -1411,9 +1411,9 @@ export function startScheduler(options = {}) {
     }),
   );
 
-  // Job 8: Auto-expire stale reservations — every hour at :15
+  // Job 8: Auto-expire stale reservations — every 5 minutes
   scheduledJobs.push(
-    cron.schedule("15 * * * *", expireStaleReservations, {
+    cron.schedule("*/5 * * * *", expireStaleReservations, {
       scheduled: true,
       timezone: process.env.APP_TIMEZONE || "Asia/Manila",
       name: "stale-reservation-expiry",

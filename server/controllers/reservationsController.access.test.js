@@ -242,6 +242,7 @@ const {
   updateReservation,
   updateReservationByUser,
   updateVisitAvailabilityRules,
+  touchReservationActivity,
 } = await import("./reservationsController.js");
 
 const createResponse = () => ({
@@ -2429,6 +2430,42 @@ describe("reservationsController.updateReservation access hardening", () => {
     expect(res.statusCode).toBe(409);
     expect(res.body?.code).toBe("APPLICATION_LOCKED_APPROVED");
     expect(reservationFindByIdAndUpdate).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("touchReservationActivity touches updatedAt for active pending reservation", async () => {
+    userFindOne.mockReturnValueOnce({
+      select: jest.fn().mockResolvedValue({
+        _id: "user-mongo-id",
+        role: "applicant",
+      }),
+    });
+
+    const mockSave = jest.fn().mockResolvedValue(true);
+    const initialTime = new Date(Date.now() - 60000);
+    const mockReservation = {
+      _id: "res-mongo-id",
+      userId: "user-mongo-id",
+      status: "pending",
+      updatedAt: initialTime,
+      save: mockSave,
+    };
+    reservationFindOne.mockResolvedValueOnce(mockReservation);
+
+    const req = {
+      params: { id: "res-mongo-id" },
+      user: { uid: "applicant-firebase-uid" },
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    await touchReservationActivity(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.code).toBe("RESERVATION_HEARTBEAT_RECORDED");
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockReservation.updatedAt.getTime()).toBeGreaterThan(initialTime.getTime());
     expect(next).not.toHaveBeenCalled();
   });
 });

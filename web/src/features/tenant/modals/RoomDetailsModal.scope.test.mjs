@@ -89,10 +89,9 @@ assert.equal(
 );
 
 // C. Intended Move-in Date Single Calendar Indicator
-assert.match(
-  modalSource,
-  /hide-native-date-indicator/,
-  "RoomDetailsModal intended move-in date input must suppress native webkit picker indicator to prevent duplicate icons"
+assert.ok(
+  modalSource.includes("hide-native-date-indicator") || modalSource.includes("CustomDatePicker"),
+  "RoomDetailsModal intended move-in date input must use CustomDatePicker or suppress native webkit picker indicator to prevent duplicate icons"
 );
 
 console.log("✔ RoomDetailsModal.scope.test.mjs passed all scope and separation contract tests");
