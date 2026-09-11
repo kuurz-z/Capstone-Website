@@ -2727,7 +2727,8 @@ describe("maintenanceController", () => {
     const res = {};
     const next = jest.fn();
 
-    await suggestAdminMaintenanceProvider(req, res, next);
+    // Directory fallback must not call a live AI service.
+    await withoutGeminiEnv(() => suggestAdminMaintenanceProvider(req, res, next));
 
     expect(serviceProviderFind).toHaveBeenCalledTimes(2);
     expect(serviceProviderFind.mock.calls[0][0]).toMatchObject({

@@ -360,7 +360,7 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
     ratePerUnit: period?.ratePerUnit,
   });
 
-  for (const bill of populatedBills) {
+  for (let bill of populatedBills) {
     const billingContext = bill.reservationId
       ? await getReservationBillingContextForBill(
           bill,
@@ -369,6 +369,12 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
       : null;
     const reservationCreditApplied = 0;
 
+    const dispatchSession=bill.waterAllocations?.length ? await mongoose.startSession() : null;
+    const persistDispatch=async()=>{
+      if (dispatchSession) {
+        bill=await Bill.findById(bill._id).session(dispatchSession).populate([{path:'userId',select:'firstName lastName email'},{path:'roomId',select:'name roomNumber branch'}]);
+        if (!bill || bill.status!=='draft') throw Object.assign(new Error('This invoice changed while publishing. Refresh and use the period dispatch for remaining water allocations.'),{statusCode:409});
+      }
     bill.reservationCreditApplied = 0;
     bill.billingMonth =
       billingContext?.cycle?.billingMonth ||
@@ -403,7 +409,10 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
     // releasing: true — this is the actual draft->published transition for
     // this bill (see the releasedAt guard in services/billing/billingPolicy.js).
     syncBillAmounts(bill, { releasing: true });
-    await bill.save();
+    await bill.save(dispatchSession ? {session:dispatchSession} : undefined);
+    };
+    try {if(dispatchSession) await dispatchSession.withTransaction(persistDispatch);else await persistDispatch();}
+    finally {if(dispatchSession) await dispatchSession.endSession();}
 
     if (billingContext?.reservation && reservationCreditApplied > 0) {
       billingContext.reservation.reservationCreditConsumedAt = sentAt;

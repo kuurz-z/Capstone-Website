@@ -42,7 +42,6 @@ const sanitizeNumericInput = (val, maxDecimals = 2, maxWholeDigits = 6) => {
   if (parts.length > 2) {
     clean = parts[0] + "." + parts.slice(1).join("");
   }
-  const [closingPending,setClosingPending] = useState(false);
   const [whole, decimal] = clean.split(".");
   const limitedWhole = whole ? whole.slice(0, maxWholeDigits) : "";
   if (decimal !== undefined) {
@@ -161,6 +160,7 @@ export default function NewBillingPeriodModal({
 
   const generateHistoricalPeriod = useGenerateHistoricalUtilityPeriod(utilityType);
 
+  const [closingPending,setClosingPending] = useState(false);
   const [generationBlocker, setGenerationBlocker] = useState(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 

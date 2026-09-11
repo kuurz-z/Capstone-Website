@@ -751,6 +751,7 @@ const UtilityBillingTab = ({
       reading: String(reading?.reading ?? ""),
       date: toInputDate(reading?.readingDate || reading?.date || new Date()),
       eventType: reading?.eventType || "regularBilling",
+      correctionReason:"",
     });
   };
 
@@ -760,10 +761,9 @@ const UtilityBillingTab = ({
       await updateReading.mutateAsync({
         readingId: editReadingModal.reading.id,
         reading: Number(editReadingForm.reading),
-        readingDate: editReadingForm.date,
-        eventType: editReadingForm.eventType,
+        ...(utilityType === "water" ? {correctionReason:editReadingForm.correctionReason} : {readingDate:editReadingForm.date,eventType:editReadingForm.eventType}),
       });
-      notify.success("Meter reading updated.");
+      notify.success(utilityType === "water" ? "Correction recorded. Original observation preserved." : "Meter reading updated.");
       setEditReadingModal({ open: false, reading: null });
       await queryClient.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
     } catch (err) {

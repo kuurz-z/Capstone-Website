@@ -248,6 +248,7 @@ export const formatBill = (bill) => {
     utilityReadingDate: bill.utilityReadingDate || null,
     additionalCharges: bill.additionalCharges || [],
     charges: visible.charges,
+    waterAllocations: bill.waterAllocations || [],
     grossAmount: visible.grossAmount,
     reservationCreditApplied: bill.reservationCreditApplied || 0,
     structuredWorkflowVersion: bill.structuredWorkflowVersion || null,

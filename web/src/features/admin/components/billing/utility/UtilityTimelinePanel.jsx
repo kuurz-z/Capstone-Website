@@ -160,11 +160,11 @@ export default function UtilityTimelinePanel({
                       type="button"
                       className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-xs font-semibold text-card-foreground hover:bg-muted active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                       onClick={() => onEditReading(row.rawReading)}
-                      disabled={isBoundary || isCurrentCycleLocked}
+                      disabled={(utilityType !== "water" && isBoundary) || isCurrentCycleLocked || ["corrected","voided"].includes(row.rawReading?.readingStatus)}
                       title={
                         isCurrentCycleLocked
                           ? "This billing cycle is locked."
-                          : isBoundary
+                          : isBoundary && utilityType !== "water"
                             ? "Opening/closing boundary readings are locked to preserve audit integrity."
                             : "Manage reading"
                       }

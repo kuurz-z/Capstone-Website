@@ -29,10 +29,10 @@ export default function EditReadingModal({
   const inputVal = Number(editForm.reading);
   const hasInput = editForm.reading !== "" && !isNaN(inputVal);
   const delta = baselineReading !== null && hasInput ? inputVal - baselineReading : null;
-  const isBelowBaseline = delta !== null && delta < 0;
+  const isBelowBaseline = utilityType !== "water" && delta !== null && delta < 0;
   const isExceedsMax = parseFloat(editForm.reading) > MAX_METER_READING;
   const isSaveDisabled =
-    isSaving || isBelowBaseline || isExceedsMax || !editForm.reading;
+    isSaving || isBelowBaseline || isExceedsMax || !editForm.reading || (utilityType === "water" && !editForm.correctionReason?.trim());
 
   const unit = utilityType === "electricity" ? "kWh" : "m³";
 
@@ -68,7 +68,7 @@ export default function EditReadingModal({
         {/* Form Body */}
         <div className="space-y-4 px-5 py-4">
           {/* Baseline Comparison Alert */}
-          {baselineReading !== null && (
+          {baselineReading !== null && utilityType !== "water" && (
             <div
               className={`rounded-lg border p-3 text-xs ${
                 isBelowBaseline
@@ -147,6 +147,7 @@ export default function EditReadingModal({
                 min="2020-01-01"
                 max="2099-12-31"
                 className="h-9 w-full rounded-lg border border-border bg-card px-2.5 text-xs text-card-foreground focus:outline-none focus:ring-2 focus:ring-[#0A1628]/10 focus:border-[#0A1628] dark:focus:ring-slate-400/20 dark:focus:border-slate-400"
+                disabled={utilityType === "water"}
                 value={editForm.date}
                 onChange={(e) =>
                   setEditForm({
@@ -164,6 +165,7 @@ export default function EditReadingModal({
               </label>
               <select
                 className="h-9 w-full rounded-lg border border-border bg-card px-2 text-xs text-card-foreground focus:outline-none focus:ring-2 focus:ring-[#0A1628]/10 focus:border-[#0A1628] dark:focus:ring-slate-400/20 dark:focus:border-slate-400"
+                disabled={utilityType === "water"}
                 value={editForm.eventType}
                 onChange={(e) =>
                   setEditForm({
@@ -172,6 +174,7 @@ export default function EditReadingModal({
                   })
                 }
               >
+                {utilityType === "water" && <><option value="periodStart">Opening Baseline</option><option value="periodEnd">Billing Closing</option></>}
                 <option value="regularBilling">Mid-Cycle Reading</option>
                 <option value="moveIn">Tenant Move-In</option>
                 <option value="moveOut">Tenant Move-Out</option>
@@ -179,6 +182,10 @@ export default function EditReadingModal({
               </select>
             </div>
           </div>
+          {utilityType === "water" && <label className="block text-xs font-semibold text-foreground">Correction reason
+            <textarea value={editForm.correctionReason || ''} onChange={event=>setEditForm({...editForm,correctionReason:event.target.value})} className="mt-1 w-full rounded-lg border border-border bg-card p-2 text-sm" required />
+            <span className="block mt-1 text-xs font-normal text-muted-foreground">The original observation stays in history. Its time and event are preserved; the corrected value must agree with surrounding observations.</span>
+          </label>}
         </div>
 
         {/* Footer Actions */}
@@ -192,7 +199,8 @@ export default function EditReadingModal({
                 onDelete(reading.id);
               }
             }}
-            disabled={isSaving}
+            disabled={isSaving || utilityType === "water"}
+            style={utilityType === "water" ? {display:"none"} : undefined}
             title={isSaving ? "Saving in progress..." : "Archive this meter reading"}
           >
             <Trash2 size={13} className="shrink-0" />

@@ -5,7 +5,7 @@ import {User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading} from
 import {closeUtilityPeriod,deleteUtilityPeriod,previewWaterBilling,updateUtilityReading,getUtilityLatestReading} from './utilityBillingController.js';
 import {createOpenUtilityPeriodWithBoundary} from '../services/billing/utilityPeriodLifecycleService.js';
 import {recordWaterObservation} from '../services/billing/waterObservations.js';
-import {upsertDraftBillsForUtility,publishWaterAllocationBill} from '../utils/utilityBillFlow.js';
+import {upsertDraftBillsForUtility,publishWaterAllocationBill,sendDraftUtilityBills} from '../utils/utilityBillFlow.js';
 import {getVisibleBillCharges} from '../services/billing/billingPolicy.js';
 let mongo,admin,room,a,b,ra,rb;
 const date=n=>new Date(`2026-08-${String(n).padStart(2,'0')}T00:00:00+08:00`);
@@ -117,4 +117,13 @@ test('payment before draft dispatch uses a separate invoice and preserves the pa
   const again=await publishWaterAllocationBill({billId:paid._id,period:p,publishedAt:new Date(),issuedAt:new Date(),dueDate:new Date()});
   expect(again).toBeNull();
   expect(await Bill.countDocuments({userId:a._id})).toBe(2);
+});
+
+test('combined publication rechecks a stale draft and never rewrites a newly paid invoice',async()=>{
+  const p=await measuredPeriod();await invoke(closeUtilityPeriod,{endDate:'2026-09-01',endReading:118},{id:String(p._id)});
+  const stale=await Bill.findOne({userId:a._id});
+  await Bill.updateOne({_id:stale._id},{$set:{status:'paid',paidAmount:0}});
+  const before=await Bill.findById(stale._id).lean();
+  await expect(sendDraftUtilityBills({bills:[stale],period:(await UtilityPeriod.findById(p._id)).toObject(),result:{tenantSummaries:[]}})).rejects.toThrow(/changed while publishing/);
+  expect(await Bill.findById(stale._id).lean()).toEqual(before);
 });
