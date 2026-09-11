@@ -66,7 +66,7 @@ export default function CloseCurrentPeriodModal({
           ? "Period closed. Occupancy continues, so the next period was opened from the verified closing reading."
           : "Period closed. The room is vacant, so no new active period was needed.",
       );
-      onSuccess?.(response?.result?.nextPeriodId || response?.result?.nextPeriod?.id || null);
+      onSuccess?.(response?.result?.periodId || period.id || period._id);
       onClose();
     } catch (error) {
       notify.error(error, "Unable to close the current period.");

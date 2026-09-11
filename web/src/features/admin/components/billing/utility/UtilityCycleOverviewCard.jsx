@@ -23,6 +23,8 @@ export default function UtilityCycleOverviewCard({
   currentPeriodCost,
   readyRoomsCount = 0,
   onOpenNewPeriodModal,
+  onOpenHistoricalPeriod,
+  isLoadingPeriod = false,
   onOpenCurrentPeriod,
   onCloseCurrentPeriod,
   onBatchSendReady,
@@ -72,13 +74,22 @@ export default function UtilityCycleOverviewCard({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={onOpenNewPeriodModal}
+            disabled={!selectedRoom || isLoadingPeriod}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A1628] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-[#13243D] disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+          >
+            <Plus size={13} />
+            <span>New Billing Period</span>
+          </button>
+          <button
+            type="button"
             onClick={onBatchSendReady}
             disabled={readyRoomsCount === 0 || isSendingBatch}
             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
             title={
               readyRoomsCount === 0
                 ? "No finalized utility bills are awaiting release to tenants"
-                : "Review and select finalized rooms to release statements"
+                : "Review and select completed cycles to release statements"
             }
           >
             <Send size={13} />
@@ -90,14 +101,16 @@ export default function UtilityCycleOverviewCard({
               <button
                 type="button"
                 onClick={onOpenCurrentPeriod}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A1628] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-[#13243D] active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-[#D4AF37] dark:bg-slate-100 dark:text-slate-900"
+                disabled={!selectedRoom || isLoadingPeriod}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
               >
                 <Plus size={13} />
                 <span>Recovery / Manual Initialization</span>
               </button>
               <button
                 type="button"
-                onClick={onOpenNewPeriodModal}
+                onClick={onOpenHistoricalPeriod}
+                disabled={!selectedRoom || isLoadingPeriod}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
               >
                 <Calendar size={13} />
@@ -106,14 +119,14 @@ export default function UtilityCycleOverviewCard({
             </>
           ) : null}
 
-          {currentPeriod ? (
+          {utilityType === "water" && currentPeriod && currentPeriod.calculationVersion !== "water-meter-v1" ? (
             <button
               type="button"
               onClick={onCloseCurrentPeriod}
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A1628] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-[#13243D]"
             >
               <Calendar size={13} />
-              <span>Close Current Period</span>
+              <span>Close Legacy Cycle</span>
             </button>
           ) : null}
 

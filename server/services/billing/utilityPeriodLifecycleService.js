@@ -1,4 +1,5 @@
 import { assertWaterChronology } from './waterChronology.js';
+import { assertElectricityChronology } from './electricityChronology.js';
 import mongoose from "mongoose";
 import { UtilityPeriod, UtilityReading } from "../../models/index.js";
 import { toManilaStartOfDay } from "../../utils/dateUtils.js";
@@ -290,6 +291,7 @@ export async function createOpenUtilityPeriodWithBoundary({
   const normalizedStartDate = normalizeUtilityPeriodStart({ startDate, startMode });
 
   const execute = async (activeSession) => {
+    if (utilityType === 'electricity') await assertElectricityChronology({roomId:room._id,date:normalizedStartDate,reading,eventType:'periodStart',session:activeSession});
     if (utilityType === 'water' && calculationVersion === 'water-meter-v1') {
       await mongoose.model('Room').updateOne({_id:room._id},{$inc:{waterObservationRevision:1}},{session:activeSession});
       await assertWaterChronology({roomId:room._id,date:normalizedStartDate,reading,session:activeSession});

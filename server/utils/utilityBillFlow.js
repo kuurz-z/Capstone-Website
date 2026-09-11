@@ -31,6 +31,10 @@ const UTILITY_BILL_SEND_CONCURRENCY = Math.max(
   Number(process.env.UTILITY_BILL_SEND_CONCURRENCY || 4),
 );
 
+function utilitySupplementIdentity(utilityType,periodId,reservationId,tenantId) {
+  return {[`${utilityType}SupplementKey`]:`${utilityType}:${periodId}:${reservationId}:${tenantId}`};
+}
+
 async function mapWithConcurrency(items, concurrency, mapper) {
   const normalizedConcurrency = Math.max(1, Number(concurrency) || 1);
   const results = new Array(items.length);
@@ -229,15 +233,17 @@ export async function upsertDraftBillsForUtility({
     if (session) billQuery = billQuery.session(session);
     let bill = await billQuery;
 
-    let waterSupplementKey = null;
-    if (utilityType === 'water' && bill?.status === 'paid' && !waterPeriodSent(bill, periodId)) {
-      waterSupplementKey = `water:${periodId}:${reservationId}:${summary.tenantId}`;
-      let supplementQuery = Bill.findOne({waterSupplementKey});
+    let supplementIdentity = null;
+    let paidInvoiceId = null;
+    if (bill?.status === 'paid' && (utilityType === 'water' ? !waterPeriodSent(bill, periodId) : getUtilityDispatchEntry(bill, utilityType).state !== 'sent')) {
+      supplementIdentity = utilitySupplementIdentity(utilityType,periodId,reservationId,summary.tenantId);
+      paidInvoiceId = bill._id;
+      let supplementQuery = Bill.findOne(supplementIdentity);
       if (session) supplementQuery = supplementQuery.session(session);
       bill = await supplementQuery;
     }
 
-    if (bill && (utilityType === 'water' ? waterPeriodSent(bill, periodId) || bill.status === 'paid' : getUtilityDispatchEntry(bill, utilityType).state === "sent")) {
+    if (bill && (bill.status === 'paid' || (utilityType === 'water' ? waterPeriodSent(bill, periodId) : getUtilityDispatchEntry(bill, utilityType).state === "sent"))) {
       const error = new Error(
         `Cannot sync ${utilityType} charges because one or more bills were already sent.`,
       );
@@ -247,14 +253,15 @@ export async function upsertDraftBillsForUtility({
 
     if (!bill) {
       bill = new Bill({
-        ...(waterSupplementKey ? {waterSupplementKey} : {}),
+        ...(supplementIdentity || {}),
+        ...(utilityType === 'electricity' && paidInvoiceId ? {parentInvoiceId:paidInvoiceId} : {}),
         reservationId,
         userId: summary.tenantId,
         branch: room.branch,
         roomId: room._id,
         billingMonth,
         billingCycleStart:
-          waterSupplementKey ? null : billingContext?.cycle?.billingCycleStart || period.startDate,
+          supplementIdentity ? null : billingContext?.cycle?.billingCycleStart || period.startDate,
         billingCycleEnd:
           billingContext?.cycle?.billingCycleEnd ||
           period.endDate ||
@@ -369,11 +376,11 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
       : null;
     const reservationCreditApplied = 0;
 
-    const dispatchSession=bill.waterAllocations?.length ? await mongoose.startSession() : null;
+    const dispatchSession=bill.waterAllocations?.length || Number(bill.charges?.electricity)>0 ? await mongoose.startSession() : null;
     const persistDispatch=async()=>{
       if (dispatchSession) {
         bill=await Bill.findById(bill._id).session(dispatchSession).populate([{path:'userId',select:'firstName lastName email'},{path:'roomId',select:'name roomNumber branch'}]);
-        if (!bill || bill.status!=='draft') throw Object.assign(new Error('This invoice changed while publishing. Refresh and use the period dispatch for remaining water allocations.'),{statusCode:409});
+        if (!bill || bill.status!=='draft') throw Object.assign(new Error('This invoice changed while publishing. Refresh and use the period dispatch for remaining utility charges.'),{statusCode:409});
       }
     bill.reservationCreditApplied = 0;
     bill.billingMonth =
@@ -381,7 +388,7 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
       bill.billingMonth ||
       period.startDate;
     bill.billingCycleStart =
-      billingContext?.cycle?.billingCycleStart ||
+      bill.electricitySupplementKey ? null : billingContext?.cycle?.billingCycleStart ||
       bill.billingCycleStart ||
       period.startDate;
     bill.billingCycleEnd =
@@ -561,6 +568,41 @@ export async function publishWaterAllocationBill({billId,period,publishedAt,issu
   } finally {await session.endSession();}
 }
 
+// Like measured Water, re-read at publication so a payment made after draft
+// generation cannot cause Send to reopen a paid invoice.
+export async function publishElectricityBill({billId,period,publishedAt,issuedAt,dueDate}) {
+  const session=await mongoose.startSession();let published=null;
+  try {
+    await session.withTransaction(async()=>{
+      published=null;
+      let bill=await Bill.findById(billId).session(session);
+      if (!bill || bill.isArchived) return;
+      const dispatch=getUtilityDispatchEntry(bill,'electricity');
+      if (dispatch.state==='sent' || (dispatch.periodId && String(dispatch.periodId)!==String(period._id))) return;
+      const utilityAmount=roundMoney(bill.charges.electricity || 0);
+      if (utilityAmount<=0) return;
+      if (bill.status==='paid') {
+        const original=bill;
+        const identity=utilitySupplementIdentity('electricity',period._id,bill.reservationId,bill.userId);
+        bill=await Bill.findOne(identity).session(session);
+        if (!bill) bill=new Bill({...identity,parentInvoiceId:original._id,reservationId:original.reservationId,userId:original.userId,
+          branch:original.branch,roomId:period.roomId,billingMonth:original.billingMonth,billingCycleStart:null,
+          billingCycleEnd:original.billingCycleEnd,status:'draft',charges:{electricity:utilityAmount},paidAmount:0});
+        if (getUtilityDispatchEntry(bill,'electricity').state==='sent') return;
+        if (bill.status==='paid') throw Object.assign(new Error('A paid electricity supplement cannot be changed.'),{statusCode:409});
+        await UtilityPeriod.updateOne({_id:period._id},{$set:{'tenantSummaries.$[summary].billId':bill._id}},
+          {session,arrayFilters:[{'summary.billId':original._id,'summary.tenantId':original.userId}]});
+      }
+      setUtilityDispatchEntry(bill,'electricity',{state:'sent',periodId:period._id,publishedAt,issuedAt,dueDate,amount:utilityAmount});
+      Object.assign(bill,getUtilityCycleFromPeriod(period),{sentAt:publishedAt,issuedAt,dueDate,paymongoSessionId:null});
+      syncBillAmounts(bill,{releasing:true});await bill.save({session});
+      published={bill,utilityAmount};
+    });
+    if (published) await published.bill.populate([{path:'userId',select:'firstName lastName email'},{path:'roomId',select:'name roomNumber branch'}]);
+    return published;
+  } finally {await session.endSession();}
+}
+
 export async function sendUtilityPeriodBills({
   bills,
   period,
@@ -590,7 +632,11 @@ export async function sendUtilityPeriodBills({
       let targetAllocations=null;
       let utilityAmount=roundMoney(bill?.charges?.[chargeField] || 0);
       const currentDispatch=getUtilityDispatchEntry(bill,utilityType);
-      if (utilityType==='water' && bill.waterAllocations?.length) {
+      if (utilityType==='electricity') {
+        const published=await publishElectricityBill({billId:bill._id,period,publishedAt,issuedAt,dueDate});
+        if (!published) return null;
+        ({bill,utilityAmount}=published);
+      } else if (utilityType==='water' && bill.waterAllocations?.length) {
         const published=await publishWaterAllocationBill({billId:bill._id,period,publishedAt,issuedAt,dueDate});
         if (!published) return null;
         ({bill,targetAllocations,utilityAmount}=published);

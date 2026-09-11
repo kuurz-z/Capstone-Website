@@ -111,6 +111,7 @@ describe("utility billing lifecycle controller commands", () => {
   }
 
   test("historical generation is one atomic closed-cycle command and creates its expected draft", async () => {
+    await UtilityReading.create({utilityType:'electricity',roomId:room._id,branch:room.branch,date:new Date('2026-08-01T00:00:00+08:00'),reading:100,eventType:'regularBilling',recordedBy:admin._id});
     const response = await invokeHistorical();
     expect(response.error).toBeUndefined();
     expect(response.statusCode).toBe(201);
@@ -139,12 +140,14 @@ describe("utility billing lifecycle controller commands", () => {
   });
 
   test("a historical close failure rolls back the period and both boundaries", async () => {
+    const baseline = await UtilityReading.create({utilityType:'electricity',roomId:room._id,branch:room.branch,date:new Date('2026-08-01T00:00:00+08:00'),reading:100,eventType:'regularBilling',recordedBy:admin._id});
     reservation.moveInDate = new Date("2026-08-10T00:00:00.000+08:00");
     await reservation.save();
     const response = await invokeHistorical();
     expect(response.error?.message).toMatch(/move-in.*reading|reading.*move-in/i);
     expect(await UtilityPeriod.countDocuments()).toBe(0);
-    expect(await UtilityReading.countDocuments()).toBe(0);
+    expect(await UtilityReading.countDocuments()).toBe(1);
+    expect(await UtilityReading.findById(baseline._id).lean()).toEqual(baseline.toObject());
     expect(await Bill.countDocuments()).toBe(0);
   });
 
@@ -152,7 +155,9 @@ describe("utility billing lifecycle controller commands", () => {
     const observedAt = new Date("2026-09-01T12:00:00.000+08:00");
     await UtilityReading.create({
       utilityType: "electricity", roomId: room._id, branch: room.branch,
-      reading: 999, date: new Date("2026-09-01T08:00:00.000+08:00"),
+      // Earlier same-meter usage must stay outside the recovered interval;
+      // keep the fixture chronological now that opening writes validate it.
+      reading: 90, date: new Date("2026-09-01T08:00:00.000+08:00"),
       eventType: "regularBilling", readingStatus: "locked", recordedBy: admin._id,
       utilityPeriodId: null,
     });

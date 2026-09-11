@@ -442,6 +442,7 @@ export async function findUtilityPeriodForBill({ bill, utilityType }) {
 }
 
 export async function buildTenantUtilityBreakdown({ dbUser, bill, utilityType }) {
+  if (!bill || Number(getVisibleBillCharges(bill)[utilityType] || 0) <= 0) return null;
   const chargeAmount = utilityType === "electricity"
     ? Number(bill?.charges?.electricity || 0)
     : Number(bill?.charges?.water || 0);

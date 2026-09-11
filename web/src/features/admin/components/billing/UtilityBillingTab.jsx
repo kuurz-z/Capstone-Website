@@ -52,6 +52,7 @@ import UtilityTimelinePanel from "./utility/UtilityTimelinePanel";
 import EditReadingModal from "./utility/EditReadingModal";
 import EditPeriodModal from "./utility/EditPeriodModal";
 import BatchSendReadyModal from "./utility/BatchSendReadyModal";
+import { readyUtilityCycles, selectUtilityPeriod } from "./utility/monthlyBillingWorkflow";
 import {
   fmtCurrency,
   fmtNumber,
@@ -119,6 +120,8 @@ const UtilityBillingTab = ({
   // Selection state
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [selectedPeriodId, setSelectedPeriodId] = useState(null);
+  const [completedDraft, setCompletedDraft] = useState(null);
+  const completedDraftId = completedDraft?.roomId === selectedRoomId ? completedDraft.periodId : null;
 
   // Filter and pagination states for Room Selector
   const [sidebarSearch, setSidebarSearch] = useState("");
@@ -147,6 +150,7 @@ const UtilityBillingTab = ({
     onConfirm: null,
   });
   const [isNewPeriodModalOpen, setIsNewPeriodModalOpen] = useState(false);
+  const [isHistoricalGeneration, setIsHistoricalGeneration] = useState(false);
   const [isOpenCurrentPeriodModalOpen, setIsOpenCurrentPeriodModalOpen] = useState(false);
   const [isCloseCurrentPeriodModalOpen, setIsCloseCurrentPeriodModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -176,9 +180,9 @@ const UtilityBillingTab = ({
   // Queries
   const { data: settingsData } = useBusinessSettings();
   const { data: roomsData, isLoading: roomsLoading } = useUtilityRooms(utilityType, branchFilter);
-  const { data: readingsData } = useUtilityReadings(utilityType, selectedRoomId);
-  const { data: latestData } = useUtilityLatestReading(utilityType, selectedRoomId);
-  const { data: periodsData } = useUtilityPeriods(utilityType, selectedRoomId);
+  const { data: readingsData, isLoading: readingsLoading } = useUtilityReadings(utilityType, selectedRoomId, { placeholderData: undefined });
+  const { data: latestData, isLoading: latestLoading } = useUtilityLatestReading(utilityType, selectedRoomId, { placeholderData: undefined });
+  const { data: periodsData, isLoading: periodsLoading } = useUtilityPeriods(utilityType, selectedRoomId, { placeholderData: undefined });
 
   // Periods list for selected room
   const periodList = useMemo(() => {
@@ -198,6 +202,7 @@ const UtilityBillingTab = ({
 
   const { data: resultData } = useUtilityResult(utilityType, selectedPeriodId, {
     enabled: isPeriodValid,
+    placeholderData: undefined,
   });
   const { data: billsData } = useBillsByBranch(branchFilter);
   const { data: adminPaymentsData } = useAdminPayments({ branch: branchFilter });
@@ -294,15 +299,20 @@ const UtilityBillingTab = ({
 
   // Auto-select latest period for tenant payment monitoring
   useEffect(() => {
-    if (periodList.length > 0) {
-      const hasCurrent = periodList.some((p) => p.id === selectedPeriodId);
-      if (!selectedPeriodId || !hasCurrent) {
-        setSelectedPeriodId(periodList[0].id);
-      }
-    } else {
-      setSelectedPeriodId(null);
-    }
-  }, [periodList, selectedPeriodId]);
+    setSelectedPeriodId(selectUtilityPeriod({ periods: periodList, selectedId: selectedPeriodId, completedId: completedDraftId }));
+  }, [periodList, selectedPeriodId, completedDraftId]);
+
+  const handleDraftGenerated = (periodId) => {
+    if (!periodId) return;
+    setCompletedDraft({ roomId: selectedRoomId, periodId });
+    setSelectedPeriodId(periodId);
+    setActiveWorkspaceTab("history");
+    setPeriodStatusFilter("");
+    setPeriodStartDate("");
+    setPeriodEndDate("");
+    setPeriodSearch("");
+    setPeriodsPage(1);
+  };
 
   // Selected period object
   const selectedPeriodFromList = useMemo(() => {
@@ -331,8 +341,8 @@ const UtilityBillingTab = ({
         if (!label.includes(q)) return false;
       }
       return true;
-    });
-  }, [periodList, periodStatusFilter, periodStartDate, periodEndDate, periodSearch]);
+    }).sort((a, b) => Number(b.id === completedDraftId) - Number(a.id === completedDraftId));
+  }, [periodList, periodStatusFilter, periodStartDate, periodEndDate, periodSearch, completedDraftId]);
 
   const totalPeriodPages = Math.max(1, Math.ceil(filteredPeriods.length / PERIODS_PER_PAGE));
   const pagedPeriods = useMemo(() => {
@@ -342,10 +352,7 @@ const UtilityBillingTab = ({
 
   // Ready to send rooms across the branch
   const readyRooms = useMemo(() => {
-    return rooms.filter((r) => {
-      const s = r.billingState || r.displayStatus;
-      return s === "ready_to_send" || s === "ready";
-    });
+    return readyUtilityCycles(rooms);
   }, [rooms]);
 
   // Current period usage and cost calculations
@@ -377,6 +384,7 @@ const UtilityBillingTab = ({
     activeModalPeriodId,
     {
       enabled: Boolean(isHistoryModalOpen && activeModalPeriodId),
+      placeholderData: undefined,
     },
   );
 
@@ -640,19 +648,19 @@ const UtilityBillingTab = ({
     setIsBatchSendModalOpen(true);
   };
 
-  const handleConfirmBatchSend = async (selectedRoomIds) => {
-    if (!selectedRoomIds || selectedRoomIds.length === 0) return;
+  const handleConfirmBatchSend = async (selectedPeriodIds) => {
+    if (!selectedPeriodIds || selectedPeriodIds.length === 0) return;
     setIsSendingBatch(true);
     let successCount = 0;
     const targetRooms = readyRooms.filter((r) =>
-      selectedRoomIds.includes(r.id || r._id),
+      selectedPeriodIds.includes(r.id),
     );
 
     try {
       for (const r of targetRooms) {
-        if (r.latestPeriodId) {
+        if (r.period?.id) {
           try {
-            await sendPeriod.mutateAsync({ periodId: r.latestPeriodId });
+            await sendPeriod.mutateAsync({ periodId: r.period.id });
             successCount += 1;
           } catch {
             // individual error caught
@@ -661,12 +669,13 @@ const UtilityBillingTab = ({
       }
       if (successCount > 0) {
         notify.success(
-          `Released ${utilityType} statements for ${successCount} room${successCount !== 1 ? "s" : ""}.`,
+            `Released ${successCount} ${utilityType} cycle${successCount !== 1 ? "s" : ""}.`,
         );
         await queryClient.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
-        setIsBatchSendModalOpen(false);
+        if (successCount === targetRooms.length) setIsBatchSendModalOpen(false);
+        else notify.warn(`${targetRooms.length - successCount} cycle(s) could not be released. Review the remaining cycles and retry.`);
       } else {
-        notify.error("Unable to release statements for the selected rooms.");
+        notify.error("Unable to release statements for the selected cycles.");
       }
     } finally {
       setIsSendingBatch(false);
@@ -869,6 +878,7 @@ const UtilityBillingTab = ({
         setSelectedPeriodId(null);
       }
       await deletePeriod.mutateAsync({ periodId, force: Boolean(overrideChecked) });
+      if (completedDraftId === periodId) setCompletedDraft(null);
       notify.success(
         overrideChecked
           ? `Billing cycle force-deleted and charges retracted with administrative override for ${roomName || "room"}.`
@@ -1054,7 +1064,9 @@ const UtilityBillingTab = ({
             currentPeriodUsage={currentPeriodUsage}
             currentPeriodCost={currentPeriodCost}
             readyRoomsCount={readyRooms.length}
-            onOpenNewPeriodModal={() => setIsNewPeriodModalOpen(true)}
+            onOpenNewPeriodModal={() => { setIsHistoricalGeneration(false); setIsNewPeriodModalOpen(true); }}
+            onOpenHistoricalPeriod={() => { setIsHistoricalGeneration(true); setIsNewPeriodModalOpen(true); }}
+            isLoadingPeriod={periodsLoading || latestLoading || readingsLoading}
             onBatchSendReady={handleOpenBatchSendModal}
             onExportCsv={handleExportRows}
             onExportPdf={handleExportPdf}
@@ -1130,6 +1142,11 @@ const UtilityBillingTab = ({
                 id="utility-subpanel-history"
                 aria-labelledby="utility-subtab-history"
               >
+                {completedDraftId && completedDraftId === selectedPeriodId && getDisplayStatus(selectedPeriodFromList) !== "sent" && (
+                  <p role="status" className="mb-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                    Completed cycle selected. Review the breakdown below, then use Send to release the utility charge.
+                  </p>
+                )}
                 <UtilityCycleHistoryPanel
                   periods={periodList}
                   filteredPeriods={filteredPeriods}
@@ -1187,11 +1204,11 @@ const UtilityBillingTab = ({
             )}
 
             {/* Sub-Panel 2: Tenant Allocation & Payments */}
-            {activeWorkspaceTab === "payments" && (
+            {(activeWorkspaceTab === "payments" || (activeWorkspaceTab === "history" && selectedPeriodFromList && selectedPeriodFromList.status !== "open")) && (
               <div
-                role="tabpanel"
+                role={activeWorkspaceTab === "payments" ? "tabpanel" : "region"}
                 id="utility-subpanel-payments"
-                aria-labelledby="utility-subtab-payments"
+                aria-label="Selected cycle tenant breakdown"
               >
                 <UtilityTenantPaymentPanel
                   selectedPeriod={selectedPeriodFromList}
@@ -1267,8 +1284,10 @@ const UtilityBillingTab = ({
         isOpen={isNewPeriodModalOpen}
         onClose={() => setIsNewPeriodModalOpen(false)}
         utilityType={utilityType}
+        readings={readingsData?.readings || readingsData?.data || []}
+        historical={isHistoricalGeneration}
+        manualReviewPeriod={manualReviewPeriod}
         selectedRoomId={selectedRoomId}
-        selectedPeriodId={selectedPeriodId}
         openPeriodForRoom={openPeriodForRoom}
         lastClosedPeriod={lastClosedPeriod}
         latestReading={latestData?.reading}
@@ -1277,11 +1296,7 @@ const UtilityBillingTab = ({
         roomName={getRoomLabel(selectedRoom) || selectedRoom?.name || selectedRoom?.roomNumber || ""}
         activeTenantCount={selectedRoom?.activeTenantCount ?? selectedRoom?.occupants?.length ?? 0}
         periods={periodList}
-        onSuccess={(newPeriodId) => {
-          if (newPeriodId) {
-            setSelectedPeriodId(newPeriodId);
-          }
-        }}
+        onSuccess={handleDraftGenerated}
       />
 
       <OpenCurrentPeriodModal
@@ -1305,9 +1320,7 @@ const UtilityBillingTab = ({
         period={currentPeriod}
         roomName={getRoomLabel(selectedRoom) || selectedRoom?.name || selectedRoom?.roomNumber || ""}
         latestReading={latestData?.reading}
-        onSuccess={(nextPeriodId) => {
-          if (nextPeriodId) setSelectedPeriodId(nextPeriodId);
-        }}
+        onSuccess={handleDraftGenerated}
       />
 
       <BillingCycleDetailModal
@@ -1320,7 +1333,7 @@ const UtilityBillingTab = ({
         result={modalResultWithBilling}
         utilityType={utilityType}
         statusLabel={historyModalPeriod ? getDisplayStatusLabel(historyModalPeriod) : ""}
-        isReadOnly={historyModalPeriod ? historyModalPeriod.status === "sent" : true}
+        isReadOnly={historyModalPeriod ? getDisplayStatus(historyModalPeriod) === "sent" : true}
         formatters={{
           fmtCurrency,
           fmtNumber,
@@ -1338,7 +1351,7 @@ const UtilityBillingTab = ({
       <ConfirmModal
         isOpen={confirmModal.open}
         onClose={() => setConfirmModal((prev) => ({ ...prev, open: false, overrideChecked: false, periodId: null }))}
-        onConfirm={handleConfirmDelete}
+        onConfirm={confirmModal.onConfirm || handleConfirmDelete}
         title={confirmModal.title}
         message={confirmModal.message}
         variant={confirmModal.variant || "primary"}
