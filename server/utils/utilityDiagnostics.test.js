@@ -30,7 +30,32 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   },
 }));
 
-const { getUtilityDiagnostics } = await import("./utilityDiagnostics.js");
+const { getUtilityDiagnostics, getReadyUtilityPeriods } = await import("./utilityDiagnostics.js");
+
+describe('completed utility publication discovery', () => {
+  const period = (id, overrides={}) => ({_id:id,status:'closed',startDate:'2026-07-01',endDate:'2026-08-01',tenantSummaries:[{billId:'bill-'+id,billAmount:100}],...overrides});
+  const bill = (id, overrides={}) => ({_id:'bill-'+id,status:'draft',charges:{electricity:100,water:100},utilityDispatch:{electricity:{state:'draft',periodId:id},water:{state:'draft',periodId:id}},...overrides});
+  const ready = (periods,bills,type='electricity') => getReadyUtilityPeriods({periods,utilityType:type,billStatusMap:new Map(bills.map(b=>[b._id,b]))}).map(p=>p.id);
+  test('returns every older completed draft even when the newest period is open',()=>{
+    expect(ready([period('first'),period('second',{status:'revised'}),period('next',{status:'open'})],[bill('first'),bill('second'),bill('next')])).toEqual(['first','second']);
+  });
+  test('excludes archived, invalid-date, review, zero, settled and already sent periods',()=>{
+    const periods=[period('archived',{isArchived:true}),period('dates',{endDate:'2026-06-01'}),period('review',{status:'manual_review_required'}),period('zero',{tenantSummaries:[{billId:'bill-zero',billAmount:0}]}),period('settled',{tenantSummaries:[{billId:'bill-settled',billAmount:100,settledOnTransfer:true}]}),period('sent'),period('missing')];
+    const bills=periods.map(p=>bill(p._id));
+    bills.find(b=>b._id==='bill-sent').utilityDispatch.electricity.state='sent';
+    expect(ready(periods,bills.filter(b=>b._id!=='bill-missing'))).toEqual([]);
+  });
+  test('Water discovery uses allocation identities despite sent aggregate dispatch or a paid invoice',()=>{
+    const shared={...bill('shared'),utilityDispatch:{water:{state:'sent'}},waterAllocations:[{utilityPeriodId:'sent',state:'sent',amount:100},{utilityPeriodId:'draft',state:'draft',amount:100}]};
+    const periods=['sent','draft','unrelated'].map(id=>period(id,{tenantSummaries:[{billId:shared._id,billAmount:100}]}));
+    expect(ready(periods,[shared],'water')).toEqual(['draft']);
+    // Publication moves the draft to a separate invoice, preserving the paid one.
+    expect(ready(periods,[{...shared,status:'paid'}],'water')).toEqual(['draft']);
+  });
+  test('excludes archived/voided invoices and paid legacy Water',()=>{
+    expect(ready([period('a'),period('b'),period('c')],[bill('a',{isArchived:true}),bill('b',{status:'voided'}),bill('c',{status:'paid'})],'water')).toEqual([]);
+  });
+});
 
 function mockLeanResult(value) {
   return {

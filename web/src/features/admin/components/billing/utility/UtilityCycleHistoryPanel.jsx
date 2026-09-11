@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   fmtCurrency,
+  fmtNumber,
   getCycleLabel,
   getMeterRangeLabel,
   getDisplayStatus,
@@ -22,7 +23,6 @@ import {
   getHistoryStatusClasses,
   canEditPeriod,
   canDeletePeriod,
-  DeltaChip,
 } from "./utilityConstants";
 
 export default function UtilityCycleHistoryPanel({
@@ -229,17 +229,14 @@ export default function UtilityCycleHistoryPanel({
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span>{getMeterRangeLabel(p, utilityType)}</span>
                     {(utilityType !== "water" || p.calculationVersion === "water-meter-v1") && (
-                      <DeltaChip
-                        start={p.startReading}
-                        end={p.endReading}
-                        unit={utilityType === "electricity" ? "kWh" : "m³"}
-                      />
+                      <span>Consumption: {p.computedTotalUsage == null ? "—" : `${fmtNumber(p.computedTotalUsage, 2)} ${utilityType === "electricity" ? "kWh" : "m³"}`}</span>
                     )}
                   </div>
                 </div>
 
                 {/* Right info: Rate + Status badge + Action buttons (One-to-Many Layout) */}
                 <div className="flex flex-wrap items-center gap-2.5">
+                  {p.computedTotalCost != null && <span className="text-xs font-semibold">Room total: {fmtCurrency(p.computedTotalCost)}</span>}
                   {/* Structured Rate Tag */}
                   <div className="flex items-center gap-1 rounded border border-border/70 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
                     <span>{utilityType === "water" && p.calculationVersion !== "water-meter-v1" ? "Legacy room total:" : "Rate:"}</span>

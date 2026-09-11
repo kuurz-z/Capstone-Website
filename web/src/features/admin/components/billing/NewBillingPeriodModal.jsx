@@ -10,13 +10,13 @@ import {
   AlertCircle,
   Sparkles,
   LoaderCircle,
-  CheckCircle2,
-  TrendingUp,
   ChevronDown,
   Clock3,
+  CheckCircle2,
 } from "lucide-react";
 import {
   useGenerateHistoricalUtilityPeriod,
+  useCloseUtilityPeriod,
 } from "../../../../shared/hooks/queries/useUtility";
 import useBillingNotifier from "./shared/useBillingNotifier";
 import useEscapeClose from "../../../../shared/hooks/useEscapeClose";
@@ -25,6 +25,7 @@ import {
   readMoveOutDate,
 } from "../../../../shared/utils/lifecycleNaming";
 import { fmtDate, fmtCurrency } from "../../utils/formatters";
+import { completedUtilityPeriodId } from "./utility/monthlyBillingWorkflow";
 
 const MAX_METER_READING = 999999.99;
 const MAX_ELECTRICITY_RATE = 100.0;
@@ -143,8 +144,9 @@ export default function NewBillingPeriodModal({
   isOpen,
   onClose,
   utilityType,
+  historical = false,
+  manualReviewPeriod = null,
   selectedRoomId,
-  selectedPeriodId,
   openPeriodForRoom,
   lastClosedPeriod,
   latestReading,
@@ -159,6 +161,11 @@ export default function NewBillingPeriodModal({
   const finalReadingInputRef = useRef(null);
 
   const generateHistoricalPeriod = useGenerateHistoricalUtilityPeriod(utilityType);
+  const closePeriod = useCloseUtilityPeriod(utilityType);
+  const activePeriod = historical ? null : openPeriodForRoom;
+  const legacyWater = utilityType === "water" && activePeriod && activePeriod.calculationVersion !== "water-meter-v1";
+  const unit = utilityType === "electricity" ? "kWh" : "m³";
+  const initializedFor = useRef(null);
 
   const [closingPending,setClosingPending] = useState(false);
   const [generationBlocker, setGenerationBlocker] = useState(null);
@@ -175,21 +182,23 @@ export default function NewBillingPeriodModal({
   });
 
   const [initialFormState, setInitialFormState] = useState(null);
-  const [waterPreview,setWaterPreview] = useState(null);
+  const [waterPreviewResponse,setWaterPreview] = useState(null);
+  const waterRequestKey = JSON.stringify([selectedRoomId, activePeriod?.id || activePeriod?._id, periodForm]);
+  const waterPreview = waterPreviewResponse?.key === waterRequestKey ? waterPreviewResponse.result : null;
   const [waterPreviewError,setWaterPreviewError] = useState('');
   const [waterPreviewPending,setWaterPreviewPending] = useState(false);
   useEffect(()=>{
-    if (!isOpen || utilityType !== 'water') return;
+    if (!isOpen || utilityType !== 'water' || legacyWater || manualReviewPeriod) return;
     let cancelled=false;
-    setWaterPreview(null); setWaterPreviewError('');
+    setWaterPreview(null); setWaterPreviewError(''); setWaterPreviewPending(false);
     if (!periodForm.startDate || !periodForm.endDate || periodForm.endReading === '' || periodForm.ratePerUnit === '') return;
     setWaterPreviewPending(true);
-    const timer=setTimeout(()=>utilityApi.previewWater({...periodForm,roomId:selectedRoomId,periodId:openPeriodForRoom?.id || openPeriodForRoom?._id})
-      .then(response=>{if(!cancelled) setWaterPreview(response.result || response.data || response);})
+    const timer=setTimeout(()=>utilityApi.previewWater({...periodForm,roomId:selectedRoomId,periodId:activePeriod?.id || activePeriod?._id})
+      .then(response=>{if(!cancelled) setWaterPreview({key:waterRequestKey,result:response.result || response.data || response});})
       .catch(error=>{if(!cancelled) setWaterPreviewError(error.message || 'Unable to preview water billing.');})
       .finally(()=>{if(!cancelled) setWaterPreviewPending(false);}),350);
     return ()=>{cancelled=true;clearTimeout(timer);};
-  },[isOpen,utilityType,selectedRoomId,periodForm]);
+  },[isOpen,utilityType,selectedRoomId,periodForm,activePeriod,legacyWater,manualReviewPeriod,waterRequestKey]);
 
 
   const handlePresetChange = (presetKey) => {
@@ -260,14 +269,18 @@ export default function NewBillingPeriodModal({
   };
 
   useEffect(() => {
+    if (!isOpen) { initializedFor.current = null; return; }
+    const formKey = `${utilityType}:${selectedRoomId}:${historical}:${activePeriod?.id || activePeriod?._id || "new"}`;
+    if (initializedFor.current === formKey) return;
+    initializedFor.current = formKey;
     if (isOpen) {
       const continuationDate = lastClosedPeriod?.endDate
         ? toInputDate(lastClosedPeriod.endDate)
         : null;
       const continuationReading = lastClosedPeriod?.endReading ?? null;
-      const startDate = utilityType === "water" && openPeriodForRoom ? toInputDate(openPeriodForRoom.startDate) : continuationDate || toInputDate(new Date());
-      const initialStartReading = utilityType === "water" ? openPeriodForRoom?.startReading ?? latestReading?.reading ?? "" : continuationReading ?? latestReading?.reading ?? 0;
-      const initialRate = utilityType === "water" ? String(openPeriodForRoom?.pricingSnapshot?.ratePerUnit ?? openPeriodForRoom?.ratePerUnit ?? defaultRatePerUnit ?? "") :
+      const startDate = activePeriod ? toInputDate(activePeriod.startDate) : continuationDate || toInputDate(new Date());
+      const initialStartReading = activePeriod?.startReading ?? (utilityType === "water" ? latestReading?.reading ?? "" : continuationReading ?? latestReading?.reading ?? 0);
+      const initialRate = activePeriod ? String(activePeriod.pricingSnapshot?.ratePerUnit ?? activePeriod.ratePerUnit ?? "") : utilityType === "water" ? String(defaultRatePerUnit ?? "") :
         lastClosedPeriod?.ratePerUnit != null
           ? String(lastClosedPeriod.ratePerUnit)
           : defaultRatePerUnit !== undefined &&
@@ -300,7 +313,7 @@ export default function NewBillingPeriodModal({
         }
       }, 80);
     }
-  }, [isOpen, defaultRatePerUnit, lastClosedPeriod, latestReading]);
+  }, [isOpen, defaultRatePerUnit, lastClosedPeriod, latestReading, activePeriod, utilityType, selectedRoomId, historical]);
 
   // Dirty state checking
   const isDirty = Boolean(
@@ -313,6 +326,7 @@ export default function NewBillingPeriodModal({
   );
 
   const handleRequestClose = () => {
+    if (closingPending || closePeriod.isPending || generateHistoricalPeriod.isPending) return;
     if (isDirty && !generateHistoricalPeriod.isPending && !closingPending) {
       setShowCloseConfirm(true);
     } else {
@@ -329,7 +343,7 @@ export default function NewBillingPeriodModal({
 
   // Determine source of start reading for UX contextual badge
   const startReadingSource =
-    lastClosedPeriod?.endReading != null
+    activePeriod ? "Saved opening reading for this cycle" : lastClosedPeriod?.endReading != null
       ? `Auto-filled from previous cycle (${lastClosedPeriod.endReading} kWh)`
       : latestReading?.reading != null
         ? `Pre-filled from latest room meter log (${latestReading.reading} kWh)`
@@ -348,7 +362,7 @@ export default function NewBillingPeriodModal({
     !isNaN(startNum) && startNum > MAX_METER_READING;
   const isEndReadingExceedsMax = !isNaN(endNum) && endNum > MAX_METER_READING;
   const isReadingLower =
-    isElectricity && !isNaN(startNum) && !isNaN(endNum) && endNum < startNum;
+    !isNaN(startNum) && !isNaN(endNum) && endNum < startNum;
 
   const hasValidReadings =
     !isNaN(startNum) &&
@@ -366,7 +380,7 @@ export default function NewBillingPeriodModal({
 
   // Date Overlap validation against existing periods in this room (strict interior overlap)
   const isDateOverlapping = (periods || []).some((p) => {
-    if (p.id === selectedPeriodId || p.status === "archived") return false;
+    if (String(p.id || p._id) === String(activePeriod?.id || activePeriod?._id) || p.status === "archived") return false;
     const pStart = toInputDate(p.startDate);
     const pEnd = toInputDate(p.endDate);
     if (!pStart || !pEnd) return false;
@@ -402,8 +416,6 @@ export default function NewBillingPeriodModal({
       : 0;
 
   const tenantCount = Math.max(0, Number(activeTenantCount) || 0);
-  const estPerTenantCost =
-    tenantCount > 0 ? estimatedTotalCost / tenantCount : estimatedTotalCost;
 
   // Unbilled gap check: expected start is previous cycle end date
   const continuationDate = lastClosedPeriod?.endDate
@@ -496,6 +508,9 @@ export default function NewBillingPeriodModal({
   };
 
   const handleGenerateCycle = async () => {
+    if (closingPending || closePeriod.isPending || generateHistoricalPeriod.isPending) return;
+    if (legacyWater || manualReviewPeriod) return notify.warn("Review the existing cycle before generating a new monthly bill.");
+    if (utilityType === "water" && (!waterPreview || waterPreviewPending)) return;
     if (isFixedRateBranch) {
       return notify.warn(
         "Guadalupe uses fixed-rate billing. Separate utility cycles cannot be generated for this branch."
@@ -517,7 +532,8 @@ export default function NewBillingPeriodModal({
       return notify.warn("All fields (dates, readings, and rate) are required.");
     }
 
-    if (isRateInvalid) {
+    if (!hasValidReadings) return notify.warn("Enter finite, non-negative opening and closing readings in order.");
+    if (!hasValidRate) {
       return notify.warn(
         `Rate cannot be negative or exceed ₱${maxRate.toLocaleString()}.`
       );
@@ -525,7 +541,7 @@ export default function NewBillingPeriodModal({
 
     if (isStartReadingExceedsMax || isEndReadingExceedsMax) {
       return notify.warn(
-        `Meter readings cannot exceed ${MAX_METER_READING.toLocaleString()} kWh.`
+        `Meter readings cannot exceed ${MAX_METER_READING.toLocaleString()} ${unit}.`
       );
     }
 
@@ -548,11 +564,11 @@ export default function NewBillingPeriodModal({
     try {
       setClosingPending(true);
       setGenerationBlocker(null);
-      if (openPeriodForRoom && utilityType !== "water") {
+      if (historical && openPeriodForRoom) {
         return notify.warn("An active period already exists. Historical generation cannot replace or delete it.");
       }
-      const generatedData = openPeriodForRoom && utilityType === "water"
-        ? await utilityApi.closePeriod("water",openPeriodForRoom.id || openPeriodForRoom._id,{endDate:periodForm.endDate,endReading:Number(periodForm.endReading)})
+      const generatedData = activePeriod
+        ? await closePeriod.mutateAsync({periodId:activePeriod.id || activePeriod._id,endDate:periodForm.endDate,endReading:Number(periodForm.endReading)})
         : await generateHistoricalPeriod.mutateAsync({
         roomId: selectedRoomId,
         startDate: periodForm.startDate,
@@ -563,10 +579,9 @@ export default function NewBillingPeriodModal({
           Number(periodForm.endReading),
         endDate: periodForm.endDate,
       });
-      const newPeriodId =
-        generatedData?.period?._id || generatedData?.period?.id || generatedData?.result?.periodId || generatedData?.id;
+      const newPeriodId = completedUtilityPeriodId(generatedData);
       onSuccess(newPeriodId || null);
-      notify.success("Billing cycle generated. Ready for review.");
+      notify.success("Draft bills generated. Review the completed cycle before sending.");
       setGenerationBlocker(null);
       onClose();
     } catch (err) {
@@ -575,10 +590,13 @@ export default function NewBillingPeriodModal({
     } finally { setClosingPending(false); }
   };
 
-  const isPending = generateHistoricalPeriod.isPending || closingPending;
+  const isPending = generateHistoricalPeriod.isPending || closePeriod.isPending || closingPending;
   const isActionDisabled =
+    Boolean(legacyWater || manualReviewPeriod) ||
     (utilityType === "water" && (!waterPreview || waterPreviewPending)) ||
     isPending ||
+    !hasValidReadings ||
+    !hasValidRate ||
     isReadingLower ||
     isDateInvalid ||
     isRateInvalid ||
@@ -610,6 +628,9 @@ export default function NewBillingPeriodModal({
       onClick={handleRequestClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={historical ? "Generate Historical Cycle" : "New Billing Period"}
         className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-xl overflow-hidden"
         style={{ boxShadow: "var(--shadow-xl)" }}
         onClick={(e) => e.stopPropagation()}
@@ -624,7 +645,7 @@ export default function NewBillingPeriodModal({
             )}
             <div>
               <h2 className="text-base font-semibold text-foreground">
-                Generate Historical {isElectricity ? "Electricity" : "Water"} Cycle
+                {historical ? "Generate Historical Cycle" : "New Billing Period"} · {isElectricity ? "Electricity" : "Water"}
               </h2>
               {roomName && (
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -749,14 +770,18 @@ export default function NewBillingPeriodModal({
             Define the billing cycle duration, meter readings, and rate to compute draft utility charges for all active room tenants.
           </p>
 
+          {activePeriod && !legacyWater && <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs">The saved cycle start, opening reading and rate are retained. Choose the closing date and reading, then generate drafts for review. Sending later will not extend this cycle.</p>}
+          {legacyWater && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">This active cycle uses legacy Water billing. Close it with Close Legacy Cycle before starting measured Water billing from a verified physical baseline. Its recorded amounts and allocation basis will be preserved.</p>}
+          {manualReviewPeriod && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">This room has a cycle requiring review: {manualReviewPeriod.manualReviewReason || 'Review its meter continuity before generating drafts.'}</p>}
           {/* Dates & Rate Configuration Grid */}
-          <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2">
+          {!legacyWater && <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2">
             {/* Cycle Start */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                 <Calendar size={13} className="text-muted-foreground" /> Cycle Start
               </label>
               <input
+                aria-label="Cycle Start"
                 type="date"
                 min="2020-01-01"
                 max="2099-12-31"
@@ -770,10 +795,10 @@ export default function NewBillingPeriodModal({
                   } catch {}
                 }}
                 onKeyDown={handleKeyDown}
-                disabled={isPending || isFixedRateBranch || (utilityType === "water" && !!openPeriodForRoom)}
+                disabled={isPending || isFixedRateBranch || Boolean(activePeriod)}
               />
               <p className="text-[11px] text-muted-foreground">
-                Start of billing period
+                {activePeriod ? "Saved start of the active cycle" : "Start of billing period"}
               </p>
             </div>
 
@@ -817,6 +842,7 @@ export default function NewBillingPeriodModal({
                 <Calendar size={13} className="text-muted-foreground" /> Cycle End
               </label>
               <input
+                aria-label="Cycle End"
                 type="date"
                 min="2020-01-01"
                 max="2099-12-31"
@@ -857,6 +883,7 @@ export default function NewBillingPeriodModal({
                 </label>
               </div>
               <input
+                aria-label={`Rate (PHP/${unit})`}
                 type="text"
                 inputMode="decimal"
                 maxLength={10}
@@ -879,7 +906,7 @@ export default function NewBillingPeriodModal({
                 }
                 onKeyDown={handleKeyDown}
                 placeholder="e.g. 16.00"
-                disabled={isPending || isFixedRateBranch || (utilityType === "water" && !!openPeriodForRoom)}
+                disabled={isPending || isFixedRateBranch || Boolean(activePeriod)}
               />
               {isRateInvalid && !isFixedRateBranch ? (
                 <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
@@ -888,235 +915,61 @@ export default function NewBillingPeriodModal({
               ) : (
                 <p className="text-[11px] text-muted-foreground">
                   {utilityType === "water"
-                    ? (openPeriodForRoom ? "Saved price for this cycle; rate changes apply to new cycles" : "Price per cubic metre")
-                    : "Applicable unit rate"}
+                    ? (activePeriod ? "Saved price for this cycle; rate changes apply to new cycles" : "Price per cubic metre")
+                    : activePeriod ? "Saved rate for this cycle" : "Applicable unit rate"}
                 </p>
               )}
             </div>
-          </div>
+          </div>}
 
-          {/* Electricity Meter Readings & Live Delta Badge */}
-          {isElectricity ? (
-            <div className="space-y-3 pt-1">
-              <div className="grid gap-3.5 md:grid-cols-2">
-                {/* Opening Meter Reading */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-foreground">
-                      Opening Meter Reading (kWh)
-                    </label>
-                  </div>
+          {/* Shared monthly meter inputs and preview */}
+          {!legacyWater && <div className="space-y-3 pt-1">
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              {['startReading', 'endReading'].map((field) => (
+                <label key={field} className="space-y-1.5 text-xs font-semibold text-foreground">
+                  <span>{field === 'startReading' ? 'Opening' : 'Closing'} Reading ({unit})</span>
                   <input
-                    type="text"
-                    inputMode="decimal"
-                    maxLength={9}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm text-foreground focus:outline-none disabled:opacity-60 transition-colors ${
-                      isStartReadingExceedsMax && !isFixedRateBranch
-                        ? "border-rose-500"
-                        : "border-border bg-card"
-                    }`}
-                    {...ringFocus}
-                    value={periodForm.startReading}
-                    onChange={(e) =>
-                      setPeriodForm({
-                        ...periodForm,
-                        startReading: sanitizeNumericInput(e.target.value, 2, 6),
-                      })
-                    }
+                    aria-label={`${field === 'startReading' ? 'Opening' : 'Closing'} Reading (${unit})`}
+                    ref={field === 'endReading' ? finalReadingInputRef : undefined}
+                    type="number" min="0" step="0.01" inputMode="decimal"
+                    disabled={isPending || isFixedRateBranch || (field === 'startReading' && Boolean(activePeriod))}
+                    value={periodForm[field]}
+                    onChange={(event) => setPeriodForm((current) => ({ ...current, [field]: event.target.value }))}
                     onKeyDown={handleKeyDown}
-                    placeholder={
-                      latestReading?.reading != null
-                        ? `Last: ${latestReading.reading}`
-                        : "e.g. 1200"
-                    }
-                    disabled={isPending || isFixedRateBranch}
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-60"
+                    required
                   />
-                  {isStartReadingExceedsMax && !isFixedRateBranch ? (
-                    <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 mt-1">
-                      Reading cannot exceed 999,999.99 kWh
-                    </p>
-                  ) : (
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">
-                      <Info size={12} className="shrink-0 text-sky-500" />
-                      <span className="truncate">{startReadingSource}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Final Meter Reading */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-foreground">
-                      Final Reading (kWh)
-                    </label>
-                  </div>
-                  <input
-                    ref={finalReadingInputRef}
-                    type="text"
-                    inputMode="decimal"
-                    maxLength={9}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm text-foreground focus:outline-none disabled:opacity-60 transition-colors ${
-                      (isReadingLower ||
-                        isEndReadingExceedsMax ||
-                        isUsageExceedsMax) &&
-                      !isFixedRateBranch
-                        ? "border-rose-500"
-                        : "border-border bg-card"
-                    }`}
-                    {...ringFocus}
-                    value={periodForm.endReading}
-                    onChange={(e) =>
-                      setPeriodForm({
-                        ...periodForm,
-                        endReading: sanitizeNumericInput(e.target.value, 2, 6),
-                      })
-                    }
-                    onKeyDown={handleKeyDown}
-                    placeholder="e.g. 1350"
-                    disabled={isPending || isFixedRateBranch}
-                  />
-                  {isEndReadingExceedsMax && !isFixedRateBranch ? (
-                    <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 mt-1">
-                      Reading cannot exceed 999,999.99 kWh
-                    </p>
-                  ) : isReadingLower && !isFixedRateBranch ? (
-                    <div className="flex items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 mt-1">
-                      <AlertCircle size={12} />
-                      <span>
-                        Cannot be lower than opening reading ({periodForm.startReading} kWh)
-                      </span>
-                    </div>
-                  ) : isUsageExceedsMax && !isFixedRateBranch ? (
-                    <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 mt-1">
-                      Usage (+{calculatedUsage.toLocaleString()} kWh) exceeds max limit of 50,000 kWh
-                    </p>
-                  ) : hasValidReadings && !isFixedRateBranch ? (
-                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 mt-1">
-                      <TrendingUp size={12} className="shrink-0" />
-                      <span>
-                        Δ Usage: +{calculatedUsage.toLocaleString()} kWh (~{dailyBurnRate.toFixed(1)} kWh/day)
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Current meter reading at cycle end
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Elevated Live Cycle Calculation Preview Card */}
-              <div className="rounded-xl border border-border bg-muted/30 p-3.5 text-sm">
-                <div className="flex items-center justify-between text-xs text-muted-foreground mb-2.5">
-                  <span className="font-semibold uppercase tracking-wider text-[10px] text-foreground">
-                    Live Cycle Calculation Preview
+                  <span className="block text-[11px] font-normal text-muted-foreground">
+                    {field === 'startReading' ? (activePeriod ? 'Saved opening reading for this cycle' : isElectricity ? startReadingSource : 'Use a verified physical Water observation') : 'Physical meter reading at cycle end'}
                   </span>
-                  {hasValidReadings &&
-                    !isFixedRateBranch &&
-                    !isDateOverlapping &&
-                    !isUsageExceedsMax && (
-                      <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-medium text-xs">
-                        <CheckCircle2 size={12} /> Ready to compute
-                      </span>
-                    )}
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                  {/* Total Usage Card */}
-                  <div className="rounded-lg bg-card border border-border p-2.5">
-                    <div className="text-[10px] font-medium text-muted-foreground uppercase">
-                      Total Usage
-                    </div>
-                    <div className="text-sm font-bold text-foreground mt-0.5">
-                      {hasValidReadings && !isFixedRateBranch
-                        ? `${calculatedUsage.toLocaleString()} kWh`
-                        : "—"}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {cycleDays > 0 && hasValidReadings
-                        ? `~${dailyBurnRate.toFixed(1)} kWh/day`
-                        : "Meter difference"}
-                    </div>
-                  </div>
-
-                  {/* Rate Card */}
-                  <div className="rounded-lg bg-card border border-border p-2.5">
-                    <div className="text-[10px] font-medium text-muted-foreground uppercase">
-                      Rate
-                    </div>
-                    <div className="text-sm font-semibold text-foreground mt-0.5">
-                      {hasValidRate && !isFixedRateBranch
-                        ? `₱${rateNum.toFixed(2)}/kWh`
-                        : "—"}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {cycleDays > 0 ? `${cycleDays} days cycle` : "—"}
-                    </div>
-                  </div>
-
-                  {/* Estimated Room Total Card */}
-                  <div className="rounded-lg bg-card border border-border p-2.5">
-                    <div className="text-[10px] font-medium text-muted-foreground uppercase">
-                      Est. Room Total
-                    </div>
-                    <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">
-                      {hasValidReadings &&
-                      hasValidRate &&
-                      !isFixedRateBranch &&
-                      !isUsageExceedsMax
-                        ? fmtCurrency(estimatedTotalCost)
-                        : "—"}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      Full room charge
-                    </div>
-                  </div>
-
-                  {/* Estimated Per Tenant Card */}
-                  <div className="rounded-lg bg-card border border-border p-2.5">
-                    <div className="text-[10px] font-medium text-muted-foreground uppercase">
-                      Est. Per Tenant
-                    </div>
-                    <div className="text-sm font-bold text-sky-700 dark:text-sky-400 mt-0.5">
-                      {hasValidReadings &&
-                      hasValidRate &&
-                      !isFixedRateBranch &&
-                      !isUsageExceedsMax
-                        ? tenantCount > 0
-                          ? fmtCurrency(estPerTenantCost)
-                          : "₱0.00"
-                        : "—"}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {tenantCount > 0 ? (
-                        `${tenantCount} active tenant${tenantCount > 1 ? "s" : ""}`
-                      ) : (
-                        <span className="text-amber-600 dark:text-amber-400 font-medium">
-                          100% Dorm Overhead
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                </label>
+              ))}
             </div>
-          ) : (
-            <div className="space-y-3 pt-1">
-              <div className="grid gap-3.5 md:grid-cols-2">
-                {['startReading','endReading'].map(field=><label key={field} className="text-xs font-semibold text-foreground">
-                  {field==='startReading'?'Opening':'Closing'} Reading (m³)
-                  <input type="number" min="0" step="0.01" disabled={isPending || (field === "startReading" && !!openPeriodForRoom)} value={periodForm[field]}
-                    onChange={e=>setPeriodForm(current=>({...current,[field]:e.target.value}))}
-                    className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm" required />
-                </label>)}
+            {isReadingLower && <p role="alert" className="text-xs text-rose-600">Closing reading cannot be lower than the opening reading.</p>}
+            <div className="rounded-xl border border-border bg-muted/30 p-3.5 text-sm" aria-label="Live Cycle Calculation Preview">
+              <p className="mb-2.5 text-xs font-semibold text-foreground">Live Cycle Calculation Preview</p>
+              <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
+                <div className="rounded-lg border border-border bg-card p-2.5">
+                  <p className="text-[10px] uppercase text-muted-foreground">Consumption</p>
+                  <p className="mt-1 text-sm font-bold">{isElectricity ? (hasValidReadings ? `${calculatedUsage.toLocaleString()} kWh` : '—') : waterPreview ? `${waterPreview.computedTotalUsage} m³` : '—'}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-2.5">
+                  <p className="text-[10px] uppercase text-muted-foreground">Rate</p>
+                  <p className="mt-1 text-sm font-bold">{hasValidRate ? `${fmtCurrency(rateNum)} / ${unit}` : '—'}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-2.5">
+                  <p className="text-[10px] uppercase text-muted-foreground">Estimated Room Total</p>
+                  <p className="mt-1 text-sm font-bold text-emerald-700 dark:text-emerald-400">{isElectricity ? (hasValidReadings && hasValidRate ? fmtCurrency(estimatedTotalCost) : '—') : waterPreview ? fmtCurrency(waterPreview.computedTotalCost) : '—'}</p>
+                </div>
               </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">{isElectricity ? 'Meter-difference estimate. Saved drafts use the existing occupancy, vacancy and meter-boundary calculations.' : 'Calculated from verified meter events and the saved price for this cycle.'}</p>
+            </div>
+            {!isElectricity && <>
               {waterPreviewPending && <p role="status" className="animate-pulse text-xs">Calculating measured segments...</p>}
               {waterPreviewError && <p role="alert" className="text-xs text-rose-600">{waterPreviewError}</p>}
-              {waterPreview && <>
-                <p className="rounded-lg border border-border p-3 text-sm">Consumption: {waterPreview.computedTotalUsage} m³ · Rate: {fmtCurrency(waterPreview.ratePerUnit)} / m³ · Calculated Water Amount: {fmtCurrency(waterPreview.computedTotalCost)}</p>
-                <WaterBillingTables data={waterPreview}/>
-              </>}
-            </div>
-          )}
+              {waterPreview && <WaterBillingTables data={waterPreview} />}
+            </>}
+          </div>}
         </div>
 
         {/* Unsaved Changes Confirmation Banner */}
@@ -1189,7 +1042,7 @@ export default function NewBillingPeriodModal({
                       : isDateOverlapping
                         ? "The selected date range overlaps with an existing cycle in this room."
                         : isStartReadingExceedsMax || isEndReadingExceedsMax
-                          ? `Meter readings cannot exceed ${MAX_METER_READING.toLocaleString()} kWh.`
+                          ? `Meter readings cannot exceed ${MAX_METER_READING.toLocaleString()} ${unit}.`
                           : isUsageExceedsMax
                             ? `Usage exceeds maximum single-cycle limit of ${MAX_CYCLE_USAGE.toLocaleString()} kWh.`
                             : isReadingLower

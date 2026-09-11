@@ -18,7 +18,8 @@ test("current-period opening and historical generation are separate admin comman
   assert.match(openModal, /Recovery \/ Manual Initialization/);
   assert.match(historicalModal, /useGenerateHistoricalUtilityPeriod/);
   assert.match(historicalModal, /Generate Historical/);
-  assert.doesNotMatch(historicalModal, /useCloseUtilityPeriod|useDeleteUtilityPeriod/);
+  assert.match(historicalModal, /useCloseUtilityPeriod/);
+  assert.doesNotMatch(historicalModal, /useOpenUtilityPeriod|useDeleteUtilityPeriod/);
 });
 
 test("historical generation never deletes or replaces an active period", () => {
@@ -30,7 +31,8 @@ test("historical generation never deletes or replaces an active period", () => {
 test("overview exposes lifecycle-aware actions and a distinct manual-review state", () => {
   assert.match(overview, /!currentPeriod && !manualReviewPeriod/);
   assert.match(overview, /Recovery \/ Manual Initialization/);
-  assert.match(overview, /Close Current Period/);
+  assert.match(overview, /New Billing Period/);
+  assert.match(overview, /Close Legacy Cycle/);
   assert.match(overview, /Generate Historical Cycle/);
   assert.match(overview, /Billing Period Requires Review/);
   assert.match(billingTab, /periodList\.find\(\(p\) => p\.status === "manual_review_required"\)/);

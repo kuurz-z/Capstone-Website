@@ -1,4 +1,5 @@
-import { waterPeriodSent } from '../services/billing/waterAllocations.js';
+import { waterPeriodSent, waterAllocationsForPeriod } from '../services/billing/waterAllocations.js';
+import { assertUtilityPeriodSendable } from './utilityDateIntegrity.js';
 import {
   Bill,
   Reservation,
@@ -76,6 +77,36 @@ export function deriveUtilityPeriodBillingState({
     hasSentBills,
     blockingReason,
   };
+}
+
+// Publication readiness belongs to a completed period, independently of the
+// room's current occupancy/open-period state. Use already-fetched bill data.
+export function getReadyUtilityPeriods({ periods, utilityType, billStatusMap }) {
+  return periods.filter((period) => {
+    if (period.isArchived || !["closed", "revised"].includes(period.status)) return false;
+    try { assertUtilityPeriodSendable(period); } catch { return false; }
+    return (period.tenantSummaries || []).some((summary) => {
+      if (summary.settledOnTransfer || Number(summary.billAmount) <= 0) return false;
+      const bill = billStatusMap.get(String(summary.billId));
+      if (!bill || bill.isArchived || ["voided", "waived"].includes(bill.status)) return false;
+      if (utilityType === "water") {
+        if (bill.waterAllocations?.length) {
+          return !waterPeriodSent(bill, period._id) && waterAllocationsForPeriod(bill, period._id)
+            .some((allocation) => allocation.state === "draft" && Number(allocation.amount) > 0);
+        }
+        if (bill.status === "paid") return false;
+      }
+      const dispatch = getUtilityDispatchEntry(bill, utilityType);
+      return Number(bill.charges?.[utilityType]) > 0 && dispatch.state !== "sent" &&
+        (!dispatch.periodId || String(dispatch.periodId) === String(period._id));
+    });
+  }).map((period) => ({
+    id: period._id, startDate: period.startDate, endDate: period.endDate,
+    startReading: period.startReading, endReading: period.endReading,
+    ratePerUnit: period.ratePerUnit, calculationVersion: period.calculationVersion,
+    computedTotalUsage: period.computedTotalUsage, computedTotalCost: period.computedTotalCost,
+    tenantCount: (period.tenantSummaries || []).length,
+  }));
 }
 
 export function detectMissingMoveInAnchors({
@@ -274,6 +305,7 @@ function buildRoomDiagnostic({
     orphanReadingIds: orphanReadings.map((r) => r._id),
     openPeriodId: openPeriod?._id || null,
     latestPeriodId: latestPeriod?._id || null,
+    readyPeriods: getReadyUtilityPeriods({ periods, utilityType, billStatusMap }),
     latestPeriodDisplayStatus,
     billingState: latestPeriodBillingState,
     billingLabel: latestPeriodBillingLabel,
@@ -326,7 +358,7 @@ export async function getUtilityRoomDiagnostics(roomId, utilityType) {
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
     const bills = await Bill.find({ _id: { $in: allBillIds } })
-      .select("status utilityDispatch waterAllocations sentAt issuedAt dueDate charges")
+      .select("status isArchived utilityDispatch waterAllocations sentAt issuedAt dueDate charges")
       .lean();
     for (const b of bills) billStatusMap.set(String(b._id), b);
   }
@@ -383,7 +415,7 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
   const billStatusMap = new Map();
   if (allBillIds.length > 0) {
     const bills = await Bill.find({ _id: { $in: allBillIds } })
-      .select("status utilityDispatch waterAllocations sentAt issuedAt dueDate charges")
+      .select("status isArchived utilityDispatch waterAllocations sentAt issuedAt dueDate charges")
       .lean();
     for (const b of bills) billStatusMap.set(String(b._id), b);
   }

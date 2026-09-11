@@ -26,7 +26,7 @@ export default function BatchSendReadyModal({
   onConfirmSend,
   isSending = false,
 }) {
-  useEscapeClose(onClose, isOpen);
+  useEscapeClose(isOpen && !isSending, onClose);
 
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -127,7 +127,7 @@ export default function BatchSendReadyModal({
                 Release Finalized {utilityTitle} Statements
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Select and customize which ready rooms to dispatch to tenant portals.
+                Select completed cycles to send. A newer active cycle does not affect these drafts.
               </p>
             </div>
           </div>
@@ -177,7 +177,7 @@ export default function BatchSendReadyModal({
               <span className="font-bold text-card-foreground">
                 {selectedIds.size}
               </span>{" "}
-              of {readyRooms.length} room{readyRooms.length !== 1 ? "s" : ""} selected
+              of {readyRooms.length} cycle{readyRooms.length !== 1 ? "s" : ""} selected
             </div>
           </div>
 
@@ -220,7 +220,7 @@ export default function BatchSendReadyModal({
         <div className="max-h-[340px] overflow-y-auto p-4 space-y-2.5">
           {filteredRooms.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center text-xs text-muted-foreground">
-              <p className="font-semibold text-card-foreground">No matching ready rooms</p>
+              <p className="font-semibold text-card-foreground">No matching ready cycles</p>
               <p className="mt-0.5 text-[11px]">
                 Try adjusting your search query.
               </p>
@@ -231,11 +231,11 @@ export default function BatchSendReadyModal({
               const isChecked = selectedIds.has(roomId);
               const roomLabel = getRoomLabel(room);
               const branch = room.branch ? String(room.branch).toUpperCase() : "";
-              const period = room.activePeriod || room.latestPeriod;
+              const period = room.period;
               const cycleLabel = period ? getCycleLabel(period) : (room.billingLabel || "Finalized Statement");
               const usage = utilityType === "water" && period?.calculationVersion !== "water-meter-v1" ? null : period?.computedTotalUsage ?? period?.totalConsumption ?? period?.usage;
               const amount = period?.totalAmount ?? period?.computedTotalCost ?? room.latestPeriodAmount;
-              const tenantCount = room.activeTenantCount || 0;
+              const tenantCount = period?.tenantCount || 0;
 
               return (
                 <label
@@ -298,7 +298,7 @@ export default function BatchSendReadyModal({
           <p className="text-xs text-muted-foreground">
             {selectedIds.size === 0 ? (
               <span className="text-amber-600 dark:text-amber-400 font-medium">
-                Select at least 1 room to release
+                Select at least 1 cycle to release
               </span>
             ) : (
               <span>
@@ -324,7 +324,7 @@ export default function BatchSendReadyModal({
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               title={
                 selectedIds.size === 0
-                  ? "Select at least one room to release statements"
+                  ? "Select at least one cycle to release statements"
                   : "Release selected statements to tenant portal"
               }
             >

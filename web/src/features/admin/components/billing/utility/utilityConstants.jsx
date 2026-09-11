@@ -258,7 +258,7 @@ export const getMeterRangeLabel = (period, utilityType) =>
   period
     ? utilityType === "water" && period.calculationVersion !== "water-meter-v1"
       ? `${fmtCurrency(period.ratePerUnit)} total water charge`
-      : `${fmtNumber(period.startReading, 0)} ${utilityType === "electricity" ? "kWh" : "m³"} to ${period.endReading != null ? `${fmtNumber(period.endReading, 0)} ${utilityType === "electricity" ? "kWh" : "m³"}` : EMPTY_VALUE}`
+      : `${fmtNumber(period.startReading, utilityType === "water" ? 4 : 2)} ${utilityType === "electricity" ? "kWh" : "m³"} to ${period.endReading != null ? `${fmtNumber(period.endReading, utilityType === "water" ? 4 : 2)} ${utilityType === "electricity" ? "kWh" : "m³"}` : EMPTY_VALUE}`
     : EMPTY_VALUE;
 
 export const getExpectedPeriodEndDate = (period) =>
