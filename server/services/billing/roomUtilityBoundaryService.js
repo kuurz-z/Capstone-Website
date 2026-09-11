@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { assertElectricityChronology } from './electricityChronology.js';
 import {
   BedHistory,
   Reservation,
@@ -356,7 +357,7 @@ async function latestUsableReading({ roomId, utilityType, eventAt, session }) {
     roomId,
     utilityType,
     isArchived: false,
-    readingStatus: { $ne: "voided" },
+    ...(utilityType === 'electricity' ? {readingStatus:{$nin:['voided','corrected']},supersededByReadingId:null} : {readingStatus:{$ne:'voided'}}),
     date: { $lte: eventAt },
   }).sort({ date: -1, createdAt: -1 });
   query = withSession(query, session);
@@ -378,6 +379,7 @@ async function findIdempotentBoundary({
     tenantId: tenantId || null,
     date: eventAt,
     isArchived: false,
+    ...(utilityType === 'electricity' ? {readingStatus:{$nin:['voided','corrected']},supersededByReadingId:null} : {}),
   });
   query = withSession(query, session);
   return query;
@@ -398,7 +400,7 @@ export async function resolveRoomUtilityBoundaryContext({
   meterReset = null,
   session = null,
 } = {}) {
-  if (allowInitialize && !session) {
+  if ((allowInitialize || utilityType === 'electricity') && !session) {
     const ownedSession = await mongoose.startSession();
     let result;
     try {
@@ -646,13 +648,13 @@ export async function resolveRoomUtilityBoundaryContext({
       meterReset?.oldMeterFinalReading,
       { fieldLabel: "Old meter final reading", maximum: 999999.99 },
     );
-    assertPhysicalMeterContinuity({
+    if (utilityType !== 'electricity') assertPhysicalMeterContinuity({
       reading: oldMeterFinalReading,
       previousReading: previous?.reading,
       eventType: "periodEnd",
       fieldLabel: "Old meter final reading",
     });
-  } else {
+  } else if (utilityType !== 'electricity') {
     assertPhysicalMeterContinuity({
       reading: parsedReading,
       previousReading: previous?.reading,
@@ -661,6 +663,7 @@ export async function resolveRoomUtilityBoundaryContext({
     });
   }
 
+  if (utilityType === 'electricity') await assertElectricityChronology({roomId:canonicalRoomId,date:timestamp,reading:parsedReading,eventType,meterReset,session});
   const [boundary] = await UtilityReading.create(
     [
       {

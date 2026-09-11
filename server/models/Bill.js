@@ -64,6 +64,7 @@ const billSchema = new mongoose.Schema(
     // Supplemental utility invoice after the original monthly invoice was paid.
     // Its rent-cycle boundary stays null, as with other non-rent invoices.
     waterSupplementKey: {type:String},
+    electricitySupplementKey: {type:String},
     waterAllocations: { type: [new mongoose.Schema({
       allocationId: { type: String, required: true },
       utilityPeriodId: { type: mongoose.Schema.Types.ObjectId, ref: 'UtilityPeriod' },
@@ -751,6 +752,7 @@ billSchema.index(
 
 // For forecasting and trend analysis
 billSchema.index({waterSupplementKey:1},{unique:true,sparse:true,name:'unique_water_supplement'});
+billSchema.index({electricitySupplementKey:1},{unique:true,sparse:true,name:'unique_electricity_supplement'});
 billSchema.index({ billingMonth: -1, totalAmount: 1 });
 billSchema.index({ branch: 1, billingMonth: -1, status: 1 });
 billSchema.index(

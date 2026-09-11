@@ -169,6 +169,7 @@ export default function NewBillingPeriodModal({
       setPeriodForm((prev) => ({
         ...prev,
         endDate: computedEnd,
+        endReading: computedEnd === prev.endDate ? prev.endReading : "",
       }));
     }
   };
@@ -194,6 +195,7 @@ export default function NewBillingPeriodModal({
       startDate: newStart,
       startReading: String(openingOnDate({date:newStart,activePeriod,readings})?.reading ?? ""),
       endDate: newEnd || prev.endDate,
+      endReading: !newEnd || newEnd === prev.endDate ? prev.endReading : "",
     }));
   };
 
@@ -215,6 +217,7 @@ export default function NewBillingPeriodModal({
     setPeriodForm((prev) => ({
       ...prev,
       endDate: newEnd,
+      endReading: newEnd === prev.endDate ? prev.endReading : "",
     }));
   };
 

@@ -155,7 +155,9 @@ describe("utility billing lifecycle controller commands", () => {
     const observedAt = new Date("2026-09-01T12:00:00.000+08:00");
     await UtilityReading.create({
       utilityType: "electricity", roomId: room._id, branch: room.branch,
-      reading: 999, date: new Date("2026-09-01T08:00:00.000+08:00"),
+      // Earlier same-meter usage must stay outside the recovered interval;
+      // keep the fixture chronological now that opening writes validate it.
+      reading: 90, date: new Date("2026-09-01T08:00:00.000+08:00"),
       eventType: "regularBilling", readingStatus: "locked", recordedBy: admin._id,
       utilityPeriodId: null,
     });

@@ -1,6 +1,7 @@
 import { parseUtilityCycleDate, resolveUtilityOpening, assertUtilityCycleRange, assertUtilityOpeningChange, applyUtilityOpening } from '../services/billing/monthlyUtilitySchedule.js';
 import { calculateCanonicalWaterPeriod } from '../services/billing/canonicalWaterCalculation.js';
 import { assertWaterChronology } from '../services/billing/waterChronology.js';
+import { assertElectricityChronology } from '../services/billing/electricityChronology.js';
 import { refreshWaterAggregate, waterPeriodSent } from '../services/billing/waterAllocations.js';
 import { assertUtilityHistoryMutable } from '../services/billing/utilityHistorySafety.js';
 /**
@@ -272,6 +273,7 @@ async function syncElectricityBoundaryReadings({
     utilityType: "electricity",
     eventType: "periodStart",
     isArchived: false,
+    readingStatus:{$nin:['voided','corrected']},supersededByReadingId:null,
   });
 
   if (!startBoundaryReading) {
@@ -287,6 +289,11 @@ async function syncElectricityBoundaryReadings({
     });
   }
 
+  // Validate both proposed boundaries before persisting either one.
+  const oldEnd = await UtilityReading.findOne({utilityPeriodId:period._id,utilityType:'electricity',eventType:'periodEnd',isArchived:false,readingStatus:{$nin:['voided','corrected']},supersededByReadingId:null});
+  const excludeIds=[startBoundaryReading._id,oldEnd?._id].filter(Boolean);
+  await assertElectricityChronology({roomId:room._id,date:startDate,reading:period.startReading,eventType:'periodStart',excludeIds});
+  if (shouldPersistEndReading && period.endDate && period.endReading != null) await assertElectricityChronology({roomId:room._id,date:dayjs(period.endDate).startOf('day').toDate(),reading:period.endReading,eventType:'periodEnd',excludeIds});
   startBoundaryReading.roomId = room._id;
   startBoundaryReading.branch = room.branch;
   startBoundaryReading.reading = Number(period.startReading);
@@ -301,6 +308,7 @@ async function syncElectricityBoundaryReadings({
     utilityType: "electricity",
     eventType: "periodEnd",
     isArchived: false,
+    readingStatus:{$nin:['voided','corrected']},supersededByReadingId:null,
   });
 
   const hasEndBoundary =
@@ -444,16 +452,18 @@ async function closePeriodAndGenerateDrafts({
   await assertUtilityCycleRange({roomId:room._id,utilityType,startDate:period.startDate,endDate:closingDate,periodId:period._id,session});
 
   if (metered) {
+    if (utilityType === 'electricity') await assertElectricityChronology({roomId:room._id,date:closingDate,reading:endReading,eventType:'periodEnd',session});
     if (meterWater) {
       await Room.updateOne({_id:room._id},{$inc:{waterObservationRevision:1}},{session});
       await assertWaterChronology({roomId:room._id,date:closingDate,reading:endReading,session});
     }
     assertBoundaryReadings({ startReading: period.startReading, endReading });
+    if (meterWater) {
     let latestReadingQuery = UtilityReading.findOne({
       roomId: room._id,
       utilityType,
       isArchived: false,
-      ...(meterWater ? {readingStatus:{$nin:["voided","corrected"]}} : {}),
+      readingStatus:{$nin:["voided","corrected"]},
       date: { $lte: closingDate },
     }).sort({ date: -1, createdAt: -1 });
     if (session) latestReadingQuery = latestReadingQuery.session(session);
@@ -464,6 +474,7 @@ async function closePeriodAndGenerateDrafts({
       eventType: "periodEnd",
       fieldLabel: "Final meter reading",
     });
+    }
   }
 
   assertUtilityRoomEligibility(room, utilityType);
@@ -1602,21 +1613,6 @@ export const updateUtilityReading = async (req, res, next) => {
         fieldLabel: "Meter reading",
         maximum: 999999.99,
       });
-      const effectiveDate = date !== undefined
-        ? assertUtilityReadingDate(date, { periodStart: linkedPeriod?.startDate || null })
-        : readingDoc.date;
-      const previousReading = await UtilityReading.findOne({
-        _id: { $ne: readingDoc._id },
-        roomId: readingDoc.roomId,
-        utilityType,
-        isArchived: false,
-        date: { $lte: effectiveDate },
-      }).sort({ date: -1, createdAt: -1 }).lean();
-      assertPhysicalMeterContinuity({
-        reading: parsedReading,
-        previousReading: previousReading?.reading,
-        eventType: normalizeUtilityEventType(eventType ?? readingDoc.eventType),
-      });
       readingDoc.reading = parsedReading;
     }
     if (date !== undefined) {
@@ -1626,6 +1622,7 @@ export const updateUtilityReading = async (req, res, next) => {
     }
     if (eventType !== undefined) readingDoc.eventType = eventType;
 
+    if (utilityType === 'electricity') await assertElectricityChronology({roomId:readingDoc.roomId,date:readingDoc.date,reading:readingDoc.reading,eventType:readingDoc.eventType,meterReset:readingDoc.meterReset,excludeIds:[readingDoc._id]});
     await readingDoc.save();
     res.json({ success: true, reading: serializeUtilityReading(readingDoc) });
   } catch (err) {

@@ -124,6 +124,29 @@ test('Water rejects stale preview after the closing observation changes',async()
   await settlePreview();assert.equal(button('Generate Draft Bills').disabled,false);
 });
 
+for (const type of ['electricity','water']) test(`${type}: audit changing cutoff requires a fresh closing observation`,async()=>{
+  const unit=type==='water'?'m\u00b3':'kWh';
+  mounted=mount(modal(type));
+  fill(input('Cycle End'),'2026-09-01');
+  fill(input(`Closing Reading (${unit})`),'118');
+  if(type==='water') await settlePreview();
+  fill(input('Cycle End'),'2026-08-25');
+  assert.equal(input(`Closing Reading (${unit})`).value,'','A reading entered for Sep 1 must not silently become an Aug 25 observation');
+  assert.equal(button('Generate Draft Bills').disabled,true);
+  assert.doesNotMatch(input('Live Cycle Calculation Preview').textContent,/900/);
+  if(type==='water') assert.equal(queryByRole(document.body,'table',{name:'Tenant Allocation'}),null);
+  fill(input(`Closing Reading (${unit})`),'118');
+  fill(input('Cycle End'),'2026-08-25');
+  assert.equal(input(`Closing Reading (${unit})`).value,'118','An unchanged end date preserves the entry');
+  if(type==='water') await settlePreview();
+  assert.equal(button('Generate Draft Bills').disabled,false);
+  fill(input('Select billing cycle duration preset'),'1mo');
+  assert.equal(input(`Closing Reading (${unit})`).value,'','Duration changes also invalidate the old closing');
+  fill(input(`Closing Reading (${unit})`),'118');
+  fill(input('Cycle Start'),'2026-08-16');
+  assert.equal(input(`Closing Reading (${unit})`).value,'','Start edits that change the cutoff invalidate the old closing');
+});
+
 test('legacy Water keeps truthful history labels and cannot be silently finalized as measured water',()=>{
   mounted=mount(modal('water',{openPeriodForRoom:{...opening,calculationVersion:'legacy'}}));
   assert.match(document.body.textContent,/legacy Water billing/);

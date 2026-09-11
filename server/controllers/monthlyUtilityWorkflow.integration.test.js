@@ -9,23 +9,29 @@ const push = jest.fn(async () => ({success:true}));
 await jest.unstable_mockModule('../services/email/lilycrestEmailService.js',()=>({sendLilycrestEmail:email}));
 await jest.unstable_mockModule('../services/notifications/mobilePushService.js',()=>({sendMobilePushBill:push,sendMobilePushToRecipients:push}));
 await jest.unstable_mockModule('../utils/socket.js',()=>({emitToUser:jest.fn()}));
-const {User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading} = await import('../models/index.js');
+await jest.unstable_mockModule('../middleware/mobileTenantAuth.js',()=>({mobileTenantAuth:(req,res,next)=>{req.mobileTenant={_id:tenant._id};next();}}));
+const {User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading,Payment} = await import('../models/index.js');
 const {default:Notification} = await import('../models/Notification.js');
-const {closeUtilityPeriod,sendUtilityPeriod,generateHistoricalUtilityPeriod,previewWaterBilling} = await import('./utilityBillingController.js');
+const {closeUtilityPeriod,sendUtilityPeriod,generateHistoricalUtilityPeriod,previewWaterBilling,recordUtilityReading,updateUtilityReading} = await import('./utilityBillingController.js');
 const {createOpenUtilityPeriodWithBoundary} = await import('../services/billing/utilityPeriodLifecycleService.js');
 const {getVisibleBillCharges} = await import('../services/billing/billingPolicy.js');
 const {getUtilityDiagnostics} = await import('../utils/utilityDiagnostics.js');
+const {getReservationBillingContextForUser,upsertDraftBillsForUtility,publishElectricityBill} = await import('../utils/utilityBillFlow.js');
+const {default:express} = await import('express');
+const {default:mobileBillingRoutes} = await import('../routes/mobileBillingRoutes.js');
+const {buildTenantUtilityBreakdown} = await import('./billing/_helpers.js');
 let mongo,admin,room,tenant,reservation;
 jest.setTimeout(120000);
 beforeAll(async()=>{
   mongo=await MongoMemoryReplSet.create({replSet:{count:1}});
   await mongoose.connect(mongo.getUri(),{dbName:'monthly_utility_workflow'});
   await UtilityPeriod.syncIndexes();
+  for(const field of ['electricitySupplementKey','waterSupplementKey']) await Bill.collection.createIndex({[field]:1},{unique:true,sparse:true});
 });
 afterEach(()=>jest.useRealTimers());
 afterAll(async()=>{await mongoose.disconnect();await mongo?.stop();});
 beforeEach(async()=>{
-  for (const model of [User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading,Notification]) await model.deleteMany({});
+  for (const model of [User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading,Notification,Payment]) await model.deleteMany({});
   email.mockClear();push.mockClear();
   const user=role=>User.create({firebaseUid:`${role}-${new mongoose.Types.ObjectId()}`,username:`${role}-${new mongoose.Types.ObjectId()}`,email:`${new mongoose.Types.ObjectId()}@example.test`,firstName:role,lastName:'Monthly',role,branch:'gil-puyat'});
   admin=await user('branch_admin');tenant=await user('tenant');
@@ -64,6 +70,7 @@ for (const type of ['electricity','water']) for (const sendDay of [15,18]) test(
   expect(draft.status).toBe('draft');expect(draft.charges[type]).toBe(18*rate);
   expect(getVisibleBillCharges(draft)[type]).toBe(0);expect(draft.totalAmount).toBe(0);expect(draft.remainingAmount).toBe(0);
   expect(await Notification.countDocuments()).toBe(0);expect(email).not.toHaveBeenCalled();expect(push).not.toHaveBeenCalled();
+  await Bill.updateOne({_id:draft._id},{$set:{paymongoSessionId:'audit-stale-checkout'}});
   const diagnostics=await getUtilityDiagnostics({branch:'gil-puyat'});
   const diagnostic=diagnostics[`${type}Rooms`][0];
   expect(diagnostic.billingState).toBe('open');
@@ -75,8 +82,13 @@ for (const type of ['electricity','water']) for (const sendDay of [15,18]) test(
   const released=await Bill.findById(draft._id).lean();
   expect(getVisibleBillCharges(released)[type]).toBe(18*rate);expect(released.totalAmount).toBe(18*rate);expect(released.remainingAmount).toBe(18*rate);
   expect(released.utilityDispatch[type].state).toBe('sent');
+  expect(released.paymongoSessionId).toBeNull();
   expect(released.issuedAt).toEqual(new Date(`2026-09-${sendDay}T00:00:00+08:00`));
   expect(await Notification.countDocuments()).toBe(1);expect(email).toHaveBeenCalledTimes(1);expect(push).toHaveBeenCalled();
+  const notification=await Notification.findOne({userId:tenant._id}).lean();
+  expect(String(notification.entityId)).toBe(String(released._id));
+  expect(String(notification.data.utilityPeriodId)).toBe(String(p._id));
+  if(type==='water') expect(notification.data.allocationIds).toBe(released.waterAllocations.map(a=>a.allocationId).sort().join(','));
   if(type==='water') {
     expect(closed.calculationVersion).toBe('water-meter-v1');expect(closed.pricingSnapshot.ratePerUnit).toBe(50);
     expect(released.waterAllocations).toHaveLength(1);
@@ -102,6 +114,155 @@ for (const type of ['electricity','water']) for (const sendDay of [15,18]) test(
 
 
 const observed = (type, date, reading, extra={}) => UtilityReading.create({utilityType:type,roomId:room._id,branch:room.branch,date:new Date(date),reading,eventType:'regularBilling',recordedBy:admin._id,...extra});
+
+test('legacy Water breakdown follows canonical dispatch visibility',async()=>{
+  const bill=await Bill.create({userId:tenant._id,reservationId:reservation._id,roomId:room._id,branch:room.branch,billingMonth:new Date('2026-08-01'),charges:{water:300},totalAmount:0,status:'draft'});
+  const period=await UtilityPeriod.create({utilityType:'water',calculationVersion:'water-occupancy-legacy',roomId:room._id,branch:room.branch,startDate:new Date('2026-08-01'),endDate:new Date('2026-09-01'),startReading:0,endReading:0,ratePerUnit:300,status:'closed',computedTotalCost:300,tenantSummaries:[{tenantId:tenant._id,tenantName:'Monthly Tenant',totalUsage:0,reservationId:reservation._id,billId:bill._id,billAmount:300}]});
+  bill.utilityDispatch.water={state:'draft',periodId:period._id,amount:300};await bill.save();
+  expect(await buildTenantUtilityBreakdown({dbUser:tenant,bill,utilityType:'water'})).toBeNull();
+  bill.utilityDispatch.water.state='sent';await bill.save();
+  expect((await buildTenantUtilityBreakdown({dbUser:tenant,bill,utilityType:'water'})).tenantAmount).toBe(300);
+});
+
+test('Electricity create/update enforce both neighbors, excluded evidence and explicit replacement boundaries',async()=>{
+  const type='electricity';
+  const p=await createOpenUtilityPeriodWithBoundary({utilityType:type,room,startDate:new Date('2026-08-01T00:00:00+08:00'),startReading:90,ratePerUnit:16,actorId:admin._id});
+  await observed(type,'2026-08-10T00:00:00+08:00',100,{utilityPeriodId:p._id});
+  await observed(type,'2026-08-20T00:00:00+08:00',120,{utilityPeriodId:p._id});
+  for (const excluded of [{readingStatus:'corrected'},{readingStatus:'voided'},{isArchived:true},{supersededByReadingId:new mongoose.Types.ObjectId()}]) {
+    await observed(type,'2026-08-14T00:00:00+08:00',999,{...excluded,utilityPeriodId:p._id});
+    await observed(type,'2026-08-16T00:00:00+08:00',1,{...excluded,utilityPeriodId:p._id});
+  }
+  const body={roomId:room._id,date:'2026-08-15',eventType:'moveIn',tenantId:tenant._id};
+  for(const reading of [99,130]) expect((await invoke(recordUtilityReading,type,null,{...body,reading})).error?.code).toBe('ELECTRICITY_READING_CONFLICT');
+  expect((await invoke(recordUtilityReading,type,null,{...body,reading:110})).statusCode).toBe(201);
+  const reading=await UtilityReading.findOne({eventType:'moveIn',date:new Date('2026-08-15T00:00:00+08:00')});
+  expect((await invoke(updateUtilityReading,type,reading._id,{reading:115})).error).toBeUndefined();
+  expect((await invoke(updateUtilityReading,type,reading._id,{reading:130})).error?.code).toBe('ELECTRICITY_READING_CONFLICT');
+  expect((await invoke(updateUtilityReading,type,reading._id,{date:'2026-08-09'})).error?.code).toBe('ELECTRICITY_READING_CONFLICT');
+  expect((await UtilityReading.findById(reading._id)).reading).toBe(115);
+  expect((await invoke(recordUtilityReading,type,null,{...body,eventType:'moveOut',reading:116})).error?.code).toBe('ELECTRICITY_READING_CONFLICT');
+  expect((await invoke(recordUtilityReading,type,null,{...body,eventType:'moveOut',reading:115})).statusCode).toBe(201);
+  await observed(type,'2026-08-30T00:00:00+08:00',5,{utilityPeriodId:p._id});
+  expect((await invoke(recordUtilityReading,type,null,{roomId:room._id,date:'2026-08-25',reading:0,eventType:'meterReplacement',meterReset:{oldMeterFinalReading:125,evidenceReferences:['replacement-ticket']}})).statusCode).toBe(201);
+  await observed(type,'2026-08-25T00:00:00+08:00',125,{eventType:'periodEnd',utilityPeriodId:p._id});
+  expect((await invoke(recordUtilityReading,type,null,{...body,date:'2026-08-26',reading:3})).statusCode).toBe(201);
+});
+
+for(const paidAmount of [0,4000,10000]) test(`Electricity 1000 draft preserves ${paidAmount}/10000 rent payment history through Send`,async()=>{
+  const type='electricity';
+  const p=await createOpenUtilityPeriodWithBoundary({utilityType:type,room,startDate:new Date('2026-08-15T00:00:00+08:00'),startReading:100,ratePerUnit:10,actorId:admin._id});
+  const context=await getReservationBillingContextForUser(tenant._id,new Date('2026-09-15T00:00:00+08:00'));
+  const status=paidAmount===10000?'paid':paidAmount?'partially-paid':'pending';
+  const rent=await Bill.create({userId:tenant._id,reservationId:reservation._id,roomId:room._id,branch:room.branch,billingMonth:context.cycle.billingMonth,billingCycleStart:context.cycle.billingCycleStart,billingCycleEnd:context.cycle.billingCycleEnd,charges:{rent:10000},totalAmount:10000,grossAmount:10000,paidAmount,remainingAmount:10000-paidAmount,status,paymentState:paidAmount===10000?'paid':paidAmount?'partially-paid':'unpaid',paymentDate:paidAmount?new Date('2026-09-01'):null,paymongoPaymentId:'historical-payment',paymongoSessionId:'historical-session',receiptSourceVersion:'historical-receipt',releasedAt:new Date('2026-09-01')});
+  if(paidAmount) await Payment.create({tenantId:tenant._id,billId:rent._id,amount:paidAmount,method:'offline_cash',branch:room.branch,purpose:'rent'});
+  const original=await Bill.findById(rent._id).lean();const ledger=await Payment.find({}).lean();
+  expect((await invoke(closeUtilityPeriod,type,p._id,{endDate:'2026-09-15',endReading:200})).error).toBeUndefined();
+  const period=await UtilityPeriod.findById(p._id);
+  const summary=period.tenantSummaries[0];
+  const draft=await Bill.findById(summary.billId);
+  expect(draft.charges.electricity).toBe(1000);expect(getVisibleBillCharges(draft).electricity).toBe(0);
+  expect(String(draft._id)===String(rent._id)).toBe(paidAmount<10000);
+  for(let n=0;n<2;n++) await upsertDraftBillsForUtility({period,room,tenantSummaries:period.tenantSummaries,utilityType:type});
+  expect(await Bill.countDocuments()).toBe(paidAmount===10000?2:1);
+  expect((await invoke(sendUtilityPeriod,type,p._id)).error).toBeUndefined();
+  const sent=await Bill.findById(draft._id);
+  expect(sent.remainingAmount).toBe((paidAmount===10000?0:10000-paidAmount)+1000);
+  expect(getVisibleBillCharges(sent).electricity).toBe(1000);
+  await expect(upsertDraftBillsForUtility({period,room,tenantSummaries:period.tenantSummaries,utilityType:type})).rejects.toMatchObject({statusCode:409});
+  expect(await Payment.find({}).lean()).toEqual(ledger);
+  if(paidAmount===10000) expect(await Bill.findById(rent._id).lean()).toEqual(original);
+  else expect((await Bill.findById(rent._id)).paidAmount).toBe(paidAmount);
+});
+
+test('Electricity rechecks paid status at Send and publishes a supplement exactly once',async()=>{
+  const p=await createOpenUtilityPeriodWithBoundary({utilityType:'electricity',room,startDate:new Date('2026-08-15T00:00:00+08:00'),startReading:100,ratePerUnit:16,actorId:admin._id});
+  await invoke(closeUtilityPeriod,'electricity',p._id,{endDate:'2026-09-15',endReading:118});
+  const bill=await Bill.findOne({reservationId:reservation._id});
+  await Bill.updateOne({_id:bill._id},{$set:{status:'paid',paidAmount:0,paymongoPaymentId:'settled-payment',paymongoSessionId:'settled-session'}});
+  const original=await Bill.findById(bill._id).lean();
+  const closed=await UtilityPeriod.findById(p._id);
+  const args={billId:bill._id,period:closed,publishedAt:new Date(),issuedAt:new Date(),dueDate:new Date()};
+  const published=await publishElectricityBill(args);
+  expect(published.bill._id.equals(bill._id)).toBe(false);
+  expect(published.bill.remainingAmount).toBe(288);
+  expect(await publishElectricityBill(args)).toBeNull();
+  expect(await Bill.findById(bill._id).lean()).toEqual(original);
+  expect(String((await UtilityPeriod.findById(p._id)).tenantSummaries[0].billId)).toBe(String(published.bill._id));
+  expect(await Bill.countDocuments()).toBe(2);
+});
+for (const type of ['electricity','water']) {
+  test(`${type}: audit monthly generation preserves an already paid rent invoice`,async()=>{
+    const p=await createOpenUtilityPeriodWithBoundary({utilityType:type,room,startDate:new Date('2026-08-15T00:00:00+08:00'),startReading:100,ratePerUnit:16,actorId:admin._id});
+    const context=await getReservationBillingContextForUser(tenant._id,new Date('2026-09-15T00:00:00+08:00'));
+    const paid=await Bill.create({userId:tenant._id,reservationId:reservation._id,roomId:room._id,branch:room.branch,billingMonth:context.cycle.billingMonth,billingCycleStart:context.cycle.billingCycleStart,billingCycleEnd:context.cycle.billingCycleEnd,charges:{rent:5000},totalAmount:5000,grossAmount:5000,paidAmount:5000,remainingAmount:0,status:'paid',releasedAt:new Date('2026-09-01T00:00:00+08:00')});
+    paid.paymentState='paid';paid.paymentDate=new Date('2026-09-01T12:00:00+08:00');await paid.save();
+    const original=await Bill.findById(paid._id).lean();
+    const response=await invoke(closeUtilityPeriod,type,p._id,{endDate:'2026-09-15',endReading:118});
+    expect(response.error).toBeUndefined();
+    expect(await Bill.findById(paid._id).lean()).toEqual(original);
+    const generated=await Bill.findOne({_id:{$ne:paid._id},reservationId:reservation._id});
+    expect(generated).not.toBeNull();
+    expect(getVisibleBillCharges(generated)[type]).toBe(0);
+    const duplicate=await invoke(closeUtilityPeriod,type,p._id,{endDate:'2026-09-15',endReading:118});
+    expect(duplicate.error).toBeUndefined();expect(await Bill.countDocuments()).toBe(2);
+    expect((await invoke(sendUtilityPeriod,type,p._id)).error).toBeUndefined();
+    expect(getVisibleBillCharges(await Bill.findById(generated._id))[type]).toBe(288);
+    expect(await Bill.findById(paid._id).lean()).toEqual(original);
+    expect((await invoke(sendUtilityPeriod,type,p._id)).statusCode).toBe(409);
+    expect(await Bill.countDocuments()).toBe(2);
+  });
+  test(`${type}: audit later edited opening with no skipped usage and a custom end preserves evidence`,async()=>{
+    const p=await createOpenUtilityPeriodWithBoundary({utilityType:type,room,startDate:new Date('2026-09-15T00:00:00+08:00'),startReading:100,ratePerUnit:16,actorId:admin._id});
+    const evidence=await observed(type,'2026-09-20T10:00:00+08:00',100,{utilityPeriodId:p._id});
+    const response=await invoke(closeUtilityPeriod,type,p._id,{startDate:'2026-09-20',startReading:100,endDate:'2026-10-12',endReading:118});
+    expect(response.error).toBeUndefined();
+    const closed=await UtilityPeriod.findById(p._id).lean();
+    expect(closed.startDate).toEqual(evidence.date);
+    expect(closed.endDate).toEqual(new Date('2026-10-12T00:00:00+08:00'));
+    expect(closed.computedTotalUsage).toBe(18);
+    const closing=await UtilityReading.findOne({utilityPeriodId:p._id,eventType:'periodEnd'}).lean();
+    expect(closing.date).toEqual(closed.endDate);expect(closing.reading).toBe(118);
+    if(type==='water') expect(closed.calculationInputs.openingObservationId).toBe(String(evidence._id));
+  });
+  test(`${type}: audit edited end cannot contradict a later recorded physical observation`,async()=>{
+    const p=await createOpenUtilityPeriodWithBoundary({utilityType:type,room,startDate:new Date('2026-08-15T00:00:00+08:00'),startReading:100,ratePerUnit:16,actorId:admin._id});
+    await observed(type,'2026-09-12T00:00:00+08:00',120,{utilityPeriodId:p._id});
+    const response=await invoke(closeUtilityPeriod,type,p._id,{startDate:'2026-08-15',startReading:100,endDate:'2026-09-10',endReading:130});
+    expect(response.error?.statusCode || response.statusCode).toBeGreaterThanOrEqual(400);
+    expect((await UtilityPeriod.findById(p._id).lean()).status).toBe('open');
+    expect(await Bill.countDocuments()).toBe(0);
+  });
+  test(`${type}: audit direct mobile breakdown hides an owned unreleased draft`,async()=>{
+    const p=await createOpenUtilityPeriodWithBoundary({utilityType:type,room,startDate:new Date('2026-08-15T00:00:00+08:00'),startReading:100,ratePerUnit:16,actorId:admin._id});
+    const generated=await invoke(closeUtilityPeriod,type,p._id,{endDate:'2026-09-15',endReading:118});
+    expect(generated.error).toBeUndefined();
+    const bill=await Bill.findOne({reservationId:reservation._id});
+    const app=express();app.use('/api/m',mobileBillingRoutes);
+    const http=await new Promise(resolve=>{const server=app.listen(0,'127.0.0.1',()=>resolve(server));});
+    try {
+      const base=`http://127.0.0.1:${http.address().port}/api/m`;
+      const list=await fetch(`${base}/billing/me`);
+      expect(await list.json()).toEqual([]);
+      const stranger=await User.create({firebaseUid:'audit-stranger',username:'audit-stranger',email:'stranger@example.test',firstName:'Other',lastName:'Tenant',role:'tenant',branch:room.branch});
+      await Bill.updateOne({_id:bill._id},{$set:{userId:stranger._id}});
+      const forbidden=await fetch(`${base}/billing/${bill._id}/breakdown/${type}`);
+      expect(forbidden.status).toBe(404);
+      await Bill.updateOne({_id:bill._id},{$set:{userId:tenant._id}});
+      const response=await fetch(`${base}/billing/${bill._id}/breakdown/${type}`);
+      expect(response.status).toBe(404);
+      const detail=await (await fetch(`${base}/billing/${bill._id}`)).json();
+      expect(detail[type]).toBe(0);expect(detail.utility_breakdowns[type]).toBeNull();
+      expect((await invoke(sendUtilityPeriod,type,p._id)).error).toBeUndefined();
+      const releasedList=await (await fetch(`${base}/billing/me`)).json();
+      expect(releasedList).toHaveLength(1);expect(releasedList[0][type]).toBe(288);
+      const released=await fetch(`${base}/billing/${bill._id}/breakdown/${type}`);
+      expect(released.status).toBe(200);
+      const breakdown=await released.json();
+      expect(type==='electricity' ? breakdown.myBillAmount : breakdown.tenantAmount).toBe(288);
+    } finally { await new Promise(resolve=>http.close(resolve)); }
+  });
+}
 for (const type of ['electricity','water']) {
   test(`${type}: valid edited active opening uses evidence atomically without rewriting observations`,async()=>{
     const baseline=await observed(type,'2026-08-15T10:00:00+08:00',100);
