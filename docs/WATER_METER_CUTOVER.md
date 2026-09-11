@@ -29,6 +29,24 @@ Do not run a blanket `syncIndexes()` against production: it can remove unrelated
 
 An active legacy period continues as legacy until deliberately cut over. Do not set `calculationVersion` on an existing period or copy occupancy-day usage into a meter field.
 
+## Read-only cutover readiness and recovery
+
+Before selecting an existing observation as a measured cutover baseline, run from `server` with the existing database environment configured:
+
+```powershell
+node scripts/validate_water_cutover.mjs <roomId> <verifiedReadingId>
+```
+
+This command never writes documents, creates indexes or fabricates a reading. It returns JSON with `status`, room/baseline identities and blocking reasons. Exit0 means READY,1 means evidence/policy BLOCKED, and2 means invalid arguments or an unavailable validation environment. The validation service has been tested with isolated fixtures; the command was not run against production.
+
+READY requires an applicable Gil Puyat Private/Double policy, a valid persisted m3 observation with actor/time, and chronological evidence. Missing baselines, contradictory observations and unsupported rooms return BLOCKED. Corrected/superseded/archived/voided records are excluded. A replacement/rollover after the selected baseline requires a new baseline for an uninterrupted meter-v1 cycle; its explicit old-final/new-opening evidence remains intact.
+
+Opening, closing, occupancy capture and correction validate both temporal neighbors: previous <= new <= following, with same-instant agreement and dedicated reset semantics. Archive only an eligible unpublished period when recovery requires it. Its valid observations and BedHistory remain available to the shared preview/generation resolver, regardless of the archived period ID. Preview and generation now match for100→106→118 (A12m³/B6m³), including the canonical fingerprint. Missing physical occupancy boundaries still block calculation; do not interpolate consumption.
+
+Open-period pricing may intentionally be edited before calculation. PATCH preserves opening value, observation identity/time and calculation version; changing physical evidence uses the correction workflow. An accepted rate change atomically updates the authoritative pricing snapshot and records previous/new rate, actor and time. Concurrent close/edit conflicts require refresh. Global rate changes never mutate existing snapshots. Once calculated, the saved price and calculation fingerprint are immutable under the existing lifecycle protections.
+
+This evidence check does not certify production indexes, configuration, devices or deployment. The prerequisites above remain operator responsibilities before enabling the feature.
+
 ## Financial and observation safeguards
 
 - `Bill.waterAllocations` identifies each period/room/reservation/tenant allocation. `charges.water` remains its compatibility aggregate. Tenant balances and payment amounts include sent allocations only.

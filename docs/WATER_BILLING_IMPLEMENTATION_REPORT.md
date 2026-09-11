@@ -2,6 +2,22 @@
 
 2026-09-11. Scope: versioned, measured water billing for Gil Puyat Private and Double/Sharing rooms. Quad and Guadalupe remain excluded. API, web, statements and backend mobile projections are implemented. Native clients are blocked. No production database migration or deployment was performed.
 
+## Blocker-fix pass after the pre-merge audit
+
+F1/F2/F3/F4/F5/F6/F8 acceptance regressions pass at code/test head `edd373c1`. [The pre-merge report](WATER_BILLING_PREMERGE_VALIDATION.md) records the fixes, test provenance and current readiness matrix; its original `bf2bccfa` audit is explicitly historical.
+
+- Measured opening evidence is immutable through PATCH. An intentional open-period rate edit atomically updates both the period field and pricing snapshot with actor/time/previous-rate audit; closed snapshots remain immutable.
+- Preview and generation use one canonical room/date observation and BedHistory resolver, independent of archived period links. The stored calculation inputs/fingerprint verify matching boundaries, segments, participants, price and money.
+- Water writes validate previous, following and same-instant observations; corrections use supersession. A read-only cutover command reports READY/BLOCKED without manufacturing evidence.
+- Transfer displays separate source/destination water baselines and dates. Move-in clears unsaved inputs on every requested lifecycle transition.
+- Tenant/mobile details use stored allocation identity and display each allocation's own usage/amount. Utility result and related operations enforce branch scope before disclosure, preserving existing owner RBAC.
+
+Commits: `a0576907`, `a6096d45`, `0ec04a83`, `1cfc132b`, `edd373c1`, followed by documentation/evidence. New schema fields are `UtilityPeriod.pricingAudit`, `calculationInputs` and `calculationFingerprint`; no new index is introduced by this fix pass.
+
+Current acceptance evidence:33 focused backend tests and1,002 full frontend tests pass, including24 new backend cases and7 new component cases. Browser checks pass at1440px/390px with mocked APIs. The full server run passed352 suites/3,420 tests (689.894s); the final33-test focused run covers the last added authorization case and controller changes. The production build passed in3m45s. Hosted-head results are recorded in the final handoff and PR checks. Older counts below describe the original implementation run.
+
+Remaining non-blocking issues: pre-existing F7 PDF header overlap with long names, unused legacy utility PDF helper, raw overdue DTO water component. Native Android/iOS and production verification remain unperformed.
+
 ## A. Branch
 
 `feat/versioned-water-meter-billing`, based on main with the latest main changes integrated through `625645f0`. The feature has not been merged into main.
@@ -32,7 +48,7 @@ The complete implementation file list is in [WATER_BILLING_CHANGED_FILES.txt](WA
 
 | Model | Additive contract |
 | --- | --- |
-| UtilityPeriod | Calculation version, unit, immutable pricing snapshot, canonical meter events |
+| UtilityPeriod | Calculation version, unit, audited open-period pricing snapshot (immutable after calculation), pricing audit, canonical meter events and calculation inputs/fingerprint |
 | UtilityReading | m3 unit, observed timestamp, reservation/stay/transfer references, source/evidence and supersession audit metadata |
 | Bill | Independently identified water allocations, dispatch state and supplemental invoice key; existing charges.water remains the aggregate |
 | BedHistory | Exact observed occupancy start/end timestamps for water, alongside existing date fields |
@@ -106,7 +122,7 @@ Statement template v5 includes all three water tables, wrapped cells and truthfu
 
 ## Q. Tests and verification
 
-Final full local server regression: **351 suites, 3,397 tests passed, zero failures** (756.839 seconds). This includes the integration suites and existing electricity/payment regressions. The earlier environment-dependent maintenance timeout was fixed by isolating that deterministic fallback from live AI configuration; the final full run passed.
+Original implementation full local server regression: **351 suites, 3,397 tests passed, zero failures** (756.839 seconds). This includes the integration suites and existing electricity/payment regressions. The earlier environment-dependent maintenance timeout was fixed by isolating that deterministic fallback from live AI configuration; the final full run passed.
 
 Commands run in their respective package directories:
 
