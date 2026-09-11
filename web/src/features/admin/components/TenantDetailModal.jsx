@@ -1399,6 +1399,7 @@ export default function TenantDetailModal({
                 deductions: (payload.damageDeductions || 0) + (payload.keyReturned ? 0 : 500),
                 outstandingBalanceSnapshot: tenant?.balance || 0,
                 finalUtilityReading: payload.meterReading,
+        finalWaterReading: payload.finalWaterReading,
                 confirm: true,
               });
               await invalidateTenantQueries();

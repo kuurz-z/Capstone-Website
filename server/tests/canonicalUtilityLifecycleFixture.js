@@ -15,6 +15,12 @@ import {
   UTILITY_PERIOD_STATE,
 } from "../services/billing/utilityPeriodLifecycleService.js";
 
+// Jest business-date clocks and Mongoose's CJS clock live in different VM
+// contexts. Date jumps must not mark a healthy isolated replica set stale.
+Object.defineProperty(mongoose.connection, '_lastHeartbeatAt', {
+  configurable:true, get:()=>Infinity, set(){},
+});
+
 const DEFAULT_RATE_PER_KWH = 16;
 
 function validDate(value) {
@@ -159,7 +165,7 @@ export async function prepareCanonicalTransferUtilityFixture({
     await fixtureSession.endSession();
   }
 
-  const nextPayload = { ...payload };
+  const nextPayload = {sourceWaterReading:100, targetWaterReading:100, ...payload};
   if (sourceRoom && branchSupportsSeparateUtilityBilling(sourceRoom.branch, "electricity")) {
     const latestSource = await latestReading(sourceRoom._id, eventAt);
     if (nextPayload.sourceRoomMeterReading == null) {

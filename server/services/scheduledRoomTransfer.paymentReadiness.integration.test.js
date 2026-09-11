@@ -201,7 +201,7 @@ async function scheduleThenComplete({ reservation, dest, actorId, daysAgo = 3 })
   await ScheduledRoomTransfer.updateOne({ _id: scheduledTransfer._id }, { $set: { effectiveTransferDate: back } });
   const r = await completeRoomTransfer({
     reservationId: String(reservation._id),
-    payload: { sourceRoomMeterReading: 0, targetRoomMeterReading: 0 },
+    payload: { sourceWaterReading:100, targetWaterReading:100, sourceRoomMeterReading: 0, targetRoomMeterReading: 0 },
     actorId,
   });
   const rec = await ScheduledRoomTransfer.findById(scheduledTransfer._id);

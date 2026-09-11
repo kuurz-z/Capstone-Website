@@ -216,6 +216,38 @@ describe("Phase 7 — atomic cutover cross-domain consistency", () => {
 
   afterEach(() => { jest.useRealTimers(); });
 
+  test('eligible source and destination persist fresh water at the same physical transfer instant',async()=>{
+    const {roomA,reservation,actorId}=await seedTenant({sourceType:'double-sharing'});
+    const roomB=await emptyRoom('double-sharing','water-success');
+    const result=await transferStayWorkflow({reservationId:reservation._id,actorId,
+      payload:{...transferPayload({targetRoom:roomB,sourceReading:1200,targetReading:5000}),sourceWaterReading:106,targetWaterReading:200}});
+    for (const [roomId,eventType,reading] of [[roomA._id,'moveOut',106],[roomB._id,'moveIn',200]]) {
+      const observation=await UtilityReading.findOne({roomId,utilityType:'water',eventType});
+      expect(observation.reading).toBe(reading);expect(observation.date.getTime()).toBe(result.cutoverAt.getTime());
+      expect(String(observation.reservationId)).toBe(String(reservation._id));
+    }
+  });
+
+  test('water save failure rolls back source and destination occupancy together',async()=>{
+    const {roomA,reservation,stay,actorId}=await seedTenant({sourceType:'double-sharing'});
+    const roomB=await emptyRoom('private','water-dest');
+    const create=UtilityReading.create.bind(UtilityReading);
+    const spy=jest.spyOn(UtilityReading,'create').mockImplementation((docs,...args)=>{
+      if ((Array.isArray(docs)?docs:[docs]).some(d=>d.utilityType==='water' && String(d.roomId)===String(roomB._id))) throw new Error('Injected water meter failure');
+      return create(docs,...args);
+    });
+    try {
+      await expect(transferStayWorkflow({reservationId:reservation._id,actorId,
+        payload:{...transferPayload({targetRoom:roomB,sourceReading:1200,targetReading:5000}),sourceWaterReading:106,targetWaterReading:200}})).rejects.toThrow('Injected water meter failure');
+    } finally {spy.mockRestore();}
+    expect(String((await Reservation.findById(reservation._id)).roomId)).toBe(String(roomA._id));
+    expect(String((await Stay.findById(stay._id)).roomId)).toBe(String(roomA._id));
+    expect((await Room.findById(roomA._id)).currentOccupancy).toBe(1);
+    expect((await Room.findById(roomB._id)).currentOccupancy).toBe(0);
+    expect(await UtilityReading.countDocuments({utilityType:'water'})).toBe(0);
+    expect(await BedHistory.countDocuments({reservationId:reservation._id,status:'transferred'})).toBe(0);
+  });
+
   // ── 1. Successful transfer: every domain agrees with the SAME transfer ──
   test("Quad -> Private: occupancy + rent + utility cutoffs + financial records + lease dates all consistent after one transfer", async () => {
     const { tenant, roomA, reservation, stay, predecessor, actorId } = await seedTenant({ sourceType: "quadruple-sharing" });
@@ -447,8 +479,8 @@ describe("Phase 7 — atomic cutover cross-domain consistency", () => {
       resolveCurrentStayForReservation(reservation._id),
       Reservation.findById(reservation._id),
       Bill.find({ reservationId: reservation._id, billType: "transfer_settlement" }),
-      UtilityReading.find({ roomId: reservation.roomId, eventType: "moveOut", tenantId: tenant._id }),
-      UtilityReading.find({ roomId: roomB._id, eventType: "moveIn", tenantId: tenant._id }),
+      UtilityReading.find({ roomId: reservation.roomId, utilityType:"electricity", eventType: "moveOut", tenantId: tenant._id }),
+      UtilityReading.find({ roomId: roomB._id, utilityType:"electricity", eventType: "moveIn", tenantId: tenant._id }),
     ]);
     expect(String(currentStay.roomId)).toBe(String(roomB._id));
     expect(currentStay.bedId).toBe("r402-b1");

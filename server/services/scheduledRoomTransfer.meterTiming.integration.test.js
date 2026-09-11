@@ -238,6 +238,7 @@ async function runCutover({ reservation, dest, actorId, source, target }) {
       effectiveTransferDate: scheduledPast,
       ...(source != null ? { sourceRoomMeterReading: source } : {}),
       ...(target != null ? { targetRoomMeterReading: target } : {}),
+      sourceWaterReading: 100, targetWaterReading: 100,
       reason: "meter timing test",
     },
     actorId,
@@ -258,6 +259,11 @@ describe("admin-supplied readings are used verbatim, dated at the actual cutover
 
     const result = await runCutover({ reservation, dest, actorId, source: 130, target: 55 });
 
+    const waterSource=await UtilityReading.findOne({roomId:roomA._id,utilityType:'water',eventType:'moveOut'});
+    const waterDestination=await UtilityReading.findOne({roomId:dest._id,utilityType:'water',eventType:'moveIn'});
+    expect(waterSource).toBeNull(); // Quad source remains excluded.
+    expect(waterDestination.reading).toBe(100);
+    expect(waterDestination.date.getTime()).toBe(result.cutoverAt.getTime());
     const mo = await sourceMoveOut(roomA._id);
     expect(mo.reading).toBe(130);
     expect(new Date(mo.date).getTime()).toBe(result.cutoverAt.getTime());
@@ -307,10 +313,14 @@ describe("scheduling does not capture scheduling-day readings", () => {
         effectiveTransferDate: now().add(3, "day").format("YYYY-MM-DD"),
         // Even if a caller passes readings at scheduling, they are dropped.
         sourceRoomMeterReading: 1234, targetRoomMeterReading: 567,
+        sourceWaterReading: 333, targetWaterReading: 444,
       },
       actorId,
     });
     const fresh = await ScheduledRoomTransfer.findById(scheduledTransfer._id).lean();
+    expect(fresh.sourceWaterReading).toBeUndefined();
+    expect(fresh.targetWaterReading).toBeUndefined();
+    expect(await UtilityReading.countDocuments({utilityType:"water"})).toBe(0);
     expect(fresh.sourceRoomMeterReading).toBeNull();
     expect(fresh.targetRoomMeterReading).toBeNull();
   });

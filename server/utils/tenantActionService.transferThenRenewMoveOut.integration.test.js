@@ -327,9 +327,10 @@ describe("Phase 10 — renewal + move-out after room transfer", () => {
     const roomB = await emptyRoom("private", "402");
     await doTransfer(reservation, roomB, actorId, "2026-06-15T00:00:00.000Z");
 
+    jest.setSystemTime(new Date("2026-10-16T10:00:00+08:00"));
     await moveOutStayWorkflow({
       reservationId: reservation._id,
-      payload: { confirm: true, moveOutDate: "2026-09-30", finalUtilityReading: 1500, keyReturned: true, forceOverride: true },
+      payload: { confirm: true, moveOutDate: "2026-09-30", finalWaterReading:100, finalUtilityReading: 1500, keyReturned: true, forceOverride: true },
       actorId,
     });
 
@@ -362,9 +363,10 @@ describe("Phase 10 — renewal + move-out after room transfer", () => {
     const r1 = await Reservation.findById(reservation._id);
     expect(r1.securityDepositHeld).toBe(13500); // excess stays held
 
+    jest.setSystemTime(new Date("2026-10-16T10:00:00+08:00"));
     await moveOutStayWorkflow({
       reservationId: reservation._id,
-      payload: { confirm: true, moveOutDate: "2026-09-30", finalUtilityReading: 900, keyReturned: true, forceOverride: true },
+      payload: { confirm: true, moveOutDate: "2026-09-30", finalWaterReading:100, finalUtilityReading: 900, keyReturned: true, forceOverride: true },
       actorId,
     });
     const reloadedRes = await Reservation.findById(reservation._id);
@@ -402,9 +404,10 @@ describe("Phase 10 — renewal + move-out after room transfer", () => {
     const bhTransferredBefore = await BedHistory.find({ reservationId: reservation._id, status: "transferred" }).sort({ moveInDate: 1 });
     expect(bhTransferredBefore).toHaveLength(2);
 
+    jest.setSystemTime(new Date("2026-10-16T10:00:00+08:00"));
     await moveOutStayWorkflow({
       reservationId: reservation._id,
-      payload: { confirm: true, moveOutDate: "2026-10-15", finalUtilityReading: 2000, keyReturned: true, forceOverride: true },
+      payload: { confirm: true, moveOutDate: "2026-10-15", finalWaterReading:100, finalUtilityReading: 2000, keyReturned: true, forceOverride: true },
       actorId,
     });
 
@@ -420,6 +423,9 @@ describe("Phase 10 — renewal + move-out after room transfer", () => {
     expect(bhTransferredAfter.map((b) => [String(b._id), String(b.roomId), b.effectiveEndDate?.toISOString()]))
       .toEqual(bhTransferredBefore.map((b) => [String(b._id), String(b.roomId), b.effectiveEndDate?.toISOString()]));
 
+    const waterClosing=await UtilityReading.findOne({roomId:roomC._id,utilityType:'water',eventType:'moveOut'});
+    expect(waterClosing.reading).toBe(100);
+    expect(waterClosing.date.getTime()).toBe(new Date((await Reservation.findById(reservation._id)).moveOutDate).getTime());
     // Final electricity cutoff is on Room C only.
     const finalReadings = await UtilityReading.find({
       tenantId: reservation.userId, utilityType: "electricity", eventType: "moveOut",

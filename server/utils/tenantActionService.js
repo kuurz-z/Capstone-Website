@@ -1,3 +1,4 @@
+import { recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
 import dayjs from "dayjs";
 import logger from "../middleware/logger.js";
@@ -538,7 +539,9 @@ export async function computeRoomTransferPreview({
         ? "Enter/confirm the CURRENT destination-room electricity reading during Complete Transfer — it becomes the tenant's opening baseline there."
         : "This branch bills electricity at a fixed rate — no destination opening reading is required.",
     },
+    destinationWater: {required:requiresWaterObservation(targetRoom)},
     water: {
+      required:requiresWaterObservation(reservation.roomId),
       // Water CANNOT be finalized on transfer day — its period total and
       // covered-day denominator are unknowable until the water period closes.
       // The transferee is billed for their room-scoped occupancy days at the
@@ -546,7 +549,7 @@ export async function computeRoomTransferPreview({
       billedAtPeriodClose: true,
       finalizedAtTransfer: false,
       separatelyBilled: branchSupportsSeparateUtilityBillingSafe(sourceBranch, "water"),
-      note: "Old-room water (where separately billed) is settled at its normal water period close, based on the tenant's occupancy through the transfer cutoff. It is NOT included in the amount due now and is not double-charged. Where water is included in rent, no water settlement applies.",
+      note: "Old-room water (where separately billed) is settled at its normal water period close, using the saved calculation version and measured occupancy boundaries. It is NOT included in the amount due now and is not double-charged. Where water is included in rent, no water settlement applies.",
     },
     totalImmediateDue,
   };
@@ -2024,6 +2027,15 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
         await targetRoom.save({ session });
       }
 
+      for (const [waterRoom, waterReading, waterEvent] of [
+        [currentRoom, payload.sourceWaterReading, 'moveOut'],
+        [targetRoom, payload.targetWaterReading, 'moveIn'],
+      ]) {
+        await recordWaterObservation({room:waterRoom,reading:waterReading,eventAt:cutoverAt,
+          eventType:waterEvent,reservationId:reservation._id,stayId:activeStay._id,
+          transferId:payload.__scheduledTransferId,tenantId:reservation.userId?._id || reservation.userId,
+          actorId,session,source:'transfer-completion'});
+      }
       const sourceMeterReading = payload.sourceRoomMeterReading ?? payload.meterReading;
       const targetMeterReading = payload.targetRoomMeterReading ?? payload.newRoomMeterReading;
       const sourceMetered = branchSupportsSeparateUtilityBillingSafe(currentRoom.branch, "electricity");
@@ -2674,6 +2686,7 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
         .sort({ moveInDate: -1 })
         .session(session);
       if (activeHistory) {
+        activeHistory.observedEndAt = cutoverAt;
         activeHistory.moveOutDate = cutoverDay;
         activeHistory.effectiveEndDate = cutoverDay;
         activeHistory.status = "transferred";
@@ -2777,6 +2790,7 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
             tenantId: reservation.userId?._id || reservation.userId,
             reservationId: reservation._id,
             stayId: activeStay._id,
+            observedStartAt: cutoverAt,
             moveInDate: cutoverDay,
             effectiveStartDate: cutoverDay,
             status: "active",
@@ -3105,7 +3119,7 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
   try {
     await session.withTransaction(async () => {
       const reservation = await Reservation.findById(reservationId)
-        .populate("roomId", "name roomNumber branch currentOccupancy capacity")
+        .populate("roomId", "name roomNumber branch type currentOccupancy capacity")
         .populate("userId", "firstName lastName email tenantStatus firebaseUid role branch")
         .session(session);
       if (!reservation) {
@@ -3134,6 +3148,9 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
       if (readMoveInDate(reservation) && moveOutAt < new Date(readMoveInDate(reservation))) {
         throw Object.assign(new Error("Move-out date cannot be earlier than move-in date."), { statusCode: 400, code: "MOVEOUT_BEFORE_MOVEIN" });
       }
+      await recordWaterObservation({room:reservation.roomId,reading:payload.finalWaterReading,
+        eventAt:moveOutAt,eventType:'moveOut',reservationId:reservation._id,stayId:activeStay._id,
+        tenantId:reservation.userId?._id || reservation.userId,actorId,session,source:'move-out'});
       const moveOutBoundary = branchSupportsSeparateUtilityBillingSafe(
         reservation.roomId?.branch || activeStay.roomId?.branch,
         "electricity",
@@ -3197,6 +3214,7 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
         .sort({ moveInDate: -1 })
         .session(session);
       if (activeHistory) {
+        activeHistory.observedEndAt = moveOutAt;
         activeHistory.moveOutDate = moveOutAt;
         activeHistory.effectiveEndDate = moveOutAt;
         activeHistory.status = "completed";
@@ -3345,7 +3363,10 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
       reservation.finalSettlementSummary = {
         securityDeposit: securityDepositAmount,
         outstandingBalance: outstandingBal,
-        finalUtilityCharge: validatedFinalUtilityReading,
+        finalElectricityReading: validatedFinalUtilityReading,
+        finalWaterReading: payload.finalWaterReading ?? null,
+        waterLiabilityStatus: requiresWaterObservation(reservation.roomId) ? "pending-period-close" : "included-in-rent",
+        finalUtilityCharge: 0,
         damageDeductions,
         keyDeduction,
         netAmount: netSettlement,

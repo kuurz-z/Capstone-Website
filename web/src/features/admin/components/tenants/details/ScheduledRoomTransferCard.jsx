@@ -419,6 +419,8 @@ function RescheduleDialog({ transfer, onClose, onDone }) {
    atomic cutover. Internal reconciliation machinery is never surfaced here.
    ───────────────────────────────────────────────────────────────────────────── */
 function CompleteTransferDialog({ transfer, onClose, onDone }) {
+  const [sourceWater,setSourceWater] = useState("");
+  const [targetWater,setTargetWater] = useState("");
   const [sourceReading, setSourceReading] = useState("");
   const [targetReading, setTargetReading] = useState("");
   const [notes, setNotes] = useState("");
@@ -466,6 +468,13 @@ function CompleteTransferDialog({ transfer, onClose, onDone }) {
 
   const submit = async () => {
     const body = { notes: notes.trim() || undefined };
+    for (const [required,value,field,label] of [[preview?.water?.required,sourceWater,'sourceWaterReading','source'],[preview?.destinationWater?.required,targetWater,'targetWaterReading','destination']]) {
+      if (!required) continue;
+      if (value === '' || !Number.isFinite(Number(value)) || Number(value)<0) {
+        showNotification(`Enter a valid ${label} water reading (m³).`,'warning'); return;
+      }
+      body[field]=Number(value);
+    }
     if (sourceSubMetered && sourceReading !== "") {
       if (!Number.isFinite(Number(sourceReading)) || Number(sourceReading) < 0) {
         showNotification("The source room reading must be a finite, non-negative number.", "warning");
@@ -577,6 +586,13 @@ function CompleteTransferDialog({ transfer, onClose, onDone }) {
           </p>
         )}
 
+        {[[preview?.water?.required,sourceWater,setSourceWater,'Source'],[preview?.destinationWater?.required,targetWater,setTargetWater,'Destination']].map(([required,value,setValue,label])=>required ? (
+          <label key={label} className="block text-xs font-medium text-foreground mt-3">
+            {label} Water Reading (m³)
+            <input type="number" min="0" step="0.01" value={value} onChange={e=>setValue(e.target.value)} disabled={busy}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" required />
+          </label>
+        ) : null)}
         {sourceSubMetered ? (
           <div className="space-y-1">
             <span className="text-[11px] text-muted-foreground">

@@ -1056,6 +1056,8 @@ export function buildTenantWorkspaceEntry({
         personalInformation.emergencyContact.relationship,
       emergencyContactPhone: personalInformation.emergencyContact.phone,
       branch: reservation.roomId?.branch || "",
+      roomType: reservation.roomId?.type || "",
+      roomId: reservation.roomId?._id || null,
       room: reservation.roomId?.name || reservation.roomId?.roomNumber || "",
       bed: reservation.selectedBed?.position || reservation.selectedBed?.id || "",
     },

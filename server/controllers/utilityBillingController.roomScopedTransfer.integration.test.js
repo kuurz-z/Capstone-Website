@@ -64,7 +64,8 @@ await jest.unstable_mockModule("../services/contractService.js", () => ({
   validateContractForGeneration: mockValidate,
 }));
 
-const { transferStayWorkflow } = await import("../utils/tenantActionService.js");
+const { transferStayWorkflow: transferWithMeters } = await import("../utils/tenantActionService.js");
+const transferStayWorkflow = input => transferWithMeters({...input,payload:{sourceWaterReading:100,targetWaterReading:100,...input.payload}});
 const { seedCanonicalElectricityRoom } = await import("../tests/canonicalUtilityLifecycleFixture.js");
 const { generateContractNumber } = await import("../services/contractService.js");
 const { resolveRoomScopedReservationsForPeriod } = await import("./utilityBillingController.js");

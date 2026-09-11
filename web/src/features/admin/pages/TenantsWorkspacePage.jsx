@@ -1336,6 +1336,7 @@ export default function TenantsWorkspacePage() {
                       actionContext?.billingSummary?.currentBalance ??
                       actionTenantDetail?.paymentInfo?.currentBalance ??
                       0,
+                    finalWaterReading: payload.finalWaterReading,
                     finalUtilityReading:
                       payload.finalUtilityReading ?? payload.meterReading,
                     confirm: true,

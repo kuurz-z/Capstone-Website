@@ -207,7 +207,7 @@ async function makeDueWithSettlementBill(scheduledTransferId, { daysAgo = 3 } = 
   const r = await completeRoomTransfer({
     reservationId: String(rec.reservationId),
     // Sub-metered branch (gil-puyat) needs meter readings even to SIZE the Bill.
-    payload: { sourceRoomMeterReading: 0, targetRoomMeterReading: 0 },
+    payload: { sourceRoomMeterReading: 0, targetRoomMeterReading: 0, sourceWaterReading:100,targetWaterReading:100 },
     actorId: fixtureActorId,
   });
   const linked = (await ScheduledRoomTransfer.findById(scheduledTransferId).lean())?.settlementBillId || null;
@@ -481,7 +481,7 @@ describe("post-cutover", () => {
     // Complete the transfer (admin-driven) — it is now paid, so it executes.
     const done = await completeRoomTransfer({
       reservationId: String(reservation._id),
-      payload: { sourceRoomMeterReading: 0, targetRoomMeterReading: 0 },
+      payload: { sourceRoomMeterReading: 0, targetRoomMeterReading: 0, sourceWaterReading:100,targetWaterReading:100 },
       actorId,
     });
     expect(done.outcome).toBe("executed");
