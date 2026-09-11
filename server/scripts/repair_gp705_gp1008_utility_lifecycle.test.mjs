@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import { createHash } from "node:crypto";
+import { rawSnapshot, seedProtectedControls, guardMutations, controls } from "./utilityRepairTestSupport.mjs";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "@jest/globals";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import {
@@ -205,11 +207,7 @@ async function seedTargetState() {
 }
 
 async function collectionSnapshot() {
-  const result = {};
-  for (const [name, Model] of Object.entries(models)) {
-    result[name] = await Model.find({}).sort({ _id: 1 }).lean();
-  }
-  return JSON.stringify(result);
+  return rawSnapshot(models);
 }
 
 describe("targeted GP-705 / GP-1008 utility repair", () => {
@@ -232,6 +230,7 @@ describe("targeted GP-705 / GP-1008 utility repair", () => {
   beforeEach(async () => {
     await clearCollections();
     await seedTargetState();
+    await seedProtectedControls(models);
   });
 
   test("1. dry-run performs zero writes", async () => {
@@ -410,10 +409,54 @@ describe("targeted GP-705 / GP-1008 utility repair", () => {
     };
     await runTargetedUtilityRepair({ args: parsedArgs({ write: true }), models });
     expect(await ScheduledRoomTransfer.findById(TARGET.scheduleId).select("+executionToken").lean()).toEqual(before.schedule);
-    expect(await Room.find({ _id: { $in: [O(TARGET.sourceRoomId), O(TARGET.destinationRoomId)] } }).sort({ _id: 1 }).lean()).toEqual(before.rooms);
+    expect(await Room.find({ _id: { $in: [O(TARGET.sourceRoomId), O(TARGET.destinationRoomId)] } }).sort({ _id: 1 }).lean()).toEqual(before.rooms.map(room => ({ ...room, electricityObservationRevision: (room.electricityObservationRevision ?? 0) + 1 })));
     expect(await Reservation.findById(TARGET.reservationId).lean()).toEqual(before.reservation);
     expect(await Stay.find({ reservationId: O(TARGET.reservationId) }).sort({ _id: 1 }).lean()).toEqual(before.stays);
     expect(await Contract.find({ reservationId: O(TARGET.reservationId) }).sort({ _id: 1 }).lean()).toEqual(before.contracts);
     expect(await Payment.find({ reservationId: O(TARGET.reservationId) }).sort({ _id: 1 }).lean()).toEqual(before.payments);
+  });
+
+  test.each([undefined, 7])("exact revision increment from %s preserves all other Room fields and paid history", async revision => {
+    if (revision !== undefined) await Room.collection.updateMany({ _id: { $in: [O(TARGET.sourceRoomId), O(TARGET.destinationRoomId)] } }, { $set: { electricityObservationRevision: revision } });
+    const before = JSON.parse(await collectionSnapshot());
+    await runTargetedUtilityRepair({ args: parsedArgs({ write: true }), models });
+    const after = JSON.parse(await collectionSnapshot());
+    expect(after.Room).toEqual(before.Room.map(room => [TARGET.sourceRoomId, TARGET.destinationRoomId].includes(room._id) ? { ...room, electricityObservationRevision: (revision ?? 0) + 1 } : room));
+    expect(after.Payment).toEqual(before.Payment);
+    expect(after.Bill.filter(bill => bill.status === "paid")).toEqual(before.Bill.filter(bill => bill.status === "paid"));
+    expect(after.UtilityPeriod.find(period => period._id === String(controls.period))).toEqual(before.UtilityPeriod.find(period => period._id === String(controls.period)));
+    expect(after.UtilityReading.find(reading => reading._id === String(controls.reading))).toEqual(before.UtilityReading.find(reading => reading._id === String(controls.reading)));
+  });
+
+  test.each(guardMutations(TARGET))("rejects %s and rolls back all raw documents", async (_label, model, filter, update) => {
+    const before = await collectionSnapshot();
+    await expect(runTargetedUtilityRepair({ args: parsedArgs({ write: true }), models,
+      hooks: { afterMutations: async ({ session }) => { await models[model].collection.updateOne(filter, update, { session }); } },
+    })).rejects.toMatchObject({ code: "UNTOUCHED_STATE_CHANGED" });
+    expect(await collectionSnapshot()).toBe(before);
+  });
+
+  test("historical v1 full-state audit hash remains readable without rewriting the audit", async () => {
+    // Recreate the historical post-state: the old opener did not write Room.
+    const canonical = value => {
+      if (value instanceof Date) return value.toISOString();
+      if (value?.toHexString) return value.toHexString();
+      if (Array.isArray(value)) return value.map(canonical);
+      return value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+    };
+    const protectedBefore = {
+      schedule: await ScheduledRoomTransfer.findById(TARGET.scheduleId).select("+executionToken").lean(),
+      rooms: [await Room.findById(TARGET.sourceRoomId).lean(), await Room.findById(TARGET.destinationRoomId).lean()],
+      reservation: await Reservation.findById(TARGET.reservationId).lean(),
+      stays: await Stay.find({ reservationId: O(TARGET.reservationId) }).sort({ _id: 1 }).lean(),
+      contracts: await Contract.find({ reservationId: O(TARGET.reservationId) }).sort({ _id: 1 }).lean(),
+      payments: await Payment.find({ reservationId: O(TARGET.reservationId) }).sort({ _id: 1 }).lean(),
+    };
+    await runTargetedUtilityRepair({ args: parsedArgs({ write: true }), models });
+    await Room.collection.updateMany({ _id: { $in: [O(TARGET.sourceRoomId), O(TARGET.destinationRoomId)] } }, { $unset: { electricityObservationRevision: "" } });
+    await AuditLog.collection.updateOne({ _id: O(REPLACEMENT_IDS.auditLogId) }, { $set: { "metadata.untouchedStateHash": createHash("sha256").update(JSON.stringify(canonical(protectedBefore))).digest("hex") } });
+    const before = await collectionSnapshot();
+    expect((await runTargetedUtilityRepair({ args: parsedArgs({ write: true }), models })).status).toBe("ALREADY_APPLIED");
+    expect(await collectionSnapshot()).toBe(before);
   });
 });

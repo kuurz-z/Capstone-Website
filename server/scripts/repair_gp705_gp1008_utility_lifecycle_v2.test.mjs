@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import { rawSnapshot, seedProtectedControls, guardMutations, controls } from "./utilityRepairTestSupport.mjs";
+import { resolveUtilityPeriodState } from "../services/billing/utilityPeriodLifecycleService.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "@jest/globals";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { AuditLog, Bill, Contract, Payment, Reservation, Room, ScheduledRoomTransfer, Stay, UtilityFinalization, UtilityHistoricalGap, UtilityPeriod, UtilityReading } from "../models/index.js";
@@ -47,12 +49,12 @@ describe("fresh-baseline v2 repair script", () => {
   let mongo;
   beforeAll(async () => { mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } }); await mongoose.connect(mongo.getUri(), { dbName: "fresh_baseline_v2" }); await UtilityPeriod.syncIndexes(); }, 120_000);
   afterAll(async () => { await mongoose.disconnect(); await mongo?.stop(); }, 120_000);
-  beforeEach(async () => { await Promise.all(Object.values(models).map((Model) => Model.deleteMany({}))); await seed(); });
+  beforeEach(async () => { await Promise.all(Object.values(models).map((Model) => Model.deleteMany({}))); await seed(); await seedProtectedControls(models); });
 
   test("15. v2 dry-run performs zero writes", async () => {
-    const before = await Promise.all(Object.values(models).map((Model) => Model.countDocuments()));
+    const before = await rawSnapshot(models);
     expect(await runFreshBaselineRepair({ args: args(), models })).toMatchObject({ mode: "dry-run", status: "READY", databaseMutations: 0 });
-    expect(await Promise.all(Object.values(models).map((Model) => Model.countDocuments()))).toEqual(before);
+    expect(await rawSnapshot(models)).toBe(before);
   });
   test("16. v2 write transaction archives history rather than deleting it", async () => {
     await runFreshBaselineRepair({ args: args(true), models, now: () => new Date("2026-09-01T04:21:00Z") });
@@ -83,5 +85,31 @@ describe("fresh-baseline v2 repair script", () => {
     const after = await ScheduledRoomTransfer.findById(TARGET.scheduleId).lean();
     expect(after).toMatchObject({ status: before.status, holdApplied: before.holdApplied, effectiveTransferDate: before.effectiveTransferDate, scheduleHistory: before.scheduleHistory });
     expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  test.each([undefined, 7])("exact revision increment from %s preserves other Room fields and paid history", async revision => {
+    if (revision !== undefined) await Room.collection.updateMany({ _id: { $in: [O(TARGET.sourceRoomId), O(TARGET.destinationRoomId)] } }, { $set: { electricityObservationRevision: revision } });
+    const before = JSON.parse(await rawSnapshot(models));
+    await runFreshBaselineRepair({ args: args(true), models });
+    const after = JSON.parse(await rawSnapshot(models));
+    expect(after.Room).toEqual(before.Room.map(room => [TARGET.sourceRoomId, TARGET.destinationRoomId].includes(room._id) ? { ...room, electricityObservationRevision: (revision ?? 0) + 1 } : room));
+    for (const name of ["Payment", "Contract", "Stay", "Reservation", "ScheduledRoomTransfer"]) expect(after[name]).toEqual(before[name]);
+    expect(after.Bill.filter(bill => bill.status === "paid")).toEqual(before.Bill.filter(bill => bill.status === "paid"));
+    expect(after.UtilityPeriod.find(period => period._id === String(controls.period))).toEqual(before.UtilityPeriod.find(period => period._id === String(controls.period)));
+    expect(after.UtilityReading.find(reading => reading._id === String(controls.reading))).toEqual(before.UtilityReading.find(reading => reading._id === String(controls.reading)));
+  });
+
+  test.each(guardMutations(TARGET))("rejects %s and rolls back all raw documents", async (_label, model, filter, update) => {
+    const before = await rawSnapshot(models);
+    let injected = false;
+    await expect(runFreshBaselineRepair({ args: args(true), models, deps: {
+      resolvePeriod: async options => {
+        // The script resolves replacements after writing its audit record.
+        if (!injected) { injected = true; await models[model].collection.updateOne(filter, update, { session: options.session }); }
+        return resolveUtilityPeriodState(options);
+      },
+    } })).rejects.toMatchObject({ code: "UNTOUCHED_STATE_CHANGED" });
+    expect(injected).toBe(true);
+    expect(await rawSnapshot(models)).toBe(before);
   });
 });
