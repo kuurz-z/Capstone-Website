@@ -298,3 +298,27 @@ test("PersonalDetailsTab component enforces visual limits, counters, and birthda
   assert.match(source, /Must be at least 18 years old/);
 });
 
+test("PersonalDetailsTab BirthdayField decouples parts state to prevent reset on partial selection", () => {
+  assert.match(
+    source,
+    /selectedParts/,
+    "BirthdayField must maintain internal state for selectedParts to prevent selection wipe"
+  );
+  assert.match(
+    source,
+    /selectedParts\.month/,
+    "BirthdayField month select must bind to selectedParts.month"
+  );
+  assert.match(
+    source,
+    /selectedParts\.day/,
+    "BirthdayField day select must bind to selectedParts.day"
+  );
+  assert.match(
+    source,
+    /selectedParts\.year/,
+    "BirthdayField year select must bind to selectedParts.year"
+  );
+});
+
+

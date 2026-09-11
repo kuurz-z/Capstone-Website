@@ -238,7 +238,7 @@ export function ChatLeadEscalationForm({
         chatContext: conversationHistory.slice(-6).map((m) => `${m.role}: ${m.text}`).join("\n"),
       };
 
-      const res = await chatbotApi.escalateToHuman(payload);
+      const res = await chatbotApi.escalateChatbotLead(payload);
 
       if (res?.success) {
         setSubmittedRequest({

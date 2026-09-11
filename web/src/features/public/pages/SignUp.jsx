@@ -21,6 +21,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  fetchSignInMethodsForEmail,
   GoogleAuthProvider,
   FacebookAuthProvider,
 } from "firebase/auth";
@@ -425,9 +426,10 @@ function SignUp() {
   };
 
   const completePasswordOnboarding = async (firebaseUser) => {
+    const phoneToSave = (formData.phone || "").trim();
     const response = await registerUserInBackend(
       firebaseUser,
-      formData.phone,
+      phoneToSave,
       formData.firstName,
       formData.lastName,
     );
@@ -475,15 +477,16 @@ function SignUp() {
     return response;
   };
 
-  const redirectExistingAccountToSignIn = async () => {
+  const redirectExistingAccountToSignIn = async (isGoogle = false) => {
     await auth.signOut().catch(() => {});
     appNavigate("/signin", {
       replace: true,
       state: { email: formData.email },
       flash: {
         type: "info",
-        message:
-          "An account already exists with this email address. Please sign in instead.",
+        message: isGoogle
+          ? "An account with this email already exists via Google. Please sign in with Google."
+          : "An account already exists with this email address. Please sign in instead.",
       },
     });
   };
@@ -512,7 +515,14 @@ function SignUp() {
         signInError?.code === "auth/wrong-password" ||
         signInError?.code === "auth/invalid-credential"
       ) {
-        await redirectExistingAccountToSignIn();
+        let isGoogle = false;
+        try {
+          const methods = await fetchSignInMethodsForEmail(auth, formData.email);
+          isGoogle = Array.isArray(methods) && methods.includes("google.com");
+        } catch {
+          // fallback
+        }
+        await redirectExistingAccountToSignIn(isGoogle);
         return;
       }
       showNotification(getRegistrationErrorMessage(signInError, "signup"), "error");
@@ -523,7 +533,14 @@ function SignUp() {
       await authApi.checkUser();
       // A backend profile already exists for this identity — it's a
       // genuinely complete, existing account.
-      await redirectExistingAccountToSignIn();
+      let isGoogle = false;
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, formData.email);
+        isGoogle = Array.isArray(methods) && methods.includes("google.com");
+      } catch {
+        // fallback
+      }
+      await redirectExistingAccountToSignIn(isGoogle);
     } catch (checkError) {
       const code = checkError.response?.data?.code;
       if (code === "USER_NOT_FOUND") {
@@ -537,11 +554,7 @@ function SignUp() {
       }
       await recoverFromAuthFailure(auth, checkError);
       if (code === "IDENTITY_CONFLICT") {
-        showNotification(
-          "This account requires identity verification before it can be linked. Please use your original sign-in method or contact support.",
-          "warning",
-          7000,
-        );
+        await redirectExistingAccountToSignIn(true);
         return;
       }
       showNotification(getRegistrationErrorMessage(checkError, "signup"), "error");

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Edit2,
   User,
@@ -674,11 +674,26 @@ const BirthdayField = ({
   const [focusedPart, setFocusedPart] = useState(null);
   const hasError = errors?.[field];
   const currentDate = editData?.[field] || "";
-  const parts = parseDateParts(currentDate);
+
+  // Maintain local parts state so selecting an individual part (e.g. Month)
+  // persists visually even when the composed date string is still incomplete.
+  const [selectedParts, setSelectedParts] = useState(() =>
+    parseDateParts(currentDate || value || "")
+  );
+
+  // Synchronize when the external complete date string changes
+  useEffect(() => {
+    if (currentDate && typeof currentDate === "string" && currentDate.includes("-")) {
+      const parsed = parseDateParts(currentDate);
+      if (parsed.year || parsed.month || parsed.day) {
+        setSelectedParts(parsed);
+      }
+    }
+  }, [currentDate]);
 
   const daysCount = useMemo(
-    () => getDaysInMonth(parts.year, parts.month),
-    [parts.year, parts.month],
+    () => getDaysInMonth(selectedParts.year, selectedParts.month),
+    [selectedParts.year, selectedParts.month],
   );
 
   const dayOptions = useMemo(
@@ -689,18 +704,21 @@ const BirthdayField = ({
   const yearOptions = useMemo(() => buildYearOptions(18, 100), []);
 
   const handlePartChange = (part, partValue) => {
-    const nextParts = { ...parts, [part]: partValue };
-    if (nextParts.month && nextParts.day) {
-      const maxDays = getDaysInMonth(nextParts.year, nextParts.month);
-      if (Number(nextParts.day) > maxDays) {
-        nextParts.day = String(maxDays).padStart(2, "0");
+    setSelectedParts((prev) => {
+      const nextParts = { ...prev, [part]: partValue };
+      if (nextParts.month && nextParts.day) {
+        const maxDays = getDaysInMonth(nextParts.year, nextParts.month);
+        if (Number(nextParts.day) > maxDays) {
+          nextParts.day = String(maxDays).padStart(2, "0");
+        }
       }
-    }
-    const nextDate = composeDate(nextParts);
-    setEditData((prev) => ({ ...prev, [field]: nextDate }));
-    if (nextParts.year && nextParts.month && nextParts.day) {
-      onBlur?.(field, nextDate);
-    }
+      const nextDate = composeDate(nextParts);
+      setEditData((prevEdit) => ({ ...prevEdit, [field]: nextDate }));
+      if (nextParts.year && nextParts.month && nextParts.day) {
+        onBlur?.(field, nextDate);
+      }
+      return nextParts;
+    });
   };
 
   return (
@@ -723,7 +741,7 @@ const BirthdayField = ({
               {/* Month Select */}
               <div style={{ position: "relative", flex: 1.4 }}>
                 <select
-                  value={parts.month}
+                  value={selectedParts.month}
                   onChange={(e) => handlePartChange("month", e.target.value)}
                   onFocus={() => setFocusedPart("month")}
                   onBlur={() => {
@@ -766,7 +784,7 @@ const BirthdayField = ({
               {/* Day Select */}
               <div style={{ position: "relative", flex: 0.9 }}>
                 <select
-                  value={parts.day}
+                  value={selectedParts.day}
                   onChange={(e) => handlePartChange("day", e.target.value)}
                   onFocus={() => setFocusedPart("day")}
                   onBlur={() => {
@@ -809,7 +827,7 @@ const BirthdayField = ({
               {/* Year Select */}
               <div style={{ position: "relative", flex: 1.1 }}>
                 <select
-                  value={parts.year}
+                  value={selectedParts.year}
                   onChange={(e) => handlePartChange("year", e.target.value)}
                   onFocus={() => setFocusedPart("year")}
                   onBlur={() => {
