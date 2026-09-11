@@ -10,6 +10,7 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import mongoose from "mongoose";
+import { roomAfterOpening, protectedStateHash } from "./utilityRepairProtectedState.mjs";
 import {
   AuditLog,
   Bill,
@@ -529,10 +530,10 @@ function validatePreconditions(state, args) {
   assertRepair(!state.deterministicAuditCollision, "REPLACEMENT_ID_COLLISION", "The deterministic AuditLog ID already exists with different metadata.");
 }
 
-function untouchedSnapshot(state) {
+function untouchedSnapshot(state, afterOpening = false) {
   return canonicalize({
     schedule: state.schedule,
-    rooms: [state.sourceRoom, state.destinationRoom],
+    rooms: [state.sourceRoom, state.destinationRoom].map(room => afterOpening ? roomAfterOpening(room) : room),
     reservation: state.reservation,
     stays: state.stays,
     contracts: state.contracts,
@@ -560,7 +561,7 @@ export function buildRepairPreview(state, args, repairAt = new Date()) {
       I_newSourcePeriodStartReading: { before: null, after: { id: REPLACEMENT_IDS.sourceStartReadingId, roomId: TARGET.sourceRoomId, utilityPeriodId: REPLACEMENT_IDS.sourcePeriodId, eventType: "periodStart", readingStatus: "locked", reading: args.sourceOpening, date: TARGET.periodStart, isArchived: false } },
       J_newDestinationOpenPeriod: { before: null, after: { id: REPLACEMENT_IDS.destinationPeriodId, roomId: TARGET.destinationRoomId, utilityType: "electricity", status: "open", isArchived: false, startDate: TARGET.periodStart, endDate: null, startReading: args.destinationOpening, endReading: null, ratePerUnit: TARGET.ratePerUnit } },
       K_newDestinationPeriodStartReading: { before: null, after: { id: REPLACEMENT_IDS.destinationStartReadingId, roomId: TARGET.destinationRoomId, utilityPeriodId: REPLACEMENT_IDS.destinationPeriodId, eventType: "periodStart", readingStatus: "locked", reading: args.destinationOpening, date: TARGET.periodStart, isArchived: false } },
-      L_auditLog: { before: null, after: { id: REPLACEMENT_IDS.auditLogId, logId: REPLACEMENT_IDS.auditLogIdText, type: "data_modification", severity: "critical", action: "targeted utility lifecycle data repair", entityType: "utility", entityId: TARGET.scheduleId, actorId, metadata: { repairKey: REPAIR_KEY, sourceEvidence: args.sourceEvidence, destinationEvidence: args.destinationEvidence, sourceOpening: args.sourceOpening, destinationOpening: args.destinationOpening, untouchedStateHash: stateDigest(untouchedSnapshot(state)), confirmToken: CONFIRM_TOKEN, scriptVersion: SCRIPT_VERSION } } },
+      L_auditLog: { before: null, after: { id: REPLACEMENT_IDS.auditLogId, logId: REPLACEMENT_IDS.auditLogIdText, type: "data_modification", severity: "critical", action: "targeted utility lifecycle data repair", entityType: "utility", entityId: TARGET.scheduleId, actorId, metadata: { repairKey: REPAIR_KEY, sourceEvidence: args.sourceEvidence, destinationEvidence: args.destinationEvidence, sourceOpening: args.sourceOpening, destinationOpening: args.destinationOpening, untouchedStateHash: stateDigest(untouchedSnapshot(state, true)), confirmToken: CONFIRM_TOKEN, scriptVersion: SCRIPT_VERSION } } },
     },
     untouched: {
       scheduleId: TARGET.scheduleId,
@@ -585,7 +586,7 @@ async function conditionalArchive(Model, filter, label, session) {
   assertRepair(result.matchedCount === 1 && result.modifiedCount === 1, "CHANGED_SINCE_AUDIT", `${label} changed before it could be archived.`);
 }
 
-async function validatePostWrite({ models, session, args, beforeUntouched, deps }) {
+async function validatePostWrite({ models, session, args, expectedUntouched, deps }) {
   const state = await loadState({ models, session });
   const sourceResolution = await deps.resolvePeriodState({
     utilityType: "electricity",
@@ -622,7 +623,7 @@ async function validatePostWrite({ models, session, args, beforeUntouched, deps 
     const expected = sameId(reading.roomId, TARGET.sourceRoomId) ? args.sourceOpening : args.destinationOpening;
     assertRepair(reading.eventType === "periodStart" && reading.readingStatus === "locked" && Number(reading.reading) === expected && reading.isArchived === false, "POSTCONDITION_FAILED", "A replacement start boundary is invalid.");
   }
-  assertRepair(comparable(untouchedSnapshot(state)) === comparable(beforeUntouched), "UNTOUCHED_STATE_CHANGED", "Schedule, occupancy, Reservation, Stay, Contract, or Payment state changed during repair.");
+  assertRepair(comparable(untouchedSnapshot(state)) === comparable(expectedUntouched), "UNTOUCHED_STATE_CHANGED", "Schedule, occupancy, Reservation, Stay, Contract, or Payment state changed during repair.");
   assertRepair(state.schedule.status === "scheduled" && state.schedule.holdApplied === true && !state.schedule.executionToken && !state.schedule.executedAt, "POSTCONDITION_FAILED", "Transfer state changed during utility repair.");
   assertRepair(state.repairAudit && state.repairAudit.metadata?.repairKey === REPAIR_KEY, "POSTCONDITION_FAILED", "Repair AuditLog is missing.");
 }
@@ -782,7 +783,18 @@ export async function runTargetedUtilityRepair({
         return;
       }
       validatePreconditions(state, args);
-      const beforeUntouched = untouchedSnapshot(state);
+      // The full expected post-state includes exactly one coordination write
+      // per opening. Hash format remains unchanged for historical audits.
+      const expectedUntouched = untouchedSnapshot(state, true);
+      const protectedOptions = {
+        models, session, roomIds: [TARGET.sourceRoomId, TARGET.destinationRoomId],
+        mutableIds: {
+          Bill: [TARGET.sourceBillId],
+          UtilityPeriod: [TARGET.sourcePeriodId, TARGET.destinationPeriodId, REPLACEMENT_IDS.sourcePeriodId, REPLACEMENT_IDS.destinationPeriodId],
+          UtilityReading: [TARGET.sourceStartReadingId, TARGET.sourceEndReadingId, TARGET.destinationStartReadingId, TARGET.destinationEndReadingId, REPLACEMENT_IDS.sourceStartReadingId, REPLACEMENT_IDS.destinationStartReadingId],
+        },
+      };
+      const expectedProtectedHash = await protectedStateHash({ ...protectedOptions, afterOpening: true });
       const actorId = objectId(args.actorId || state.schedule.scheduledBy);
 
       await conditionalArchive(models.UtilityPeriod, {
@@ -878,7 +890,7 @@ export async function runTargetedUtilityRepair({
         actorId: sid(actorId),
         timestamp: repairAt,
         beforeAfter: preview.records,
-        untouchedStateHash: stateDigest(beforeUntouched),
+        untouchedStateHash: stateDigest(expectedUntouched),
         confirmToken: CONFIRM_TOKEN,
         scriptVersion: SCRIPT_VERSION,
         repairNote: args.repairNote || null,
@@ -901,7 +913,8 @@ export async function runTargetedUtilityRepair({
       }], { session });
 
       if (hooks.afterMutations) await hooks.afterMutations({ session, models });
-      await validatePostWrite({ models, session, args, beforeUntouched, deps });
+      await validatePostWrite({ models, session, args, expectedUntouched, deps });
+      assertRepair(await protectedStateHash(protectedOptions) === expectedProtectedHash, "UNTOUCHED_STATE_CHANGED", "Protected records changed during utility repair.");
       result = {
         ...preview,
         mode: "write",
