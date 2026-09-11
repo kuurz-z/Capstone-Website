@@ -430,6 +430,7 @@ describe("utility breakdowns formatting & bridge", () => {
   };
 
   const sampleWaterBreakdown = {
+    calculationVersion:'water-meter-v1', unit:'m3',
     record: {
       id: "607f1f77bcf86cd799439002",
       cycleStart: new Date("2026-05-01"),

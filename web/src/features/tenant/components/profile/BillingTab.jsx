@@ -1,3 +1,4 @@
+import WaterBillingTables from '../../../../shared/components/WaterBillingTables';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { billingApi } from "../../../../shared/api/apiClient";
@@ -948,6 +949,7 @@ const StatementLedgerCard = ({
 
   return (
     <div
+      id={`bill-${bill.id || bill._id}`}
       className={`statement-card ${bill.status === "overdue" ? "is-overdue" : ""} ${isSelected ? "is-selected" : ""}`}
       style={{
         background: isSelected ? "#f8fafc" : "#ffffff",
@@ -1338,51 +1340,10 @@ const StatementLedgerCard = ({
                   <Activity size={14} /> Loading water breakdown...
                 </div>
               ) : resolvedWaterData?.record ? (
-                (() => {
-                  const occupantsCount = Number(resolvedWaterData.record.tenantsSharing || 1);
-                  const isSingleOccupant = occupantsCount <= 1;
-                  return (
-                    <div className="statement-breakdown-card">
-                      <div className="statement-breakdown-header">
-                        <span className="statement-breakdown-header__title">
-                          <Droplets size={14} color="#2563eb" />
-                          Water Utility Breakdown
-                        </span>
-                        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
-                          {isSingleOccupant ? "Single Occupancy" : `${occupantsCount} Occupants (Shared Room)`}
-                        </span>
-                      </div>
-                      <div className="statement-breakdown-body">
-                        <div className="statement-breakdown-row">
-                          <span className="statement-breakdown-label">
-                            {isSingleOccupant ? "Total Water Consumption" : "Room Water Consumption"}
-                          </span>
-                          <span className="statement-breakdown-value">
-                            {Number(resolvedWaterData.record.usage || 0).toLocaleString("en-PH", { maximumFractionDigits: 2 })} units
-                          </span>
-                        </div>
-                        <div className="statement-breakdown-row">
-                          <span className="statement-breakdown-label">Water Rate per Unit</span>
-                          <span className="statement-breakdown-value">
-                            {fmt(resolvedWaterData.record.ratePerUnit)}
-                          </span>
-                        </div>
-                        <div className="statement-breakdown-row">
-                          <span className="statement-breakdown-label">Total Room Cost</span>
-                          <span className="statement-breakdown-value">
-                            {fmt(resolvedWaterData.record.roomTotal)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="statement-breakdown-footer">
-                        <span>
-                          {isSingleOccupant ? "Water Amount Due" : `Your Allocated Share (${occupantsCount} occupants)`}
-                        </span>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: "#2563eb" }}>{fmt(summary.waterTotal)}</span>
-                      </div>
-                    </div>
-                  );
-                })()
+                <div className="statement-breakdown-card">
+                  <div className="statement-breakdown-header"><strong>Water Billing Details</strong><span>{fmt(summary.waterTotal)}</span></div>
+                  <div className="statement-breakdown-body"><WaterBillingTables data={resolvedWaterData}/></div>
+                </div>
               ) : (
                 <div className="statement-breakdown-card">
                   <div className="statement-breakdown-header">
@@ -1459,6 +1420,15 @@ export default function BillingTab() {
   const [categoryFilter, setCategoryFilter] = useState("all"); // all | rent | electricity | water
   const [selectedBillIds, setSelectedBillIds] = useState([]);
   const [expandedBillIds, setExpandedBillIds] = useState(new Set());
+  useEffect(()=>{
+    const target=searchParams.get('billId');
+    if (!target || !bills.some(b=>String(b._id || b.id)===target)) return;
+    setStatusFilter('all');setCategoryFilter('all');
+    setExpandedBillIds(current=>current.has(target)?current:new Set([...current,target]));
+    const timer=setTimeout(()=>document.getElementById(`bill-${target}`)?.scrollIntoView({behavior:'smooth',block:'center'}),100);
+    return ()=>clearTimeout(timer);
+  },[searchParams,bills]);
+
   const [payingOnline, setPayingOnline] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [billsToCheckout, setBillsToCheckout] = useState([]);

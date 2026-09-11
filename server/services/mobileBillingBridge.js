@@ -269,28 +269,16 @@ export function formatMobileElectricityBreakdown(breakdown) {
  * @returns {Object|null}
  */
 export function formatMobileWaterBreakdown(breakdown) {
-  if (!breakdown || !breakdown.record) return null;
-  const rec = breakdown.record;
-  const rate = Number(rec.ratePerUnit || 50);
-  const consumption = Number(rec.usage || 0);
-  const readingFrom = Number(rec.readingFrom ?? 0);
-  const readingTo = Number(rec.readingTo ?? (readingFrom + consumption));
-  const total = Number(rec.roomTotal ?? (consumption * rate));
-  const myShare = Number(rec.myShare ?? 0);
-  const tenantsSharing = Number(rec.tenantsSharing || 1);
-
-  return {
-    period_start: toIsoOrNull(breakdown?.period?.startDate),
-    period_end: toIsoOrNull(breakdown?.period?.endDate),
-    reading_date: toIsoOrNull(breakdown?.period?.endDate),
-    reading_from: readingFrom,
-    reading_to: readingTo,
-    consumption: +consumption.toFixed(1),
-    rate,
-    total: +total.toFixed(2),
-    sharing_policy: "Equal division among active tenants",
-    tenants_sharing: tenantsSharing,
-    my_share: +myShare.toFixed(2),
+  if (!breakdown?.record) return null;
+  const rec=breakdown.record;
+  const measured=breakdown.calculationVersion === 'water-meter-v1';
+  return {...breakdown,
+    period_start:toIsoOrNull(rec.cycleStart),period_end:toIsoOrNull(rec.cycleEnd),reading_date:toIsoOrNull(rec.cycleEnd),
+    reading_from:measured?rec.readingFrom:null,reading_to:measured?rec.readingTo:null,
+    consumption:measured?rec.usage:null,rate:measured?rec.ratePerUnit:null,
+    total:rec.roomTotal ?? null,my_share:breakdown.tenantAmount ?? rec.myShare ?? null,
+    sharing_policy:breakdown.billingBasis || 'Historical water allocation; physical consumption is unknown',
+    tenants_sharing:rec.tenantsSharing ?? null,
   };
 }
 
