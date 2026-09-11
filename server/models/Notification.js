@@ -25,6 +25,7 @@ import mongoose from "mongoose";
 
 const notificationSchema = new mongoose.Schema(
   {
+    data: {type:mongoose.Schema.Types.Mixed, default:undefined},
     // --- Target User ---
     userId: {
       type: mongoose.Schema.Types.ObjectId,

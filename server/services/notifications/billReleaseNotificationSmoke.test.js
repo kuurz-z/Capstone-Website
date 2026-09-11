@@ -194,3 +194,20 @@ describe("bill release -> mobile push smoke test", () => {
     expect(messages.some((m) => m.to === "ExponentPushToken[tenant-b-device]")).toBe(false);
   });
 });
+
+test('water allocation notification dedupes DB, push and in-app while retaining exact bill identity',async()=>{
+  const userId=await seedTenantWithPushToken();const billId=String(new mongoose.Types.ObjectId());
+  await Notification.init();
+  const {emitToUser}=await import('../../utils/socket.js');emitToUser.mockClear();
+  const options={billId,utilityPeriodId:'water-period-1',allocationIds:['water-allocation-1']};
+  for(let n=0;n<2;n++) await notify.utilityChargeAvailable(userId,'water','August 2026',600,600,'Sep 8',options);
+  expect(await Notification.countDocuments({userId})).toBe(1);
+  expect(axiosPost).toHaveBeenCalledTimes(1);expect(emitToUser).toHaveBeenCalledTimes(1);
+  const stored=await Notification.findOne({userId});
+  expect(stored.data).toMatchObject({billId,utilityType:'water',utilityPeriodId:'water-period-1',screen:'billing'});
+  expect(stored.actionUrl).toBe(`/billing?billId=${billId}`);
+  expect(axiosPost.mock.calls[0][1][0].data).toMatchObject({billId,billing_id:billId,utilityPeriodId:'water-period-1',url:`/bill-details?billId=${billId}`});
+  expect(emitToUser.mock.calls[0][2].data.billId).toBe(billId);
+  await notify.utilityChargeAvailable(userId,'water','August 2026',100,700,'Sep 8',{billId,utilityPeriodId:'water-period-2',allocationIds:['water-allocation-2']});
+  expect(await Notification.countDocuments({userId})).toBe(2);
+});

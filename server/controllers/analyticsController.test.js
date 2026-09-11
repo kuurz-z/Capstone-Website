@@ -476,6 +476,17 @@ describe("analyticsController", () => {
     );
   });
 
+  test('report counts sent water allocations exactly once and preserves partial payments',async()=>{
+    getUserBranchInfo.mockResolvedValue({role:'owner',branch:'gil-puyat',isOwner:true});
+    const bill={_id:'water-report',branch:'gil-puyat',status:'partially-paid',billingMonth:new Date(),
+      totalAmount:600,paidAmount:100,remainingAmount:500,charges:{water:900},
+      waterAllocations:[{state:'sent',amount:600},{state:'draft',amount:300}]};
+    billFind.mockReturnValueOnce(createLeanChain([bill])).mockReturnValueOnce(createLeanChain([bill]));
+    const req={user:{uid:'water-report-owner'},query:{branch:'gil-puyat',range:'3m'}};const res={req};
+    await getBillingReport(req,res,jest.fn());
+    expect(sendSuccess).toHaveBeenCalledWith(res,expect.objectContaining({kpis:expect.objectContaining({totalWaterBilled:600,billedAmount:600,collectedRevenue:100,outstandingBalance:500})}));
+  });
+
   test("returns billing report tables for the owner-selected branch", async () => {
     getUserBranchInfo.mockResolvedValue({
       role: "owner",

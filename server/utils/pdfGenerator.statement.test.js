@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "@jest/globals";
 import fs from "fs/promises";
+import {inflateSync} from "node:zlib";
 import path from "path";
 import { fileURLToPath } from "url";
 import { PDFDocument as PdfLibDocument } from "pdf-lib";
@@ -92,4 +93,35 @@ describe("canonical billing statement template", () => {
     expect(parsed.getProducer()).toContain(BILL_RECEIPT_TEMPLATE_MARKER);
     expect(parsed.getKeywords()).toContain(BILL_RECEIPT_TEMPLATE_MARKER);
   });
+});
+
+function pdfText(bytes) {
+  const raw=bytes.toString('latin1');let text='';
+  for (const match of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    try {
+      const decoded=inflateSync(Buffer.from(match[1],'latin1')).toString('latin1');
+      text += [...decoded.matchAll(/<([a-fA-F0-9]+)>/g)].map(m=>Buffer.from(m[1],'hex').toString('latin1')).join('');
+    } catch { /* Non-compressed metadata streams contain no statement text. */ }
+  }
+  return text;
+}
+test('water PDF renders all three canonical tables and truthful legacy fallback',async()=>{
+  for (const measured of [true,false]) {
+    const relativePath=await generateBillPdf({
+      bill:{_id:`water-statement-${process.pid}-${measured}`,userId:'a',billingMonth:new Date('2026-08-01'),charges:{water:600},totalAmount:600},
+      period:{startDate:new Date('2026-08-01'),endDate:new Date('2026-09-01'),branch:'gil-puyat'},
+      room:{roomNumber:'GP-WATER',branch:'gil-puyat'},tenant:{firstName:'A',lastName:'Sample'},
+      waterBreakdown:{calculationVersion:measured?'water-meter-v1':'water-occupancy-legacy',tenantAmount:600,
+        meterEvents:[{eventType:'moveIn',date:'2026-08-01T00:00:00+08:00',reading:100},{eventType:'periodEnd',date:'2026-09-01T00:00:00+08:00',reading:118}],
+        consumptionSegments:[{startDate:'2026-08-01',endDate:'2026-09-01',readingFrom:100,readingTo:118,unitsConsumed:18,coveredTenantNames:['A Sample','B Sample']}],
+        tenantAllocations:[{tenantName:'A Sample',consumptionShare:12,rate:50,amount:600},{tenantName:'B Sample',consumptionShare:6,rate:50,amount:300}]},
+    });
+    const absolutePath=path.resolve(here,'..',relativePath);generatedFiles.push(absolutePath);
+    const bytes=await fs.readFile(absolutePath);const document=await PdfLibDocument.load(bytes);
+    expect(document.getPageCount()).toBeGreaterThan(0);
+    const text=pdfText(bytes);expect(text).toContain('WATER BILLING DETAILS');
+    if(measured) {
+      for(const label of ['Meter event','Consumption segment','Tenant allocation','12.0000','600.00']) expect(text).toContain(label);
+    } else {expect(text).toContain('Physical readings, consumption and price');expect(text).not.toContain('12.0000');}
+  }
 });
