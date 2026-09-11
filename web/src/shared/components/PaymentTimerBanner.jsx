@@ -13,6 +13,7 @@ export default function PaymentTimerBanner({
   onExpire,
   onRefresh,
   compact = false,
+  card = false,
   className = "",
 }) {
   const targetTime = useMemo(() => {
@@ -65,7 +66,7 @@ export default function PaymentTimerBanner({
       <div
         role="timer"
         aria-live="polite"
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs font-semibold text-slate-800 dark:text-slate-200 ${className}`}
+        className={`inline-flex items-center gap-2 px-2.5 py-1 text-xs font-semibold text-slate-800 dark:text-slate-200 ${className}`}
       >
         <span
           className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -78,14 +79,18 @@ export default function PaymentTimerBanner({
     );
   }
 
+  const containerClasses = card
+    ? "w-full p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-900 dark:text-slate-100 transition-colors"
+    : "w-full py-2 bg-transparent text-slate-900 dark:text-slate-100 transition-colors";
+
   return (
     <div
       role="region"
       aria-label={title}
-      className={`w-full p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-900 dark:text-slate-100 transition-colors ${className}`}
+      className={`${containerClasses} ${className}`}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-start sm:items-center gap-3">
+        <div className="flex items-start sm:items-center gap-2.5">
           <span
             className={`w-2.5 h-2.5 rounded-full mt-1 sm:mt-0 flex-shrink-0 ${
               hasExpired ? "bg-rose-500" : isWarning ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
@@ -93,7 +98,7 @@ export default function PaymentTimerBanner({
           />
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold tracking-tight">{title}</span>
+              <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100">{title}</span>
               {isWarning && !hasExpired && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="w-3 h-3" /> Expiring Soon
@@ -105,19 +110,21 @@ export default function PaymentTimerBanner({
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-              {hasExpired ? "This payment window has expired. Refresh to check room hold." : subtitle}
-            </p>
+            {subtitle && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {hasExpired ? "This payment window has expired. Refresh to check room hold." : subtitle}
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 self-end sm:self-auto flex-shrink-0">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs">
-            <Clock className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-2xs">
+            <Clock className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span
-              className={`font-mono text-sm font-bold ${
+              className={
                 hasExpired ? "text-rose-600 dark:text-rose-400" : isWarning ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-slate-100"
-              }`}
+              }
             >
               {hasExpired ? "00:00" : formattedTime}
             </span>
@@ -127,9 +134,9 @@ export default function PaymentTimerBanner({
             <button
               type="button"
               onClick={onRefresh}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors shadow-2xs"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3 h-3" />
               <span>Refresh Session</span>
             </button>
           )}

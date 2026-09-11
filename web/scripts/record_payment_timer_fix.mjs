@@ -86,18 +86,17 @@ async function run() {
             <div style="font-size: 13px; font-weight: 600; color: #64748b;">Room 204 • Bed B</div>
           </div>
 
-          <!-- Live PaymentTimerBanner -->
-          <div id="demo-timer-banner" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; margin-bottom: 24px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
+          <!-- Live PaymentTimerBanner (Frameless / Cardless) -->
+          <div id="demo-timer-banner" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; background: transparent; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
               <span id="timer-dot" style="width: 8px; height: 8px; border-radius: 50%; background-color: #10b981; flex-shrink: 0;"></span>
               <div>
-                <div style="font-size: 13px; font-weight: 700; color: #0f172a;">Temporary Room Hold</div>
-                <div style="font-size: 11.5px; color: #64748b;">Complete your reservation fee payment before this room hold window expires.</div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">Temporary Room Hold</div>
+                <div style="font-size: 12px; color: #64748b;">Complete your reservation fee payment before this room hold window expires.</div>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 11.5px; color: #64748b;">Time Remaining:</span>
-              <span id="timer-clock" style="font-family: ui-monospace, monospace; font-size: 14px; font-weight: 700; padding: 4px 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; color: #0f172a;">14:48</span>
+              <span id="timer-clock" style="font-family: ui-monospace, monospace; font-size: 13.5px; font-weight: 700; padding: 3px 8px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; color: #0f172a;">14:48</span>
             </div>
           </div>
 
@@ -230,9 +229,9 @@ async function run() {
             Are you sure you want to proceed with paying <strong>PHP 10,000.00</strong>? You will be redirected to PayMongo to complete your payment.
           </p>
 
-          <!-- 15-Min Timer Banner in Move-In Modal -->
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; margin-bottom: 20px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
+          <!-- 15-Min Timer Banner in Move-In Modal (Cardless) -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; background: transparent; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
               <span style="width: 8px; height: 8px; border-radius: 50%; background-color: #10b981; flex-shrink: 0;"></span>
               <div>
                 <div style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Payment Checkout Window</div>
@@ -256,7 +255,7 @@ async function run() {
   console.log("9. Demonstrating Tenant Monthly Billing Statement Review with 15-Minute Timer...");
   await page.evaluate(() => {
     document.body.innerHTML = `
-      <div style="min-height: 100vh; background: rgba(15, 23, 42, 0.65); font-family: ui-sans-serif, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px;">
+      <div style="min-height: 100vh; background: rgba(15, 23, 42, 0.65); font-family: ui-sans-ui, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px;">
         <div style="width: 100%; max-width: 540px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
             <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a;">Review Selected Statements</h3>
@@ -267,9 +266,9 @@ async function run() {
             Please confirm the statements you wish to settle. You will be redirected to the secure <strong>PayMongo</strong> gateway to complete your payment.
           </p>
 
-          <!-- 15-Min Timer Banner in Billing Modal -->
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
+          <!-- 15-Min Timer Banner in Billing Modal (Cardless) -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; background: transparent; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
               <span style="width: 8px; height: 8px; border-radius: 50%; background-color: #10b981; flex-shrink: 0;"></span>
               <div>
                 <div style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Payment Checkout Window</div>

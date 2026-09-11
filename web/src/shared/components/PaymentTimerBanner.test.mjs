@@ -13,4 +13,6 @@ test("PaymentTimerBanner adheres to DMS standards and supports warning/expiry st
   assert.match(fileContent, /isWarning/, "Must evaluate warning threshold under 5 minutes");
   assert.match(fileContent, /onRefresh/, "Must provide refresh callback on expiration");
   assert.doesNotMatch(fileContent, /bg-gradient/, "Must strictly avoid background gradients");
+  assert.match(fileContent, /bg-transparent/, "Default container must be transparent to avoid nested cards");
+  assert.match(fileContent, /card\s*=\s*false/, "Default card prop must be false to avoid nested cards");
 });

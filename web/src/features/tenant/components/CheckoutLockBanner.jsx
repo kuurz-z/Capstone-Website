@@ -56,7 +56,7 @@ export default function CheckoutLockBanner({
     <div
       role="region"
       aria-label="Bed Reservation Lock Timer"
-      className="w-full p-4 mb-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 text-sm font-medium transition-colors"
+      className="w-full py-2.5 mb-2 bg-transparent text-slate-800 dark:text-slate-200 text-sm font-medium transition-colors"
     >
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2.5">
