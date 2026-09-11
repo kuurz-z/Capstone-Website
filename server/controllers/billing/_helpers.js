@@ -452,7 +452,7 @@ export async function buildTenantUtilityBreakdown({ dbUser, bill, utilityType })
     const periods=await UtilityPeriod.find({_id:{$in:visible.map(a=>a.utilityPeriodId).filter(Boolean)}}).populate('roomId','name roomNumber').lean();
     const allocations=visible.map(a=>{
       const snapshot=periods.find(p=>String(p._id)===String(a.utilityPeriodId));
-      return projectWaterPeriod(snapshot || {_id:a.utilityPeriodId,roomId:a.roomId,startDate:a.cycleStart,endDate:a.cycleEnd,computedTotalCost:a.amount},dbUser._id,a.amount,a.allocationId);
+      return projectWaterPeriod(snapshot || {_id:a.utilityPeriodId,roomId:a.roomId,startDate:a.cycleStart,endDate:a.cycleEnd,computedTotalCost:a.amount},dbUser._id,a.amount,a.allocationId,a);
     });
     if (!allocations.length) return null;
     const tenantAmount=allocations.reduce((sum,a)=>sum+Number(a.tenantAmount || 0),0);
