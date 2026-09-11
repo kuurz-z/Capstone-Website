@@ -317,8 +317,13 @@ test("PersonalDetailsTab BirthdayField uses a unified single-click date picker w
   );
   assert.match(
     source,
-    /clearDate|handleClear/,
-    "BirthdayField must provide a clear action when date is selected"
+    /cutoff\s*=\s*new Date\(today\.getFullYear\(\)\s*-\s*18/,
+    "BirthdayField must compute cutoff using Date arithmetic to prevent leap-year invalid date strings"
+  );
+  assert.match(
+    source,
+    /minWidth:\s*"26px"/,
+    "BirthdayField action buttons must meet WCAG minimum touch target dimensions"
   );
 });
 

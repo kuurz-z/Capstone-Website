@@ -436,7 +436,9 @@ const s = {
     justifyContent: "center",
     background: "transparent",
     border: "none",
-    padding: "3px",
+    minWidth: "26px",
+    minHeight: "26px",
+    padding: "4px",
     borderRadius: "var(--radius-sm, 6px)",
     cursor: "pointer",
   },
@@ -446,7 +448,9 @@ const s = {
     justifyContent: "center",
     background: "transparent",
     border: "none",
-    padding: "3px",
+    minWidth: "26px",
+    minHeight: "26px",
+    padding: "4px",
     borderRadius: "var(--radius-sm, 6px)",
     cursor: "pointer",
   },
@@ -705,12 +709,11 @@ const BirthdayField = ({
 
   const { minDate, maxDate } = useMemo(() => {
     const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
+    const cutoff = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+    const pad = (n) => String(n).padStart(2, "0");
     return {
-      maxDate: `${year - 18}-${month}-${day}`,
-      minDate: `${year - 100}-01-01`,
+      maxDate: `${cutoff.getFullYear()}-${pad(cutoff.getMonth() + 1)}-${pad(cutoff.getDate())}`,
+      minDate: `${today.getFullYear() - 100}-01-01`,
     };
   }, []);
 
@@ -764,7 +767,7 @@ const BirthdayField = ({
                 style={{
                   ...s.input,
                   marginTop: 0,
-                  paddingRight: rawDateValue ? 58 : 34,
+                  paddingRight: rawDateValue ? 68 : 38,
                   cursor: "pointer",
                   colorScheme: "inherit",
                   ...(focused && !hasError ? s.inputFocus : {}),
@@ -774,12 +777,12 @@ const BirthdayField = ({
               <div
                 style={{
                   position: "absolute",
-                  right: 8,
+                  right: 6,
                   top: "50%",
                   transform: "translateY(-50%)",
                   display: "flex",
                   alignItems: "center",
-                  gap: 4,
+                  gap: 2,
                 }}
               >
                 {rawDateValue && (
@@ -788,6 +791,7 @@ const BirthdayField = ({
                     onClick={handleClear}
                     title="Clear date"
                     aria-label="Clear date"
+                    className="hover:bg-muted/70 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     style={s.dateClearBtn}
                   >
                     <X size={13} color="var(--muted-foreground)" />
@@ -804,6 +808,7 @@ const BirthdayField = ({
                   }}
                   title="Open calendar picker"
                   aria-label="Open calendar picker"
+                  className="hover:bg-muted/70 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   style={s.datePickerBtn}
                 >
                   <CalendarDays size={14} color="var(--muted-foreground)" />
