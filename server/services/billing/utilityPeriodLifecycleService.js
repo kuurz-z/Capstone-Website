@@ -281,7 +281,6 @@ export async function createOpenUtilityPeriodWithBoundary({
   boundaryReadingId = null,
   startMode = UTILITY_PERIOD_START_MODE.BUSINESS_DATE,
   session = null,
-  serialize = true,
 }) {
   const reading = utilityType === "water" && calculationVersion !== "water-meter-v1"
     ? 0
@@ -292,9 +291,9 @@ export async function createOpenUtilityPeriodWithBoundary({
   const normalizedStartDate = normalizeUtilityPeriodStart({ startDate, startMode });
 
   const execute = async (activeSession) => {
-    if (utilityType === 'electricity') await assertElectricityChronology({roomId:room._id,date:normalizedStartDate,reading,eventType:'periodStart',session:activeSession,serialize});
+    if (utilityType === 'electricity') await assertElectricityChronology({roomId:room._id,date:normalizedStartDate,reading,eventType:'periodStart',session:activeSession});
     if (utilityType === 'water' && calculationVersion === 'water-meter-v1') {
-      if (serialize) await mongoose.model('Room').updateOne({_id:room._id},{$inc:{waterObservationRevision:1}},{session:activeSession, timestamps:false});
+      await mongoose.model('Room').updateOne({_id:room._id},{$inc:{waterObservationRevision:1}},{session:activeSession, timestamps:false});
       await assertWaterChronology({roomId:room._id,date:normalizedStartDate,reading,session:activeSession});
     }
     const existing = await resolveUtilityPeriodState({

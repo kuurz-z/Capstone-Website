@@ -6,6 +6,7 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import mongoose from "mongoose";
+import { roomAfterOpening, protectedStateHash } from "./utilityRepairProtectedState.mjs";
 import {
   AuditLog, Bill, Contract, Payment, Reservation, Room, ScheduledRoomTransfer, Stay,
   UtilityFinalization, UtilityHistoricalGap, UtilityPeriod, UtilityReading,
@@ -191,7 +192,16 @@ export async function runFreshBaselineRepair({ args, models = DEFAULT_MODELS, mo
   try {
     await dbSession.withTransaction(async () => {
       const state = await loadState(models, dbSession); validateState(state, args); const actorId = oid(args.actorId);
-      const untouchedSnapshot = JSON.stringify({ schedule: state.schedule, reservation: state.reservation, sourceRoom: state.sourceRoom, destinationRoom: state.destinationRoom, stays: state.stays, contracts: state.contracts, payments: state.reservationPayments });
+      const untouchedSnapshot = JSON.stringify({ schedule: state.schedule, reservation: state.reservation, sourceRoom: roomAfterOpening(state.sourceRoom), destinationRoom: roomAfterOpening(state.destinationRoom), stays: state.stays, contracts: state.contracts, payments: state.reservationPayments });
+      const protectedOptions = {
+        models, session: dbSession, roomIds: [TARGET.sourceRoomId, TARGET.destinationRoomId],
+        mutableIds: {
+          Bill: [TARGET.sourceBillId],
+          UtilityPeriod: [TARGET.sourcePeriodId, TARGET.destinationPeriodId, GENERATED_IDS.sourcePeriodId, GENERATED_IDS.destinationPeriodId],
+          UtilityReading: [...TARGET.sourceReadingIds, ...TARGET.destinationReadingIds, GENERATED_IDS.sourceReadingId, GENERATED_IDS.destinationReadingId],
+        },
+      };
+      const expectedProtectedHash = await protectedStateHash({ ...protectedOptions, afterOpening: true });
       const archive = async (Model, filter, label) => {
         const result = await Model.updateOne(filter, { $set: { isArchived: true } }, { session: dbSession, timestamps: false });
         if (result.modifiedCount !== 1) fail("STALE_FINGERPRINT", `${label} changed while the transaction was starting.`);
@@ -201,7 +211,7 @@ export async function runFreshBaselineRepair({ args, models = DEFAULT_MODELS, mo
       await archive(models.Bill, { _id: oid(TARGET.sourceBillId), updatedAt: args.expectedBillUpdatedAt, status: "draft", paidAmount: 0, isArchived: false }, "source Bill");
       await archive(models.UtilityPeriod, { _id: oid(TARGET.destinationPeriodId), updatedAt: args.expectedDestinationUpdatedAt, status: "closed", isArchived: false }, "destination period");
       for (const id of TARGET.destinationReadingIds) await archive(models.UtilityReading, { _id: oid(id), isArchived: false, readingStatus: "locked", updatedAt: new Date(EXPECTED_READINGS[id].updatedAt) }, `destination reading ${id}`);
-      const common = { utilityType: "electricity", startDate: args.observedAt, ratePerUnit: TARGET.ratePerUnit, actorId, startMode: UTILITY_PERIOD_START_MODE.EXACT_OBSERVATION, session: dbSession, serialize: false };
+      const common = { utilityType: "electricity", startDate: args.observedAt, ratePerUnit: TARGET.ratePerUnit, actorId, startMode: UTILITY_PERIOD_START_MODE.EXACT_OBSERVATION, session: dbSession };
       const sourcePeriod = await services.createOpenPeriod({ ...common, room: state.sourceRoom, startReading: args.sourceOpening, periodId: oid(GENERATED_IDS.sourcePeriodId), boundaryReadingId: oid(GENERATED_IDS.sourceReadingId) });
       const destinationPeriod = await services.createOpenPeriod({ ...common, room: state.destinationRoom, startReading: args.destinationOpening, periodId: oid(GENERATED_IDS.destinationPeriodId), boundaryReadingId: oid(GENERATED_IDS.destinationReadingId) });
       await models.UtilityHistoricalGap.create([{
@@ -250,6 +260,7 @@ export async function runFreshBaselineRepair({ args, models = DEFAULT_MODELS, mo
       const afterUntouchedState = await loadState(models, dbSession);
       const afterUntouchedSnapshot = JSON.stringify({ schedule: afterUntouchedState.schedule, reservation: afterUntouchedState.reservation, sourceRoom: afterUntouchedState.sourceRoom, destinationRoom: afterUntouchedState.destinationRoom, stays: afterUntouchedState.stays, contracts: afterUntouchedState.contracts, payments: afterUntouchedState.reservationPayments });
       if (afterUntouchedSnapshot !== untouchedSnapshot) fail("UNTOUCHED_STATE_CHANGED", "Room, Stay, Contract, addendum, Payment, schedule, or Reservation state changed during utility repair.");
+      if (await protectedStateHash(protectedOptions) !== expectedProtectedHash) fail("UNTOUCHED_STATE_CHANGED", "Protected records changed during utility repair.");
     }, { readConcern: { level: "snapshot" }, writeConcern: { w: "majority" }, readPreference: "primary" });
     return { ...plan, mode: "write", status: "APPLIED", databaseMutations: 15 };
   } finally { await dbSession.endSession(); }
