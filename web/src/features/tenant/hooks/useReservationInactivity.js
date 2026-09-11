@@ -113,6 +113,7 @@ export function useReservationInactivity({
   const [secondsRemaining, setSecondsRemaining] = useState(initialState.initialSeconds);
   const [isExtending, setIsExtending] = useState(false);
   const lastActivityRef = useRef(initialState.initialLastActive);
+  const lastStorageWriteRef = useRef(initialState.initialLastActive);
   const countdownIntervalRef = useRef(null);
   const onExpiredRef = useRef(onExpired);
 
@@ -137,9 +138,9 @@ export function useReservationInactivity({
   // If already expired on mount, trigger immediately ONLY when hold is actively monitored
   useEffect(() => {
     if (isActive && reservationId && initialState.isAlreadyExpired) {
-      if (onExpired) onExpired();
+      if (onExpiredRef.current) onExpiredRef.current();
     }
-  }, [isActive, reservationId, initialState.isAlreadyExpired, onExpired]);
+  }, [isActive, reservationId, initialState.isAlreadyExpired]);
 
   // Sync server updatedAt when it changes (e.g. after draft autosave)
   useEffect(() => {
@@ -148,6 +149,7 @@ export function useReservationInactivity({
       const serverTime = new Date(updatedAt).getTime();
       if (!Number.isNaN(serverTime)) {
         lastActivityRef.current = Math.max(lastActivityRef.current, serverTime);
+        lastStorageWriteRef.current = Math.max(lastStorageWriteRef.current, serverTime);
         const storageKey = getStorageKey();
         if (storageKey && typeof window !== "undefined") {
           localStorage.setItem(storageKey, String(lastActivityRef.current));
@@ -160,24 +162,25 @@ export function useReservationInactivity({
     if (!isActive || !reservationId) return;
     if (!isWarningOpen) {
       const now = Date.now();
-      if (now - lastActivityRef.current < 5000) {
-        lastActivityRef.current = now;
-        return;
-      }
       lastActivityRef.current = now;
-      const storageKey = getStorageKey();
-      if (storageKey && typeof window !== "undefined") {
-        localStorage.setItem(storageKey, String(now));
+      if (now - lastStorageWriteRef.current >= 5000) {
+        lastStorageWriteRef.current = now;
+        const storageKey = getStorageKey();
+        if (storageKey && typeof window !== "undefined") {
+          localStorage.setItem(storageKey, String(now));
+        }
       }
     }
   }, [isActive, isWarningOpen, reservationId]);
 
   const resetActivity = useCallback(() => {
     if (!isActive || !reservationId) return;
-    lastActivityRef.current = Date.now();
+    const now = Date.now();
+    lastActivityRef.current = now;
+    lastStorageWriteRef.current = now;
     const storageKey = getStorageKey();
     if (storageKey && typeof window !== "undefined") {
-      localStorage.setItem(storageKey, String(lastActivityRef.current));
+      localStorage.setItem(storageKey, String(now));
     }
     if (!isWarningOpen) {
       setSecondsRemaining(COUNTDOWN_SECONDS);

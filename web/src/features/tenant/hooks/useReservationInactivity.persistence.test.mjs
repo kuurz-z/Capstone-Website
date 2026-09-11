@@ -89,8 +89,8 @@ test("useReservationInactivity throttles localStorage interaction writes to 5000
   const content = fs.readFileSync(filePath, "utf8");
   assert.match(
     content,
-    /now\s*-\s*lastActivityRef\.current\s*<\s*5000/,
-    "recordActivity must throttle localStorage writes within 5000ms"
+    /lastStorageWriteRef\.current\s*>=\s*5000/,
+    "recordActivity must throttle localStorage writes against lastStorageWriteRef"
   );
   assert.match(
     content,
@@ -103,4 +103,37 @@ test("useReservationInactivity throttles localStorage interaction writes to 5000
     "Countdown effect must omit onExpired callback to prevent interval churn"
   );
 });
+
+test("Behavioral simulation: rapid continuous interactions update in-memory activity while throttling disk writes", () => {
+  let storageWrites = 0;
+  let lastStorageValue = null;
+  const mockStorage = {
+    setItem: (key, val) => {
+      storageWrites++;
+      lastStorageValue = val;
+    },
+  };
+
+  let lastActivity = 10000;
+  let lastStorageWrite = 10000;
+
+  function simulateRecordActivity(nowTime) {
+    lastActivity = nowTime;
+    if (nowTime - lastStorageWrite >= 5000) {
+      lastStorageWrite = nowTime;
+      mockStorage.setItem("res_key", String(nowTime));
+    }
+  }
+
+  // Simulate 20 rapid keystrokes/scroll events occurring every 500ms (10 seconds total: 10500ms to 20000ms)
+  for (let t = 10500; t <= 20000; t += 500) {
+    simulateRecordActivity(t);
+  }
+
+  // Storage writes should occur at 15000ms and 20000ms (2 writes), NOT 20 writes (disk spam) and NOT 0 writes (lost activity)
+  assert.equal(storageWrites, 2, "Must throttle disk writes to exactly 2 across a 10s interaction window");
+  assert.equal(lastStorageValue, "20000", "Storage must reflect the latest throttled timestamp");
+  assert.equal(lastActivity, 20000, "In-memory activity must track the exact latest user event");
+});
+
 
