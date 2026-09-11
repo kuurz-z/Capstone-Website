@@ -1,12 +1,13 @@
 import React from "react";
-import { Bed, Wrench, Layers, User, Calendar, CheckCircle2, AlertCircle, History } from "lucide-react";
+import { Bed, Wrench, Layers, User, Calendar, CheckCircle2, AlertCircle, History, Image as ImageIcon } from "lucide-react";
 import { groupBedsByBunk, getBedShortCode, formatBedPosition } from "../../../../shared/utils/bedIdentifier";
+import { prefetchOptimizedImage } from "../../../../shared/utils/imageOptimizer";
 
 /**
  * DoubleDeckRoomCard — Visual Bunk Bed Matrix Card (Upper & Lower Deck)
  * Renders room occupancy as structured double-deck bunk frames with solid high-contrast status pills.
  */
-export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, canManageRooms = true }) {
+export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, onViewPhotos, canManageRooms = true }) {
   if (!room) return null;
 
   const roomNumber = room.roomNumber || room.name || "Room";
@@ -22,6 +23,14 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, c
 
   const formattedType = room.type ? room.type.replace("-", " ") : "Standard";
   const subtitleText = hasDistinctName ? `${rawRoomName} • ${formattedType}` : formattedType;
+
+  // Extract photos for quick full view
+  const roomImages = (() => {
+    const fromImages = Array.isArray(room.images) ? room.images.filter(Boolean) : [];
+    if (fromImages.length > 0) return fromImages;
+    if (typeof room.image === "string" && room.image.trim()) return [room.image.trim()];
+    return [];
+  })();
 
   // Filter beds in maintenance
   const bedsInMaintenance = (room.beds || []).filter((b) => b.status === "maintenance").length;
@@ -305,21 +314,38 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, c
 
       {/* Footer Details */}
       <div className="pt-2 mt-1 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
-        {onViewHistory ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewHistory(room._id || room.id);
-            }}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
-            title="View room & bed history"
-          >
-            <History className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" /> History
-          </button>
-        ) : (
-          <span />
-        )}
+        <div className="flex items-center gap-2">
+          {onViewPhotos && roomImages.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewPhotos(room);
+              }}
+              onMouseEnter={() => {
+                roomImages.forEach((img) => prefetchOptimizedImage(img));
+              }}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white px-1.5 py-0.5 rounded hover:bg-muted transition-colors cursor-pointer"
+              title={`View ${roomImages.length} full size room photo${roomImages.length > 1 ? "s" : ""}`}
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+              <span>{roomImages.length} {roomImages.length === 1 ? "Photo" : "Photos"}</span>
+            </button>
+          )}
+          {onViewHistory ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewHistory(room._id || room.id);
+              }}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+              title="View room & bed history"
+            >
+              <History className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" /> History
+            </button>
+          ) : null}
+        </div>
         {canManageRooms && (
           <span className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-white group-hover:underline flex items-center gap-1">
             Manage Room &rarr;

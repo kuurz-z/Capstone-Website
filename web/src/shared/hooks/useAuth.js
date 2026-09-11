@@ -199,6 +199,7 @@ export const AuthProvider = ({ children }) => {
     // as a real login session or the user gets navigated in unexpectedly.
     if (
       sessionStorage.getItem("resendInProgress") === "1" ||
+      sessionStorage.getItem("socialAuthInProgress") === "1" ||
       isLoginInProgress() ||
       getOtpPending()
     ) {
@@ -230,10 +231,11 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
-      // Guard: double-check the resend flag in case it was set while the
+      // Guard: double-check the resend and social auth flags in case they were set while the
       // API call was in-flight (the transient sign-in can be very fast)
       if (
         sessionStorage.getItem("resendInProgress") === "1" ||
+        sessionStorage.getItem("socialAuthInProgress") === "1" ||
         isLoginInProgress() ||
         getOtpPending()
       ) {

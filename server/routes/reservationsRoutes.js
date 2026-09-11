@@ -51,6 +51,7 @@ import {
   updateVisitAvailabilityRules,
   updateReservation,
   updateReservationByUser,
+  touchReservationActivity,
   cancelReservationByUser,
   requestCancellationByUser,
   withdrawCancellationRequestByUser,
@@ -451,6 +452,23 @@ router.put(
   verifyToken,
   verifyApplicant,
   updateReservationByUser,
+);
+
+/**
+ * POST /api/reservations/:id/heartbeat
+ * Keep-alive endpoint to touch updatedAt for rolling inactivity timeout.
+ */
+router.post(
+  "/:reservationId/heartbeat",
+  verifyToken,
+  verifyApplicant,
+  touchReservationActivity,
+);
+router.post(
+  "/:id/heartbeat",
+  verifyToken,
+  verifyApplicant,
+  touchReservationActivity,
 );
 
 /**

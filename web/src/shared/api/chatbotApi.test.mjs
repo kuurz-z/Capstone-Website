@@ -7,14 +7,22 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const chatbotApiSource = fs.readFileSync(path.join(here, "chatbotApi.js"), "utf8");
 
-test("chatbotApi exports streamPublicChatbot, queryPublicChatbot, and escalateChatbotLead", () => {
+test("chatbotApi exports streamPublicChatbot, queryPublicChatbot, escalateChatbotLead, and escalateToHuman alias", () => {
   assert.match(chatbotApiSource, /export const streamPublicChatbot/);
   assert.match(chatbotApiSource, /export const queryPublicChatbot/);
   assert.match(chatbotApiSource, /export const escalateChatbotLead/);
+  assert.match(chatbotApiSource, /export const escalateToHuman = escalateChatbotLead/);
   assert.match(chatbotApiSource, /export const chatbotApi = \{/);
   assert.match(chatbotApiSource, /streamPublicChatbot,/);
   assert.match(chatbotApiSource, /queryPublicChatbot,/);
   assert.match(chatbotApiSource, /escalateChatbotLead,/);
+  assert.match(chatbotApiSource, /escalateToHuman,/);
+});
+
+test("escalateChatbotLead normalizes fullName/name, contactNumber/phone, and branch/preferredBranch", () => {
+  assert.match(chatbotApiSource, /leadData\?\.name\s*\|\|\s*leadData\?\.fullName/);
+  assert.match(chatbotApiSource, /leadData\?\.phone\s*\|\|\s*leadData\?\.contactNumber/);
+  assert.match(chatbotApiSource, /leadData\?\.preferredBranch\s*\|\|\s*leadData\?\.branch/);
 });
 
 test("streamPublicChatbot uses fetch with POST /chatbot/public/stream and SSE Accept header", () => {

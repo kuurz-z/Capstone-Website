@@ -120,4 +120,48 @@ test("ActivityHistoryTab styles Moved In status and milestone with Success Green
   );
 });
 
+test("ActivityHistoryTab integrates Current Stay and RoomTransferRequestPanel", () => {
+  const source = readTenantSource("components/profile/ActivityHistoryTab.jsx");
+
+  assert.equal(
+    source.includes("RoomTransferRequestPanel"),
+    true,
+    "ActivityHistoryTab must import and render RoomTransferRequestPanel",
+  );
+  assert.equal(
+    source.includes("CurrentStayCard"),
+    true,
+    "ActivityHistoryTab must include CurrentStayCard component",
+  );
+  assert.equal(
+    source.includes("Current Stay"),
+    true,
+    "Current Stay section header must be present",
+  );
+});
+
+test("ActivityHistoryTab provides segmented filter tabs for All, Completed, and Cancelled", () => {
+  const source = readTenantSource("components/profile/ActivityHistoryTab.jsx");
+
+  assert.equal(
+    source.includes("All Records"),
+    true,
+    "Filter tab for All Records must be present",
+  );
+  assert.equal(
+    source.includes("Completed Stays"),
+    true,
+    "Filter tab for Completed Stays must be present",
+  );
+  assert.equal(
+    source.includes("Cancelled"),
+    true,
+    "Filter tab for Cancelled must be present",
+  );
+  assert.equal(
+    source.includes("historyFilter"),
+    true,
+    "historyFilter state must be present",
+  );
+});
 

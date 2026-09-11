@@ -34,8 +34,9 @@ export const BUSINESS = {
   /** Grace period in days before a no-show reserved reservation is auto-cancelled. */
   NOSHOW_GRACE_DAYS: 7,
 
-  /** Hours before a pending reservation (no visit scheduled) is auto-expired. */
-  STALE_PENDING_HOURS: 2,
+  /** Hours before an inactive pending reservation is auto-expired (30 minutes = 0.5 hours). */
+  STALE_PENDING_HOURS: 0.5,
+  STALE_PENDING_MINUTES: 30,
 
   /** Hours before a visit_pending reservation is auto-expired (14-day safety net).
    *  This is a last-resort failsafe — admins are expected to act well before this.

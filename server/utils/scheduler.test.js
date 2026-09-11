@@ -301,7 +301,7 @@ describe("scheduler jobs", () => {
 
     await scheduler.expireStaleReservations();
 
-    const pendingCutoff = reservationFind.mock.calls[0][0].createdAt.$lt;
+    const pendingCutoff = reservationFind.mock.calls[0][0].updatedAt.$lt;
     const visitPendingCutoff = reservationFind.mock.calls[1][0].createdAt.$lt;
     const approvedCutoff = reservationFind.mock.calls[2][0].visitDate.$lt;
     const paymentCutoff = reservationFind.mock.calls[3][0].updatedAt.$lt;
@@ -316,6 +316,32 @@ describe("scheduler jobs", () => {
     expect(diffHours(approvedCutoff)).toBeLessThan(72.5);
     expect(diffHours(paymentCutoff)).toBeGreaterThan(59.5);
     expect(diffHours(paymentCutoff)).toBeLessThan(60.5);
+  });
+
+  test("expireStaleReservations checks updatedAt for pending reservations using 30-minute inactivity window", async () => {
+    reservationFind
+      .mockReturnValueOnce(makePopulateChain([]))
+      .mockReturnValueOnce(makePopulateChain([]))
+      .mockReturnValueOnce(makePopulateChain([]))
+      .mockReturnValueOnce(makePopulateChain([]));
+    getLifecyclePolicySettings.mockResolvedValue({
+      noShowGraceDays: 7,
+      stalePendingHours: 0.5,
+      staleVisitPendingHours: 240,
+      visitPendingWarnDays: 12,
+      staleVisitApprovedHours: 72,
+      stalePaymentPendingHours: 60,
+      archiveCancelledAfterDays: 14,
+    });
+
+    await scheduler.expireStaleReservations();
+
+    const pendingQuery = reservationFind.mock.calls[0][0];
+    // Must filter on updatedAt for rolling inactivity
+    expect(pendingQuery.updatedAt).toBeDefined();
+    const diffMinutes = (Date.now() - pendingQuery.updatedAt.$lt.getTime()) / (1000 * 60);
+    expect(diffMinutes).toBeGreaterThan(29);
+    expect(diffMinutes).toBeLessThan(31);
   });
 
   test("cancelNoShowReservations cancels overdue reserved reservations and syncs lifecycle", async () => {

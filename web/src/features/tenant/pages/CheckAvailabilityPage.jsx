@@ -422,28 +422,33 @@ function CheckAvailabilityPage() {
     [filteredRooms, currentPage],
   );
 
-  // Pre-warm gallery thumbnails for visible rooms during idle time (0ms modal open delay)
+  // Pre-warm next page primary thumbnails during browser idle time (0ms next-page display delay)
   useEffect(() => {
-    if (typeof window === "undefined" || !Array.isArray(paginatedRooms) || paginatedRooms.length === 0) return;
+    if (typeof window === "undefined" || !Array.isArray(filteredRooms) || filteredRooms.length === 0) return;
+    const nextPageStart = currentPage * ROOMS_PER_PAGE;
+    const nextPageRooms = filteredRooms.slice(nextPageStart, nextPageStart + 4);
+    if (nextPageRooms.length === 0) return;
+
     const prewarm = () => {
-      paginatedRooms.slice(0, 6).forEach((room) => {
-        const rImages = room.images?.length ? room.images : (room.image ? [room.image] : []);
-        rImages.forEach((imgSrc) => {
-          if (imgSrc && typeof Image !== "undefined") {
-            const preloader = new Image();
-            preloader.src = getThumbnailUrl(imgSrc, { width: 120, quality: 70 });
-          }
-        });
+      nextPageRooms.forEach((room) => {
+        const primarySrc = room.images?.[0] || room.image;
+        if (primarySrc && typeof Image !== "undefined") {
+          const preloader = new Image();
+          preloader.src = getThumbnailUrl(primarySrc);
+        }
       });
     };
 
     if ("requestIdleCallback" in window) {
-      window.requestIdleCallback(prewarm);
+      const handle = window.requestIdleCallback(prewarm, { timeout: 2500 });
+      return () => {
+        if ("cancelIdleCallback" in window) window.cancelIdleCallback(handle);
+      };
     } else {
-      const timer = setTimeout(prewarm, 600);
+      const timer = setTimeout(prewarm, 1500);
       return () => clearTimeout(timer);
     }
-  }, [paginatedRooms]);
+  }, [currentPage, filteredRooms]);
 
   const handleBranchFilter = useCallback((branch) => {
     setSelectedBranch(branch);
@@ -620,24 +625,37 @@ function CheckAvailabilityPage() {
  message: `Room changed to ${selectedRoom.title}`,
  },
  });
- } catch (err) {
- console.error("Failed to change room:", err);
- const isLocked =
- err?.response?.data?.code === "RESERVATION_ROOM_SELECTION_LOCKED";
- showNotification(
- isLocked
- ? ROOM_SELECTION_LOCKED_MESSAGE
- : getFriendlyError(err, "Failed to change room. Please try again."),
- isLocked ? "info" : "error",
- 4000,
- );
- if (isLocked) {
- appNavigate("/applicant/profile", {
- state: { tab: "dashboard" },
- flash: { type: "info", message: ROOM_SELECTION_LOCKED_MESSAGE },
- });
- }
- }
+  } catch (err) {
+  console.error("Failed to change room:", err);
+  const isLocked =
+  err?.response?.data?.code === "RESERVATION_ROOM_SELECTION_LOCKED";
+  const isBedUnavailable =
+  err?.response?.data?.code === "BED_UNAVAILABLE" ||
+  err?.response?.data?.error === "BED_UNAVAILABLE" ||
+  /bed.*unavailable/i.test(err?.response?.data?.message || "");
+
+  if (isBedUnavailable) {
+    showNotification(
+      "This bed is currently unavailable. Please select another available bed or room.",
+      "warning",
+      5000,
+    );
+    return;
+  }
+  showNotification(
+  isLocked
+  ? ROOM_SELECTION_LOCKED_MESSAGE
+  : getFriendlyError(err, "Failed to change room. Please try again."),
+  isLocked ? "info" : "error",
+  4000,
+  );
+  if (isLocked) {
+  appNavigate("/applicant/profile", {
+  state: { tab: "dashboard" },
+  flash: { type: "info", message: ROOM_SELECTION_LOCKED_MESSAGE },
+  });
+  }
+  }
  return;
  }
 
@@ -699,21 +717,32 @@ function CheckAvailabilityPage() {
   },
   });
   } catch (err) {
-  console.error("Failed to reserve room:", err);
-  if (err?.response?.data?.code === "RESERVATION_ALREADY_EXISTS") {
-  showNotification(
-  "You already have an ongoing reservation. Go to your profile to continue.",
-  "warning",
-  4000,
-  );
-  } else {
-  showNotification(
-  getFriendlyError(err, "Failed to reserve room. Please try again."),
-  "error",
-  4000,
-  );
-  }
-  }
+   console.error("Failed to reserve room:", err);
+   const isBedUnavailable =
+     err?.response?.data?.code === "BED_UNAVAILABLE" ||
+     err?.response?.data?.error === "BED_UNAVAILABLE" ||
+     /bed.*unavailable/i.test(err?.response?.data?.message || "");
+
+   if (isBedUnavailable) {
+     showNotification(
+       "This bed is currently unavailable. Please select another available bed or room.",
+       "warning",
+       5000,
+     );
+   } else if (err?.response?.data?.code === "RESERVATION_ALREADY_EXISTS") {
+   showNotification(
+   "You already have an ongoing reservation. Go to your profile to continue.",
+   "warning",
+   4000,
+   );
+   } else {
+   showNotification(
+   getFriendlyError(err, "Failed to reserve room. Please try again."),
+   "error",
+   4000,
+   );
+   }
+   }
  };
 
   // ── Render ─────────────────────────────────────────────────
@@ -960,11 +989,15 @@ function CheckAvailabilityPage() {
       </div>
     </div>
   ) : (
-    <div className="ca-grid">
+    <div
+      className="ca-grid"
+      key={`ca-grid-${currentPage}-${selectedBranch}-${selectedRoomType}-${selectedLeaseTermFilter}-${minPrice}-${maxPrice}-${debouncedSearchQuery}`}
+    >
       {paginatedRooms.map((room, index) => (
         <RoomCard
           key={room.id}
           room={room}
+          cardIndex={index}
           isPriority={index < 3}
           selectedLeaseTermFilter={selectedLeaseTermFilter}
           searchQuery={debouncedSearchQuery}

@@ -1316,12 +1316,39 @@ body.modal-open {
   gap: var(--spacing-md);
 }
 
+@keyframes rcm-photo-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .image-preview-card {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-light);
   background: var(--bg-card);
+  animation: rcm-photo-reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.image-preview-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: var(--border-medium);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-preview-card,
+  .image-preview-card__img {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 .image-preview-card__img {
@@ -1329,6 +1356,15 @@ body.modal-open {
   height: 112px;
   object-fit: cover;
   display: block;
+  opacity: 0;
+  transform: scale(1.05);
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.image-preview-card__img.is-loaded {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .image-preview-card__footer {

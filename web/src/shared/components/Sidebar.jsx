@@ -89,17 +89,6 @@ const buildNavSections = (isTenant, hasContract = false) => [
       ...(isTenant
         ? [
             {
-              id: "stays",
-              label: "My Stays",
-              icon: Home,
-              path: "/applicant/profile",
-              tab: "stays",
-            },
-          ]
-        : []),
-      ...(isTenant
-        ? [
-            {
               id: "maintenance",
               label: "Maintenance",
               icon: Wrench,
@@ -222,7 +211,8 @@ export default function Sidebar({ isOpen, toggleSidebar, isCollapsed, toggleColl
   const { data: unreadData } = useUnreadCount();
   const sidebarUnreadCount = unreadData?.unreadCount ?? 0;
 
-  const currentTab = location.state?.tab || "dashboard";
+  const urlTab = new URLSearchParams(location.search).get("tab");
+  const currentTab = urlTab || location.state?.tab || "dashboard";
   const rawFullName =
     `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
     user?.name ||
@@ -265,7 +255,11 @@ export default function Sidebar({ isOpen, toggleSidebar, isCollapsed, toggleColl
   };
 
   const handleItemClick = (item) => {
-    appNavigate(item.path, { state: item.tab ? { tab: item.tab } : undefined });
+    const targetPath =
+      item.tab && item.path === "/applicant/profile"
+        ? `${item.path}?tab=${item.tab}`
+        : item.path;
+    appNavigate(targetPath, { state: item.tab ? { tab: item.tab } : undefined });
     if (isMobile && isOpen) toggleSidebar();
   };
 

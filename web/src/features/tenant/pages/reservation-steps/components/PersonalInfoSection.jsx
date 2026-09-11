@@ -18,7 +18,7 @@ const ID_TYPE_LABELS = {
   other: "Valid ID",
 };
 
-const MONTH_OPTIONS = [
+export const MONTH_OPTIONS = [
   { value: "01", label: "January" },
   { value: "02", label: "February" },
   { value: "03", label: "March" },
@@ -33,32 +33,47 @@ const MONTH_OPTIONS = [
   { value: "12", label: "December" },
 ];
 
-const pad2 = (value) => String(value).padStart(2, "0");
+export const pad2 = (value) => String(value).padStart(2, "0");
 
-const parseDateParts = (value) => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+export const parseDateParts = (value) => {
+  if (!value) return { year: "", month: "", day: "" };
+  let str = "";
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return { year: "", month: "", day: "" };
+    str = value.toISOString();
+  } else {
+    str = String(value).trim();
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
   if (!match) return { year: "", month: "", day: "" };
   return { year: match[1], month: match[2], day: match[3] };
 };
 
-const getDaysInMonth = (year, month) => {
+export const getDaysInMonth = (year, month) => {
   const numericMonth = Number(month);
   if (!numericMonth) return 31;
   const numericYear = Number(year) || 2000;
   return new Date(numericYear, numericMonth, 0).getDate();
 };
 
-const composeDate = ({ year, month, day }) => {
+export const composeDate = ({ year, month, day }) => {
   if (!year || !month || !day) return "";
-  return `${year}-${month}-${day}`;
+  return `${year}-${pad2(month)}-${pad2(day)}`;
 };
 
-const buildYearOptions = (min, max) => {
+export const buildYearOptions = (min, max) => {
   const minYear = Number(String(min || "").slice(0, 4));
   const maxYear = Number(String(max || "").slice(0, 4));
-  if (!Number.isFinite(minYear) || !Number.isFinite(maxYear)) return [];
-  return Array.from({ length: maxYear - minYear + 1 }, (_, index) =>
-    String(maxYear - index),
+  if (Number.isFinite(minYear) && Number.isFinite(maxYear) && maxYear >= minYear) {
+    return Array.from({ length: maxYear - minYear + 1 }, (_, index) =>
+      String(maxYear - index),
+    );
+  }
+  const currentYear = new Date().getFullYear();
+  const defaultMaxYear = currentYear - 15;
+  const defaultMinYear = currentYear - 100;
+  return Array.from({ length: defaultMaxYear - defaultMinYear + 1 }, (_, index) =>
+    String(defaultMaxYear - index),
   );
 };
 

@@ -114,6 +114,91 @@
   flex-wrap: wrap;
 }
 
+/* Carousel wrapper for filter cards with scroll buttons */
+.tenant-announcements-filter-carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Mobile: Strictly hide the filter cards and carousel to avoid redundancy with the mobile dropdown select */
+@media (max-width: 639px) {
+  .tenant-announcements-filter-carousel,
+  .tenant-announcements-filter-cards {
+    display: none !important;
+  }
+}
+
+/* Carousel navigation chevron buttons (positioned absolutely to guarantee zero layout shifts) */
+.tenant-announcements-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: var(--card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  color: var(--text-heading, #0f172a);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  user-select: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.85);
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0s linear 0.22s,
+              background-color 0.15s,
+              border-color 0.15s;
+}
+
+.tenant-announcements-carousel-arrow--left {
+  left: 2px;
+}
+
+.tenant-announcements-carousel-arrow--right {
+  right: 2px;
+}
+
+.tenant-announcements-carousel-arrow.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0s linear 0s,
+              background-color 0.15s,
+              border-color 0.15s;
+}
+
+.tenant-announcements-carousel-arrow.is-visible:hover {
+  background: var(--muted, #f1f5f9);
+  border-color: #cbd5e1;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.dark .tenant-announcements-carousel-arrow,
+html[data-theme="dark"] .tenant-announcements-carousel-arrow {
+  background: var(--card, #1e293b);
+  border-color: var(--border, #334155);
+  color: var(--foreground, #f8fafc);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.dark .tenant-announcements-carousel-arrow.is-visible:hover,
+html[data-theme="dark"] .tenant-announcements-carousel-arrow.is-visible:hover {
+  background: var(--muted, #334155);
+  border-color: #475569;
+}
+
 .tenant-announcements-filter-cards {
   display: flex;
   align-items: center;
@@ -121,9 +206,20 @@
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  flex: 1;
-  min-width: 280px;
-  padding: 2px 0;
+  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 4px;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  cursor: grab;
+}
+
+.tenant-announcements-filter-cards.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+  scroll-behavior: auto !important;
 }
 
 .tenant-announcements-filter-cards::-webkit-scrollbar {
@@ -242,7 +338,21 @@ html[data-theme="dark"] .tenant-announcements-filter-card--active .tenant-announ
   flex-shrink: 0;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  .tenant-announcements-filters-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .tenant-announcements-filter-carousel {
+    width: 100%;
+  }
+
+  .tenant-announcements-filter-cards {
+    width: 100%;
+  }
+
   .tenant-announcements-search-wrap {
     width: 100%;
   }

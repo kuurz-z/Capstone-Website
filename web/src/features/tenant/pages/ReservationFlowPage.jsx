@@ -1,4 +1,5 @@
 import GlobalLoading from "../../../shared/components/GlobalLoading";
+import PaymentVerifyingModal from "../../../shared/components/PaymentVerifyingModal";
 import "../../../shared/styles/notification.css";
 import "../styles/reservation-flow.css";
 
@@ -18,8 +19,11 @@ import {
   StageConfirmModal,
 } from "./reservation-flow";
 
-// All state + logic lives in this hook
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import useReservationFlow from "../hooks/useReservationFlow";
+import { useReservationInactivity } from "../hooks/useReservationInactivity";
+import ReservationInactivityModal from "../components/ReservationInactivityModal";
 import { showNotification } from "../../../shared/utils/notification";
 import { billingApi } from "../../../shared/api/apiClient";
 import { reservationApi } from "../../../shared/api/reservationApi";
@@ -27,28 +31,73 @@ import { queryKeys } from "../../../shared/lib/queryKeys";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-// ReservationFlowPage ΓÇö thin JSX orchestrator
+// ─────────────────────────────────────────────────────────────────────────────
+// ReservationFlowPage — thin JSX orchestrator
 // All state/effects/handlers live in useReservationFlow hook.
-// ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ─────────────────────────────────────────────────────────────────────────────
 function ReservationFlowPage() {
   const flow = useReservationFlow();
+  const queryClient = useQueryClient();
+
+  const handleInactivityExpired = useCallback(async () => {
+    const reservation = flow.reservationData;
+    if (!reservation?._id || reservation?.status !== "pending" || reservation?.applicationSubmittedAt) {
+      return;
+    }
+    try {
+      await reservationApi.updateByUser(reservation._id, {
+        cancelReservation: true,
+      });
+    } catch (err) {
+      console.warn("Auto-cancellation on inactivity expired failed:", err);
+    }
+    showNotification("Your room hold expired due to 30 minutes of inactivity.", "info", 5000);
+    queryClient.invalidateQueries({ queryKey: queryKeys.reservations.all });
+    flow.navigate("/applicant/check-availability");
+  }, [flow, queryClient]);
+
+  const isHoldMonitored =
+    Boolean(flow.reservationData?._id) &&
+    flow.reservationData?.status === "pending" &&
+    !flow.reservationData?.applicationSubmittedAt;
+
+  const {
+    isWarningOpen,
+    secondsRemaining,
+    isExtending,
+    extendHold,
+    releaseNow,
+  } = useReservationInactivity({
+    reservationId: flow.reservationData?._id,
+    updatedAt: flow.reservationData?.updatedAt,
+    isActive: isHoldMonitored,
+    onExpired: handleInactivityExpired,
+  });
 
   // ΓöÇΓöÇ Loading ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   // payment=cancelled returns skip the spinner entirely — the user deliberately
   // pressed Back. Show Step 4 immediately with the inline recovery banner.
   const isPaymentCancellation = flow.paymentCancelled;
 
-  if (
-    !flow.reservationData ||
-    flow.isLoading ||
-    (!isPaymentCancellation && flow.paymentReturnLoading) ||
-    (!isPaymentCancellation && flow.paymentVerifyingRef.current)
-  ) {
+  const isPaymentVerifying =
+    !isPaymentCancellation &&
+    Boolean(flow.paymentReturnLoading || flow.paymentVerifyingRef.current);
+
+  if (isPaymentVerifying) {
+    return (
+      <PaymentVerifyingModal
+        show={true}
+        step={2}
+        title="Verifying Reservation Payment"
+      />
+    );
+  }
+
+  if (!flow.reservationData || flow.isLoading) {
     return <GlobalLoading />;
   }
 
-  // ΓöÇΓöÇ Render ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  // ΓöÇΓöÇ Render ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   return (
     <div className="reservation-flow-container">
       {/* ΓöÇΓöÇ Success Overlay ΓöÇΓöÇ */}
@@ -98,6 +147,14 @@ function ReservationFlowPage() {
           flow.setShowStageConfirm(false);
           flow.setPendingStageAction(null);
         }}
+      />
+      <ReservationInactivityModal
+        isOpen={isWarningOpen}
+        roomName={flow.reservationData?.roomId?.name || flow.roomData?.name || "your room"}
+        secondsRemaining={secondsRemaining}
+        isExtending={isExtending}
+        onExtend={extendHold}
+        onRelease={releaseNow}
       />
 
       <div className="reservation-layout">

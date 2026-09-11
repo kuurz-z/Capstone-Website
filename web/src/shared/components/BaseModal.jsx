@@ -21,6 +21,9 @@ import useBodyScrollLock from "../hooks/useBodyScrollLock";
 export default function BaseModal({
   isOpen,
   onClose,
+  onCancel,
+  closeOnBackdrop = true,
+  closeOnEscape = true,
   title,
   subtitle,
   variant = "primary", // "primary" | "danger" | "warning" | "success" | "info"
@@ -40,13 +43,13 @@ export default function BaseModal({
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e) => {
-      if (e.key === "Escape" && !loading) {
+      if (closeOnEscape && e.key === "Escape" && !loading) {
         onClose();
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isOpen, loading, onClose]);
+  }, [isOpen, loading, onClose, closeOnEscape]);
 
   // Lock background scroll when modal is open
   useBodyScrollLock(isOpen);
@@ -108,7 +111,7 @@ export default function BaseModal({
     typeof showCloseButton === "boolean" ? showCloseButton : !hasFooterCancel;
 
   const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget && !loading) {
+    if (closeOnBackdrop && e.target === e.currentTarget && !loading) {
       onClose();
     }
   };
@@ -282,7 +285,7 @@ export default function BaseModal({
             {cancelText && (
               <button
                 type="button"
-                onClick={onClose}
+                onClick={onCancel || onClose}
                 disabled={loading}
                 style={{
                   padding: "9px 18px",

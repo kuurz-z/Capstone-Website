@@ -29,12 +29,9 @@ import {
   toTitleCase,
   formatProperCase,
   formatBed,
-  MONTH_OPTIONS,
   RELATIONSHIP_OPTIONS,
   parseDateParts,
-  getDaysInMonth,
   composeDate,
-  buildYearOptions,
   validateField,
   validateEmergencyContactGroup,
   isSamePhone,
@@ -43,12 +40,9 @@ import {
 export {
   toTitleCase,
   formatBed,
-  MONTH_OPTIONS,
   RELATIONSHIP_OPTIONS,
   parseDateParts,
-  getDaysInMonth,
   composeDate,
-  buildYearOptions,
   validateField,
   validateEmergencyContactGroup,
   isSamePhone,
@@ -430,6 +424,30 @@ const s = {
     borderColor: "var(--danger)",
     boxShadow: "0 0 0 2px color-mix(in srgb, var(--danger) 15%, transparent)",
   },
+  dateClearBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    border: "none",
+    minWidth: "28px",
+    minHeight: "28px",
+    padding: "4px",
+    borderRadius: "var(--radius-sm, 6px)",
+    cursor: "pointer",
+  },
+  datePickerBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    border: "none",
+    minWidth: "28px",
+    minHeight: "28px",
+    padding: "4px",
+    borderRadius: "var(--radius-sm, 6px)",
+    cursor: "pointer",
+  },
   charCounter: {
     fontSize: "10px",
     fontWeight: "var(--font-weight-medium, 500)",
@@ -657,7 +675,6 @@ const PhoneField = ({
 };
 
 const BirthdayField = ({
-
   icon: Icon,
   label,
   field,
@@ -671,61 +688,46 @@ const BirthdayField = ({
   onAdd,
   locked,
 }) => {
-  const [focusedPart, setFocusedPart] = useState(null);
+  const [focused, setFocused] = useState(false);
+  const datePickerRef = useRef(null);
   const hasError = errors?.[field];
-  const currentDate = editData?.[field] || "";
 
-  // Maintain local parts state so selecting an individual part (e.g. Month)
-  // persists visually even when the composed date string is still incomplete.
-  const [selectedParts, setSelectedParts] = useState(() =>
-    parseDateParts(currentDate || value || "")
-  );
-
-  // Synchronize when the external complete date string changes
-  useEffect(() => {
-    if (currentDate && typeof currentDate === "string" && currentDate.includes("-")) {
-      const parsed = parseDateParts(currentDate);
-      if (parsed.year || parsed.month || parsed.day) {
-        setSelectedParts(parsed);
-      }
+  const rawDateValue = useMemo(() => {
+    const val = editData?.[field] || "";
+    if (typeof val === "string") return val.slice(0, 10);
+    if (val instanceof Date && !isNaN(val.getTime())) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, "0");
+      const d = String(val.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
     }
-  }, [currentDate]);
+    return "";
+  }, [editData, field]);
 
-  const daysCount = useMemo(
-    () => getDaysInMonth(selectedParts.year, selectedParts.month),
-    [selectedParts.year, selectedParts.month],
-  );
+  const { minDate, maxDate } = useMemo(() => {
+    const today = new Date();
+    const cutoff = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+    const minCutoff = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
+    const pad = (n) => String(n).padStart(2, "0");
+    return {
+      maxDate: `${cutoff.getFullYear()}-${pad(cutoff.getMonth() + 1)}-${pad(cutoff.getDate())}`,
+      minDate: `${minCutoff.getFullYear()}-${pad(minCutoff.getMonth() + 1)}-${pad(minCutoff.getDate())}`,
+    };
+  }, []);
 
-  const dayOptions = useMemo(
-    () => Array.from({ length: daysCount }, (_, i) => String(i + 1).padStart(2, "0")),
-    [daysCount],
-  );
-
-  const yearOptions = useMemo(() => buildYearOptions(18, 100), []);
-
-  const handlePartChange = (part, partValue) => {
-    setSelectedParts((prev) => {
-      const nextParts = { ...prev, [part]: partValue };
-      if (nextParts.month && nextParts.day) {
-        const maxDays = getDaysInMonth(nextParts.year, nextParts.month);
-        if (Number(nextParts.day) > maxDays) {
-          nextParts.day = String(maxDays).padStart(2, "0");
-        }
-      }
-      const nextDate = composeDate(nextParts);
-      setEditData((prevEdit) => ({ ...prevEdit, [field]: nextDate }));
-      if (nextParts.year && nextParts.month && nextParts.day) {
-        onBlur?.(field, nextDate);
-      }
-      return nextParts;
-    });
+  const handleClear = (e) => {
+    e.stopPropagation();
+    setEditData((prev) => ({ ...prev, [field]: "" }));
+    onBlur?.(field, "");
   };
 
   return (
     <div style={{ ...s.fieldTile, ...(colSpan ? { gridColumn: `span ${colSpan}` } : {}) }}>
       <div style={s.fieldHeader}>
         {Icon && <Icon size={13} color="var(--muted-foreground)" style={{ flexShrink: 0 }} />}
-        <span style={s.fieldLabel}>{label}</span>
+        <label htmlFor="profileDateOfBirthInput" style={s.fieldLabel}>
+          {label}
+        </label>
       </div>
       {editing ? (
         locked ? (
@@ -737,138 +739,93 @@ const BirthdayField = ({
           />
         ) : (
           <div style={{ marginTop: 2 }}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              {/* Month Select */}
-              <div style={{ position: "relative", flex: 1.4 }}>
-                <select
-                  value={selectedParts.month}
-                  onChange={(e) => handlePartChange("month", e.target.value)}
-                  onFocus={() => setFocusedPart("month")}
-                  onBlur={() => {
-                    setFocusedPart(null);
-                    onBlur?.(field);
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <input
+                ref={datePickerRef}
+                type="date"
+                id="profileDateOfBirthInput"
+                aria-label="Date of Birth"
+                aria-describedby={hasError ? "profileDobError" : "profileDobHelper"}
+                aria-invalid={!!hasError}
+                min={minDate}
+                max={maxDate}
+                value={rawDateValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEditData((prev) => ({ ...prev, [field]: val }));
+                  onBlur?.(field, val);
+                }}
+                onFocus={() => setFocused(true)}
+                onBlur={(e) => {
+                  setFocused(false);
+                  onBlur?.(field, e.target.value);
+                }}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch (_) {}
+                }}
+                className="hide-native-date-indicator"
+                style={{
+                  ...s.input,
+                  marginTop: 0,
+                  paddingRight: rawDateValue ? 74 : 42,
+                  cursor: "pointer",
+                  colorScheme: "inherit",
+                  ...(focused && !hasError ? s.inputFocus : {}),
+                  ...(hasError ? s.inputError : {}),
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  right: 6,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                }}
+              >
+                {rawDateValue && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    title="Clear date"
+                    aria-label="Clear selected date of birth"
+                    className="hover:bg-muted/70 active:scale-95 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    style={s.dateClearBtn}
+                  >
+                    <X size={13} color="var(--muted-foreground)" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      datePickerRef.current?.showPicker?.();
+                    } catch (_) {
+                      datePickerRef.current?.focus();
+                    }
                   }}
-                  aria-label="Birth month"
-                  style={{
-                    ...s.input,
-                    appearance: "none",
-                    paddingRight: 24,
-                    cursor: "pointer",
-                    marginTop: 0,
-                    fontSize: "12px",
-                    padding: "7px 8px",
-                    ...(focusedPart === "month" && !hasError ? s.inputFocus : {}),
-                    ...(hasError ? s.inputError : {}),
-                  }}
+                  title="Open calendar picker"
+                  aria-label="Open calendar picker for date of birth"
+                  aria-haspopup="dialog"
+                  className="hover:bg-muted/70 active:scale-95 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  style={s.datePickerBtn}
                 >
-                  <option value="">Month</option>
-                  {MONTH_OPTIONS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={12}
-                  color="var(--muted-foreground)"
-                  style={{
-                    position: "absolute",
-                    right: 6,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    pointerEvents: "none",
-                  }}
-                />
-              </div>
-
-              {/* Day Select */}
-              <div style={{ position: "relative", flex: 0.9 }}>
-                <select
-                  value={selectedParts.day}
-                  onChange={(e) => handlePartChange("day", e.target.value)}
-                  onFocus={() => setFocusedPart("day")}
-                  onBlur={() => {
-                    setFocusedPart(null);
-                    onBlur?.(field);
-                  }}
-                  aria-label="Birth day"
-                  style={{
-                    ...s.input,
-                    appearance: "none",
-                    paddingRight: 20,
-                    cursor: "pointer",
-                    marginTop: 0,
-                    fontSize: "12px",
-                    padding: "7px 8px",
-                    ...(focusedPart === "day" && !hasError ? s.inputFocus : {}),
-                    ...(hasError ? s.inputError : {}),
-                  }}
-                >
-                  <option value="">Day</option>
-                  {dayOptions.map((d) => (
-                    <option key={d} value={d}>
-                      {Number(d)}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={12}
-                  color="var(--muted-foreground)"
-                  style={{
-                    position: "absolute",
-                    right: 6,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    pointerEvents: "none",
-                  }}
-                />
-              </div>
-
-              {/* Year Select */}
-              <div style={{ position: "relative", flex: 1.1 }}>
-                <select
-                  value={selectedParts.year}
-                  onChange={(e) => handlePartChange("year", e.target.value)}
-                  onFocus={() => setFocusedPart("year")}
-                  onBlur={() => {
-                    setFocusedPart(null);
-                    onBlur?.(field);
-                  }}
-                  aria-label="Birth year"
-                  style={{
-                    ...s.input,
-                    appearance: "none",
-                    paddingRight: 22,
-                    cursor: "pointer",
-                    marginTop: 0,
-                    fontSize: "12px",
-                    padding: "7px 8px",
-                    ...(focusedPart === "year" && !hasError ? s.inputFocus : {}),
-                    ...(hasError ? s.inputError : {}),
-                  }}
-                >
-                  <option value="">Year</option>
-                  {yearOptions.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={12}
-                  color="var(--muted-foreground)"
-                  style={{
-                    position: "absolute",
-                    right: 6,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    pointerEvents: "none",
-                  }}
-                />
+                  <CalendarDays size={14} color="var(--muted-foreground)" />
+                </button>
               </div>
             </div>
-            <div style={s.helperText}>Must be at least 18 years old</div>
-            {hasError && <div style={s.errorText}>{hasError}</div>}
+            <div id="profileDobHelper" style={s.helperText}>
+              Must be at least 18 years old
+            </div>
+            {hasError && (
+              <div id="profileDobError" role="alert" aria-live="polite" style={s.errorText}>
+                {hasError}
+              </div>
+            )}
           </div>
         )
       ) : value && value !== "Not provided" ? (

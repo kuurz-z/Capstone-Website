@@ -5,8 +5,27 @@ import { reservationApi } from "../../../shared/api/reservationApi.js";
  * CheckoutLockBanner - Displays a live 30-minute lock countdown banner during bed reservation checkout.
  * Enforces solid flat colors (NO gradients) with 1px border.
  */
-export default function CheckoutLockBanner({ lockId, roomId, bedId, initialTimeRemainingSeconds = 1800, onLockExpired }) {
-  const [secondsLeft, setSecondsLeft] = useState(initialTimeRemainingSeconds);
+export default function CheckoutLockBanner({
+  lockId,
+  roomId,
+  bedId,
+  expiresAt,
+  initialTimeRemainingSeconds = 900,
+  onLockExpired,
+}) {
+  const calculateRemaining = () => {
+    if (expiresAt) {
+      const expMs = new Date(expiresAt).getTime();
+      return Math.max(0, Math.floor((expMs - Date.now()) / 1000));
+    }
+    return initialTimeRemainingSeconds;
+  };
+
+  const [secondsLeft, setSecondsLeft] = useState(calculateRemaining);
+
+  useEffect(() => {
+    setSecondsLeft(calculateRemaining());
+  }, [expiresAt, initialTimeRemainingSeconds]);
 
   useEffect(() => {
     if (secondsLeft <= 0) {
@@ -15,11 +34,17 @@ export default function CheckoutLockBanner({ lockId, roomId, bedId, initialTimeR
     }
 
     const timer = setInterval(() => {
-      setSecondsLeft((prev) => prev - 1);
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          if (onLockExpired) onLockExpired();
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [secondsLeft, onLockExpired]);
+  }, [secondsLeft <= 0, onLockExpired]);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
@@ -31,7 +56,7 @@ export default function CheckoutLockBanner({ lockId, roomId, bedId, initialTimeR
     <div
       role="region"
       aria-label="Bed Reservation Lock Timer"
-      className="w-full p-4 mb-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 text-sm font-medium transition-colors"
+      className="w-full py-2.5 mb-2 bg-transparent text-slate-800 dark:text-slate-200 text-sm font-medium transition-colors"
     >
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2.5">

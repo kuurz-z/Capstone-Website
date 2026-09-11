@@ -10,6 +10,8 @@ import DeadlineBadge from "../../../../shared/components/DeadlineBadge";
 import { useMyUtilityBreakdownByBillId } from "../../../../shared/hooks/queries/useUtility";
 import { showNotification } from "../../../../shared/utils/notification";
 import BillingPageSkeleton from "../billing/BillingPageSkeleton";
+import PaymentTimerBanner from "../../../../shared/components/PaymentTimerBanner";
+import PaymentVerifyingModal from "../../../../shared/components/PaymentVerifyingModal";
 import "../../styles/tenant-billing.css";
 import {
   Zap,
@@ -17,6 +19,8 @@ import {
   CreditCard,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   AlertCircle,
   CheckCircle,
   Clock,
@@ -508,6 +512,12 @@ const PreCheckoutModal = ({
             })}
           </div>
 
+          <PaymentTimerBanner
+            title="Payment Checkout Window"
+            subtitle="Your billing payment checkout session is active for 15 minutes."
+            className="mb-4"
+          />
+
           <div className="precheckout-summary-box">
             <div className="precheckout-summary-row">
               <span>Payment Gateway</span>
@@ -682,96 +692,343 @@ const StatementFilters = ({
   hasWaterBilling = false,
 }) => {
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [dropdownAlign, setDropdownAlign] = useState("right");
   const filterMenuRef = useRef(null);
+  const filterScrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartX = useRef(0);
+  const dragScrollLeft = useRef(0);
+  const hasDragged = useRef(false);
 
-  // Close dropdown on click outside
+  const unpaidCount = useMemo(
+    () => bills.filter((b) => !isPaidBill(b)).length,
+    [bills]
+  );
+  const paidCount = useMemo(
+    () => bills.filter((b) => isPaidBill(b)).length,
+    [bills]
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { value: "all", label: "All Statements", count: bills.length },
+      { value: "unpaid", label: "Unpaid", count: unpaidCount },
+      { value: "paid", label: "Paid History", count: paidCount },
+    ],
+    [bills.length, unpaidCount, paidCount]
+  );
+
+  const rentCount = useMemo(
+    () =>
+      bills.filter((b) => {
+        const cs = getBillChargeSummary(b);
+        return (
+          cs.hasRentCharges ||
+          b.billType === "initial_payment" ||
+          b.billType === "monthly" ||
+          (!b.charges?.electricity && !b.charges?.water)
+        );
+      }).length,
+    [bills]
+  );
+
+  const elecCount = useMemo(
+    () =>
+      bills.filter((b) => {
+        const cs = getBillChargeSummary(b);
+        return (
+          cs.hasElectricityCharge ||
+          b.billType === "electricity" ||
+          Boolean(b.utilityBreakdowns?.electricity)
+        );
+      }).length,
+    [bills]
+  );
+
+  const waterCount = useMemo(
+    () =>
+      bills.filter((b) => {
+        const cs = getBillChargeSummary(b);
+        return (
+          cs.hasWaterCharge ||
+          b.billType === "water" ||
+          Boolean(b.utilityBreakdowns?.water)
+        );
+      }).length,
+    [bills]
+  );
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: "all", label: "All Kinds", count: bills.length },
+      { value: "rent", label: "Rent", icon: Home, count: rentCount },
+      ...(hasElectricityBilling ? [{ value: "electricity", label: "Electricity", icon: Zap, count: elecCount }] : []),
+      ...(hasWaterBilling ? [{ value: "water", label: "Water", icon: Droplets, count: waterCount }] : []),
+    ],
+    [bills.length, rentCount, elecCount, waterCount, hasElectricityBilling, hasWaterBilling]
+  );
+
+  const activeCategory = useMemo(
+    () => categoryOptions.find((c) => c.value === categoryFilter),
+    [categoryOptions, categoryFilter]
+  );
+
+  // Measure category toggle position to prevent clipping off-screen
+  const updateDropdownPosition = useCallback(() => {
+    if (!filterMenuRef.current) return;
+    const rect = filterMenuRef.current.getBoundingClientRect();
+    // If right edge of button is < 240px from viewport left, right:0 would clip off left screen
+    if (rect.right < 240 || rect.left < 16) {
+      setDropdownAlign("left");
+    } else {
+      setDropdownAlign("right");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isCategoryMenuOpen) return;
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    return () => window.removeEventListener("resize", updateDropdownPosition);
+  }, [isCategoryMenuOpen, updateDropdownPosition]);
+
+  // Close dropdown on click outside or escape key
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (filterMenuRef.current && !filterMenuRef.current.contains(e.target)) {
         setIsCategoryMenuOpen(false);
       }
     };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setIsCategoryMenuOpen(false);
+      }
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
-  const unpaidCount = bills.filter((b) => !isPaidBill(b)).length;
-  const paidCount = bills.filter((b) => isPaidBill(b)).length;
+  // Update carousel scroll buttons state with asymmetric hysteresis
+  const updateScrollButtons = useCallback(() => {
+    const el = filterScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft((prev) => (prev ? el.scrollLeft > 4 : el.scrollLeft > 18));
+    setCanScrollRight((prev) => {
+      const remaining = el.scrollWidth - el.clientWidth - el.scrollLeft;
+      return prev ? remaining > 4 : remaining > 18;
+    });
+  }, []);
 
-  const statusOptions = [
-    { value: "all", label: "All Statements", count: bills.length },
-    { value: "unpaid", label: "Unpaid", count: unpaidCount },
-    { value: "paid", label: "Paid History", count: paidCount },
-  ];
+  useEffect(() => {
+    const el = filterScrollRef.current;
+    if (!el) return;
 
-  const rentCount = bills.filter((b) => {
-    const s = getBillChargeSummary(b);
-    return (
-      s.hasRentCharges ||
-      b.billType === "initial_payment" ||
-      b.billType === "monthly" ||
-      (!b.charges?.electricity && !b.charges?.water)
-    );
-  }).length;
+    updateScrollButtons();
+    el.addEventListener("scroll", updateScrollButtons, { passive: true });
+    window.addEventListener("resize", updateScrollButtons);
 
-  const elecCount = bills.filter((b) => {
-    const s = getBillChargeSummary(b);
-    return (
-      s.hasElectricityCharge ||
-      b.billType === "electricity" ||
-      Boolean(b.utilityBreakdowns?.electricity)
-    );
-  }).length;
+    let ro;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => {
+        updateScrollButtons();
+      });
+      ro.observe(el);
+    }
 
-  const waterCount = bills.filter((b) => {
-    const s = getBillChargeSummary(b);
-    return (
-      s.hasWaterCharge ||
-      b.billType === "water" ||
-      Boolean(b.utilityBreakdowns?.water)
-    );
-  }).length;
+    // Translate vertical mouse wheel into horizontal scroll for mouse users
+    const onWheel = (e) => {
+      if (e.deltaY === 0) return;
+      if (el.scrollWidth > el.clientWidth) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY * 0.85;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
 
-  const categoryOptions = [
-    { value: "all", label: "All Kinds", count: bills.length },
-    { value: "rent", label: "Rent", icon: Home, count: rentCount },
-    ...(hasElectricityBilling ? [{ value: "electricity", label: "Electricity", icon: Zap, count: elecCount }] : []),
-    ...(hasWaterBilling ? [{ value: "water", label: "Water", icon: Droplets, count: waterCount }] : []),
-  ];
+    return () => {
+      el.removeEventListener("scroll", updateScrollButtons);
+      window.removeEventListener("resize", updateScrollButtons);
+      el.removeEventListener("wheel", onWheel);
+      if (ro) ro.disconnect();
+    };
+  }, [updateScrollButtons, statusOptions]);
 
-  const activeCategory = categoryOptions.find((c) => c.value === categoryFilter);
+  const scrollFilters = (direction) => {
+    const el = filterScrollRef.current;
+    if (!el) return;
+    const offset = direction === "left" ? -180 : 180;
+    el.scrollBy({ left: offset, behavior: "smooth" });
+  };
+
+  const handleMouseDown = (e) => {
+    if (e.button !== 0) return;
+    const el = filterScrollRef.current;
+    if (!el) return;
+    setIsDragging(true);
+    dragStartX.current = e.pageX - el.offsetLeft;
+    dragScrollLeft.current = el.scrollLeft;
+    hasDragged.current = false;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    const el = filterScrollRef.current;
+    if (!el) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - dragStartX.current) * 1.2;
+    if (Math.abs(walk) > 4) {
+      hasDragged.current = true;
+    }
+    el.scrollLeft = dragScrollLeft.current - walk;
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+    if (hasDragged.current) {
+      setTimeout(() => {
+        hasDragged.current = false;
+      }, 50);
+    }
+  };
 
   return (
-    <div className="statement-filters-container" style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-        {/* Status Pills */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {statusOptions.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setStatusFilter(opt.value)}
-              className={`ledger-filter-chip ${statusFilter === opt.value ? "is-active" : ""}`}
-            >
-              {opt.label}
-              <span style={s.chipCount}>{opt.count}</span>
-            </button>
-          ))}
+    <div className="statement-filters-container">
+      {/* Mobile Dropdown Selectors (< 640px) */}
+      <div className="sm:hidden flex items-center gap-2 mb-3">
+        {/* Status Dropdown */}
+        <div className="relative flex-1 min-w-0">
+          <label htmlFor="mobile-statement-status-filter" className="sr-only">
+            Filter statements by status
+          </label>
+          <select
+            id="mobile-statement-status-filter"
+            value={statusOptions.some((opt) => opt.value === statusFilter) ? statusFilter : "all"}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full sm:hidden appearance-none px-3.5 py-2.5 pr-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500 transition-all cursor-pointer truncate"
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label} ({opt.count})
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400 dark:text-slate-500">
+            <ChevronDown size={13} />
+          </div>
+        </div>
+
+        {/* Category Dropdown */}
+        <div className="relative flex-1 min-w-0">
+          <label htmlFor="mobile-statement-category-filter" className="sr-only">
+            Filter statements by category
+          </label>
+          <select
+            id="mobile-statement-category-filter"
+            value={categoryOptions.some((cat) => cat.value === categoryFilter) ? categoryFilter : "all"}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="w-full sm:hidden appearance-none px-3.5 py-2.5 pr-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-400 dark:focus:ring-slate-500 transition-all cursor-pointer truncate"
+          >
+            {categoryOptions.map((cat) => (
+              <option key={cat.value} value={cat.value}>
+                {cat.label} ({cat.count})
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400 dark:text-slate-500">
+            <Filter size={13} />
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Filter Toolbar (>= 640px): Status Carousel + Category Dropdown */}
+      <div className="hidden sm:flex statement-filters-toolbar items-center justify-between gap-3">
+        {/* Horizontally Slidable Status Pills Carousel */}
+        <div className="statement-filter-carousel">
+          <button
+            type="button"
+            className={`statement-filter-carousel-arrow statement-filter-carousel-arrow--left ${
+              canScrollLeft ? "is-visible" : ""
+            }`}
+            onClick={() => scrollFilters("left")}
+            aria-label="Scroll filters left"
+            title="Scroll filters left"
+            tabIndex={canScrollLeft ? 0 : -1}
+            aria-hidden={!canScrollLeft}
+          >
+            <ChevronLeft size={15} />
+          </button>
+
+          <div
+            ref={filterScrollRef}
+            className={`statement-filter-scroll ${isDragging ? "is-dragging" : ""}`}
+            role="tablist"
+            aria-label="Filter statements by status"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUpOrLeave}
+            onMouseLeave={handleMouseUpOrLeave}
+          >
+            {statusOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === opt.value}
+                onClick={(e) => {
+                  if (hasDragged.current) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setStatusFilter(opt.value);
+                }}
+                className={`ledger-filter-chip ${statusFilter === opt.value ? "is-active" : ""}`}
+              >
+                <span>{opt.label}</span>
+                <span className="ledger-filter-chip__count">{opt.count}</span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className={`statement-filter-carousel-arrow statement-filter-carousel-arrow--right ${
+              canScrollRight ? "is-visible" : ""
+            }`}
+            onClick={() => scrollFilters("right")}
+            aria-label="Scroll filters right"
+            title="Scroll filters right"
+            tabIndex={canScrollRight ? 0 : -1}
+            aria-hidden={!canScrollRight}
+          >
+            <ChevronRight size={15} />
+          </button>
         </div>
 
         {/* Clickable Filter Category Dropdown Toggle */}
-        <div style={{ position: "relative" }} ref={filterMenuRef}>
+        <div className="statement-category-filter-wrap relative flex-shrink-0" ref={filterMenuRef}>
           <button
             type="button"
-            onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
+            onClick={() => {
+              if (!isCategoryMenuOpen) {
+                updateDropdownPosition();
+              }
+              setIsCategoryMenuOpen((prev) => !prev);
+            }}
             className={`ledger-filter-category-btn ${categoryFilter !== "all" ? "is-active" : ""}`}
             aria-expanded={isCategoryMenuOpen}
             aria-haspopup="true"
           >
             {categoryFilter !== "all" && activeCategory?.icon ? (
-              <activeCategory.icon size={13} color="#ffffff" />
+              <activeCategory.icon size={13} color="currentColor" />
             ) : (
-              <Filter size={13} color={categoryFilter !== "all" ? "#ffffff" : "#64748b"} />
+              <Filter size={13} color="currentColor" />
             )}
             <span>
               {categoryFilter !== "all" ? activeCategory?.label || "Filtered" : "Filter Category"}
@@ -788,7 +1045,7 @@ const StatementFilters = ({
                 className="category-clear-btn"
                 title="Clear category filter"
               >
-                <X size={10} color="#ffffff" strokeWidth={2.5} />
+                <X size={10} strokeWidth={2.5} />
               </span>
             ) : (
               <ChevronDown
@@ -796,7 +1053,8 @@ const StatementFilters = ({
                 style={{
                   transform: isCategoryMenuOpen ? "rotate(180deg)" : "none",
                   transition: "transform 0.2s ease",
-                  color: "#94a3b8",
+                  color: "currentColor",
+                  opacity: 0.7,
                 }}
               />
             )}
@@ -804,19 +1062,12 @@ const StatementFilters = ({
 
           {/* Category Dropdown Menu */}
           {isCategoryMenuOpen && (
-            <div className="category-dropdown-menu">
-              <div
-                style={{
-                  padding: "6px 10px 6px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#94a3b8",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  borderBottom: "1px solid #f1f5f9",
-                  marginBottom: 2,
-                }}
-              >
+            <div
+              className={`category-dropdown-menu ${dropdownAlign === "left" ? "align-left" : ""}`}
+              role="menu"
+              aria-label="Filter statements by category"
+            >
+              <div className="category-dropdown-header" role="presentation">
                 Filter by Category
               </div>
               {categoryOptions.map((cat) => {
@@ -826,6 +1077,8 @@ const StatementFilters = ({
                   <button
                     key={cat.value}
                     type="button"
+                    role="menuitem"
+                    aria-current={isActive ? "true" : undefined}
                     onClick={() => {
                       setCategoryFilter(cat.value);
                       setIsCategoryMenuOpen(false);
@@ -834,22 +1087,13 @@ const StatementFilters = ({
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {Icon ? (
-                        <Icon size={15} color={isActive ? "#0A1628" : "#64748b"} />
+                        <Icon size={15} color="currentColor" />
                       ) : (
-                        <Filter size={14} color={isActive ? "#0A1628" : "#94a3b8"} />
+                        <Filter size={14} color="currentColor" />
                       )}
                       <span>{cat.label}</span>
                     </div>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: "2px 7px",
-                        borderRadius: 10,
-                        background: isActive ? "#0A1628" : "#f1f5f9",
-                        color: isActive ? "#ffffff" : "#64748b",
-                      }}
-                    >
+                    <span className="category-dropdown-item__count">
                       {cat.count}
                     </span>
                   </button>
@@ -1483,7 +1727,12 @@ export default function BillingTab() {
             try {
               sessionStorage.setItem("lilycrest_last_settled_payment_time", String(Date.now()));
             } catch {}
-            showNotification("Payment successful! Your statement balance has been settled.", "success", 5000);
+            const refText = result?.referenceNumber ? ` Reference #${result.referenceNumber}.` : "";
+            showNotification(
+              `Payment confirmed!${refText} Your statement balance has been settled. Official receipt sent to your email.`,
+              "success",
+              6000,
+            );
             loadBills();
           } else if (result?.status === "unpaid") {
             showNotification("Payment was not completed. You can try again anytime.", "info", 4000);
@@ -1744,7 +1993,17 @@ export default function BillingTab() {
     }
   };
 
-  if (loading || verifyingPayment) {
+  if (verifyingPayment) {
+    return (
+      <PaymentVerifyingModal
+        show={verifyingPayment}
+        step={2}
+        title="Verifying Statement Payment"
+      />
+    );
+  }
+
+  if (loading) {
     return <BillingPageSkeleton />;
   }
 

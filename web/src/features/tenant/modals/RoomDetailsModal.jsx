@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import SpotlightCard from "../components/SpotlightCard";
 import BedSelector from "../components/BedSelector";
+import CustomDatePicker from "../../../shared/components/CustomDatePicker";
 import useEscapeClose from "../../../shared/hooks/useEscapeClose";
 import {
   LEASE_OPTIONS,
@@ -31,7 +32,7 @@ import {
   getMoveInDateConstraints,
 } from "../pages/reservation-steps/applicationFormConstants";
 import { validateTargetMoveInDate } from "../utils/reservationValidation";
-import { getOptimizedUrl, getThumbnailUrl } from "../../../shared/utils/imageOptimizer";
+import { getOptimizedUrl, getThumbnailUrl, getImageFallbackUrl } from "../../../shared/utils/imageOptimizer.js";
 import { calculateRoomDetailsCost, getFlyerRates } from "../utils/roomDetailsPricing";
 
 
@@ -138,11 +139,14 @@ export default function RoomDetailsModal({
   onSelectIntendedMoveInDate,
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [prevImage, setPrevImage] = useState(null);
   const [hdLoadedMap, setHdLoadedMap] = useState({});
   const [internalLeaseDuration, setInternalLeaseDuration] = useState("");
   const [internalMoveInDate, setInternalMoveInDate] = useState("");
   const datePickerRef = React.useRef(null);
-
+  const baseRetriedRef = React.useRef(new Set());
+  const hdRetriedRef = React.useRef(new Set());
+  const thumbRetriedRef = React.useRef(new Set());
 
   useEscapeClose(isOpen && !!room, onClose);
 
@@ -150,6 +154,102 @@ export default function RoomDetailsModal({
   const images = useMemo(
     () => getImages(room || {}),
     [room?.id, room?.images, room?.image]
+  );
+
+  useEffect(() => {
+    baseRetriedRef.current.clear();
+    hdRetriedRef.current.clear();
+    thumbRetriedRef.current.clear();
+    if (!isOpen) {
+      setCurrentImageIndex(0);
+      setPrevImage(null);
+      setHdLoadedMap({});
+    }
+  }, [isOpen, images]);
+
+  // Safety un-blur timer: ensure modal photo never gets stuck blurred if HD network request stalls
+  useEffect(() => {
+    if (!isOpen || hdLoadedMap[currentImageIndex]) return;
+    const timer = setTimeout(() => {
+      setHdLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }));
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [isOpen, currentImageIndex, hdLoadedMap]);
+
+  const handleBaseImageError = useCallback(
+    (e) => {
+      const key = currentImageIndex;
+      const rawTarget = images[currentImageIndex];
+      if (
+        !baseRetriedRef.current.has(key) &&
+        e.currentTarget.src.includes("/api/rooms/photos/optimize")
+      ) {
+        baseRetriedRef.current.add(key);
+        const fallback = getImageFallbackUrl(rawTarget || e.currentTarget.src);
+        if (fallback && fallback !== e.currentTarget.src) {
+          e.currentTarget.src = fallback;
+          return;
+        }
+      }
+      if (e.currentTarget.src && e.currentTarget.src.includes("-thumb.webp")) {
+        const rawWebp = e.currentTarget.src.replace("-thumb.webp", ".webp");
+        if (rawWebp !== e.currentTarget.src) {
+          e.currentTarget.src = rawWebp;
+          return;
+        }
+      }
+    },
+    [images, currentImageIndex]
+  );
+
+  const handleHdImageError = useCallback(
+    (e) => {
+      const key = currentImageIndex;
+      const rawTarget = images[currentImageIndex];
+      if (
+        !hdRetriedRef.current.has(key) &&
+        e.currentTarget.src.includes("/api/rooms/photos/optimize")
+      ) {
+        hdRetriedRef.current.add(key);
+        const fallback = getImageFallbackUrl(rawTarget || e.currentTarget.src);
+        if (fallback && fallback !== e.currentTarget.src) {
+          e.currentTarget.src = fallback;
+          return;
+        }
+      }
+      if (e.currentTarget.src && e.currentTarget.src.includes("-thumb.webp")) {
+        const rawWebp = e.currentTarget.src.replace("-thumb.webp", ".webp");
+        if (rawWebp !== e.currentTarget.src) {
+          e.currentTarget.src = rawWebp;
+          return;
+        }
+      }
+      setHdLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }));
+    },
+    [images, currentImageIndex]
+  );
+
+  const handleThumbError = useCallback(
+    (index, e) => {
+      const rawTarget = images[index];
+      if (!thumbRetriedRef.current.has(index)) {
+        thumbRetriedRef.current.add(index);
+        const fallback = getImageFallbackUrl(rawTarget || e.currentTarget.src);
+        if (fallback && fallback !== e.currentTarget.src) {
+          e.currentTarget.src = fallback;
+          return;
+        }
+      }
+      if (e.currentTarget.src && e.currentTarget.src.includes("-thumb.webp")) {
+        const rawWebp = e.currentTarget.src.replace("-thumb.webp", ".webp");
+        if (rawWebp !== e.currentTarget.src) {
+          e.currentTarget.src = rawWebp;
+          return;
+        }
+      }
+      e.currentTarget.classList.add("is-loaded");
+    },
+    [images]
   );
 
   // Preload all full-res and thumbnail photos on modal mount exactly once
@@ -289,13 +389,15 @@ export default function RoomDetailsModal({
 
   const handlePrevImage = useCallback(() => {
     if (!images.length) return;
+    setPrevImage(images[currentImageIndex]);
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
-  }, [images.length]);
+  }, [images, currentImageIndex]);
 
   const handleNextImage = useCallback(() => {
     if (!images.length) return;
+    setPrevImage(images[currentImageIndex]);
     setCurrentImageIndex((prev) => (prev + 1) % images.length);
-  }, [images.length]);
+  }, [images, currentImageIndex]);
 
   const availability = useMemo(() => (room ? getAvailabilityMeta(room) : { label: "Available", bg: "var(--success)", fg: "#fff" }), [room]);
 
@@ -312,6 +414,26 @@ export default function RoomDetailsModal({
     >
       <style>{`
         @keyframes rdm-rise { from { opacity: 0; transform: translateY(16px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes rdm-crossfade {
+          from {
+            opacity: 0;
+            transform: scale(1.035);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes rdm-slide-exit {
+          from {
+            opacity: 1;
+            transform: scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: scale(0.975);
+          }
+        }
         .rdm-panel {
           animation: rdm-rise 0.22s cubic-bezier(0.16,1,0.3,1);
           contain: content;
@@ -319,7 +441,49 @@ export default function RoomDetailsModal({
           transform: translateZ(0);
           backface-visibility: hidden;
         }
-        @media (prefers-reduced-motion: reduce) { .rdm-panel { animation: none; } }
+        .rdm-slide-enter {
+          animation: rdm-crossfade 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          will-change: opacity, transform;
+        }
+        .rdm-slide-exit {
+          animation: rdm-slide-exit 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          will-change: opacity, transform;
+        }
+        @keyframes rdm-thumb-reveal {
+          from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.92);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .rdm-thumb-btn {
+          animation: rdm-thumb-reveal 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .rdm-thumb-btn:hover {
+          transform: translateY(-2px) scale(1.04) !important;
+        }
+        .rdm-thumb-btn.is-active {
+          transform: scale(1.02) !important;
+        }
+        .rdm-thumb-img {
+          opacity: 1;
+          transform: scale(1);
+          transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .rdm-thumb-img.is-loaded {
+          opacity: 1;
+          transform: scale(1);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .rdm-panel, .rdm-slide-enter, .rdm-slide-exit, .rdm-thumb-btn, .rdm-thumb-img {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
         .rdm-scroller::-webkit-scrollbar { width: 8px; }
         .rdm-scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
         .rdm-thumbstrip::-webkit-scrollbar { display: none; }
@@ -380,38 +544,67 @@ export default function RoomDetailsModal({
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-muted">
                   {images.length > 0 && (
                     <>
-                      {/* Base layer: Instant thumbnail from cache (0ms blank time) */}
-                      <img
-                        src={getThumbnailUrl(images[currentImageIndex], { width: 480, quality: 75 })}
-                        alt=""
-                        aria-hidden="true"
-                        className="w-full h-full object-cover"
-                        style={{
-                          filter: isHdLoaded ? "none" : "blur(4px)",
-                          transform: isHdLoaded ? "scale(1)" : "scale(1.03)",
-                          transition: "filter 0.3s ease, transform 0.3s ease",
-                        }}
-                      />
+                      {/* Previous slide layer kept visible underneath during slide change */}
+                      {prevImage && (
+                        <img
+                          key={`prev-${prevImage}`}
+                          src={getThumbnailUrl(prevImage, { width: 480, quality: 75 })}
+                          alt=""
+                          aria-hidden="true"
+                          className="w-full h-full object-cover absolute inset-0 rdm-slide-exit"
+                          onAnimationEnd={() => setPrevImage(null)}
+                          style={{ zIndex: 0 }}
+                        />
+                      )}
 
-                      {/* Overlay layer: Full 1200px HD image fading in smoothly */}
-                      <img
-                        src={getOptimizedUrl(images[currentImageIndex], { width: 1200, quality: 82 })}
-                        alt={`${room.title} — photo ${currentImageIndex + 1}`}
-                        loading="eager"
-                        fetchpriority="high"
-                        decoding="async"
-                        onLoad={() => setHdLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }))}
-                        className="w-full h-full object-cover absolute inset-0"
-                        style={{
-                          opacity: isHdLoaded ? 1 : 0,
-                          transition: "opacity 0.3s ease",
-                        }}
-                      />
+                      {/* Active photo slide container with smooth cross-fade animation on index change */}
+                      <div
+                        key={`slide-${currentImageIndex}`}
+                        className="w-full h-full absolute inset-0 rdm-slide-enter pointer-events-none"
+                        style={{ zIndex: 1 }}
+                      >
+                        {/* Base layer: Instant thumbnail from cache (0ms blank time) */}
+                        <img
+                          src={getThumbnailUrl(images[currentImageIndex], { width: 480, quality: 75 })}
+                          alt=""
+                          aria-hidden="true"
+                          decoding="auto"
+                          className="w-full h-full object-cover"
+                          onError={handleBaseImageError}
+                          style={{
+                            filter: "none",
+                            transform: isHdLoaded ? "scale(1)" : "scale(1.03)",
+                            transition: "transform 0.35s ease",
+                          }}
+                        />
+
+                        {/* Overlay layer: Full 1200px HD image fading in smoothly */}
+                        <img
+                          src={getOptimizedUrl(images[currentImageIndex], { width: 1200, quality: 82 })}
+                          alt={`${room.title} — photo ${currentImageIndex + 1}`}
+                          loading="eager"
+                          fetchpriority="high"
+                          decoding="auto"
+                          ref={(node) => {
+                            if (node && node.complete && !hdLoadedMap[currentImageIndex]) {
+                              setHdLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }));
+                            }
+                          }}
+                          onLoad={() => setHdLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }))}
+                          onError={handleHdImageError}
+                          className="w-full h-full object-cover absolute inset-0"
+                          style={{
+                            opacity: isHdLoaded ? 1 : 0,
+                            transition: "opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+                            willChange: "opacity",
+                          }}
+                        />
+                      </div>
                     </>
                   )}
 
                   <span
-                    className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm"
+                    className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm z-10"
                     style={{ backgroundColor: availability.bg, color: availability.fg }}
                   >
                     {availability.label}
@@ -422,18 +615,18 @@ export default function RoomDetailsModal({
                       <button
                         onClick={handlePrevImage}
                         aria-label="Previous photo"
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-card/90 backdrop-blur-sm flex items-center justify-center hover:bg-card shadow-md transition-all"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-card/90 backdrop-blur-sm flex items-center justify-center hover:bg-card shadow-md transition-all z-10"
                       >
                         <ChevronLeft className="w-5 h-5 text-foreground" />
                       </button>
                       <button
                         onClick={handleNextImage}
                         aria-label="Next photo"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-card/90 backdrop-blur-sm flex items-center justify-center hover:bg-card shadow-md transition-all"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-card/90 backdrop-blur-sm flex items-center justify-center hover:bg-card shadow-md transition-all z-10"
                       >
                         <ChevronRight className="w-5 h-5 text-foreground" />
                       </button>
-                      <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-xs">
+                      <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-xs z-10">
                         {currentImageIndex + 1} / {images.length}
                       </div>
                     </>
@@ -447,11 +640,17 @@ export default function RoomDetailsModal({
                     <button
                       key={index}
                       type="button"
-                      onClick={() => setCurrentImageIndex(index)}
+                      onClick={() => {
+                        if (currentImageIndex !== index) {
+                          setPrevImage(images[currentImageIndex]);
+                          setCurrentImageIndex(index);
+                        }
+                      }}
                       aria-label={`View photo ${index + 1}`}
                       aria-current={currentImageIndex === index}
-                      className="shrink-0 w-16 h-16 min-w-[4rem] min-h-[4rem] aspect-square rounded-lg overflow-hidden border bg-muted relative flex items-center justify-center cursor-pointer transition-all"
+                      className={`rdm-thumb-btn shrink-0 w-16 h-16 min-w-[4rem] min-h-[4rem] aspect-square rounded-lg overflow-hidden border bg-muted relative flex items-center justify-center cursor-pointer transition-all ${currentImageIndex === index ? "is-active" : ""}`}
                       style={{
+                        animationDelay: `${index * 40}ms`,
                         borderColor: currentImageIndex === index ? "var(--primary)" : "transparent",
                         opacity: currentImageIndex === index ? 1 : 0.75,
                         boxShadow: currentImageIndex === index ? "0 0 0 1px var(--primary)" : "none",
@@ -462,8 +661,13 @@ export default function RoomDetailsModal({
                         alt={`Photo thumbnail ${index + 1}`}
                         loading="eager"
                         fetchpriority="high"
-                        decoding="async"
-                        className="w-full h-full object-cover block"
+                        decoding="auto"
+                        ref={(node) => {
+                          if (node && node.complete) node.classList.add("is-loaded");
+                        }}
+                        onLoad={(e) => e.currentTarget.classList.add("is-loaded")}
+                        onError={(e) => handleThumbError(index, e)}
+                        className="w-full h-full object-cover block rdm-thumb-img"
                       />
                     </button>
                   ))}
@@ -613,57 +817,16 @@ export default function RoomDetailsModal({
                   Feel free to pick a date now or skip this step. You can also adjust this date before submitting in your application form.
                 </p>
 
-                <div className="relative flex items-center group mt-2">
-                  <input
-                    ref={datePickerRef}
+                <div className="mt-2">
+                  <CustomDatePicker
                     id="modalIntendedMoveInDate"
-                    type="date"
                     min={minMoveInDate}
                     max={maxMoveInDate}
                     value={activeMoveInDate ? String(activeMoveInDate).substring(0, 10) : ""}
-                    onClick={(e) => {
-                      try {
-                        e.currentTarget.showPicker?.();
-                      } catch (_) {}
-                    }}
-                    onChange={(e) => handleMoveInDateChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 pr-16 text-sm rounded-xl border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-xs cursor-pointer"
-                    style={{
-                      colorScheme: "light",
-                      border: activeMoveInDate && !isMoveInDateValid ? "1.5px solid var(--danger)" : "1px solid var(--border)",
-                    }}
+                    onChange={handleMoveInDateChange}
+                    placeholder="Select move-in date..."
+                    error={activeMoveInDate && !isMoveInDateValid}
                   />
-                  <div className="absolute right-2.5 flex items-center gap-1">
-                    {activeMoveInDate && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleMoveInDateChange("");
-                        }}
-                        className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors focus:outline-none cursor-pointer"
-                        title="Clear date"
-                        aria-label="Clear date"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        try {
-                          datePickerRef.current?.showPicker?.();
-                        } catch (_) {
-                          datePickerRef.current?.focus();
-                        }
-                      }}
-                      className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors focus:outline-none cursor-pointer"
-                      title="Open calendar picker"
-                      aria-label="Open calendar picker"
-                    >
-                      <Calendar className="w-4 h-4" />
-                    </button>
-                  </div>
                 </div>
                 {activeMoveInDate && !isMoveInDateValid ? (
                   <p className="text-xs text-rose-600 dark:text-rose-400 mt-2 font-medium">

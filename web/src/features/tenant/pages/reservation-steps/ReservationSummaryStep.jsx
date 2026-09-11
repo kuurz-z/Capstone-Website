@@ -41,6 +41,7 @@ import {
 } from "../../utils/pricingDisplayHelpers";
 import { getAvailableLeaseOptions, getMoveInDateConstraints } from "./applicationFormConstants";
 import { validateTargetMoveInDate } from "../../utils/reservationValidation";
+import CustomDatePicker from "../../../../shared/components/CustomDatePicker";
 import { showNotification } from "../../../../shared/utils/notification";
 import { ROOM_SELECTION_LOCKED_MESSAGE } from "../../utils/reservationRoomLock";
 import { calculatePaymentBreakdown } from "../../utils/roomDetailsPricing";
@@ -987,62 +988,16 @@ const ReservationSummaryStep = ({
                   </div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">3 days up to 3 months</span>
                 </div>
-                <div className="relative flex items-center group">
-                  <input
-                    ref={dateInputRef}
+                <div>
+                  <CustomDatePicker
                     id="modalIntendedMoveInDate"
-                    type="date"
                     min={minMoveInDate}
                     max={maxMoveInDate}
                     value={tempMoveInDate ? String(tempMoveInDate).substring(0, 10) : ""}
-                    onClick={(e) => {
-                      try {
-                        e.currentTarget.showPicker?.();
-                      } catch (_) {}
-                    }}
-                    onFocus={(e) => {
-                      try {
-                        e.currentTarget.showPicker?.();
-                      } catch (_) {}
-                    }}
-                    onChange={(e) => setTempMoveInDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 pr-16 text-sm rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 shadow-xs cursor-pointer"
-                    style={{
-                      colorScheme: "light",
-                      border: tempMoveInDate && !isTempMoveInDateValid ? "1.5px solid var(--danger)" : "1px solid var(--border)",
-                    }}
+                    onChange={(val) => setTempMoveInDate(val)}
+                    placeholder="Select move-in date..."
+                    error={tempMoveInDate && !isTempMoveInDateValid}
                   />
-                  <div className="absolute right-2.5 flex items-center gap-1">
-                    {tempMoveInDate && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTempMoveInDate("");
-                        }}
-                        className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors focus:outline-none cursor-pointer"
-                        title="Clear date"
-                        aria-label="Clear date"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        try {
-                          dateInputRef.current?.showPicker?.();
-                        } catch (_) {
-                          dateInputRef.current?.focus();
-                        }
-                      }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors focus:outline-none cursor-pointer"
-                      title="Open calendar picker"
-                      aria-label="Open calendar picker"
-                    >
-                      <Calendar className="w-4 h-4" />
-                    </button>
-                  </div>
                 </div>
                 {tempMoveInDate && !isTempMoveInDateValid ? (
                   <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">

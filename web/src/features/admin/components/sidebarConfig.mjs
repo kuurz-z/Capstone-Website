@@ -10,6 +10,7 @@ import {
   FileText,
   TrendingUp,
   Building2,
+  MessageSquare,
   MessageSquareText,
   Shield,
   Settings,
@@ -25,6 +26,7 @@ export const NAV_GROUPS = [
 export const NAV_ITEMS = [
   { to: "/admin/dashboard", icon: LayoutDashboard, text: "Dashboard", group: "workspace", priority: 1 },
   { to: "/admin/reservations", icon: Calendar, text: "Reservations", group: "workspace", priority: 2 },
+  { to: "/admin/inquiries", icon: MessageSquare, text: "Inquiries & Leads", group: "workspace", priority: 2.5 },
   { to: "/admin/room-availability", icon: DoorOpen, text: "Room Management", group: "workspace", priority: 3 },
   { to: "/admin/tenants", icon: Users, text: "Tenants", group: "workspace", priority: 4 },
   { to: "/admin/maintenance", icon: Wrench, text: "Maintenance", group: "workspace", priority: 5, permission: "manageMaintenance" },

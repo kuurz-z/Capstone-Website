@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   formatBranch,
   fmtDate,
@@ -25,6 +26,7 @@ import {
 import { getAvailableLeaseOptions } from "./applicationFormConstants";
 import { getEffectiveMonthlyStayRate } from "../../utils/pricingDisplayHelpers";
 import { showNotification } from "../../../../shared/utils/notification";
+import PaymentTimerBanner from "../../../../shared/components/PaymentTimerBanner";
 
 const formatCurrency = (amount) =>
   `PHP ${Number.isFinite(Number(amount)) ? Number(amount).toLocaleString("en-PH") : "0"}`;
@@ -73,8 +75,10 @@ const ReservationPaymentStep = ({
   onUpdateStayPackage,
   roomSelectionLocked = false,
 }) => {
+  const navigate = useNavigate();
   const [isEditingTerm, setIsEditingTerm] = React.useState(false);
   const [isUpdatingTerm, setIsUpdatingTerm] = React.useState(false);
+  const [isTimerExpired, setIsTimerExpired] = React.useState(false);
 
   const room = reservationData?.room || {};
   const roomName = toDisplayString(room.name || room.roomNumber || room.title || room.id, "N/A");
@@ -133,9 +137,11 @@ const ReservationPaymentStep = ({
     bedDisplay = bedCode || bedLabel || toDisplayString(selectedBed, "");
   }
 
-  const canPay = agreedToFeePolicy && !isLoading && !payingOnline && paymentAvailable && !readOnly;
+  const canPay = agreedToFeePolicy && !isLoading && !payingOnline && paymentAvailable && !readOnly && !isTimerExpired;
   const payButtonLabel = payingOnline
     ? "Redirecting to PayMongo..."
+    : isTimerExpired
+    ? "Room Hold Expired"
     : `Pay ${formatCurrency(reservationFeeAmount)} Securely`;
 
   const handlePayClick = () => {
@@ -173,6 +179,17 @@ const ReservationPaymentStep = ({
           </p>
         </div>
       </div>
+
+      {/* 15-Minute Live Room Hold Timer Banner */}
+      {!readOnly && paymentAvailable && (
+        <PaymentTimerBanner
+          title="Temporary Room Hold"
+          subtitle="Complete your reservation fee payment before this room hold window expires."
+          expiresAt={reservationData?.paymentExpiresAt}
+          onExpire={() => setIsTimerExpired(true)}
+          className="mb-2"
+        />
+      )}
 
       {/* Payment Cancelled Recovery Banner */}
       {paymentCancelled && !readOnly && (
@@ -471,6 +488,16 @@ const ReservationPaymentStep = ({
                       </span>
                     )}
                   </button>
+                  {isTimerExpired && !readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/applicant/check-availability")}
+                      className="w-full mt-3 py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Home size={14} />
+                      <span>Browse Available Rooms</span>
+                    </button>
+                  )}
                 </div>
               )
             )}

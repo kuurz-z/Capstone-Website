@@ -19,6 +19,7 @@ import {
 } from "../../models/index.js";
 import logger from "../../middleware/logger.js";
 import auditLogger from "../../utils/auditLogger.js";
+import { AppError } from "../../middleware/errorHandler.js";
 import { getBusinessSettings } from "../../utils/businessSettings.js";
 import {
   generatePaymentReference,
@@ -3012,3 +3013,58 @@ export const manageReservationVisit = async (req, res, next) => {
     handleReservationError(res, error, "manage visit");
   }
 };
+
+/**
+ * Keep-alive heartbeat endpoint for pending reservations.
+ * Refreshes updatedAt timestamp so rolling 30-minute inactivity timer resets.
+ */
+export const touchReservationActivity = async (req, res, next) => {
+  try {
+    const reservationId = req.params.reservationId || req.params.id;
+    if (!isValidObjectId(reservationId)) {
+      return invalidIdResponse(res);
+    }
+    const dbUser = await findDbUser(req.user?.uid);
+    if (!dbUser) {
+      throw new AppError("User not found", 404, "USER_NOT_FOUND");
+    }
+
+    const reservation = await Reservation.findOne({
+      _id: reservationId,
+      userId: dbUser._id,
+      isArchived: { $ne: true },
+    });
+
+    if (!reservation) {
+      throw new AppError("Reservation not found", 404, "RESERVATION_NOT_FOUND");
+    }
+
+    if (reservation.status !== "pending") {
+      throw new AppError(
+        "Heartbeat only applies to pending reservations.",
+        400,
+        "HEARTBEAT_NOT_APPLICABLE"
+      );
+    }
+
+    reservation.updatedAt = new Date();
+    await reservation.save();
+
+    const expiresAt = dayjs(reservation.updatedAt).add(30, "minute").toDate();
+
+    return res.status(200).json({
+      success: true,
+      code: "RESERVATION_HEARTBEAT_RECORDED",
+      data: {
+        code: "RESERVATION_HEARTBEAT_RECORDED",
+        renewedAt: reservation.updatedAt,
+        expiresAt,
+      },
+      renewedAt: reservation.updatedAt,
+      expiresAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

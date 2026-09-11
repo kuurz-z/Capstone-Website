@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { MongoMemoryServer } from "mongodb-memory-server";
 
@@ -250,4 +250,43 @@ describe("Reservation Lifecycle Controller — Cancellation Guards", () => {
     expect(unchanged.status).toBe("moveIn");
     expect(unchanged.cancellationStatus).toBe("pending");
   });
+
+  test("approveCancellationRequest approves paid reservation even when cancellationReason is null/empty, setting fallback reason", async () => {
+    const reservation = await Reservation.create({
+      userId: tenantUser._id,
+      roomId: roomDoc._id,
+      status: "reserved",
+      paymentStatus: "paid",
+      reservationFeePaymentStatus: "verified",
+      totalPrice: 6000,
+      leaseDuration: 6,
+      reservationFeeAmount: 2000,
+      moveInDate: new Date("2026-09-20T00:00:00.000Z"),
+      cancellationRequested: true,
+      cancellationStatus: "pending",
+      cancellationReason: null,
+      cancellationRequestedAt: new Date(),
+      cancellationRequestedBy: tenantUser._id,
+      selectedBed: { id: "bed-1", bedNumber: 1, position: "lower" },
+    });
+
+    const req = requestFor(String(reservation._id), {}, {
+      user: { uid: "admin-firebase-uid" },
+      authUser: adminUser,
+    });
+    const res = response();
+    const next = jest.fn();
+
+    await approveCancellationRequest(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+
+    const updated = await Reservation.findById(reservation._id).lean();
+    expect(updated.status).toBe("cancelled");
+    expect(updated.cancellationStatus).toBe("approved");
+    expect(typeof updated.cancellationReason).toBe("string");
+    expect(updated.cancellationReason.length).toBeGreaterThan(0);
+  });
 });
+

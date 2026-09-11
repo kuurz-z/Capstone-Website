@@ -184,6 +184,16 @@ input[type="time"] {
   cursor: pointer;
 }
 
+/* Suppress native browser calendar indicator when custom action button is provided */
+input.hide-native-date-indicator::-webkit-calendar-picker-indicator,
+.hide-native-date-indicator input[type="date"]::-webkit-calendar-picker-indicator,
+.hide-native-date-indicator::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  -webkit-appearance: none !important;
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator,
 input[type="month"]::-webkit-calendar-picker-indicator,

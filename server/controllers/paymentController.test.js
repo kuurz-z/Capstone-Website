@@ -713,7 +713,13 @@ describe("paymentController", () => {
     );
     expect(sendSuccess).toHaveBeenCalledWith(
       res,
-      expect.objectContaining({ sessionId: "cs_bill_3", status: "paid" }),
+      expect.objectContaining({
+        sessionId: "cs_bill_3",
+        status: "paid",
+        referenceNumber: "pay_3",
+        amount: 4500,
+        paidAt: expect.any(String),
+      }),
     );
     expect(next).not.toHaveBeenCalled();
   });

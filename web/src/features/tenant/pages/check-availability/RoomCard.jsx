@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
-import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
-import { getThumbnailUrl, getOptimizedUrl } from "../../../../shared/utils/imageOptimizer";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { ChevronLeft, ChevronRight, MapPin, Bed } from "lucide-react";
+import { getThumbnailUrl, getOptimizedUrl, getImageFallbackUrl } from "../../../../shared/utils/imageOptimizer.js";
 
 function highlightTokens(text, query) {
   if (!text || !query || !String(query).trim()) return text;
@@ -37,16 +37,64 @@ const RoomCard = React.memo(({
   selectedLeaseTermFilter = "All",
   searchQuery = "",
   isPriority = false,
+  cardIndex = 0,
 }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [previousImageIndex, setPreviousImageIndex] = useState(null);
   const [loadedMap, setLoadedMap] = useState({}); // { [index]: true } when fully loaded
   const debounceRef = useRef(false);
   const prefetchedRef = useRef(false);
+  const retriedIndicesRef = useRef(new Set());
+  const prevRoomIdRef = useRef(room._id || room.id);
 
   const images = useMemo(() => {
-    const rawImages = room.images?.length ? room.images : [room.image];
-    return rawImages.map((src) => getThumbnailUrl(src));
+    const rawImages = room.images?.length ? room.images : (room.image ? [room.image] : []);
+    const mapped = rawImages.map((src) => getThumbnailUrl(src)).filter(Boolean);
+    return mapped.length > 0 ? mapped : (room.image ? [room.image] : []);
   }, [room.images, room.image]);
+
+  useEffect(() => {
+    const currentId = room._id || room.id;
+    if (prevRoomIdRef.current !== currentId) {
+      prevRoomIdRef.current = currentId;
+      setCurrentImageIndex(0);
+      setPreviousImageIndex(null);
+      setLoadedMap({});
+      retriedIndicesRef.current.clear();
+      prefetchedRef.current = false;
+    }
+  }, [room._id || room.id]);
+
+  useEffect(() => {
+    retriedIndicesRef.current.clear();
+  }, [images]);
+
+  const handleImageError = useCallback(
+    (e) => {
+      const currentSrc = images[currentImageIndex];
+      if (
+        !retriedIndicesRef.current.has(currentImageIndex) &&
+        currentSrc &&
+        currentSrc.includes("/api/rooms/photos/optimize")
+      ) {
+        retriedIndicesRef.current.add(currentImageIndex);
+        const fallback = getImageFallbackUrl(currentSrc);
+        if (fallback && fallback !== currentSrc) {
+          e.currentTarget.src = fallback;
+          return;
+        }
+      }
+      if (e.currentTarget.src && e.currentTarget.src.includes("-thumb.webp")) {
+        const rawWebp = e.currentTarget.src.replace("-thumb.webp", ".webp");
+        if (rawWebp !== e.currentTarget.src) {
+          e.currentTarget.src = rawWebp;
+          return;
+        }
+      }
+      setLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }));
+    },
+    [images, currentImageIndex]
+  );
 
   const matchedAmenities = useMemo(() => {
     if (!searchQuery || !searchQuery.trim() || !Array.isArray(room.amenities)) return [];
@@ -97,9 +145,10 @@ const RoomCard = React.memo(({
     e.stopPropagation();
     if (debounceRef.current) return;
     debounceRef.current = true;
+    setPreviousImageIndex(currentImageIndex);
     setCurrentImageIndex((prev) => (prev + delta + images.length) % images.length);
     setTimeout(() => { debounceRef.current = false; }, 150);
-  }, [images.length]);
+  }, [images.length, currentImageIndex]);
 
   const nextImage = useCallback((e) => navigate(1, e), [navigate]);
   const prevImage = useCallback((e) => navigate(-1, e), [navigate]);
@@ -208,40 +257,100 @@ const RoomCard = React.memo(({
   }, [room]);
 
   return (
-    <div className="ca-card" onClick={handleCardClick} onMouseEnter={handleCardMouseEnter}>
+    <div
+      className="ca-card"
+      onClick={handleCardClick}
+      onMouseEnter={handleCardMouseEnter}
+      style={{ "--card-index": cardIndex }}
+    >
       {/* Image carousel */}
       <div className="ca-card-image-wrap">
         {/* Solid neutral placeholder surface — strictly no gradients */}
-        {!isCurrentLoaded && (
+        <div
+          aria-hidden="true"
+          className={`ca-card-placeholder ${isCurrentLoaded ? "ca-card-placeholder--hidden" : ""}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 1,
+            backgroundColor: "var(--card-muted, #f1f5f9)",
+            borderRadius: "inherit",
+            opacity: isCurrentLoaded ? 0 : 1,
+            transition: "opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+            pointerEvents: "none",
+            willChange: "opacity",
+          }}
+        />
+
+        {images.length === 0 ? (
           <div
-            aria-hidden="true"
+            className="ca-card-no-photo flex flex-col items-center justify-center text-muted-foreground gap-1.5"
             style={{
               position: "absolute",
               inset: 0,
               zIndex: 2,
               backgroundColor: "var(--card-muted, #f1f5f9)",
-              borderRadius: "inherit",
             }}
-          />
-        )}
+          >
+            <Bed className="w-8 h-8 stroke-[1.5] text-muted-foreground/60" />
+            <span className="text-[11px] font-medium tracking-wide text-muted-foreground/70">No photos available</span>
+          </div>
+        ) : (
+          <>
+            {/* Previous image layer kept visible during carousel slide cross-fade */}
+            {previousImageIndex !== null && images[previousImageIndex] && (
+              <img
+                key={`prev-${previousImageIndex}`}
+                src={images[previousImageIndex]}
+                alt=""
+                aria-hidden="true"
+                className="ca-card-img--prev-slide"
+                onAnimationEnd={() => setPreviousImageIndex(null)}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  display: "block",
+                  zIndex: 2,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
 
-        <img
-          src={images[currentImageIndex]}
-          alt={room.title || "Room photo"}
-          loading={isPriority && currentImageIndex === 0 ? "eager" : "lazy"}
-          fetchpriority={isPriority && currentImageIndex === 0 ? "high" : "low"}
-          decoding="async"
-          onLoad={() => setLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }))}
-          onError={() => setLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }))}
-          style={{
-            opacity: isCurrentLoaded ? 1 : 0,
-            transition: "opacity 0.3s ease",
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-          }}
-        />
+            <img
+              key={`current-${currentImageIndex}-${room._id || room.id}`}
+              src={images[currentImageIndex]}
+              alt={room.title || "Room photo"}
+              loading={currentImageIndex === 0 ? "eager" : "lazy"}
+              fetchpriority={isPriority && currentImageIndex === 0 ? "high" : "auto"}
+              decoding="auto"
+              ref={(node) => {
+                if (node && node.complete && !loadedMap[currentImageIndex]) {
+                  setLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }));
+                }
+              }}
+              onLoad={() => setLoadedMap((prev) => ({ ...prev, [currentImageIndex]: true }))}
+              onError={handleImageError}
+              className={isCurrentLoaded ? "ca-card-img--fade-in" : ""}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+                zIndex: 3,
+                opacity: isCurrentLoaded ? 1 : 0,
+                transform: isCurrentLoaded ? "scale(1)" : "scale(1.04)",
+                transition: "opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)",
+                willChange: "opacity, transform",
+                pointerEvents: "none",
+              }}
+            />
+          </>
+        )}
 
         {/* Discount Badge */}
         {discountPercent > 0 && (

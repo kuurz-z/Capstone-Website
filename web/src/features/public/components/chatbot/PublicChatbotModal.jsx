@@ -718,8 +718,19 @@ export function PublicChatbotModal({
                 initialMessage={escalationContext}
                 conversationHistory={messages}
                 onCancel={() => setIsEscalating(false)}
-                onSuccessSubmitted={() => {
+                onClose={() => setIsEscalating(false)}
+                onSuccessSubmitted={(submittedData) => {
                   touchActivity();
+                  if (submittedData?.inquiryId) {
+                    const confirmationMsg = {
+                      id: `escalation-confirm-${Date.now()}`,
+                      role: "assistant",
+                      text: `Your assistance request has been submitted successfully with reference ID **${submittedData.inquiryId}**. Our Front Desk Admin Team will contact you shortly.`,
+                      timestamp: Date.now(),
+                      isStreaming: false,
+                    };
+                    setMessages((prev) => [...prev, confirmationMsg]);
+                  }
                 }}
               />
             </div>

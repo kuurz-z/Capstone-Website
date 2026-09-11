@@ -17,7 +17,7 @@
  * ============================================================================
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	Bell,
@@ -281,7 +281,101 @@ const NotificationsTab = () => {
 	const isApplicant = user?.role === "applicant";
 
 	const currentRole = isApplicant ? "applicant" : "tenant";
-	const filterTabs = ALL_FILTER_TABS.filter((t) => t.roles.includes(currentRole));
+	const filterTabs = useMemo(
+		() => ALL_FILTER_TABS.filter((t) => t.roles.includes(currentRole)),
+		[currentRole]
+	);
+
+	const filterScrollRef = useRef(null);
+	const [canScrollLeft, setCanScrollLeft] = useState(false);
+	const [canScrollRight, setCanScrollRight] = useState(false);
+	const [isDragging, setIsDragging] = useState(false);
+	const dragStartX = useRef(0);
+	const dragScrollLeft = useRef(0);
+	const hasDragged = useRef(false);
+
+	const updateScrollButtons = useCallback(() => {
+		const el = filterScrollRef.current;
+		if (!el) return;
+		setCanScrollLeft((prev) => (prev ? el.scrollLeft > 4 : el.scrollLeft > 18));
+		setCanScrollRight((prev) => {
+			const remaining = el.scrollWidth - el.clientWidth - el.scrollLeft;
+			return prev ? remaining > 4 : remaining > 18;
+		});
+	}, []);
+
+	useEffect(() => {
+		const el = filterScrollRef.current;
+		if (!el) return;
+
+		updateScrollButtons();
+		el.addEventListener("scroll", updateScrollButtons, { passive: true });
+		window.addEventListener("resize", updateScrollButtons);
+
+		let ro;
+		if (typeof ResizeObserver !== "undefined") {
+			ro = new ResizeObserver(() => {
+				updateScrollButtons();
+			});
+			ro.observe(el);
+		}
+
+		// Translate vertical mouse wheel into horizontal scroll for mouse users
+		const onWheel = (e) => {
+			if (e.deltaY === 0) return;
+			if (el.scrollWidth > el.clientWidth) {
+				e.preventDefault();
+				el.scrollLeft += e.deltaY * 0.85;
+			}
+		};
+		el.addEventListener("wheel", onWheel, { passive: false });
+
+		return () => {
+			el.removeEventListener("scroll", updateScrollButtons);
+			window.removeEventListener("resize", updateScrollButtons);
+			el.removeEventListener("wheel", onWheel);
+			if (ro) ro.disconnect();
+		};
+	}, [updateScrollButtons, filterTabs]);
+
+	const scrollFilters = (direction) => {
+		const el = filterScrollRef.current;
+		if (!el) return;
+		const offset = direction === "left" ? -180 : 180;
+		el.scrollBy({ left: offset, behavior: "smooth" });
+	};
+
+	const handleMouseDown = (e) => {
+		if (e.button !== 0) return;
+		const el = filterScrollRef.current;
+		if (!el) return;
+		setIsDragging(true);
+		dragStartX.current = e.pageX - el.offsetLeft;
+		dragScrollLeft.current = el.scrollLeft;
+		hasDragged.current = false;
+	};
+
+	const handleMouseMove = (e) => {
+		if (!isDragging) return;
+		const el = filterScrollRef.current;
+		if (!el) return;
+		e.preventDefault();
+		const x = e.pageX - el.offsetLeft;
+		const walk = (x - dragStartX.current) * 1.2;
+		if (Math.abs(walk) > 4) {
+			hasDragged.current = true;
+		}
+		el.scrollLeft = dragScrollLeft.current - walk;
+	};
+
+	const handleMouseUpOrLeave = () => {
+		setIsDragging(false);
+		if (hasDragged.current) {
+			setTimeout(() => {
+				hasDragged.current = false;
+			}, 50);
+		}
+	};
 
 	// Apply type filter
 	const filtered = useMemo(
@@ -426,47 +520,97 @@ const NotificationsTab = () => {
 				</button>
 			</div>
 
-			{/* Desktop Filter Pills (>= 640px) */}
-			<div
-				className="hidden sm:flex notif-filter-scroll gap-2 mb-5 flex-nowrap items-center overflow-x-auto pb-1"
-				style={{
-					scrollbarWidth: "none",
-					WebkitOverflowScrolling: "touch",
-				}}
-			>
-				{filterTabs.map((tab) => (
+			{/* Desktop Filter Pills Carousel with Arrows & Smooth Scrolling (>= 640px) */}
+			<div className="hidden sm:flex notif-filter-carousel notif-filter-scroll-wrapper mb-5">
+				<button
+					type="button"
+					className={`notif-filter-carousel-arrow notif-filter-carousel-arrow--left ${
+						canScrollLeft ? "is-visible" : ""
+					}`}
+					onClick={() => scrollFilters("left")}
+					aria-label="Scroll filters left"
+					title="Scroll filters left"
+					tabIndex={canScrollLeft ? 0 : -1}
+					aria-hidden={!canScrollLeft}
+				>
+					<ChevronLeft size={15} />
+				</button>
+
+				<div
+					ref={filterScrollRef}
+					className={`notif-filter-scroll ${isDragging ? "is-dragging" : ""}`}
+					role="tablist"
+					aria-label="Filter notifications"
+					onMouseDown={handleMouseDown}
+					onMouseMove={handleMouseMove}
+					onMouseUp={handleMouseUpOrLeave}
+					onMouseLeave={handleMouseUpOrLeave}
+				>
+					{filterTabs.map((tab) => (
+						<button
+							key={tab.key}
+							type="button"
+							role="tab"
+							aria-selected={typeFilter === tab.key}
+							onClick={(e) => {
+								if (hasDragged.current) {
+									e.preventDefault();
+									return;
+								}
+								handleFilterChange(tab.key);
+							}}
+							className={`px-3.5 py-1.5 rounded-full border text-xs whitespace-nowrap transition-all duration-150 cursor-pointer ${getFilterPillClass(
+								typeFilter === tab.key
+							)}`}
+						>
+							{tab.label}
+						</button>
+					))}
+
+					{/* Separator */}
+					<span
+						style={{
+							width: "1px",
+							height: "20px",
+							backgroundColor: "var(--border)",
+							margin: "0 2px",
+							flexShrink: 0,
+						}}
+					/>
+
+					{/* Unread only toggle */}
 					<button
-						key={tab.key}
-						onClick={() => handleFilterChange(tab.key)}
+						type="button"
+						onClick={(e) => {
+							if (hasDragged.current) {
+								e.preventDefault();
+								return;
+							}
+							handleToggleUnread();
+						}}
 						className={`px-3.5 py-1.5 rounded-full border text-xs whitespace-nowrap transition-all duration-150 cursor-pointer ${getFilterPillClass(
-							typeFilter === tab.key
+							unreadOnly
 						)}`}
 					>
-						{tab.label}
+						<span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+							<Filter style={{ width: "12px", height: "12px" }} />
+							Unread only
+						</span>
 					</button>
-				))}
+				</div>
 
-				{/* Separator */}
-				<span
-					style={{
-						width: "1px",
-						height: "20px",
-						backgroundColor: "var(--border)",
-						margin: "0 2px",
-					}}
-				/>
-
-				{/* Unread only toggle */}
 				<button
-					onClick={handleToggleUnread}
-					className={`px-3.5 py-1.5 rounded-full border text-xs whitespace-nowrap transition-all duration-150 cursor-pointer ${getFilterPillClass(
-						unreadOnly
-					)}`}
+					type="button"
+					className={`notif-filter-carousel-arrow notif-filter-carousel-arrow--right ${
+						canScrollRight ? "is-visible" : ""
+					}`}
+					onClick={() => scrollFilters("right")}
+					aria-label="Scroll filters right"
+					title="Scroll filters right"
+					tabIndex={canScrollRight ? 0 : -1}
+					aria-hidden={!canScrollRight}
 				>
-					<span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-						<Filter style={{ width: "12px", height: "12px" }} />
-						Unread only
-					</span>
+					<ChevronRight size={15} />
 				</button>
 			</div>
 

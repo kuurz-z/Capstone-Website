@@ -135,4 +135,85 @@ test("CSS rules suppress native datalist dropdown arrows across global and reser
   );
 });
 
+test("PersonalInfoSection defines date helpers required by BirthdaySelectField", () => {
+  const source = readTenantSource("pages/reservation-steps/components/PersonalInfoSection.jsx");
+
+  assert.match(source, /parseDateParts/, "PersonalInfoSection must define parseDateParts");
+  assert.match(source, /getDaysInMonth/, "PersonalInfoSection must define getDaysInMonth");
+  assert.match(source, /pad2/, "PersonalInfoSection must define pad2");
+  assert.match(source, /composeDate/, "PersonalInfoSection must define composeDate");
+  assert.match(source, /buildYearOptions/, "PersonalInfoSection must define buildYearOptions");
+  assert.match(source, /MONTH_OPTIONS/, "PersonalInfoSection must define MONTH_OPTIONS");
+  assert.match(
+    source,
+    /(?:const|function)\s+parseDateParts/,
+    "parseDateParts must be declared as a function or const in PersonalInfoSection",
+  );
+  assert.match(
+    source,
+    /(?:const|function)\s+getDaysInMonth/,
+    "getDaysInMonth must be declared as a function or const in PersonalInfoSection",
+  );
+  assert.match(
+    source,
+    /(?:const|function)\s+pad2/,
+    "pad2 must be declared as a function or const in PersonalInfoSection",
+  );
+  assert.match(
+    source,
+    /(?:const|function)\s+composeDate/,
+    "composeDate must be declared as a function or const in PersonalInfoSection",
+  );
+  assert.match(
+    source,
+    /(?:const|function)\s+buildYearOptions/,
+    "buildYearOptions must be declared as a function or const in PersonalInfoSection",
+  );
+  assert.match(
+    source,
+    /const\s+MONTH_OPTIONS/,
+    "MONTH_OPTIONS must be declared as a const in PersonalInfoSection",
+  );
+});
+
+test("PersonalInfoSection date helpers execute correctly", () => {
+  const source = readTenantSource("pages/reservation-steps/components/PersonalInfoSection.jsx");
+
+  // Verify BirthdaySelectField consumes the helpers without ReferenceError
+  assert.match(source, /parseDateParts\(birthday\)/);
+  assert.match(source, /buildYearOptions\(birthdayMin,\s*birthdayMax\)/);
+  assert.match(source, /getDaysInMonth\(parts\.year,\s*parts\.month\)/);
+  assert.match(source, /pad2\(index\s*\+\s*1\)/);
+  assert.match(source, /composeDate\(next\)/);
+  assert.match(source, /MONTH_OPTIONS\.map/);
+
+  // Evaluate the extracted functions to verify runtime execution
+  const helperCode = `
+    ${source.match(/export const MONTH_OPTIONS = \[[\s\S]*?\];/)[0].replace('export ', '')}
+    ${source.match(/export const pad2 = [\s\S]*?;/)[0].replace('export ', '')}
+    ${source.match(/export const parseDateParts = [\s\S]*?\n\};/)[0].replace('export ', '')}
+    ${source.match(/export const getDaysInMonth = [\s\S]*?\n\};/)[0].replace('export ', '')}
+    ${source.match(/export const composeDate = [\s\S]*?\n\};/)[0].replace('export ', '')}
+    ${source.match(/export const buildYearOptions = [\s\S]*?\n\};/)[0].replace('export ', '')}
+    return { MONTH_OPTIONS, pad2, parseDateParts, getDaysInMonth, composeDate, buildYearOptions };
+  `;
+  const fn = new Function(helperCode);
+  const { MONTH_OPTIONS, pad2, parseDateParts, getDaysInMonth, composeDate, buildYearOptions } = fn();
+
+  assert.equal(MONTH_OPTIONS.length, 12);
+  assert.equal(pad2(5), "05");
+  assert.equal(pad2("9"), "09");
+  assert.deepEqual(parseDateParts("2002-08-25"), { year: "2002", month: "08", day: "25" });
+  assert.deepEqual(parseDateParts(""), { year: "", month: "", day: "" });
+  assert.deepEqual(parseDateParts(null), { year: "", month: "", day: "" });
+  assert.equal(getDaysInMonth("2024", "02"), 29);
+  assert.equal(getDaysInMonth("2023", "02"), 28);
+  assert.equal(getDaysInMonth("2024", "04"), 30);
+  assert.equal(composeDate({ year: "2000", month: "5", day: "4" }), "2000-05-04");
+
+  const years = buildYearOptions("1946-01-01", "2008-12-31");
+  assert.equal(years[0], "2008");
+  assert.equal(years[years.length - 1], "1946");
+});
+
 

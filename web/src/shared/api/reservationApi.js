@@ -335,6 +335,16 @@ export const reservationApi = {
     ),
 
   /**
+   * Keep-alive heartbeat for pending reservations.
+   * Touches updatedAt to reset the rolling 30-minute inactivity timer.
+   */
+  sendHeartbeat: (reservationId) =>
+    authFetch(`/reservations/${reservationId}/heartbeat`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  /**
    * Archive reservation (soft delete)
    */
   archive: (reservationId, data = {}) =>

@@ -43,6 +43,7 @@ import {
   uploadRoomPhotos,
   uploadPhotosMiddleware,
 } from "../controllers/roomPhotoController.js";
+import { optimizeRoomPhoto } from "../controllers/imageOptimizationController.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { createRoomSchema, updateRoomSchema } from "../validation/zodSchemas.js";
 
@@ -64,6 +65,17 @@ const router = express.Router();
  * @returns {Array} List of rooms matching the filters
  */
 router.get("/", optionalAuth, getRooms);
+
+/**
+ * GET /api/rooms/photos/optimize
+ *
+ * On-the-fly room photo optimization and caching endpoint.
+ * Returns resized WebP with immutable caching headers.
+ * Placed before /:roomId routes so Express does not capture "photos" as :roomId.
+ *
+ * Access: Public
+ */
+router.get("/photos/optimize", optimizeRoomPhoto);
 
 /**
  * POST /api/rooms/:roomId/photos

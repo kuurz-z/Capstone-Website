@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import ProfilePageSkeleton from "../components/profile/ProfilePageSkeleton";
 import ConfirmModal from "../../../shared/components/ConfirmModal";
+import PaymentVerifyingModal from "../../../shared/components/PaymentVerifyingModal";
 import { authFetch } from "../../../shared/api/apiClient";
 import { showNotification } from "../../../shared/utils/notification";
 import { formatDisplayName } from "../../../shared/utils/formatDate";
@@ -28,7 +29,6 @@ import {
  ContractTab,
  ReservationAgreementPage,
   AnnouncementsTab,
-  StaysTab,
 } from "../components/profile";
 
 const ProfilePage = () => {
@@ -38,19 +38,21 @@ const ProfilePage = () => {
  const queryClient = useQueryClient();
  const recoveredMoveInSessionsRef = useRef(new Set());
  const canViewAnnouncements = authUser?.role === "tenant";
- const requestedTab = location.state?.tab || new URLSearchParams(location.search).get("tab");
+  const rawRequestedTab = location.state?.tab || new URLSearchParams(location.search).get("tab");
+  const requestedTab = rawRequestedTab === "stays" ? "history" : rawRequestedTab;
 
- const [activeTab, setActiveTab] = useState(
- requestedTab === "announcements" && !canViewAnnouncements
- ? "dashboard"
- : requestedTab || "dashboard",
- );
+  const [activeTab, setActiveTab] = useState(
+    requestedTab === "announcements" && !canViewAnnouncements
+      ? "dashboard"
+      : requestedTab || "dashboard",
+  );
  const [saving, setSaving] = useState(false);
  const [isEditingProfile, setIsEditingProfile] = useState(false);
  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
  const [pendingTab, setPendingTab] = useState(null);
  const [receiptModal, setReceiptModal] = useState({ open: false, step: null });
  const [selectedReservationId, setSelectedReservationId] = useState(null);
+ const [verifyingMoveIn, setVerifyingMoveIn] = useState(false);
 
  const [profileData, setProfileData] = useState({
  firstName: "",
@@ -96,11 +98,11 @@ const ProfilePage = () => {
  });
 
  const { data: profile, isLoading: profileLoading } = useCurrentUser();
- const {
- data: reservationsData,
- isLoading: reservationsLoading,
- refetch: refetchReservations,
- } = useReservations();
+  const {
+    data: reservationsData,
+    isLoading: reservationsLoading,
+    refetch: refetchReservations,
+  } = useReservations({ includeArchived: "true" });
  const loading = (!profile && profileLoading) || (!reservationsData && reservationsLoading);
 
  useEffect(() => {
@@ -125,14 +127,16 @@ const ProfilePage = () => {
     });
   }, [profile]);
 
- useEffect(() => {
- const nextTab =
- requestedTab === "announcements" && !canViewAnnouncements
- ? "dashboard"
- : requestedTab || "dashboard";
+  useEffect(() => {
+    const rawTab = location.state?.tab || new URLSearchParams(location.search).get("tab");
+    const resolvedTab = rawTab === "stays" ? "history" : rawTab;
+    const nextTab =
+      resolvedTab === "announcements" && !canViewAnnouncements
+        ? "dashboard"
+        : resolvedTab || "dashboard";
 
- setActiveTab(nextTab);
- }, [canViewAnnouncements, location.search, location.state, requestedTab]);
+    setActiveTab(nextTab);
+  }, [canViewAnnouncements, location.search, location.state]);
 
  useEffect(() => {
  const refreshReservations = () => {
@@ -236,6 +240,7 @@ const ProfilePage = () => {
       };
 
       if (sessionId) {
+        setVerifyingMoveIn(true);
         try {
           recoveredMoveInSessionsRef.current.add(sessionId);
           const result = await billingApi.checkPaymentStatus(sessionId);
@@ -254,11 +259,12 @@ const ProfilePage = () => {
             await queryClient.invalidateQueries({ queryKey: ["tenant-contracts"] });
             return;
           }
-          if (result?.status === "paid") {
+          if (result?.status === "paid" || result?.paid) {
+            const refText = result?.referenceNumber ? ` Reference #${result.referenceNumber}.` : "";
             showNotification(
-              "Move-in payment received! Your move-in requirements are fully settled.",
+              `Move-in payment confirmed!${refText} Your move-in requirements are fully settled. Official receipt sent to your email.`,
               "success",
-              5000,
+              6000,
             );
             await flushCaches(active?._id);
             await queryClient.invalidateQueries({ queryKey: ["tenant-contracts"] });
@@ -266,6 +272,8 @@ const ProfilePage = () => {
           }
         } catch (error) {
           console.error("Move-in payment verification failed:", error);
+        } finally {
+          setVerifyingMoveIn(false);
         }
       }
 
@@ -337,11 +345,12 @@ const ProfilePage = () => {
               queryClient.invalidateQueries({ queryKey: ["tenant-contracts"] }),
             ]);
             await refetchReservations();
-            if (!cancelled && result?.status === "paid") {
+            if (!cancelled && (result?.status === "paid" || result?.paid)) {
+              const refText = result?.referenceNumber ? ` Reference #${result.referenceNumber}.` : "";
               showNotification(
-                "Move-in payment confirmed and your balance has been updated.",
+                `Move-in payment confirmed!${refText} Your balance has been updated and official receipt sent to your email.`,
                 "success",
-                5000,
+                6000,
               );
             }
             return;
@@ -495,11 +504,12 @@ const ProfilePage = () => {
       return;
     }
 
-    setActiveTab(nextTab);
+    const targetTab = nextTab === "stays" ? "history" : nextTab;
+    setActiveTab(targetTab);
     setIsEditingProfile(false);
-    navigate("/applicant/profile", {
+    navigate(`/applicant/profile?tab=${targetTab}`, {
       replace: true,
-      state: { tab: nextTab },
+      state: { tab: targetTab },
     });
   };
 
@@ -508,10 +518,11 @@ const ProfilePage = () => {
     handleCancelEdit();
 
     if (pendingTab) {
-      setActiveTab(pendingTab);
-      navigate("/applicant/profile", {
+      const targetTab = pendingTab === "stays" ? "history" : pendingTab;
+      setActiveTab(targetTab);
+      navigate(`/applicant/profile?tab=${targetTab}`, {
         replace: true,
-        state: { tab: pendingTab },
+        state: { tab: targetTab },
       });
       setPendingTab(null);
     }
@@ -663,20 +674,24 @@ const ProfilePage = () => {
         />
       )}
 
-      {activeTab === "history" && (
+      {(activeTab === "history" || activeTab === "stays") && (
         <ActivityHistoryTab
           reservations={reservations}
           isLoading={reservationsLoading}
         />
       )}
 
-      {activeTab === "stays" && <StaysTab />}
-
       {activeTab === "maintenance" && <TenantMaintenanceWorkspace embedded />}
       {activeTab === "announcements" && canViewAnnouncements && <AnnouncementsTab />}
       {activeTab === "notifications" && <NotificationsTab onTabChange={handleTabChange} />}
       {activeTab === "settings" && <SettingsTab />}
       {activeTab === "contract" && <ContractTab />}
+
+      <PaymentVerifyingModal
+        show={verifyingMoveIn}
+        step={2}
+        title="Verifying Move-In Payment"
+      />
 
       <ReceiptModal
         isOpen={receiptModal.open}

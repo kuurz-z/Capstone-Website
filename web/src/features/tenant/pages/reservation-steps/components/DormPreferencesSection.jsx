@@ -1,6 +1,7 @@
 import React from "react";
 import { Check } from "lucide-react";
 import { formatProperCase, sanitizeName } from "../../../../../shared/utils/authValidation";
+import CustomDatePicker from "../../../../../shared/components/CustomDatePicker";
 import {
  MOVE_IN_TIME_SLOTS,
  REFERRAL_OPTIONS,
@@ -127,20 +128,18 @@ const DormPreferencesSection = ({
         </span>
       )}
     </div>
-    <input
+    <CustomDatePicker
       id="intendedMoveInDateInput"
-      type="date"
-      className="form-input"
       value={targetMoveInDate}
       min={moveInMin}
       max={moveInMax}
-      onClick={openDatePicker}
-      onChange={(e) => handleTargetDateInput(e.target.value)}
+      onChange={handleTargetDateInput}
       disabled={readOnly}
+      readOnly={readOnly}
       required
+      placeholder="Select intended move-in date..."
+      error={Boolean(fieldErrors.targetMoveInDate || (showValidationErrors && !targetMoveInDate))}
       style={{
-        colorScheme: "light",
-        cursor: readOnly ? "not-allowed" : "pointer",
         border: fieldErrors.targetMoveInDate
           ? "1.5px solid var(--danger)"
           : errBorder(showValidationErrors, targetMoveInDate),

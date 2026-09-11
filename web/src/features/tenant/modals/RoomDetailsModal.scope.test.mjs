@@ -88,4 +88,10 @@ assert.equal(
   "RoomDetailsModal footer must display Monthly Stay Rate",
 );
 
+// C. Intended Move-in Date Single Calendar Indicator
+assert.ok(
+  modalSource.includes("hide-native-date-indicator") || modalSource.includes("CustomDatePicker"),
+  "RoomDetailsModal intended move-in date input must use CustomDatePicker or suppress native webkit picker indicator to prevent duplicate icons"
+);
+
 console.log("✔ RoomDetailsModal.scope.test.mjs passed all scope and separation contract tests");

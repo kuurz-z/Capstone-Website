@@ -13,6 +13,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import ConfirmModal from "../../../../shared/components/ConfirmModal";
+import PaymentTimerBanner from "../../../../shared/components/PaymentTimerBanner";
 import { billingApi } from "../../../../shared/api/billingApi";
 import { showNotification } from "../../../../shared/utils/notification";
 import {
@@ -610,7 +611,13 @@ export default function MoveInSettlementCard({
         cancelText="Cancel"
         variant="success"
         loading={payingOnline}
-      />
+      >
+        <PaymentTimerBanner
+          title="Payment Checkout Window"
+          subtitle="Your move-in payment session is active for 15 minutes."
+          className="mt-3 text-left"
+        />
+      </ConfirmModal>
     </div>
   );
 }

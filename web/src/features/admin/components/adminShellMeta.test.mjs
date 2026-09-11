@@ -127,6 +127,12 @@ test("base pages stop at page name without extra sub-tab names in breadcrumbs", 
     { label: "Reservations" },
   ]);
 
+  const inquiriesMeta = getPageMeta("/admin/inquiries");
+  assert.deepEqual(inquiriesMeta.breadcrumbs, [
+    { label: "Admin", href: "/admin/dashboard" },
+    { label: "Inquiries & Leads" },
+  ]);
+
   const auditMeta = getPageMeta("/admin/audit-logs");
   assert.deepEqual(auditMeta.breadcrumbs, [
     { label: "Admin", href: "/admin/dashboard" },

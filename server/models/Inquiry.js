@@ -311,6 +311,14 @@ const inquirySchema = new mongoose.Schema(
       maxlength: 5000,
     },
 
+    // Subject / topic of the inquiry
+    subject: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 300,
+    },
+
     // Original message from the prospective tenant
     message: {
       type: String,

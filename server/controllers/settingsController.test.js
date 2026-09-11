@@ -270,7 +270,7 @@ describe("settingsController", () => {
     };
     const req = {
       body: {
-        stalePendingHours: "1.5",
+        staleVisitPendingHours: "1.5",
       },
     };
     const res = createResponse();
@@ -282,10 +282,44 @@ describe("settingsController", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual({
-      error: "Stale pending hours must be a non-negative whole number",
+      error: "Stale visit pending hours must be a non-negative whole number",
     });
     expect(settings.save).not.toHaveBeenCalled();
     expect(logModification).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("accepts system default stalePendingHours of 0.5 hours (30 minutes)", async () => {
+    const settings = {
+      reservationFeeAmount: 2000,
+      penaltyRatePerDay: 50,
+      defaultElectricityRatePerKwh: 16,
+      defaultWaterRatePerUnit: 0,
+      noShowGraceDays: 7,
+      stalePendingHours: 2,
+      staleVisitPendingHours: 336,
+      visitPendingWarnDays: 12,
+      staleVisitApprovedHours: 48,
+      stalePaymentPendingHours: 48,
+      archiveCancelledAfterDays: 7,
+      branchOverrides: DEFAULT_BRANCH_OVERRIDES,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    const req = {
+      body: { stalePendingHours: 0.5 },
+      user: { uid: "owner_123", role: "owner" },
+    };
+    const res = createResponse();
+    const next = jest.fn();
+
+    getBusinessSettings.mockResolvedValue(settings);
+
+    await updateBusinessRules(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(settings.stalePendingHours).toBe(0.5);
+    expect(settings.save).toHaveBeenCalledTimes(1);
     expect(next).not.toHaveBeenCalled();
   });
 
