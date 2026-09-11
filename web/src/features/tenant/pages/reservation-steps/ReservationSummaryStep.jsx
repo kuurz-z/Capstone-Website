@@ -1006,7 +1006,7 @@ const ReservationSummaryStep = ({
                       } catch (_) {}
                     }}
                     onChange={(e) => setTempMoveInDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 pr-16 text-sm rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 shadow-xs cursor-pointer"
+                    className="w-full px-3.5 py-2.5 pr-16 text-sm rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 shadow-xs cursor-pointer hide-native-date-indicator"
                     style={{
                       colorScheme: "light",
                       border: tempMoveInDate && !isTempMoveInDateValid ? "1.5px solid var(--danger)" : "1px solid var(--border)",

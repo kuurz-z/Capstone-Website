@@ -627,7 +627,7 @@ export default function RoomDetailsModal({
                       } catch (_) {}
                     }}
                     onChange={(e) => handleMoveInDateChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 pr-16 text-sm rounded-xl border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-xs cursor-pointer"
+                    className="w-full px-3.5 py-2.5 pr-16 text-sm rounded-xl border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-xs cursor-pointer hide-native-date-indicator"
                     style={{
                       colorScheme: "light",
                       border: activeMoveInDate && !isMoveInDateValid ? "1.5px solid var(--danger)" : "1px solid var(--border)",

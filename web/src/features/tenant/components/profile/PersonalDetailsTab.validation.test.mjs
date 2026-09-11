@@ -289,35 +289,36 @@ test("validateEmergencyContactGroup enforces group completeness and cross-field 
   assert.equal(collision.errors.emergencyPhone, "Emergency contact number cannot be the same as your personal mobile number");
 });
 
-test("PersonalDetailsTab component enforces visual limits, counters, and birthday dropdown selector", () => {
+test("PersonalDetailsTab component enforces visual limits, counters, and birthday calendar picker", () => {
   assert.match(source, /BirthdayField/);
-  assert.match(source, /MONTH_OPTIONS/);
+  assert.match(source, /type="date"/);
+  assert.match(source, /showPicker/);
   assert.match(source, /maxLength=\{50\}/);
   assert.match(source, /maxLength=\{60\}/);
   assert.match(source, /charCounter/);
   assert.match(source, /Must be at least 18 years old/);
 });
 
-test("PersonalDetailsTab BirthdayField decouples parts state to prevent reset on partial selection", () => {
+test("PersonalDetailsTab BirthdayField uses a unified single-click date picker with 18+ age constraints", () => {
   assert.match(
     source,
-    /selectedParts/,
-    "BirthdayField must maintain internal state for selectedParts to prevent selection wipe"
+    /type="date"/,
+    "BirthdayField must render an input with type='date'"
   );
   assert.match(
     source,
-    /selectedParts\.month/,
-    "BirthdayField month select must bind to selectedParts.month"
+    /max=\{maxDate\}/,
+    "BirthdayField must constrain max to 18 years old date"
   );
   assert.match(
     source,
-    /selectedParts\.day/,
-    "BirthdayField day select must bind to selectedParts.day"
+    /showPicker/,
+    "BirthdayField must trigger showPicker on click for smooth calendar opening"
   );
   assert.match(
     source,
-    /selectedParts\.year/,
-    "BirthdayField year select must bind to selectedParts.year"
+    /clearDate|handleClear/,
+    "BirthdayField must provide a clear action when date is selected"
   );
 });
 
