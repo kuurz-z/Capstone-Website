@@ -505,7 +505,7 @@ const STAGE_GUIDANCE = {
 export default function ReservationDetailsModal({
  reservation,
  focusCancellation = false,
- onClose,
+ onClose: onCloseModal,
  onUpdate,
 }) {
  const reservationId = reservation?.id || reservation?._id || "";
@@ -551,11 +551,24 @@ export default function ReservationDetailsModal({
   const [houseRulesPrepared, setHouseRulesPrepared] = useState(false);
   const [showMeterPrompt, setShowMeterPrompt] = useState(false);
 
+  const resetMoveInForm = () => {
+    setMeterReadingVal("");
+    setWaterReadingVal("");
+    setActualMoveInDate(scheduledMoveInStr);
+  };
+  const onClose = () => {
+    resetMoveInForm();
+    setShowMeterPrompt(false);
+    onCloseModal();
+  };
   useEffect(() => {
-    if (showMeterPrompt) {
-      setActualMoveInDate(scheduledMoveInStr);
-    }
-  }, [showMeterPrompt, scheduledMoveInStr]);
+    setMeterReadingVal("");
+    setWaterReadingVal("");
+    setActualMoveInDate(scheduledMoveInStr);
+  }, [showMeterPrompt, scheduledMoveInStr, reservation?.id, reservation?._id]);
+  useEffect(() => {
+    setShowMeterPrompt(false);
+  }, [reservation?.id, reservation?._id]);
   const cancellationPanelRef = useRef(null);
  const [confirmModal, setConfirmModal] = useState({
  open: false,
@@ -2209,6 +2222,8 @@ export default function ReservationDetailsModal({
                                   confirmedMoveInDate: actualMoveInDate,
                                   houseRulesPrepared: true,
                                 });
+                                resetMoveInForm();
+                                setShowMeterPrompt(false);
                                 // Invalidate utility caches so the billing timeline auto-updates.
                                 await queryClient.invalidateQueries({ queryKey: ["utilities"] });
                               } catch (apiErr) {
@@ -2260,7 +2275,7 @@ export default function ReservationDetailsModal({
                               return;
                             }
                             if (!isMoveInPaymentSettled) return;
-                            setMeterReadingVal("");
+                            resetMoveInForm();
                             setShowMeterPrompt(true);
                           }}
                           disabled={isSubmitting || !isMoveInPaymentSettled || cancellationPending}
