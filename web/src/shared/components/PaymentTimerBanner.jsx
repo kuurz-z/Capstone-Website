@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Clock, RefreshCw, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { Clock, AlertTriangle } from "lucide-react";
 
 /**
  * PaymentTimerBanner - Live, accessible 15-minute countdown banner.
@@ -11,7 +11,6 @@ export default function PaymentTimerBanner({
   title = "Payment Session",
   subtitle = "Complete your payment before this session window expires.",
   onExpire,
-  onRefresh,
   compact = false,
   card = false,
   className = "",
@@ -32,12 +31,17 @@ export default function PaymentTimerBanner({
   const [secondsLeft, setSecondsLeft] = useState(calculateSecondsLeft);
   const [hasExpired, setHasExpired] = useState(() => calculateSecondsLeft() <= 0);
 
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
+
   useEffect(() => {
     const initial = calculateSecondsLeft();
     setSecondsLeft(initial);
     if (initial <= 0) {
       setHasExpired(true);
-      if (onExpire) onExpire();
+      if (onExpireRef.current) onExpireRef.current();
       return;
     }
 
@@ -49,12 +53,12 @@ export default function PaymentTimerBanner({
       if (remaining <= 0) {
         clearInterval(timer);
         setHasExpired(true);
-        if (onExpire) onExpire();
+        if (onExpireRef.current) onExpireRef.current();
       }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [targetTime, onExpire]);
+  }, [targetTime]);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
@@ -112,7 +116,7 @@ export default function PaymentTimerBanner({
             </div>
             {subtitle && (
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {hasExpired ? "This payment window has expired. Refresh to check room hold." : subtitle}
+                {hasExpired ? "This payment window has expired." : subtitle}
               </p>
             )}
           </div>
@@ -129,17 +133,6 @@ export default function PaymentTimerBanner({
               {hasExpired ? "00:00" : formattedTime}
             </span>
           </div>
-
-          {hasExpired && onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors shadow-2xs"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Refresh Session</span>
-            </button>
-          )}
         </div>
       </div>
     </div>
