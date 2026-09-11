@@ -29,12 +29,9 @@ import {
   toTitleCase,
   formatProperCase,
   formatBed,
-  MONTH_OPTIONS,
   RELATIONSHIP_OPTIONS,
   parseDateParts,
-  getDaysInMonth,
   composeDate,
-  buildYearOptions,
   validateField,
   validateEmergencyContactGroup,
   isSamePhone,
@@ -43,12 +40,9 @@ import {
 export {
   toTitleCase,
   formatBed,
-  MONTH_OPTIONS,
   RELATIONSHIP_OPTIONS,
   parseDateParts,
-  getDaysInMonth,
   composeDate,
-  buildYearOptions,
   validateField,
   validateEmergencyContactGroup,
   isSamePhone,
@@ -436,8 +430,8 @@ const s = {
     justifyContent: "center",
     background: "transparent",
     border: "none",
-    minWidth: "26px",
-    minHeight: "26px",
+    minWidth: "28px",
+    minHeight: "28px",
     padding: "4px",
     borderRadius: "var(--radius-sm, 6px)",
     cursor: "pointer",
@@ -448,8 +442,8 @@ const s = {
     justifyContent: "center",
     background: "transparent",
     border: "none",
-    minWidth: "26px",
-    minHeight: "26px",
+    minWidth: "28px",
+    minHeight: "28px",
     padding: "4px",
     borderRadius: "var(--radius-sm, 6px)",
     cursor: "pointer",
@@ -702,7 +696,10 @@ const BirthdayField = ({
     const val = editData?.[field] || "";
     if (typeof val === "string") return val.slice(0, 10);
     if (val instanceof Date && !isNaN(val.getTime())) {
-      return val.toISOString().slice(0, 10);
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, "0");
+      const d = String(val.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
     }
     return "";
   }, [editData, field]);
@@ -710,10 +707,11 @@ const BirthdayField = ({
   const { minDate, maxDate } = useMemo(() => {
     const today = new Date();
     const cutoff = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+    const minCutoff = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
     const pad = (n) => String(n).padStart(2, "0");
     return {
       maxDate: `${cutoff.getFullYear()}-${pad(cutoff.getMonth() + 1)}-${pad(cutoff.getDate())}`,
-      minDate: `${today.getFullYear() - 100}-01-01`,
+      minDate: `${minCutoff.getFullYear()}-${pad(minCutoff.getMonth() + 1)}-${pad(minCutoff.getDate())}`,
     };
   }, []);
 
@@ -727,7 +725,9 @@ const BirthdayField = ({
     <div style={{ ...s.fieldTile, ...(colSpan ? { gridColumn: `span ${colSpan}` } : {}) }}>
       <div style={s.fieldHeader}>
         {Icon && <Icon size={13} color="var(--muted-foreground)" style={{ flexShrink: 0 }} />}
-        <span style={s.fieldLabel}>{label}</span>
+        <label htmlFor="profileDateOfBirthInput" style={s.fieldLabel}>
+          {label}
+        </label>
       </div>
       {editing ? (
         locked ? (
@@ -745,6 +745,8 @@ const BirthdayField = ({
                 type="date"
                 id="profileDateOfBirthInput"
                 aria-label="Date of Birth"
+                aria-describedby={hasError ? "profileDobError" : "profileDobHelper"}
+                aria-invalid={!!hasError}
                 min={minDate}
                 max={maxDate}
                 value={rawDateValue}
@@ -767,7 +769,7 @@ const BirthdayField = ({
                 style={{
                   ...s.input,
                   marginTop: 0,
-                  paddingRight: rawDateValue ? 68 : 38,
+                  paddingRight: rawDateValue ? 74 : 42,
                   cursor: "pointer",
                   colorScheme: "inherit",
                   ...(focused && !hasError ? s.inputFocus : {}),
@@ -790,8 +792,8 @@ const BirthdayField = ({
                     type="button"
                     onClick={handleClear}
                     title="Clear date"
-                    aria-label="Clear date"
-                    className="hover:bg-muted/70 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    aria-label="Clear selected date of birth"
+                    className="hover:bg-muted/70 active:scale-95 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     style={s.dateClearBtn}
                   >
                     <X size={13} color="var(--muted-foreground)" />
@@ -807,16 +809,23 @@ const BirthdayField = ({
                     }
                   }}
                   title="Open calendar picker"
-                  aria-label="Open calendar picker"
-                  className="hover:bg-muted/70 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  aria-label="Open calendar picker for date of birth"
+                  aria-haspopup="dialog"
+                  className="hover:bg-muted/70 active:scale-95 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   style={s.datePickerBtn}
                 >
                   <CalendarDays size={14} color="var(--muted-foreground)" />
                 </button>
               </div>
             </div>
-            <div style={s.helperText}>Must be at least 18 years old</div>
-            {hasError && <div style={s.errorText}>{hasError}</div>}
+            <div id="profileDobHelper" style={s.helperText}>
+              Must be at least 18 years old
+            </div>
+            {hasError && (
+              <div id="profileDobError" role="alert" aria-live="polite" style={s.errorText}>
+                {hasError}
+              </div>
+            )}
           </div>
         )
       ) : value && value !== "Not provided" ? (

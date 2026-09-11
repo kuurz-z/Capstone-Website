@@ -322,8 +322,62 @@ test("PersonalDetailsTab BirthdayField uses a unified single-click date picker w
   );
   assert.match(
     source,
-    /minWidth:\s*"26px"/,
+    /minWidth:\s*"28px"/,
     "BirthdayField action buttons must meet WCAG minimum touch target dimensions"
+  );
+});
+
+test("PersonalDetailsTab BirthdayField uses local timezone date extraction and safe minDate arithmetic", () => {
+  assert.match(
+    source,
+    /val\.getFullYear\(\)/,
+    "rawDateValue must extract local year to prevent UTC day shift in Manila timezone"
+  );
+  assert.match(
+    source,
+    /minCutoff\s*=\s*new Date\(today\.getFullYear\(\)\s*-\s*100/,
+    "minDate must use Date arithmetic for safe calendar boundary computation"
+  );
+});
+
+test("PersonalDetailsTab BirthdayField implements WCAG 2.2 programmatic label binding, ARIA alert, and >=28px touch targets", () => {
+  assert.match(
+    source,
+    /<label\s+htmlFor="profileDateOfBirthInput"/,
+    "BirthdayField must bind label to input using htmlFor"
+  );
+  assert.match(
+    source,
+    /aria-describedby=\{hasError \? "profileDobError" : "profileDobHelper"\}/,
+    "BirthdayField must connect helper text and error state via aria-describedby"
+  );
+  assert.match(
+    source,
+    /role="alert"\s+aria-live="polite"/,
+    "BirthdayField error message must announce to assistive technology via polite alert"
+  );
+  assert.match(
+    source,
+    /minWidth:\s*"28px"/,
+    "BirthdayField action buttons must expand to 28px for touch ergonomics"
+  );
+  assert.match(
+    source,
+    /aria-haspopup="dialog"/,
+    "BirthdayField calendar trigger button must declare dialog popup to screen readers"
+  );
+});
+
+test("PersonalDetailsTab eliminates vestigial dead exports from old 3-dropdown selector", () => {
+  assert.doesNotMatch(
+    source,
+    /export\s*\{[^}]*MONTH_OPTIONS/,
+    "PersonalDetailsTab must not re-export obsolete MONTH_OPTIONS"
+  );
+  assert.doesNotMatch(
+    source,
+    /export\s*\{[^}]*buildYearOptions/,
+    "PersonalDetailsTab must not re-export obsolete buildYearOptions"
   );
 });
 
