@@ -1074,6 +1074,18 @@ export const checkSessionStatus = async (req, res, next) => {
       }
     }
 
+    const primaryPaidPayment = paidPayments[0] || null;
+    const referenceNumber = primaryPaidPayment?.id || reservation?.paymongoPaymentId || sessionId;
+    const sessionPaidAmount = Number(primaryPaidPayment?.attributes?.amount || 0);
+    const resolvedAmount = Number(metadata.amountDue || 0) > 0
+      ? Number(metadata.amountDue)
+      : sessionPaidAmount > 0
+        ? sessionPaidAmount / 100
+        : Number(session?.attributes?.line_items?.[0]?.amount || 0) / 100;
+    const paidAt = primaryPaidPayment?.attributes?.paid_at
+      ? new Date(primaryPaidPayment.attributes.paid_at * 1000).toISOString()
+      : new Date().toISOString();
+
     logger.info(
       { sessionId, status: isPaid ? "paid" : "pending" },
       "checkSessionStatus complete",
@@ -1082,6 +1094,10 @@ export const checkSessionStatus = async (req, res, next) => {
     sendSuccess(res, {
       sessionId,
       status: isPaid ? "paid" : "pending",
+      paid: isPaid,
+      referenceNumber: isPaid ? referenceNumber : null,
+      amount: isPaid ? resolvedAmount : 0,
+      paidAt: isPaid ? paidAt : null,
       paymentCount: paidPayments.length,
       paymentMethod,
       ...(paidReservationSnapshot && { reservation: paidReservationSnapshot }),
