@@ -9,12 +9,14 @@
 import mongoose from "mongoose";
 import admin from "firebase-admin";
 import axios from "axios";
+import { createHash } from 'node:crypto';
 import logger from "../../middleware/logger.js";
 
 const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
 const EXPO_CHUNK_SIZE = 100;
 const FCM_CHUNK_SIZE = 500;
 const DEFAULT_CHANNEL_ID = "default";
+const tokenHash = token => createHash('sha256').update(token).digest('hex');
 
 function isExpoPushToken(token) {
   return (
@@ -133,8 +135,9 @@ async function removeInvalidTokens(tokens = []) {
 }
 
 async function sendToExpo(entries, { title, body, data }) {
-  if (!entries.length) return 0;
+  if (!entries.length) return { accepted: 0, attempted: 0, acceptedTokenHashes: [] };
   let successCount = 0;
+  const acceptedTokenHashes = [];
   const invalidTokens = [];
 
   await Promise.all(
@@ -162,6 +165,7 @@ async function sendToExpo(entries, { title, body, data }) {
         tickets.forEach((ticket, index) => {
           if (ticket?.status === "ok") {
             successCount += 1;
+            if (batch[index]) acceptedTokenHashes.push(tokenHash(batch[index].token));
             return;
           }
 
@@ -187,12 +191,13 @@ async function sendToExpo(entries, { title, body, data }) {
     await removeInvalidTokens(invalidTokens);
   }
 
-  return successCount;
+  return { accepted: successCount, attempted: entries.length, acceptedTokenHashes };
 }
 
 async function sendToFCM(tokens, { title, body, data }) {
-  if (!tokens.length || !admin.apps.length) return 0;
+  if (!tokens.length || !admin.apps.length) return { accepted: 0, attempted: 0, acceptedTokenHashes: [] };
   let successCount = 0;
+  const acceptedTokenHashes = [];
   const invalidTokens = [];
 
   await Promise.all(
@@ -216,6 +221,7 @@ async function sendToFCM(tokens, { title, body, data }) {
         });
         successCount += resp.successCount;
         resp.responses.forEach((result, index) => {
+          if (result.success) acceptedTokenHashes.push(tokenHash(batch[index]));
           const code = result?.error?.code || result?.error?.errorInfo?.code;
           if (
             code === "messaging/registration-token-not-registered" ||
@@ -234,16 +240,19 @@ async function sendToFCM(tokens, { title, body, data }) {
     await removeInvalidTokens(invalidTokens);
   }
 
-  return successCount;
+  return { accepted: successCount, attempted: tokens.length, acceptedTokenHashes };
 }
 
-export async function sendMobilePushToRecipients(recipientIds, { title, body, data = {} }) {
-  if (!recipientIds?.length) return 0;
+export async function sendMobilePushToRecipients(recipientIds, { title, body, data = {} }, options = {}) {
+  const outcome = (status, extra = {}) => options.detailed
+    ? { status, attempted: false, accepted: 0, acceptedTokenHashes: [], ...extra }
+    : Number(extra.accepted || 0);
+  if (!recipientIds?.length) return outcome('no_eligible_token');
 
   const db = mongoose.connection.db;
   if (!db) {
     logger.warn("[MobilePush] MongoDB not ready — push skipped");
-    return 0;
+    return outcome('failed', { error: 'Push storage is unavailable.' });
   }
 
   try {
@@ -253,7 +262,7 @@ export async function sendMobilePushToRecipients(recipientIds, { title, body, da
 
     if (!normalizedRecipientIds.length) {
       logger.warn("[MobilePush] No valid recipient ids resolved");
-      return 0;
+      return outcome('failed', { error: 'No canonical recipient IDs.' });
     }
 
     const users = await db
@@ -280,8 +289,11 @@ export async function sendMobilePushToRecipients(recipientIds, { title, body, da
         entriesByToken.set(entry.token, entry);
       }
     }
-    const allEntries = [...entriesByToken.values()];
-    if (!allEntries.length) return 0;
+    const enabledEntries = [...entriesByToken.values()];
+    if (!enabledEntries.length) return outcome('no_eligible_token');
+    const alreadyAccepted = new Set(options.acceptedTokenHashes || []);
+    const allEntries = enabledEntries.filter(entry => !alreadyAccepted.has(tokenHash(entry.token)));
+    if (!allEntries.length) return outcome('accepted');
 
     const expoEntries = allEntries.filter((e) => isExpoPushToken(e.token));
     const fcmTokens = allEntries
@@ -289,12 +301,12 @@ export async function sendMobilePushToRecipients(recipientIds, { title, body, da
       .map((e) => e.token);
 
     const stringData = stringifyData(data);
-    const [expoCount, fcmCount] = await Promise.all([
+    const [expoResult, fcmResult] = await Promise.all([
       sendToExpo(expoEntries, { title, body, data: stringData }),
       sendToFCM(fcmTokens, { title, body, data: stringData }),
     ]);
 
-    const totalSent = expoCount + fcmCount;
+    const totalSent = expoResult.accepted + fcmResult.accepted;
     logger.info(
       {
         requestedRecipients: normalizedRecipientIds.length,
@@ -305,10 +317,16 @@ export async function sendMobilePushToRecipients(recipientIds, { title, body, da
       },
       "[MobilePush] Delivery completed",
     );
-    return totalSent;
+    return outcome(totalSent === allEntries.length ? 'accepted' : totalSent ? 'partial' : 'failed', {
+      attempted: expoResult.attempted + fcmResult.attempted > 0,
+      accepted: totalSent,
+      acceptedTokenHashes: [...expoResult.acceptedTokenHashes, ...fcmResult.acceptedTokenHashes],
+      eligibleTokens: enabledEntries.length,
+      ...(totalSent < allEntries.length ? { error: 'One or more devices were not accepted by the push provider.' } : {}),
+    });
   } catch (err) {
     logger.warn({ err }, "[MobilePush] sendMobilePushToRecipients failed");
-    return 0;
+    return outcome('failed', { error: 'Push delivery failed.' });
   }
 }
 

@@ -211,3 +211,35 @@ test('water allocation notification dedupes DB, push and in-app while retaining 
   await notify.utilityChargeAvailable(userId,'water','August 2026',100,700,'Sep 8',{billId,utilityPeriodId:'water-period-2',allocationIds:['water-allocation-2']});
   expect(await Notification.countDocuments({userId})).toBe(2);
 });
+
+test('detailed delivery distinguishes no token, rejection, and provider acceptance', async () => {
+  const userId = await seedTenantWithPushToken('');
+  const payload = { title: 'Water Charge Available', body: 'Test', data: { event_key: 'utility:test' } };
+  expect(await sendMobilePushToRecipients([userId], payload, { detailed: true }))
+    .toMatchObject({ status: 'no_eligible_token', attempted: false, accepted: 0 });
+  await mongoose.connection.db.collection('users').updateOne({ _id: userId },
+    { $set: { push_token: 'ExponentPushToken[outcome-device]' } });
+  axiosPost.mockResolvedValueOnce({ data: { data: [{ status: 'error', message: 'Unavailable' }] } });
+  expect(await sendMobilePushToRecipients([userId], payload, { detailed: true }))
+    .toMatchObject({ status: 'failed', attempted: true, accepted: 0 });
+  expect(await sendMobilePushToRecipients([userId], payload, { detailed: true }))
+    .toMatchObject({ status: 'accepted', attempted: true, accepted: 1 });
+});
+
+test('partial delivery retries only devices not already accepted', async () => {
+  const userId = await seedTenantWithPushToken('');
+  await mongoose.connection.db.collection('users').updateOne({ _id: userId }, { $set: {
+    push_tokens: ['ExponentPushToken[first-device]', 'ExponentPushToken[second-device]'],
+  } });
+  const payload = { title: 'Electricity Charge Available', body: 'Test', data: { event_key: 'utility:partial' } };
+  axiosPost.mockResolvedValueOnce({ data: { data: [{ status: 'ok' }, { status: 'error' }] } });
+  const first = await sendMobilePushToRecipients([userId], payload, { detailed: true });
+  expect(first).toMatchObject({ status: 'partial', attempted: true, accepted: 1 });
+  expect(first.acceptedTokenHashes).toHaveLength(1);
+  expect(first.acceptedTokenHashes[0]).toMatch(/^[a-f0-9]{64}$/);
+  const retry = await sendMobilePushToRecipients([userId], payload,
+    { detailed: true, acceptedTokenHashes: first.acceptedTokenHashes });
+  expect(retry).toMatchObject({ status: 'accepted', attempted: true, accepted: 1 });
+  expect(axiosPost.mock.calls[1][1].map(message => message.to))
+    .toEqual(['ExponentPushToken[second-device]']);
+});

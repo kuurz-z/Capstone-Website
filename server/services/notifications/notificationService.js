@@ -106,8 +106,9 @@ async function createNotificationOnce(userId, type, title, message, dedupeKey, o
         { userId: String(userId || ""), type, dedupeKey },
         "[Notification] Duplicate event suppressed (dedupeKey already delivered)",
       );
-      return { notification: null, created: false };
+      return { notification: options.reuseExisting ? await Notification.findOne({ userId, dedupeKey }) : null, created: false };
     }
+    if (options.throwOnFailure) throw error;
     console.error("⚠️ Failed to create notification:", error.message);
     return { notification: null, created: false };
   }
@@ -135,6 +136,7 @@ async function createNotificationWithPush(
   if (!notification) {
     return null;
   }
+  if (options.persistOnly) return notification;
 
   // A duplicate event (same dedupeKey already delivered) must not also
   // re-send the OS push — the tenant already saw this in-app and/or on
@@ -528,6 +530,9 @@ const notify = {
       message,
       {
         data:{...identity,screen:"billing",url:billId ? `/bill-details?billId=${String(billId)}` : "/(tabs)/billing"},
+        persistOnly: options.persistOnly === true,
+        reuseExisting: options.persistOnly === true,
+        throwOnFailure: options.persistOnly === true,
         entityType: "bill",
         entityId: billId ? String(billId) : null,
         actionUrl: billId ? `/billing?billId=${String(billId)}` : "/applicant/billing",

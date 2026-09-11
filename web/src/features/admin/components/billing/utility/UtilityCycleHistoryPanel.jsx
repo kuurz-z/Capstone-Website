@@ -270,6 +270,14 @@ export default function UtilityCycleHistoryPanel({
                       </button>
                     )}
 
+                    {['sent', 'finalized', 'paid'].includes(status) && (
+                      <button type="button" onClick={() => onSendPeriod(p, true)}
+                        disabled={isSending || isSendingPeriod}
+                        className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground disabled:opacity-50">
+                        Retry notifications
+                      </button>
+                    )}
+
                     {/* Primary Action: View calculation snapshot */}
                     <button
                       type="button"

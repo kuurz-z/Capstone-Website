@@ -28,6 +28,7 @@ import {
   buildPublishResultFromPeriod,
 } from "./_helpers.js";
 import { sendDraftUtilityBills } from "../../utils/utilityBillFlow.js";
+import { queuePublishedBillUtilityNotifications, deliverUtilityNotification } from '../../services/notifications/utilityNotificationDelivery.js';
 import { createMilestoneSubInvoices } from "../../services/milestoneInvoiceService.js";
 import { executeLatePenaltyCron } from "../../services/penaltyEngineService.js";
 import { getTenantBillsInPriorityOrder } from "../../services/billingPriorityService.js";
@@ -790,12 +791,18 @@ export const publishRoomBills = async (req, res, next) => {
     const readiness = await getRoomPublishState(room);
     if (readiness.draftBillCount === 0) {
       if (readiness.publishState === "issued" && readiness.issuedBillCount > 0) {
+        const deliveries = [];
+        for (const bill of readiness.cycleBills || []) {
+          if (bill.status === 'draft') continue;
+          const ids = await queuePublishedBillUtilityNotifications(bill);
+          deliveries.push(...await Promise.all(ids.map(deliverUtilityNotification)));
+        }
         return res.json({
           success: true,
           roomId: room._id,
           roomName: readiness.roomName,
           published: 0,
-          deliveries: [],
+          deliveries,
           message: "Invoices for this cycle were already published.",
         });
       }

@@ -6,7 +6,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 // All financial/notification persistence is real in an isolated local replica
 // set. Mock only outbound delivery; these tests cannot email or push to tenants.
 const email = jest.fn(async () => ({success:true}));
-const push = jest.fn(async () => ({success:true}));
+const push = jest.fn(async () => ({status:'accepted',attempted:true,accepted:1,acceptedTokenHashes:['test-device']}));
 await jest.unstable_mockModule('../services/email/lilycrestEmailService.js',()=>({sendLilycrestEmail:email}));
 await jest.unstable_mockModule('../services/notifications/mobilePushService.js',()=>({sendMobilePushBill:push,sendMobilePushToRecipients:push}));
 await jest.unstable_mockModule('../utils/socket.js',()=>({emitToUser:jest.fn()}));
@@ -35,7 +35,7 @@ beforeEach(async()=>{
   await BusinessSettings.findOneAndUpdate({key:'global'},{$set:{defaultElectricityRatePerKwh:16,defaultWaterRatePerUnit:16}},{upsert:true});
   for (const model of [User,Room,Reservation,BedHistory,Bill,UtilityPeriod,UtilityReading,Notification,Payment]) await model.deleteMany({});
   email.mockClear();push.mockClear();
-  const user=role=>User.create({firebaseUid:`${role}-${new mongoose.Types.ObjectId()}`,username:`${role}-${new mongoose.Types.ObjectId()}`,email:`${new mongoose.Types.ObjectId()}@example.test`,firstName:role,lastName:'Monthly',role,branch:'gil-puyat'});
+  const user=role=>User.create({firebaseUid:`${role}-${new mongoose.Types.ObjectId()}`,username:`${role}-${new mongoose.Types.ObjectId()}`,email:`${new mongoose.Types.ObjectId()}@example.test`,firstName:role,lastName:'Monthly',role,tenantStatus:role==='tenant'?'active':'applicant',branch:'gil-puyat'});
   admin=await user('branch_admin');tenant=await user('tenant');
   room=await Room.create({name:'Monthly test',roomNumber:'MT',branch:'gil-puyat',type:'private',capacity:1,currentOccupancy:1,price:5000});
   const moveInDate=new Date('2026-07-01T00:00:00+08:00');
@@ -97,7 +97,7 @@ for (const type of ['electricity','water']) for (const sendDay of [15,18]) test(
     expect(released.waterAllocations[0].allocationId).toBe(draft.waterAllocations[0].allocationId);
   }
   const retry=await invoke(sendUtilityPeriod,type,p._id);
-  expect(retry.statusCode).toBe(409);
+  expect(retry.statusCode).toBe(200);expect(retry.body.published).toBe(0);
   expect((await Bill.findById(draft._id).lean()).totalAmount).toBe(18*rate);
   expect(await Notification.countDocuments()).toBe(1);expect(email).toHaveBeenCalledTimes(1);
   const after=await UtilityPeriod.findById(p._id).lean();
@@ -211,7 +211,7 @@ for (const type of ['electricity','water']) {
     expect((await invoke(sendUtilityPeriod,type,p._id)).error).toBeUndefined();
     expect(getVisibleBillCharges(await Bill.findById(generated._id))[type]).toBe(288);
     expect(await Bill.findById(paid._id).lean()).toEqual(original);
-    expect((await invoke(sendUtilityPeriod,type,p._id)).statusCode).toBe(409);
+    const retry=await invoke(sendUtilityPeriod,type,p._id);expect(retry.statusCode).toBe(200);expect(retry.body.published).toBe(0);
     expect(await Bill.countDocuments()).toBe(2);
   });
   test(`${type}: audit later edited opening with no skipped usage and a custom end preserves evidence`,async()=>{

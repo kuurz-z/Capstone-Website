@@ -157,6 +157,11 @@ await jest.unstable_mockModule("../utils/utilityBillFlow.js", () => ({
   sendDraftUtilityBills: jest.fn(),
 }));
 
+await jest.unstable_mockModule('../services/notifications/utilityNotificationDelivery.js', () => ({
+  queuePublishedBillUtilityNotifications: jest.fn(async () => []),
+  deliverUtilityNotification: jest.fn(),
+}));
+
 await jest.unstable_mockModule("../utils/pdfGenerator.js", () => ({
   generateBillPdf,
   generateBillReceiptPdf: jest.fn(),

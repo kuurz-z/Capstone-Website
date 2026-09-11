@@ -21,7 +21,7 @@ export default function OpenCurrentPeriodModal({
   onSuccess,
   onRecordOpening,
 }) {
-  const notify = useBillingNotifier();
+  const notify = useBillingNotifier(utilityType, {hasActiveCycle:false});
   const openPeriod = useOpenUtilityPeriod(utilityType);
   const [form, setForm] = useState({ startDate: "", startReading: "", ratePerUnit: "" });
   const isElectricity = utilityType === "electricity";
@@ -91,7 +91,7 @@ export default function OpenCurrentPeriodModal({
           </label>
         </div>
         <div className="mt-6 flex justify-end gap-2">
-          {needsWaterOpening && onRecordOpening && <button type="button" onClick={onRecordOpening} className="rounded-lg border border-border px-3 py-2 text-sm">Record Opening Reading</button>}
+          {needsWaterOpening && onRecordOpening && <button type="button" onClick={onRecordOpening} className="rounded-lg border border-border px-3 py-2 text-sm">Create Water Cycle</button>}
           <button type="button" className="rounded-lg border border-border px-4 py-2 text-sm" onClick={onClose}>Cancel</button>
           <button type="submit" disabled={openPeriod.isPending} className="inline-flex items-center gap-2 rounded-lg bg-[#0A1628] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
             {openPeriod.isPending ? <LoaderCircle size={15} className="animate-spin" /> : null} Initialize Manually

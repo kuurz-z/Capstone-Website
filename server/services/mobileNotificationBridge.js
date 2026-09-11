@@ -99,6 +99,9 @@ export function isApplicantLifecycleNotification(notification = {}) {
 }
 
 export function filterNotificationsForTenantLifecycle(currentRole, notifications = []) {
+  if (normalizeString(currentRole).toLowerCase() === 'applicant') {
+    return notifications.filter(notification => !['water', 'electricity'].includes(notification.data?.utilityType));
+  }
   if (!TENANT_NOTIFICATION_ROLES.has(normalizeString(currentRole).toLowerCase())) {
     return [...notifications];
   }

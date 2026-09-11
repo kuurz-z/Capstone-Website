@@ -1,3 +1,4 @@
+import { friendlyWaterError } from './utility/waterErrors';
 import WaterBillingTables from '../../../../shared/components/WaterBillingTables';
 import { utilityApi } from '../../../../shared/api/utilityApi';
 import { useState, useEffect, useRef } from "react";
@@ -108,7 +109,7 @@ export default function NewBillingPeriodModal({
   onSuccess,
   onRecordOpening,
 }) {
-  const notify = useBillingNotifier();
+  const notify = useBillingNotifier(utilityType, {hasActiveCycle:!!openPeriodForRoom});
   const finalReadingInputRef = useRef(null);
 
   const generateHistoricalPeriod = useGenerateHistoricalUtilityPeriod(utilityType);
@@ -147,7 +148,7 @@ export default function NewBillingPeriodModal({
     setWaterPreviewPending(true);
     const timer=setTimeout(()=>utilityApi.previewWater({...periodForm,roomId:selectedRoomId,periodId:activePeriod?.id || activePeriod?._id})
       .then(response=>{if(!cancelled) setWaterPreview({key:waterRequestKey,result:response.result || response.data || response});})
-      .catch(error=>{if(!cancelled) { setWaterPreviewError(error.message || 'Unable to preview water billing.'); setWaterErrorCode(apiErrorCode(error)); }})
+      .catch(error=>{if(!cancelled) { setWaterPreviewError(friendlyWaterError(error, {hasActiveCycle:!!openPeriodForRoom})); setWaterErrorCode(apiErrorCode(error)); }})
       .finally(()=>{if(!cancelled) setWaterPreviewPending(false);}),350);
     return ()=>{cancelled=true;clearTimeout(timer);};
   },[isOpen,utilityType,selectedRoomId,periodForm,activePeriod,legacyWater,manualReviewPeriod,waterRequestKey]);
@@ -624,7 +625,7 @@ export default function NewBillingPeriodModal({
             (waterErrorCode === 'WATER_VERIFIED_BASELINE_REQUIRED' || isBlankValue(periodForm.startReading)) && (
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs">
               <p>A verified opening observation is required before Water billing can continue.</p>
-              <button type="button" onClick={onRecordOpening} disabled={isPending} className="mt-2 rounded-lg border border-border px-3 py-2 font-semibold">Record Opening Reading</button>
+              <button type="button" onClick={onRecordOpening} disabled={isPending} className="mt-2 rounded-lg border border-border px-3 py-2 font-semibold">Create Water Cycle</button>
             </div>
           )}
           {/* Fixed rate branch warning */}
@@ -726,7 +727,7 @@ export default function NewBillingPeriodModal({
 
           {activePeriod && !legacyWater && <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs">Cycle starts must match verified meter evidence. The saved rate is retained. Sending later will not extend this cycle.</p>}
           {legacyWater && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">This active cycle uses legacy Water billing. Close it with Close Legacy Cycle before starting measured Water billing from a verified physical baseline. Its recorded amounts and allocation basis will be preserved.</p>}
-          {manualReviewPeriod && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">This room has a cycle requiring review: {manualReviewPeriod.manualReviewReason || 'Review its meter continuity before generating drafts.'}</p>}
+          {manualReviewPeriod && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">{utilityType === 'water' ? 'Review the existing Water cycle before continuing.' : `This room has a cycle requiring review: ${manualReviewPeriod.manualReviewReason || 'Review its meter continuity before generating drafts.'}`}</p>}
           {/* Dates & Rate Configuration Grid */}
           {!legacyWater && <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2">
             {/* Cycle Start */}

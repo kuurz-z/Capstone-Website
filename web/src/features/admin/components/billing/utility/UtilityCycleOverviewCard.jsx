@@ -106,7 +106,7 @@ export default function UtilityCycleOverviewCard({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
               >
                 <Plus size={13} />
-                <span>Recovery / Manual Initialization</span>
+                <span>{utilityType === 'water' ? 'Create Water Cycle' : 'Recovery / Manual Initialization'}</span>
               </button>
               <button
                 type="button"
@@ -190,7 +190,7 @@ export default function UtilityCycleOverviewCard({
         <div className="mt-4 flex flex-col items-center justify-center rounded-lg border border-amber-300 bg-amber-50/60 py-6 text-center text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
           <AlertCircle size={24} />
           <p className="mt-2 font-semibold">Billing Period Requires Review</p>
-          <p className="mt-0.5 text-[11px]">{manualReviewPeriod.manualReviewReason || "Resolve the billing warning before continuing."}</p>
+          <p className="mt-0.5 text-[11px]">{utilityType === 'water' ? 'Review the existing Water cycle before continuing.' : manualReviewPeriod.manualReviewReason || "Resolve the billing warning before continuing."}</p>
         </div>
       ) : (
         <div className="mt-4 flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
@@ -203,7 +203,7 @@ export default function UtilityCycleOverviewCard({
               : "No Active Billing Period"}
           </p>
           <p className="mt-0.5 text-[11px]">
-            {Number(selectedRoom?.activeTenantCount || 0) === 0
+            {utilityType === 'water' ? "No active water cycle found. Create a water cycle to start billing for this room." : Number(selectedRoom?.activeTenantCount || 0) === 0
               ? "The next move-in or transfer will initialize the period from the actual meter reading."
               : "Billing continuity needs review. Use manual initialization only for an approved recovery."}
           </p>

@@ -1800,14 +1800,13 @@ export const sendUtilityPeriod = async (req, res, next) => {
     const sendableBills = bills.filter((bill) => {
       const chargeField = utilityType === "water" ? "water" : "electricity";
       return (
-        Number(bill?.charges?.[chargeField] || 0) > 0 &&
-        (utilityType === "water" && bill.waterAllocations?.length ? !waterPeriodSent(bill, period._id) : getUtilityDispatchEntry(bill, utilityType).state !== "sent")
+        Number(bill?.charges?.[chargeField] || 0) > 0
       );
     });
 
     if (sendableBills.length === 0) {
       return res.status(409).json({
-        error: `This ${utilityType} period has already been sent to tenants.`,
+        error: `No ${utilityType} charges are available for this period.`,
       });
     }
 

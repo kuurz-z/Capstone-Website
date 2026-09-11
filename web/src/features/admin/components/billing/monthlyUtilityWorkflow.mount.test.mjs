@@ -88,31 +88,32 @@ test('missing Water baseline error offers recovery and resumes with the verified
   mounted=mount(React.createElement(Tab,{utilityType:'water'}));
   await click(button('New Billing Period'));
   fill(input('Closing Reading (m\u00b3)'),'118');await settlePreview();
-  await click(button('Record Opening Reading'));
-  assert.ok(getByRole(document.body,'dialog',{name:'Record Opening Reading'}));
-  assert.equal(input('Actual Water Reading (m\u00b3)').value,'','Never invent a zero opening');
-  fill(input('Actual Water Reading (m\u00b3)'),'123.45');
+  await click(button('Create Water Cycle'));
+  assert.ok(getByRole(document.body,'dialog',{name:'Create Water Cycle'}));
+  assert.equal(input('Opening Meter Reading (m\u00b3)').value,'','Never invent a zero opening');
+  fill(input('Opening Meter Reading (m\u00b3)'),'123.45');
   fill(input('Reading Source'),'documented-history');
-  fill(input('Observation Date and Time (Philippine time)'),'2026-08-20T10:35');
+  fill(input('Start Date'),'2026-08-20');
+  fill(input('Observation Time'),'10:35:27');
   fill(input('Reason'),'Recovered signed inspection');
   fill(input('Evidence Reference (required)'),'Inspection register page 42');
-  await click(button('Save Opening Reading'));
+  await click(button('Complete Water Setup'));
   assert.deepEqual(state.calls.find(c=>c.name==='useRecoverWaterOpening').payload,{
-    roomId:'room-1',reading:123.45,observedAt:'2026-08-20T02:35:00.000Z',source:'documented-history',
+    roomId:'room-1',reading:123.45,observedAt:'2026-08-20T02:35:27.000Z',source:'documented-history',
     reason:'Recovered signed inspection',evidenceReferences:['Inspection register page 42']});
   assert.equal(state.calls.some(c=>/GenerateHistorical|CloseUtility|SendUtility/.test(c.name)),false);
   assert.match(getByRole(document.body,'status').textContent,/123.45.*Earlier consumption remains unknown/);
-  assert.ok(getByRole(document.body,'dialog',{name:'New Billing Period'}));
-  assert.equal(input('Opening Reading (m\u00b3)').value,'123.45');
+  assert.equal(queryByRole(document.body,'dialog'),null);
+  assert.equal(state.notifications.some(n=>String(n.message || n).includes('No bill has been created')),true);
 });
 
 test('recovery requires documented evidence for a historical reading',async()=>{
   mounted=mount(React.createElement(Recovery,{isOpen:true,onClose:()=>{},roomId:room.id}));
   fill(input('Reading Source'),'documented-history');
-  fill(input('Actual Water Reading (m\u00b3)'),'0');
+  fill(input('Opening Meter Reading (m\u00b3)'),'0');
   fill(input('Reason'),'Missing register entry');
-  await act(async()=>{fireEvent.submit(getByRole(document.body,'dialog',{name:'Record Opening Reading'}));});
-  assert.match(getByRole(document.body,'alert').textContent,/requires an evidence reference/);
+  await act(async()=>{fireEvent.submit(getByRole(document.body,'dialog',{name:'Create Water Cycle'}));});
+  assert.match(getByRole(document.body,'alert').textContent,/Add a reference/);
   assert.equal(state.calls.length,0);
 });
 
@@ -249,4 +250,27 @@ test('completed selection survives stale lists, next-cycle refresh and a deliber
   assert.equal(selectUtilityPeriod({periods:[next,completed],selectedId:next.id,completedId:completed.id}),next.id);
   assert.equal(selectUtilityPeriod({periods:[next],selectedId:'other-room',completedId:null}),next.id);
   assert.deepEqual(readyUtilityCycles([{...room,readyPeriods:[completed]}]).map(c=>[c.roomId,c.period.id]),[[room.id,completed.id]]);
+});
+
+test('Create Water Cycle initializes only Water setup and displays the latest global rate',async()=>{
+  state.periods=[];
+  mounted=mount(React.createElement(Tab,{utilityType:'water'}));
+  assert.equal(queryByRole(document.body,'button',{name:'Record Opening Reading'}),null);
+  assert.equal(queryByRole(document.body,'button',{name:'Recovery / Manual Initialization'}),null);
+  await click(button('Create Water Cycle'));
+  assert.match(getByRole(document.body,'dialog').textContent,/No active water cycle found/);
+  assert.equal(input('Current Water Rate').readOnly,true);
+  assert.equal(input('Opening Meter Reading (m\u00b3)').value,'');
+  assert.equal(queryByRole(document.body,'textbox',{name:/Evidence Reference/}),null);
+  fill(input('Opening Meter Reading (m\u00b3)'),'0');fill(input('Reason'),'Initial verified physical observation');
+  await click(getByRole(getByRole(document.body,'dialog'), 'button', {name:'Create Water Cycle'}));
+  assert.equal(state.calls.filter(c=>c.name==='useRecoverWaterOpening').length,1);
+  assert.equal(state.calls.some(c=>/GenerateHistorical|CloseUtility|SendUtility|OpenUtilityPeriod/.test(c.name)),false);
+});
+test('existing Water setup explicitly retains the captured rate and repairs instead of creating a second period',async()=>{
+  mounted=mount(React.createElement(Recovery,{isOpen:true,onClose:()=>{},roomId:room.id,activePeriod:opening,defaultRatePerUnit:88}));
+  assert.match(getByRole(document.body,'dialog').textContent,/existing Water cycle/);
+  assert.equal(input('Current Water Rate').value,String(opening.ratePerUnit));
+  assert.ok(button('Complete Water Setup'));
+  assert.equal(queryByRole(document.body,'button',{name:'Record Opening Reading'}),null);
 });

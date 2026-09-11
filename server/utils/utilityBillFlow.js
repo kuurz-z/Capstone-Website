@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import mongoose from "mongoose";
+import { queueUtilityNotification, queuePublishedBillUtilityNotifications, deliverUtilityNotification, resolveUtilityNotificationRecipient } from '../services/notifications/utilityNotificationDelivery.js';
 import { upsertWaterAllocation, waterAllocationsForPeriod, waterPeriodSent } from '../services/billing/waterAllocations.js';
 import { formatManilaDate, getManilaDayjs } from "./dateUtils.js";
 import { Bill, Reservation, Room, User, UtilityFinalization, UtilityPeriod } from "../models/index.js";
@@ -368,6 +369,8 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
   });
 
   for (let bill of populatedBills) {
+    let utilityDeliveryIds = [];
+    let utilityOutcomes = [];
     const billingContext = bill.reservationId
       ? await getReservationBillingContextForBill(
           bill,
@@ -417,6 +420,7 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
     // this bill (see the releasedAt guard in services/billing/billingPolicy.js).
     syncBillAmounts(bill, { releasing: true });
     await bill.save(dispatchSession ? {session:dispatchSession} : undefined);
+    utilityDeliveryIds = await queuePublishedBillUtilityNotifications(bill, dispatchSession);
     };
     try {if(dispatchSession) await dispatchSession.withTransaction(persistDispatch);else await persistDispatch();}
     finally {if(dispatchSession) await dispatchSession.endSession();}
@@ -469,7 +473,8 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
       : formatManilaDate(bill.billingMonth || issuedAt, "MMMM YYYY");
     const dueDateLabel = formatManilaDate(dueDate, "MMMM D, YYYY");
 
-    if (tenant?.email) {
+    const eligibleRecipient = await resolveUtilityNotificationRecipient(bill.userId?._id || bill.userId);
+    if (tenant?.email && eligibleRecipient) {
       const emailResult = await sendBillGeneratedEmail({
         to: tenant.email,
         tenantName,
@@ -485,7 +490,12 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
     }
 
     try {
-      await notify.billGenerated(
+      if (utilityDeliveryIds.length) {
+        utilityOutcomes = await Promise.all(utilityDeliveryIds.map(deliverUtilityNotification));
+        const failure = utilityOutcomes.find(outcome => !outcome.notificationPersisted || outcome.error);
+        if (failure) notificationError = failure.error || 'Notification record was not persisted.';
+      } else if (eligibleRecipient) {
+      const notification = await notify.billGenerated(
         bill.userId?._id || bill.userId,
         billingMonthLabel,
         bill.totalAmount,
@@ -497,6 +507,8 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
           eventId: `invoice:${Number(bill.invoiceVersion || 1)}`,
         },
       );
+      if (!notification?._id) notificationError = 'Notification record was not persisted.';
+      } else notificationError = 'Recipient is not an eligible current tenant.';
     } catch (error) {
       notificationError = error.message;
     }
@@ -504,17 +516,17 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
     bill.delivery = {
       ...(bill.delivery || {}),
       email: {
-        status: emailError ? "failed" : tenant?.email ? "sent" : "not_attempted",
-        sentAt: emailError || !tenant?.email ? null : new Date(),
+        status: emailError ? "failed" : tenant?.email && eligibleRecipient ? "sent" : "not_attempted",
+        sentAt: emailError || !tenant?.email || !eligibleRecipient ? null : new Date(),
         error: emailError || "",
       },
       notification: {
-        status: notificationError ? "failed" : "sent",
-        sentAt: notificationError ? null : new Date(),
+        status: utilityOutcomes.length ? (utilityOutcomes.every(item => item.notificationPersisted) ? 'sent' : 'failed') : notificationError ? "failed" : "sent",
+        sentAt: utilityOutcomes.length ? (utilityOutcomes.every(item => item.notificationPersisted) ? new Date() : null) : notificationError ? null : new Date(),
         error: notificationError || "",
       },
     };
-    await bill.save();
+    await Bill.updateOne({ _id: bill._id, status: { $ne: 'paid' } }, { $set: { delivery: bill.delivery } });
 
     deliveries.push({
       billId: bill._id,
@@ -523,6 +535,8 @@ export async function sendDraftUtilityBills({ bills, period, result }) {
       pdfError,
       emailError,
       notificationError,
+      publicationSucceeded: true,
+      notificationDeliveries: utilityOutcomes,
     });
 
     sent += 1;
@@ -561,6 +575,7 @@ export async function publishWaterAllocationBill({billId,period,publishedAt,issu
       setUtilityDispatchEntry(bill,'water',{state:'sent',periodId:period._id,publishedAt,issuedAt,dueDate,amount:utilityAmount});
       Object.assign(bill,getUtilityCycleFromPeriod(period),{sentAt:publishedAt,issuedAt,dueDate,paymongoSessionId:null});
       syncBillAmounts(bill,{releasing:true});await bill.save({session});
+      await queueUtilityNotification({bill,period,utilityType:'water',utilityAmount,allocations,session});
       published={bill,utilityAmount,targetAllocations:allocations};
     });
     if (published) await published.bill.populate([{path:'userId',select:'firstName lastName email'},{path:'roomId',select:'name roomNumber branch'}]);
@@ -596,6 +611,7 @@ export async function publishElectricityBill({billId,period,publishedAt,issuedAt
       setUtilityDispatchEntry(bill,'electricity',{state:'sent',periodId:period._id,publishedAt,issuedAt,dueDate,amount:utilityAmount});
       Object.assign(bill,getUtilityCycleFromPeriod(period),{sentAt:publishedAt,issuedAt,dueDate,paymongoSessionId:null});
       syncBillAmounts(bill,{releasing:true});await bill.save({session});
+      await queueUtilityNotification({bill,period,utilityType:'electricity',utilityAmount,session});
       published={bill,utilityAmount};
     });
     if (published) await published.bill.populate([{path:'userId',select:'firstName lastName email'},{path:'roomId',select:'name roomNumber branch'}]);
@@ -603,202 +619,81 @@ export async function publishElectricityBill({billId,period,publishedAt,issuedAt
   } finally {await session.endSession();}
 }
 
-export async function sendUtilityPeriodBills({
-  bills,
-  period,
-  result,
-  utilityType,
-}) {
-  const chargeField = getUtilityChargeField(utilityType);
+export async function sendUtilityPeriodBills({ bills, period, result, utilityType }) {
   const publishedAt = new Date();
   const utilityCycle = getUtilityCycleFromPeriod(period);
-  const issuedAt = getUtilityIssueDate({
-    readingDate: utilityCycle.utilityReadingDate,
-    finalizedAt: publishedAt,
-  });
+  const issuedAt = getUtilityIssueDate({ readingDate: utilityCycle.utilityReadingDate, finalizedAt: publishedAt });
   const dueDate = getUtilityDueDate(issuedAt);
-  let sent = 0;
-  const deliveries = [];
-
-  const populatedBills = await Bill.populate(bills, [
-    { path: "userId", select: "firstName lastName email" },
-    { path: "roomId", select: "name roomNumber branch" },
-  ]);
-
-  const settledDeliveries = await mapWithConcurrency(
-    populatedBills,
-    UTILITY_BILL_SEND_CONCURRENCY,
-    async (bill) => {
-      let targetAllocations=null;
-      let utilityAmount=roundMoney(bill?.charges?.[chargeField] || 0);
-      const currentDispatch=getUtilityDispatchEntry(bill,utilityType);
-      if (utilityType==='electricity') {
-        const published=await publishElectricityBill({billId:bill._id,period,publishedAt,issuedAt,dueDate});
-        if (!published) return null;
-        ({bill,utilityAmount}=published);
-      } else if (utilityType==='water' && bill.waterAllocations?.length) {
-        const published=await publishWaterAllocationBill({billId:bill._id,period,publishedAt,issuedAt,dueDate});
-        if (!published) return null;
-        ({bill,targetAllocations,utilityAmount}=published);
-      } else {
-        if (utilityAmount<=0 || currentDispatch.state==='sent') return null;
-        if (utilityType==='water' && bill.status==='paid') throw Object.assign(new Error('A paid water invoice cannot be changed.'),{statusCode:409});
-      setUtilityDispatchEntry(bill, utilityType, {
-        state: "sent",
-        periodId: period?._id || period?.id || currentDispatch.periodId || null,
-        publishedAt,
-        issuedAt,
-        dueDate,
-        amount: utilityAmount,
-      });
-
-      bill.utilityCycleStart = utilityCycle.utilityCycleStart;
-      bill.utilityCycleEnd = utilityCycle.utilityCycleEnd;
-      bill.utilityReadingDate = utilityCycle.utilityReadingDate;
-      bill.sentAt = publishedAt;
-      bill.issuedAt = issuedAt;
-      bill.dueDate = dueDate;
-      bill.paymongoSessionId = null;
-      // releasing: true — this per-utility-type send is what actually makes
-      // this bill's charge tenant-visible; see the releasedAt guard in
-      // services/billing/billingPolicy.js. A no-op if the bill already has
-      // releasedAt (e.g. a rent+utility bill first released at creation).
-      syncBillAmounts(bill, { releasing: true });
-      await bill.save();
-
-      }
-
-      const tenant =
-        bill.userId && typeof bill.userId === "object" ? bill.userId : null;
-      const targetUserId = bill.userId?._id
-        ? String(bill.userId._id)
-        : bill.userId
-          ? String(bill.userId)
-          : null;
-      const tenantName =
-        [tenant?.firstName, tenant?.lastName]
-          .filter(Boolean)
-          .join(" ")
-          .trim() || "Tenant";
-      const billingMonthLabel = bill.utilityCycleEnd
-        ? formatManilaDate(bill.utilityCycleEnd, "MMMM YYYY")
-        : formatManilaDate(bill.billingMonth || issuedAt, "MMMM YYYY");
-      const dueDateLabel = formatManilaDate(dueDate, "MMMM D, YYYY");
-      const visibleCharges = getVisibleBillCharges(bill);
-      const visibleTotalAmount = bill.totalAmount;
-      let emailError = null;
-      let notificationError = null;
-
-      const [emailResult, notificationResult] = await Promise.allSettled([
-        tenant?.email
-          ? sendUtilityChargeAvailableEmail({
-              to: tenant.email,
-              tenantName,
-              utilityType,
-              billingMonth: billingMonthLabel,
-              utilityAmount,
-              totalAmount: visibleTotalAmount,
-              dueDate: dueDateLabel,
-              branchName: bill.roomId?.branch || bill.branch || "Lilycrest",
-            })
-          : Promise.resolve(null),
-        targetUserId
-          ? notify.utilityChargeAvailable(
-              targetUserId,
-              utilityType,
-              billingMonthLabel,
-              utilityAmount,
-              visibleTotalAmount,
-              dueDateLabel,
-              {
-                billId: bill._id,
-                utilityPeriodId: period._id,
-                allocationIds: (targetAllocations || []).map(a=>a.allocationId),
-                eventId: `${utilityType}:${String(period?._id || period?.id || Number(bill.invoiceVersion || 1))}`,
-              },
-            )
-          : Promise.reject(new Error("No tenant user assigned to bill")),
-      ]);
-
-      if (emailResult.status === "fulfilled" && emailResult.value) {
-        if (!emailResult.value?.success) {
-          emailError =
-            emailResult.value?.error ||
-            emailResult.value?.message ||
-            "Email delivery failed";
-        }
-      } else if (emailResult.status === "rejected") {
-        emailError = emailResult.reason?.message || "Email delivery failed";
-      }
-
-      if (notificationResult.status === "rejected") {
-        notificationError =
-          notificationResult.reason?.message || "Notification delivery failed";
-      }
-
-      const emailSent = Boolean(tenant?.email && !emailError);
-      const notificationSent = Boolean(targetUserId && !notificationError);
-
-      bill.delivery = {
-        ...(bill.delivery || {}),
-        email: {
-          status: emailError ? "failed" : emailSent ? "sent" : "not_attempted",
-          sentAt: emailSent ? new Date() : null,
-          error: emailError || "",
-        },
-        notification: {
-          status: notificationError ? "failed" : notificationSent ? "sent" : "not_attempted",
-          sentAt: notificationSent ? new Date() : null,
-          error: notificationError || "",
-        },
-      };
-      await bill.save();
-
-      return {
-        billId: bill._id,
-        tenantId: targetUserId,
-        utilityType,
-        utilityAmount,
-        totalAmount: visibleTotalAmount,
-        visibleCharges,
-        emailSent,
-        emailError,
-        notificationSent,
-        notificationError,
-      };
-    },
-  );
-
-  let emailSuccessCount = 0;
-  let emailFailedCount = 0;
-  let notificationSuccessCount = 0;
-  let notificationFailedCount = 0;
-
-  for (const delivery of settledDeliveries) {
-    if (!delivery) continue;
-    deliveries.push(delivery);
-    sent += 1;
-    if (delivery.emailError) {
-      emailFailedCount += 1;
-    } else if (delivery.emailSent) {
-      emailSuccessCount += 1;
+  const deliveries = (await mapWithConcurrency(bills, UTILITY_BILL_SEND_CONCURRENCY, async original => {
+    let publication = null;
+    if (utilityType === 'electricity') {
+      publication = await publishElectricityBill({ billId: original._id, period, publishedAt, issuedAt, dueDate });
+    } else if (original.waterAllocations?.length) {
+      publication = await publishWaterAllocationBill({ billId: original._id, period, publishedAt, issuedAt, dueDate });
+    } else {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          publication = null;
+          const bill = await Bill.findById(original._id).session(session);
+          if (!bill || getUtilityDispatchEntry(bill, utilityType).state === 'sent') return;
+          const utilityAmount = roundMoney(bill.charges?.water || 0);
+          if (utilityAmount <= 0) return;
+          if (bill.status === 'paid') throw Object.assign(new Error('A paid water invoice cannot be changed.'), { statusCode: 409 });
+          setUtilityDispatchEntry(bill, utilityType, { state: 'sent', periodId: period._id, publishedAt, issuedAt, dueDate, amount: utilityAmount });
+          Object.assign(bill, utilityCycle, { sentAt: publishedAt, issuedAt, dueDate, paymongoSessionId: null });
+          syncBillAmounts(bill, { releasing: true });
+          await bill.save({ session });
+          await queueUtilityNotification({ bill, period, utilityType, utilityAmount, session });
+          publication = { bill, utilityAmount };
+        });
+      } finally { await session.endSession(); }
     }
-    if (delivery.notificationError) {
-      notificationFailedCount += 1;
-    } else if (delivery.notificationSent) {
-      notificationSuccessCount += 1;
+    // A retry reads the published invoice; it never writes financial state.
+    let bill = publication?.bill || await Bill.findById(original._id);
+    if (!bill) return null;
+    const allocations = utilityType === 'water' ? waterAllocationsForPeriod(bill, period._id).filter(a => a.state === 'sent') : [];
+    const dispatch = getUtilityDispatchEntry(bill, utilityType);
+    if (!publication && !(allocations.length || (dispatch.state === 'sent' && String(dispatch.periodId) === String(period._id)))) return null;
+    const utilityAmount = publication?.utilityAmount ?? (allocations.length
+      ? roundMoney(allocations.reduce((sum, a) => sum + Number(a.amount), 0)) : dispatch.amount);
+    const jobId = await queueUtilityNotification({ bill, period, utilityType, utilityAmount, allocations });
+    await bill.populate([{ path: 'userId', select: 'firstName lastName email' }, { path: 'roomId', select: 'name roomNumber branch' }]);
+    const tenant = bill.userId;
+    const eligibleRecipient = await resolveUtilityNotificationRecipient(tenant?._id || tenant).catch(() => null);
+    const [emailResult, notificationResult] = await Promise.allSettled([
+      publication && tenant?.email && eligibleRecipient ? sendUtilityChargeAvailableEmail({
+        to: tenant.email, tenantName: [tenant.firstName, tenant.lastName].filter(Boolean).join(' ') || 'Tenant',
+        utilityType, billingMonth: formatManilaDate(bill.utilityCycleEnd || bill.billingMonth, 'MMMM YYYY'),
+        utilityAmount, totalAmount: bill.totalAmount, dueDate: formatManilaDate(bill.dueDate, 'MMMM D, YYYY'),
+        branchName: bill.roomId?.branch || bill.branch || 'Lilycrest',
+      }) : Promise.resolve(null),
+      deliverUtilityNotification(jobId),
+    ]);
+    const emailError = emailResult.status === 'rejected' ? emailResult.reason?.message || 'Email delivery failed'
+      : emailResult.value && !emailResult.value.success ? emailResult.value.error || 'Email delivery failed' : null;
+    const outcome = notificationResult.status === 'fulfilled' ? notificationResult.value : null;
+    const notificationSent = outcome?.notificationPersisted === true;
+    const notificationError = !outcome ? notificationResult.reason?.message || 'Notification delivery failed'
+      : outcome.error || (!notificationSent ? 'Notification record is not available.' : null);
+    const emailSent = Boolean(publication && tenant?.email && eligibleRecipient && !emailError);
+    if (publication) {
+      bill.delivery = { ...(bill.delivery?.toObject?.() || bill.delivery || {}),
+        email: { status: emailError ? 'failed' : emailSent ? 'sent' : 'not_attempted', sentAt: emailSent ? new Date() : null, error: emailError || '' },
+        notification: { status: notificationSent ? 'sent' : 'failed', sentAt: notificationSent ? new Date() : null, error: notificationSent ? '' : notificationError || '' },
+      };
+      // Metadata-only update avoids saving a stale invoice over a concurrent payment.
+      await Bill.updateOne({ _id: bill._id, status: { $ne: 'paid' } }, { $set: { delivery: bill.delivery } });
     }
-  }
-
-  return {
-    sent,
-    issuedAt,
-    dueDate,
-    publishedAt,
-    deliveries,
-    emailSuccessCount,
-    emailFailedCount,
-    notificationSuccessCount,
-    notificationFailedCount,
+    return { billId: bill._id, tenantId: String(tenant?._id || tenant || ''), utilityType, utilityAmount,
+      totalAmount: bill.totalAmount, visibleCharges: getVisibleBillCharges(bill), newlyPublished: !!publication,
+      publicationSucceeded: true, emailSent, emailError, notificationSent, notificationError,
+      notificationDelivery: outcome || { notificationPersisted: false, retryable: true, push: { status: 'pending', attempted: false, accepted: 0 } } };
+  })).filter(Boolean);
+  return { sent: deliveries.filter(d => d.newlyPublished).length, issuedAt, dueDate, publishedAt, deliveries,
+    emailSuccessCount: deliveries.filter(d => d.emailSent).length,
+    emailFailedCount: deliveries.filter(d => d.emailError).length,
+    notificationSuccessCount: deliveries.filter(d => d.notificationSent).length,
+    notificationFailedCount: deliveries.filter(d => !d.notificationSent).length,
   };
 }

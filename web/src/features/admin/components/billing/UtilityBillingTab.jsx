@@ -41,6 +41,7 @@ import { getRoomLabel } from "../../../../shared/utils/roomLabel";
 import { fmtDate } from "../../utils/formatters";
 import { AdminTablePageSkeleton } from "../AdminContentSkeletons";
 import useBillingNotifier from "./shared/useBillingNotifier";
+import { utilityDeliveryMessage } from './utility/utilityDeliveryMessage';
 import "./shared/BillingDelta.css";
 
 // Modular sub-components
@@ -86,7 +87,7 @@ const UtilityBillingTab = ({
 }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const notify = useBillingNotifier();
+  const notify = useBillingNotifier(utilityType, () => ({hasActiveCycle:!!openPeriodForRoom}));
   const isOwner = user?.role === "owner";
 
   // Branch filter handling
@@ -619,23 +620,24 @@ const UtilityBillingTab = ({
     setUnmaskedRows((prev) => ({ ...prev, [rowId]: !prev[rowId] }));
   }, []);
 
-  const handleSendSinglePeriod = async (period) => {
+  const handleSendSinglePeriod = async (period, retryDelivery = false) => {
     if (!period) return;
     const roomName = getRoomLabel(selectedRoom || {}, "Room");
     const cycleText = getCycleLabel(period);
 
     setConfirmModal({
       open: true,
-      title: `Send ${utilityType === "water" ? "Water" : "Electricity"} To Tenants`,
-      message: `Send the ${utilityType} charge for ${roomName} (${cycleText}) to the tenant side now? This will make the charge visible in the tenant billing view and payment total.`,
+      title: retryDelivery ? 'Retry tenant notifications' : `Send ${utilityType === "water" ? "Water" : "Electricity"} To Tenants`,
+      message: retryDelivery ? 'Check and retry missing notifications for this cycle. Existing bills and charges will not be published again.' : `Send the ${utilityType} charge for ${roomName} (${cycleText}) to the tenant side now? This will make the charge visible in the tenant billing view and payment total.`,
       variant: "primary",
-      confirmText: "Send Now",
+      confirmText: retryDelivery ? 'Retry notifications' : "Send Now",
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, open: false }));
         setSendingByPeriodId((prev) => ({ ...prev, [period.id]: true }));
         try {
-          await sendPeriod.mutateAsync({ periodId: period.id });
-          notify.success(`Sent ${utilityType} charges for ${roomName}.`);
+          const response = await sendPeriod.mutateAsync({ periodId: period.id });
+          const delivery = utilityDeliveryMessage(response);
+          notify[delivery.tone](delivery.message);
           await queryClient.invalidateQueries({ queryKey: utilityKeys.all(utilityType) });
         } catch (err) {
           notify.error(err, `Failed to send ${utilityType} charges.`);
@@ -663,7 +665,9 @@ const UtilityBillingTab = ({
       for (const r of targetRooms) {
         if (r.period?.id) {
           try {
-            await sendPeriod.mutateAsync({ periodId: r.period.id });
+            const response = await sendPeriod.mutateAsync({ periodId: r.period.id });
+            const delivery = utilityDeliveryMessage(response);
+            if (delivery.tone !== 'success') notify[delivery.tone](delivery.message);
             successCount += 1;
           } catch {
             // individual error caught
@@ -1077,7 +1081,7 @@ const UtilityBillingTab = ({
             utilityType={utilityType}
             manualReviewPeriod={manualReviewPeriod}
             latestHistoricalPeriod={lastClosedPeriod}
-            onOpenCurrentPeriod={() => setIsOpenCurrentPeriodModalOpen(true)}
+            onOpenCurrentPeriod={() => utilityType === 'water' ? setIsWaterOpeningModalOpen(true) : setIsOpenCurrentPeriodModalOpen(true)}
             onCloseCurrentPeriod={() => setIsCloseCurrentPeriodModalOpen(true)}
             isSendingBatch={isSendingBatch}
           />
@@ -1285,6 +1289,8 @@ const UtilityBillingTab = ({
 
       {recoveredWaterOpening?.roomId === selectedRoomId && utilityType === 'water' && <p role="status" className="rounded-lg border border-border bg-muted/20 p-3 text-sm">Verified Water opening: {recoveredWaterOpening.reading} m³ · {new Date(recoveredWaterOpening.observedAt).toLocaleString('en-PH', {timeZone:'Asia/Manila'})} (Philippine time). Earlier consumption remains unknown.</p>}
       <RecordWaterOpeningModal
+        activePeriod={openPeriodForRoom}
+        defaultRatePerUnit={defaultRatePerUnit}
         isOpen={isWaterOpeningModalOpen}
         onClose={() => setIsWaterOpeningModalOpen(false)}
         roomId={selectedRoomId}
@@ -1293,7 +1299,7 @@ const UtilityBillingTab = ({
           setRecoveredWaterOpening({roomId:selectedRoomId, reading:response.reading.reading, observedAt:response.reading.observedAt || response.reading.date});
           setSelectedPeriodId(response.period.id || response.period._id);
           setIsHistoricalGeneration(false);
-          setIsNewPeriodModalOpen(true);
+          notify.success('Water billing starts from this verified reading. Earlier usage remains unknown. No bill has been created.');
         }}
       />
       <NewBillingPeriodModal

@@ -1,3 +1,4 @@
+import { friendlyWaterError } from './utility/waterErrors';
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarCheck, LoaderCircle, X } from "lucide-react";
@@ -20,7 +21,7 @@ export default function CloseCurrentPeriodModal({
   latestReading,
   onSuccess,
 }) {
-  const notify = useBillingNotifier();
+  const notify = useBillingNotifier(utilityType, {hasActiveCycle:!!period});
   const closePeriod = useCloseUtilityPeriod(utilityType);
   const isElectricity = utilityType === "electricity";
   const metered = isElectricity || period?.calculationVersion === "water-meter-v1";
@@ -34,7 +35,7 @@ export default function CloseCurrentPeriodModal({
     if (!form.endDate || form.endReading === '') return;
     const timer=setTimeout(()=>utilityApi.previewWater({roomId:period.roomId?._id || period.roomId,periodId:period.id || period._id,...form})
       .then(result=>{if(!cancelled) setPreview(result.result || result.data || result);})
-      .catch(error=>{if(!cancelled) setPreviewError(error.message);}),350);
+      .catch(error=>{if(!cancelled) setPreviewError(friendlyWaterError(error, {hasActiveCycle:!!period}));}),350);
     return ()=>{cancelled=true;clearTimeout(timer);};
   },[isOpen,isElectricity,metered,period,form]);
 
