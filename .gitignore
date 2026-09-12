@@ -45,3 +45,13 @@ server/backups/*.json.gz
 .vscode/
 .superpowers/
 
+# Reproducible local water-fixture screenshots/PDFs; keep harness and audit notes.
+/.water-visual-qa/screenshots/
+/.water-visual-qa/*.png
+/.water-visual-qa/*.pdf
+/.water-visual-qa/premerge/*.png
+/.water-visual-qa/premerge/*.pdf
+/.water-visual-qa/premerge/*-runtime.txt
+/.water-visual-qa/premerge/*-text.txt
+/.water-visual-qa/premerge/frontend-unit-search.txt
+

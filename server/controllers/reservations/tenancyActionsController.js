@@ -414,6 +414,7 @@ export const createRenewalOffer = async (req, res, next) => {
       return res.status(400).json({ error: "Only active moved-in tenants can receive renewal offers.", code: "INVALID_STATUS" });
     }
 
+    if (reservation.pendingExtensionRequestId) return res.status(409).json({ error: 'Review the pending stay extension request first.' });
     const hasPending = (reservation.renewalOffers || []).some((o) => o.status === "pending");
     if (hasPending) {
       return res.status(409).json({ error: "A pending renewal offer already exists for this tenant.", code: "PENDING_OFFER_EXISTS" });
@@ -469,6 +470,7 @@ export const createRenewalOffer = async (req, res, next) => {
     const withOffer = await Reservation.findOneAndUpdate(
       {
         _id: reservationId,
+        pendingExtensionRequestId: null,
         renewalOffers: { $not: { $elemMatch: { status: "pending" } } },
       },
       { $push: { renewalOffers: newOffer } },

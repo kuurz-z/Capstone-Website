@@ -469,6 +469,7 @@ export async function createTenantTransferRequest({ tenantId, payload = {} }) {
     );
   }
 
+  if (reservation.pendingExtensionRequestId) throw serviceError('Resolve the pending stay extension first.', 'EXTENSION_PENDING', 409);
   const preferredTransferDate = normalizePreferredDate(payload.preferredTransferDate);
   const [{ request: existingRequest, scheduledTransfer: existingSchedule }, moveOut, termination, predecessorContract] = await Promise.all([
     resolveTenantTransferLifecycleRecords({ tenantId }),

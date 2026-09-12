@@ -240,6 +240,9 @@ const err = (message, statusCode, code, extra = {}) =>
   Object.assign(new Error(message), { statusCode, code, ...extra });
 
 async function assertNoRoomTransferLifecycleConflict(reservationId, { session = null } = {}) {
+  if (await Reservation.exists({ _id: reservationId, pendingExtensionRequestId: { $ne: null } }).session(session)) {
+    throw err('Review the pending stay extension request first.', 409, 'EXTENSION_PENDING');
+  }
   const moveOutQuery = MoveOutClearance.exists({ reservationId });
   const terminationQuery = TerminationReview.exists({
     reservationId,

@@ -902,6 +902,14 @@ const notify = {
     }),
   ),
 
+  stayExtensionLifecycleOnce: (userId, title, message, dedupeKey, options = {}) =>
+    createNotificationWithPush(userId, 'general', title, message, {
+      ...options, dedupeKey,
+    }, (_notification, pushIdentity) => sendMobilePushToRecipients([userId], {
+      title, body: message,
+      data: { ...pushIdentity, type: 'stay_extension', screen: 'extend-stay', url: '/extend-stay' },
+    })),
+
   adminReply: (userId, conversationId, messageId) => {
     if (!userId || !conversationId || !messageId) {
       return Promise.reject(new Error("A tenant, conversation, and persisted message are required."));

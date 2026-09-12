@@ -23,6 +23,7 @@
  */
 
 import express from "express";
+import { loadMobilePaymentEvidence } from "../services/billing/mobilePaymentEvidence.js";
 import fs from "fs";
 import path from "path";
 import { Bill, Reservation } from "../models/index.js";
@@ -72,6 +73,7 @@ const NON_DRAFT_FILTER = NON_DRAFT_BILL_FILTER;
 
 async function mapMobileBillsWithBreakdowns(bills, tenantId) {
   const dbUser = { _id: tenantId };
+  const payments = await loadMobilePaymentEvidence(bills, tenantId);
   return Promise.all(
     bills.map(async (bill) => {
       const visibleCharges = getVisibleBillCharges(bill);
@@ -83,7 +85,7 @@ async function mapMobileBillsWithBreakdowns(bills, tenantId) {
       if (Number(visibleCharges.water || 0) > 0) {
         waterBreakdown = await buildTenantUtilityBreakdown({ dbUser, bill, utilityType: "water" });
       }
-      return toMobileBill(bill, { electricityBreakdown, waterBreakdown });
+      return toMobileBill(bill, { electricityBreakdown, waterBreakdown, payment: payments.get(String(bill._id)) || null });
     }),
   );
 }

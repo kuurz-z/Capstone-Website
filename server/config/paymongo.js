@@ -140,7 +140,7 @@ export async function createCheckoutSession({
  * @param {string} sessionId - The checkout session ID
  * @returns {Object} Full session data from PayMongo
  */
-export async function getCheckoutSession(sessionId) {
+export async function getCheckoutSession(sessionId, { signal } = {}) {
   if (mockCheckoutSessions.has(sessionId)) {
     return mockCheckoutSessions.get(sessionId);
   }
@@ -192,6 +192,7 @@ export async function getCheckoutSession(sessionId) {
 
   const response = await fetch(`${PAYMONGO_API}/checkout_sessions/${sessionId}`, {
     headers: { Authorization: getAuthHeader() },
+    signal,
   });
 
   if (!response.ok) {

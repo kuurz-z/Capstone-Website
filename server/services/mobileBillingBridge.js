@@ -297,7 +297,7 @@ export function formatMobileWaterBreakdown(breakdown) {
  * @param {{electricityBreakdown?: Object|null, waterBreakdown?: Object|null}} [options]
  * @returns {Object} mobile-shaped bill JSON
  */
-export function toMobileBill(bill, { electricityBreakdown = null, waterBreakdown = null } = {}) {
+export function toMobileBill(bill, { electricityBreakdown = null, waterBreakdown = null, payment } = {}) {
   const visible = getVisibleBillSnapshot(bill);
   const mobileStatus = resolveMobileBillStatus({
     status: bill.status,
@@ -355,8 +355,11 @@ export function toMobileBill(bill, { electricityBreakdown = null, waterBreakdown
     gross_amount: visible.grossAmount,
     remaining_amount: visible.remainingAmount,
     paid_amount: bill.paidAmount || 0,
-    payment_method: toMobilePaymentMethodLabel(bill.paymentMethod),
-    payment_date: bill.paymentDate || null,
+    payment_method: payment === undefined ? toMobilePaymentMethodLabel(bill.paymentMethod) : toMobilePaymentMethodLabel(payment?.method),
+    payment_method_label: payment === undefined ? toMobilePaymentMethodLabel(bill.paymentMethod) : (toMobilePaymentMethodLabel(payment?.method) || 'Method unavailable'),
+    payment_method_source: payment ? (payment.evidenceSource || 'successful_transaction') : null,
+    payment_reference: payment?.paymentReference || payment?.referenceNumber || null,
+    payment_date: payment?.processedAt || payment?.settlementTimestamp || payment?.verifiedAt || payment?.createdAt || bill.paymentDate || null,
     paymongo_reference: bill.paymongoPaymentId || null,
     additional_charges: bill.additionalCharges || [],
     payment_proof_status: bill.paymentProof?.verificationStatus || "none",

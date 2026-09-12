@@ -816,7 +816,7 @@ export const updateReservation = async (req, res, next) => {
       try {
         const rawMethod = String(req.body.paymentMethod || "").trim().toLowerCase();
         const paymentMethod =
-          rawMethod === "cash" || !rawMethod ? "offline_cash" : req.body.paymentMethod;
+          rawMethod === "cash" ? "offline_cash" : req.body.paymentMethod || null;
 
         await settleInitialMoveInOnCheckIn({
           reservation: updatedReservation,

@@ -143,7 +143,7 @@ export async function settlePaymongoBill({
 export async function settleInitialMoveInOnCheckIn({
   reservation,
   actorId = "system",
-  paymentMethod = "offline_cash",
+  paymentMethod = null,
   now = new Date(),
 } = {}) {
   if (!reservation) return { settled: false, reason: "no_reservation" };
@@ -167,6 +167,10 @@ export async function settleInitialMoveInOnCheckIn({
     return { settled: false, reason: "already_paid", bill };
   }
 
+  if (!String(paymentMethod || '').trim()) {
+    return { settled: false, reason: 'explicit_payment_method_required', bill };
+  }
+
   const amountToSettle = Number(bill.remainingAmount || bill.totalAmount || 0);
   const rawMethod = String(paymentMethod || "").trim().toLowerCase();
   const normalizedMethod =
@@ -182,6 +186,7 @@ export async function settleInitialMoveInOnCheckIn({
     metadata: {
       reservationId: String(resDoc._id),
       reason: "Settled upon move-in check-in",
+      methodExplicitlyRecorded: true,
     },
     now,
   });

@@ -1,3 +1,4 @@
+import { mobileStayExtensionRoutes, adminStayExtensionRoutes } from './routes/stayExtensionRoutes.js';
 /**
  * ============================================================================
  * LILYCREST DORMITORY MANAGEMENT SYSTEM - SERVER
@@ -356,6 +357,8 @@ app.use("/api/m", mobileUploadRoutes);
 // become a second lifecycle/authorization/notification authority.
 app.use("/api/m", mobileChatRoutes);
 app.use("/api/m", mobileTenantTransferRequestRoutes);
+app.use("/api/m", mobileStayExtensionRoutes);
+app.use("/api/tenant", adminStayExtensionRoutes);
 app.use("/api/m", mobileMaintenanceRoutes);
 app.use("/api/m", mobileRoutes);
 app.use("/api/m/maintenance", maintenanceRoutes);

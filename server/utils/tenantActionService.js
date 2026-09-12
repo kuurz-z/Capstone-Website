@@ -1,5 +1,6 @@
 import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
+import StayExtensionRequest from '../models/StayExtensionRequest.js';
 import dayjs from "dayjs";
 import logger from "../middleware/logger.js";
 import {
@@ -915,7 +916,7 @@ export async function getTenantActionContext(reservationId, previewParams = null
   };
 }
 
-export async function renewStayWorkflow({ reservationId, payload, actorId }) {
+export async function renewStayWorkflow({ reservationId, payload, actorId, extensionRequestId = null }) {
   const session = await mongoose.startSession();
   let result;
   try {
@@ -938,6 +939,20 @@ export async function renewStayWorkflow({ reservationId, payload, actorId }) {
       const activeStay = await ensureActiveStay(reservation, actorId, session, predecessorContract);
       if (!activeStay || !CURRENT_STAY_STATUSES.includes(activeStay.status)) {
         throw Object.assign(new Error("No active stay found for renewal."), { statusCode: 400, code: "NO_ACTIVE_STAY" });
+      }
+      if (reservation.pendingExtensionRequestId && String(reservation.pendingExtensionRequestId) !== String(extensionRequestId)) {
+        throw Object.assign(new Error('Review the pending stay extension request first.'), { statusCode: 409 });
+      }
+      const extension = extensionRequestId ? await StayExtensionRequest.findOne({
+        _id: extensionRequestId, reservationId: reservation._id, stayId: activeStay._id,
+        tenantId: reservation.userId?._id || reservation.userId, status: 'pending',
+      }).session(session) : null;
+      if (extensionRequestId && (!extension || activeStay.endedAt ||
+          String(predecessorContract?._id) !== String(extension.contractId) ||
+          new Date(activeStay.leaseEndDate).getTime() !== new Date(extension.currentEndDate).getTime() ||
+          String(activeStay.roomId) !== String(extension.roomId) ||
+          new Date(payload.newLeaseEndDate).getTime() !== new Date(extension.requestedEndDate).getTime())) {
+        throw Object.assign(new Error('The request no longer matches the current stay and contract.'), { statusCode: 409 });
       }
       if (["inactive", "moved_out"].includes(String(reservation.userId?.tenantStatus || ""))) {
         throw Object.assign(new Error("Inactive or moved-out tenants cannot be renewed."), { statusCode: 400, code: "TENANT_INACTIVE" });
@@ -1027,6 +1042,15 @@ export async function renewStayWorkflow({ reservationId, payload, actorId }) {
 
       reservation.currentStayId = newStay._id;
       reservation.latestStayStatus = "active";
+      if (extension) {
+        extension.status = 'approved';
+        extension.reviewedBy = actorId;
+        extension.reviewedAt = new Date();
+        extension.adminNote = payload.notes || '';
+        extension.successorStayId = newStay._id;
+        await extension.save({ session });
+        reservation.pendingExtensionRequestId = null;
+      }
 
       // Ensure declared appliance add-ons cleanly carry over during lease renewals within Guadalupe
       const renewalBranch = String(reservation.roomId?.branch || reservation.branch || "").toLowerCase();
@@ -1747,6 +1771,7 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
       if (!reservation) {
         throw Object.assign(new Error("Reservation not found"), { statusCode: 404, code: "RESERVATION_NOT_FOUND" });
       }
+      if (reservation.pendingExtensionRequestId) throw Object.assign(new Error('Review the pending stay extension request first.'), { statusCode: 409 });
       if (!hasReservationStatus(reservation.status, "moveIn")) {
         throw Object.assign(new Error("Only active moved-in tenants can be transferred."), { statusCode: 400, code: "INVALID_STATUS_FOR_TRANSFER" });
       }

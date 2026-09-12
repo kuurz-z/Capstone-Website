@@ -82,6 +82,7 @@ describe("settleInitialMoveInOnCheckIn", () => {
     const result = await settleInitialMoveInOnCheckIn({
       reservation: mockReservation,
       actorId: "admin-user-id",
+      paymentMethod: "offline_cash",
     });
 
     expect(result.settled).toBe(true);
@@ -163,4 +164,15 @@ describe("settleInitialMoveInOnCheckIn", () => {
     );
     expect(mockBill.save).not.toHaveBeenCalled();
   });
+});
+
+
+test('an omitted method does not fabricate a cash payment on check-in', async () => {
+  const invoice = { status: 'pending', totalAmount: 100, remainingAmount: 100 };
+  const reservation = { _id: '66bc00000000000000000001', initialPaymentBillId: '66bc00000000000000000003' };
+  BillFindById.mockResolvedValue(invoice);
+  applyBillPayment.mockClear();
+  expect(await settleInitialMoveInOnCheckIn({ reservation })).toMatchObject({ settled: false, reason: 'explicit_payment_method_required' });
+  expect(applyBillPayment).not.toHaveBeenCalled();
+  expect(invoice.remainingAmount).toBe(100);
 });
