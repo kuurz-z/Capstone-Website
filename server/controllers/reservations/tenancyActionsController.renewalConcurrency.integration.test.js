@@ -35,7 +35,7 @@ await jest.unstable_mockModule("../../utils/occupancyManager.js", () => ({
   updateOccupancyOnReservationChange: jest.fn(),
 }));
 
-const { createRenewalOffer, respondToRenewalOffer } = await import("./tenancyActionsController.js");
+const { createRenewalOffer, respondToRenewalOffer, renewContract } = await import("./tenancyActionsController.js");
 const { Reservation, Room, User, Stay, BedHistory, BusinessSettings } = await import("../../models/index.js");
 
 const response = () => ({
@@ -90,7 +90,7 @@ describe("renewal offer concurrency (createRenewalOffer / respondToRenewalOffer)
       username: `tenant_${new mongoose.Types.ObjectId().toString().slice(-10)}`,
       firstName: "Test", lastName: "Tenant", role: "tenant", tenantStatus: "active",
     });
-    const room = await Room.create({
+    const room = await Room.create({ beds: [{ id: "bed-1", position: "upper", status: "occupied" }],
       name: "Room 301", roomNumber: "301", branch: "gil-puyat",
       type: "quadruple-sharing", capacity: 4, price: 6000,
     });
@@ -116,6 +116,18 @@ describe("renewal offer concurrency (createRenewalOffer / respondToRenewalOffer)
     params, body,
     branchFilter: undefined,
     user: { uid: user.firebaseUid },
+  });
+
+  test("admin renewal returns success after preparing the successor without requiring an offer ID", async () => {
+    const { admin, reservation, stay } = await seed();
+    const res = response();
+    await renewContract(req(admin, { reservationId: String(reservation._id) }, {
+      confirm: true, newLeaseStartDate: "2026-04-02", newLeaseEndDate: "2026-10-01", monthlyRent: 6300,
+    }), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.stay.status).toBe("upcoming");
+    expect((await Stay.findById(stay._id)).status).toBe("active");
+    expect(await Stay.countDocuments({ reservationId: reservation._id })).toBe(2);
   });
 
   test("two concurrent offer-creation requests leave exactly one pending offer", async () => {
@@ -170,11 +182,11 @@ describe("renewal offer concurrency (createRenewalOffer / respondToRenewalOffer)
     // Exactly one successor Stay (renewal record) was created.
     const renewedStays = await Stay.find({ reservationId: reservation._id, previousStayId: { $ne: null } });
     expect(renewedStays).toHaveLength(1);
-    expect(renewedStays[0].status).toBe("active");
+    expect(renewedStays[0].status).toBe("upcoming");
 
     // Exactly one prior Stay was marked renewed (not two independent ones).
     const renewedPrevious = await Stay.find({ reservationId: reservation._id, status: "renewed" });
-    expect(renewedPrevious).toHaveLength(1);
+    expect(renewedPrevious).toHaveLength(0);
 
     // The offer itself ends in a single, consistent accepted state.
     const reloaded = await Reservation.findById(reservation._id);
@@ -182,6 +194,28 @@ describe("renewal offer concurrency (createRenewalOffer / respondToRenewalOffer)
     expect(acceptedOffer.status).toBe("accepted");
 
     // Reservation now points at the single new Stay, not a stale/duplicate one.
-    expect(String(reloaded.currentStayId)).toBe(String(renewedStays[0]._id));
+    expect(String(reloaded.currentStayId)).not.toBe(String(renewedStays[0]._id));
+    expect(renewedStays[0].status).toBe("upcoming");
   });
+  test.each(['accept', 'decline'])('another tenant cannot %s an offer', async action => {
+    const { admin, reservation } = await seed();
+    const offerResponse = response();
+    await createRenewalOffer(req(admin, { reservationId: String(reservation._id) }, { months: 6 }), offerResponse);
+    const stranger = await User.create({ firebaseUid: 'stranger', username: 'stranger', email: 'stranger@example.test', firstName: 'Other', lastName: 'Tenant', role: 'tenant' });
+    const denied = response();
+    await respondToRenewalOffer(req(stranger, { reservationId: String(reservation._id), offerId: offerResponse.body.offer.offerId }, { action }), denied);
+    expect(denied.statusCode).toBe(403);
+    expect((await Reservation.findById(reservation._id)).renewalOffers[0].status).toBe('pending');
+    expect(await Stay.countDocuments({ previousStayId: { $ne: null } })).toBe(0);
+  });
+  test('legacy accepted offer without a successor is resumed safely', async () => {
+    const { admin, tenant, reservation } = await seed(); const offerResponse = response();
+    await createRenewalOffer(req(admin, { reservationId: String(reservation._id) }, { months: 6 }), offerResponse);
+    await Reservation.updateOne({ _id: reservation._id }, { $set: { 'renewalOffers.0.status': 'accepted' } });
+    const result = response();
+    await respondToRenewalOffer(req(tenant, { reservationId: String(reservation._id), offerId: offerResponse.body.offer.offerId }, { action: 'accept' }), result);
+    expect(result.statusCode).toBe(200);
+    expect(await Stay.countDocuments({ renewalOfferId: offerResponse.body.offer.offerId })).toBe(1);
+  });
+
 });

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import dayjs from "dayjs";
 
+const cronSchedule = jest.fn(() => ({ stop: jest.fn() }));
+await jest.unstable_mockModule("node-cron", () => ({ default: { schedule: cronSchedule } }));
+
 const reservationFind = jest.fn();
 const reservationFindById = jest.fn();
 const reservationFindOverdueMoveIns = jest.fn();
@@ -139,6 +142,10 @@ await jest.unstable_mockModule("../services/contractRenewalActivationService.js"
   activateDueRenewalContracts: jest.fn(),
 }));
 
+await jest.unstable_mockModule("../services/tenancyLifecycleReconciliationService.js", () => ({
+  reconcileTenancyLifecycles: jest.fn(async () => ({ recovered: 0, errors: 0 })),
+}));
+
 await jest.unstable_mockModule("./announcementDispatch.js", () => ({
   dispatchDueScheduledAnnouncements,
 }));
@@ -150,6 +157,24 @@ await jest.unstable_mockModule("./lifecycleNaming.js", () => ({
 }));
 
 const scheduler = await import("./scheduler.js");
+
+test("renewal activation and reconciliation register once and resume after scheduler restart", () => {
+  try {
+    scheduler.startScheduler({ runWarmup: false });
+    const count = cronSchedule.mock.calls.length;
+    scheduler.startScheduler({ runWarmup: false });
+    expect(cronSchedule.mock.calls).toHaveLength(count);
+    const activation = cronSchedule.mock.calls.find(([, , options]) => options.name === "renewal-contract-activation");
+    const reconciliation = cronSchedule.mock.calls.find(([, , options]) => options.name === "missing-contract-generation-reconciliation");
+    expect(activation[0]).toBe("* * * * *");
+    expect(reconciliation[0]).toBe("*/5 * * * *");
+    expect(activation[2].timezone).toBe(process.env.APP_TIMEZONE || "Asia/Manila");
+    expect(reconciliation[2].timezone).toBe(process.env.APP_TIMEZONE || "Asia/Manila");
+    scheduler.stopScheduler();
+    scheduler.startScheduler({ runWarmup: false });
+    expect(cronSchedule.mock.calls).toHaveLength(count * 2);
+  } finally { scheduler.stopScheduler(); }
+});
 
 const createReservation = (overrides = {}) => ({
   _id: "reservation-1",

@@ -852,6 +852,15 @@ export const createSuccessorContractForRenewal = async ({
   actorId,
   session = null,
 }) => {
+  if (!session) {
+    const transaction = await mongoose.startSession();
+    let successor;
+    try { await transaction.withTransaction(async () => {
+      await Reservation.updateOne({ _id: reservationId }, { $inc: { tenancyMutationVersion: 1 } }, { session: transaction });
+      successor = await createSuccessorContractForRenewal({ reservationId, oldContract, newStay, actorId, session: transaction });
+    }); } finally { await transaction.endSession(); }
+    return successor;
+  }
   if (!oldContract) {
     throw serviceError("Previous active contract is required for renewal.", "PREVIOUS_CONTRACT_REQUIRED", 400);
   }

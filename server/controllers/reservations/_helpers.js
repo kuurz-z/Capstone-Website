@@ -1927,7 +1927,7 @@ export const buildWorkspaceEntries = async (reservations, now = new Date()) => {
     const reservationKey = String(reservation._id);
     const tenantKey = String(reservation.userId?._id || reservation.userId || "");
     const stayHistory = staysByReservationId.get(reservationKey) || [];
-    const currentStay = stayHistory[0] || null;
+    const currentStay = stayHistory.find((stay) => CURRENT_STAY_STATUSES.includes(stay.status)) || null;
     const branchKey = String(reservation.roomId?.branch || "").toLowerCase();
     const branchRoomsForReservation = branchAvailability.get(branchKey) || [];
     const hasAvailableBedsInBranch = branchRoomsForReservation.some(

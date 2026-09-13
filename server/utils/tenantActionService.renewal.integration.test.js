@@ -50,7 +50,7 @@ describe("renewStayWorkflow does not prematurely change the Reservation billing 
       username: `tenant_${new mongoose.Types.ObjectId().toString().slice(-10)}`,
       firstName: "Test", lastName: "Tenant", role: "tenant", tenantStatus: "active",
     });
-    const room = await Room.create({
+    const room = await Room.create({ beds: [{ id: "bed-1", position: "upper", status: "occupied" }],
       name: "Room 301", roomNumber: "301", branch: "gil-puyat",
       type: "quadruple-sharing", capacity: 4, price: 6300,
     });
@@ -83,7 +83,7 @@ describe("renewStayWorkflow does not prematurely change the Reservation billing 
     });
 
     expect(result.stay.monthlyRent).toBe(6800); // new Stay legitimately describes the new terms
-    expect(result.stay.status).toBe("active");
+    expect(result.stay.status).toBe("upcoming");
 
     const reloadedReservation = await Reservation.findById(reservation._id);
     // The billing source of truth must remain the OLD rate until the

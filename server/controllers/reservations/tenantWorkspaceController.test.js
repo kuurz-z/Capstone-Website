@@ -176,7 +176,10 @@ await jest.unstable_mockModule("../../models/index.js", () => ({
   Stay: {
     find: jest.fn(() => ({
       sort: jest.fn().mockReturnThis(),
-      lean: jest.fn().mockResolvedValue([mockStay]),
+      lean: jest.fn().mockResolvedValue([
+        { ...mockStay, _id: new mongoose.Types.ObjectId(), previousStayId: mockStay._id, status: "upcoming", leaseStartDate: new Date("2026-07-02"), leaseEndDate: new Date("2027-07-02") },
+        mockStay,
+      ]),
     })),
   },
   Contract: {
@@ -299,6 +302,9 @@ describe("Tenant Workspace Controller & Helpers", () => {
     expect(entries.length).toBe(1);
     expect(entries[0].tenantName).toBe("Juan Dela Cruz");
     expect(entries[0].room).toBe("Room 101");
+    expect(entries[0].currentStayId).toBe(String(mockStay._id));
+    expect(entries[0].leaseEndDate).toEqual(mockStay.leaseEndDate);
+    expect(entries[0].allowedActions.renew.enabled).toBe(false);
     expect(Array.isArray(entries[0].warningFlags)).toBe(true);
     // Verify violation flag is included
     const violationFlag = entries[0].warningFlags.find(
@@ -346,6 +352,8 @@ describe("Tenant Workspace Controller & Helpers", () => {
     const responsePayload = res.json.mock.calls[0][0];
     expect(responsePayload.success).toBe(true);
     expect(responsePayload.data.tenantName).toBe("Juan Dela Cruz");
+    expect(responsePayload.data.currentStayId).toBe(String(mockStay._id));
+    expect(responsePayload.data.leaseEndDate).toEqual(mockStay.leaseEndDate);
   });
 
   it("markTenantWorkspaceAsViewed should return 200 and stamp viewed timestamp", async () => {

@@ -1,3 +1,5 @@
+import { transferInvoiceBalance, supplementTransferInvoice } from "./billing/transferSettlementInvoices.js";
+import { lockTenancyOperation } from "./tenancyExclusionService.js";
 /**
  * ============================================================================
  * SCHEDULED ROOM TRANSFER SERVICE
@@ -263,7 +265,7 @@ async function assertNoRoomTransferLifecycleConflict(reservationId, { session = 
     stayIdsQuery,
   ]);
   const stayIds = stays.map((stay) => stay._id);
-  const renewalQuery = Stay.exists({ reservationId, previousStayId: { $in: stayIds } });
+  const renewalQuery = Stay.exists({ reservationId, previousStayId: { $in: stayIds }, $or: [{ status: "upcoming" }, { status: "active", leaseStartDate: { $gte: getManilaToday().add(1, "day").toDate() } }] });
   if (session) renewalQuery.session(session);
   const renewal = stayIds.length ? await renewalQuery : null;
 
@@ -280,8 +282,7 @@ async function assertNoRoomTransferLifecycleConflict(reservationId, { session = 
 
 /**
  * True when `effectiveTransferDate` is strictly AFTER today's Manila business
- * date. Today / past => not a scheduled transfer (today is the immediate
- * path; past is rejected by the caller).
+ * date. This helper classifies dates only; today is also schedulable.
  */
 export function isFutureManilaDate(effectiveTransferDate) {
   const eff = toManilaStartOfDay(effectiveTransferDate);
@@ -499,16 +500,12 @@ export async function openHoldsByRoom(roomIds = null) {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Schedule a room transfer to take effect on a chosen Manila business date +
- * time. Same-day is allowed provided the chosen date/time is still within
- * configured office hours; a future date is always allowed; a past date is
- * rejected.
+ * Schedule a room transfer for today or a future Manila calendar date.
+ * The stored time is guidance. Completion is Admin-driven on/after that date.
  *
- * Preconditions (all enforced here, not just the UI):
- *   - the SAME canonical transfer-intent validation the cutover engine runs
- *     (`resolveValidatedRoomTransferIntent`, requireConfirm)
- *   - effectiveTransferDate is today or later (Manila); if today, the
- *     effectiveTransferTime must be within office hours
+ * Preconditions (enforced server-side):
+ *   - canonical transfer-intent validation (`resolveValidatedRoomTransferIntent`)
+ *   - effectiveTransferDate is today or later in Manila
  *   - the reservation has NO open (scheduled | action_required) transfer
  *   - no pending future renewal (same guard the immediate transfer applies)
  *
@@ -625,6 +622,8 @@ export async function scheduleRoomTransfer({ reservationId, payload = {}, actorI
   let created;
   try {
     await session.withTransaction(async () => {
+      await lockTenancyOperation(reservation._id, "transfer", session);
+      await assertNoRoomTransferLifecycleConflict(reservation._id, { session });
       // Re-assert the "no open schedule" guard inside the txn.
       const raceOpen = await ScheduledRoomTransfer.findOne({
         reservationId: reservation._id,
@@ -733,7 +732,7 @@ export async function scheduleRoomTransfer({ reservationId, payload = {}, actorI
  *   - the record is still OPEN and not executed
  *   - the same canonical transfer intent still holds (branch/type/bed/lease/
  *     renewal) — the destination bed hold must still be in place
- *   - the new date is today or later; if today, within office hours
+ *   - the new date is today or later; completion is available on that Manila date
  *
  * Effects: appends a `scheduleHistory` entry, updates
  * `effectiveTransferDate` / `effectiveTransferTimeMinutes`, refreshes
@@ -933,7 +932,17 @@ export async function rescheduleRoomTransfer({ reservationId, payload = {}, acto
  * @returns {Promise<import("mongoose").Document|null>} the Bill, or null when
  *   nothing is owed and no Bill exists.
  */
-async function upsertTransferSettlementBill({ record, reservation, preview, finalizedElectricity, asOfCutoverDay, actorId }) {
+async function upsertTransferSettlementBill(args) {
+  const session = await mongoose.startSession();
+  let result;
+  try { await session.withTransaction(async () => {
+    const record = await ScheduledRoomTransfer.findOneAndUpdate({ _id: args.record._id }, { $inc: { __v: 1 } }, { new: true, session });
+    result = await writeTransferSettlementBill({ ...args, record, session });
+    args.record.settlementBillId = record.settlementBillId;
+  }); } finally { await session.endSession(); }
+  return result;
+}
+async function writeTransferSettlementBill({ record, reservation, preview, finalizedElectricity, asOfCutoverDay, actorId, session }) {
   const rentDue = roundMoney(Math.max(0, Number(preview?.rent?.adjustmentDue) || 0));
   const depositDue = roundMoney(Math.max(0, Number(preview?.deposit?.balanceDue) || 0));
   // Finalized source-room electricity (sub-metered branch) — settled on THIS
@@ -956,9 +965,14 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
   const indexedCycleEnd = hasSameCycleMonthlyBill ? null : cycleEnd;
 
   let bill = record.settlementBillId
-    ? await Bill.findById(record.settlementBillId)
-    : null;
+    ? await Bill.findById(record.settlementBillId).session(session)
+    : await Bill.findOne({ transferSettlementKey: String(record._id) }).session(session);
   if (bill && (bill.isArchived === true || bill.status === "voided")) bill = null;
+  if (bill && !record.settlementBillId) {
+    record.settlementBillId = bill._id;
+    await record.save({ session });
+  }
+
 
   const noteFor = () =>
     `Room Transfer settlement: ${preview?.fromRoom?.name || "current room"} → ` +
@@ -1000,6 +1014,7 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
     const [created] = await Bill.create([
       {
         billType: "transfer_settlement",
+        transferSettlementKey: String(record._id),
         reservationId: reservation._id,
         userId: reservation.userId?._id || reservation.userId,
         branch: record.branch,
@@ -1036,19 +1051,22 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
         },
         createdBy: actorId || null,
       },
-    ]);
+    ], { session });
     record.settlementBillId = created._id;
-    await record.save();
+    await record.save({ session });
     return created;
   }
 
-  // Existing Bill: a downward change is never applied once money exists. An
-  // upward recomputation may increase this transfer-specific Bill while
-  // preserving its paid amount and payment history, so the additional balance
-  // can be settled through the existing payment path.
+  // Any payment freezes the original invoice, including its metadata/timestamps.
   const paid = roundMoney(Number(bill.paidAmount || 0));
   const previousTotal = roundMoney(Number(bill.totalAmount || 0));
-  if (paid <= 0 || total > previousTotal + 0.01) {
+  if (paid > 0 || bill.status === 'paid') {
+    const balance = await transferInvoiceBalance(bill, session);
+    if (total > balance.totalAmount + 0.01) return supplementTransferInvoice({ primary: bill,
+      targetCharges: { rent: rentDue, securityDeposit: depositDue, electricity: electricityDue }, record, actorId, session });
+    return balance;
+  }
+  if (paid <= 0) {
     bill.billingCycleStart = indexedCycleStart;
     bill.billingCycleEnd = indexedCycleEnd;
     bill.charges.rent = rentDue;
@@ -1075,7 +1093,7 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
         : {}),
     };
     syncBillAmounts(bill, { preserveStatus: false });
-    await bill.save();
+    await bill.save({ session });
   }
   return bill;
 }
@@ -1439,7 +1457,7 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
   //    Unrelated historical balances are NOT merged and do NOT block (spec §9).
   if (totalImmediateDue > 0) {
     const previousBill = record.settlementBillId
-      ? await Bill.findById(record.settlementBillId).lean()
+      ? await transferInvoiceBalance(await Bill.findById(record.settlementBillId).lean())
       : null;
     const previousBillTotal = roundMoney(Number(previousBill?.totalAmount || 0));
     const previousPaid = roundMoney(Number(previousBill?.paidAmount || 0));
@@ -1456,9 +1474,9 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
 
     // The Bill already carries a real payment AND the fresh (actual-cutover-day)
     // recompute is HIGHER than what the Bill was sized for -> a financial
-    // adjustment. upsertTransferSettlementBill increases this transfer Bill
-    // while preserving its paid amount and payment history. The remaining
-    // balance must be settled before cutover.
+    // adjustment. A supplemental invoice carries the increase; the original
+    // payment-bearing invoice stays immutable. All remaining balances must
+    // be settled before cutover.
     if (previousPaid > 0 && previousBillTotal + 0.01 < totalImmediateDue) {
       const remainingDue = roundMoney(Math.max(0, totalImmediateDue - paid));
       const now = new Date();
@@ -1485,7 +1503,7 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
         outcome: "action_required",
         reason: "ADDITIONAL_BALANCE_DUE",
         scheduledTransfer: fresh,
-        bill,
+        bill: bill?.payableBillId ? await Bill.findById(bill.payableBillId) : bill,
         message:
           `The transfer settlement recomputed to ₱${roundMoney(totalImmediateDue).toFixed(2)} ` +
           `and ₱${paid.toFixed(2)} has been paid. Settle the remaining ` +
@@ -1520,7 +1538,7 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
         outcome: "action_required",
         reason: "FINANCIAL_ADJUSTMENT_REQUIRED",
         scheduledTransfer: fresh,
-        bill,
+        bill: bill?.payableBillId ? await Bill.findById(bill.payableBillId) : bill,
         message: MANUAL_FINANCIAL_GUIDANCE,
       };
     }
@@ -1534,12 +1552,12 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
         { $set: { status: "action_required", lastError: "TRANSFER_BALANCE_UNPAID", lastAttemptAt: new Date() } },
       );
       const fresh = await ScheduledRoomTransfer.findById(record._id);
-      const freshTotal = roundMoney(Number((await Bill.findById(bill?._id).lean())?.totalAmount || billTotal));
+      const freshTotal = billTotal;
       return {
         outcome: "awaiting_settlement",
         reason: "TRANSFER_BALANCE_UNPAID",
         scheduledTransfer: fresh,
-        bill,
+        bill: bill?.payableBillId ? await Bill.findById(bill.payableBillId) : bill,
         message:
           `Settle the Room Transfer balance of ₱${roundMoney(freshTotal - paid).toFixed(2)} ` +
           `then complete the transfer.`,

@@ -1,6 +1,8 @@
+import { syncBillAmounts } from "./billing/billingPolicy.js";
+import { lockTenancyOperation } from "./tenancyExclusionService.js";
 import mongoose from "mongoose";
 import logger from "../middleware/logger.js";
-import { Contract, Reservation, Stay } from "../models/index.js";
+import { BedHistory, Bill, Contract, Reservation, Stay } from "../models/index.js";
 import { transitionContract } from "./contractService.js";
 import { notify, notifyBranchAdmins } from "./notifications/notificationService.js";
 import { toManilaStartOfDay } from "../utils/dateUtils.js";
@@ -115,7 +117,7 @@ export async function activateDueRenewalContracts({ now = new Date() } = {}) {
         const predecessor = successor.replacesContractId
           ? await Contract.findById(successor.replacesContractId).session(session)
           : null;
-        if (!predecessor || predecessor.status !== "active") {
+        if (!predecessor || !["active", "published", "expiring_soon"].includes(predecessor.status)) {
           // The predecessor was already superseded/closed by something else
           // (another activation, manual admin action, data corruption) —
           // activating this successor too would leave two "current"
@@ -132,9 +134,7 @@ export async function activateDueRenewalContracts({ now = new Date() } = {}) {
         // marked completed/terminated for this reservation, must never have
         // a renewal silently activated for them — that would resurrect a
         // tenancy that has already ended. This only blocks on clear evidence
-        // of departure; it does not require a Stay to exist at all (many
-        // legitimate Contracts have no Stay row — a separate, known gap
-        // tracked by Job 19 — and must not be penalized here for that).
+        // of departure. Successor Stay integrity is checked before cutover below.
         const predecessorReservationId = predecessor.reservationId;
         if (predecessorReservationId) {
           const [reservationDeparted, hasDepartedStay] = await Promise.all([
@@ -151,6 +151,25 @@ export async function activateDueRenewalContracts({ now = new Date() } = {}) {
             outcome = { conflict: true };
             return;
           }
+        }
+
+        await lockTenancyOperation(successor.reservationId, 'renewal', session);
+        const successorStay = successor.stayId
+          ? await Stay.findById(successor.stayId).session(session)
+          : await Stay.findOne({ reservationId: successor.reservationId, leaseStartDate: successor.leaseStartDate, status: { $in: ['upcoming', 'active'] } }).session(session);
+        if (successorStay) {
+          if (!['upcoming', 'active'].includes(successorStay.status)) throw new Error('Renewal Stay cannot be activated.');
+          const previousStay = successorStay.previousStayId ? await Stay.findById(successorStay.previousStayId).session(session) : null;
+          if (previousStay) {
+            previousStay.status = 'renewed'; previousStay.endedAt = successor.leaseStartDate; previousStay.endReason = 'renewed';
+            await previousStay.save({ session });
+          }
+          successorStay.status = 'active'; successorStay.monthlyRent = Number(successor.approvedMonthlyRate);
+          await successorStay.save({ session });
+          await Reservation.updateOne({ _id: successor.reservationId }, { $set: { currentStayId: successorStay._id, latestStayStatus: 'active' } }, { session });
+          await BedHistory.updateMany({ reservationId: successor.reservationId, status: 'active' }, { $set: { stayId: successorStay._id } }, { session });
+        } else {
+          throw new Error('Renewal successor Stay is missing; repair the tenancy before activation.');
         }
 
         successor.isCurrent = true;
@@ -171,37 +190,31 @@ export async function activateDueRenewalContracts({ now = new Date() } = {}) {
           session,
         );
 
-        // Reservation is the actual billing source of truth
-        // (rentGenerator.resolveReservationRentAmount reads
-        // reservation.monthlyRent, not Contract) — this is the other half
-        // of the cutover renewStayWorkflow deliberately defers. Only
-        // monthlyRent is updated here; pricingSnapshot (used by
-        // structured-initial-payment reservations instead) is intentionally
-        // left untouched — see this file's module header / the Phase 2B
-        // report for why that's a documented, separate gap rather than a
-        // silent omission.
-        //
-        // PHASE 10 — `recurringRentRate` is a ROOM-TRANSFER override that
-        // wins over EVERYTHING in resolveReservationRentAmount (including
-        // monthlyRent and the structured pricingSnapshot). A renewal is a
-        // NEW lease term with its own canonically-approved rate, so the
-        // transfer override must NOT survive renewal activation — otherwise
-        // a transferred-then-renewed tenant keeps being billed the old
-        // transfer rate forever. Clear it here so the renewal's
-        // approvedMonthlyRate (written to monthlyRent just above) becomes
-        // the one authoritative current rate. A tenant who transfers AGAIN
-        // after renewing gets a fresh override from that transfer's cutover.
+        // The effective term overrides the immutable initial pricing snapshot.
         if (successor.reservationId && Number.isFinite(Number(successor.approvedMonthlyRate))) {
           await Reservation.updateOne(
             { _id: successor.reservationId },
             {
               $set: {
                 monthlyRent: Number(successor.approvedMonthlyRate),
-                recurringRentRate: null, // clear the room-transfer override — see comment above
+                recurringRentRate: Number(successor.approvedMonthlyRate),
               },
             },
             { session },
           );
+        }
+
+        // An unpaid advance-generated monthly invoice can predate approval.
+        // Reprice only this renewal interval; payment-bearing history is immutable.
+        const futureBills = await Bill.find({ reservationId: successor.reservationId, billType: 'monthly',
+          billingCycleStart: { $gte: toManilaStartOfDay(successor.leaseStartDate).toDate(), $lte: successor.leaseEndDate },
+          paidAmount: { $in: [0, null] }, status: { $nin: ['paid', 'voided'] }, isArchived: { $ne: true }, 'charges.rent': { $gt: 0 },
+        }).session(session);
+        for (const bill of futureBills) {
+          if (Number(bill.charges.rent) === Number(successor.approvedMonthlyRate)) continue;
+          bill.charges.rent = Number(successor.approvedMonthlyRate);
+          syncBillAmounts(bill, { preserveStatus: false });
+          await bill.save({ session });
         }
 
         outcome = {

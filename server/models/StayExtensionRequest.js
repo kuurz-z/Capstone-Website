@@ -17,6 +17,8 @@ const schema = new mongoose.Schema({
   note: { type: String, maxlength: 1000, default: '' },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   adminNote: { type: String, maxlength: 1000, default: '' },
+  acknowledgedAt: { type: Date, default: null },
+  acknowledgedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   reviewedAt: Date,
   successorStayId: { type: mongoose.Schema.Types.ObjectId, ref: 'Stay' },

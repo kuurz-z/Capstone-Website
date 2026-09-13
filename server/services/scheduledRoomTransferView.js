@@ -1,3 +1,4 @@
+import { transferInvoiceBalance } from "./billing/transferSettlementInvoices.js";
 /**
  * ============================================================================
  * SCHEDULED ROOM TRANSFER — SERIALIZATION
@@ -114,7 +115,7 @@ export async function resolveScheduledTransferBalance(scheduledTransfer, { sessi
     };
   }
   const q = Bill.findById(billId);
-  const bill = await (session ? q.session(session) : q).lean();
+  const bill = await transferInvoiceBalance(await (session ? q.session(session) : q).lean(), session);
   if (!bill || bill.status === "voided") {
     return {
       hasBill: false,
@@ -133,7 +134,8 @@ export async function resolveScheduledTransferBalance(scheduledTransfer, { sessi
   else if (amountPaid > 0) paymentState = "partial";
   return {
     hasBill: true,
-    billId: String(billId),
+    billId: String(bill.payableBillId || billId),
+    invoiceIds: bill.invoiceIds,
     amountDue,
     amountPaid,
     remaining,

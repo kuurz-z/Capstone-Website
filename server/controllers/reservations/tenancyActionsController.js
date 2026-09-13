@@ -1,3 +1,5 @@
+import { isAdminRole, isOwnerRole } from "../../config/roles.js";
+import { normalizePermissions } from "../../config/accessControl.js";
 /**
  * ============================================================================
  * TENANCY ACTIONS CONTROLLER
@@ -296,9 +298,9 @@ export const renewContract = async (req, res, next) => {
     const roomName = result.reservation.roomId?.name || "your room";
     notify.general(
       result.reservation.userId?._id || result.reservation.userId,
-      "Contract Renewed",
-      `Your lease for ${roomName} has been renewed through ${dayjs(result.stay.leaseEndDate).format("MMM D, YYYY")}.`,
-      { entityType: "stay" },
+      "Renewal Approved",
+      `Your renewal for ${roomName} through ${dayjs(result.stay.leaseEndDate).format("MMM D, YYYY")} has been approved. Contract finalization and effective-date activation are still required.`,
+      { entityType: "stay", dedupeKey: `renewal_approved:${result.stay._id}` },
     );
 
     await auditLogger.logModification(
@@ -598,6 +600,16 @@ export const respondToRenewalOffer = async (req, res, next) => {
     }
 
     const actor = await findDbUser(req.user.uid);
+    const ownerId = String(precheck.userId?._id || precheck.userId);
+    const tenantAllowed = actor?.role === "tenant" && String(actor._id) === ownerId;
+    const adminAllowed = isAdminRole(actor?.role) && (isOwnerRole(actor.role) || (
+      actor.branch === precheck.roomId?.branch &&
+      normalizePermissions(actor.permissions).some((permission) => ["manageTenants", "manageReservations"].includes(permission))
+    ));
+    if (!tenantAllowed && !adminAllowed) {
+      return res.status(403).json({ error: "You cannot respond to this renewal offer.", code: "RENEWAL_OFFER_ACCESS_DENIED" });
+    }
+
 
     // Resolves what to tell the caller when the atomic CAS below finds the
     // offer already left the "pending" state — either because a concurrent
@@ -611,20 +623,6 @@ export const respondToRenewalOffer = async (req, res, next) => {
       const existingOffer = (current.renewalOffers || []).find((o) => o.offerId === offerId);
       if (!existingOffer) {
         return res.status(404).json({ error: "Renewal offer not found", code: "OFFER_NOT_FOUND" });
-      }
-      if (action === "accept" && existingOffer.status === "accepted") {
-        // Another concurrent/duplicate request (double-click, retry,
-        // duplicate mobile request) already accepted this exact offer and
-        // extended the lease. Treat this as a safe no-op success instead of
-        // erroring or extending the lease a second time.
-        const { Stay } = await import("../../models/index.js");
-        const currentStay = await Stay.findOne({ reservationId, status: "active" }).sort({ createdAt: -1 });
-        return res.status(200).json({
-          message: "Renewal offer already accepted",
-          alreadyProcessed: true,
-          reservation: serializeReservation(current),
-          stay: currentStay,
-        });
       }
       if (action === "decline" && existingOffer.status === "declined") {
         return res.status(200).json({
@@ -680,27 +678,9 @@ export const respondToRenewalOffer = async (req, res, next) => {
       });
     }
 
-    // Accept path. Step 1: atomically CLAIM the pending -> accepted
-    // transition. This is the concurrency boundary — MongoDB guarantees
-    // only one concurrent findOneAndUpdate can match a given document's
-    // "still pending" condition and apply the $set; every other concurrent
-    // request gets null back and must NOT proceed to extend the lease.
-    const claimed = await populateReservation(
-      Reservation.findOneAndUpdate(
-        { _id: reservationId, renewalOffers: { $elemMatch: { offerId, status: "pending" } } },
-        {
-          $set: {
-            "renewalOffers.$[offer].status": "accepted",
-            "renewalOffers.$[offer].respondedAt": new Date(),
-            "renewalOffers.$[offer].tenantResponseReason": String(tenantResponseReason || "").trim(),
-          },
-        },
-        { arrayFilters: [{ "offer.offerId": offerId }], new: true },
-      ),
-    );
-
-    if (!claimed) return respondNotPending();
-
+    // Acceptance and successor creation commit together inside the canonical workflow.
+    // Legacy accepted-without-successor records can safely resume here.
+    const claimed = precheck;
     const offer = claimed.renewalOffers.find((o) => o.offerId === offerId);
 
     const activeStay = await resolveCurrentStayForReservation(claimed._id);
@@ -718,35 +698,8 @@ export const respondToRenewalOffer = async (req, res, next) => {
       notes: `Accepted Renewal Offer (${offer.months} months). ${offer.notes || ""}`.trim(),
     };
 
-    let result;
-    try {
-      result = await renewStayWorkflow({
-        reservationId,
-        payload: renewPayload,
-        actorId: actor?._id || null,
-      });
-    } catch (workflowErr) {
-      // Compensate: this request won the claim above but the actual lease
-      // extension failed (validation error, overlap, etc). Release the
-      // claim back to "pending" so the tenant/admin can legitimately retry,
-      // but only if the offer is still in the exact state we just set —
-      // never clobber a newer legitimate transition.
-      await Reservation.updateOne(
-        { _id: reservationId, renewalOffers: { $elemMatch: { offerId, status: "accepted" } } },
-        {
-          $set: {
-            "renewalOffers.$[offer].status": "pending",
-            "renewalOffers.$[offer].respondedAt": null,
-            "renewalOffers.$[offer].tenantResponseReason": "",
-          },
-        },
-        { arrayFilters: [{ "offer.offerId": offerId }] },
-      );
-      throw workflowErr;
-    }
-
-    // Offer status was already transitioned atomically above (step 1) —
-    // no further write to the offer is needed or performed here.
+    const result = await renewStayWorkflow({ reservationId, payload: { ...renewPayload, tenantResponseReason }, actorId: actor?._id || null });
+    if (result.alreadyProcessed) return res.status(200).json({ message: 'Renewal offer already accepted', alreadyProcessed: true, reservation: serializeReservation(result.reservation), stay: result.stay });
 
     const { notify } = await import("../../utils/notificationService.js");
     const roomName = claimed.roomId?.name || "your room";
@@ -755,7 +708,7 @@ export const respondToRenewalOffer = async (req, res, next) => {
       claimed.userId?._id || claimed.userId,
       "Lease Renewed!",
       `Your lease renewal for ${roomName} has been processed! Extended by ${offer.months} months through ${dayjs(newEndDate).format("MMM D, YYYY")}.`,
-      { entityType: "stay" }
+      { entityType: "stay", dedupeKey: `renewal_offer_accepted:${reservationId}:${offerId}` }
     );
 
     await auditLogger.logModification(
