@@ -209,7 +209,7 @@ function tenantLoginRestriction(user) {
     return {
       status: 403,
       code: LOGIN_ERROR_CODES.TENANT_NOT_REGISTERED,
-      detail: 'This account is not registered as an active tenant.',
+      detail: 'This account is not registered as an active tenant. The mobile app is reserved for active checked-in tenants. If you are an applicant or have a pending reservation, please sign in via the Lilycrest Web Portal.',
     };
   }
 
@@ -219,13 +219,13 @@ function tenantLoginRestriction(user) {
     return {
       status: 403,
       code: LOGIN_ERROR_CODES.TENANT_INACTIVE,
-      detail: 'This tenant account is inactive. Please contact the admin office.',
+      detail: 'This tenant account is currently inactive. The mobile app is reserved for active checked-in tenants. Please contact the dormitory admin office or check your status on the Lilycrest Web Portal.',
     };
   }
   return {
     status: 403,
     code: LOGIN_ERROR_CODES.TENANT_NOT_REGISTERED,
-    detail: 'This account is not registered as an active tenant.',
+    detail: 'This account is not registered as an active tenant. The mobile app is reserved for active checked-in tenants. If you are an applicant or have a pending reservation, please sign in via the Lilycrest Web Portal.',
   };
 }
 
@@ -437,7 +437,7 @@ async function login(req, res) {
       res,
       403,
       LOGIN_ERROR_CODES.TENANT_NOT_REGISTERED,
-      'This account is not registered as an active tenant.',
+      'This account is not registered as an active tenant. The mobile app is reserved for active checked-in tenants. If you are an applicant or have a pending reservation, please sign in via the Lilycrest Web Portal.',
     );
   }
 

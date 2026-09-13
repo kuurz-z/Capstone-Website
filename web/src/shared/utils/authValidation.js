@@ -194,19 +194,19 @@ export const validatePassword = (password) => {
   return null; // Valid
 };
 
-/** Capitalize the first letter of each word (after start, whitespace, hyphens, apostrophes) */
+/** Capitalize the first letter of each word (after start, whitespace, hyphens, apostrophes, periods) */
 export const formatProperCase = (str) => {
   if (!str || typeof str !== "string") return "";
-  return String(str).replace(/(?:^|[\s'-])([a-zA-Z])/g, (char) => char.toUpperCase());
+  return String(str).replace(/(?:^|[\s'.-])([a-zA-Z])/g, (char) => char.toUpperCase());
 };
 
-/** Sanitize name fields — allow only letters, spaces, hyphens, apostrophes, and auto-capitalize first letter of each word */
+/** Sanitize name fields — allow letters, spaces, hyphens, apostrophes, periods, and auto-capitalize first letter of each word */
 export const sanitizeName = (value) => {
   if (!value || typeof value !== "string") return "";
   let cleaned = value
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<[^>]+>/g, "")
-    .replace(/[^a-zA-Z\s'-]/g, "");
+    .replace(/[^a-zA-Z\s'.-]/g, "");
   return formatProperCase(cleaned);
 };
 
