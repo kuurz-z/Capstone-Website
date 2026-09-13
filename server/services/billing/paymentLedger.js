@@ -76,7 +76,14 @@ async function reconcileTransferDepositHeld({ bill, paymentId, session, now }) {
             ? snapshotHeld
             : 0,
       );
-  const resultingHeld = roundMoney(heldBefore + depositFunded);
+  // Another settlement invoice (including a supplement) may have funded
+  // deposit cash since this invoice's first partial payment. Apply only this
+  // invoice's newly funded delta to the current held balance; rebuilding from
+  // its original baseline would erase the other invoice's contribution.
+  const previouslyFunded = roundMoney(Number(existing?.adjustmentAmount || 0));
+  const resultingHeld = existing && canonicalHeldKnown
+    ? roundMoney(Number(canonicalHeld) + Math.max(0, depositFunded - previouslyFunded))
+    : roundMoney(heldBefore + depositFunded);
 
   if (existing) {
     if (roundMoney(Number(existing.adjustmentAmount || 0)) >= depositFunded) return; // already at/above

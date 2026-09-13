@@ -484,6 +484,26 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
     expect(await Payment.find({ billId: primary._id }).lean()).toEqual(paymentsSnapshot);
   });
 
+  test("interleaved primary and supplemental payments preserve all funded deposit cash", async () => {
+    const { res, roomB, actorId } = await seed();
+    const { schedId } = await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 2 });
+    const first = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    const primary = await Bill.findById(first.bill._id);
+    await applyBillPayment({ bill: primary, amount: primary.charges.rent + 100, method: "offline_cash", source: "admin-manual", now: new Date() });
+    const schedule = await ScheduledRoomTransfer.findById(schedId);
+    await BusinessSettings.updateOne({ key: "global" }, { $set: { isDiscountEnabled: false } });
+    await Contract.updateOne({ _id: schedule.addendumContractId }, { $set: { approvedMonthlyRate: 6000, securityDepositAmount: 6000 } });
+    await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    const supplement = await Bill.findOne({ transferSupplementOf: primary._id });
+    expect(supplement.charges.securityDeposit).toBeGreaterThan(0);
+    await applyBillPayment({ bill: supplement, amount: supplement.totalAmount, method: "offline_cash", source: "admin-manual", now: new Date() });
+    const remainingPrimary = await Bill.findById(primary._id);
+    await applyBillPayment({ bill: remainingPrimary, amount: remainingPrimary.totalAmount - remainingPrimary.paidAmount, method: "offline_cash", source: "admin-manual", now: new Date() });
+    expect((await Reservation.findById(res._id)).securityDepositHeld).toBe(6000);
+    expect((await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId })).outcome).toBe("executed");
+    expect((await Reservation.findById(res._id)).securityDepositHeld).toBe(6000);
+  });
+
   test("delayed completion after a PARTIAL payment whose recompute is higher -> supplemental Bill preserves payment history", async () => {
     const { res, roomB, actorId } = await seed();
     const { schedId } = await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 10 });
