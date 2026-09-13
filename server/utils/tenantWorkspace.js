@@ -888,7 +888,7 @@ export function buildTenantWorkspaceEntry({
   const hasFutureRenewal = stayHistory.some((stay) =>
     currentStay?._id &&
     String(stay.previousStayId || "") === String(currentStay._id) &&
-    ["active", "ending_soon"].includes(String(stay.status || "")),
+    ["upcoming", "active", "ending_soon"].includes(String(stay.status || "")),
   );
   const allowedActions = buildAllowedActions({
     reservation,

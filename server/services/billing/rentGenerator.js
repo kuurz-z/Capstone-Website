@@ -8,7 +8,7 @@
 
 import dayjs from "dayjs";
 import { getManilaDayjs, toManilaStartOfDay } from "../../utils/dateUtils.js";
-import { Bill, Reservation } from "../../models/index.js";
+import { Bill, Contract, Reservation, Stay } from "../../models/index.js";
 import {
   getReservationRecurringFees,
   roundMoney,
@@ -206,7 +206,18 @@ export async function ensureCurrentCycleRentBill({
     );
   }
 
-  const rentPrice = resolveReservationRentAmount(reservation, referenceDate);
+  // Price the coverage date, even when this invoice is generated before activation.
+  const term = await Contract.findOne({ reservationId: reservation._id, roomId,
+    contractPurpose: 'renewal', status: { $in: ['published', 'active', 'expiring_soon', 'replaced'] },
+    finalDocument: { $ne: null }, leaseStartDate: { $lt: toManilaStartOfDay(billingMonthStartDate).add(1, 'day').toDate() },
+    leaseEndDate: { $gte: toManilaStartOfDay(billingMonthStartDate).toDate() },
+  }).sort({ leaseStartDate: -1 }).lean();
+  if (!term && await Stay.exists({ reservationId: reservation._id, status: 'upcoming',
+    leaseStartDate: { $lt: toManilaStartOfDay(billingMonthStartDate).add(1, 'day').toDate() },
+    leaseEndDate: { $gte: toManilaStartOfDay(billingMonthStartDate).toDate() } })) {
+    return { status: 'blocked', reason: 'renewal_contract_not_final', cycle: billingCycle };
+  }
+  const rentPrice = term ? roundMoney(term.approvedMonthlyRate) : resolveReservationRentAmount(reservation, billingMonthStartDate);
   const { applianceFees, additionalCharges } =
     getReservationRecurringFees(reservation);
   const grossAmount = roundMoney(rentPrice + applianceFees);

@@ -187,6 +187,7 @@ const reservationSchema = new mongoose.Schema(
       ref: "Room",
       required: true,
     },
+    tenancyMutationVersion: { type: Number, default: 0 },
     pendingExtensionRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'StayExtensionRequest', default: null },
     currentStayId: {
       type: mongoose.Schema.Types.ObjectId,

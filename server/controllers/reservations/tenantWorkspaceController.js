@@ -41,6 +41,7 @@ import {
 import { getOpenScheduledRoomTransferForReservation } from "../../services/scheduledRoomTransferView.js";
 import { getRoomTransferHistoryForReservation } from "../../services/scheduledRoomTransferHistory.js";
 import { getAdminTransferLifecycleForReservation } from "../../services/tenantTransferRequestService.js";
+import { CURRENT_STAY_STATUSES } from "../../services/tenantContractSelectionService.js";
 
 // In-memory throttle for tenant scope reconciliation (prevents redundant MongoDB write scans on repeated GET reads)
 const lastScopeReconcileTime = new Map();
@@ -269,8 +270,7 @@ export const getTenantWorkspaceById = async (req, res) => {
         .lean(),
     ]);
     const currentStay =
-      stayHistory.find((stay) => stay.status === "active") ||
-      stayHistory[0] ||
+      stayHistory.find((stay) => CURRENT_STAY_STATUSES.includes(stay.status)) ||
       null;
     const hasAvailableBedsInBranch = branchRooms.some((room) => {
       const availableBeds = (room.beds || [])

@@ -1,3 +1,5 @@
+import { acknowledgeTenancyRequest } from "./requestAcknowledgementService.js";
+import { lockTenancyOperation } from "./tenancyExclusionService.js";
 import mongoose from 'mongoose';
 import { isOwnerRole, isAdminRole } from '../config/roles.js';
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
@@ -68,7 +70,7 @@ async function assertNoConflicts(context, session = null) {
   if (await ScheduledRoomTransfer.exists({ tenantId: stay.tenantId, status: { $in: OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES }, isArchived: { $ne: true } }).session(session)) fail('Resolve the scheduled room transfer first.');
 }
 
-async function sendLifecycle(request, event) {
+export async function sendLifecycle(request, event) {
   await notify.stayExtensionLifecycleOnce(request.tenantId, `Stay Extension ${event}`, event === 'Submitted'
     ? 'Your stay extension request is pending Admin review.'
     : event === 'Approved'
@@ -81,10 +83,11 @@ async function sendLifecycle(request, event) {
 }
 
 export async function getMyStayExtension(tenantId) {
-  const request = await StayExtensionRequest.findOne({ tenantId }).sort({ createdAt: -1 }).lean();
+  const request = await serializeStayExtension(await StayExtensionRequest.findOne({ tenantId }).sort({ createdAt: -1 }).lean());
+  let current = null;
   try {
     const context = await currentContext(tenantId);
-    const current = { stayId: id(context.stay), startDate: context.stay.leaseStartDate, endDate: context.stay.leaseEndDate, room: context.room.name };
+    current = { stayId: id(context.stay), startDate: context.stay.leaseStartDate, endDate: context.stay.leaseEndDate, room: context.room.name };
     if (request?.status === 'pending') return { request, current, canRequest: false };
     await assertNoConflicts(context);
     extensionDates(context.stay.leaseEndDate, 1);
@@ -96,7 +99,7 @@ export async function getMyStayExtension(tenantId) {
     return { request, current, options, canRequest: true };
   } catch (error) {
     if (!error.statusCode) throw error;
-    return { request, current: null, canRequest: false, reason: error.message };
+    return { request, current, canRequest: false, reason: error.message };
   }
 }
 
@@ -109,6 +112,7 @@ export async function createStayExtension({ tenantId, payload = {} }) {
   try {
     await session.withTransaction(async () => {
       const context = await currentContext(tenantId, session);
+      await lockTenancyOperation(context.reservation._id, "renewal", session);
       const { stay, reservation, contract, room } = context;
       if (id(stay) !== id(payload.stayId)) fail('Your stay changed. Refresh before submitting.');
       await assertNoConflicts(context, session);
@@ -138,6 +142,7 @@ export async function createStayExtension({ tenantId, payload = {} }) {
 }
 
 export async function reviewStayExtension({ requestId, actor, decision, adminNote }) {
+  if (decision === 'acknowledged') return acknowledgeTenancyRequest({ kind: 'extension', requestId, actor });
   if (!['approved', 'rejected'].includes(decision)) fail('Choose approve or reject.', 400);
   const request = await StayExtensionRequest.findById(requestId);
   if (!request) fail('Request not found.', 404);
@@ -165,4 +170,19 @@ export async function reviewStayExtension({ requestId, actor, decision, adminNot
   const reviewed = await StayExtensionRequest.findById(request._id);
   await sendLifecycle(reviewed, decision === 'approved' ? 'Approved' : 'Rejected');
   return reviewed;
+}
+
+export async function serializeStayExtension(request) {
+  if (!request) return null;
+  const data = request.toObject ? request.toObject() : { ...request };
+  if (data.status !== 'approved') return { ...data, fulfillmentState: null };
+  const stay = data.successorStayId ? await Stay.findById(data.successorStayId).lean() : null;
+  const contract = stay ? await Contract.findOne({ stayId: stay._id, contractPurpose: 'renewal' }).lean() : null;
+  const effective = stay && stay.status !== 'upcoming' && (contract?.status === 'active' || contract?.statusHistory?.some(entry => entry.status === 'active'));
+  const overdue = stay && !toManilaStartOfDay(stay.leaseStartDate).isAfter(getManilaToday(), 'day');
+  const fulfillmentState = effective ? 'effective' : !stay || overdue ? 'action_required' : !contract ? 'awaiting_contract'
+    : ['draft', 'incomplete', 'ready_for_generation'].includes(contract.status) ? 'preparing'
+    : !contract.finalDocument ? 'awaiting_contract'
+    : toManilaStartOfDay(stay.leaseStartDate).isAfter(getManilaToday(), 'day') ? 'awaiting_effective_date' : 'action_required';
+  return { ...data, fulfillmentState, successorContractId: contract?._id || null, effectiveDate: stay?.leaseStartDate || null };
 }

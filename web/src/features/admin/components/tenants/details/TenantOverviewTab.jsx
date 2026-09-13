@@ -39,6 +39,7 @@ export default function TenantOverviewTab({
   onOpenDigitalContract,
   onProceedTransferRequest,
   onDeclineTransferRequest,
+  onAcknowledgeTransferRequest,
   transferRequestLoading = false,
 }) {
   const queryClient = useQueryClient();
@@ -266,6 +267,7 @@ export default function TenantOverviewTab({
         request={tenantTransferRequest}
         onProceed={onProceedTransferRequest}
         onDecline={onDeclineTransferRequest}
+        onAcknowledge={onAcknowledgeTransferRequest}
         loading={transferRequestLoading}
       />
       {scheduledRoomTransfer ? (

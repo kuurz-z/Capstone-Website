@@ -9,7 +9,7 @@
  *  3. Delayed completion that INCREASES the amount due -> the UNPAID
  *     transfer_settlement Bill is recomputed (unpaid-only reshape).
  *  4. Delayed completion after a PARTIAL payment whose recompute is higher ->
- *     ADDITIONAL_BALANCE_DUE (upward-only Bill resize; no cutover).
+ *     ADDITIONAL_BALANCE_DUE (separate supplemental invoice; no cutover).
  *  5. scheduleHistory keeps the ORIGINAL scheduled date even though
  *     executedAt / cutoverAt land on the actual (later) completion day.
  *
@@ -191,6 +191,42 @@ beforeEach(async () => {
     UtilityFinalization.deleteMany({}), ScheduledRoomTransfer.deleteMany({}),
   ]);
   mockGenerate.mockClear();
+});
+
+test("finalized transfer electricity stays payable through normal primary and supplemental checkout settlement", async () => {
+  const { res, roomA, actorId } = await seed();
+  const { transferElectricityDispatch, supplementTransferInvoice } = await import("./billing/transferSettlementInvoices.js");
+  const { getVisibleBillSnapshot } = await import("./billing/billingPolicy.js");
+  const { settlePaymongoBill } = await import("./billing/billSettlement.js");
+  const primary = await Bill.create({ billType: "transfer_settlement", reservationId: res._id, userId: res.userId,
+    branch: res.branch || "guadalupe", roomId: roomA._id, billingMonth: new Date(), dueDate: new Date(),
+    charges: { rent: 500, electricity: 100 }, totalAmount: 600, grossAmount: 600, remainingAmount: 600,
+    status: "pending", publicationState: "published", utilityDispatch: transferElectricityDispatch(100, null), createdBy: actorId });
+  expect(getVisibleBillSnapshot(primary).remainingAmount).toBe(600);
+  await settlePaymongoBill({ bill: primary, paymentReference: "pay_transfer_primary", settledAmount: 600 });
+  const frozen = await Bill.findById(primary._id).lean();
+  expect(frozen.totalAmount).toBe(600);
+  expect(frozen.paidAmount).toBe(600);
+  await supplementTransferInvoice({ primary, targetCharges: { rent: 500, electricity: 150 }, record: { _id: new mongoose.Types.ObjectId() }, actorId });
+  const supplemental = await Bill.findOne({ transferSupplementOf: primary._id });
+  expect(getVisibleBillSnapshot(supplemental).remainingAmount).toBe(50);
+  await settlePaymongoBill({ bill: supplemental, paymentReference: "pay_transfer_supplement", settledAmount: 50 });
+  expect((await Bill.findById(supplemental._id)).paidAmount).toBe(50);
+  expect(await Bill.findById(primary._id).lean()).toEqual(frozen);
+  expect(await Payment.countDocuments({ billId: { $in: [primary._id, supplemental._id] } })).toBe(2);
+});
+
+test("an inconsistent historical paid invoice blocks cutover for manual review without rewriting it", async () => {
+  const { res, roomB, actorId } = await seed();
+  await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 10 });
+  const first = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+  await applyBillPayment({ bill: await Bill.findById(first.bill._id), amount: 500, method: "offline_cash", source: "admin-manual" });
+  await Bill.updateOne({ _id: first.bill._id }, { $set: { "charges.electricity": 100 } });
+  const frozen = await Bill.findById(first.bill._id).lean();
+  await expect(completeRoomTransfer({ reservationId: res._id, payload: {}, actorId }))
+    .rejects.toMatchObject({ statusCode: 409, code: "FINANCIAL_ADJUSTMENT_REQUIRED" });
+  expect(await Bill.findById(first.bill._id).lean()).toEqual(frozen);
+  expect(String((await Reservation.findById(res._id)).roomId)).not.toBe(String(roomB._id));
 });
 
 describe("rescheduleRoomTransfer — no office-hours restriction", () => {
@@ -388,9 +424,11 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
       source: "admin-manual", now: new Date(),
     });
 
+    const paidInvoiceSnapshot = await Bill.findById(billId).lean();
     // 2nd completion -> executed.
     const r2 = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
     expect(r2.outcome).toBe("executed");
+    expect(await Bill.findById(billId).lean()).toEqual(paidInvoiceSnapshot);
 
     const sched = await ScheduledRoomTransfer.findById(schedId).lean();
     expect(sched.status).toBe("executed");
@@ -453,7 +491,56 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
     expect(transferBills).toHaveLength(1);
   });
 
-  test("delayed completion after a PARTIAL payment whose recompute is higher -> Bill increases, payment is preserved, remaining balance is explicit", async () => {
+  test("fully paid settlement with an upward adjustment preserves history and requires its supplement before cutover", async () => {
+    const { res, roomB, actorId } = await seed();
+    const { schedId } = await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 2 });
+    const first = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    const primary = await Bill.findById(first.bill._id);
+    await applyBillPayment({ bill: primary, amount: primary.totalAmount, method: "offline_cash", source: "admin-manual", now: new Date() });
+    const paidSnapshot = await Bill.findById(primary._id).lean();
+    const paymentsSnapshot = await Payment.find({ billId: primary._id }).lean();
+    const schedule = await ScheduledRoomTransfer.findById(schedId);
+    // Test fixture: an approved pricing/addendum correction removes the
+    // configured 10% discount from the 6,000 long-term quad rate.
+    await BusinessSettings.updateOne({ key: "global" }, { $set: { isDiscountEnabled: false } });
+    await Contract.updateOne({ _id: schedule.addendumContractId }, { $set: { approvedMonthlyRate: 6000, securityDepositAmount: 6000 } });
+    const adjusted = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    expect(adjusted.reason).toBe("ADDITIONAL_BALANCE_DUE");
+    expect(await Bill.findById(primary._id).lean()).toEqual(paidSnapshot);
+    expect(await Payment.find({ billId: primary._id }).lean()).toEqual(paymentsSnapshot);
+    const supplement = await Bill.findOne({ transferSupplementOf: primary._id });
+    expect(supplement.totalAmount).toBeGreaterThan(0);
+    await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    expect(await Bill.countDocuments({ transferSupplementOf: primary._id })).toBe(1);
+    expect((await ScheduledRoomTransfer.findById(schedId)).executedAt).toBeFalsy();
+    await applyBillPayment({ bill: supplement, amount: supplement.totalAmount, method: "offline_cash", source: "admin-manual", now: new Date() });
+    const completed = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    expect(completed.outcome).toBe("executed");
+    expect(await Bill.findById(primary._id).lean()).toEqual(paidSnapshot);
+    expect(await Payment.find({ billId: primary._id }).lean()).toEqual(paymentsSnapshot);
+  });
+
+  test("interleaved primary and supplemental payments preserve all funded deposit cash", async () => {
+    const { res, roomB, actorId } = await seed();
+    const { schedId } = await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 2 });
+    const first = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    const primary = await Bill.findById(first.bill._id);
+    await applyBillPayment({ bill: primary, amount: primary.charges.rent + 100, method: "offline_cash", source: "admin-manual", now: new Date() });
+    const schedule = await ScheduledRoomTransfer.findById(schedId);
+    await BusinessSettings.updateOne({ key: "global" }, { $set: { isDiscountEnabled: false } });
+    await Contract.updateOne({ _id: schedule.addendumContractId }, { $set: { approvedMonthlyRate: 6000, securityDepositAmount: 6000 } });
+    await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    const supplement = await Bill.findOne({ transferSupplementOf: primary._id });
+    expect(supplement.charges.securityDeposit).toBeGreaterThan(0);
+    await applyBillPayment({ bill: supplement, amount: supplement.totalAmount, method: "offline_cash", source: "admin-manual", now: new Date() });
+    const remainingPrimary = await Bill.findById(primary._id);
+    await applyBillPayment({ bill: remainingPrimary, amount: remainingPrimary.totalAmount - remainingPrimary.paidAmount, method: "offline_cash", source: "admin-manual", now: new Date() });
+    expect((await Reservation.findById(res._id)).securityDepositHeld).toBe(6000);
+    expect((await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId })).outcome).toBe("executed");
+    expect((await Reservation.findById(res._id)).securityDepositHeld).toBe(6000);
+  });
+
+  test("delayed completion after a PARTIAL payment whose recompute is higher -> supplemental Bill preserves payment history", async () => {
     const { res, roomB, actorId } = await seed();
     const { schedId } = await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 10 });
 
@@ -494,20 +581,15 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
     expect(sched.status).toBe("action_required");
     expect(sched.executedAt).toBeFalsy();
 
-    // Upward-only adjustment: preserve the payment/history but increase the
-    // same transfer Bill so the remaining amount can be paid normally.
+    // Original paid invoice stays immutable; the upward difference is separately payable.
     const billAfter = await Bill.findById(billId).lean();
+    const supplemental = await Bill.findOne({ transferSupplementOf: billId }).lean();
     expect(Number(billAfter.paidAmount)).toBe(smallPayment);
-    expect(Number(billAfter.totalAmount)).toBeGreaterThan(originalTotal);
-    expect(billAfter.charges.rent).toBe(originalCharges.rent);
-    expect(billAfter.charges.securityDeposit).toBeGreaterThan(originalCharges.securityDeposit);
-    expect(Number(billAfter.remainingAmount)).toBeCloseTo(
-      Number(billAfter.totalAmount) - smallPayment,
-      2,
-    );
-    expect(Number(billAfter.transferSnapshot.upwardAdjustmentFrom)).toBe(originalTotal);
-    expect(Number(billAfter.transferSnapshot.upwardAdjustmentTo)).toBe(Number(billAfter.totalAmount));
-    expect(r2.message).toContain(Number(billAfter.totalAmount).toFixed(2));
+    expect(Number(billAfter.totalAmount)).toBe(originalTotal);
+    expect(billAfter.charges).toEqual(originalCharges);
+    expect(supplemental.totalAmount).toBeGreaterThan(0);
+    const combinedTotal = originalTotal + Number(supplemental.totalAmount);
+    expect(r2.message).toContain(combinedTotal.toFixed(2));
     expect(r2.message).toContain(smallPayment.toFixed(2));
 
     const audit = sched.financialAdjustmentHistory.at(-1);
@@ -518,8 +600,8 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
     expect(String(audit.scheduledRoomTransferId)).toBe(String(schedId));
     expect(audit.amountPaid).toBe(smallPayment);
     expect(audit.previousRequiredAmount).toBe(originalTotal);
-    expect(audit.recomputedRequiredAmount).toBe(Number(billAfter.totalAmount));
-    expect(audit.difference).toBeCloseTo(Number(billAfter.totalAmount) - originalTotal, 2);
+    expect(audit.recomputedRequiredAmount).toBe(combinedTotal);
+    expect(audit.difference).toBeCloseTo(combinedTotal - originalTotal, 2);
     expect(audit.recordedAt).toBeTruthy();
   });
 
@@ -694,4 +776,15 @@ describe("Addendum effective date on LATE completion (audit item 3)", () => {
     const draftAfter = await Contract.findById(draft._id).lean();
     expect(draftAfter.amendmentEffectiveDate.toISOString()).toBe(draft.amendmentEffectiveDate.toISOString());
   });
+  test('a settlement with a missing schedule link is recovered by its stable identity without a duplicate bill', async () => {
+    const { res, roomB, actorId } = await seed();
+    const { schedId } = await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 2 });
+    const first = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    expect(first.outcome).toBe('awaiting_settlement');
+    await ScheduledRoomTransfer.updateOne({ _id: schedId }, { $set: { settlementBillId: null } });
+    await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+    expect(String((await ScheduledRoomTransfer.findById(schedId)).settlementBillId)).toBe(String(first.bill._id));
+    expect(await Bill.countDocuments({ reservationId: res._id, billType: 'transfer_settlement' })).toBe(1);
+  });
+
 });
