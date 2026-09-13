@@ -193,6 +193,42 @@ beforeEach(async () => {
   mockGenerate.mockClear();
 });
 
+test("finalized transfer electricity stays payable through normal primary and supplemental checkout settlement", async () => {
+  const { res, roomA, actorId } = await seed();
+  const { transferElectricityDispatch, supplementTransferInvoice } = await import("./billing/transferSettlementInvoices.js");
+  const { getVisibleBillSnapshot } = await import("./billing/billingPolicy.js");
+  const { settlePaymongoBill } = await import("./billing/billSettlement.js");
+  const primary = await Bill.create({ billType: "transfer_settlement", reservationId: res._id, userId: res.userId,
+    branch: res.branch || "guadalupe", roomId: roomA._id, billingMonth: new Date(), dueDate: new Date(),
+    charges: { rent: 500, electricity: 100 }, totalAmount: 600, grossAmount: 600, remainingAmount: 600,
+    status: "pending", publicationState: "published", utilityDispatch: transferElectricityDispatch(100, null), createdBy: actorId });
+  expect(getVisibleBillSnapshot(primary).remainingAmount).toBe(600);
+  await settlePaymongoBill({ bill: primary, paymentReference: "pay_transfer_primary", settledAmount: 600 });
+  const frozen = await Bill.findById(primary._id).lean();
+  expect(frozen.totalAmount).toBe(600);
+  expect(frozen.paidAmount).toBe(600);
+  await supplementTransferInvoice({ primary, targetCharges: { rent: 500, electricity: 150 }, record: { _id: new mongoose.Types.ObjectId() }, actorId });
+  const supplemental = await Bill.findOne({ transferSupplementOf: primary._id });
+  expect(getVisibleBillSnapshot(supplemental).remainingAmount).toBe(50);
+  await settlePaymongoBill({ bill: supplemental, paymentReference: "pay_transfer_supplement", settledAmount: 50 });
+  expect((await Bill.findById(supplemental._id)).paidAmount).toBe(50);
+  expect(await Bill.findById(primary._id).lean()).toEqual(frozen);
+  expect(await Payment.countDocuments({ billId: { $in: [primary._id, supplemental._id] } })).toBe(2);
+});
+
+test("an inconsistent historical paid invoice blocks cutover for manual review without rewriting it", async () => {
+  const { res, roomB, actorId } = await seed();
+  await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 10 });
+  const first = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
+  await applyBillPayment({ bill: await Bill.findById(first.bill._id), amount: 500, method: "offline_cash", source: "admin-manual" });
+  await Bill.updateOne({ _id: first.bill._id }, { $set: { "charges.electricity": 100 } });
+  const frozen = await Bill.findById(first.bill._id).lean();
+  await expect(completeRoomTransfer({ reservationId: res._id, payload: {}, actorId }))
+    .rejects.toMatchObject({ statusCode: 409, code: "FINANCIAL_ADJUSTMENT_REQUIRED" });
+  expect(await Bill.findById(first.bill._id).lean()).toEqual(frozen);
+  expect(String((await Reservation.findById(res._id)).roomId)).not.toBe(String(roomB._id));
+});
+
 describe("rescheduleRoomTransfer — no office-hours restriction", () => {
   test("reschedule to a FUTURE date + any time (e.g. 21:00 on a weekend) is accepted and appends schedule history", async () => {
     const { res, roomB, actorId } = await seed();

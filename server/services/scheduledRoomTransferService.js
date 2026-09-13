@@ -1,4 +1,4 @@
-import { transferInvoiceBalance, supplementTransferInvoice } from "./billing/transferSettlementInvoices.js";
+import { transferInvoiceBalance, supplementTransferInvoice, transferElectricityDispatch } from "./billing/transferSettlementInvoices.js";
 import { lockTenancyOperation } from "./tenancyExclusionService.js";
 /**
  * ============================================================================
@@ -1025,6 +1025,7 @@ async function writeTransferSettlementBill({ record, reservation, preview, final
         dueDate: effectiveDateObj,
         charges,
         totalAmount: billTotal,
+        utilityDispatch: transferElectricityDispatch(electricityDue, finalizedElectricity?.utilityPeriodId, effectiveDateObj),
         grossAmount: billTotal,
         remainingAmount: billTotal,
         paidAmount: 0,
@@ -1062,6 +1063,9 @@ async function writeTransferSettlementBill({ record, reservation, preview, final
   const previousTotal = roundMoney(Number(bill.totalAmount || 0));
   if (paid > 0 || bill.status === 'paid') {
     const balance = await transferInvoiceBalance(bill, session);
+    if (Math.abs(roundMoney(sumBillCharges(balance.charges) - Number(bill.reservationCreditApplied || 0)) - balance.totalAmount) > 0.01) {
+      throw err("Paid transfer invoice components do not match the recorded total; manual financial review is required.", 409, "FINANCIAL_ADJUSTMENT_REQUIRED");
+    }
     if (total > balance.totalAmount + 0.01) return supplementTransferInvoice({ primary: bill,
       targetCharges: { rent: rentDue, securityDeposit: depositDue, electricity: electricityDue }, record, actorId, session });
     return balance;
@@ -1072,6 +1076,8 @@ async function writeTransferSettlementBill({ record, reservation, preview, final
     bill.charges.rent = rentDue;
     bill.charges.securityDeposit = depositDue;
     bill.charges.electricity = electricityDue;
+    bill.utilityDispatch ??= {};
+    bill.utilityDispatch.electricity = transferElectricityDispatch(electricityDue, finalizedElectricity?.utilityPeriodId, effectiveDateObj).electricity;
     bill.charges.water = 0;
     bill.notes = noteFor();
     bill.transferSnapshot = {

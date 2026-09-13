@@ -905,7 +905,10 @@ export const createSuccessorContractForRenewal = async ({
 
   const leaseStartDate = newStay.leaseStartDate;
   const leaseEndDate = newStay.leaseEndDate;
-  const leaseDurationMonths = Math.max(1, dayjs(leaseEndDate).diff(dayjs(leaseStartDate), "month"));
+  // Stay ends at the inclusive final day's last millisecond. Match the
+  // contract validator's rounded calendar-month duration instead of
+  // truncating a six-month term to five months and selecting the wrong rate.
+  const leaseDurationMonths = Math.max(1, Math.round(dayjs(leaseEndDate).diff(dayjs(leaseStartDate), "month", true)));
 
   // The renewal successor Contract must snapshot the SAME approved pricing
   // the tenant actually accepted — never a re-resolution against whatever

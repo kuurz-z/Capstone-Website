@@ -328,7 +328,8 @@ export const uploadAndFinalizeNotarizedContract = async ({
   contract.readyForPublicationAt = now;
   contract.readyForPublicationBy = actorId;
 
-  // 5. Advance through the canonical lifecycle chain to active status.
+  // 5. Publish through the canonical lifecycle chain. Renewal activation is
+  // deferred to Job 18; other contracts retain the existing active transition.
   // CONTRACT_TRANSITIONS (contractService.js) never permits a direct jump
   // to "active" from any of DIRECT_NOTARIZED_UPLOAD_STATUSES — only from
   // "published" (or "transfer_review_required"). This single-action upload
@@ -357,12 +358,17 @@ export const uploadAndFinalizeNotarizedContract = async ({
     actorId,
     "Final signed and notarized Contract published for secure tenant access",
   );
-  await transitionContract(
-    contract,
-    "active",
-    actorId,
-    "Final signed and notarized Contract uploaded and activated for tenant access",
-  );
+  // Renewal finality is separate from tenancy effectivity. Job 18 must switch
+  // the Stay, current contract and recurring rate together, including when a
+  // renewal is already due by the time its signed document is uploaded.
+  if (contract.contractPurpose !== "renewal") {
+    await transitionContract(
+      contract,
+      "active",
+      actorId,
+      "Final signed and notarized Contract uploaded and activated for tenant access",
+    );
+  }
 
   return {
     contract,

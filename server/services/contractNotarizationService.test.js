@@ -19,6 +19,7 @@ const {
   uploadNotarizedContract,
   verifyNotarizedContract,
   rejectNotarizedContract,
+  uploadAndFinalizeNotarizedContract,
 } = await import("./contractNotarizationService.js");
 
 const contract = (changes = {}) => Object.assign({
@@ -47,6 +48,21 @@ beforeEach(() => {
   writeFile.mockReset().mockResolvedValue(undefined);
   rm.mockReset().mockResolvedValue(undefined);
   transitionContract.mockClear();
+});
+
+test.each(["2020-01-01", "2030-01-01"])("one-step renewal finalization waits for canonical activation even for term %s", async (leaseStartDate) => {
+  const item = contract({ contractPurpose: "renewal", isCurrent: false, leaseStartDate: new Date(leaseStartDate) });
+  await uploadAndFinalizeNotarizedContract({ contract: item, file: pdf(), actorId: "admin", preparedDocumentVersion: 1 });
+  expect(item.status).toBe("published");
+  expect(item.isCurrent).toBe(false);
+  expect(item.finalDocument).toBeDefined();
+  expect(transitionContract.mock.calls.map(([, status]) => status)).toEqual(["notarized", "ready_for_publication", "published"]);
+});
+
+test("one-step initial contract finalization retains its existing active transition", async () => {
+  const item = contract({ contractPurpose: "initial" });
+  await uploadAndFinalizeNotarizedContract({ contract: item, file: pdf(), actorId: "admin", preparedDocumentVersion: 1 });
+  expect(item.status).toBe("active");
 });
 
 describe("direct signed-and-notarized Path B", () => {

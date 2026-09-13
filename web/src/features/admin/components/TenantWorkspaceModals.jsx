@@ -652,9 +652,7 @@ export function TransferTenantModal({
   const isCrossTypeTransfer =
     !!selectedRoomType && !!currentRoomType && selectedRoomType !== currentRoomType;
   const prettyRoomType = (t) => String(t || "").replace(/-/g, " ") || "—";
-  const currentPrice = resolveTenantCurrentRent(tenant, detail, preview);
   const newPrice = Number(selectedRoom?.monthlyPrice || selectedRoom?.price || 0);
-  const priceDiff = newPrice - currentPrice;
 
   // ── Fixed 2-step scheduled wizard ────────────────────────────────────────
   // Every new Admin Room Transfer is scheduled for a future date, so the
@@ -678,6 +676,8 @@ export function TransferTenantModal({
     { enabled: !!reservationId && !!effectiveTransferDate },
   );
   const preview = previewResp?.data?.transferPreview ?? previewResp?.transferPreview ?? null;
+  const currentPrice = resolveTenantCurrentRent(tenant, detail, preview);
+  const priceDiff = newPrice - currentPrice;
   const transferCandidates =
     previewResp?.data?.transferCandidates ?? previewResp?.transferCandidates ?? null;
   const candidateByRoomId = useMemo(() => {

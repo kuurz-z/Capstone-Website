@@ -1,6 +1,14 @@
 import { Bill } from '../../models/index.js';
 import { roundMoney } from './billingPolicy.js';
 
+// Transfer electricity is finalized at completion. Publish that component on
+// the same invoice so normal Web/mobile checkout cannot hide it as a draft
+// monthly utility charge while waiting for the room's period to close.
+export function transferElectricityDispatch(amount, periodId, issuedAt = new Date()) {
+  return { electricity: { state: 'sent', amount: roundMoney(amount), periodId: periodId || null,
+    issuedAt, publishedAt: issuedAt, dueDate: issuedAt } };
+}
+
 // Aggregate for readiness only. Never persist this projection as an invoice.
 export async function transferInvoiceBalance(primary, session = null) {
   if (!primary) return null;
@@ -31,6 +39,7 @@ export async function supplementTransferInvoice({ primary, targetCharges, record
     reservationId: primary.reservationId, userId: primary.userId, branch: primary.branch, roomId: primary.roomId,
     billingMonth: new Date(), billingCycleStart: null, billingCycleEnd: null, dueDate: new Date(),
     charges, totalAmount: total, grossAmount: total, remainingAmount: total, paidAmount: 0,
+    utilityDispatch: transferElectricityDispatch(charges.electricity, primary.utilityDispatch?.electricity?.periodId),
     status: 'pending', publicationState: 'published', createdBy: actorId,
     notes: `Supplemental Room Transfer balance for invoice ${primary._id}. Original invoice preserved.`,
   }], { session });
