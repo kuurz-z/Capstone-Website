@@ -1432,6 +1432,8 @@ export const completeRoomTransferAction = async (req, res, next) => {
     const result = await completeRoomTransfer({
       reservationId,
       payload: {
+        sourceWaterReading: req.body.sourceWaterReading,
+        targetWaterReading: req.body.targetWaterReading,
         sourceRoomMeterReading: req.body.sourceRoomMeterReading,
         targetRoomMeterReading: req.body.targetRoomMeterReading,
         notes: req.body.notes || "",

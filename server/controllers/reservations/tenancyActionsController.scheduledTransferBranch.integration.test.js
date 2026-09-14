@@ -75,6 +75,7 @@ const { transferTenant, rescheduleRoomTransferAction, completeRoomTransferAction
   await import("./tenancyActionsController.js");
 const { getManilaToday } = await import("../../utils/dateUtils.js");
 const { Reservation, Room, User } = await import("../../models/index.js");
+const { assertWaterNeighbors } = await import("../../services/billing/waterChronology.js");
 
 const response = () => ({
   statusCode: 200, body: null,
@@ -217,7 +218,24 @@ describe("rescheduleRoomTransferAction (PATCH)", () => {
 });
 
 describe("completeRoomTransferAction (POST)", () => {
-  test("outcome executed -> 200; meter readings forwarded", async () => {
+  test("a service chronology rejection retains its 422 code and message", async () => {
+    const { reservation } = await seedMovedIn();
+    completeRoomTransferMock.mockImplementationOnce(({ payload }) => {
+      assertWaterNeighbors({ previous: { reading: 150 }, reading: payload.sourceWaterReading, date: new Date() });
+    });
+    const res = response();
+    await completeRoomTransferAction(req({
+      reservationId: reservation._id,
+      body: { sourceWaterReading: 123.45, targetWaterReading: 200 },
+    }), res);
+    expect(res.statusCode).toBe(422);
+    expect(res.body).toEqual({
+      code: "WATER_READING_CONFLICT",
+      error: "Water reading must remain between the previous and following valid observations.",
+    });
+  });
+
+  test("outcome executed -> 200; all four water/electricity readings forwarded unchanged", async () => {
     const { reservation } = await seedMovedIn();
     completeRoomTransferMock.mockResolvedValueOnce({
       outcome: "executed", message: "Room transfer completed.",
@@ -226,13 +244,20 @@ describe("completeRoomTransferAction (POST)", () => {
     const res = response();
     await completeRoomTransferAction(req({
       reservationId: reservation._id,
-      body: { sourceRoomMeterReading: 1310, targetRoomMeterReading: 500 },
+      body: {
+        sourceWaterReading: 123.45, targetWaterReading: 200,
+        sourceRoomMeterReading: 1310, targetRoomMeterReading: 500,
+        __consumeScheduledHold: true,
+      },
     }), res);
     expect(res.statusCode).toBe(200);
     expect(res.body.outcome).toBe("executed");
     const call = completeRoomTransferMock.mock.calls[0][0];
+    expect(call.payload.sourceWaterReading).toBe(123.45);
+    expect(call.payload.targetWaterReading).toBe(200);
     expect(call.payload.sourceRoomMeterReading).toBe(1310);
     expect(call.payload.targetRoomMeterReading).toBe(500);
+    expect(call.payload).not.toHaveProperty("__consumeScheduledHold");
   });
 
   test("outcome awaiting_settlement -> 202 with the Bill", async () => {

@@ -21,6 +21,8 @@
  * PDF + contract validation mocked (same shims as the executor suite).
  */
 import mongoose from "mongoose";
+import express from "express";
+import { once } from "node:events";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, jest } from "@jest/globals";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 
@@ -60,6 +62,7 @@ await jest.unstable_mockModule("./contractService.js", () => ({
 
 const { scheduleRoomTransfer } = await import("./scheduledRoomTransferService.js");
 const { transferStayWorkflow } = await import("../utils/tenantActionService.js");
+const { completeRoomTransferAction } = await import("../controllers/reservations/tenancyActionsController.js");
 const { applyBillPayment } = await import("./billing/paymentLedger.js");
 const { generateContractNumber } = await import("./contractService.js");
 const { getManilaToday } = await import("../utils/dateUtils.js");
@@ -323,5 +326,132 @@ describe("scheduling does not capture scheduling-day readings", () => {
     expect(await UtilityReading.countDocuments({utilityType:"water"})).toBe(0);
     expect(fresh.sourceRoomMeterReading).toBeNull();
     expect(fresh.targetRoomMeterReading).toBeNull();
+  });
+});
+
+// HTTP -> real controller -> real completion/observation services. Only the
+// authenticated principal is supplied by the harness; PDF shims are above.
+// Follow-up: exercise stale Reservation.roomId / scheduled sourceRoomId /
+// active Stay.roomId combinations. Do not redesign source selection in this
+// controller-forwarding fix; all fixtures below have consistent pointers.
+describe("scheduled-transfer completion HTTP water regression", () => {
+  let httpServer;
+  let baseUrl;
+  let adminUid;
+
+  beforeAll(async () => {
+    const app = express();
+    app.use(express.json());
+    app.post("/api/reservations/:reservationId/scheduled-transfer/complete", (req, res, next) => {
+      req.user = { uid: adminUid };
+      req.branchFilter = null;
+      req.id = "water-forwarding-test";
+      return completeRoomTransferAction(req, res, next);
+    });
+    httpServer = app.listen(0, "127.0.0.1");
+    await once(httpServer, "listening");
+    baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
+  });
+
+  afterAll(async () => {
+    httpServer.closeAllConnections();
+    await new Promise(resolve => httpServer.close(resolve));
+  });
+
+  async function setup(sourceType = "private", destinationType = "private") {
+    const fixture = await seed({ sourceType });
+    const dest = await emptyRoom(destinationType, "205");
+    adminUid = `water-admin-${fixture.actorId}`;
+    await User.create({
+      _id: fixture.actorId, firebaseUid: adminUid,
+      email: `${adminUid}@example.test`, username: adminUid,
+      firstName: "Water", lastName: "Admin", role: "owner",
+    });
+    // Seed canonical electricity boundaries so water tests cannot fail on an
+    // unrelated missing electricity observation or historical period fixture.
+    const { prepareCanonicalTransferUtilityFixture } = await import("../tests/canonicalUtilityLifecycleFixture.js");
+    await prepareCanonicalTransferUtilityFixture({
+      reservationId: fixture.reservation._id, actorId: fixture.actorId,
+      payload: { targetRoomId: dest._id, sourceRoomMeterReading: 0, targetRoomMeterReading: 0 },
+    });
+    await scheduleRoomTransfer({
+      reservationId: fixture.reservation._id, actorId: fixture.actorId,
+      payload: payloadFor({ targetRoom: dest, transferDate: now().format("YYYY-MM-DD") }),
+    });
+    return { ...fixture, dest };
+  }
+
+  async function post(fixture, water = {}) {
+    const response = await fetch(`${baseUrl}/api/reservations/${fixture.reservation._id}/scheduled-transfer/complete`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceRoomMeterReading: 0, targetRoomMeterReading: 0, ...water }),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+
+  async function finish(fixture, water) {
+    let result = await post(fixture, water);
+    if (result.status === 202 && result.body.bill?.id) {
+      await payFull(result.body.bill.id);
+      result = await post(fixture, water);
+    }
+    expect(result).toMatchObject({ status: 200, body: { outcome: "executed" } });
+    return result;
+  }
+
+  test.each([
+    ["source only", "private", "quadruple-sharing", { sourceWaterReading: 123.45 }, 1],
+    ["destination only", "quadruple-sharing", "private", { targetWaterReading: 200 }, 1],
+    ["both", "private", "private", { sourceWaterReading: 123.45, targetWaterReading: 200 }, 2],
+    ["neither", "quadruple-sharing", "quadruple-sharing", {}, 0],
+  ])("%s required policy completes and records only applicable water observations", async (_label, sourceType, destType, water, count) => {
+    const fixture = await setup(sourceType, destType);
+    await finish(fixture, water);
+    const observations = await UtilityReading.find({ utilityType: "water", source: "transfer-completion" }).lean();
+    expect(observations).toHaveLength(count);
+    if (water.sourceWaterReading != null) expect(observations.find(r => r.eventType === "moveOut").reading).toBe(water.sourceWaterReading);
+    if (water.targetWaterReading != null) expect(observations.find(r => r.eventType === "moveIn").reading).toBe(water.targetWaterReading);
+  });
+
+  test.each([
+    ["source", { targetWaterReading: 200 }, "Source"],
+    ["destination", { sourceWaterReading: 123.45 }, "Destination"],
+  ])("missing %s returns the correct required-reading error", async (_label, water, label) => {
+    const fixture = await setup();
+    expect(await post(fixture, water)).toEqual({ status: 400, body: {
+      code: "INVALID_PHYSICAL_METER_READING", error: `${label} water reading (m\u00b3) is required.`,
+    } });
+    expect(await UtilityReading.countDocuments({ utilityType: "water" })).toBe(0);
+  });
+
+  test.each([0, "123.45"])("source %p reaches existing normalization and persists numerically", async value => {
+    const fixture = await setup();
+    await finish(fixture, { sourceWaterReading: value, targetWaterReading: 200 });
+    const reading = await UtilityReading.findOne({ roomId: fixture.roomA._id, utilityType: "water", eventType: "moveOut" });
+    expect(reading.reading).toBe(Number(value));
+  });
+
+  test("a real water chronology conflict preserves its specific error and rolls back observations", async () => {
+    const fixture = await setup();
+    await UtilityReading.create({
+      roomId: fixture.roomA._id, branch: "gil-puyat", utilityType: "water",
+      reading: 150, date: relNow(-1), eventType: "regularBilling", recordedBy: fixture.actorId,
+    });
+    const water = { sourceWaterReading: 123.45, targetWaterReading: 200 };
+    let result = await post(fixture, water);
+    if (result.status === 202 && result.body.bill?.id) {
+      await payFull(result.body.bill.id);
+      result = await post(fixture, water);
+    }
+    // Preserve the existing paid-settlement response contract: operational
+    // failures retain their cause inside actionRequiredReason, not top-level 422.
+    expect(result).toMatchObject({ status: 202, body: {
+      outcome: "action_required", reason: "PAID_TRANSFER_CANNOT_COMPLETE",
+      scheduledRoomTransfer: { actionRequiredReason: "PAID_TRANSFER_CANNOT_COMPLETE: WATER_READING_CONFLICT" },
+    } });
+    expect(result.body.message).toContain("Water reading must remain between the previous and following valid observations.");
+    expect(JSON.stringify(result.body)).not.toContain("water reading (m\u00b3) is required");
+    expect(await UtilityReading.countDocuments({ utilityType: "water", source: "transfer-completion" })).toBe(0);
+    expect(String((await Reservation.findById(fixture.reservation._id)).roomId)).toBe(String(fixture.roomA._id));
   });
 });
