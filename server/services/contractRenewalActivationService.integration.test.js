@@ -13,7 +13,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { activateDueRenewalContracts } from "./contractRenewalActivationService.js";
 import { generateContractNumber } from "./contractService.js";
 import { resolveReservationRentAmount } from "./billing/rentGenerator.js";
-import { Bill, Contract, Reservation, Room, User, Stay, BedHistory } from "../models/index.js";
+import { Contract, Reservation, Room, User, Stay, BedHistory } from "../models/index.js";
 
 jest.setTimeout(120_000);
 
@@ -32,7 +32,6 @@ describe("contractRenewalActivationService.activateDueRenewalContracts", () => {
 
   beforeEach(async () => {
     await Promise.all([
-      Bill.deleteMany({}),
       Reservation.deleteMany({}),
       Room.deleteMany({}),
       User.deleteMany({}),
@@ -75,10 +74,6 @@ describe("contractRenewalActivationService.activateDueRenewalContracts", () => {
   }
 
   async function createContract({ tenant, room, reservation, actorId, overrides = {} }) {
-    if (overrides.contractPurpose === 'renewal' && !overrides.stayId && overrides.leaseStartDate && overrides.leaseEndDate) {
-      const successorStay = await Stay.create({ tenantId: tenant._id, reservationId: reservation._id, roomId: room._id, branch: room.branch, bedId: 'bed-1', leaseStartDate: overrides.leaseStartDate, leaseEndDate: overrides.leaseEndDate, monthlyRent: overrides.approvedMonthlyRate || 6300, status: 'upcoming' });
-      overrides = { ...overrides, stayId: successorStay._id };
-    }
     const number = await generateContractNumber(room.branch, new Date());
     return Contract.create({
       ...number,
@@ -243,7 +238,7 @@ describe("contractRenewalActivationService.activateDueRenewalContracts", () => {
     expect(reloadedReservation.monthlyRent).toBe(14000);
     // ... and the room-transfer override is GONE (null/absent), so the
     // renewed rate is now the ONE authoritative current rate.
-    expect(reloadedReservation.recurringRentRate).toBe(14000);
+    expect(reloadedReservation.recurringRentRate == null).toBe(true);
 
     // The canonical rent resolver returns the renewed rate — the old
     // transfer rate (13500) can no longer override it.
@@ -473,8 +468,6 @@ describe("contractRenewalActivationService.activateDueRenewalContracts", () => {
         statusHistory: [{ status: "published", changedBy: actorId, reason: "seed" }],
         isCurrent: false,
         leaseStartDate: new Date(Date.now() - 60 * 60 * 1000),
-        leaseEndDate: new Date(Date.now() + 180 * 86400000),
-        approvedMonthlyRate: 6300,
         finalDocument: minimalFinalDocument(actorId),
       },
     });
@@ -489,40 +482,4 @@ describe("contractRenewalActivationService.activateDueRenewalContracts", () => {
     const reloadedSuccessor = await Contract.findById(successor._id);
     expect(reloadedSuccessor.statusHistory.filter((h) => h.status === "active")).toHaveLength(1);
   });
-  test('Manila boundary activates Stay, legal contract and structured recurring rate together', async () => {
-    const { tenant, room, reservation } = await seedTenantRoomReservation(); const actorId = new mongoose.Types.ObjectId();
-    const start = new Date('2027-02-01T00:00:00+08:00'), end = new Date('2027-07-31T23:59:59+08:00');
-    const previousStay = await Stay.create({ tenantId: tenant._id, reservationId: reservation._id, roomId: room._id, branch: room.branch, bedId: 'bed-1', status: 'active', leaseStartDate: new Date('2026-08-01'), leaseEndDate: new Date('2027-01-31T23:59:59+08:00'), monthlyRent: 6300 });
-    const future = await Stay.create({ tenantId: tenant._id, reservationId: reservation._id, roomId: room._id, branch: room.branch, bedId: 'bed-1', status: 'upcoming', leaseStartDate: start, leaseEndDate: end, monthlyRent: 7100, previousStayId: previousStay._id });
-    const old = await createContract({ tenant, room, reservation, actorId, overrides: { stayId: previousStay._id } });
-    const successor = await createContract({ tenant, room, reservation, actorId, overrides: { stayId: future._id, contractPurpose: 'renewal', replacesContractId: old._id, isCurrent: false, status: 'published', approvedMonthlyRate: 7100, leaseStartDate: start, leaseEndDate: end, finalDocument: minimalFinalDocument(actorId) } });
-    await Reservation.updateOne({ _id: reservation._id }, { $set: { currentStayId: previousStay._id, monthlyRent: 6300, financialWorkflowVersion: 'structured-initial-payment-v1', 'pricingSnapshot.finalMonthlyRate': 6300 } });
-    const unpaid = await Bill.create({ userId: tenant._id, reservationId: reservation._id, roomId: room._id, branch: room.branch, billType: 'monthly', billingMonth: start, billingCycleStart: start, billingCycleEnd: new Date('2027-03-01'), dueDate: start, charges: { rent: 6300 }, totalAmount: 6300, paidAmount: 0, status: 'pending' });
-    const paid = await Bill.create({ userId: tenant._id, reservationId: reservation._id, roomId: room._id, branch: room.branch, billType: 'monthly', billingMonth: new Date('2027-03-01'), billingCycleStart: new Date('2027-03-01'), billingCycleEnd: new Date('2027-04-01'), dueDate: new Date('2027-03-01'), charges: { rent: 6300 }, totalAmount: 6300, paidAmount: 6300, status: 'paid' });
-    const paidBefore = await Bill.findById(paid._id).lean();
-    expect((await activateDueRenewalContracts({ now: new Date('2027-01-31T15:59:59Z') })).activated).toBe(0);
-    expect(String((await Reservation.findById(reservation._id)).currentStayId)).toBe(String(previousStay._id));
-    expect((await Contract.findById(old._id)).isCurrent).toBe(true);
-    expect((await activateDueRenewalContracts({ now: new Date('2027-01-31T16:00:00Z') })).activated).toBe(1);
-    const updated = await Reservation.findById(reservation._id);
-    expect(String(updated.currentStayId)).toBe(String(future._id));
-    expect((await Stay.findById(previousStay._id)).status).toBe('renewed');
-    expect((await Stay.findById(future._id)).status).toBe('active');
-    expect((await Contract.findById(successor._id)).isCurrent).toBe(true);
-    expect(resolveReservationRentAmount(updated)).toBe(7100);
-    expect(updated.pricingSnapshot.finalMonthlyRate).toBe(6300);
-    expect((await Bill.findById(unpaid._id)).charges.rent).toBe(7100);
-    expect(await Bill.findById(paid._id).lean()).toEqual(paidBefore);
-  });
-
-  test('missing successor Stay blocks activation without changing the legal contract', async () => {
-    const { tenant, room, reservation } = await seedTenantRoomReservation(); const actorId = new mongoose.Types.ObjectId();
-    const old = await createContract({ tenant, room, reservation, actorId });
-    const successor = await createContract({ tenant, room, reservation, actorId, overrides: { stayId: new mongoose.Types.ObjectId(), contractPurpose: 'renewal', replacesContractId: old._id, status: 'published', isCurrent: false, leaseStartDate: new Date(Date.now() - 86400000), leaseEndDate: new Date(Date.now() + 180 * 86400000), approvedMonthlyRate: 6800, finalDocument: minimalFinalDocument(actorId) } });
-    const report = await activateDueRenewalContracts();
-    expect(report.activated).toBe(0); expect(report.errors).toBe(1);
-    expect((await Contract.findById(old._id)).isCurrent).toBe(true);
-    expect((await Contract.findById(successor._id)).status).toBe('published');
-  });
-
 });

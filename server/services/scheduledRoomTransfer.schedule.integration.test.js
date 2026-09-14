@@ -465,16 +465,7 @@ describe("scheduleRoomTransfer — guards", () => {
     expect((await Room.findById(dest2._id)).currentOccupancy).toBe(0);
   });
 
-  test('historical completed renewal does not block a later transfer', async () => {
-    const { reservation, stay, tenant, actorId } = await seed();
-    const previous = await Stay.create({ tenantId: tenant._id, reservationId: reservation._id, branch: stay.branch, roomId: stay.roomId, bedId: stay.bedId, leaseStartDate: new Date('2025-01-01'), leaseEndDate: new Date('2025-12-31'), monthlyRent: stay.monthlyRent, status: 'renewed' });
-    stay.previousStayId = previous._id; await stay.save();
-    const dest = await emptyRoom('private', '205');
-    await scheduleRoomTransfer({ reservationId: reservation._id, payload: payloadFor({ targetRoom: dest, transferDate: futureDateISO(10) }), actorId });
-    expect(await ScheduledRoomTransfer.countDocuments({ reservationId: reservation._id })).toBe(1);
-  });
-
-  test.each(["active", "upcoming"])("a pending future renewal (%s) blocks scheduling", async (status) => {
+  test("a pending future renewal blocks scheduling", async () => {
     const { reservation, stay, tenant, actorId } = await seed();
     const dest = await emptyRoom("private", "205");
     // Simulate a pending renewal: a Stay chained off the active one.
@@ -482,7 +473,7 @@ describe("scheduleRoomTransfer — guards", () => {
       tenantId: tenant._id, reservationId: reservation._id, branch: "gil-puyat",
       roomId: stay.roomId, bedId: stay.bedId,
       leaseStartDate: new Date("2027-01-01"), leaseEndDate: new Date("2027-12-31"),
-      monthlyRent: RATE["quadruple-sharing"], status, previousStayId: stay._id,
+      monthlyRent: RATE["quadruple-sharing"], status: "active", previousStayId: stay._id,
     });
     await expect(scheduleRoomTransfer({
       reservationId: reservation._id,
@@ -491,19 +482,6 @@ describe("scheduleRoomTransfer — guards", () => {
     })).rejects.toMatchObject({ code: "FUTURE_RENEWAL_EXISTS" });
     expect(await ScheduledRoomTransfer.countDocuments({})).toBe(0);
     expect((await Room.findById(dest._id)).currentOccupancy).toBe(0);
-  });
-
-  test("a pending mobile extension blocks admin scheduling without placing a hold", async () => {
-    const { reservation, stay, tenant, actorId } = await seed();
-    const { default: Extension } = await import("../models/StayExtensionRequest.js");
-    const { insertedId } = await Extension.collection.insertOne({ tenantId: tenant._id, reservationId: reservation._id, stayId: stay._id, status: "pending" });
-    try {
-      await Reservation.updateOne({ _id: reservation._id }, { $set: { pendingExtensionRequestId: insertedId } });
-      const dest = await emptyRoom("private", "205");
-      await expect(scheduleRoomTransfer({ reservationId: reservation._id, payload: payloadFor({ targetRoom: dest, transferDate: futureDateISO(10) }), actorId })).rejects.toMatchObject({ code: "EXTENSION_PENDING" });
-      expect(await ScheduledRoomTransfer.countDocuments({ reservationId: reservation._id })).toBe(0);
-      expect((await Room.findById(dest._id)).currentOccupancy).toBe(0);
-    } finally { await Extension.deleteOne({ _id: insertedId }); }
   });
 
   test("an initiated move-out clearance blocks scheduling before a hold is placed", async () => {

@@ -1,4 +1,3 @@
-import { authFetch as acknowledgeRequestFetch } from "../../../shared/api/httpClient";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -1188,16 +1187,6 @@ export default function TenantDetailModal({
                       onProceedTransferRequest={(request) =>
                         setDialogState({ type: "transfer", loading: false, error: null, request })
                       }
-                      onAcknowledgeTransferRequest={async () => {
-                        const request = fetchedDetail?.tenantTransferRequest;
-                        if (!request?.id || transferRequestActionLoading) return;
-                        setTransferRequestActionLoading(true);
-                        try {
-                          await acknowledgeRequestFetch(`/tenant/room-transfer-requests/${request.id}/acknowledge`, { method: 'PATCH' });
-                          await invalidateTenantQueries(); await refetchDetail();
-                        } catch (error) { showNotification(error.message || 'Could not acknowledge request.', 'error'); }
-                        finally { setTransferRequestActionLoading(false); }
-                      }}
                       onDeclineTransferRequest={async (declineReason) => {
                         const request = fetchedDetail?.tenantTransferRequest;
                         if (!request?.id) return;

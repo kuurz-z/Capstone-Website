@@ -1,7 +1,3 @@
-import { toManilaStartOfDay } from "./dateUtils.js";
-import { transferInvoiceBalance } from "../services/billing/transferSettlementInvoices.js";
-import { assertRenewalOccupancy } from "../services/renewalOccupancyService.js";
-import { lockTenancyOperation } from "../services/tenancyExclusionService.js";
 import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
@@ -925,7 +921,6 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
   let result;
   try {
     await session.withTransaction(async () => {
-      await lockTenancyOperation(reservationId, "renewal", session);
       const reservation = await Reservation.findById(reservationId)
         .populate("roomId", "name roomNumber branch monthlyPrice price")
         .populate("userId", "firstName lastName email tenantStatus")
@@ -937,23 +932,10 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         throw Object.assign(new Error("Only active moved-in tenants can be renewed."), { statusCode: 400, code: "INVALID_STATUS_FOR_RENEWAL" });
       }
 
-      if (payload.renewalOfferId) {
-        const existing = await Stay.findOne({ reservationId, renewalOfferId: payload.renewalOfferId }).session(session);
-        if (existing) {
-          result = { reservation, stay: existing.toObject(), alreadyProcessed: true };
-          return;
-        }
-        const offer = reservation.renewalOffers.find(o => o.offerId === payload.renewalOfferId);
-        if (!offer || !['pending', 'accepted'].includes(offer.status)) throw Object.assign(new Error('Renewal offer is no longer available.'), { statusCode: 409 });
-        offer.status = 'accepted'; offer.respondedAt ||= new Date();
-        offer.tenantResponseReason = String(payload.tenantResponseReason || '').trim();
-        payload = { ...payload, monthlyRent: offer.proposedRent };
-      }
-
       const predecessorContract = await resolveAuthoritativeCurrentContract({
         reservationId: reservation._id,
-        tenantId: reservation.userId?._id || reservation.userId, session,
-      });
+        tenantId: reservation.userId?._id || reservation.userId,
+      }).catch(() => null);
       const activeStay = await ensureActiveStay(reservation, actorId, session, predecessorContract);
       if (!activeStay || !CURRENT_STAY_STATUSES.includes(activeStay.status)) {
         throw Object.assign(new Error("No active stay found for renewal."), { statusCode: 400, code: "NO_ACTIVE_STAY" });
@@ -979,8 +961,8 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         throw Object.assign(new Error("Renewal confirmation is required."), { statusCode: 400, code: "CONFIRM_REQUIRED" });
       }
 
-      const newLeaseStartDate = toManilaStartOfDay(payload.newLeaseStartDate)?.toDate();
-      const newLeaseEndDate = toManilaStartOfDay(payload.newLeaseEndDate)?.endOf("day").toDate();
+      const newLeaseStartDate = normalizeDate(payload.newLeaseStartDate);
+      const newLeaseEndDate = normalizeDate(payload.newLeaseEndDate, true);
       if (!newLeaseStartDate || !newLeaseEndDate || newLeaseEndDate <= newLeaseStartDate) {
         throw Object.assign(new Error("Valid renewal start and end dates are required."), { statusCode: 400, code: "INVALID_RENEWAL_DATES" });
       }
@@ -1006,9 +988,12 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         throw Object.assign(new Error("A future renewal already exists for this tenant."), { statusCode: 409, code: "FUTURE_RENEWAL_EXISTS" });
       }
 
-      await assertRenewalOccupancy({ reservation, stay: activeStay, start: newLeaseStartDate, end: newLeaseEndDate, session });
-
-      // Approval prepares a future term. Only canonical effective-date activation ends this Stay.
+      activeStay.status = "renewed";
+      activeStay.endedAt = newLeaseStartDate;
+      activeStay.endReason = "renewed";
+      activeStay.renewalNotes = payload.notes || "";
+      activeStay.updatedBy = actorId;
+      await activeStay.save({ session });
 
       const renewalRoomId = reservation.roomId?._id || reservation.roomId;
       // Stay.bedId is a required String — `""` is rejected. The renewed Stay
@@ -1032,7 +1017,7 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
             leaseStartDate: newLeaseStartDate,
             leaseEndDate: newLeaseEndDate,
             monthlyRent: Number(payload.monthlyRent ?? getMonthlyRent(reservation)),
-            status: "upcoming",
+            status: "active",
             previousStayId: activeStay._id,
             renewalOfferId: payload.renewalOfferId || null,
             renewalNotes: payload.notes || "",
@@ -1043,6 +1028,20 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         { session },
       );
 
+      const activeHistory = await BedHistory.findOne({
+        reservationId: reservation._id,
+        tenantId: reservation.userId?._id || reservation.userId,
+        status: "active",
+      })
+        .sort({ moveInDate: -1 })
+        .session(session);
+      if (activeHistory && !activeHistory.stayId) {
+        activeHistory.stayId = newStay._id;
+        await activeHistory.save({ session });
+      }
+
+      reservation.currentStayId = newStay._id;
+      reservation.latestStayStatus = "active";
       if (extension) {
         extension.status = 'approved';
         extension.reviewedBy = actorId;
@@ -1099,11 +1098,10 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
   }
 
   // ── Automated Renewal Successor Contract Generation ──────────────────────
-  // Await the post-commit preparation attempt; Job 19 retries any missing successor.
-  // This uses the existing contract
-  // preparation path. Never touches the old Contract's status/isCurrent — see
+  // Fire-and-forget, mirrors transferStayWorkflow's post-transaction contract
+  // trigger below. Never touches the old Contract's status/isCurrent — see
   // createSuccessorContractForRenewal's comment (contractService.js).
-  if (result && !result.alreadyProcessed) {
+  if (result) {
     try {
       const oldContract = await resolveAuthoritativeCurrentContract({
         reservationId: result.reservation._id,
@@ -1111,7 +1109,7 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
       });
       if (oldContract) {
         const { autoGenerateRenewalContract } = await import("../services/autoContractOrchestratorService.js");
-        await autoGenerateRenewalContract({
+        autoGenerateRenewalContract({
           reservationId: result.reservation._id,
           oldContract,
           newStay: result.stay,
@@ -1766,7 +1764,6 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
   let result;
   try {
     await session.withTransaction(async () => {
-      await lockTenancyOperation(reservationId, "transfer", session);
       const reservation = await Reservation.findById(reservationId)
         .populate("roomId", "name roomNumber branch beds currentOccupancy capacity type")
         .populate("userId", "firstName lastName email tenantStatus")
@@ -2442,11 +2439,9 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
             { statusCode: 409, code: "ROOM_TRANSFER_SCHEDULED_BILL_INVALID" },
           );
         }
-        const invoiceBalance = await transferInvoiceBalance(transferBill, session);
-        if (invoiceBalance.remainingAmount > 0.01) throw Object.assign(new Error("Transfer settlement is unpaid."), { statusCode: 409 });
-        const billRent = roundMoney(Number(invoiceBalance.charges?.rent || 0));
-        const billDeposit = roundMoney(Number(invoiceBalance.charges?.securityDeposit || 0));
-        const billElectricity = roundMoney(Number(invoiceBalance.charges?.electricity || 0));
+        const billRent = roundMoney(Number(transferBill.charges?.rent || 0));
+        const billDeposit = roundMoney(Number(transferBill.charges?.securityDeposit || 0));
+        const billElectricity = roundMoney(Number(transferBill.charges?.electricity || 0));
         if (
           Math.abs(billRent - roundMoney(transferCharges.rent)) > 0.01 ||
           Math.abs(billDeposit - roundMoney(transferCharges.securityDeposit)) > 0.01 ||
@@ -2459,8 +2454,7 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
             { statusCode: 409, code: "ROOM_TRANSFER_SCHEDULED_BILL_MISMATCH" },
           );
         }
-        // Execution history belongs on the transfer; a paid invoice is immutable.
-        if (Number(transferBill.paidAmount || 0) === 0 && transferBill.status !== "paid") {
+        // Refresh execution-time metadata; never touch paidAmount / payment history.
         transferBill.roomId = currentRoom._id;
         transferBill.billingMonth = effectiveTransferDate;
         transferBill.billingCycleStart = rentCoverageBillType === "monthly"
@@ -2531,7 +2525,6 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
         };
         syncBillAmounts(transferBill, { preserveStatus: true });
         await transferBill.save({ session });
-        }
       } else {
       [transferBill] = await Bill.create(
         [
@@ -3167,8 +3160,8 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
 
       const predecessorContract = await resolveAuthoritativeCurrentContract({
         reservationId: reservation._id,
-        tenantId: reservation.userId?._id || reservation.userId, session,
-      });
+        tenantId: reservation.userId?._id || reservation.userId,
+      }).catch(() => null);
       const activeStay = await ensureActiveStay(reservation, actorId, session, predecessorContract);
       if (!activeStay || !CURRENT_STAY_STATUSES.includes(activeStay.status)) {
         throw Object.assign(new Error("No active stay found for move-out."), { statusCode: 400, code: "NO_ACTIVE_STAY" });
@@ -3558,10 +3551,79 @@ export async function executeEarlyTerminationWorkflow(reservationId, payload = {
 /**
  * SCENARIO 1 - Case 4: Direct Tenant Room Swap
  */
-export async function executeDirectRoomSwapWorkflow() {
-  throw Object.assign(new Error("Direct room swaps are retired. Use the existing scheduled Room Transfer workflow."), {
-    statusCode: 410, code: "DIRECT_ROOM_SWAP_RETIRED",
-  });
+export async function executeDirectRoomSwapWorkflow(
+  reservationAId,
+  reservationBId,
+  actorId = null,
+  branchFilter = null,
+) {
+  const session = await mongoose.startSession();
+  let result = null;
+
+  try {
+    await session.withTransaction(async () => {
+      const resA = await Reservation.findById(reservationAId).populate("roomId").session(session);
+      const resB = await Reservation.findById(reservationBId).populate("roomId").session(session);
+
+      if (!resA || !resB) {
+        throw Object.assign(new Error("One or both reservations not found for room swap"), {
+          statusCode: 404,
+          code: "RESERVATION_NOT_FOUND",
+        });
+      }
+
+      const branchA = resA.roomId?.branch || resA.branch;
+      const branchB = resB.roomId?.branch || resB.branch;
+
+      if (branchFilter) {
+        if (branchA !== branchFilter || branchB !== branchFilter) {
+          throw Object.assign(
+            new Error(`Access denied. You can only execute room swaps within ${branchFilter} branch.`),
+            {
+              statusCode: 403,
+              code: "BRANCH_ACCESS_DENIED",
+            },
+          );
+        }
+      }
+
+      if (branchA && branchB && branchA !== branchB) {
+        throw Object.assign(
+          new Error("Direct room swap cannot be executed across different branches. Use standard tenant transfer."),
+          {
+            statusCode: 400,
+            code: "CROSS_BRANCH_SWAP_PROHIBITED",
+          },
+        );
+      }
+
+      // Swap room and bed assignments
+      const roomATemp = resA.roomId?._id || resA.roomId;
+      const bedATemp = resA.selectedBed;
+
+      resA.roomId = resB.roomId?._id || resB.roomId;
+      resA.selectedBed = resB.selectedBed;
+      resA.notes = `${resA.notes ? resA.notes + " | " : ""}Swapped room with tenant ${resB.userId} at ${new Date().toISOString()}`;
+
+      resB.roomId = roomATemp;
+      resB.selectedBed = bedATemp;
+      resB.notes = `${resB.notes ? resB.notes + " | " : ""}Swapped room with tenant ${resA.userId} at ${new Date().toISOString()}`;
+
+      await resA.save({ session });
+      await resB.save({ session });
+
+      result = {
+        success: true,
+        message: "Direct room swap executed successfully between tenants.",
+        tenantA: resA,
+        tenantB: resB,
+      };
+    });
+
+    return result;
+  } finally {
+    await session.endSession();
+  }
 }
 
 /**
@@ -3637,24 +3699,36 @@ export async function executeAbandonmentProtocolWorkflow(reservationId, payload 
  * SCENARIO 1 - Case 6: Contract Extension vs Pre-Booking Lock Check
  */
 export async function validateContractExtensionWorkflow(reservationId, requestedNewEndDate) {
-  const session = await mongoose.startSession();
-  let result;
-  try {
-    await session.withTransaction(async () => {
-      const reservation = await Reservation.findById(reservationId).session(session);
-      const stay = await resolveCurrentStayForReservation(reservationId, { session });
-      if (!reservation || !stay) throw Object.assign(new Error('Current tenancy not found.'), { statusCode: 404 });
-      const end = toManilaStartOfDay(requestedNewEndDate);
-      const start = toManilaStartOfDay(stay.leaseEndDate).add(1, 'day');
-      if (!end || end.isBefore(start)) throw Object.assign(new Error('Invalid extension interval.'), { statusCode: 400 });
-      await assertRenewalOccupancy({ reservation, stay, start: start.toDate(), end: end.toDate(), session, lockInventory: false });
-      result = { canExtend: true, message: 'No room or bed conflict found for the extended interval.' };
-    });
-    return result;
-  } catch (error) {
-    if (error.code === 'EXTENSION_OCCUPANCY_CONFLICT') return { canExtend: false, reason: error.message };
-    throw error;
-  } finally { await session.endSession(); }
+  const reservation = await Reservation.findById(reservationId);
+  if (!reservation) {
+    throw new Error("Reservation not found");
+  }
+
+  const room = await Room.findById(reservation.roomId);
+  if (!room) {
+    throw new Error("Room not found");
+  }
+
+  // Check for pre-bookings starting before requested new end date
+  const conflict = await Reservation.findOne({
+    roomId: reservation.roomId,
+    _id: { $ne: reservation._id },
+    status: { $in: ["reserved", "pending", "approved_for_payment"] },
+    isArchived: { $ne: true },
+    moveInDate: { $lte: new Date(requestedNewEndDate) }
+  }).populate("userId", "firstName lastName email");
+
+  if (conflict) {
+    return {
+      canExtend: false,
+      reason: `Cannot extend contract: Room ${room.roomNumber || room.name} is pre-booked starting ${dayjs(conflict.moveInDate).format("YYYY-MM-DD")} by ${conflict.userId?.firstName} ${conflict.userId?.lastName}.`
+    };
+  }
+
+  return {
+    canExtend: true,
+    message: "No pre-booking conflict found. Lease extension can proceed."
+  };
 }
 
 /**

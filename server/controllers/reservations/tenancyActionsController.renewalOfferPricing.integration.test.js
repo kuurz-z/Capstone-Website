@@ -89,7 +89,7 @@ describe("renewal offer pricing (createRenewalOffer / respondToRenewalOffer)", (
       username: `tenant_${new mongoose.Types.ObjectId().toString().slice(-10)}`,
       firstName: "Test", lastName: "Tenant", role: "tenant",
     });
-    const room = await Room.create({ beds: [{ id: "bed-1", position: "upper", status: "occupied" }],
+    const room = await Room.create({
       name: "Room 301", roomNumber: "301", branch: "gil-puyat",
       type: roomType, capacity: roomType === "private" ? 1 : (roomType === "double-sharing" ? 2 : 4),
       price: roomPrice,

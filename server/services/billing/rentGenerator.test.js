@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 const reservationFind = jest.fn();
 const billFindOne = jest.fn();
 const billInstances = [];
-const contractFind = jest.fn();
 const notify = {
   billGenerated: jest.fn(),
 };
@@ -31,8 +30,6 @@ await jest.unstable_mockModule("../../models/index.js", () => {
 
   return {
     Bill,
-    Contract: { findOne: contractFind },
-    Stay: { exists: jest.fn(async () => null) },
     AuditLog: { create: jest.fn().mockResolvedValue({}) },
     Reservation: {
       find: reservationFind,
@@ -106,7 +103,6 @@ const createReservation = (overrides = {}) => ({
 
 describe("services/billing/rentGenerator", () => {
   beforeEach(() => {
-    contractFind.mockReset().mockReturnValue({ sort: () => ({ lean: async () => null }) });
     reservationFind.mockReset();
     billFindOne.mockReset();
     billInstances.length = 0;
@@ -305,26 +301,4 @@ describe("services/billing/rentGenerator", () => {
     // The earlier bill remains untouched.
     expect(billInstances[0].charges.rent).toBe(6300);
   });
-  test('future rent bill generated before activation uses the signed renewal coverage rate', async () => {
-    const reservation = createReservation({ moveInDate: new Date('2026-01-05T00:00:00Z'), monthlyRent: 6300, pricingSnapshot: { finalMonthlyRate: 6300 } });
-    contractFind.mockReturnValue({ sort: () => ({ lean: async () => ({ approvedMonthlyRate: 7100 }) }) });
-    billFindOne.mockResolvedValue(null);
-    const result = await ensureCurrentCycleRentBill({ reservation, referenceDate: new Date('2026-02-26T00:00:00Z') });
-    expect(result.status).toBe('created');
-    expect(billInstances[0].charges.rent).toBe(7100);
-    expect(contractFind.mock.calls[0][0].leaseStartDate.$lt.getTime()).toBeGreaterThan(new Date('2026-03-04T16:00:00Z').getTime());
-    expect(reservation.monthlyRent).toBe(6300);
-  });
-
-  test('structured future cycle uses the signed renewal rate while the original snapshot stays frozen', async () => {
-    const reservation = createReservation({ moveInDate: new Date('2026-01-05T00:00:00Z'), monthlyRent: 6300,
-      financialWorkflowVersion: 'structured-initial-payment-v1', pricingSnapshot: { finalMonthlyRate: 6300 },
-      advanceCoverageStart: new Date('2026-01-05'), advanceCoverageEndExclusive: new Date('2026-02-05'), nextRegularBillingDate: new Date('2026-02-05') });
-    contractFind.mockReturnValue({ sort: () => ({ lean: async () => ({ approvedMonthlyRate: 7200 }) }) });
-    billFindOne.mockResolvedValue(null);
-    const result = await ensureCurrentCycleRentBill({ reservation, referenceDate: new Date('2026-02-26T00:00:00Z') });
-    expect(result.status).toBe('created'); expect(billInstances[0].charges.rent).toBe(7200);
-    expect(reservation.pricingSnapshot.finalMonthlyRate).toBe(6300);
-  });
-
 });

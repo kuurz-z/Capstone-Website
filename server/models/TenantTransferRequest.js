@@ -90,8 +90,6 @@ const tenantTransferRequestSchema = new mongoose.Schema(
     schedulingStartedAt: { type: Date, default: null },
     schedulingHeartbeatAt: { type: Date, default: null },
     submittedAt: { type: Date, default: Date.now, required: true },
-  acknowledgedAt: { type: Date, default: null },
-  acknowledgedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
     declineReason: { type: String, default: "", trim: true, maxlength: 1000 },

@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import { ROOM_BRANCHES } from "../config/branches.js";
 
 const STAY_STATUSES = [
-  "upcoming",
   "active",
   "ending_soon",
   // Spec §24.5: Lease term has lapsed but tenant is still occupying.

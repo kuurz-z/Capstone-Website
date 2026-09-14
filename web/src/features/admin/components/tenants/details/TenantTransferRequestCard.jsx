@@ -4,7 +4,6 @@ import { ArrowRight, CheckCircle2, XCircle } from "lucide-react";
 const formatDate = (value) =>
   value
     ? new Date(value).toLocaleDateString("en-PH", {
-        timeZone: "Asia/Manila",
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -16,7 +15,7 @@ const labelRoomType = (value) =>
     .replaceAll("-", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-export default function TenantTransferRequestCard({ request, onProceed, onDecline, onAcknowledge, loading = false }) {
+export default function TenantTransferRequestCard({ request, onProceed, onDecline, loading = false }) {
   const [declining, setDeclining] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   if (!request || request.status !== "pending" || request.canReview === false) return null;
@@ -32,10 +31,10 @@ export default function TenantTransferRequestCard({ request, onProceed, onDeclin
             <CheckCircle2 className="h-4 w-4 text-blue-600" />
             Room Transfer Request
           </div>
-          <p className="mt-1 text-xs font-semibold text-blue-700 dark:text-blue-300">{request.acknowledgedAt ? "Reviewed" : "Pending Review"}</p>
+          <p className="mt-1 text-xs font-semibold text-blue-700 dark:text-blue-300">Pending Review</p>
         </div>
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          Submitted {new Date(request.submittedAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
+          Submitted {new Date(request.submittedAt).toLocaleString("en-PH")}
         </span>
       </div>
 
@@ -66,12 +65,11 @@ export default function TenantTransferRequestCard({ request, onProceed, onDeclin
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          {!request.acknowledgedAt ? <button type="button" disabled={loading} onClick={onAcknowledge} className="rounded-lg border px-3 py-2 text-xs font-semibold">Acknowledge</button> : null}
           <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:bg-slate-900 dark:text-rose-300" onClick={() => setDeclining(true)} disabled={loading}>
             <XCircle className="h-4 w-4" /> Decline
           </button>
           <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => onProceed?.(request)} disabled={loading}>
-            Proceed to Transfer <ArrowRight className="h-4 w-4" />
+            Proceed to Schedule <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       )}

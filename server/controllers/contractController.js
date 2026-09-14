@@ -655,9 +655,7 @@ export const uploadFinalNotarizedContract = async (req, res) => {
       req,
       before,
       contract,
-      contract.contractPurpose === "renewal"
-        ? "Final signed-and-notarized renewal Contract published; awaiting canonical tenancy activation"
-        : "Final signed-and-notarized Contract uploaded and activated for tenant access",
+      "Final signed-and-notarized Contract uploaded and activated for tenant access",
     );
     // The one-step finalize path did not fire the tenant "document ready"
     // notification that the older multi-step publishContract() path already

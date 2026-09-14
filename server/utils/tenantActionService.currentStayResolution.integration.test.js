@@ -59,7 +59,6 @@ describe("current-stay resolution unifies active + ending_soon across renewal", 
     const room = await Room.create({
       name: "Room 301", roomNumber: "301", branch: "gil-puyat",
       type: "quadruple-sharing", capacity: 4, price: 6000,
-      beds: [{ id: "bed-1", position: "upper", status: "occupied" }],
     });
     const leaseStart = new Date("2025-12-01T00:00:00.000Z");
     const leaseEnd = new Date("2026-01-31T00:00:00.000Z");
@@ -98,20 +97,21 @@ describe("current-stay resolution unifies active + ending_soon across renewal", 
       actorId: reservation.userId,
     });
 
-    expect(result.stay.status).toBe("upcoming");
+    expect(result.stay.status).toBe("active");
     expect(String(result.stay.previousStayId)).toBe(String(stay._id));
 
-    // Approval prepares the successor; activation alone ends the predecessor.
+    // The predecessor Stay was transitioned (renewed), not left dangling as
+    // a second independently-active record.
     const predecessor = await Stay.findById(stay._id);
-    expect(predecessor.status).toBe("ending_soon");
+    expect(predecessor.status).toBe("renewed");
 
     // Exactly one Stay now reports as the reservation's current lease —
     // never two competing "current" Stay documents for the same reservation.
     const allStaysForReservation = await Stay.find({ reservationId: reservation._id });
-    expect(allStaysForReservation).toHaveLength(2); // current predecessor + upcoming successor
+    expect(allStaysForReservation).toHaveLength(2); // predecessor (renewed) + successor (active)
     const currentOnes = allStaysForReservation.filter((s) => ["active", "ending_soon"].includes(s.status));
     expect(currentOnes).toHaveLength(1);
-    expect(String(currentOnes[0]._id)).toBe(String(stay._id));
+    expect(String(currentOnes[0]._id)).toBe(String(result.stay._id));
   });
 
   test("resolveValidatedRoomTransferIntent self-heals a missing Stay when an active Contract exists", async () => {

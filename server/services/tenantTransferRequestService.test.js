@@ -68,8 +68,6 @@ jest.unstable_mockModule("./notifications/notificationService.js", () => ({
 }));
 jest.unstable_mockModule("./scheduledRoomTransferView.js", () => ({ serializeScheduledRoomTransfer }));
 
-jest.unstable_mockModule('./tenancyExclusionService.js', () => ({ lockTenancyOperation: jest.fn(async () => ({})) }));
-jest.spyOn(mongoose, 'startSession').mockResolvedValue({ withTransaction: async fn => fn(), endSession: async () => {} });
 const service = await import("./tenantTransferRequestService.js");
 
 const tenantId = objectId();
@@ -96,7 +94,7 @@ function arrangeActiveStay() {
     currentBedSnapshot: { bedId: "bed-a", position: "lower", bunkBlock: "A", code: "A-L" },
     submittedAt: new Date("2026-08-31T02:00:00Z"),
   };
-  TenantTransferRequest.create.mockResolvedValue([request]);
+  TenantTransferRequest.create.mockResolvedValue(request);
   resolveAuthoritativeCurrentContract.mockResolvedValue({
     _id: objectId(), status: "active", isCurrent: true, leaseEndDate: new Date("2027-08-31T00:00:00Z"),
   });
@@ -141,9 +139,9 @@ describe("tenant room transfer request boundary", () => {
     });
 
     expect(result).toMatchObject({ id: String(created._id), status: "pending", statusLabel: "Pending Review", canCancel: true });
-    expect(TenantTransferRequest.create).toHaveBeenCalledWith([expect.objectContaining({
+    expect(TenantTransferRequest.create).toHaveBeenCalledWith(expect.objectContaining({
       tenantId, reservationId, stayId, preferredRoomType: "private", reason: "Need a quieter room",
-    })], expect.objectContaining({ session: expect.anything() }));
+    }));
     expect(ScheduledRoomTransfer.findOne).not.toHaveBeenCalled();
     expect(ScheduledRoomTransfer.findById).not.toHaveBeenCalled();
     expect(roomTransferLifecycleOnce).toHaveBeenCalledWith(

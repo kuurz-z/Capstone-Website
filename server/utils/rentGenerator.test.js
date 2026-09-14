@@ -30,8 +30,6 @@ await jest.unstable_mockModule("../models/index.js", () => {
 
   return {
     Bill,
-    Contract: { findOne: jest.fn(() => ({ sort: () => ({ lean: async () => null }) })) },
-    Stay: { exists: jest.fn(async () => null) },
     Reservation: {
       find: reservationFind,
     },

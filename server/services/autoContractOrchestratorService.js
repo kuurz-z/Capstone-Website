@@ -692,9 +692,6 @@ export async function autoGenerateRenewalContract({
       actorId,
     });
 
-    if (!['draft', 'incomplete', 'ready_for_generation'].includes(successorContract.status)) {
-      return { success: true, successorContractId: String(successorContract._id), status: successorContract.status };
-    }
     if (successorContract.status !== "ready_for_generation") {
       const validation = await validateContractForGeneration(successorContract);
       if (validation.valid) {

@@ -1,4 +1,3 @@
-import { lockTenancyOperation } from "./tenancyExclusionService.js";
 import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
 import MoveOutClearance from "../models/MoveOutClearance.js";
@@ -341,9 +340,7 @@ export async function serializeTenantTransferRequest(
     reservationId: id(doc.reservationId),
     stayId: id(doc.stayId),
     status: effectiveStatus,
-    statusLabel: effectiveStatus === "pending" && doc.acknowledgedAt ? "Reviewed" : tenantTransferStatusLabel(effectiveStatus),
-    acknowledgedAt: doc.acknowledgedAt || null,
-    acknowledgedBy: id(doc.acknowledgedBy),
+    statusLabel: tenantTransferStatusLabel(effectiveStatus),
     preferredRoomType: doc.preferredRoomType,
     preferredRoom: safeRoom(preferredRoom),
     preferredTransferDate: doc.preferredTransferDate || null,
@@ -591,14 +588,7 @@ export async function createTenantTransferRequest({ tenantId, payload = {} }) {
 
   let request;
   try {
-    const session = await mongoose.startSession();
-    try {
-      await session.withTransaction(async () => {
-        const current = await lockTenancyOperation(reservation._id, 'transfer', session);
-        if (String(current.currentStayId || stay._id) !== String(stay._id)) throw serviceError('Your stay changed. Refresh before submitting.', 'STALE_STAY', 409);
-        [request] = await TenantTransferRequest.create([requestPayload], { session });
-      });
-    } finally { await session.endSession(); }
+    request = await TenantTransferRequest.create(requestPayload);
   } catch (error) {
     if (error?.code === 11000) {
       throw serviceError(
@@ -719,11 +709,7 @@ export async function claimTenantTransferRequestForScheduling({
   );
 
   const token = randomUUID();
-  let claimed;
-  const session = await mongoose.startSession();
-  try { await session.withTransaction(async () => {
-  await lockTenancyOperation(reservationId, "transfer", session);
-  claimed = await TenantTransferRequest.findOneAndUpdate(
+  const claimed = await TenantTransferRequest.findOneAndUpdate(
     {
       _id: requestId,
       reservationId,
@@ -740,9 +726,8 @@ export async function claimTenantTransferRequestForScheduling({
         reviewedAt: new Date(),
       },
     },
-    { new: true, session },
+    { new: true },
   ).select("+schedulingToken");
-  }); } finally { await session.endSession(); }
   if (!claimed) {
     const current = await TenantTransferRequest.findById(requestId).lean();
     if (current?.status === "scheduled" || current?.scheduledRoomTransferId) {
@@ -993,11 +978,6 @@ export async function syncRequestFromScheduledTransfer(
       `room_transfer_rescheduled:${scheduledId}:${historySize}`,
       { entityId: String(record.reservationId), event: "rescheduled" },
     );
-  } else if (record.status === 'action_required') {
-    await notify.roomTransferLifecycleOnce(tenantId, 'Room Transfer Action Required',
-      'Open your room transfer to review the required action or payment.',
-      `room_transfer_action:${record._id}:${record.lastError || 'review'}`,
-      { entityId: String(record.reservationId), event: 'action_required' });
   } else if (nextStatus === "completed") {
     await notify.roomTransferLifecycleOnce(
       tenantId,

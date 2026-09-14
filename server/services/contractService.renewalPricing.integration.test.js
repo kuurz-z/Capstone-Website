@@ -273,21 +273,6 @@ describe("createSuccessorContractForRenewal — approved pricing resolution", ()
 
   // ── Successor idempotency ─────────────────────────────────────────────────
 
-  test("inclusive Manila extension end preserves six-month duration and long-term contract pricing", async () => {
-    const { tenant, room, reservation, stay } = await seedTenantRoomReservation({ roomType: "quadruple-sharing", roomPrice: 6300 });
-    const actorId = new mongoose.Types.ObjectId();
-    const oldContract = await createOldContract({ tenant, room, reservation, stay, roomType: "quadruple-sharing", leaseDurationMonths: 3, approvedMonthlyRate: 6300, actorId });
-    const newStay = await makeNewStay({ reservation, room,
-      leaseStartDate: new Date("2026-10-03T16:00:00.000Z"),
-      leaseEndDate: new Date("2027-04-03T15:59:59.999Z"), monthlyRent: 5400 });
-    const successor = await createSuccessorContractForRenewal({ reservationId: reservation._id, oldContract, newStay, actorId });
-    expect(successor.leaseDurationMonths).toBe(6);
-    expect(successor.leaseType).toBe("long_term");
-    expect(successor.approvedMonthlyRate).toBe(5400);
-    const { resolveContractTemplate } = await import("./contractTemplateService.js");
-    expect(resolveContractTemplate({ ...successor.toObject(), leaseType: "long-term" }).templateId).toBe("quadruple-sharing-long-term");
-  });
-
   test("calling createSuccessorContractForRenewal twice for the same predecessor returns the same successor — no duplicate", async () => {
     const { tenant, room, reservation, stay } = await seedTenantRoomReservation({ roomType: "quadruple-sharing", roomPrice: 6000 });
     const actorId = new mongoose.Types.ObjectId();

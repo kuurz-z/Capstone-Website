@@ -33,10 +33,4 @@ router.patch(
   declineTenantTransferRequestAction,
 );
 
-router.patch('/room-transfer-requests/:id/acknowledge', verifyToken, verifyAdmin,
-  requireAnyPermission(['manageReservations', 'manageTenants']), async (req, res) => {
-    try { const { acknowledgeTenancyRequest } = await import("../services/requestAcknowledgementService.js"); res.json({ request: await acknowledgeTenancyRequest({ kind: 'transfer', requestId: req.params.id, actor: req.authUser }) }); }
-    catch (error) { res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Unable to acknowledge request.' }); }
-  });
-
 export default router;

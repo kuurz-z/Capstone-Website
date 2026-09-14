@@ -852,15 +852,6 @@ export const createSuccessorContractForRenewal = async ({
   actorId,
   session = null,
 }) => {
-  if (!session) {
-    const transaction = await mongoose.startSession();
-    let successor;
-    try { await transaction.withTransaction(async () => {
-      await Reservation.updateOne({ _id: reservationId }, { $inc: { tenancyMutationVersion: 1 } }, { session: transaction });
-      successor = await createSuccessorContractForRenewal({ reservationId, oldContract, newStay, actorId, session: transaction });
-    }); } finally { await transaction.endSession(); }
-    return successor;
-  }
   if (!oldContract) {
     throw serviceError("Previous active contract is required for renewal.", "PREVIOUS_CONTRACT_REQUIRED", 400);
   }
@@ -905,10 +896,7 @@ export const createSuccessorContractForRenewal = async ({
 
   const leaseStartDate = newStay.leaseStartDate;
   const leaseEndDate = newStay.leaseEndDate;
-  // Stay ends at the inclusive final day's last millisecond. Match the
-  // contract validator's rounded calendar-month duration instead of
-  // truncating a six-month term to five months and selecting the wrong rate.
-  const leaseDurationMonths = Math.max(1, Math.round(dayjs(leaseEndDate).diff(dayjs(leaseStartDate), "month", true)));
+  const leaseDurationMonths = Math.max(1, dayjs(leaseEndDate).diff(dayjs(leaseStartDate), "month"));
 
   // The renewal successor Contract must snapshot the SAME approved pricing
   // the tenant actually accepted — never a re-resolution against whatever
