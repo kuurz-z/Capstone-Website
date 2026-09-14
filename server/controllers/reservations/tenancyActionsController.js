@@ -1,3 +1,5 @@
+import { resolveRenewalTerm } from "../../services/contractLeaseDateService.js";
+import { toManilaStartOfDay } from "../../utils/dateUtils.js";
 /**
  * ============================================================================
  * TENANCY ACTIONS CONTROLLER
@@ -706,8 +708,8 @@ export const respondToRenewalOffer = async (req, res, next) => {
     const activeStay = await resolveCurrentStayForReservation(claimed._id);
 
     let currentEndDate = activeStay?.leaseEndDate || computeLeaseEndDate(claimed) || new Date();
-    const newStartDate = dayjs(currentEndDate).add(1, "day").toDate();
-    const newEndDate = dayjs(newStartDate).add(offer.months, "month").subtract(1, "day").toDate();
+    const term = resolveRenewalTerm({ leaseStartDate: toManilaStartOfDay(currentEndDate).add(1, 'day').toDate(), leaseDurationMonths: offer.months });
+    const newStartDate = term.leaseStartDate, newEndDate = term.stayEndDate;
 
     const renewPayload = {
       confirm: true,

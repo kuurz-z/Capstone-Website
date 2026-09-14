@@ -116,21 +116,15 @@ describe("lease normalization and duration validation", () => {
       .toThrow(expect.objectContaining({ code: "LEASE_DURATION_CONFLICT" }));
   });
 
-  // Regression: validateLeaseDuration previously hardcoded a 6-month
-  // long-term threshold, out of sync with the actual configurable
-  // BusinessSettings.longTermLeaseMinMonths that resolveContractLeasePricing
-  // (contractPricingResolver.js) uses to price the lease. With a
-  // longer-than-6 configured threshold (confirmed in production:
-  // longTermLeaseMinMonths = 10), a correctly short-term-priced 6-9 month
-  // lease was falsely rejected as LEASE_TYPE_DURATION_MISMATCH.
-  describe("configurable longTermLeaseMinMonths threshold", () => {
-    test("a 6-month lease is short-term when the configured threshold is 10 (matches production)", () => {
-      expect(validateLeaseDuration({ ...dates(6), leaseType: "short-term", longTermLeaseMinMonths: 10 }))
-        .toEqual({ leaseType: "short-term", durationMonths: 6 });
+  // Promotional pricing thresholds do not change official legal template bounds.
+  describe("legal duration independent of pricing threshold", () => {
+    test("a 6-month lease is legally long-term with a 10-month pricing threshold", () => {
+      expect(validateLeaseDuration({ ...dates(6), leaseType: "long-term", longTermLeaseMinMonths: 10 }))
+        .toEqual({ leaseType: "long-term", durationMonths: 6 });
     });
 
-    test("rejects a 6-month lease misclassified as long-term when the threshold is 10", () => {
-      expect(() => validateLeaseDuration({ ...dates(6), leaseType: "long-term", longTermLeaseMinMonths: 10 }))
+    test("rejects a 6-month lease misclassified as short-term regardless of pricing", () => {
+      expect(() => validateLeaseDuration({ ...dates(6), leaseType: "short-term", longTermLeaseMinMonths: 10 }))
         .toThrow(expect.objectContaining({ code: "LEASE_TYPE_DURATION_MISMATCH" }));
     });
 
@@ -160,15 +154,15 @@ describe("official template selection", () => {
     expect(resolveContractTemplate({ branch, roomType, ...dates(months) }).templateId).toBe(expected);
   });
 
-  test("selects the short-term template for a 6-month lease when the configured threshold is 10", () => {
+  test("selects the long-term legal template for a 6-month lease with pricing threshold 10", () => {
     const template = resolveContractTemplate({
       branch: "gil-puyat",
       roomType: "private",
       ...dates(6),
-      leaseType: "short-term",
+      leaseType: "long-term",
       longTermLeaseMinMonths: 10,
     });
-    expect(template.templateId).toBe("private-short-term");
+    expect(template.templateId).toBe("private-long-term");
   });
 
   test.each(["private", "double-sharing"])("rejects Guadalupe %s templates", (roomType) => {

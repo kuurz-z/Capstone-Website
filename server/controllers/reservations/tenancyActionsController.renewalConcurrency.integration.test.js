@@ -170,18 +170,18 @@ describe("renewal offer concurrency (createRenewalOffer / respondToRenewalOffer)
     // Exactly one successor Stay (renewal record) was created.
     const renewedStays = await Stay.find({ reservationId: reservation._id, previousStayId: { $ne: null } });
     expect(renewedStays).toHaveLength(1);
-    expect(renewedStays[0].status).toBe("active");
+    expect(renewedStays[0].status).toBe("upcoming");
 
-    // Exactly one prior Stay was marked renewed (not two independent ones).
+    // Acceptance prepares a successor without ending the current Stay early.
     const renewedPrevious = await Stay.find({ reservationId: reservation._id, status: "renewed" });
-    expect(renewedPrevious).toHaveLength(1);
+    expect(renewedPrevious).toHaveLength(0);
 
     // The offer itself ends in a single, consistent accepted state.
     const reloaded = await Reservation.findById(reservation._id);
     const acceptedOffer = reloaded.renewalOffers.find((o) => o.offerId === offer.offerId);
     expect(acceptedOffer.status).toBe("accepted");
 
-    // Reservation now points at the single new Stay, not a stale/duplicate one.
-    expect(String(reloaded.currentStayId)).toBe(String(renewedStays[0]._id));
+    // The current Stay remains authoritative until effective-date activation.
+    expect(String(reloaded.currentStayId)).toBe(String(reservation.currentStayId));
   });
 });

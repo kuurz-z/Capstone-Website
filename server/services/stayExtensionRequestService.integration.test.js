@@ -64,12 +64,13 @@ test('approval atomically renews the correct stay and invokes canonical contract
   const request = await submit();
   const reviewed = await reviewStayExtension({ requestId: request._id, actor, decision: 'approved', adminNote: 'Approved for next term' });
   expect(reviewed.status).toBe('approved');
-  expect((await Stay.findById(stay._id)).status).toBe('renewed');
+  expect((await Stay.findById(stay._id)).status).toBe('active');
   const successor = await Stay.findById(reviewed.successorStayId);
   expect(String(successor.previousStayId)).toBe(String(stay._id));
   expect(successor.leaseEndDate.toDateString()).toBe(new Date(request.requestedEndDate).toDateString());
   const updated = await Reservation.findById(reservation._id);
-  expect(String(updated.currentStayId)).toBe(String(successor._id));
+  expect(String(updated.currentStayId)).toBe(String(stay._id));
+  expect(successor.status).toBe("upcoming");
   expect(updated.monthlyRent).toBe(6300);
   expect(updated.pendingExtensionRequestId).toBeNull();
   expect((await Contract.findById(contract._id)).leaseEndDate).toEqual(contract.leaseEndDate);

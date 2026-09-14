@@ -1,3 +1,4 @@
+import { resolveLegalLeaseType } from "../config/contractLegalTerm.js";
 import { chromium } from "playwright-core";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -88,9 +89,9 @@ export const buildContractHtml = (data) => {
   }
   const term = leaseType === "short-term" ? "SHORT TERM" : "LONG TERM";
   const durationMonths = Number(data.fields.leaseDurationNumber);
-  if (!Number.isFinite(durationMonths)
-      || (leaseType === "short-term" && durationMonths >= 6)
-      || (leaseType === "long-term" && durationMonths < 6)) {
+  let expectedLeaseType;
+  try { expectedLeaseType = resolveLegalLeaseType(durationMonths); } catch { /* reported below */ }
+  if (leaseType !== expectedLeaseType) {
     const error = new Error("The selected lease template does not match the lease duration.");
     error.code = "CONTRACT_TEMPLATE_DURATION_MISMATCH";
     throw error;

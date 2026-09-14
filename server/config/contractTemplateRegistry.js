@@ -1,5 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import { LEGAL_LEASE_TERMS } from './contractLegalTerm.js';
 
 const templateDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -18,8 +19,7 @@ const createTemplate = ({
   displayName,
   roomType,
   leaseType,
-  minimumMonths: leaseType === "short-term" ? 1 : 6,
-  maximumMonths: leaseType === "short-term" ? 5 : null,
+  ...LEGAL_LEASE_TERMS[leaseType],
   sourceFileName,
   sourceFilePath: path.join(templateDirectory, sourceFileName),
   templateVersion: "1.0.0",

@@ -16,7 +16,7 @@ export default function StayExtensionRequests({ onReviewed }) {
     setBusy(request._id);
     try {
       await authFetch(`/tenant/stay-extension-requests/${request._id}`, { method: 'PATCH', body: JSON.stringify({ decision, adminNote: notes[request._id] || '' }) });
-      showNotification(`Stay extension ${decision}.`, 'success'); await load(); onReviewed?.();
+      showNotification(decision === 'retry_preparation' ? 'Contract preparation retried. Review the updated status.' : `Stay extension ${decision}.`, 'success'); await load(); onReviewed?.();
     } catch (err) { showNotification(err.message || 'Unable to review request.', 'error'); }
     finally { setBusy(null); }
   };
@@ -32,6 +32,11 @@ export default function StayExtensionRequests({ onReviewed }) {
         <div><dt className="font-medium">Monthly rent for extension</dt><dd>{Number(request.monthlyRent).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })}</dd></div>
         <div><dt className="font-medium">Reason / note</dt><dd className="whitespace-pre-wrap break-words">{request.reason || 'No reason supplied'}{request.note ? `\n${request.note}` : ''}</dd></div>
       </dl>
+      {request.status === 'approved' && request.fulfillmentState ? <p className="mt-3 text-sm text-gray-700 dark:text-gray-200">Contract: {request.fulfillmentState.replaceAll('_', ' ')}</p> : null}
+      {request.fulfillmentState === 'action_required' && request.preparationFailure ? <div className="mt-3 space-y-2" role="alert">
+        <p className="text-sm text-red-700 dark:text-red-300">{request.preparationFailure.message} ({request.preparationFailure.code})</p>
+        <button type="button" disabled={Boolean(busy)} onClick={() => review(request, 'retry_preparation')} className="rounded bg-blue-900 px-4 py-2 text-sm text-white disabled:opacity-50">Retry contract preparation</button>
+      </div> : null}
       {request.status === 'pending' ? <div className="mt-3 space-y-3">
         <label className="block text-sm text-gray-700 dark:text-gray-200">Admin note (optional)<textarea aria-label={`Admin note for ${request.tenantId?.firstName || 'tenant'}`} maxLength={1000} value={notes[request._id] || ''} onChange={(event) => setNotes({ ...notes, [request._id]: event.target.value })} className="mt-1 block w-full rounded border border-gray-400 bg-white p-2 text-gray-900 dark:bg-gray-800 dark:text-white" /></label>
         <p className="text-xs text-gray-600 dark:text-gray-300">Approval processes the existing renewal workflow. Contract preparation, signing, and rent activation rules apply.</p>

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { ROOM_BRANCHES } from "../config/branches.js";
 
 const STAY_STATUSES = [
+  "upcoming",
   "active",
   "ending_soon",
   // Spec §24.5: Lease term has lapsed but tenant is still occupying.
@@ -59,6 +60,19 @@ const staySchema = new mongoose.Schema(
     leaseEndDate: {
       type: Date,
       required: true,
+    },
+    leaseDurationMonths: { type: Number, default: null, min: 1 },
+    renewalPricingSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+    contractPreparationLease: {
+      type: new mongoose.Schema({ token: String, expiresAt: Date }, { _id: false }), default: null,
+    },
+    // Preparation diagnostics only; the existing Stay/Contract lifecycle remains authoritative.
+    contractPreparation: {
+      type: new mongoose.Schema({
+        status: { type: String, enum: ['action_required', 'retryable'] },
+        code: String, message: String, inputHash: String, failedAt: Date, adminNotified: Boolean,
+      }, { _id: false }),
+      default: null,
     },
     monthlyRent: {
       type: Number,

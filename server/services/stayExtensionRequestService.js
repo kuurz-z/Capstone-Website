@@ -1,3 +1,4 @@
+import { resolveRenewalTerm } from "./contractLeaseDateService.js";
 import mongoose from 'mongoose';
 import { isOwnerRole, isAdminRole } from '../config/roles.js';
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
@@ -35,7 +36,8 @@ export function extensionDates(currentEndDate, months) {
   const current = toManilaStartOfDay(currentEndDate);
   if (!current || current.isBefore(getManilaToday(), 'day')) fail('Your current lease must not have ended.', 400);
   const start = current.add(1, 'day');
-  return { start: start.toDate(), end: start.add(months, 'month').subtract(1, 'day').toDate() };
+  const term = resolveRenewalTerm({ leaseStartDate: start.toDate(), leaseDurationMonths: months });
+  return { start: term.leaseStartDate, end: toManilaStartOfDay(term.stayEndDate).toDate() };
 }
 
 async function currentContext(tenantId, session = null) {
@@ -48,7 +50,10 @@ async function currentContext(tenantId, session = null) {
       (reservation.currentStayId && id(reservation.currentStayId) !== id(stay))) fail('Your current stay has changed.');
   const contract = await resolveAuthoritativeCurrentContract({ reservationId: reservation._id, tenantId, session, strictIntegrityCheck: true });
   if (!contract || !['active', 'published', 'expiring_soon'].includes(contract.status)) fail('A current contract is required.');
-  if (!contract.leaseEndDate || toManilaStartOfDay(contract.leaseEndDate)?.valueOf() !== toManilaStartOfDay(stay.leaseEndDate)?.valueOf()) fail('The current stay and contract dates require Admin review.');
+  const stayEndDay = toManilaStartOfDay(stay.leaseEndDate)?.valueOf();
+  if (!contract.leaseEndDate || ![toManilaStartOfDay(contract.leaseEndDate)?.valueOf(),
+    toManilaStartOfDay(new Date(new Date(contract.leaseEndDate).getTime() - 1))?.valueOf()].includes(stayEndDay))
+    fail('The current stay and contract dates require Admin review.');
   if (toManilaStartOfDay(stay.leaseStartDate)?.isAfter(getManilaToday(), 'day')) fail('Your renewed stay has not started yet.');
   if (id(contract.roomId) && id(contract.roomId) !== id(stay.roomId)) fail('Your current room and contract require Admin review.');
   const room = await Room.findById(stay.roomId).session(session);
@@ -81,7 +86,7 @@ async function sendLifecycle(request, event) {
 }
 
 export async function getMyStayExtension(tenantId) {
-  const request = await StayExtensionRequest.findOne({ tenantId }).sort({ createdAt: -1 }).lean();
+  const request = await serializeStayExtension(await StayExtensionRequest.findOne({ tenantId }).sort({ createdAt: -1 }).lean());
   try {
     const context = await currentContext(tenantId);
     const current = { stayId: id(context.stay), startDate: context.stay.leaseStartDate, endDate: context.stay.leaseEndDate, room: context.room.name };
@@ -138,10 +143,19 @@ export async function createStayExtension({ tenantId, payload = {} }) {
 }
 
 export async function reviewStayExtension({ requestId, actor, decision, adminNote }) {
-  if (!['approved', 'rejected'].includes(decision)) fail('Choose approve or reject.', 400);
+  if (!['approved', 'rejected', 'retry_preparation'].includes(decision)) fail('Choose approve, reject, or retry preparation.', 400);
   const request = await StayExtensionRequest.findById(requestId);
   if (!request) fail('Request not found.', 404);
   if (!isAdminRole(actor?.role) || (!isOwnerRole(actor.role) && actor.branch !== request.branch)) fail('This request belongs to another branch.', 403);
+  if (decision === 'retry_preparation') {
+    if (request.status !== 'approved') fail('Only an approved extension can retry preparation.');
+    const stay = await Stay.findById(request.successorStayId);
+    if (!stay || stay.status !== 'upcoming') fail('This extension is not awaiting preparation.');
+    const oldContract = await Contract.findOne({ stayId: stay.previousStayId, isCurrent: true });
+    const { autoGenerateRenewalContract } = await import('./autoContractOrchestratorService.js');
+    await autoGenerateRenewalContract({ reservationId: request.reservationId, oldContract, newStay: stay, actorId: actor._id, retry: true });
+    return serializeStayExtension(request);
+  }
   if (request.status !== 'pending') fail('This request has already been reviewed.');
   const note = text(adminNote, 1000);
   if (decision === 'approved') {
@@ -165,4 +179,19 @@ export async function reviewStayExtension({ requestId, actor, decision, adminNot
   const reviewed = await StayExtensionRequest.findById(request._id);
   await sendLifecycle(reviewed, decision === 'approved' ? 'Approved' : 'Rejected');
   return reviewed;
+}
+
+export async function serializeStayExtension(request) {
+  if (!request) return null;
+  const data = request.toObject ? request.toObject() : { ...request };
+  if (data.status !== 'approved') return data;
+  const stay = data.successorStayId ? await Stay.findById(data.successorStayId).lean() : null;
+  const contract = stay ? await Contract.findOne({ stayId: stay._id, contractPurpose: 'renewal' }).lean() : null;
+  const unprepared = !contract || ['draft', 'incomplete', 'ready_for_generation'].includes(contract.status);
+  const failure = unprepared ? stay?.contractPreparation : null;
+  const fulfillmentState = contract?.status === 'active' && stay?.status === 'active' ? 'effective'
+    : failure?.status === 'action_required' || !stay ? 'action_required'
+    : unprepared ? 'preparing' : !contract.finalDocument ? 'awaiting_contract'
+    : 'awaiting_effective_date';
+  return { ...data, fulfillmentState, preparationFailure: failure || null, successorContractId: contract?._id || null };
 }

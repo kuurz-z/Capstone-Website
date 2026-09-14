@@ -42,6 +42,12 @@ describe("autoContractOrchestratorService", () => {
     });
     mockGeneratePreparedContractPdf = jest.fn();
 
+    jest.unstable_mockModule("./renewalContractPreparationService.js", () => ({
+      withRenewalPreparationLock: (_stayId, prepare) => prepare(),
+    skipBlockedRenewalPreparation: jest.fn().mockResolvedValue(null),
+      clearRenewalPreparationFailure: jest.fn().mockResolvedValue(null),
+      recordRenewalPreparationFailure: jest.fn(async (_, e) => ({ success: false, error: e.code || e.message, code: e.code })),
+    }));
     jest.unstable_mockModule("../models/index.js", () => ({
       Contract: {
         findOne: mockContractFindOne,
