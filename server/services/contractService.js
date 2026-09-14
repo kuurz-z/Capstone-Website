@@ -1,3 +1,4 @@
+import { resolveLegalLeaseType } from "../config/contractLegalTerm.js";
 import mongoose from "mongoose";
 import dayjs from "dayjs";
 import { Contract, ContractCounter, Reservation, Room, Stay, User } from "../models/index.js";
@@ -29,6 +30,7 @@ import { readMoveInDate } from "../utils/lifecycleNaming.js";
 import {
   deriveAdvanceCoverageDates,
   deriveContractLeaseDates,
+  resolveRenewalTerm,
 } from "./contractLeaseDateService.js";
 import { roundMoney } from "./billing/billingPolicy.js";
 
@@ -253,11 +255,10 @@ export const createDraftContract = async ({
     resolvedTemplate = resolveContractTemplate({
       branch,
       roomType: canonicalRoomType,
-      leaseType: pricing.isLongTerm ? "long-term" : "short-term",
+      leaseType: resolveLegalLeaseType(leaseDurationMonths),
       leaseStartDate,
       leaseEndDate,
       leaseDurationMonths,
-      longTermLeaseMinMonths: settings.longTermLeaseMinMonths,
     });
   } catch {
     // A draft may preserve incomplete lease data. Full validation reports the
@@ -282,8 +283,9 @@ export const createDraftContract = async ({
       version: previousContract ? previousContract.version + 1 : 1,
       previousContractId: previousContract?._id || null,
       templateType: resolvedTemplate?.templateId ||
-        `${canonicalRoomType.replaceAll("-", "_")}_${pricing.leaseType}`,
+        `${canonicalRoomType}-${resolveLegalLeaseType(leaseDurationMonths)}`,
       roomType: canonicalRoomType,
+      // Historical leaseType stores the pricing tier; templateType carries the legal term.
       leaseType: pricing.leaseType,
       propertyName: property.propertyName,
       propertyAddress: property.propertyAddress,
@@ -702,11 +704,10 @@ export const createReplacementContractForTransfer = async ({
     resolvedTemplate = resolveContractTemplate({
       branch,
       roomType: canonicalRoomType,
-      leaseType: pricing.isLongTerm ? "long-term" : "short-term",
+      leaseType: resolveLegalLeaseType(leaseDurationMonths),
       leaseStartDate,
       leaseEndDate,
       leaseDurationMonths,
-      longTermLeaseMinMonths: settings.longTermLeaseMinMonths,
     });
   } catch {
     // Template resolved on validation
@@ -777,7 +778,7 @@ export const createReplacementContractForTransfer = async ({
         roomId: targetRoom._id,
         branch,
         version: (oldContract.version || 1) + 1,
-        templateType: resolvedTemplate?.templateId || `${canonicalRoomType.replaceAll("-", "_")}_${pricing.leaseType}`,
+        templateType: resolvedTemplate?.templateId || `${canonicalRoomType}-${resolveLegalLeaseType(leaseDurationMonths)}`,
         roomType: canonicalRoomType,
         leaseType: pricing.leaseType,
         propertyName: property.propertyName,
@@ -859,6 +860,15 @@ export const createSuccessorContractForRenewal = async ({
     throw serviceError("The renewed Stay record is required for renewal.", "RENEWAL_STAY_REQUIRED", 400);
   }
 
+  if (!session) {
+    const transaction = await mongoose.startSession();
+    let successor;
+    try { await transaction.withTransaction(async () => {
+      await Reservation.updateOne({ _id: reservationId }, { $inc: { renewalPreparationVersion: 1 } }, { session: transaction });
+      successor = await createSuccessorContractForRenewal({ reservationId, oldContract, newStay, actorId, session: transaction });
+    }); } finally { await transaction.endSession(); }
+    return successor;
+  }
   // Idempotency guard — one predecessor Contract may produce at most one
   // legitimate renewal successor. Mirrors createReplacementContractForTransfer's
   // guard exactly (replacesContractId + contractPurpose): a retried/duplicate
@@ -894,9 +904,10 @@ export const createSuccessorContractForRenewal = async ({
   const branch = oldContract.branch;
   const canonicalRoomType = oldContract.roomType;
 
-  const leaseStartDate = newStay.leaseStartDate;
-  const leaseEndDate = newStay.leaseEndDate;
-  const leaseDurationMonths = Math.max(1, dayjs(leaseEndDate).diff(dayjs(leaseStartDate), "month"));
+  const { leaseStartDate, leaseEndDate, leaseDurationMonths } = resolveRenewalTerm({
+    leaseStartDate: newStay.leaseStartDate, leaseEndDate: newStay.leaseEndDate,
+    leaseDurationMonths: newStay.leaseDurationMonths,
+  });
 
   // The renewal successor Contract must snapshot the SAME approved pricing
   // the tenant actually accepted — never a re-resolution against whatever
@@ -905,9 +916,9 @@ export const createSuccessorContractForRenewal = async ({
   // Prefer the exact accepted Reservation.renewalOffers[] entry (linked via
   // newStay.renewalOfferId, set at acceptance in tenantActionService.js's
   // renewStayWorkflow) when it was itself resolved canonically.
-  const acceptedOffer = newStay.renewalOfferId
+  const acceptedOffer = newStay.renewalPricingSnapshot || (newStay.renewalOfferId
     ? (reservation.renewalOffers || []).find((offer) => offer.offerId === newStay.renewalOfferId)
-    : null;
+    : null);
   const hasFrozenCanonicalOffer =
     acceptedOffer?.pricingSource === "canonical_resolver" &&
     Number.isFinite(Number(acceptedOffer.proposedRent)) &&
@@ -975,11 +986,10 @@ export const createSuccessorContractForRenewal = async ({
     resolvedTemplate = resolveContractTemplate({
       branch,
       roomType: canonicalRoomType,
-      leaseType: pricing.isLongTerm ? "long-term" : "short-term",
+      leaseType: resolveLegalLeaseType(leaseDurationMonths),
       leaseStartDate,
       leaseEndDate,
       leaseDurationMonths,
-      longTermLeaseMinMonths: settings.longTermLeaseMinMonths,
     });
   } catch {
     // Template resolved on validation
@@ -1023,7 +1033,7 @@ export const createSuccessorContractForRenewal = async ({
         roomId: oldContract.roomId,
         branch,
         version: (oldContract.version || 1) + 1,
-        templateType: resolvedTemplate?.templateId || `${canonicalRoomType.replaceAll("-", "_")}_${pricing.leaseType}`,
+        templateType: resolvedTemplate?.templateId || `${canonicalRoomType}-${resolveLegalLeaseType(leaseDurationMonths)}`,
         roomType: canonicalRoomType,
         leaseType: pricing.leaseType,
         propertyName: oldContract.propertyName,

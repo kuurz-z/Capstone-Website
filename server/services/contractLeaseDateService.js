@@ -1,4 +1,4 @@
-import dayjs from "dayjs";
+import { getManilaDayjs, toManilaStartOfDay } from '../utils/dateUtils.js';
 
 const contractDateError = (message, code, details = undefined) =>
   Object.assign(new Error(message), { code, statusCode: 422, details });
@@ -37,7 +37,7 @@ export const deriveContractLeaseDates = ({
       { leaseDurationMonths: leaseDurationMonths ?? null },
     );
   }
-  const end = dayjs(start).add(duration, "month");
+  const end = getManilaDayjs(start).add(duration, "month");
   if (!end.isValid()) {
     throw contractDateError(
       "The Contract lease end date could not be derived.",
@@ -61,6 +61,31 @@ export const deriveAdvanceCoverageDates = (leaseStartDate) => {
   }
   return {
     advanceCoverageStart: start,
-    advanceCoverageEnd: dayjs(start).add(1, "month").subtract(1, "day").toDate(),
+    advanceCoverageEnd: getManilaDayjs(start).add(1, "month").subtract(1, "day").toDate(),
   };
 };
+
+// A Stay uses an inclusive final day; its legal Contract uses the exclusive
+// calendar anniversary. Validate the endpoint rather than rounding a diff.
+export function resolveRenewalTerm({ leaseStartDate, leaseEndDate, leaseDurationMonths }) {
+  const start = toManilaStartOfDay(leaseStartDate);
+  const end = leaseEndDate == null ? null : toManilaStartOfDay(leaseEndDate);
+  if (!start || (leaseEndDate != null && !end)) {
+    throw contractDateError('Valid renewal dates are required.', 'INVALID_RENEWAL_DATES');
+  }
+  const hasMonths = leaseDurationMonths != null;
+  const delta = end ? (end.year() - start.year()) * 12 + end.month() - start.month() : 0;
+  const candidates = hasMonths ? [Number(leaseDurationMonths)] : [delta, delta + 1];
+  for (const months of candidates) {
+    if (!Number.isInteger(months) || months < 1) continue;
+    const legal = deriveContractLeaseDates({ leaseStartDate: start.toDate(), leaseDurationMonths: months });
+    const inclusiveEnd = getManilaDayjs(legal.leaseEndDate).subtract(1, 'millisecond');
+    const legacyExclusive = deriveContractLeaseDates({ leaseStartDate, leaseDurationMonths: months }).leaseEndDate;
+    if (end && end.valueOf() !== inclusiveEnd.startOf('day').valueOf() &&
+        new Date(leaseEndDate).getTime() !== legacyExclusive.getTime()) continue;
+    return { ...legal, stayEndDate: inclusiveEnd.toDate() };
+  }
+  throw contractDateError('Renewal dates do not match the requested whole-month term.', 'LEASE_DURATION_CONFLICT', {
+    leaseStartDate, leaseEndDate, requestedMonths: leaseDurationMonths ?? null,
+  });
+}

@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import logger from "../middleware/logger.js";
-import { Contract, Reservation, Stay } from "../models/index.js";
+import { BedHistory, Contract, Reservation, Stay } from "../models/index.js";
 import { transitionContract } from "./contractService.js";
 import { notify, notifyBranchAdmins } from "./notifications/notificationService.js";
 import { toManilaStartOfDay } from "../utils/dateUtils.js";
@@ -115,7 +115,7 @@ export async function activateDueRenewalContracts({ now = new Date() } = {}) {
         const predecessor = successor.replacesContractId
           ? await Contract.findById(successor.replacesContractId).session(session)
           : null;
-        if (!predecessor || predecessor.status !== "active") {
+        if (!predecessor || !["active", "expiring_soon"].includes(predecessor.status)) {
           // The predecessor was already superseded/closed by something else
           // (another activation, manual admin action, data corruption) —
           // activating this successor too would leave two "current"
@@ -151,6 +151,24 @@ export async function activateDueRenewalContracts({ now = new Date() } = {}) {
             outcome = { conflict: true };
             return;
           }
+        }
+
+        const nextStay = successor.stayId ? await Stay.findById(successor.stayId).session(session) : null;
+        if (nextStay?.status === 'upcoming') {
+          const previousStay = await Stay.findById(nextStay.previousStayId).session(session);
+          const reservation = await Reservation.findById(successor.reservationId).session(session);
+          if (!reservation || !previousStay || !['active', 'ending_soon'].includes(previousStay.status) ||
+              String(previousStay.reservationId) !== String(reservation._id) ||
+              String(previousStay._id) !== String(predecessor.stayId) ||
+              (reservation.currentStayId && String(reservation.currentStayId) !== String(previousStay._id))) {
+            outcome = { conflict: true }; return;
+          }
+          previousStay.status = 'renewed'; previousStay.endedAt = nextStay.leaseStartDate; previousStay.endReason = 'renewed';
+          nextStay.status = 'active';
+          await previousStay.save({ session }); await nextStay.save({ session });
+          reservation.currentStayId = nextStay._id; reservation.latestStayStatus = 'active';
+          await reservation.save({ session });
+          await BedHistory.updateMany({ reservationId: reservation._id, status: 'active' }, { $set: { stayId: nextStay._id } }, { session });
         }
 
         successor.isCurrent = true;

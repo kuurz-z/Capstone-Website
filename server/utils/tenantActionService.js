@@ -1,3 +1,5 @@
+import { resolveRenewalTerm } from "../services/contractLeaseDateService.js";
+import { toManilaStartOfDay } from "./dateUtils.js";
 import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
@@ -922,7 +924,7 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
   try {
     await session.withTransaction(async () => {
       const reservation = await Reservation.findById(reservationId)
-        .populate("roomId", "name roomNumber branch monthlyPrice price")
+        .populate("roomId", "name roomNumber branch type capacity monthlyPrice price regularShortRate regularLongRate isDiscountEnabled")
         .populate("userId", "firstName lastName email tenantStatus")
         .session(session);
       if (!reservation) {
@@ -961,12 +963,10 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         throw Object.assign(new Error("Renewal confirmation is required."), { statusCode: 400, code: "CONFIRM_REQUIRED" });
       }
 
-      const newLeaseStartDate = normalizeDate(payload.newLeaseStartDate);
-      const newLeaseEndDate = normalizeDate(payload.newLeaseEndDate, true);
-      if (!newLeaseStartDate || !newLeaseEndDate || newLeaseEndDate <= newLeaseStartDate) {
-        throw Object.assign(new Error("Valid renewal start and end dates are required."), { statusCode: 400, code: "INVALID_RENEWAL_DATES" });
-      }
-      if (!dayjs(newLeaseStartDate).isAfter(dayjs(activeStay.leaseEndDate), "day")) {
+      const requestedMonths = extension?.months || (reservation.renewalOffers || []).find(o => o.offerId === payload.renewalOfferId)?.months || payload.leaseDurationMonths;
+      const term = resolveRenewalTerm({ leaseStartDate: payload.newLeaseStartDate, leaseEndDate: payload.newLeaseEndDate, leaseDurationMonths: requestedMonths });
+      const newLeaseStartDate = term.leaseStartDate, newLeaseEndDate = term.stayEndDate;
+      if (newLeaseStartDate < toManilaStartOfDay(activeStay.leaseEndDate).add(1, 'day').toDate()) {
         throw Object.assign(new Error("Renewal start date must be after the current lease end date."), { statusCode: 400, code: "RENEWAL_START_OVERLAP" });
       }
 
@@ -988,12 +988,23 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         throw Object.assign(new Error("A future renewal already exists for this tenant."), { statusCode: 409, code: "FUTURE_RENEWAL_EXISTS" });
       }
 
-      activeStay.status = "renewed";
-      activeStay.endedAt = newLeaseStartDate;
-      activeStay.endReason = "renewed";
-      activeStay.renewalNotes = payload.notes || "";
-      activeStay.updatedBy = actorId;
-      await activeStay.save({ session });
+      // Serialize preparation without changing the current Stay or recurring rate.
+      reservation.renewalPreparationVersion = Number(reservation.renewalPreparationVersion || 0) + 1;
+      const { resolveAuthoritativeLeasePricing } = await import('../services/contractPricingResolver.js');
+      const { getBusinessSettings } = await import('./businessSettings.js');
+      const acceptedOffer = (reservation.renewalOffers || []).find(o => o.offerId === payload.renewalOfferId);
+      const resolvedPricing = resolveAuthoritativeLeasePricing({ room: reservation.roomId,
+        roomType: reservation.roomId.type, branch: reservation.roomId.branch,
+        leaseDurationMonths: term.leaseDurationMonths, settings: await getBusinessSettings() });
+      const approvedRate = Number(payload.monthlyRent ?? resolvedPricing.finalMonthlyRate);
+      const approvedRegular = Math.max(resolvedPricing.regularMonthlyRate, approvedRate);
+      const renewalPricingSnapshot = acceptedOffer?.pricingSource === 'canonical_resolver'
+        ? { pricingSource: acceptedOffer.pricingSource, pricingTier: acceptedOffer.pricingTier,
+            proposedRent: acceptedOffer.proposedRent, regularMonthlyRate: acceptedOffer.regularMonthlyRate,
+            discountPercentage: acceptedOffer.discountPercentage, offerId: acceptedOffer.offerId }
+        : { pricingSource: 'canonical_resolver', pricingTier: resolvedPricing.leaseType,
+            proposedRent: approvedRate, regularMonthlyRate: approvedRegular,
+            discountPercentage: approvedRegular > 0 ? (approvedRegular - approvedRate) / approvedRegular * 100 : 0 };
 
       const renewalRoomId = reservation.roomId?._id || reservation.roomId;
       // Stay.bedId is a required String — `""` is rejected. The renewed Stay
@@ -1016,8 +1027,10 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
             bedId: renewalBedId,
             leaseStartDate: newLeaseStartDate,
             leaseEndDate: newLeaseEndDate,
-            monthlyRent: Number(payload.monthlyRent ?? getMonthlyRent(reservation)),
-            status: "active",
+            monthlyRent: renewalPricingSnapshot.proposedRent,
+            status: "upcoming",
+            leaseDurationMonths: term.leaseDurationMonths,
+            renewalPricingSnapshot,
             previousStayId: activeStay._id,
             renewalOfferId: payload.renewalOfferId || null,
             renewalNotes: payload.notes || "",
@@ -1028,20 +1041,6 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         { session },
       );
 
-      const activeHistory = await BedHistory.findOne({
-        reservationId: reservation._id,
-        tenantId: reservation.userId?._id || reservation.userId,
-        status: "active",
-      })
-        .sort({ moveInDate: -1 })
-        .session(session);
-      if (activeHistory && !activeHistory.stayId) {
-        activeHistory.stayId = newStay._id;
-        await activeHistory.save({ session });
-      }
-
-      reservation.currentStayId = newStay._id;
-      reservation.latestStayStatus = "active";
       if (extension) {
         extension.status = 'approved';
         extension.reviewedBy = actorId;
@@ -1098,8 +1097,7 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
   }
 
   // ── Automated Renewal Successor Contract Generation ──────────────────────
-  // Fire-and-forget, mirrors transferStayWorkflow's post-transaction contract
-  // trigger below. Never touches the old Contract's status/isCurrent — see
+  // Await preparation; Job 19 can retry a persisted upcoming Stay. Never touches the old Contract's status/isCurrent — see
   // createSuccessorContractForRenewal's comment (contractService.js).
   if (result) {
     try {
@@ -1109,7 +1107,7 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
       });
       if (oldContract) {
         const { autoGenerateRenewalContract } = await import("../services/autoContractOrchestratorService.js");
-        autoGenerateRenewalContract({
+        await autoGenerateRenewalContract({
           reservationId: result.reservation._id,
           oldContract,
           newStay: result.stay,

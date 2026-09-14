@@ -1,9 +1,13 @@
 /**
  * Room details pricing & lease term calculations.
  *
- * Enforces the strict rule:
- * - 1 to 5 months = Short-Term (uses Short-Term base rate with Short-Term discount)
- * - 6 to 12 months = Long-Term (uses Long-Term base rate with Long-Term discount)
+ * PRICING tier (which base rate/discount applies) follows the room's
+ * configurable long-term discount threshold (`room.longTermLeaseMinMonths`,
+ * platform default 6 months when unset), NOT a fixed month count. It is
+ * independent of the fixed 1-5 / 6+ month LEGAL contract-template
+ * classification enforced server-side (see server/config/contractLegalTerm.js)
+ * — a 6-9 month lease can be legally Long-Term while still billed at the
+ * short-duration rate until the room's actual threshold is reached.
  */
 
 export function getFlyerRates(roomType, targetRoom = {}) {
@@ -59,8 +63,12 @@ export function calculateRoomDetailsCost({
   const flyer = getFlyerRates(roomType, room);
   const isDiscountEnabled = room?.isDiscountEnabled !== false;
 
+  const pricingThreshold =
+    Number.isFinite(Number(room?.longTermLeaseMinMonths)) && Number(room.longTermLeaseMinMonths) > 0
+      ? Number(room.longTermLeaseMinMonths)
+      : 6;
   const leaseMonths = parseInt(activeLeaseDuration, 10) || 6;
-  const isLongTerm = leaseMonths >= 6;
+  const isLongTerm = leaseMonths >= pricingThreshold;
 
   const regularRate = isLongTerm ? flyer.regularLong : flyer.regularShort;
   const monthlyRate = isDiscountEnabled

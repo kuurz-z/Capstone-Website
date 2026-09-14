@@ -31,6 +31,12 @@ export const getEffectiveMonthlyStayRate = (reservationData, overrides = {}) => 
   const room = reservationData?.room || {};
   const pricingDisplay = reservationData?.pricingDisplay;
   const rawServerRate = getResolvedMonthlyRate(pricingDisplay);
+  // Configurable pricing-discount threshold, not the fixed 1-5 / 6+ month
+  // legal contract-template classification (server/config/contractLegalTerm.js).
+  const pricingThreshold =
+    Number.isFinite(Number(room?.longTermLeaseMinMonths)) && Number(room.longTermLeaseMinMonths) > 0
+      ? Number(room.longTermLeaseMinMonths)
+      : 6;
 
   const leaseDuration =
     overrides.leaseDuration ||
@@ -48,8 +54,8 @@ export const getEffectiveMonthlyStayRate = (reservationData, overrides = {}) => 
     const matchesServerDuration =
       !pricingDisplay?.leaseDurationMonths ||
       String(pricingDisplay.leaseDurationMonths) === String(leaseDuration) ||
-      (pricingDisplay.leaseType === "short_term" && Number(leaseDuration) < 6) ||
-      (pricingDisplay.leaseType === "long_term" && Number(leaseDuration) >= 6);
+      (pricingDisplay.leaseType === "short_term" && Number(leaseDuration) < pricingThreshold) ||
+      (pricingDisplay.leaseType === "long_term" && Number(leaseDuration) >= pricingThreshold);
 
     if (!isExplicitOverride || matchesServerDuration) {
       baseMonthlyRent = rawServerRate;

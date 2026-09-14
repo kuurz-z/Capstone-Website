@@ -1,3 +1,4 @@
+import { resolveLegalLeaseType } from "../config/contractLegalTerm.js";
 import mongoose from "mongoose";
 import dayjs from "dayjs";
 import { chromium } from "playwright-core";
@@ -1149,7 +1150,7 @@ export function mapStayDataToContractPayload(stayData) {
   }
 
   const durationMonths = Number(stayData.leaseDurationMonths) || 6;
-  const leaseType = durationMonths < 6 ? "short-term" : "long-term";
+  const leaseType = resolveLegalLeaseType(durationMonths);
   const templateId = `${roomType.replace(/_/g, "-")}-${leaseType}`;
 
   const executionDate = stayData.issuedAt || new Date();

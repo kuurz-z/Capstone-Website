@@ -188,6 +188,7 @@ const reservationSchema = new mongoose.Schema(
       required: true,
     },
     pendingExtensionRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'StayExtensionRequest', default: null },
+    renewalPreparationVersion: { type: Number, default: 0 },
     currentStayId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Stay",

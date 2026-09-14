@@ -1,3 +1,4 @@
+import { withRenewalPreparationLock, skipBlockedRenewalPreparation, recordRenewalPreparationFailure, clearRenewalPreparationFailure } from "./renewalContractPreparationService.js";
 import dayjs from "dayjs";
 import logger from "../middleware/logger.js";
 import { Contract, Reservation, Room, User } from "../models/index.js";
@@ -669,16 +670,23 @@ export async function autoGenerateTransferContract({
  * @param {string|mongoose.Types.ObjectId} params.actorId
  * @returns {Promise<{ success: boolean, successorContractId?: string, error?: string }>}
  */
-export async function autoGenerateRenewalContract({
+export async function autoGenerateRenewalContract(params) {
+  return withRenewalPreparationLock(params.newStay?._id, () => prepareRenewalContract(params));
+}
+
+async function prepareRenewalContract({
   reservationId,
   oldContract,
   newStay,
   actorId,
+  retry = false,
 }) {
+  const params = { reservationId, oldContract, newStay, actorId, retry };
   try {
+    const skipped = await skipBlockedRenewalPreparation(params);
+    if (skipped) return skipped;
     if (!oldContract) {
-      logger.warn({ reservationId }, "[AutoContract] Renewal contract skipped: no current Contract found");
-      return { success: false, error: "PREVIOUS_CONTRACT_REQUIRED" };
+      throw Object.assign(new Error("Previous current Contract is required."), { code: "PREVIOUS_CONTRACT_REQUIRED" });
     }
 
     logger.info(
@@ -705,17 +713,10 @@ export async function autoGenerateRenewalContract({
         successorContract.updatedBy = actorId;
         await successorContract.save();
       } else {
-        logger.warn(
-          { contractId: successorContract._id, missing: validation.missingFields, errors: validation.errors },
-          "[AutoContract] Renewal contract validation incomplete; draft created for administrator review",
-        );
-        return {
-          success: true,
-          successorContractId: String(successorContract._id),
-          contractNumber: successorContract.contractNumber,
-          status: successorContract.status,
-          incomplete: true,
-        };
+        const detail = validation.errors?.[0] || validation.conflicts?.[0];
+        throw Object.assign(new Error(detail?.message || 'Contract source fields require administrator review.'), {
+          code: detail?.code || 'CONTRACT_REQUIRED_FIELD_MISSING', details: validation,
+        });
       }
     }
 
@@ -729,10 +730,11 @@ export async function autoGenerateRenewalContract({
       regenerationReason: `Auto-generated renewal successor for Room ${successorContract.roomNumber}`,
     });
 
+    await clearRenewalPreparationFailure(newStay._id);
     try {
       const tenant = await User.findById(successorContract.tenantId).select("firstName lastName").lean();
       const tenantName = tenant ? `${tenant.firstName} ${tenant.lastName}`.trim() : successorContract.tenantLegalName || "Tenant";
-      notifyBranchAdminsSafe(
+      await notifyBranchAdminsSafe(
         successorContract.branch,
         "contract_prepared",
         "Renewal Contract Ready",
@@ -756,24 +758,11 @@ export async function autoGenerateRenewalContract({
       contractNumber: result.contract.contractNumber,
     };
   } catch (error) {
-    logger.error({ err: error, reservationId }, "[AutoContract] Failed to auto-generate Renewal contract");
-    try {
-      notifyBranchAdminsSafe(
-        oldContract?.branch || "",
-        "contract_error",
-        "Renewal Contract Auto-Generation Alert",
-        `Renewal contract auto-generation encountered an issue: ${error.message || "Unknown error"}. Review required in Contracts workspace.`,
-        {
-          entityType: "reservation",
-          entityId: String(reservationId),
-          reservationId: String(reservationId),
-          actionUrl: `/admin/tenants?reservationId=${encodeURIComponent(String(reservationId))}`,
-        },
-      );
-    } catch (alertErr) {
-      // Non-fatal
+    try { return await recordRenewalPreparationFailure(params, error); }
+    catch (persistenceError) {
+      logger.warn({ err: persistenceError, reservationId }, 'Unable to persist renewal preparation diagnostic; will retry');
+      return { success: false, error: error.message, code: error.code };
     }
-    return { success: false, error: error.message, code: error.code };
   }
 }
 

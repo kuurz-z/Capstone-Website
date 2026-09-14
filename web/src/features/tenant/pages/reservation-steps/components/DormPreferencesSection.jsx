@@ -31,6 +31,10 @@ const DormPreferencesSection = ({
  handleTargetDateInput, handleTimeInput,
  readOnly, moveInMin, moveInMax, fieldErrors, validateField,
  showValidationErrors,
+ // Configurable pricing-discount threshold (defaults to the platform
+ // default of 6 only when unavailable) — distinct from the fixed 1-5 /
+ // 6+ month LEGAL Short-Term/Long-Term classification used below.
+ longTermLeaseMinMonths = 6,
 }) => (
  <>
   {/* Referral Source */}
@@ -258,7 +262,11 @@ const DormPreferencesSection = ({
           )}
         </div>
         <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
-          {Number(leaseDuration) >= 6
+          {/* Pricing eligibility follows the room's actual (configurable)
+              discount threshold, never the fixed legal 6-month boundary
+              above — a 6-9 month lease can be legally Long-Term while still
+              billed at the short-duration rate. */}
+          {Number(leaseDuration) >= Number(longTermLeaseMinMonths)
             ? "Eligible for standard discounted monthly rent rates and standard security deposit. All pricing previews stay synchronized."
             : "Flexible short-term rate applies. All previous stages and payment previews automatically synchronize with your selected duration."}
         </p>

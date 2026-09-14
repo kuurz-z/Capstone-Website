@@ -656,7 +656,7 @@ export const generatePreparedContractPdf = async ({
     contractNumber: contract.contractNumber,
     tenantLegalName: contract.tenantLegalName,
     roomType: contract.roomType,
-    leaseType: contract.leaseType,
+    leaseType: generationData.lease.leaseType,
     contractDate: generationData.lease.executionDate.toISOString().slice(0, 10),
     version: generatedVersion,
   });

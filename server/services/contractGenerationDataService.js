@@ -1,3 +1,4 @@
+import { resolveLegalLeaseType } from "../config/contractLegalTerm.js";
 import dayjs from "dayjs";
 import { Reservation, Room, Stay, User } from "../models/index.js";
 import {
@@ -12,7 +13,6 @@ import {
 import { buildInitialPaymentSummary } from "./contractPricingService.js";
 import { resolveReservationContractEligibility } from "./reservationContractEligibilityService.js";
 import { joinAddressParts, normalizeAddress, stripRegionSuffix } from "../utils/addressUtils.js";
-import { getBusinessSettings } from "../utils/businessSettings.js";
 
 const numberWords = Object.freeze([
   "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
@@ -187,16 +187,14 @@ export const buildContractGenerationData = async (
     throw error;
   }
 
-  const businessSettings = await getBusinessSettings();
   const template = resolveContractTemplate({
     branch: room.branch,
     roomType: room.type,
-    leaseType: contract.leaseType,
+    leaseType: resolveLegalLeaseType(contract.leaseDurationMonths),
     leaseStartDate: contract.leaseStartDate,
     leaseEndDate: contract.leaseEndDate,
     leaseDurationMonths: contract.leaseDurationMonths,
     requestedTemplateId,
-    longTermLeaseMinMonths: businessSettings.longTermLeaseMinMonths,
   });
   const integrity = verifyTemplate ? await assertOfficialTemplateAvailable(template) : null;
   const person = resolveApplicantIdentity({ contract, reservation });

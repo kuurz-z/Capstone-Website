@@ -149,6 +149,9 @@ await jest.unstable_mockModule("./lifecycleNaming.js", () => ({
   readMoveInDate: (reservation) => reservation.moveInDate || null,
 }));
 
+const reconcileRenewalContractPreparation = jest.fn().mockResolvedValue({ recovered: 0 });
+await jest.unstable_mockModule("../services/renewalContractPreparationService.js", () => ({ reconcileRenewalContractPreparation }));
+
 const scheduler = await import("./scheduler.js");
 
 const createReservation = (overrides = {}) => ({
@@ -562,6 +565,7 @@ describe("scheduler jobs", () => {
     autoGenerateMoveInContract.mockResolvedValue({ success: true, contractId: "contract-1" });
 
     await scheduler.reconcileMissingContractGeneration();
+    expect(reconcileRenewalContractPreparation).toHaveBeenCalled();
 
     expect(autoGenerateMoveInContract).toHaveBeenCalledWith({
       reservationId: "res-1",

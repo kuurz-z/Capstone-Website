@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import { Bill, Reservation, Room } from "../../models/index.js";
 import logger from "../../middleware/logger.js";
+import { getBusinessSettings } from "../../utils/businessSettings.js";
 import {
   getAdminInfo,
   fetchBills,
@@ -147,6 +148,7 @@ export const getRentBillableTenants = async (req, res, next) => {
       }
     }
     const search = String(req.query.search || "").trim().toLowerCase();
+    const { longTermLeaseMinMonths } = await getBusinessSettings();
 
     const tenants = reservationCycles
       .map(({ reservation, cycle, validationError }) =>
@@ -155,6 +157,7 @@ export const getRentBillableTenants = async (req, res, next) => {
           existingByReservation.get(String(reservation._id)),
           cycle,
           validationError,
+          longTermLeaseMinMonths,
         ),
       )
       .filter((tenant) => {
@@ -556,6 +559,7 @@ export const generateBulkBills = async (req, res, next) => {
     const monthEnd = monthDate.endOf("month").toDate();
 
     const rooms = await Room.find({ branch, isArchived: false });
+    const { longTermLeaseMinMonths } = await getBusinessSettings();
 
     const summary = {
       roomsProcessed: 0,
@@ -595,7 +599,7 @@ export const generateBulkBills = async (req, res, next) => {
         seenUserIds.add(String(reservation.userId._id));
 
         const moveInDate = readMoveInDate(reservation) || monthStart;
-        const rent = suggestRent(reservation, room, moveInDate);
+        const rent = suggestRent(reservation, room, moveInDate, longTermLeaseMinMonths);
         const customCharges =
           getReservationRecurringFees(reservation).additionalCharges;
         const tenantStart = dayjs(

@@ -83,7 +83,7 @@ describe("renewStayWorkflow does not prematurely change the Reservation billing 
     });
 
     expect(result.stay.monthlyRent).toBe(6800); // new Stay legitimately describes the new terms
-    expect(result.stay.status).toBe("active");
+    expect(result.stay.status).toBe("upcoming");
 
     const reloadedReservation = await Reservation.findById(reservation._id);
     // The billing source of truth must remain the OLD rate until the
