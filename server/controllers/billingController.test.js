@@ -140,6 +140,11 @@ await jest.unstable_mockModule("../utils/businessSettings.js", () => ({
   getLatePaymentGraceDays: jest.fn(async () => 1),
   resolvePenaltyRatePerDay: jest.fn((rate) => rate || 50),
   resolveLatePaymentGraceDays: jest.fn((grace) => (grace !== undefined && grace !== null ? Number(grace) : 1)),
+  // suggestRent's fallback threshold (server/controllers/billing/_helpers.js)
+  // is resolved via getBusinessSettings(); not exercised by this suite's
+  // fixtures (they always supply an explicit monthlyRent/totalPrice), but the
+  // module import must resolve.
+  getBusinessSettings: jest.fn(async () => ({ longTermLeaseMinMonths: 6 })),
 }));
 
 await jest.unstable_mockModule("../utils/notificationService.js", () => {

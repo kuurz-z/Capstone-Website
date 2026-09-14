@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import { Bill, Room, User, Reservation } from "../../models/index.js";
+import { getBusinessSettings } from "../../utils/businessSettings.js";
 import {
   getVisibleBillSnapshot,
   getVisibleBillCharges,
@@ -186,6 +187,7 @@ export const getRoomsWithTenants = async (req, res, next) => {
     })
       .populate("userId", "firstName lastName email")
       .lean();
+    const { longTermLeaseMinMonths } = await getBusinessSettings();
 
     const reservationsByRoom = new Map();
     for (const r of allReservations) {
@@ -213,7 +215,7 @@ export const getRoomsWithTenants = async (req, res, next) => {
                 "Tenant",
               email: r.userId.email || "",
               moveInDate: readMoveInDate(r),
-              monthlyRent: suggestRent(r, room, readMoveInDate(r)),
+              monthlyRent: suggestRent(r, room, readMoveInDate(r), longTermLeaseMinMonths),
               customCharges: getReservationRecurringFees(r).additionalCharges,
               bedPosition: bed?.position || null,
             };

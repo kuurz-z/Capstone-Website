@@ -5,6 +5,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import { Bill, Payment, Reservation, Room, User, UtilityPeriod } from "../../models/index.js";
+import { BUSINESS } from "../../config/constants.js";
+import { getBusinessSettings } from "../../utils/businessSettings.js";
 
 export const RoomBill = mongoose.models.RoomBill || mongoose.model("RoomBill", new mongoose.Schema({}, { strict: false }));
 import logger from "../../middleware/logger.js";
@@ -707,11 +709,20 @@ export const computeWaterShare = (roomType, totalWater, tenantCount) => {
   }
 };
 
-export const suggestRent = (reservation, room, moveInDate) => {
+// `longTermLeaseMinMonths` is the configurable pricing-discount threshold
+// (BusinessSettings.longTermLeaseMinMonths, default 6) — NOT the fixed 1-5 /
+// 6+ month legal contract-template boundary (server/config/contractLegalTerm.js).
+// Callers should resolve the live setting via getBusinessSettings() and pass
+// it through; a caller that cannot (e.g. no async context) falls back to the
+// platform default, mirroring resolvePenaltyRatePerDay/resolveElectricityRatePerKwh.
+export const suggestRent = (reservation, room, moveInDate, longTermLeaseMinMonths = BUSINESS.LONG_TERM_LEASE_MIN_MONTHS) => {
   if (reservation.monthlyRent) return reservation.monthlyRent;
   if (reservation.totalPrice) return reservation.totalPrice;
   const months = dayjs().diff(dayjs(moveInDate), "month", true);
-  const isLongTerm = months >= 6;
+  const threshold = Number.isFinite(Number(longTermLeaseMinMonths)) && Number(longTermLeaseMinMonths) > 0
+    ? Number(longTermLeaseMinMonths)
+    : BUSINESS.LONG_TERM_LEASE_MIN_MONTHS;
+  const isLongTerm = months >= threshold;
   return isLongTerm ? (room.monthlyPrice ?? room.price ?? 0) : (room.price ?? 0);
 };
 
@@ -838,7 +849,7 @@ export function resolveRentDueDate(cycle, dueDate) {
   return resolved.toDate();
 }
 
-export function resolveRentAmountForBilling(reservation, room, cycle, rentAmount) {
+export async function resolveRentAmountForBilling(reservation, room, cycle, rentAmount) {
   if (usesStructuredInitialPayment(reservation)) {
     const frozenRate = Number(reservation?.pricingSnapshot?.finalMonthlyRate);
     if (!Number.isFinite(frozenRate) || frozenRate <= 0) {
@@ -851,7 +862,7 @@ export function resolveRentAmountForBilling(reservation, room, cycle, rentAmount
       ? null
       : Number(rentAmount);
   const rent = explicitRent === null
-    ? suggestRent(reservation, room, cycle.billingCycleStart)
+    ? suggestRent(reservation, room, cycle.billingCycleStart, (await getBusinessSettings()).longTermLeaseMinMonths)
     : explicitRent;
 
   if (!Number.isFinite(rent) || rent <= 0) {
@@ -992,7 +1003,7 @@ export async function buildRentBillDraft({
     throw error;
   }
 
-  const rent = resolveRentAmountForBilling(reservation, room, cycle, rentAmount);
+  const rent = await resolveRentAmountForBilling(reservation, room, cycle, rentAmount);
   const recurring = getReservationRecurringFees(reservation);
   const applianceFees = roundMoney(recurring.applianceFees || 0);
   const grossAmount = roundMoney(rent + applianceFees);
@@ -1562,12 +1573,13 @@ export function formatActiveRentTenant(
   existingBill = null,
   cycle = null,
   validationError = "",
+  longTermLeaseMinMonths = BUSINESS.LONG_TERM_LEASE_MIN_MONTHS,
 ) {
   const room = reservation.roomId || {};
   const tenant = reservation.userId || {};
   const moveInDate = readMoveInDate(reservation);
   const recurring = getReservationRecurringFees(reservation);
-  const monthlyRent = suggestRent(reservation, room, moveInDate || new Date());
+  const monthlyRent = suggestRent(reservation, room, moveInDate || new Date(), longTermLeaseMinMonths);
   const validationErrors = [];
 
   if (!moveInDate) validationErrors.push("No active tenant");

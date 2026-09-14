@@ -701,6 +701,11 @@ const ReservationApplicationStep = ({
               fieldErrors,
               validateField,
               showValidationErrors,
+              // Legal Short/Long-Term classification is a fixed 1-5 / 6+ month
+              // boundary (independent of pricing). The eligible-discount
+              // messaging below it must instead reflect the room's actual
+              // configurable pricing threshold, not that legal boundary.
+              longTermLeaseMinMonths: room?.longTermLeaseMinMonths,
             }}
           />
         </CollapsibleSection>
