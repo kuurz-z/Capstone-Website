@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import { User, Contract, Room, Bill, MaintenanceRequest, Inquiry } from "../../models/index.js";
+import { User, Contract, Room, Bill, MaintenanceRequest, Inquiry, Reservation } from "../../models/index.js";
 import { APPLIANCE_FEES } from "./knowledgeBase.js";
 import {
   streamChatCompletion,
@@ -129,6 +129,7 @@ export async function getTenantStayContext(userId) {
         default: return `${d}th`;
       }
     };
+    const leaseCycleText = leaseDay ? `${ordinalSuffix(leaseDay)} of each month` : "Monthly lease cycle";
     const isExplicitTenant = user?.role === "tenant" || user?.tenantStatus === "active" || reservation?.status === "moveIn";
     const isApplicant = !isExplicitTenant && !contract && (Boolean(reservation) || user?.role === "applicant");
 
@@ -189,11 +190,11 @@ export async function getTenantStayContext(userId) {
             billingMonth: latestBill.billingMonth || new Date().toISOString().slice(0, 7),
             totalAmount: latestBill.totalAmount || 0,
             remainingAmount: latestBill.remainingAmount !== undefined ? latestBill.remainingAmount : latestBill.totalAmount || 0,
-            rentAmount: latestBill.rentAmount || 0,
-            electricityAmount: latestBill.electricityAmount || 0,
-            waterAmount: latestBill.waterAmount || 0,
-            applianceCharges: latestBill.applianceCharges || 0,
-            lateFee: latestBill.lateFee || 0,
+            rentAmount: latestBill.charges?.rent || latestBill.rentAmount || 0,
+            electricityAmount: latestBill.charges?.electricity || latestBill.electricityAmount || 0,
+            waterAmount: latestBill.charges?.water || latestBill.waterAmount || 0,
+            applianceCharges: latestBill.charges?.applianceFees || latestBill.applianceCharges || 0,
+            lateFee: latestBill.charges?.penalty || latestBill.lateFee || 0,
             status: latestBill.status || "unpaid",
             dueDate: latestBill.dueDate ? new Date(latestBill.dueDate).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : leaseCycleText,
           }
@@ -232,7 +233,12 @@ export function detectTenantWidgetIntent(message = "", context = null) {
     text.includes("invoice") ||
     text.includes("due date") ||
     text.includes("magkano") ||
-    text.includes("statement")
+    text.includes("statement") ||
+    text.includes("penalty") ||
+    text.includes("penalties") ||
+    text.includes("late fee") ||
+    text.includes("multa") ||
+    text.includes("surcharge")
   ) {
     const fallbackDue = context?.leaseCycleText || "Monthly lease cycle";
     return {
@@ -246,6 +252,7 @@ export function detectTenantWidgetIntent(message = "", context = null) {
           electricityAmount: 0,
           waterAmount: 0,
           rentAmount: context?.contract?.monthlyRent || 5500,
+          lateFee: 0,
           dueDate: fallbackDue,
         },
         contract: context?.contract,
@@ -379,6 +386,7 @@ LATEST BILLING STATEMENT:
 - Rent Amount: ₱${bill?.rentAmount ? Number(bill.rentAmount).toLocaleString() : "0.00"}
 - Electricity Share (Pro-Rata): ₱${bill?.electricityAmount ? Number(bill.electricityAmount).toLocaleString() : "0.00"}
 - Water: Free (Included in rent)
+- Late Fee / Penalty: ₱${bill?.lateFee ? Number(bill.lateFee).toLocaleString("en-PH", { minimumFractionDigits: 2 }) : "0.00"}
 
 ACTIVE MAINTENANCE TICKETS:
 ${
@@ -435,7 +443,17 @@ export function determineTenantSuggestedActions(message = "", botReply = "", con
   }
 
   // Billing links
-  if (text.includes("bill") || text.includes("bayad") || text.includes("electric") || text.includes("kuryente") || text.includes("penalty")) {
+  if (
+    text.includes("bill") ||
+    text.includes("bayad") ||
+    text.includes("electric") ||
+    text.includes("kuryente") ||
+    text.includes("penalty") ||
+    text.includes("penalties") ||
+    text.includes("late fee") ||
+    text.includes("multa") ||
+    text.includes("surcharge")
+  ) {
     actions.push({ label: "View Billing Statement", url: "/applicant/billing" });
     actions.push({ label: "Check Electricity Share", prompt: "How was my electricity share computed this month?" });
   }
@@ -496,7 +514,19 @@ export function getTenantRuleBasedFallback(message = "", context = null) {
     return "Your room electricity is measured monthly with a dedicated submeter on the 15th and shared equally among roommates. Water and high-speed Wi-Fi are completely free and included in your rent.";
   }
 
-  if (text.includes("bill") || text.includes("bayad") || text.includes("rent") || text.includes("due date") || text.includes("magkano") || text.includes("next bill")) {
+  if (
+    text.includes("bill") ||
+    text.includes("bayad") ||
+    text.includes("rent") ||
+    text.includes("due date") ||
+    text.includes("magkano") ||
+    text.includes("next bill") ||
+    text.includes("penalty") ||
+    text.includes("penalties") ||
+    text.includes("late fee") ||
+    text.includes("multa") ||
+    text.includes("surcharge")
+  ) {
     const isPaid = !bill || bill.status === "paid" || Number(bill.remainingAmount ?? bill.totalAmount ?? 0) <= 0;
     if (isPaid) {
       const leaseDueCycle = context?.leaseCycleText || (contract?.leaseStartDate ? `the ${contract.leaseStartDate}` : "your monthly lease cycle");
