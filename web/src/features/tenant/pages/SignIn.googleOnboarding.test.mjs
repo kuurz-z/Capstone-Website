@@ -26,6 +26,9 @@ test("SignIn handleSocialLogin auto-onboards unregistered Google accounts seamle
   // 5. Must integrate socialAuthManager for instant cancellation & timeout protection
   assert.match(signIn, /createSocialAuthSession/);
   assert.match(signIn, /isPopupCancellationError/);
+
+  // 6. Must use parseSmartFullName to correctly handle multi-word and compound names
+  assert.match(signIn, /parseSmartFullName/);
 });
 
 

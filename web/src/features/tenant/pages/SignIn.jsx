@@ -20,6 +20,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  getAdditionalUserInfo,
   GoogleAuthProvider,
   FacebookAuthProvider,
 } from "firebase/auth";
@@ -28,6 +29,7 @@ import { showNotification } from "../../../shared/utils/notification";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { recoverFromAuthFailure } from "../../../shared/utils/identitySafety";
+import { parseSmartFullName } from "../../../shared/utils/nameParser";
 import {
   validateEmail,
   getFirebaseErrorMessage,
@@ -532,7 +534,7 @@ function SignIn() {
     throw lastCollision || new Error("Unable to allocate a registration username.");
   };
 
-  const processSocialUser = async (firebaseUser) => {
+  const processSocialUser = async (firebaseUser, socialResult = null) => {
     if (!firebaseUser.email) {
       await recoverFromAuthFailure(auth);
       showNotification(
@@ -571,13 +573,11 @@ function SignIn() {
       ) {
         // Auto-onboard first-time Google sign-in users seamlessly
         try {
-          const rawName = (firebaseUser.displayName || "")
-            .replace(/[^a-zA-Z\s'-]/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-          const parts = rawName.split(" ");
-          const firstName = formatProperCase(parts[0] || "User");
-          const lastName = formatProperCase(parts.slice(1).join(" ") || "Guest");
+          const googleProfile = socialResult ? getAdditionalUserInfo(socialResult)?.profile : null;
+          const { firstName, lastName } = parseSmartFullName(
+            firebaseUser.displayName,
+            googleProfile,
+          );
           const registration = await registerUserInBackend(
             firebaseUser,
             "",
@@ -667,7 +667,7 @@ function SignIn() {
           setSocialLoading(true);
           setGlobalLoading(true);
           sessionStorage.setItem("socialAuthInProgress", "1");
-          await processSocialUser(result.user);
+          await processSocialUser(result.user, result);
         }
       } catch (error) {
         if (isMounted) {
@@ -720,7 +720,7 @@ function SignIn() {
       });
 
       if (result?.user) {
-        await processSocialUser(result.user);
+        await processSocialUser(result.user, result);
       }
     } catch (error) {
       if (error.code === "auth/popup-blocked") {
@@ -812,6 +812,7 @@ function SignIn() {
  Don&apos;t have an account? <Link to="/signup">Sign up</Link>
  </p>
  </div>
+
 
  {/* Unverified email banner with resend button */}
  {unverifiedEmail && (

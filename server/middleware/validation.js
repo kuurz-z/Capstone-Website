@@ -139,12 +139,12 @@ export const sanitizePhone = (phone) => {
  */
 export const formatProperCase = (str) => {
   if (!str || typeof str !== "string") return "";
-  return str.replace(/(?:^|[\s'-])([a-zA-Z])/g, (char) => char.toUpperCase());
+  return str.replace(/(?:^|[\s'.-])([a-zA-Z])/g, (char) => char.toUpperCase());
 };
 
 /**
  * Sanitize name input (firstName, lastName)
- * - Allows letters, spaces, hyphens, apostrophes
+ * - Allows letters, spaces, hyphens, apostrophes, periods
  * - 1-50 characters
  * - Removes HTML/script tags
  * - Converts the first letter of each word to uppercase
@@ -162,9 +162,9 @@ export const sanitizeName = (name) => {
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<[^>]+>/g, "");
 
-  // Allow letters, spaces, hyphens, apostrophes only
+  // Allow letters, spaces, hyphens, apostrophes, and periods (.)
   // Minimum 1 character to support short names from social providers (Google)
-  if (!/^[a-zA-Z\s\-']{1,50}$/.test(sanitized)) {
+  if (!/^[a-zA-Z\s\-'.]{1,50}$/.test(sanitized)) {
     return null;
   }
 

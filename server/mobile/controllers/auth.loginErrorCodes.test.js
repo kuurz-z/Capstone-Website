@@ -97,7 +97,7 @@ describe('email/password login error-code contract', () => {
     expect(res.statusCode).toBe(403);
     expect(res.body).toEqual({
       code: 'TENANT_INACTIVE',
-      detail: 'This tenant account is inactive. Please contact the admin office.',
+      detail: 'This tenant account is currently inactive. The mobile app is reserved for active checked-in tenants. Please contact the dormitory admin office or check your status on the Lilycrest Web Portal.',
     });
   });
 
@@ -111,7 +111,7 @@ describe('email/password login error-code contract', () => {
     expect(res.statusCode).toBe(403);
     expect(res.body).toEqual({
       code: 'TENANT_NOT_REGISTERED',
-      detail: 'This account is not registered as an active tenant.',
+      detail: 'This account is not registered as an active tenant. The mobile app is reserved for active checked-in tenants. If you are an applicant or have a pending reservation, please sign in via the Lilycrest Web Portal.',
     });
   });
 });

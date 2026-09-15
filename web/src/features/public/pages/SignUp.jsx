@@ -21,6 +21,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  getAdditionalUserInfo,
   fetchSignInMethodsForEmail,
   GoogleAuthProvider,
   FacebookAuthProvider,
@@ -31,6 +32,7 @@ import { authApi } from "../../../shared/api/apiClient";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { recoverFromAuthFailure } from "../../../shared/utils/identitySafety";
+import { parseSmartFullName } from "../../../shared/utils/nameParser";
 import {
   validateEmail,
   validatePassword,
@@ -590,7 +592,7 @@ function SignUp() {
     }
   };
 
-  const processSocialSignupUser = async (firebaseUser) => {
+  const processSocialSignupUser = async (firebaseUser, socialResult = null) => {
     if (!firebaseUser.email) {
       await recoverFromAuthFailure(auth);
       socialAuthRef.current = false;
@@ -622,13 +624,11 @@ function SignUp() {
     } catch (loginError) {
       if (loginError.response?.status === 404) {
         try {
-          const rawName = (firebaseUser.displayName || "")
-            .replace(/[^a-zA-Z\s'-]/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-          const parts = rawName.split(" ");
-          const firstName = formatProperCase(parts[0] || "User");
-          const lastName = formatProperCase(parts.slice(1).join(" ") || "Guest");
+          const googleProfile = socialResult ? getAdditionalUserInfo(socialResult)?.profile : null;
+          const { firstName, lastName } = parseSmartFullName(
+            firebaseUser.displayName,
+            googleProfile,
+          );
           const registration = await registerUserInBackend(
             firebaseUser,
             "",
@@ -721,7 +721,7 @@ function SignUp() {
           setSocialLoading(true);
           socialAuthRef.current = true;
           sessionStorage.setItem("socialAuthInProgress", "1");
-          await processSocialSignupUser(result.user);
+          await processSocialSignupUser(result.user, result);
         }
       } catch (error) {
         if (isMounted) {
@@ -765,7 +765,7 @@ function SignUp() {
       });
 
       if (result?.user) {
-        await processSocialSignupUser(result.user);
+        await processSocialSignupUser(result.user, result);
       }
     } catch (error) {
       if (error.code === "auth/popup-blocked") {
@@ -837,6 +837,7 @@ function SignUp() {
                 Already have an account? <Link to="/signin">Log in</Link>
               </p>
             </div>
+
 
             <form onSubmit={handleSignUp} className="auth-form">
               <div className="form-row">

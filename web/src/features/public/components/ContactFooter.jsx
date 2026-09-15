@@ -41,16 +41,16 @@ const socialLinks = [
 export function ContactFooter() {
   return (
     <footer
-      className="py-8 lg:py-10"
+      className="py-6 lg:py-8"
       style={{
         backgroundColor: 'var(--lp-bg)',
         borderTop: '1px solid var(--lp-border)',
       }}
     >
-      <div className="max-w-screen-2xl mx-auto px-6 sm:px-8 lg:px-12">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="sr-only">Contact and Site Navigation</h2>
         {/* Main content */}
-        <ScrollRevealStagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10 mb-6" staggerDelay={0.12}>
+        <ScrollRevealStagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 mb-5" staggerDelay={0.12}>
           {/* Brand + Social */}
           <ScrollRevealItem>
             <div>
@@ -60,7 +60,7 @@ export function ContactFooter() {
               >
                 Lilycrest
               </h3>
-              <p className="text-xs font-light leading-relaxed mb-4" style={{ color: 'var(--lp-text-secondary)' }}>
+              <p className="text-xs font-light leading-relaxed mb-3" style={{ color: 'var(--lp-text-secondary)' }}>
                 Premium living spaces designed for comfort, convenience, and
                 community.
               </p>
@@ -126,7 +126,7 @@ export function ContactFooter() {
                         e.preventDefault();
                         smoothScrollTo(link.id, 80);
                       }}
-                      className="inline-block py-1 text-sm font-light transition-colors cursor-pointer"
+                      className="inline-block py-0.5 text-sm font-light transition-colors cursor-pointer"
                       style={{ color: 'var(--lp-text-secondary)' }}
                       onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--lp-accent-text)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lp-text-secondary)'; }}
@@ -217,13 +217,13 @@ export function ContactFooter() {
         {/* Bottom */}
         <ScrollReveal variant="fade" delay={0.2}>
           <div
-            className="pt-4"
+            className="pt-3.5"
             style={{
               borderTop: '1px solid var(--lp-border)',
-              paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
           >
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
               <p className="text-xs font-light text-center sm:text-left" style={{ color: 'var(--lp-text-secondary)' }}>
                 © {new Date().getFullYear()} Lilycrest. All rights reserved.
               </p>

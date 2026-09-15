@@ -293,8 +293,8 @@ export default function RoomConfigModal({
       const allowedName = value.replace(/[^a-zA-Z0-9\s-]/g, "").slice(0, 50);
       setDraftRoom((prev) => ({ ...prev, name: allowedName }));
     } else if (field === "roomNumber") {
-      const digitsOnly = value.replace(/\D/g, "");
-      setDraftRoom((prev) => ({ ...prev, roomNumber: digitsOnly }));
+      const alphanumeric = value.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 20);
+      setDraftRoom((prev) => ({ ...prev, roomNumber: alphanumeric }));
     } else {
       setDraftRoom((prev) => ({
         ...prev,
@@ -445,16 +445,16 @@ export default function RoomConfigModal({
       });
       return;
     }
-    if (roomNumVal.length > 10) {
+    if (roomNumVal.length > 20) {
       showNotification({
-        message: "Room number cannot exceed 10 digits.",
+        message: "Room number cannot exceed 20 characters.",
         type: "warning",
       });
       return;
     }
-    if (!/^[0-9]+$/.test(roomNumVal)) {
+    if (!/^[a-zA-Z0-9-]+$/.test(roomNumVal)) {
       showNotification({
-        message: "Room number must contain numbers only.",
+        message: "Room number must contain letters, numbers, and hyphens only.",
         type: "warning",
       });
       return;
@@ -662,13 +662,11 @@ export default function RoomConfigModal({
                     <label>Room Number <span className="rfm-required">*</span></label>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
                       spellCheck={false}
-                      maxLength={10}
+                      maxLength={20}
                       value={draftRoom.roomNumber || ""}
                       onChange={(e) => handleFieldChange("roomNumber", e.target.value)}
-                      placeholder="e.g. 202"
+                      placeholder="e.g. 202 or 202-A"
                     />
                   </div>
                 </div>
