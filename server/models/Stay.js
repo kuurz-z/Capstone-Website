@@ -12,6 +12,7 @@ const STAY_STATUSES = [
   "completed",
   "terminated",
   "renewed",
+  "cancelled",
 ];
 
 const staySchema = new mongoose.Schema(

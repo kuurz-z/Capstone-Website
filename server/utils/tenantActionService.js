@@ -3421,25 +3421,6 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
           payload.reason === "terminated" ? "early_termination_move_out" : "normal_completion_move_out",
           session,
         );
-
-        // A dangling lease renewal chained off the Contract we just closed
-        // out is now meaningless — left alone, the daily renewal-activation
-        // cron could otherwise activate it for a tenant who has already
-        // left. Cancel it here, synchronously, in the same transaction.
-        const danglingRenewal = await Contract.findOne({
-          contractPurpose: "renewal",
-          replacesContractId: currentContract._id,
-          status: { $in: ["published", "renewal_pending"] },
-        }).session(session);
-        if (danglingRenewal) {
-          await transitionContract(
-            danglingRenewal,
-            "cancelled",
-            actorId,
-            "predecessor_moved_out",
-            session,
-          );
-        }
       } else if (!currentContract) {
         logger.warn(
           { reservationId: reservation._id },
@@ -3447,10 +3428,98 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
         );
       }
 
+      // Dangling unfulfilled renewal / replacement / successor contracts chained
+      // off the Contract we just closed out or prepared for this reservation/tenant
+      // are now meaningless — left alone, the daily renewal-activation cron could
+      // otherwise activate them for a tenant who has already left. Cancel all
+      // unfulfilled contracts here, synchronously, in the same transaction.
+      const UNFULFILLED_CONTRACT_STATUSES = [
+        "draft",
+        "incomplete",
+        "ready_for_generation",
+        "generated",
+        "awaiting_signatures",
+        "partially_signed",
+        "signed",
+        "awaiting_notarization",
+        "ready_for_publication",
+        "published",
+        "renewal_pending",
+      ];
+
+      const danglingRenewals = await Contract.find({
+        $or: [
+          ...(currentContract ? [{ replacesContractId: currentContract._id }] : []),
+          {
+            reservationId: reservation._id,
+            contractPurpose: { $in: ["renewal", "replacement", "amendment"] },
+          },
+          {
+            tenantId: reservation.userId?._id || reservation.userId,
+            contractPurpose: { $in: ["renewal", "replacement", "amendment"] },
+          },
+        ],
+        status: { $in: UNFULFILLED_CONTRACT_STATUSES },
+      }).session(session);
+
+      for (const danglingRenewal of danglingRenewals) {
+        if (currentContract && String(danglingRenewal._id) === String(currentContract._id)) {
+          continue;
+        }
+        await transitionContract(
+          danglingRenewal,
+          "cancelled",
+          actorId,
+          "predecessor_moved_out",
+          session,
+        );
+      }
+
+      // Cancel any upcoming Stay records linked to this reservation or tenant
+      await Stay.updateMany(
+        {
+          $or: [
+            { reservationId: reservation._id },
+            { tenantId: reservation.userId?._id || reservation.userId },
+          ],
+          status: "upcoming",
+        },
+        {
+          $set: {
+            status: "cancelled",
+            endedAt: moveOutAt,
+            endReason: "tenant_moved_out",
+            updatedBy: actorId,
+          },
+        },
+        { session },
+      );
+
+      // Cancel any pending or approved StayExtensionRequest records for this reservation or tenant
+      await StayExtensionRequest.updateMany(
+        {
+          $or: [
+            { reservationId: reservation._id },
+            { tenantId: reservation.userId?._id || reservation.userId },
+          ],
+          status: { $in: ["pending", "approved"] },
+        },
+        {
+          $set: {
+            status: "cancelled",
+            adminNote: "Cancelled automatically due to tenant move-out.",
+            reviewedBy: actorId,
+            reviewedAt: new Date(),
+          },
+        },
+        { session },
+      );
+
       reservation.status = "moveOut";
       reservation.moveOutDate = moveOutAt;
       reservation.currentStayId = activeStay._id;
       reservation.latestStayStatus = activeStay.status;
+      reservation.pendingExtensionRequestId = undefined;
 
       // ── Deposit Forfeiture & Settlement Calculation ──────────────────────────
       const leaseEndDate = activeStay.leaseEndDate

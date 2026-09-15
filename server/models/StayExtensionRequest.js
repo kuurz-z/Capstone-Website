@@ -15,7 +15,7 @@ const schema = new mongoose.Schema({
   monthlyRent: { type: Number, required: true },
   reason: { type: String, maxlength: 500, default: '' },
   note: { type: String, maxlength: 1000, default: '' },
-  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'approved', 'rejected', 'cancelled'], default: 'pending' },
   adminNote: { type: String, maxlength: 1000, default: '' },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   reviewedAt: Date,

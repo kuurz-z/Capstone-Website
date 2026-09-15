@@ -38,6 +38,7 @@ import LoginLog from "./LoginLog.js";
 import Room from "./Room.js";
 import BedHistory from "./BedHistory.js";
 import Stay from "./Stay.js";
+import StayExtensionRequest from "./StayExtensionRequest.js";
 import Contract from "./Contract.js";
 import ContractCounter from "./ContractCounter.js";
 import ContractAcknowledgement from "./ContractAcknowledgement.js";
@@ -149,6 +150,7 @@ export {
   UtilityHistoricalGap,
   BedHistory,
   Stay,
+  StayExtensionRequest,
   Contract,
   ContractCounter,
   ContractAcknowledgement,

@@ -4,9 +4,9 @@ import StayModel, { STAY_STATUSES } from "../../models/Stay.js";
 
 describe("Stay Termination Cascade on Deletion", () => {
   describe("STAY_STATUSES Canonical Enum Invariants", () => {
-    test("canonical STAY_STATUSES contains 'terminated' and strictly excludes 'cancelled'", () => {
+    test("canonical STAY_STATUSES contains 'terminated' and 'cancelled'", () => {
       expect(STAY_STATUSES).toContain("terminated");
-      expect(STAY_STATUSES).not.toContain("cancelled");
+      expect(STAY_STATUSES).toContain("cancelled");
     });
   });
 
