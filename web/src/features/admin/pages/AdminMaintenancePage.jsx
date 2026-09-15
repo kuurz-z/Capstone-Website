@@ -176,6 +176,7 @@ export default function AdminMaintenancePage() {
     setCurrentPage,
     selectedRequestId,
     setSelectedRequestId,
+    handleCloseDetail,
     selectedRequest,
     isDetailLoading,
     serviceProviders,
@@ -732,7 +733,7 @@ export default function AdminMaintenancePage() {
 
           <MaintenanceDetailModal
             open={Boolean(selectedRequestId)}
-            onClose={() => setSelectedRequestId(null)}
+            onClose={handleCloseDetail}
             request={selectedRequest}
             isLoading={isDetailLoading}
             duplicateData={duplicateData}

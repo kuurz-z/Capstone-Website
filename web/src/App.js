@@ -6,6 +6,7 @@ import { ThemeProvider } from "./features/public/context/ThemeContext";
 import GlobalLoading from "./shared/components/GlobalLoading";
 import ToastViewport from "./shared/components/feedback/ToastViewport";
 import ScrollToTop from "./shared/components/ScrollToTop";
+import SessionInactivityGuard from "./shared/components/SessionInactivityGuard";
 import { FirebaseAuthProvider } from "./shared/hooks/FirebaseAuthContext";
 import { AuthProvider, useAuth } from "./shared/hooks/useAuth";
 
@@ -26,6 +27,7 @@ function AppContent() {
   return (
     <>
       <ScrollToTop />
+      <SessionInactivityGuard />
       <Suspense fallback={<GlobalLoading />}>
         <AppRoutes />
       </Suspense>

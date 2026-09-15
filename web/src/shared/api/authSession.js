@@ -1,3 +1,5 @@
+import { STORAGE_KEY_LAST_ACTIVITY } from "../utils/sessionInactivityCore.js";
+
 const DEVICE_ID_KEY = "lilycrest_device_id";
 const SESSION_ESTABLISHED_KEY = "lilycrest_session_established";
 const SESSION_ID_KEY = "lilycrest_session_id";
@@ -36,6 +38,11 @@ export const markApplicationSession = (sessionId = "") => {
     sessionStorage.setItem(SESSION_ID_KEY, sessionId);
     localStorage.setItem(SESSION_ID_KEY, sessionId);
   }
+  try {
+    localStorage.setItem(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
+  } catch {
+    // Ignore storage access errors
+  }
 };
 
 export const clearApplicationSession = () => {
@@ -44,6 +51,11 @@ export const clearApplicationSession = () => {
   localStorage.removeItem(SESSION_ESTABLISHED_KEY);
   localStorage.removeItem(SESSION_ID_KEY);
   localStorage.removeItem("lilycrest_session_id");
+  try {
+    localStorage.removeItem(STORAGE_KEY_LAST_ACTIVITY);
+  } catch {
+    // Ignore storage access errors
+  }
 };
 
 export const setOtpPending = (data = {}) => {

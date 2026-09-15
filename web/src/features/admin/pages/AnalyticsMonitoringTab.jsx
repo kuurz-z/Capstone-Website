@@ -27,6 +27,13 @@ import {
  getDynamicMonitoringPrompts,
 } from "./analyticsTabShared";
 
+const AUDIT_SEVERITY_COLORS = {
+  info: "#0284c7",
+  warning: "#d97706",
+  high: "#ea580c",
+  critical: "#e11d48",
+};
+
 const getSeverityDot = (severity) => {
   const s = String(severity || "").toLowerCase();
   if (s === "critical" || s === "high") return "bg-rose-500";
@@ -355,10 +362,14 @@ export default function AnalyticsMonitoringTab({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ReportChartPanel title="Severity distribution" subtitle="Security and audit events by severity">
           <AnalyticsDonutChart
-            data={severityDistribution.map((item) => ({
-              label: item.label,
-              value: item.count,
-            }))}
+            data={severityDistribution.map((item) => {
+              const key = String(item.severity || item.label || "").toLowerCase();
+              return {
+                label: item.label,
+                value: item.count,
+                color: AUDIT_SEVERITY_COLORS[key] || item.color,
+              };
+            })}
             centerLabel={{ value: kpis.criticalEvents || 0, label: "Critical" }}
             emptyTitle="No severity data"
             emptyDescription="Severity distribution will appear once audit events exist for this scope."

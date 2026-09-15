@@ -122,9 +122,16 @@ export function RoomInventory() {
           ? doubleRoomImg
           : quadRoomImg;
 
+      const validImages = Array.isArray(popularRoom.images)
+        ? popularRoom.images.filter((img) => (typeof img === "string" ? img.trim().length > 0 : Boolean(img?.url)))
+        : [];
+      const firstValidImage = validImages[0]
+        ? (typeof validImages[0] === "string" ? validImages[0] : validImages[0]?.url || null)
+        : null;
+
       const displayImg =
-        (Array.isArray(popularRoom.images) && popularRoom.images.length > 0 && popularRoom.images[0]) ||
-        popularRoom.image ||
+        firstValidImage ||
+        (typeof popularRoom.image === "string" && popularRoom.image.trim().length > 0 ? popularRoom.image : null) ||
         defaultRoomImage;
       const mapTypeParam = (t) => {
         if (t === "private") return "Private";
@@ -216,7 +223,7 @@ export function RoomInventory() {
 
                   {/* Price Badge with Strikethrough & Discount Tag */}
                   <div
-                    className="absolute top-4 left-4 backdrop-blur-md rounded-full px-3.5 py-1.5 flex items-center gap-1.5 shadow-sm"
+                    className="absolute top-4 left-4 z-10 backdrop-blur-md rounded-full px-3.5 py-1.5 flex items-center gap-1.5 shadow-sm"
                     style={{
                       backgroundColor: 'var(--lp-bg)',
                       boxShadow: 'var(--lp-card-shadow)',
@@ -253,7 +260,7 @@ export function RoomInventory() {
                   {/* Corner Ribbon — high contrast text #0A1628 on gold */}
                   {room.popular && (
                     <span
-                      className="absolute top-4 right-4 text-xs font-bold tracking-wider uppercase px-3.5 py-1.5 rounded-full shadow-sm"
+                      className="absolute top-4 right-4 z-10 text-xs font-bold tracking-wider uppercase px-3.5 py-1.5 rounded-full shadow-sm"
                       style={{ backgroundColor: 'var(--lp-accent, #D4AF37)', color: '#0A1628' }}
                     >
                       ★ Most Popular

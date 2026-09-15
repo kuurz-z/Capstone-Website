@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../../../shared/hooks/useAuth";
 import { showNotification } from "../../../../../shared/utils/notification";
@@ -124,6 +124,16 @@ export function useMaintenanceData() {
   const requestedRequestId = searchParams.get("requestId");
   const [selectedRequestId, setSelectedRequestId] = useState(requestedRequestId || null);
 
+  const handleCloseDetail = useCallback(() => {
+    setSelectedRequestId(null);
+    setSearchParams((prev) => {
+      if (!prev.has("requestId")) return prev;
+      const next = new URLSearchParams(prev);
+      next.delete("requestId");
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
   useEffect(() => {
     const urlSearch = searchParams.get("search") || searchParams.get("room");
     if (urlSearch !== null && urlSearch !== undefined) {
@@ -134,10 +144,10 @@ export function useMaintenanceData() {
       setBranchFilter(isOwner ? urlBranch : (userBranch || "all"));
     }
     const urlRequestId = searchParams.get("requestId");
-    if (urlRequestId && urlRequestId !== selectedRequestId) {
-      setSelectedRequestId(urlRequestId);
+    if (urlRequestId) {
+      setSelectedRequestId((prev) => (prev !== urlRequestId ? urlRequestId : prev));
     }
-  }, [searchParams, isOwner, userBranch, selectedRequestId]);
+  }, [searchParams, isOwner, userBranch]);
 
   const [analyticsFilters, setAnalyticsFilters] = useState({
     branch: isOwner ? "all" : (userBranch || "all"),
@@ -670,6 +680,7 @@ export function useMaintenanceData() {
     // Detail & Selected Request
     selectedRequestId,
     setSelectedRequestId,
+    handleCloseDetail,
     selectedRequest,
     isDetailLoading,
     serviceProviders,

@@ -134,19 +134,56 @@ describe("Universal Zod Validation Suite", () => {
       ).toBe(true);
     });
 
-    it("rejects room creation when room number contains letters or special symbols", () => {
-      const result = createRoomSchema.safeParse({
+    it("accepts alphanumeric room numbers (e.g. 202-A, G1) and rejects invalid special symbols or excessive length", () => {
+      const validAlpha = createRoomSchema.safeParse({
         name: "Deluxe Suite",
-        roomNumber: "asdad1312",
+        roomNumber: "202-A",
         branch: "gil-puyat",
         type: "private",
         capacity: 1,
         price: 5000,
       });
-      expect(result.success).toBe(false);
+      expect(validAlpha.success).toBe(true);
+      expect(validAlpha.data.roomNumber).toBe("202-A");
+
+      const validBranchCode = createRoomSchema.safeParse({
+        name: "Ground Floor Room",
+        roomNumber: "G1",
+        branch: "guadalupe",
+        type: "private",
+        capacity: 1,
+        price: 5000,
+      });
+      expect(validBranchCode.success).toBe(true);
+      expect(validBranchCode.data.roomNumber).toBe("G1");
+
+      const invalidSymbols = createRoomSchema.safeParse({
+        name: "Deluxe Suite",
+        roomNumber: "202@A!",
+        branch: "gil-puyat",
+        type: "private",
+        capacity: 1,
+        price: 5000,
+      });
+      expect(invalidSymbols.success).toBe(false);
       expect(
-        result.error.issues.some((issue) =>
-          issue.message.includes("Room number must contain numbers only"),
+        invalidSymbols.error.issues.some((issue) =>
+          issue.message.includes("Room number must contain letters, numbers, and hyphens only"),
+        ),
+      ).toBe(true);
+
+      const tooLong = createRoomSchema.safeParse({
+        name: "Deluxe Suite",
+        roomNumber: "ROOM-NUMBER-EXCEEDING-20-CHARS",
+        branch: "gil-puyat",
+        type: "private",
+        capacity: 1,
+        price: 5000,
+      });
+      expect(tooLong.success).toBe(false);
+      expect(
+        tooLong.error.issues.some((issue) =>
+          issue.message.includes("Room number cannot exceed 20 characters"),
         ),
       ).toBe(true);
     });
