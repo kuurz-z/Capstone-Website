@@ -23,6 +23,15 @@ export const resolveAuthDisplayName = (user, fallbackName = "there") => {
 export const buildAuthSuccessMessage = (user, fallbackName = "there") => {
   const displayName = resolveAuthDisplayName(user, fallbackName);
 
+  // A user is considered "new" if explicitly flagged or created within the last 5 minutes
+  const isNew =
+    user?.isNewAccount === true ||
+    (user?.createdAt && Date.now() - new Date(user.createdAt).getTime() < 5 * 60 * 1000);
+
+  if (isNew) {
+    return `Welcome, ${displayName}!`;
+  }
+
   return `Welcome back, ${displayName}!`;
 };
 

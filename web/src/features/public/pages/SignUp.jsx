@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import PasswordVisibilityButton from "../../../shared/components/PasswordVisibilityButton";
 import {
   createUserWithEmailAndPassword,
@@ -77,6 +77,7 @@ const FIELD_LIMITS = {
 
 function SignUp() {
   const navigate = useNavigate();
+  const location = useLocation();
   const appNavigate = useAppNavigation();
   const {
     login: loginBackend,
@@ -94,6 +95,29 @@ function SignUp() {
     password: "",
     confirmPassword: "",
   });
+
+  useEffect(() => {
+    const prefillEmail = (location.state?.email || "").trim();
+    const isGoogle = location.state?.isGoogleAuth === true;
+    if (prefillEmail) {
+      setFormData((prev) => ({ ...prev, email: prefillEmail }));
+      setTouched((prev) => ({ ...prev, email: true }));
+      setFieldValid((prev) => ({ ...prev, email: !validateEmail(prefillEmail) }));
+    }
+    let timer = null;
+    if (isGoogle) {
+      timer = setTimeout(() => {
+        const googleBtn = document.querySelector(".social-auth-btn--google, [data-provider='google']");
+        if (googleBtn) {
+          googleBtn.focus();
+          googleBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 300);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [location.state?.email, location.state?.isGoogleAuth]);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [termsTouched, setTermsTouched] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -493,6 +517,16 @@ function SignUp() {
     });
   };
 
+  const checkIsGoogleIdentity = async (email) => {
+    if (location.state?.isGoogleAuth === true) return true;
+    try {
+      const methods = await fetchSignInMethodsForEmail(auth, email);
+      return Array.isArray(methods) && methods.includes("google.com");
+    } catch {
+      return false;
+    }
+  };
+
   // Firebase already has an account for this email. Using only the password
   // the person just typed on this form (never stored, never a separate
   // step), work out whether it's theirs:
@@ -517,14 +551,23 @@ function SignUp() {
         signInError?.code === "auth/wrong-password" ||
         signInError?.code === "auth/invalid-credential"
       ) {
-        let isGoogle = false;
-        try {
-          const methods = await fetchSignInMethodsForEmail(auth, formData.email);
-          isGoogle = Array.isArray(methods) && methods.includes("google.com");
-        } catch {
-          // fallback
+        const isGoogle = await checkIsGoogleIdentity(formData.email);
+
+        if (isGoogle) {
+          showNotification(
+            "This email is registered with Google. Please click 'Continue with Google' to complete your registration.",
+            "warning",
+            7000,
+          );
+          const googleBtn = document.querySelector(".social-auth-btn--google, [data-provider='google']");
+          if (googleBtn) {
+            googleBtn.focus();
+            googleBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+          return;
         }
-        await redirectExistingAccountToSignIn(isGoogle);
+
+        await redirectExistingAccountToSignIn(false);
         return;
       }
       showNotification(getRegistrationErrorMessage(signInError, "signup"), "error");
@@ -535,13 +578,7 @@ function SignUp() {
       await authApi.checkUser();
       // A backend profile already exists for this identity — it's a
       // genuinely complete, existing account.
-      let isGoogle = false;
-      try {
-        const methods = await fetchSignInMethodsForEmail(auth, formData.email);
-        isGoogle = Array.isArray(methods) && methods.includes("google.com");
-      } catch {
-        // fallback
-      }
+      const isGoogle = await checkIsGoogleIdentity(formData.email);
       await redirectExistingAccountToSignIn(isGoogle);
     } catch (checkError) {
       const code = checkError.response?.data?.code;

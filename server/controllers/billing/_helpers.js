@@ -225,6 +225,7 @@ export const formatBill = (bill) => {
   return {
     id: bill._id,
     _id: bill._id,
+    reservationId: bill.reservationId?._id || bill.reservationId || null,
     tenant: bill.userId
       ? {
           id: bill.userId._id,

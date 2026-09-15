@@ -20,7 +20,6 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  getAdditionalUserInfo,
   GoogleAuthProvider,
   FacebookAuthProvider,
 } from "firebase/auth";
@@ -29,12 +28,9 @@ import { showNotification } from "../../../shared/utils/notification";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useAppNavigation } from "../../../shared/hooks/useAppNavigation";
 import { recoverFromAuthFailure } from "../../../shared/utils/identitySafety";
-import { parseSmartFullName } from "../../../shared/utils/nameParser";
 import {
   validateEmail,
   getFirebaseErrorMessage,
-  generateUsername,
-  sanitizeName,
   formatProperCase,
   NEW_PASSWORD_MAX_LENGTH,
 } from "../../../shared/utils/authValidation";
@@ -42,7 +38,6 @@ import { authApi } from "../../../shared/api/apiClient";
 import {
   AUTH_TOAST_DURATION,
   buildAuthSuccessMessage,
-  buildAuthWelcomeMessage,
 } from "../../../shared/utils/authToasts";
 import {
   clearLoginInProgress,
@@ -509,32 +504,7 @@ function SignIn() {
     }
   };
 
-  const registerUserInBackend = async (
-    firebaseUser,
-    phone,
-    firstName,
-    lastName,
-  ) => {
-    let lastCollision = null;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      try {
-        return await authApi.register({
-          email: firebaseUser.email,
-          username: generateUsername(firebaseUser.email, attempt),
-          firstName: sanitizeName(firstName).trim(),
-          lastName: sanitizeName(lastName).trim(),
-          phone,
-        });
-      } catch (error) {
-        const code = error?.code || error?.response?.data?.code;
-        if (code !== "USERNAME_TAKEN") throw error;
-        lastCollision = error;
-      }
-    }
-    throw lastCollision || new Error("Unable to allocate a registration username.");
-  };
-
-  const processSocialUser = async (firebaseUser, socialResult = null) => {
+  const processSocialUser = async (firebaseUser) => {
     if (!firebaseUser.email) {
       await recoverFromAuthFailure(auth);
       showNotification(
@@ -571,55 +541,22 @@ function SignIn() {
         status === 404 ||
         /not found|not registered|register first/i.test(errMsg)
       ) {
-        // Auto-onboard first-time Google sign-in users seamlessly
-        try {
-          const googleProfile = socialResult ? getAdditionalUserInfo(socialResult)?.profile : null;
-          const { firstName, lastName } = parseSmartFullName(
-            firebaseUser.displayName,
-            googleProfile,
-          );
-          const registration = await registerUserInBackend(
-            firebaseUser,
-            "",
-            firstName,
-            lastName,
-          );
-          const username = registration?.user?.username;
-          const newLoginResponse = await login();
-          resetLockoutState();
-          showNotification(
-            buildAuthWelcomeMessage(
-              {
-                displayName: firebaseUser.displayName,
-                username,
-                email: firebaseUser.email,
-              },
-              firstName,
-            ),
-            "success",
-            AUTH_TOAST_DURATION,
-          );
-          handlePostAuthFlow(newLoginResponse, firstName, { suppressSuccessToast: true });
-          return;
-        } catch (regError) {
-          const regCode = regError.response?.data?.code || regError.code || "";
-          if (regCode === "IDENTITY_CONFLICT" || regError.response?.status === 409) {
-            await recoverFromAuthFailure(auth, regError);
-            showNotification(
-              "This email is already registered using a password. Please sign in with your email and password instead.",
-              "warning",
-              7000,
-            );
-            return;
-          }
-          await recoverFromAuthFailure(auth, regError);
-          showNotification(
-            "Could not complete registration with Google. Please try signing up directly.",
-            "error",
-            6000,
-          );
-          return;
-        }
+        // Account does not exist in the database.
+        // Sign In must not auto-register unregistered accounts.
+        await authApi.logout().catch(() => auth.signOut().catch(() => {}));
+        sessionStorage.removeItem("socialAuthInProgress");
+        setSocialLoading(false);
+        setGlobalLoading(false);
+        appNavigate("/signup", {
+          state: { email: firebaseUser.email, isGoogleAuth: true },
+          flash: {
+            type: "warning",
+            message:
+              "No registered account found with this Google account. Please sign up first.",
+          },
+          replace: true,
+        });
+        return;
       }
 
       // Handle identity conflict (email already registered with password)

@@ -121,9 +121,10 @@ const buildUserPayload = (user) => ({
   isActive: user.isActive,
   isEmailVerified: user.isEmailVerified,
   accountStatus: user.accountStatus,
+  createdAt: user.createdAt,
 });
 
-export const buildRegistrationUserPayload = (user) => ({
+export const buildRegistrationUserPayload = (user, options = {}) => ({
   id: user._id,
   user_id: user.user_id,
   email: user.email,
@@ -136,6 +137,8 @@ export const buildRegistrationUserPayload = (user) => ({
   permissions: user.permissions || [],
   isEmailVerified: Boolean(user.isEmailVerified),
   onboardingStatus: user.onboardingStatus || "profile_complete",
+  createdAt: user.createdAt,
+  isNewAccount: options.isNewAccount !== undefined ? options.isNewAccount : true,
 });
 
 export const storeOtpChallenge = async (user, req, deviceId) => {
@@ -314,7 +317,7 @@ export const register = async (req, res, next) => {
       return res.status(200).json({
         message: "User onboarding already exists",
         code: "ONBOARDING_RESUMED",
-        user: buildRegistrationUserPayload(existingUser),
+        user: buildRegistrationUserPayload(existingUser, { isNewAccount: false }),
       });
     }
 
@@ -364,7 +367,7 @@ export const register = async (req, res, next) => {
 
     res.status(201).json({
       message: "User registered successfully. Please verify your email.",
-      user: buildRegistrationUserPayload(user),
+      user: buildRegistrationUserPayload(user, { isNewAccount: true }),
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -373,7 +376,7 @@ export const register = async (req, res, next) => {
         return res.status(200).json({
           message: "User onboarding already exists",
           code: "ONBOARDING_RESUMED",
-          user: buildRegistrationUserPayload(existingByUid),
+          user: buildRegistrationUserPayload(existingByUid, { isNewAccount: false }),
         });
       }
       const existingByEmail = req.user.email

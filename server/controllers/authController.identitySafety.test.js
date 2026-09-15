@@ -219,12 +219,23 @@ describe("authentication identity safety", () => {
       email: "person@example.test", username: "person", firstName: "Test", lastName: "Person",
       phone: null, branch: null, role: "applicant", permissions: [], isEmailVerified: false,
       onboardingStatus: "verification_pending", otpHash: "never-return-this-either",
+      createdAt: new Date().toISOString(),
     });
     expect(Object.keys(payload).sort()).toEqual([
-      "branch", "email", "firstName", "id", "isEmailVerified", "lastName",
-      "onboardingStatus", "permissions", "phone", "role", "user_id", "username",
+      "branch", "createdAt", "email", "firstName", "id", "isEmailVerified",
+      "isNewAccount", "lastName", "onboardingStatus", "permissions", "phone",
+      "role", "user_id", "username",
     ].sort());
     expect(payload).not.toHaveProperty("firebaseUid");
     expect(payload).not.toHaveProperty("otpHash");
+  });
+
+  test("buildRegistrationUserPayload respects isNewAccount option", () => {
+    const user = { _id: "mongo-1", email: "test@example.test" };
+    const defaultPayload = buildRegistrationUserPayload(user);
+    expect(defaultPayload.isNewAccount).toBe(true);
+
+    const resumedPayload = buildRegistrationUserPayload(user, { isNewAccount: false });
+    expect(resumedPayload.isNewAccount).toBe(false);
   });
 });

@@ -1,4 +1,3 @@
-import StayExtensionRequests from '../components/StayExtensionRequests';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -833,7 +832,6 @@ export default function TenantsWorkspacePage() {
 
     return (
       <div className="space-y-6">
-        <StayExtensionRequests onReviewed={() => queryClient.invalidateQueries()} />
         {/* Pattern 1 Sticky Sub-Header */}
         <AdminPageHeader
           title="Tenants"

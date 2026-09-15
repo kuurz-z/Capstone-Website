@@ -439,7 +439,7 @@ export default function RentBillingTab({
       const billedReservationIds = new Set();
       const billRows = bills.map((bill) => {
         const billId = getId(bill.id || bill._id);
-        const reservationId = getId(bill.reservationId?._id || bill.reservationId || bill.id);
+        const reservationId = getId(bill.reservationId?._id || bill.reservationId);
         if (reservationId) billedReservationIds.add(reservationId);
         
         const paymentRecord = billId ? paymentsByBillId.get(billId) : null;
@@ -471,7 +471,15 @@ export default function RentBillingTab({
 
       // 2. For active tenants who do not have any bill generated yet, include them as upcoming / action required
       const unbilledTenantRows = tenants
-        .filter((tenant) => !billedReservationIds.has(getId(tenant.reservationId)))
+        .filter((tenant) => {
+          const resId = getId(tenant.reservationId);
+          const currentBillId = getId(tenant.currentMonthBill?.id || tenant.currentMonthBill?._id);
+          const isAlreadyBilled =
+            (currentBillId && billsById.has(currentBillId)) ||
+            tenant.billStatus === "already_billed" ||
+            billedReservationIds.has(resId);
+          return !isAlreadyBilled;
+        })
         .map((tenant) => {
           const contractRate = normalizeAmount(tenant.monthlyRent || tenant.pricingSnapshot?.finalMonthlyRate || 0);
           const isMissingData = tenant.billStatus === "missing_data" || contractRate <= 0;
