@@ -1,4 +1,4 @@
-import { after, before, beforeEach, test } from 'node:test';
+import { afterAll as after, beforeAll as before, beforeEach, test } from '@jest/globals';
 import assert from 'node:assert/strict';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient, ObjectId } from 'mongodb';
@@ -14,8 +14,8 @@ const bill = (overrides = {}) => ({ _id: new ObjectId(), reservationId: new Obje
 before(async () => {
   mongo = await MongoMemoryServer.create(); client = new MongoClient(mongo.getUri());
   await client.connect(); db = client.db('rent_cycle_fixtures');
-});
-after(async () => { await client?.close(); await mongo?.stop(); });
+}, 120_000);
+after(async () => { await client?.close(); await mongo?.stop(); }, 60_000);
 beforeEach(async () => {
   await db.dropDatabase();
   // Synthetic copies of all five audited patterns; no production personal/provider data.
