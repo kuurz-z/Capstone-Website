@@ -311,6 +311,36 @@ export const sanitizeToastMessage = (rawMessage, type = "info") => {
     return "This reservation is confirmed. Please complete the move-in process or cancel the reservation before deleting.";
   }
 
+  const outsidePeriodRegex =
+    /\b(utility\s*period\s*does\s*not\s*contain|does\s*not\s*contain.*(?:occupancy|stay)\s*time|move-out\s*time\s*cannot\s*be\s*earlier\s*than\s*when\s*the\s*tenant\s*moved\s*in)\b/i;
+  if (outsidePeriodRegex.test(message)) {
+    return "Unable to process move-out. The selected move-out time cannot be earlier than when the tenant moved into the room.";
+  }
+
+  const closedOnlyRegex =
+    /\b(previous\s*billing\s*history\s*but\s*no\s*valid\s*active\s*period|requires\s*an\s*active\s*electricity\s*billing\s*period\s*to\s*be\s*opened\s*first)\b/i;
+  if (closedOnlyRegex.test(message)) {
+    return "Unable to complete this action. This room requires an active electricity billing period to be opened first.";
+  }
+
+  const ambiguousPeriodRegex =
+    /\b(multiple\s*active\s*electricity\s*periods\s*were\s*found|multiple\s*active\s*electricity\s*billing\s*periods|resolve\s*the\s*billing\s*conflict\s*first)\b/i;
+  if (ambiguousPeriodRegex.test(message)) {
+    return "Unable to complete this action due to multiple active electricity billing periods. Please resolve the open billing periods first.";
+  }
+
+  const missingPeriodRegex =
+    /\b(no\s*active\s*electricity\s*period\s*exists|no\s*active\s*electricity\s*billing\s*period\s*exists)\b/i;
+  if (missingPeriodRegex.test(message)) {
+    return "No active electricity billing period exists for this room. Please open a billing period first.";
+  }
+
+  const continuityReviewRegex =
+    /\b(review\s*period\s*continuity\s*first|review\s*or\s*initialize\s*continuity\s*before\s*continuing)\b/i;
+  if (continuityReviewRegex.test(message)) {
+    return "Unable to complete this action. Please ensure the electricity billing period is active and up to date.";
+  }
+
   // 2. Technical & System Error Replacements
   const serverErrorRegex =
     /\b(system\s*error|internal\s*server\s*error|500\s*internal|server\s*error\s*:\s*500|502\s*bad\s*gateway|503\s*service|504\s*gateway)\b/i;
@@ -355,6 +385,10 @@ export const sanitizeToastMessage = (rawMessage, type = "info") => {
     .replace(/\bresidents\b/g, "tenants")
     .replace(/\bResident\b/g, "Tenant")
     .replace(/\bresident\b/g, "tenant")
+    .replace(/\bOccupancy\b/g, "Stay")
+    .replace(/\boccupancy\b/g, "stay")
+    .replace(/\bOccupancies\b/g, "Stays")
+    .replace(/\boccupancies\b/g, "stays")
     .replace(/\bCopilot\b/g, "Assistant")
     .replace(/\bcopilot\b/g, "assistant")
     .replace(/\bSuper\s*Admin\b/g, "Owner")

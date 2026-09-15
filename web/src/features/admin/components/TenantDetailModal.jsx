@@ -1392,14 +1392,16 @@ export default function TenantDetailModal({
             try {
               const res = await reservationApi.moveOut(reservationId, {
                 moveOutDate: payload.moveOutDate,
+                moveOutTime: payload.moveOutTime,
                 actualVacateDate: payload.moveOutDate,
+                actualVacateTime: payload.moveOutTime,
                 reason: payload.reason || "move_out",
                 finalNotes: payload.notes || "",
                 damages: payload.damageDeductions || 0,
                 deductions: (payload.damageDeductions || 0) + (payload.keyReturned ? 0 : 500),
                 outstandingBalanceSnapshot: tenant?.balance || 0,
                 finalUtilityReading: payload.meterReading,
-        finalWaterReading: payload.finalWaterReading,
+                finalWaterReading: payload.finalWaterReading,
                 confirm: true,
               });
               await invalidateTenantQueries();

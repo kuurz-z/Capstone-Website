@@ -1,5 +1,5 @@
 import { resolveRenewalTerm } from "../services/contractLeaseDateService.js";
-import { toManilaStartOfDay, getManilaToday } from "./dateUtils.js";
+import { toManilaStartOfDay, getManilaToday, getManilaDayjs, composeManilaDateTime } from "./dateUtils.js";
 import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
@@ -91,14 +91,74 @@ const normalizeDate = (value, endOfDay = false) => {
   return date;
 };
 
-const parseDateTime = (dateInput, timeInput = "") => {
-  const base = new Date(dateInput || Date.now());
-  if (Number.isNaN(base.getTime())) return null;
-  if (!timeInput) return base;
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(timeInput).trim());
-  if (!match) return null;
-  base.setHours(Number(match[1]), Number(match[2]), 0, 0);
-  return base;
+export const parseDateTime = (dateInput, timeInput = "") => {
+  let resolvedDate = dateInput;
+  let resolvedTime = "";
+
+  if (dateInput && typeof dateInput === "object" && !(dateInput instanceof Date) && !dayjs.isDayjs(dateInput)) {
+    resolvedDate =
+      dateInput.moveOutDate ||
+      dateInput.actualVacateDate ||
+      dateInput.dateInput ||
+      dateInput.date ||
+      dateInput.effectiveDate ||
+      "";
+    resolvedTime = String(
+      dateInput.actualVacateTime ||
+      dateInput.moveOutTime ||
+      dateInput.time ||
+      dateInput.timeInput ||
+      "",
+    ).trim();
+  }
+
+  if (typeof timeInput === "string") {
+    if (timeInput.trim()) resolvedTime = timeInput.trim();
+  } else if (timeInput && typeof timeInput === "object" && !(timeInput instanceof Date)) {
+    const fromTimeObj = String(
+      timeInput.actualVacateTime ||
+      timeInput.moveOutTime ||
+      timeInput.time ||
+      timeInput.timeInput ||
+      "",
+    ).trim();
+    if (fromTimeObj) resolvedTime = fromTimeObj;
+  }
+
+  // If time is provided, parse hours/minutes
+  if (resolvedTime) {
+    const match = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(resolvedTime);
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    const seconds = match[3] ? Number(match[3]) : 0;
+    const targetDay = resolvedDate ? toManilaStartOfDay(resolvedDate) : getManilaToday();
+    if (!targetDay || !targetDay.isValid()) return null;
+    return targetDay.add(hours, "hour").add(minutes, "minute").add(seconds, "second").toDate();
+  }
+
+  // No time provided
+  if (!resolvedDate) {
+    return new Date();
+  }
+
+  // If resolvedDate is a pure date string (e.g. "2026-09-15" or starts with "YYYY-MM-DD" with no explicit time)
+  if (typeof resolvedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(resolvedDate.trim())) {
+    const targetDay = toManilaStartOfDay(resolvedDate.trim());
+    if (!targetDay || !targetDay.isValid()) return null;
+    const manilaToday = getManilaToday();
+    // If date is today in Manila, align cutover instant with the current Philippine Standard Time (PHT)
+    // rather than UTC midnight (08:00 AM PHT), which could predate today's active period start.
+    if (targetDay.isSame(manilaToday, "day")) {
+      return new Date();
+    }
+    return targetDay.toDate();
+  }
+
+  // If resolvedDate is a Date object or ISO string with timestamp
+  const manilaDate = getManilaDayjs(resolvedDate);
+  if (!manilaDate || !manilaDate.isValid()) return null;
+  return manilaDate.toDate();
 };
 
 export const getMonthlyRent = (reservation) =>
@@ -3157,13 +3217,49 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
         throw Object.assign(new Error("No active stay found for move-out."), { statusCode: 400, code: "NO_ACTIVE_STAY" });
       }
 
-      const moveOutAt = parseDateTime(payload.moveOutDate, payload.actualVacateTime || "");
+      let moveOutAt = parseDateTime(
+        payload.moveOutDate || payload.actualVacateDate,
+        payload.actualVacateTime || payload.moveOutTime || "",
+      );
       if (!moveOutAt) {
         throw Object.assign(new Error("A valid move-out date is required."), { statusCode: 400, code: "INVALID_MOVEOUT_DATE" });
       }
-      if (readMoveInDate(reservation) && moveOutAt < new Date(readMoveInDate(reservation))) {
-        throw Object.assign(new Error("Move-out date cannot be earlier than move-in date."), { statusCode: 400, code: "MOVEOUT_BEFORE_MOVEIN" });
+      if (readMoveInDate(reservation)) {
+        const moveInDate = new Date(readMoveInDate(reservation));
+        if (moveOutAt < moveInDate) {
+          const moveOutDay = toManilaStartOfDay(moveOutAt);
+          const moveInDay = toManilaStartOfDay(moveInDate);
+          if (moveOutDay && moveInDay && moveOutDay.isSame(moveInDay, "day")) {
+            moveOutAt = moveInDate;
+          } else {
+            throw Object.assign(new Error("Move-out date cannot be earlier than move-in date."), { statusCode: 400, code: "MOVEOUT_BEFORE_MOVEIN" });
+          }
+        }
       }
+
+      // If electricity billing is active for this room, ensure same-day move-outs align
+      // cleanly with the active period's start time if the cutover instant is on the same Manila day
+      if (branchSupportsSeparateUtilityBillingSafe(
+        reservation.roomId?.branch || activeStay.roomId?.branch,
+        "electricity",
+      )) {
+        const activePeriod = await UtilityPeriod.findOne({
+          roomId: activeStay.roomId?._id || activeStay.roomId,
+          utilityType: "electricity",
+          status: { $in: ["open", "manual_review_required"] },
+          isArchived: false,
+        }).session(session).lean();
+
+        if (activePeriod?.startDate) {
+          const periodStart = new Date(activePeriod.startDate);
+          const moveOutDay = toManilaStartOfDay(moveOutAt);
+          const periodStartDay = toManilaStartOfDay(periodStart);
+          if (moveOutDay && periodStartDay && moveOutDay.isSame(periodStartDay, "day") && moveOutAt < periodStart) {
+            moveOutAt = periodStart;
+          }
+        }
+      }
+
       await recordWaterObservation({room:reservation.roomId,reading:payload.finalWaterReading,
         eventAt:moveOutAt,eventType:'moveOut',reservationId:reservation._id,stayId:activeStay._id,
         tenantId:reservation.userId?._id || reservation.userId,actorId,session,source:'move-out'});

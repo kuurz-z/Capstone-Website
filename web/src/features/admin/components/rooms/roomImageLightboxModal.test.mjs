@@ -61,21 +61,13 @@ describe("Room Management Image Full View & Lightbox Suite", () => {
     assert.ok(code.includes("!loadError &&"), "Must guard image rendering with !loadError to avoid broken image overlay");
   });
 
-  test("2. DoubleDeckRoomCard robustly extracts room photos even when room.images is an empty array", () => {
+  test("2. DoubleDeckRoomCard removes photos text button from card footer per room management requirements", () => {
     const code = fs.readFileSync(doubleDeckCardPath, "utf8");
 
-    assert.ok(code.includes("onViewPhotos"), "Must accept onViewPhotos prop");
-    assert.ok(code.includes("roomImages"), "Must extract roomImages");
-
-    // Verify empty array bug is fixed (must not shadow room.image)
-    assert.ok(
-      code.includes("fromImages.length > 0") && code.includes("room.image"),
-      "Must fall back to room.image when room.images is an empty array"
-    );
-
-    // Button in footer
-    assert.ok(code.includes("onViewPhotos(room)"), "Must trigger onViewPhotos with room object on button click");
-    assert.ok(code.includes("Photo"), "Must display Photo count in footer button");
+    // Must not display Photos text button, ImageIcon, or trigger onViewPhotos in card footer
+    assert.ok(!code.includes("Photo</span>"), "Must not display Photo/Photos text button in footer");
+    assert.ok(!code.includes("ImageIcon"), "Must not render ImageIcon in card footer");
+    assert.ok(!code.includes("onViewPhotos(room)"), "Must not trigger onViewPhotos from card footer");
   });
 
   test("3. RoomAvailabilityPage passes onViewPhotos and safely falls back to room.image when room.images is empty", () => {
@@ -199,10 +191,6 @@ describe("Room Management Image Full View & Lightbox Suite", () => {
     assert.ok(
       roomFormCode.includes("prefetchOptimizedImage"),
       "RoomFormModal must import and invoke prefetchOptimizedImage on mouse enter",
-    );
-    assert.ok(
-      doubleDeckCode.includes("prefetchOptimizedImage"),
-      "DoubleDeckRoomCard must import and invoke prefetchOptimizedImage on mouse enter",
     );
   });
 

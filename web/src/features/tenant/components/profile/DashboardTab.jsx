@@ -38,18 +38,10 @@ const DashboardTab = ({
  const showBrowseRoomsShortcut = hasReservation;
  const showShortcutsGrid = showBrowseRoomsShortcut || canViewTenantModules;
 
- // Responsive: detect if we're on mobile
- const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
  const [isDark, setIsDark] = useState(() => {
  const root = document.documentElement;
  return root.getAttribute("data-theme") === "dark" || root.classList.contains("dark");
  });
-
- useEffect(() => {
- const handler = () => setIsMobile(window.innerWidth <= 768);
- window.addEventListener("resize", handler);
- return () => window.removeEventListener("resize", handler);
- }, []);
 
  useEffect(() => {
  const root = document.documentElement;
@@ -67,13 +59,6 @@ const DashboardTab = ({
  return () => observer.disconnect();
  }, []);
 
- const gridStyle = isMobile
- ? S.gridMobile
- : S.grid;
-
- const rightColStyle = isMobile
- ? S.rightColMobile
- : S.rightCol;
  const shortcutCardStyle = {
  ...S.shortcutCardBase,
  background: isDark ? "var(--surface-card, #0F1B2D)" : "#FFFFFF",
@@ -110,11 +95,11 @@ const DashboardTab = ({
 
 
 
- {/* ── Main grid: left stacks, right spans ─────────────── */}
- <div style={gridStyle}>
+      {/* ── Main grid: left stacks, right spans ─────────────── */}
+      <div className="dashboard-tab-grid">
 
         {/* Left column stack */}
-        <div style={isMobile ? S.gridMobile : S.leftCol}>
+        <div className="dashboard-tab-left-col">
           <ProfileCompletionCard
             profileData={profileData}
             onGoToPersonal={onGoToPersonal}
@@ -165,14 +150,14 @@ const DashboardTab = ({
         </div>
 
         {/* Right col: spans both rows on desktop, below on mobile */}
-        <div style={rightColStyle}>
+        <div className="dashboard-tab-right-col">
           <ReservationSidePanel
             reservation={selectedReservation}
             profileData={profileData}
           />
         </div>
 
- </div>
+      </div>
 
  </div>
  );
@@ -198,40 +183,7 @@ const S = {
  color: "#94A3B8",
  margin: "0 0 16px",
  },
-
-  /* Desktop grid */
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 290px",
-    gap: 16,
-    alignItems: "start",
-  },
-  leftCol: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  rightCol: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    alignSelf: "start",
-    position: "sticky",
-    top: 16,
-  },
-
- /* Mobile — single column */
- gridMobile: {
- display: "flex",
- flexDirection: "column",
- gap: 16,
- },
- rightColMobile: {
- minHeight: 220,
- display: "flex",
- flexDirection: "column",
- },
- shortcutsGrid: {
+  shortcutsGrid: {
  display: "grid",
  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
  gap: 12,

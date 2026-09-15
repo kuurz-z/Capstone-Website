@@ -101,5 +101,28 @@ test("sanitizeToastMessage replaces Failed to with Unable to and enforces Lilycr
     sanitizeToastMessage("Super Admin access granted", "info"),
     "Owner access granted",
   );
+  assert.equal(
+    sanitizeToastMessage("Failed to update room occupancy", "error"),
+    "Unable to update room stay",
+  );
+});
+
+test("sanitizeToastMessage converts utility continuity errors to friendly actionable feedback", () => {
+  assert.equal(
+    sanitizeToastMessage("The utility period does not contain the requested occupancy time. Review period continuity first.", "error"),
+    "Unable to process move-out. The selected move-out time cannot be earlier than when the tenant moved into the room.",
+  );
+  assert.equal(
+    sanitizeToastMessage("This room has previous billing history but no valid active period. Review or initialize continuity before continuing.", "error"),
+    "Unable to complete this action. This room requires an active electricity billing period to be opened first.",
+  );
+  assert.equal(
+    sanitizeToastMessage("Multiple active electricity periods were found. Resolve the billing conflict first.", "error"),
+    "Unable to complete this action due to multiple active electricity billing periods. Please resolve the open billing periods first.",
+  );
+  assert.equal(
+    sanitizeToastMessage("No active electricity period exists for this room.", "error"),
+    "No active electricity billing period exists for this room. Please open a billing period first.",
+  );
 });
 

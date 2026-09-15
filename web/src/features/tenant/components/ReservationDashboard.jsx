@@ -929,20 +929,12 @@ export default function ReservationDashboard({
                 }}
                 onMouseEnter={(e) => {
                   if (!isMobile && status !== "locked") {
-                    e.currentTarget.style.transform = isFirst
-                      ? "translateX(-18px) translateY(-2px)"
-                      : isLast
-                        ? "translateX(18px) translateY(-2px)"
-                        : "translateY(-2px)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isMobile && status !== "locked") {
-                    e.currentTarget.style.transform = isFirst
-                      ? "translateX(-18px)"
-                      : isLast
-                        ? "translateX(18px)"
-                        : "translateY(0)";
+                    e.currentTarget.style.transform = "translateY(0)";
                   }
                 }}
                 onClick={() => {
@@ -1815,8 +1807,8 @@ const styles = {
   stepperProgressRail: {
     position: "absolute",
     top: 42,
-    left: "calc(10% - 18px)",
-    right: "calc(10% - 18px)",
+    left: "10%",
+    right: "10%",
     height: 2,
     borderRadius: 999,
     overflow: "hidden",
@@ -1850,12 +1842,8 @@ const styles = {
     minWidth: 0,
     padding: "0 8px",
   },
-  stepItemFirst: {
-    transform: "translateX(-18px)",
-  },
-  stepItemLast: {
-    transform: "translateX(18px)",
-  },
+  stepItemFirst: {},
+  stepItemLast: {},
   stepCircle: {
     width: 52,
     height: 52,

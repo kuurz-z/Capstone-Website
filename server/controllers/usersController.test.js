@@ -82,7 +82,7 @@ await jest.unstable_mockModule("../models/index.js", () => ({
   UtilityReading: utilityReadingModel,
   MaintenanceRequest: maintenanceRequestModel,
   Contract: contractModel,
-  Stay: { findOne: jest.fn() },
+  Stay: { findOne: jest.fn(), updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }) },
 }));
 const archiveContractsForReservationHardDelete = jest.fn().mockResolvedValue([]);
 await jest.unstable_mockModule("../services/contractArchiveService.js", () => ({

@@ -6,7 +6,7 @@
 import crypto from "crypto";
 import mongoose from "mongoose";
 import dayjs from "dayjs";
-import { User, Reservation, Room, Bill, UtilityReading, MaintenanceRequest, Contract } from "../models/index.js";
+import { User, Reservation, Room, Bill, UtilityReading, MaintenanceRequest, Contract, Stay } from "../models/index.js";
 import { ROOM_BRANCHES } from "../config/branches.js";
 import { getAuth } from "../config/firebase.js";
 import logger from "../middleware/logger.js";
@@ -1441,7 +1441,31 @@ export const deleteUser = async (req, res, next) => {
       session.endSession();
     }
 
-    // ── Post-transaction: release beds (outside transaction for Socket.IO emit) ──
+    // ── Post-transaction: release beds & cascade-cancel stays ──
+    // Cascade-cancel any active/in-progress stays belonging to the user or archived reservations
+    // to immediately release room beds, clear occupancy, and preserve audit history
+    try {
+      const stayFilter = {
+        $or: [
+          { tenantId: user._id },
+          ...(archivedReservationIds.length > 0 ? [{ reservationId: { $in: archivedReservationIds } }] : []),
+        ],
+        status: { $in: ["active", "ending_soon", "expired_occupancy_continuing"] },
+      };
+      await Stay.updateMany(
+        stayFilter,
+        {
+          $set: {
+            status: "terminated",
+            endedAt: new Date(),
+            endReason: "Tenant account deleted",
+          },
+        },
+      );
+    } catch (stayErr) {
+      logger.warn({ err: stayErr, userId: user._id }, "Account delete: stay cancellation failed (non-fatal)");
+    }
+
     // This is intentionally outside the transaction — bed release calls emitRoomUpdate
     // which cannot run inside a MongoDB session. The user doc is already deleted at
     // this point so any failure here is repaired by the nightly reconciliation job.

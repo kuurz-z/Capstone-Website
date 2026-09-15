@@ -1328,8 +1328,11 @@ export default function TenantsWorkspacePage() {
                   actionState.tenant.reservationId,
                   {
                     moveOutDate: payload.moveOutDate,
+                    moveOutTime: payload.moveOutTime,
                     actualVacateDate:
                       payload.actualVacateDate || payload.moveOutDate,
+                    actualVacateTime:
+                      payload.actualVacateTime || payload.moveOutTime,
                     reason: payload.reason || "move_out",
                     finalNotes: payload.finalNotes || payload.notes || "",
                     damages: payload.damages || 0,

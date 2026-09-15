@@ -504,7 +504,8 @@ export default function RoomImageLightboxModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100000] flex flex-col bg-black/92 backdrop-blur-md animate-in fade-in duration-150 select-none text-white"
+      className="fixed inset-0 z-[100000] flex flex-col bg-black/95 backdrop-blur-md animate-in fade-in duration-150 select-none text-white"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.95)" }}
       onClick={(e) => {
         e.stopPropagation();
         if (!hasDraggedRef.current) {
@@ -676,7 +677,7 @@ export default function RoomImageLightboxModal({
 
         {/* Central Image Container */}
         <div
-          className="relative max-w-full max-h-full flex items-center justify-center transition-transform duration-100 ease-out"
+          className="relative max-w-full max-h-full grid place-items-center transition-transform duration-100 ease-out"
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={handleDoubleClick}
           onPointerDown={handlePointerDown}
@@ -691,7 +692,7 @@ export default function RoomImageLightboxModal({
         >
           {/* Subtle loading spinner if neither base preview nor HD is available yet */}
           {!isHdLoaded && !basePreviewUrl && !loadError && (
-            <div className="absolute inset-0 flex items-center justify-center min-w-[200px] min-h-[200px]">
+            <div className="col-start-1 row-start-1 flex items-center justify-center min-w-[200px] min-h-[200px]">
               <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
           )}
@@ -703,7 +704,7 @@ export default function RoomImageLightboxModal({
               src={basePreviewUrl}
               alt=""
               aria-hidden="true"
-              className="max-w-[90vw] max-h-[75vh] sm:max-h-[80vh] w-auto h-auto object-contain rounded-lg shadow-2xl pointer-events-none select-none"
+              className="col-start-1 row-start-1 max-w-[90vw] max-h-[75vh] sm:max-h-[80vh] w-auto h-auto object-contain rounded-lg shadow-2xl pointer-events-none select-none"
               style={{
                 filter: isHdLoaded || isHdFailed ? "none" : "blur(4px)",
                 opacity: isHdLoaded ? 0 : 1,
@@ -729,9 +730,7 @@ export default function RoomImageLightboxModal({
               key={`hd-${currentItem.id}-${hdDisplayUrl}`}
               src={hdDisplayUrl}
               alt={currentItem.name || "Room full view"}
-              className={`max-w-[90vw] max-h-[75vh] sm:max-h-[80vh] w-auto h-auto object-contain rounded-lg shadow-2xl pointer-events-none select-none ${
-                basePreviewUrl ? "absolute inset-0 m-auto" : ""
-              }`}
+              className="col-start-1 row-start-1 max-w-[90vw] max-h-[75vh] sm:max-h-[80vh] w-auto h-auto object-contain rounded-lg shadow-2xl pointer-events-none select-none"
               style={{
                 opacity: isHdLoaded ? 1 : (basePreviewUrl ? 0 : 1),
                 transition: "opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
@@ -765,7 +764,7 @@ export default function RoomImageLightboxModal({
 
           {/* Error Fallback Card */}
           {(loadError || (!basePreviewUrl && isHdFailed)) && (
-            <div className="p-6 rounded-xl bg-slate-900 border border-white/10 text-center space-y-2 max-w-sm">
+            <div className="col-start-1 row-start-1 p-6 rounded-xl bg-slate-900 border border-white/10 text-center space-y-2 max-w-sm">
               <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
               <h4 className="text-sm font-semibold text-white">Image Preview Unavailable</h4>
               <p className="text-xs text-white/60">

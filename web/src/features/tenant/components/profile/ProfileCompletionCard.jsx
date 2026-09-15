@@ -138,6 +138,8 @@ const ProfileCompletionCard = ({ profileData, onGoToPersonal }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "8px",
           marginTop: "10px",
         }}
       >
