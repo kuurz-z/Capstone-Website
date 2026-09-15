@@ -1,3 +1,4 @@
+jest.mock('./services/announcementEngagement.service', () => ({ getEngagements: jest.fn(async () => new Map()), getEngagement: jest.fn(async () => ({ isRead: false, readAt: null, acknowledged: false, acknowledgedAt: null })) }));
 const mockGetDb = jest.fn();
 jest.mock('./config/database.js', () => ({ getDb: (...args) => mockGetDb(...args) }));
 jest.mock('./config/firebase.js', () => ({

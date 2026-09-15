@@ -153,6 +153,8 @@ function normalizeAnnouncement(doc, authorNameMap = new Map()) {
     is_urgent: doc.is_urgent || doc.isUrgent || priority === 'high',
     is_pinned: doc.isPinned || doc.is_pinned || false,
     created_at: createdAt,
+    requiresAcknowledgment: Boolean(doc.requiresAcknowledgment),
+    isRead: false, readAt: null, acknowledged: false, acknowledgedAt: null,
   };
 }
 
@@ -251,7 +253,12 @@ async function getAllAnnouncements(req, res) {
       }
     }
 
-    res.json(visible.map((doc) => normalizeAnnouncement(doc, authorNameMap)));
+    const { getEngagements } = require('../services/announcementEngagement.service');
+    const engagements = await getEngagements(userMongoId, visible.map((doc) => doc._id));
+    res.json(visible.map((doc) => ({
+      ...normalizeAnnouncement(doc, authorNameMap),
+      ...engagements.get(String(doc._id)),
+    })));
   } catch (error) {
     console.error('getAllAnnouncements error:', error);
     res.status(500).json({ detail: 'Failed to fetch announcements' });
@@ -298,10 +305,14 @@ async function getAnnouncementDetail(req, res) {
       return res.status(404).json({ detail: 'Announcement not found.' });
     }
 
-    return res.json(normalizeAnnouncement(announcement));
+    const { getEngagement, engageAnnouncement } = require('../services/announcementEngagement.service');
+    const engagement = req.engagementAction
+      ? await engageAnnouncement({ userId: req.user._id, announcementId: announcement._id, acknowledge: req.engagementAction === 'acknowledge', authorize: (current) => canTenantViewAnnouncement({ announcement: current, tenantContext }) })
+      : await getEngagement(req.user._id, announcement._id);
+    return res.json({ ...normalizeAnnouncement(announcement), ...engagement });
   } catch (error) {
     console.error('getAnnouncementDetail error:', error);
-    return res.status(500).json({ detail: 'Failed to fetch announcement' });
+    return res.status([400, 404].includes(error.statusCode) ? error.statusCode : 503).json({ detail: error.statusCode === 400 ? 'No acknowledgement is needed for this announcement.' : error.statusCode === 404 ? 'This announcement is no longer available.' : 'Acknowledgement is temporarily unavailable. Please try again later.' });
   }
 }
 
@@ -555,6 +566,8 @@ async function createAnnouncement(req, res) {
 }
 
 module.exports = {
+  markRead: (req, res) => { req.engagementAction = 'read'; return getAnnouncementDetail(req, res); },
+  acknowledge: (req, res) => { req.engagementAction = 'acknowledge'; return getAnnouncementDetail(req, res); },
   getAllAnnouncements,
   getAnnouncementDetail,
   createAnnouncement,

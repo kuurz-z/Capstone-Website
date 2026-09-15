@@ -1,3 +1,4 @@
+import { engageAnnouncement } from "../services/announcementEngagementService.js";
 /**
  * ============================================================================
  * ANNOUNCEMENTS CONTROLLER
@@ -421,26 +422,7 @@ export const markAsRead = async (req, res, next) => {
       );
     }
 
-    let acknowledgment = await AcknowledgmentAccount.findOne({
-      userId: dbUser._id,
-      announcementId,
-    });
-
-    if (!acknowledgment) {
-      acknowledgment = new AcknowledgmentAccount({
-        userId: dbUser._id,
-        announcementId,
-      });
-    }
-
-    const wasRead = Boolean(acknowledgment.isRead);
-    await acknowledgment.markAsRead();
-
-    if (!wasRead) {
-      await announcement.incrementViewCount();
-    }
-
-    sendSuccess(res, { readAt: acknowledgment.readAt });
+    sendSuccess(res, await engageAnnouncement({ userId: dbUser._id, announcementId: announcement._id, authorize: (_current, session) => Announcement.exists({ ...buildActiveAnnouncementQuery(dbUser.branch), _id: announcement._id }).session(session) }));
   } catch (error) {
     next(error);
   }
@@ -481,26 +463,7 @@ export const acknowledgeAnnouncement = async (req, res, next) => {
       );
     }
 
-    let acknowledgment = await AcknowledgmentAccount.findOne({
-      userId: dbUser._id,
-      announcementId,
-    });
-
-    if (!acknowledgment) {
-      acknowledgment = new AcknowledgmentAccount({
-        userId: dbUser._id,
-        announcementId,
-      });
-    }
-
-    const alreadyAcknowledged = Boolean(acknowledgment.isAcknowledged);
-    await acknowledgment.acknowledge();
-
-    if (!alreadyAcknowledged) {
-      await announcement.incrementAcknowledgmentCount();
-    }
-
-    sendSuccess(res, { acknowledgedAt: acknowledgment.acknowledgedAt });
+    sendSuccess(res, await engageAnnouncement({ userId: dbUser._id, announcementId: announcement._id, acknowledge: true, authorize: (_current, session) => Announcement.exists({ ...buildActiveAnnouncementQuery(dbUser.branch), _id: announcement._id }).session(session) }));
   } catch (error) {
     next(error);
   }
