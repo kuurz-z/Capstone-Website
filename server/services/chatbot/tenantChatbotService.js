@@ -9,7 +9,7 @@ function getGenAIClient() {
   return new GoogleGenerativeAI(key);
 }
 
-function getSystemPrompt(contextSnapshot) {
+export function getSystemPrompt(contextSnapshot) {
   const branchName = contextSnapshot?.branch || "Lilycrest Residence";
   const currentTime = new Date().toLocaleString("en-PH", { timeZone: "Asia/Manila" });
   const isApplicant = contextSnapshot?.isApplicant !== undefined
@@ -54,9 +54,32 @@ ${JSON.stringify(contextSnapshot, null, 2)}
     ? `assigned to Room ${contextSnapshot.roomNumber}${contextSnapshot?.bedPosition ? `, ${contextSnapshot.bedPosition}` : ""}`
     : "whose room assignment is not available in the canonical context";
 
+  const summary = contextSnapshot?.billingSummary;
+  const unpaidList = contextSnapshot?.unpaidBills || [];
+  const outstandingBalanceText = summary?.totalOutstandingBalance
+    ? `₱${Number(summary.totalOutstandingBalance).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+    : "₱0.00";
+  const penaltyDueText = summary?.totalPenaltyDue
+    ? `₱${Number(summary.totalPenaltyDue).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+    : "₱0.00";
+
+  const unpaidStatementsText = unpaidList.length > 0
+    ? unpaidList.map(b => `  * [${b.billingPeriod || "Statement"}] Type: ${b.billType?.toUpperCase() || "BILL"}, Amount Due: ₱${Number(b.remainingAmount || 0).toLocaleString()}, Penalty: ₱${Number(b.penaltyAmount || 0).toLocaleString()}, Status: ${b.status?.toUpperCase() || "PENDING"}`).join("\n")
+    : "  * No unpaid statements";
+
   return `You are the official Lilycrest Tenant Assistant, an intelligent authenticated assistant for Lilycrest Dormitory Management System (Lilycrest DMS).
 You assist tenants at the ${branchName} branch (${assignment}) with a warm, polite, empathetic, and friendly tone in simple, conversational English.
 Current server time in Asia/Manila: ${currentTime}.
+
+OUTSTANDING BALANCE & PENALTY FEES:
+- Total Outstanding Balance: ${outstandingBalanceText} (${summary?.unpaidStatementsCount || 0} unpaid statements)
+- Total Penalty Charges Due: ${penaltyDueText}
+- Unpaid Statements Breakdown:
+${unpaidStatementsText}
+
+BILLING & PENALTY INSTRUCTION RULES:
+1. If the tenant asks about their balance, an unpaid bill, or penalties, ALWAYS report their exact Total Outstanding Balance (${outstandingBalanceText}) and itemized penalty charges (${penaltyDueText}) from OUTSTANDING BALANCE & PENALTY FEES above.
+2. NEVER tell a tenant their bill is paid or that they have 0 penalty if Total Outstanding Balance > 0 or Total Penalty Charges Due > 0. Acknowledge clearly that regular rent or past settlements may be paid, BUT they have an outstanding pending penalty statement.
 
 AUTHORIZED KNOWLEDGE:
 - Tenant-specific facts come only from TENANT CONTEXT below.
@@ -133,12 +156,15 @@ export function detectTenantWidgetIntent(message = "", contextSnapshot = null) {
 
   // 5. Billing Breakdown Widget
   if (
-    lower.match(/\b(my bill|monthly bill|billing breakdown|electric bill|view bill|bill statement|statement of account|unpaid bill|pay bill|billing summary|my balance|current balance|rent balance|due balance|electricity share|electricity math)\b/) ||
+    lower.match(/\b(my bill|monthly bill|billing breakdown|electric bill|view bill|bill statement|statement of account|unpaid bill|pay bill|billing summary|my balance|current balance|rent balance|due balance|electricity share|electricity math|penalty|penalties|penalty fee|late fee|multa|surcharge|late payment penalty)\b/) ||
     lower.includes("electricity math") ||
     lower.includes("payment due date") ||
     lower.includes("show my bill") ||
     lower.includes("show my statement") ||
-    lower.includes("my bill breakdown")
+    lower.includes("my bill breakdown") ||
+    lower.includes("penalty") ||
+    lower.includes("multa") ||
+    lower.includes("late fee")
   ) {
     return "billing_breakdown";
   }
@@ -359,9 +385,13 @@ export function getTenantRuleBasedFallback(message = "", contextSnapshot = null)
     lower.includes("appliance") ||
     lower.includes("bayad") ||
     lower.includes("due") ||
-    lower.includes("next bill")
+    lower.includes("next bill") ||
+    lower.includes("penalty") ||
+    lower.includes("multa") ||
+    lower.includes("surcharge") ||
+    lower.includes("late fee")
   ) {
-    const bill = contextSnapshot?.currentBill;
+    const bill = contextSnapshot?.activeUnpaidBill || contextSnapshot?.currentBill;
     if (bill) {
       const formatNum = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
       const dueDateStr = bill.dueDate ? new Date(bill.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "not set";
