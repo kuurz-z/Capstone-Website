@@ -333,26 +333,105 @@ export const attachContractLineage = (contracts = []) => {
     return true;
   });
 
-  const sorted = [...validContracts].sort((a, b) => {
-    const startA = a.leaseStartDate ? new Date(a.leaseStartDate).getTime() : new Date(a.createdAt || 0).getTime();
-    const startB = b.leaseStartDate ? new Date(b.leaseStartDate).getTime() : new Date(b.createdAt || 0).getTime();
-    if (startA !== startB) return startA - startB;
-    const createdA = new Date(a.createdAt || 0).getTime();
-    const createdB = new Date(b.createdAt || 0).getTime();
-    return createdA - createdB;
+  const parentMap = new Map();
+  const find = (i) => {
+    let root = i;
+    while (parentMap.has(root) && parentMap.get(root) !== root) {
+      root = parentMap.get(root);
+    }
+    let curr = i;
+    while (parentMap.has(curr) && parentMap.get(curr) !== root) {
+      const next = parentMap.get(curr);
+      parentMap.set(curr, root);
+      curr = next;
+    }
+    return root;
+  };
+
+  const union = (a, b) => {
+    if (!a || !b) return;
+    const rootA = find(String(a));
+    const rootB = find(String(b));
+    if (rootA !== rootB) {
+      parentMap.set(rootA, rootB);
+    }
+  };
+
+  const hasAnyReservationOrChain = validContracts.some(
+    (c) => Boolean(c.reservationId || c.applicationId || c.replacesContractId || c.parentContractId)
+  );
+
+  if (!hasAnyReservationOrChain) {
+    validContracts.forEach((c) => {
+      const cid = String(c._id || c.id || "");
+      if (cid) {
+        if (!parentMap.has(cid)) parentMap.set(cid, cid);
+        union(cid, "__default_group__");
+      }
+    });
+  } else {
+    validContracts.forEach((c) => {
+      const cid = String(c._id || c.id || "");
+      if (!cid) return;
+      if (!parentMap.has(cid)) parentMap.set(cid, cid);
+
+      const resId = c.reservationId ? String(c.reservationId._id || c.reservationId) : null;
+      const appId = c.applicationId ? String(c.applicationId._id || c.applicationId) : null;
+      const replacesId = c.replacesContractId ? String(c.replacesContractId._id || c.replacesContractId) : null;
+      const parentId = c.parentContractId ? String(c.parentContractId._id || c.parentContractId) : null;
+
+      if (resId) {
+        if (!parentMap.has(resId)) parentMap.set(resId, resId);
+        union(cid, resId);
+      }
+      if (appId) {
+        if (!parentMap.has(appId)) parentMap.set(appId, appId);
+        union(cid, appId);
+      }
+      if (replacesId) {
+        if (!parentMap.has(replacesId)) parentMap.set(replacesId, replacesId);
+        union(cid, replacesId);
+      }
+      if (parentId) {
+        if (!parentMap.has(parentId)) parentMap.set(parentId, parentId);
+        union(cid, parentId);
+      }
+    });
+  }
+
+  // Group contracts by their root key
+  const groups = new Map();
+  validContracts.forEach((c) => {
+    const cid = String(c._id || c.id || "");
+    const root = cid ? find(cid) : "__fallback__";
+    if (!groups.has(root)) {
+      groups.set(root, []);
+    }
+    groups.get(root).push(c);
   });
 
   const lineageMap = new Map();
-  sorted.forEach((contract, index) => {
-    const termNumber = index + 1;
-    const durationMonths = computeContractDurationMonths(contract);
-    const isShortTerm = durationMonths < 6;
-    const termLabel = buildTermLabel(termNumber, contract);
-    lineageMap.set(String(contract._id || contract.id), {
-      termNumber,
-      termLabel,
-      isShortTerm,
-      leaseDurationMonths: durationMonths,
+  groups.forEach((groupContracts) => {
+    const sorted = [...groupContracts].sort((a, b) => {
+      const startA = a.leaseStartDate ? new Date(a.leaseStartDate).getTime() : new Date(a.createdAt || 0).getTime();
+      const startB = b.leaseStartDate ? new Date(b.leaseStartDate).getTime() : new Date(b.createdAt || 0).getTime();
+      if (startA !== startB) return startA - startB;
+      const createdA = new Date(a.createdAt || 0).getTime();
+      const createdB = new Date(b.createdAt || 0).getTime();
+      return createdA - createdB;
+    });
+
+    sorted.forEach((contract, index) => {
+      const termNumber = index + 1;
+      const durationMonths = computeContractDurationMonths(contract);
+      const isShortTerm = durationMonths < 6;
+      const termLabel = buildTermLabel(termNumber, contract);
+      lineageMap.set(String(contract._id || contract.id), {
+        termNumber,
+        termLabel,
+        isShortTerm,
+        leaseDurationMonths: durationMonths,
+      });
     });
   });
 
@@ -405,12 +484,23 @@ const UPCOMING_VISIBLE_STATUSES = new Set([
 ]);
 
 export const resolveTenantUpcomingContract = async (tenantId) => {
-  const [canonical, upcomingStays] = await Promise.all([
+  const [canonical, activeStay] = await Promise.all([
     resolveTenantCanonicalContract(tenantId).catch(() => null),
-    Stay.find({ tenantId, status: "upcoming" }).select("_id").lean().catch(() => []),
+    resolveCurrentStayForTenant(tenantId).lean().catch(() => null),
   ]);
 
-  const upcomingStayIds = (upcomingStays || []).map((s) => s._id);
+  if (!canonical && !activeStay) return null;
+
+  let upcomingStayIds = [];
+  if (activeStay) {
+    const upcomingStays = await Stay.find({
+      tenantId,
+      status: "upcoming",
+      previousStayId: activeStay._id,
+    }).select("_id").lean().catch(() => []);
+    upcomingStayIds = (upcomingStays || []).map((s) => s._id);
+  }
+
   const orConditions = [];
   if (canonical) {
     orConditions.push({ replacesContractId: canonical._id });
