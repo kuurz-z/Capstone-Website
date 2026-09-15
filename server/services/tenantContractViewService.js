@@ -108,8 +108,15 @@ export const toTenantContractView = (source, now = new Date(), options = {}) => 
     isCurrent: contract.isCurrent !== false,
     leaseStartDate: contract.leaseStartDate || null,
     leaseEndDate: contract.leaseEndDate || null,
-    leaseDurationMonths: contract.leaseDurationMonths ?? null,
+    leaseDurationMonths: contract.leaseDurationMonths ?? options.leaseDurationMonths ?? null,
     daysRemaining: calculateContractDaysRemaining(contract.leaseEndDate, now),
+    termNumber: options.termNumber ?? contract.termNumber ?? null,
+    termLabel: options.termLabel ?? contract.termLabel ?? null,
+    isShortTerm: options.isShortTerm ?? contract.isShortTerm ?? (
+      (contract.leaseDurationMonths ?? options.leaseDurationMonths) != null
+        ? Number(contract.leaseDurationMonths ?? options.leaseDurationMonths) < 6
+        : false
+    ),
     approvedMonthlyRate,
     regularMonthlyRate,
     discountPercentage,

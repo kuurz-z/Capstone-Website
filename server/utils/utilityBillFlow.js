@@ -178,6 +178,10 @@ export async function upsertDraftBillsForUtility({
   );
 
   for (const summary of tenantSummaries || []) {
+    let tenantQuery = summary.tenantId ? User.findById(summary.tenantId) : null;
+    if (tenantQuery && session) tenantQuery = tenantQuery.session(session);
+    const tenant = tenantQuery ? await tenantQuery.lean() : null;
+
     const billingContext = utilityType === 'water' && summary.reservationId
       ? await getReservationBillingContextForBill({reservationId:summary.reservationId},period.endDate || period.startDate)
       : await getReservationBillingContextForUser(
@@ -186,7 +190,48 @@ export async function upsertDraftBillsForUtility({
     );
     const billingMonth =
       billingContext?.cycle?.billingMonth || period.startDate;
-    const reservationId = utilityType === 'water' ? summary.reservationId || billingContext?.reservation?._id || null : billingContext?.reservation?._id || null;
+
+    let targetReservation = billingContext?.reservation || null;
+    const initialReservationId = utilityType === 'water'
+      ? summary.reservationId || billingContext?.reservation?._id || null
+      : billingContext?.reservation?._id || null;
+
+    if (!targetReservation && (summary.reservationId || initialReservationId)) {
+      let resQuery = Reservation.findById(summary.reservationId || initialReservationId);
+      if (session) resQuery = resQuery.session(session);
+      targetReservation = await resQuery.lean();
+    }
+    if (!targetReservation && summary.tenantId) {
+      let resQuery = Reservation.findOne({
+        userId: summary.tenantId,
+        roomId: room?._id || room,
+        isArchived: { $ne: true },
+      }).sort({ createdAt: -1 });
+      if (session) resQuery = resQuery.session(session);
+      targetReservation = await resQuery.lean();
+    }
+
+    const reservationId = initialReservationId || targetReservation?._id || null;
+
+    // ── Departed / Moved-out Tenant Guards ──────────────────────────────────
+    const isMovedOutTenant = tenant?.tenantStatus === "moved_out" || tenant?.tenantStatus === "inactive" || tenant?.tenantStatus === "evicted";
+    const isMoveOutReservation = targetReservation && (targetReservation.status === "moveOut" || targetReservation.reservationStatus === "moveOut" || targetReservation.status === "cancelled");
+    const tenantMoveOutDate = targetReservation?.moveOutDate || targetReservation?.checkOutDate || tenant?.moveOutDate || null;
+
+    // Guard: Prevent generating draft bills for periods starting at/after the tenant's move-out date
+    const periodStartsAfterMoveOut = Boolean(
+      tenantMoveOutDate &&
+      period?.startDate &&
+      new Date(period.startDate) >= new Date(tenantMoveOutDate)
+    );
+
+    if (periodStartsAfterMoveOut) {
+      updatedSummaries.push({
+        ...summary,
+        billId: null,
+      });
+      continue;
+    }
 
     // ── Transfer-day finalization: suppress the duplicate draft Bill ────────
     const finalization =
@@ -225,12 +270,14 @@ export async function upsertDraftBillsForUtility({
       continue;
     }
 
-    let billQuery = Bill.findOne({
-      userId: summary.tenantId,
-      reservationId,
-      billingMonth,
-      isArchived: false,
-    });
+    let billQuery = summary.billId
+      ? Bill.findOne({ _id: summary.billId, isArchived: false })
+      : Bill.findOne({
+          userId: summary.tenantId,
+          reservationId,
+          billingMonth,
+          isArchived: false,
+        });
     if (session) billQuery = billQuery.session(session);
     let bill = await billQuery;
 
@@ -253,6 +300,15 @@ export async function upsertDraftBillsForUtility({
     }
 
     if (!bill) {
+      // Guard: Prevent creating a new draft bill for a tenant who has already moved out
+      if (isMovedOutTenant || isMoveOutReservation) {
+        updatedSummaries.push({
+          ...summary,
+          billId: null,
+        });
+        continue;
+      }
+
       bill = new Bill({
         ...(supplementIdentity || {}),
         ...(utilityType === 'electricity' && paidInvoiceId ? {parentInvoiceId:paidInvoiceId} : {}),

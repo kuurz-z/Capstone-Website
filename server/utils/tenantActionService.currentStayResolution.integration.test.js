@@ -63,7 +63,7 @@ describe("current-stay resolution unifies active + ending_soon across renewal", 
     const leaseStart = new Date("2025-12-01T00:00:00.000Z");
     const leaseEnd = new Date("2026-01-31T00:00:00.000Z");
     const reservation = await Reservation.create({
-      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: 2,
+      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: 6,
       reservationFeeAmount: 2000, preferredRoomType: "quadruple-sharing",
       agreedToPrivacy: true, agreedToCertification: true, totalPrice: 6000,
       monthlyRent: 6000, moveInDate: leaseStart,

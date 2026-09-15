@@ -344,4 +344,79 @@ for (const type of ['electricity','water']) {
     expect((await UtilityPeriod.findById(result.body.result.periodId).lean()).startDate).toEqual(end);
     expect(await UtilityPeriod.findById(prior._id).lean()).toEqual(prior.toObject());
   });
+
+  test(`${type}: upsertDraftBillsForUtility skips generating draft bills for departed / moved-out tenants`,async()=>{
+    const movedOutTenant = await User.create({
+      firebaseUid: `moved-out-${new mongoose.Types.ObjectId()}`,
+      username: `moved-out-${new mongoose.Types.ObjectId()}`,
+      email: `moved-out-${new mongoose.Types.ObjectId()}@example.test`,
+      firstName: 'Departed',
+      lastName: 'Tenant',
+      role: 'tenant',
+      tenantStatus: 'moved_out',
+      branch: 'gil-puyat',
+    });
+    const moveOutDate = new Date('2026-09-14T10:00:00+08:00');
+    const movedOutReservation = await Reservation.create({
+      userId: movedOutTenant._id,
+      roomId: room._id,
+      status: 'moveOut',
+      moveInDate: new Date('2026-07-01T00:00:00+08:00'),
+      moveOutDate,
+      leaseDuration: 6,
+      preferredRoomType: 'private',
+      agreedToPrivacy: true,
+      agreedToCertification: true,
+      totalPrice: 5000,
+      monthlyRent: 5000,
+      selectedBed: { id: 'a' },
+    });
+
+    // 1. Period starting after move-out date (e.g., Sep 15 - Oct 15)
+    const postPeriod = {
+      _id: new mongoose.Types.ObjectId(),
+      utilityType: type,
+      startDate: new Date('2026-09-15T00:00:00+08:00'),
+      endDate: new Date('2026-10-15T00:00:00+08:00'),
+      roomId: room._id,
+      status: 'closed',
+    };
+    const summaries = [{
+      tenantId: movedOutTenant._id,
+      reservationId: movedOutReservation._id,
+      tenantName: 'Departed Tenant',
+      totalUsage: 10,
+      billAmount: 160,
+    }];
+
+    const results = await upsertDraftBillsForUtility({
+      period: postPeriod,
+      room,
+      tenantSummaries: summaries,
+      utilityType: type,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].billId).toBeNull();
+    expect(await Bill.countDocuments({ userId: movedOutTenant._id })).toBe(0);
+
+    // 2. Period within stay but tenant already moved out and no bill exists
+    const withinPeriod = {
+      _id: new mongoose.Types.ObjectId(),
+      utilityType: type,
+      startDate: new Date('2026-08-15T00:00:00+08:00'),
+      endDate: new Date('2026-09-15T00:00:00+08:00'),
+      roomId: room._id,
+      status: 'closed',
+    };
+    const resultsWithin = await upsertDraftBillsForUtility({
+      period: withinPeriod,
+      room,
+      tenantSummaries: summaries,
+      utilityType: type,
+    });
+    expect(resultsWithin[0].billId).toBeNull();
+    expect(await Bill.countDocuments({ userId: movedOutTenant._id })).toBe(0);
+  });
 }
+

@@ -49,7 +49,7 @@ import {
 } from "./_helpers.js";
 import { getBusinessSettings } from "../../utils/businessSettings.js";
 import { resolveAuthoritativeLeasePricing } from "../../services/contractPricingResolver.js";
-import { resolveCurrentStayForReservation } from "../../services/tenantContractSelectionService.js";
+import { resolveCurrentStayForReservation, resolveAuthoritativeCurrentContract } from "../../services/tenantContractSelectionService.js";
 import {
   scheduleRoomTransfer,
   rescheduleRoomTransfer,
@@ -289,6 +289,36 @@ export const renewContract = async (req, res, next) => {
 
     const actor = await findDbUser(req.user.uid);
     const previousStaySnapshot = await resolveCurrentStayForReservation(reservationId).lean();
+    const predecessorContract = await resolveAuthoritativeCurrentContract({
+      reservationId: reservation._id,
+      tenantId: reservation.userId?._id || reservation.userId,
+    }).catch(() => null);
+
+    const requestedMonths = Number(req.body?.leaseDurationMonths || req.body?.months);
+    let currentStayDuration = Number(
+      previousStaySnapshot?.leaseDurationMonths ||
+      predecessorContract?.leaseDurationMonths ||
+      reservation.contractDuration ||
+      reservation.leaseDuration ||
+      reservation.leaseDurationMonths ||
+      0
+    );
+    if (!currentStayDuration && previousStaySnapshot?.leaseStartDate && previousStaySnapshot?.leaseEndDate) {
+      const s = toManilaStartOfDay(previousStaySnapshot.leaseStartDate);
+      const e = toManilaStartOfDay(previousStaySnapshot.leaseEndDate);
+      if (s && e) {
+        currentStayDuration = Math.round(e.diff(s, "month", true));
+      }
+    }
+    const isShortTerm = currentStayDuration > 0 && currentStayDuration < 6;
+
+    if (isShortTerm && requestedMonths > 5) {
+      return res.status(400).json({
+        error: "Short-term stays can only be extended up to 5 months. To transition to a long-term stay (6–12 months), the tenant must complete move-out and submit a new long-term reservation.",
+        code: "SHORT_TERM_LIMIT_EXCEEDED",
+      });
+    }
+
     const result = await renewStayWorkflow({
       reservationId,
       payload: req.body,
@@ -423,9 +453,39 @@ export const createRenewalOffer = async (req, res, next) => {
       return res.status(409).json({ error: "A pending renewal offer already exists for this tenant.", code: "PENDING_OFFER_EXISTS" });
     }
 
+    const activeStay = await resolveCurrentStayForReservation(reservationId);
+    const predecessorContract = await resolveAuthoritativeCurrentContract({
+      reservationId: reservation._id,
+      tenantId: reservation.userId?._id || reservation.userId,
+    }).catch(() => null);
+
     const actor = await findDbUser(req.user.uid);
     const offerId = `OFFER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const leaseDurationMonths = Number(months) || 6;
+
+    let currentStayDuration = Number(
+      activeStay?.leaseDurationMonths ||
+      predecessorContract?.leaseDurationMonths ||
+      reservation.contractDuration ||
+      reservation.leaseDuration ||
+      reservation.leaseDurationMonths ||
+      0
+    );
+    if (!currentStayDuration && activeStay?.leaseStartDate && activeStay?.leaseEndDate) {
+      const s = toManilaStartOfDay(activeStay.leaseStartDate);
+      const e = toManilaStartOfDay(activeStay.leaseEndDate);
+      if (s && e) {
+        currentStayDuration = Math.round(e.diff(s, "month", true));
+      }
+    }
+    const isShortTerm = currentStayDuration > 0 && currentStayDuration < 6;
+
+    if (isShortTerm && leaseDurationMonths > 5) {
+      return res.status(400).json({
+        error: "Short-term stays can only be extended up to 5 months. To transition to a long-term stay (6–12 months), the tenant must complete move-out and submit a new long-term reservation.",
+        code: "SHORT_TERM_LIMIT_EXCEEDED",
+      });
+    }
 
     // The offer must present the SAME room-type + duration canonical rate
     // that the renewal successor Contract will later snapshot — never the

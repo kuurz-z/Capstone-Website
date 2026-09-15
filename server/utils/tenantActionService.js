@@ -1033,6 +1033,31 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
 
       const requestedMonths = extension?.months || (reservation.renewalOffers || []).find(o => o.offerId === payload.renewalOfferId)?.months || payload.leaseDurationMonths;
       const term = resolveRenewalTerm({ leaseStartDate: payload.newLeaseStartDate, leaseEndDate: payload.newLeaseEndDate, leaseDurationMonths: requestedMonths });
+
+      let currentStayDuration = Number(
+        activeStay.leaseDurationMonths ||
+        predecessorContract?.leaseDurationMonths ||
+        reservation.contractDuration ||
+        reservation.leaseDuration ||
+        reservation.leaseDurationMonths ||
+        0
+      );
+      if (!currentStayDuration && activeStay.leaseStartDate && activeStay.leaseEndDate) {
+        const s = toManilaStartOfDay(activeStay.leaseStartDate);
+        const e = toManilaStartOfDay(activeStay.leaseEndDate);
+        if (s && e) {
+          currentStayDuration = Math.round(e.diff(s, "month", true));
+        }
+      }
+      const isShortTerm = currentStayDuration > 0 && currentStayDuration < 6;
+
+      if (isShortTerm && term.leaseDurationMonths > 5) {
+        throw Object.assign(
+          new Error("Short-term stays can only be extended up to 5 months. To transition to a long-term stay (6–12 months), the tenant must complete move-out and submit a new long-term reservation."),
+          { statusCode: 400, code: "SHORT_TERM_LIMIT_EXCEEDED" }
+        );
+      }
+
       const newLeaseStartDate = term.leaseStartDate, newLeaseEndDate = term.stayEndDate;
       if (newLeaseStartDate < toManilaStartOfDay(activeStay.leaseEndDate).add(1, 'day').toDate()) {
         throw Object.assign(new Error("Renewal start date must be after the current lease end date."), { statusCode: 400, code: "RENEWAL_START_OVERLAP" });
@@ -3312,10 +3337,34 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
       const room = await Room.findById(activeStay.roomId).session(session);
       if (room) {
         // Vacate bed immediately — available for the next reservation
-        room.vacateBed(activeStay.bedId);
+        room.vacateBed(
+          activeStay.bedId,
+          reservation.userId?._id || reservation.userId,
+          reservation._id,
+        );
         room.currentOccupancy = Math.max(0, Number(room.currentOccupancy || 0) - 1);
         room.updateAvailability();
         await room.save({ session });
+
+        // Auto-close open utility period when room reaches full vacancy (0 occupants)
+        if (room.currentOccupancy === 0) {
+          const openPeriod = await UtilityPeriod.findOne({
+            roomId: room._id,
+            utilityType: "electricity",
+            status: { $in: ["open", "manual_review_required"] },
+            isArchived: false,
+          }).session(session);
+          if (openPeriod) {
+            openPeriod.status = "closed";
+            openPeriod.endDate = moveOutAt;
+            openPeriod.endReading =
+              validatedFinalUtilityReading != null
+                ? validatedFinalUtilityReading
+                : openPeriod.startReading;
+            openPeriod.closedAt = new Date();
+            await openPeriod.save({ session });
+          }
+        }
       }
 
       const activeHistory = await BedHistory.findOne({
@@ -3429,9 +3478,7 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
       const outstandingBal = Number(billingSummary.currentBalance || 0);
       const damageDeductions = Number(payload.damageDeductions || 0);
       const keyDeduction = payload.keyReturned === false ? 500 : 0;
-      const netSettlement = isEarlyVacancy
-        ? 0
-        : Math.max(0, securityDepositAmount - outstandingBal - damageDeductions - keyDeduction);
+      const netSettlement = isEarlyVacancy ? 0 : securityDepositAmount;
 
       if (isEarlyVacancy) {
         reservation.depositForfeited = true;
@@ -3445,7 +3492,7 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
         reservation.depositForfeitureReason = null;
         reservation.depositForfeitedAt = null;
         reservation.depositRefundDeadline = dayjs(moveOutAt).add(30, "day").toDate();
-        reservation.depositRefundAmount = netSettlement;
+        reservation.depositRefundAmount = securityDepositAmount;
         reservation.depositRefundStatus = "pending";
       }
 
@@ -3484,7 +3531,7 @@ export async function moveOutStayWorkflow({ reservationId, payload, actorId }) {
         netAmount: netSettlement,
         settlementType: isEarlyVacancy
           ? "forfeited"
-          : (netSettlement > 0 ? "refund" : (outstandingBal > 0 ? "payment_due" : "zero_balance")),
+          : (securityDepositAmount > 0 ? "refund" : (outstandingBal > 0 ? "payment_due" : "zero_balance")),
         settledAt: new Date(),
       };
 

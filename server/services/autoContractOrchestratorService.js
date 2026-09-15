@@ -730,6 +730,11 @@ async function prepareRenewalContract({
       regenerationReason: `Auto-generated renewal successor for Room ${successorContract.roomNumber}`,
     });
 
+    if (result?.contract && !result.contract.tenantVisible) {
+      result.contract.tenantVisible = true;
+      await result.contract.save();
+    }
+
     await clearRenewalPreparationFailure(newStay._id);
     try {
       const tenant = await User.findById(successorContract.tenantId).select("firstName lastName").lean();

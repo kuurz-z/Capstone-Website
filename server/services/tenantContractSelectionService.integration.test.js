@@ -17,6 +17,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import {
   resolveTenantCanonicalContract,
   resolveTenantContractHistory,
+  resolveTenantContractHistoryWithLineage,
   resolveTenantUpcomingContract,
 } from "./tenantContractSelectionService.js";
 import { generateContractNumber } from "./contractService.js";
@@ -271,5 +272,124 @@ describe("tenant current/upcoming/history contract resolution", () => {
     expect(String(afterCurrent._id)).toBe(String(contractB._id));
     expect(afterUpcoming).toBeNull();
     expect(afterHistory.map((c) => String(c._id))).toContain(String(contractA._id));
+  });
+
+  test("upcoming contract is resolved when linked to an upcoming renewal Stay", async () => {
+    const { tenant, room, reservation, stay } = await seedTenant();
+    const actorId = new mongoose.Types.ObjectId();
+    const contractA = await createContract({ tenant, room, reservation, stay, actorId });
+
+    // Create an upcoming Stay representing a renewal
+    const upcomingStay = await Stay.create({
+      tenantId: tenant._id,
+      reservationId: reservation._id,
+      branch: room.branch,
+      roomId: room._id,
+      bedId: "bed-1",
+      leaseStartDate: new Date("2027-02-02T00:00:00.000Z"),
+      leaseEndDate: new Date("2027-05-02T00:00:00.000Z"),
+      monthlyRent: 6300,
+      status: "upcoming",
+      previousStayId: stay._id,
+    });
+
+    const contractB = await createContract({
+      tenant,
+      room,
+      reservation,
+      stay: upcomingStay,
+      actorId,
+      overrides: {
+        contractPurpose: "renewal",
+        stayId: upcomingStay._id,
+        replacesContractId: null, // linked via stayId rather than replacesContractId directly
+        status: "generated",
+        isCurrent: false,
+        leaseStartDate: new Date("2027-02-02T00:00:00.000Z"),
+        leaseEndDate: new Date("2027-05-02T00:00:00.000Z"),
+      },
+    });
+
+    const current = await resolveTenantCanonicalContract(tenant._id);
+    const upcoming = await resolveTenantUpcomingContract(tenant._id);
+
+    expect(String(current._id)).toBe(String(contractA._id));
+    expect(String(upcoming._id)).toBe(String(contractB._id));
+  });
+
+  test("resolveTenantContractHistory returns chronological term lineage with term labels and short-term flags", async () => {
+    const { tenant, room, reservation, stay } = await seedTenant();
+    const actorId = new mongoose.Types.ObjectId();
+
+    // Contract A: Term 1 (expired initial stay, 6 months)
+    const contractA = await createContract({
+      tenant,
+      room,
+      reservation,
+      stay,
+      actorId,
+      overrides: {
+        contractPurpose: "initial",
+        status: "expired",
+        isCurrent: false,
+        leaseStartDate: new Date("2025-08-01T00:00:00.000Z"),
+        leaseEndDate: new Date("2026-02-01T00:00:00.000Z"),
+        leaseDurationMonths: 6,
+      },
+    });
+
+    // Contract B: Term 2 (expired stay extension, 3 months)
+    const contractB = await createContract({
+      tenant,
+      room,
+      reservation,
+      stay,
+      actorId,
+      overrides: {
+        contractPurpose: "renewal",
+        replacesContractId: contractA._id,
+        status: "expired",
+        isCurrent: false,
+        leaseStartDate: new Date("2026-02-02T00:00:00.000Z"),
+        leaseEndDate: new Date("2026-05-02T00:00:00.000Z"),
+        leaseDurationMonths: 3,
+      },
+    });
+
+    // Contract C: Term 3 (active current contract, 3 months)
+    const contractC = await createContract({
+      tenant,
+      room,
+      reservation,
+      stay,
+      actorId,
+      overrides: {
+        contractPurpose: "renewal",
+        replacesContractId: contractB._id,
+        status: "active",
+        isCurrent: true,
+        leaseStartDate: new Date("2026-05-03T00:00:00.000Z"),
+        leaseEndDate: new Date("2026-08-03T00:00:00.000Z"),
+        leaseDurationMonths: 3,
+      },
+    });
+
+    const current = await resolveTenantCanonicalContract(tenant._id);
+    expect(String(current._id)).toBe(String(contractC._id));
+
+    const history = await resolveTenantContractHistory(tenant._id);
+    expect(history).toHaveLength(2);
+
+    const term1 = history.find((c) => String(c._id) === String(contractA._id));
+    expect(term1.termNumber).toBe(1);
+    expect(term1.termLabel).toBe("Term #1: Initial Stay");
+    expect(term1.isShortTerm).toBe(false);
+    expect(term1.leaseDurationMonths).toBe(6);
+
+    const term2 = history.find((c) => String(c._id) === String(contractB._id));
+    expect(term2.termNumber).toBe(2);
+    expect(term2.termLabel).toBe("Term #2: Stay Extension");
+    expect(term2.isShortTerm).toBe(true);
+    expect(term2.leaseDurationMonths).toBe(3);
   });
 });

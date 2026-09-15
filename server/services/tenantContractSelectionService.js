@@ -303,18 +303,91 @@ export const resolveAuthoritativeCurrentContract = async ({
   });
 };
 
-export const resolveTenantContractHistory = async (tenantId) => {
-  const [canonical, contracts] = await Promise.all([
+export const computeContractDurationMonths = (contract) => {
+  if (contract?.leaseDurationMonths != null && !Number.isNaN(Number(contract.leaseDurationMonths))) {
+    return Number(contract.leaseDurationMonths);
+  }
+  if (contract?.leaseStartDate && contract?.leaseEndDate) {
+    const start = new Date(contract.leaseStartDate);
+    const end = new Date(contract.leaseEndDate);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+      return Math.max(1, months);
+    }
+  }
+  return 12;
+};
+
+export const buildTermLabel = (termNumber, contract) => {
+  if (termNumber === 1) {
+    return "Term #1: Initial Stay";
+  }
+  return `Term #${termNumber}: Stay Extension`;
+};
+
+export const attachContractLineage = (contracts = []) => {
+  const validContracts = contracts.filter((c) => {
+    if (!c) return false;
+    if (c.duplicateOfContractId || c.archivedAt) return false;
+    if (["voided", "cancelled", "rejected"].includes(c.status)) return false;
+    return true;
+  });
+
+  const sorted = [...validContracts].sort((a, b) => {
+    const startA = a.leaseStartDate ? new Date(a.leaseStartDate).getTime() : new Date(a.createdAt || 0).getTime();
+    const startB = b.leaseStartDate ? new Date(b.leaseStartDate).getTime() : new Date(b.createdAt || 0).getTime();
+    if (startA !== startB) return startA - startB;
+    const createdA = new Date(a.createdAt || 0).getTime();
+    const createdB = new Date(b.createdAt || 0).getTime();
+    return createdA - createdB;
+  });
+
+  const lineageMap = new Map();
+  sorted.forEach((contract, index) => {
+    const termNumber = index + 1;
+    const durationMonths = computeContractDurationMonths(contract);
+    const isShortTerm = durationMonths < 6;
+    const termLabel = buildTermLabel(termNumber, contract);
+    lineageMap.set(String(contract._id || contract.id), {
+      termNumber,
+      termLabel,
+      isShortTerm,
+      leaseDurationMonths: durationMonths,
+    });
+  });
+
+  return contracts.map((c) => {
+    const contractId = String(c._id || c.id || "");
+    const lineage = lineageMap.get(contractId) || {
+      termNumber: 1,
+      termLabel: "Term #1: Initial Stay",
+      isShortTerm: computeContractDurationMonths(c) < 6,
+      leaseDurationMonths: computeContractDurationMonths(c),
+    };
+    if (c.toObject) {
+      const obj = c.toObject();
+      return { ...obj, ...lineage };
+    }
+    return { ...c, ...lineage };
+  });
+};
+
+export const resolveTenantContractHistoryWithLineage = async (tenantId) => {
+  const [canonical, allContracts] = await Promise.all([
     resolveTenantCanonicalContract(tenantId).catch(() => null),
-    Contract.find({ tenantId }).sort({ leaseEndDate: -1, createdAt: -1 }),
+    Contract.find({ tenantId }).sort({ leaseStartDate: 1, createdAt: 1 }),
   ]);
   const canonicalId = canonical ? String(canonical._id) : null;
-  return contracts.filter((contract) => {
+  const contractsWithLineage = attachContractLineage(allContracts);
+
+  return contractsWithLineage.filter((contract) => {
     if (canonicalId && String(contract._id) === canonicalId) return false;
     if (contract.duplicateOfContractId) return false;
     return HISTORY_VISIBLE_STATUSES.has(contract.status);
   });
 };
+
+export const resolveTenantContractHistory = resolveTenantContractHistoryWithLineage;
 
 // The "upcoming" leg of the current/upcoming/history triad (spec §AI): a
 // generated or final successor of the tenant's current contract whose
@@ -332,15 +405,35 @@ const UPCOMING_VISIBLE_STATUSES = new Set([
 ]);
 
 export const resolveTenantUpcomingContract = async (tenantId) => {
-  const canonical = await resolveTenantCanonicalContract(tenantId).catch(() => null);
-  if (!canonical) return null;
+  const [canonical, upcomingStays] = await Promise.all([
+    resolveTenantCanonicalContract(tenantId).catch(() => null),
+    Stay.find({ tenantId, status: "upcoming" }).select("_id").lean().catch(() => []),
+  ]);
+
+  const upcomingStayIds = (upcomingStays || []).map((s) => s._id);
+  const orConditions = [];
+  if (canonical) {
+    orConditions.push({ replacesContractId: canonical._id });
+  }
+  if (upcomingStayIds.length > 0) {
+    orConditions.push({ stayId: { $in: upcomingStayIds } });
+  }
+
+  if (orConditions.length === 0) return null;
+
   const upcoming = await Contract.find({
     tenantId,
-    replacesContractId: canonical._id,
+    $or: orConditions,
   }).sort({ createdAt: -1 });
-  return upcoming.find((contract) => (
-    UPCOMING_VISIBLE_STATUSES.has(contract.status) &&
-    !contract.archivedAt &&
-    contract.duplicateOfContractId == null
-  )) || null;
+
+  return (
+    upcoming.find((contract) => {
+      if (canonical && String(contract._id) === String(canonical._id)) return false;
+      return (
+        UPCOMING_VISIBLE_STATUSES.has(contract.status) &&
+        !contract.archivedAt &&
+        contract.duplicateOfContractId == null
+      );
+    }) || null
+  );
 };

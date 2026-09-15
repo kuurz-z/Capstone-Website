@@ -675,7 +675,7 @@ export default function TenantDetailModal({
         status: entry.moveOutDate ? "past" : "current",
         contract: entry.contract || null,
       })),
-      extensionHistory: (leaseInfo.extensionHistory || detail.extensionHistory || []).map((entry) => {
+      extensionHistory: (leaseInfo.extensionHistory || detail.extensionHistory || []).map((entry, idx) => {
         const addedMonths = Number(entry.addedMonths || 0);
         const startDateFormatted = entry.leaseStartDate ? formatDate(entry.leaseStartDate) : null;
         const endDateFormatted = entry.leaseEndDate ? formatDate(entry.leaseEndDate) : null;
@@ -688,9 +688,18 @@ export default function TenantDetailModal({
           duration = "Lease Extension";
         }
 
+        const termNum = entry.termNumber || idx + 2;
+        const termLabel = entry.termLabel || (termNum === 1 ? "Term #1: Initial Stay" : `Term #${termNum}: Stay Extension`);
+
         return {
-          id: entry.id,
+          id: entry.id || `ext-${idx}`,
           duration,
+          termNumber: termNum,
+          termLabel,
+          status: entry.status || "extended",
+          monthlyRent: entry.monthlyRent || entry.approvedMonthlyRate || null,
+          contractId: entry.contractId || entry.contract?._id || entry.contract?.id || null,
+          contract: entry.contract || null,
           date: formatDate(entry.extendedAt || entry.date || entry.leaseStartDate),
           previousEnd: entry.previousDuration ? `${entry.previousDuration} months` : null,
           newEnd: entry.newDuration ? `${entry.newDuration} months` : null,
@@ -1261,6 +1270,8 @@ export default function TenantDetailModal({
                     setIsDocsPanelOpen={setIsDocsPanelOpen}
                     docsPanelRef={docsPanelRef}
                     onPreviewDoc={setPreviewDoc}
+                    onOpenDigitalContract={handleOpenDigitalContract}
+                    onDownloadStayProof={handleDownloadStayProof}
                   />
                 )}
               </div>

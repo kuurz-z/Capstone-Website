@@ -151,9 +151,21 @@ function ContractSummaryBanner({ contract, stayData }) {
   );
 }
 
-function AcknowledgeConfirmModal({ open, isDraft, isAddendum, busy, onConfirm, onCancel }) {
+function AcknowledgeConfirmModal({
+  open,
+  isDraft,
+  isAddendum,
+  isRenewal,
+  busy,
+  onConfirm,
+  onCancel,
+}) {
   if (!open) return null;
-  const docName = isAddendum ? "Room Transfer Addendum" : "Contract";
+  const docName = isAddendum
+    ? "Room Transfer Addendum"
+    : isRenewal
+    ? "Renewal Contract"
+    : "Contract";
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -183,6 +195,15 @@ function AcknowledgeConfirmModal({ open, isDraft, isAddendum, busy, onConfirm, o
                 ) : (
                   <>This confirms you have <strong>received and reviewed</strong> the final Room Transfer Addendum. Your original lease remains in effect.</>
                 )
+              ) : isRenewal ? (
+                <>
+                  This confirms you have <strong>received and reviewed</strong> the contract terms for your upcoming stay extension.
+                  <br />
+                  <span className="mt-1.5 block">
+                    It is <strong>not</strong> a signature and does <strong>not</strong> make
+                    the lease binding until its scheduled effective date.
+                  </span>
+                </>
               ) : isDraft ? (
                 <>
                   This only confirms that you have <strong>received and reviewed</strong> the
@@ -291,6 +312,129 @@ function UpcomingRoomTransferPanel({ transfer }) {
   );
 }
 
+function UpcomingRenewalContractCard({
+  contract,
+  onPreview,
+  onDownload,
+  onAcknowledge,
+  actionBusyId,
+}) {
+  if (!contract) return null;
+
+  const contractId = contract.id || contract._id;
+  const isBusy = actionBusyId === contractId;
+
+  const durationMonths = Number(contract.leaseDurationMonths || 12);
+  const isShortTerm = contract.isShortTerm !== undefined
+    ? contract.isShortTerm
+    : durationMonths < 6;
+  const termDurationType = isShortTerm ? "Short Term" : "Long Term";
+  const title = contract.termLabel || `${durationMonths} Months (${termDurationType}) Extension`;
+
+  const startDate = contract.leaseStartDate ? dayjs(contract.leaseStartDate).format("MMM D, YYYY") : "—";
+  const endDate = contract.leaseEndDate ? dayjs(contract.leaseEndDate).format("MMM D, YYYY") : "—";
+  const dateRangeStr = `${startDate} – ${endDate}`;
+
+  const rate = contract.approvedMonthlyRate ?? contract.regularMonthlyRate ?? 0;
+  const branchName = contract.branch
+    ? (String(contract.branch).toLowerCase().includes("gil") ? "Lilycrest Gil Puyat" : "Lilycrest Guadalupe")
+    : "Lilycrest Residence";
+  const roomRaw = String(contract.roomNumber || "").trim();
+  const roomStr = roomRaw ? (roomRaw.toLowerCase().includes("room") ? roomRaw : `Room ${roomRaw}`) : "Room Assignment Confirmed";
+  const bedSlot = contract.bedLabel ? ` • Bed Slot ${contract.bedLabel}` : "";
+
+  const ack = contract.acknowledgement;
+  const needsAck = Boolean(ack?.required && !ack?.acknowledged);
+  const isAcknowledged = Boolean(ack?.acknowledged);
+
+  return (
+    <div className="mb-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs transition-all duration-200">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="space-y-2 flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Upcoming Renewal Contract
+            </span>
+            <span className="text-slate-300 dark:text-slate-700 font-normal">|</span>
+            <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+              {contract.contractNumber || `CON-${String(contractId).slice(-6).toUpperCase()}`}
+            </span>
+            {isAcknowledged ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 size={12} strokeWidth={2.5} />
+                Acknowledged
+              </span>
+            ) : null}
+          </div>
+
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              {title}
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Scheduled to take effect on {startDate}. Your current lease remains active until {startDate}.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1.5">
+            <div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Effective Lease Period</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {dateRangeStr} ({durationMonths} Mos)
+              </span>
+            </div>
+            <div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Accommodation</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {branchName} · {roomStr}{bedSlot}
+              </span>
+            </div>
+            <div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Approved Monthly Rent</span>
+              <span className="font-semibold font-mono text-slate-800 dark:text-slate-200">
+                ₱{Number(rate).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => onPreview(contract)}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+          >
+            <Eye size={14} strokeWidth={2} />
+            <span>{isBusy ? "Loading…" : "View PDF"}</span>
+          </button>
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={() => onDownload(contract)}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+          >
+            <Download size={14} strokeWidth={2} />
+            <span>Download</span>
+          </button>
+          {needsAck ? (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => onAcknowledge(contract)}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+            >
+              <CheckCircle2 size={14} strokeWidth={2} />
+              <span>Acknowledge Contract</span>
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AcknowledgeContractBanner({ acknowledgement, onAcknowledge, busy, isAddendum = false }) {
   if (!acknowledgement || !acknowledgement.required) return null;
 
@@ -374,12 +518,16 @@ function PreviousContractsSection({ history, onPreview, onDownload, actionBusyId
       {isOpen && (
         <div className="p-5 border-t border-slate-200/80 dark:border-slate-800 space-y-3.5 bg-slate-50/50 dark:bg-slate-950/20">
           <div className="grid grid-cols-1 gap-3">
-            {history.map((item) => {
+            {history.map((item, idx) => {
               const contractId = item.id || item._id;
               const isBusy = actionBusyId === contractId;
               const startDate = item.leaseStartDate ? dayjs(item.leaseStartDate).format("MMM D, YYYY") : "—";
               const endDate = item.leaseEndDate ? dayjs(item.leaseEndDate).format("MMM D, YYYY") : "—";
               const rate = item.approvedMonthlyRate || item.regularMonthlyRate;
+              const durationMonths = Number(item.leaseDurationMonths || 12);
+              const isShortTerm = item.isShortTerm !== undefined ? item.isShortTerm : durationMonths < 6;
+              const termLabel = item.termLabel || `Term #${idx + 1}`;
+
               // A Room Transfer Addendum ("amendment") or a legacy transfer
               // "replacement" — both are transfer-side documents, not a
               // separate lease.
@@ -416,7 +564,11 @@ function PreviousContractsSection({ history, onPreview, onDownload, actionBusyId
                 >
                   <div className="space-y-2 flex-1 min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        {termLabel}
+                      </span>
+                      <span className="text-slate-300 dark:text-slate-700 font-normal">|</span>
+                      <span className="font-mono text-xs font-semibold text-slate-600 dark:text-slate-400">
                         {item.contractNumber || `CON-${String(contractId).slice(-6).toUpperCase()}`}
                       </span>
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-transparent text-slate-700 dark:text-slate-300">
@@ -425,7 +577,7 @@ function PreviousContractsSection({ history, onPreview, onDownload, actionBusyId
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs pt-1">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1">
                       <div>
                         <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Accommodation</span>
                         <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -436,6 +588,12 @@ function PreviousContractsSection({ history, onPreview, onDownload, actionBusyId
                         <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Lease Period</span>
                         <span className="font-semibold text-slate-800 dark:text-slate-200">
                           {startDate} – {endDate}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Duration</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                          {durationMonths} Mos ({isShortTerm ? "Short Term" : "Long Term"})
                         </span>
                       </div>
                       <div>
@@ -479,6 +637,7 @@ function PreviousContractsSection({ history, onPreview, onDownload, actionBusyId
 
 export default function ContractsPage() {
   const [contract, setContract] = useState(null);
+  const [upcomingContract, setUpcomingContract] = useState(null);
   const [stayData, setStayData] = useState(null);
   const [contractHistory, setContractHistory] = useState([]);
   const [scheduledRoomTransfer, setScheduledRoomTransfer] = useState(null);
@@ -488,6 +647,7 @@ export default function ContractsPage() {
   const [acknowledgement, setAcknowledgement] = useState(null);
   const [acknowledging, setAcknowledging] = useState(false);
   const [ackModalOpen, setAckModalOpen] = useState(false);
+  const [targetAckContract, setTargetAckContract] = useState(null);
 
   // A synthetic (Stay-derived) contract has a human reference string as `id`,
   // not a Mongo ObjectId — the document/acknowledgement endpoints 404 on it.
@@ -503,9 +663,12 @@ export default function ContractsPage() {
         tenantContractApi.getMyContractHistory(),
       ]);
       let resolvedContract = null;
+      let resolvedUpcoming = null;
       if (contractRes.status === "fulfilled") {
         resolvedContract = contractRes.value?.contract || null;
+        resolvedUpcoming = contractRes.value?.upcoming || null;
         setContract(resolvedContract);
+        setUpcomingContract(resolvedUpcoming);
         setScheduledRoomTransfer(contractRes.value?.scheduledRoomTransfer || null);
       }
       if (stayProofRes.status === "fulfilled") {
@@ -538,7 +701,8 @@ export default function ContractsPage() {
   }, []);
 
   const performAcknowledge = async () => {
-    const contractId = contract?.id || contract?._id;
+    const target = targetAckContract || contract;
+    const contractId = target?.id || target?._id;
     if (!isRealContractId(contractId) || acknowledging) return;
     setAcknowledging(true);
     try {
@@ -547,18 +711,24 @@ export default function ContractsPage() {
       // local write — guarantees reload-parity and idempotency.
       try {
         const fresh = await tenantContractApi.getMyContractAcknowledgement(contractId);
-        setAcknowledgement(fresh || null);
+        if (target?.id === contract?.id || target?._id === contract?._id) {
+          setAcknowledgement(fresh || null);
+        }
       } catch {
-        setAcknowledgement((prev) => ({
-          ...(prev || {}),
-          required: true,
-          acknowledged: true,
-          acknowledgedAt: new Date().toISOString(),
-        }));
+        if (target?.id === contract?.id || target?._id === contract?._id) {
+          setAcknowledgement((prev) => ({
+            ...(prev || {}),
+            required: true,
+            acknowledged: true,
+            acknowledgedAt: new Date().toISOString(),
+          }));
+        }
       }
+      await loadContracts({ silent: true });
       setAckModalOpen(false);
+      setTargetAckContract(null);
       showNotification(
-        acknowledgement?.documentKind === "draft"
+        (target?.acknowledgement || acknowledgement)?.documentKind === "draft"
           ? "Draft contract acknowledged."
           : "Contract acknowledged.",
         "success",
@@ -632,8 +802,8 @@ export default function ContractsPage() {
     }
   };
 
-  const handlePreviewHistoryContract = async (histContract) => {
-    const contractId = histContract.id || histContract._id;
+  const handlePreviewContract = async (targetContract) => {
+    const contractId = targetContract?.id || targetContract?._id;
     if (!contractId) return;
     setActionBusyId(contractId);
     try {
@@ -648,7 +818,7 @@ export default function ContractsPage() {
         }
       }
       const url = URL.createObjectURL(blob);
-      const title = `Contract History - ${histContract.contractNumber || "Contract"}`;
+      const title = `Contract - ${targetContract.contractNumber || "Contract"}`;
       const win = window.open("", "_blank");
       if (win) {
         win.document.write(`<!doctype html><html><head><title>${title}</title><style>html,body{margin:0;height:100%;background:#525659;overflow:hidden;}iframe{width:100%;height:100%;border:none;}</style></head><body><iframe src="${url}" title="${title}"></iframe></body></html>`);
@@ -658,14 +828,14 @@ export default function ContractsPage() {
       }
       setTimeout(() => URL.revokeObjectURL(url), 120_000);
     } catch (err) {
-      showNotification(err?.message || "Failed to preview historical contract copy.", "error");
+      showNotification(err?.message || "Failed to preview contract copy.", "error");
     } finally {
       setActionBusyId(null);
     }
   };
 
-  const handleDownloadHistoryContract = async (histContract) => {
-    const contractId = histContract.id || histContract._id;
+  const handleDownloadContract = async (targetContract) => {
+    const contractId = targetContract?.id || targetContract?._id;
     if (!contractId) return;
     setActionBusyId(contractId);
     try {
@@ -682,12 +852,12 @@ export default function ContractsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Lilycrest-Lease-Contract-${histContract.contractNumber || contractId}.pdf`;
+      a.download = `Lilycrest-Lease-Contract-${targetContract.contractNumber || contractId}.pdf`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       showNotification("Contract PDF download started.", "success");
     } catch (err) {
-      showNotification(err?.message || "Failed to download historical contract copy.", "error");
+      showNotification(err?.message || "Failed to download contract copy.", "error");
     } finally {
       setActionBusyId(null);
     }
@@ -703,6 +873,15 @@ export default function ContractsPage() {
   const notice = getTenantContractMessage(
     contract || (stayData ? { status: isNotarized ? "active" : "generated", stayProofAvailable: true } : null),
   );
+
+  const activeAckDoc = targetAckContract?.acknowledgement || acknowledgement;
+  const isTargetAddendum = (targetAckContract || contract)?.contractPurpose === "amendment";
+  const isTargetRenewal =
+    (targetAckContract || contract)?.contractPurpose === "renewal" ||
+    (upcomingContract && (
+      (targetAckContract?.id && targetAckContract.id === upcomingContract.id) ||
+      (targetAckContract?._id && targetAckContract._id === upcomingContract._id)
+    ));
 
   return (
     <main className="contracts-page tenant-contract-page">
@@ -743,20 +922,41 @@ export default function ContractsPage() {
         <UpcomingRoomTransferPanel transfer={scheduledRoomTransfer} />
       ) : null}
 
+      {/* Upcoming Renewal Spotlight Card */}
+      {upcomingContract ? (
+        <UpcomingRenewalContractCard
+          contract={upcomingContract}
+          onPreview={handlePreviewContract}
+          onDownload={handleDownloadContract}
+          onAcknowledge={(c) => {
+            setTargetAckContract(c || upcomingContract);
+            setAckModalOpen(true);
+          }}
+          actionBusyId={actionBusyId}
+        />
+      ) : null}
+
       <AcknowledgeContractBanner
         acknowledgement={acknowledgement}
-        onAcknowledge={() => setAckModalOpen(true)}
+        onAcknowledge={() => {
+          setTargetAckContract(contract);
+          setAckModalOpen(true);
+        }}
         busy={acknowledging}
         isAddendum={contract?.contractPurpose === "amendment"}
       />
 
       <AcknowledgeConfirmModal
         open={ackModalOpen}
-        isDraft={acknowledgement?.documentKind === "draft"}
-        isAddendum={contract?.contractPurpose === "amendment"}
+        isDraft={activeAckDoc?.documentKind === "draft"}
+        isAddendum={isTargetAddendum}
+        isRenewal={isTargetRenewal}
         busy={acknowledging}
         onConfirm={performAcknowledge}
-        onCancel={() => setAckModalOpen(false)}
+        onCancel={() => {
+          setAckModalOpen(false);
+          setTargetAckContract(null);
+        }}
       />
 
       {!contract && !stayData ? (
@@ -805,8 +1005,8 @@ export default function ContractsPage() {
       {/* Previous Agreements & Renewals Section */}
       <PreviousContractsSection
         history={contractHistory}
-        onPreview={handlePreviewHistoryContract}
-        onDownload={handleDownloadHistoryContract}
+        onPreview={handlePreviewContract}
+        onDownload={handleDownloadContract}
         actionBusyId={actionBusyId}
       />
     </main>

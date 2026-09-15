@@ -94,11 +94,28 @@ export async function getMyStayExtension(tenantId) {
     await assertNoConflicts(context);
     extensionDates(context.stay.leaseEndDate, 1);
     const settings = await getBusinessSettings();
-    const options = [1, 3, 6, 12].map((months) => ({
+    let currentStayDuration = Number(
+      context.stay.leaseDurationMonths ||
+      context.contract?.leaseDurationMonths ||
+      context.reservation.contractDuration ||
+      context.reservation.leaseDuration ||
+      context.reservation.leaseDurationMonths ||
+      0
+    );
+    if (!currentStayDuration && context.stay.leaseStartDate && context.stay.leaseEndDate) {
+      const s = toManilaStartOfDay(context.stay.leaseStartDate);
+      const e = toManilaStartOfDay(context.stay.leaseEndDate);
+      if (s && e) {
+        currentStayDuration = Math.round(e.diff(s, "month", true));
+      }
+    }
+    const isShortTerm = currentStayDuration > 0 && currentStayDuration < 6;
+    const allowedMonthOptions = isShortTerm ? [1, 2, 3, 4, 5] : [1, 3, 6, 12];
+    const options = allowedMonthOptions.map((months) => ({
       months, endDate: extensionDates(context.stay.leaseEndDate, months).end,
       monthlyRent: resolveAuthoritativeLeasePricing({ room: context.room, roomType: context.room.type, branch: context.room.branch, leaseDurationMonths: months, settings }).finalMonthlyRate,
     }));
-    return { request, current, options, canRequest: true };
+    return { request, current, options, canRequest: true, isShortTerm };
   } catch (error) {
     if (!error.statusCode) throw error;
     return { request, current: null, canRequest: false, reason: error.message };
@@ -117,6 +134,30 @@ export async function createStayExtension({ tenantId, payload = {} }) {
       const { stay, reservation, contract, room } = context;
       if (id(stay) !== id(payload.stayId)) fail('Your stay changed. Refresh before submitting.');
       await assertNoConflicts(context, session);
+
+      let currentStayDuration = Number(
+        stay.leaseDurationMonths ||
+        contract?.leaseDurationMonths ||
+        reservation.contractDuration ||
+        reservation.leaseDuration ||
+        reservation.leaseDurationMonths ||
+        0
+      );
+      if (!currentStayDuration && stay.leaseStartDate && stay.leaseEndDate) {
+        const s = toManilaStartOfDay(stay.leaseStartDate);
+        const e = toManilaStartOfDay(stay.leaseEndDate);
+        if (s && e) {
+          currentStayDuration = Math.round(e.diff(s, "month", true));
+        }
+      }
+      const isShortTerm = currentStayDuration > 0 && currentStayDuration < 6;
+      if (isShortTerm && (months < 1 || months > 5)) {
+        throw Object.assign(
+          new Error("Short-term stays can only be extended up to 5 months. To transition to a long-term stay (6–12 months), the tenant must complete move-out and submit a new long-term reservation."),
+          { statusCode: 400, code: "SHORT_TERM_LIMIT_EXCEEDED" }
+        );
+      }
+
       const dates = extensionDates(stay.leaseEndDate, months);
       if (payload.requestedEndDate && toManilaStartOfDay(payload.requestedEndDate)?.valueOf() !== toManilaStartOfDay(dates.end).valueOf()) fail('The requested end date does not match the extension duration.', 400);
       const pricing = resolveAuthoritativeLeasePricing({ room, roomType: room.type, branch: room.branch, leaseDurationMonths: months, settings: await getBusinessSettings() });

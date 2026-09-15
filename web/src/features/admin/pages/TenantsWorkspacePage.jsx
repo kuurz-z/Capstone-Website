@@ -1247,6 +1247,7 @@ export default function TenantsWorkspacePage() {
             open
             tenant={actionState.tenant}
             detail={actionTenantDetail}
+            context={actionContext}
             loading={actionLoading === "renew"}
             onClose={() => setActionState({ type: null, tenant: null })}
             onOfferSubmit={(offerPayload) =>

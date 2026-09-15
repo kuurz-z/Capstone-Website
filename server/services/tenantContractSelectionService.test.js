@@ -1,5 +1,8 @@
 import { describe, expect, test } from "@jest/globals";
 import {
+  attachContractLineage,
+  buildTermLabel,
+  computeContractDurationMonths,
   computeDocumentReadinessScore,
   isResidentContractEligible,
   selectCanonicalTenantContract,
@@ -442,5 +445,72 @@ describe("resident canonical Contract selection", () => {
       includeEarlyStages: true,
     });
     expect(selected?._id).toBe("current-draft");
+  });
+});
+
+describe("term lineage and duration computation", () => {
+  test("computeContractDurationMonths calculates months accurately", () => {
+    expect(computeContractDurationMonths({ leaseDurationMonths: 6 })).toBe(6);
+    expect(computeContractDurationMonths({ leaseDurationMonths: "3" })).toBe(3);
+    expect(computeContractDurationMonths({
+      leaseStartDate: "2026-02-01",
+      leaseEndDate: "2026-05-01",
+    })).toBe(3);
+    expect(computeContractDurationMonths({})).toBe(12);
+  });
+
+  test("buildTermLabel formats initial stay and extension terms", () => {
+    expect(buildTermLabel(1, {})).toBe("Term #1: Initial Stay");
+    expect(buildTermLabel(2, {})).toBe("Term #2: Stay Extension");
+    expect(buildTermLabel(3, {})).toBe("Term #3: Stay Extension");
+  });
+
+  test("attachContractLineage assigns chronological term numbers and labels", () => {
+    const contracts = [
+      {
+        _id: "c2",
+        leaseStartDate: "2026-08-01",
+        createdAt: "2026-07-15",
+        leaseDurationMonths: 3,
+        status: "active",
+      },
+      {
+        _id: "c1",
+        leaseStartDate: "2026-02-01",
+        createdAt: "2026-01-15",
+        leaseDurationMonths: 6,
+        status: "expired",
+      },
+      {
+        _id: "c3",
+        leaseStartDate: "2026-11-01",
+        createdAt: "2026-10-15",
+        leaseDurationMonths: 3,
+        status: "generated",
+      },
+      {
+        _id: "c-dup",
+        duplicateOfContractId: "c1",
+        status: "draft",
+      },
+    ];
+
+    const withLineage = attachContractLineage(contracts);
+    expect(withLineage).toHaveLength(4);
+
+    const c1Res = withLineage.find((c) => c._id === "c1");
+    expect(c1Res.termNumber).toBe(1);
+    expect(c1Res.termLabel).toBe("Term #1: Initial Stay");
+    expect(c1Res.isShortTerm).toBe(false);
+
+    const c2Res = withLineage.find((c) => c._id === "c2");
+    expect(c2Res.termNumber).toBe(2);
+    expect(c2Res.termLabel).toBe("Term #2: Stay Extension");
+    expect(c2Res.isShortTerm).toBe(true);
+
+    const c3Res = withLineage.find((c) => c._id === "c3");
+    expect(c3Res.termNumber).toBe(3);
+    expect(c3Res.termLabel).toBe("Term #3: Stay Extension");
+    expect(c3Res.isShortTerm).toBe(true);
   });
 });

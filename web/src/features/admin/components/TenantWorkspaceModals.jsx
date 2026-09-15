@@ -22,7 +22,7 @@ import {
 } from "../utils/transferScheduleDate";
 import { destinationRoomNeedsBed } from "../utils/transferDestinationBed";
 import { resolveTenantCurrentRent } from "../../tenant/utils/pricingDisplayHelpers";
-import { Clock, History, ChevronLeft, ChevronRight, ChevronDown, Download, CheckCircle2, LogOut, LoaderCircle, AlertTriangle, ArrowRight, Calculator } from "lucide-react";
+import { Clock, History, ChevronLeft, ChevronRight, ChevronDown, Download, CheckCircle2, LogOut, LoaderCircle, AlertTriangle, ArrowRight, Calculator, ShieldAlert, Eye, FileText } from "lucide-react";
 
 const fmtDate = (value) =>
   value
@@ -109,7 +109,7 @@ export function RenewLeaseModal({
   onOfferSubmit,
 }) {
   const [mode, setMode] = useState("direct"); // "direct" or "offer"
-  const [selectedDuration, setSelectedDuration] = useState(6); // 1, 3, 6, 12, or "custom"
+  const [selectedDuration, setSelectedDuration] = useState(6); // 1, 2, 3, 4, 5, 6, 12, or "custom"
   const [newLeaseStartDate, setNewLeaseStartDate] = useState("");
   const [newLeaseEndDate, setNewLeaseEndDate] = useState("");
   const [offerMonths, setOfferMonths] = useState(6);
@@ -123,6 +123,43 @@ export function RenewLeaseModal({
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState(null);
   const [showOfferConfirm, setShowOfferConfirm] = useState(false);
+  const [viewingContractId, setViewingContractId] = useState(null);
+
+  const currentDuration = (() => {
+    const explicit = Number(
+      context?.currentStay?.leaseDurationMonths ||
+      detail?.leaseInfo?.leaseDurationMonths ||
+      tenant?.leaseDurationMonths ||
+      tenant?.leaseDuration
+    );
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const start = context?.currentStay?.leaseStartDate || detail?.leaseInfo?.leaseStartDate || tenant?.leaseStartDate;
+    const end = context?.currentStay?.leaseEndDate || detail?.leaseInfo?.leaseEndDate || tenant?.leaseEndDate;
+    if (start && end) {
+      const diffMs = new Date(end).getTime() - new Date(start).getTime();
+      const approxMonths = Math.round(diffMs / (1000 * 60 * 60 * 24 * 30.4375));
+      if (approxMonths > 0) return approxMonths;
+    }
+    return 12;
+  })();
+  const isShortTerm = currentDuration > 0 && currentDuration < 6;
+
+  const durationOptions = isShortTerm
+    ? [
+        { label: "+1 Month", value: 1 },
+        { label: "+2 Months", value: 2 },
+        { label: "+3 Months", value: 3 },
+        { label: "+4 Months", value: 4 },
+        { label: "+5 Months", value: 5 },
+        { label: "Custom", value: "custom" },
+      ]
+    : [
+        { label: "+1 Month", value: 1 },
+        { label: "+3 Months", value: 3 },
+        { label: "+6 Months", value: 6 },
+        { label: "+1 Year", value: 12 },
+        { label: "Custom", value: "custom" },
+      ];
 
   const currentEndRaw =
     context?.currentStay?.leaseEndDate ||
@@ -137,6 +174,8 @@ export function RenewLeaseModal({
     return toDateInputValue(target);
   };
 
+  const maxShortTermEnd = isShortTerm ? calculateTargetEnd(5) : undefined;
+
   useEffect(() => {
     if (!open) return;
 
@@ -145,21 +184,22 @@ export function RenewLeaseModal({
     const nextStart = new Date(validBase);
     nextStart.setDate(nextStart.getDate() + 1);
 
-    const initialEnd = calculateTargetEnd(6);
+    const initialMonths = isShortTerm ? Math.min(Math.max(1, currentDuration), 3) : 6;
+    const initialEnd = calculateTargetEnd(initialMonths);
 
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 14);
 
     setNewLeaseStartDate(toDateInputValue(nextStart));
     setNewLeaseEndDate(initialEnd);
-    setSelectedDuration(6);
-    setOfferMonths(6);
+    setSelectedDuration(initialMonths);
+    setOfferMonths(initialMonths);
     setExpiresAt(toDateInputValue(expiry));
     setNotes("");
     setMode("direct");
     setPricingPreview(null);
     setPricingError(null);
-  }, [open, detail, context, tenant, currentEndRaw]);
+  }, [open, detail, context, tenant, currentEndRaw, isShortTerm, currentDuration]);
 
   // Fetch the canonical pricing preview whenever the offer duration changes
   // — the admin never types a rate; the backend resolves it from room type
@@ -168,9 +208,16 @@ export function RenewLeaseModal({
   useEffect(() => {
     if (!open || mode !== "offer" || !tenant?.reservationId) return;
     const months = Number(offerMonths);
-    if (!Number.isFinite(months) || months < 1 || months > 12) {
+    const maxAllowedMonths = isShortTerm ? 5 : 12;
+    if (!Number.isFinite(months) || months < 1 || months > maxAllowedMonths) {
       setPricingPreview(null);
-      setPricingError(months > 12 ? "Renewal offers support 1–12 months." : null);
+      setPricingError(
+        isShortTerm
+          ? "Short-term renewal offers support 1–5 months."
+          : months > 12
+          ? "Renewal offers support 1–12 months."
+          : null
+      );
       return;
     }
     let cancelled = false;
@@ -193,7 +240,7 @@ export function RenewLeaseModal({
     return () => {
       cancelled = true;
     };
-  }, [open, mode, offerMonths, tenant?.reservationId]);
+  }, [open, mode, offerMonths, tenant?.reservationId, isShortTerm]);
 
   const handleSelectDuration = (months) => {
     if (months === "custom") {
@@ -208,8 +255,28 @@ export function RenewLeaseModal({
   };
 
   const handleDateChange = (val) => {
-    setNewLeaseEndDate(val);
+    if (isShortTerm && maxShortTermEnd && val > maxShortTermEnd) {
+      setNewLeaseEndDate(maxShortTermEnd);
+    } else {
+      setNewLeaseEndDate(val);
+    }
     setSelectedDuration("custom");
+  };
+
+  const handleViewContract = async (contractId) => {
+    if (!contractId) return;
+    setViewingContractId(contractId);
+    try {
+      const { contractApi } = await import("../../../shared/api/contractApi");
+      const blob = await contractApi.getStayProofFile(contractId, false);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      showNotification(err?.response?.data?.error || "Unable to load contract PDF.", "error");
+    } finally {
+      setViewingContractId(null);
+    }
   };
 
   const extensionHistory =
@@ -218,7 +285,7 @@ export function RenewLeaseModal({
   const submitOffer = () => {
     if (onOfferSubmit) {
       onOfferSubmit({
-        months: Number(offerMonths) || 6,
+        months: Number(offerMonths) || (isShortTerm ? 1 : 6),
         expiresAt,
         notes,
       });
@@ -273,6 +340,19 @@ export function RenewLeaseModal({
         </>
       }
     >
+      {/* Short-Term Tenancy Policy Banner */}
+      {isShortTerm && (
+        <div className="mb-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-3.5 text-xs text-slate-600 dark:text-slate-400">
+          <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 mb-1">
+            <ShieldAlert className="w-4 h-4 text-amber-500 flex-shrink-0" />
+            <span>Short-Term Tenancy Policy</span>
+          </div>
+          <p className="leading-relaxed">
+            This tenant is on a Short-Term Lease (under 6 months). Stay extensions are limited up to 5 months at short-term rates. To transition to a Long-Term lease (6–12 months) with long-term discounted rates, the tenant must complete their stay, undergo move-out clearance, and submit a new long-term booking application.
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-2.5 mb-5">
         <button
           type="button"
@@ -303,14 +383,8 @@ export function RenewLeaseModal({
         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
           Extended Term Duration
         </span>
-        <div className="grid grid-cols-5 gap-2">
-          {[
-            { label: "+1 Month", value: 1 },
-            { label: "+3 Months", value: 3 },
-            { label: "+6 Months", value: 6 },
-            { label: "+1 Year", value: 12 },
-            { label: "Custom", value: "custom" },
-          ].map((opt) => {
+        <div className={`grid ${isShortTerm ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-5"} gap-2`}>
+          {durationOptions.map((opt) => {
             const isSelected = selectedDuration === opt.value;
             return (
               <button
@@ -361,6 +435,8 @@ export function RenewLeaseModal({
             <input
               type="date"
               value={newLeaseEndDate}
+              min={newLeaseStartDate || toDateInputValue(new Date(currentEndRaw || Date.now()))}
+              max={maxShortTermEnd}
               onChange={(event) => handleDateChange(event.target.value)}
               onClick={triggerPicker}
             />
@@ -378,10 +454,22 @@ export function RenewLeaseModal({
                 handleSelectDuration(val);
               }}
             >
-              <option value={1}>1 Month</option>
-              <option value={3}>3 Months</option>
-              <option value={6}>6 Months</option>
-              <option value={12}>12 Months (1 Year)</option>
+              {isShortTerm ? (
+                <>
+                  <option value={1}>1 Month</option>
+                  <option value={2}>2 Months</option>
+                  <option value={3}>3 Months</option>
+                  <option value={4}>4 Months</option>
+                  <option value={5}>5 Months</option>
+                </>
+              ) : (
+                <>
+                  <option value={1}>1 Month</option>
+                  <option value={3}>3 Months</option>
+                  <option value={6}>6 Months</option>
+                  <option value={12}>12 Months (1 Year)</option>
+                </>
+              )}
             </select>
           </label>
           <label className="tenant-modal-field">
@@ -451,8 +539,13 @@ export function RenewLeaseModal({
       </label>
 
       <div className="mt-5 space-y-2.5">
-        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-          Extension History
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+          <span>Extension History</span>
+          {extensionHistory.length > 0 && (
+            <span className="text-[11px] font-normal text-muted-foreground">
+              {extensionHistory.length} {extensionHistory.length === 1 ? "extension" : "extensions"}
+            </span>
+          )}
         </h4>
         {extensionHistory.length === 0 ? (
           <div className="bg-muted/20 border border-dashed border-border rounded-xl p-4 text-center text-muted-foreground text-xs space-y-1">
@@ -464,10 +557,12 @@ export function RenewLeaseModal({
             {extensionHistory.map((entry, idx) => {
               const startDate = entry.leaseStartDate ? fmtDate(entry.leaseStartDate) : null;
               const endDate = entry.leaseEndDate ? fmtDate(entry.leaseEndDate) : null;
-              
+
               let durationText = null;
               if (entry.addedMonths) {
                 durationText = `+${entry.addedMonths} Month${entry.addedMonths === 1 ? "" : "s"}`;
+              } else if (entry.duration) {
+                durationText = entry.duration;
               } else if (entry.leaseStartDate && entry.leaseEndDate) {
                 const start = new Date(entry.leaseStartDate);
                 const end = new Date(entry.leaseEndDate);
@@ -481,40 +576,85 @@ export function RenewLeaseModal({
                 ? `${startDate} – ${endDate}`
                 : entry.extendedAt
                 ? fmtDate(entry.extendedAt)
-                : `Stay Term #${idx + 1}`;
+                : `Stay Term #${idx + 2}`;
 
+              const termNum = entry.termNumber || idx + 2;
+              const termLabel = entry.termLabel || (termNum === 1 ? "Term #1: Initial Stay" : `Term #${termNum}: Stay Extension`);
               const statusBadge = entry.status ? String(entry.status).toUpperCase() : "EXTENDED";
+
+              const contractsList = detail?.contracts || context?.contracts || [];
+              const matchedContract = entry.contract || contractsList.find(
+                (c) =>
+                  (entry.contractId && String(c._id || c.id) === String(entry.contractId)) ||
+                  (entry.leaseStartDate && c.leaseStartDate && new Date(c.leaseStartDate).toISOString().slice(0, 10) === new Date(entry.leaseStartDate).toISOString().slice(0, 10))
+              );
+              const resolvedMonthlyRent = entry.monthlyRent || matchedContract?.approvedMonthlyRate || entry.approvedMonthlyRate;
+              const contractIdToUse = entry.contractId || matchedContract?._id || matchedContract?.id;
 
               return (
                 <div
                   key={entry.id || idx}
-                  className="bg-card border border-border rounded-xl p-3 flex items-center justify-between gap-3 shadow-2xs"
+                  className="bg-card border border-border rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="flex shrink-0 items-center justify-center text-slate-500 dark:text-slate-400">
-                      <History className="w-5 h-5" />
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="flex shrink-0 items-center justify-center text-slate-500 dark:text-slate-400 mt-0.5">
+                      <History className="w-4 h-4" />
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-foreground truncate">
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-foreground border border-border/80">
+                          {termLabel}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            entry.status === "active" ? "bg-emerald-500" :
+                            entry.status === "pending" || entry.status === "generated" ? "bg-amber-500" :
+                            "bg-slate-400"
+                          }`} />
+                          {statusBadge}
+                        </span>
+                      </div>
+                      <div className="text-xs font-semibold text-foreground">
                         {dateRangeText}
                       </div>
-                      <div className="text-[11px] text-muted-foreground truncate">
-                        {entry.notes ? entry.notes : `Term #${idx + 1} • ${statusBadge}`}
-                      </div>
+                      {entry.notes && (
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {entry.notes}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    {durationText && (
-                      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-muted text-foreground border border-border/80">
-                        {durationText}
-                      </span>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 self-end sm:self-center">
+                    <div className="text-right">
+                      {durationText && (
+                        <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-foreground border border-border/80">
+                          {durationText}
+                        </span>
+                      )}
+                      {resolvedMonthlyRent ? (
+                        <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
+                          {fmtMoney(resolvedMonthlyRent)}/mo
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {contractIdToUse && (
+                      <button
+                        type="button"
+                        onClick={() => handleViewContract(contractIdToUse)}
+                        disabled={viewingContractId === contractIdToUse}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer disabled:opacity-50"
+                        title="View Contract Record"
+                      >
+                        {viewingContractId === contractIdToUse ? (
+                          <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                        )}
+                        <span>View Contract</span>
+                      </button>
                     )}
-                    {entry.monthlyRent ? (
-                      <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
-                        {fmtMoney(entry.monthlyRent)}/mo
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               );
@@ -1507,17 +1647,10 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
       ? Math.round(moveOutKwh * moveOutRate * 100) / 100
       : null;
 
-  // ── Deposit clearance math ────────────────────────────────────────────────
-  const electricityDeduction = estimatedElectricityCostMoveOut ?? 0;
-  const totalDeductions = outstandingBal + damageFee + keyFee + electricityDeduction;
-  const netSettlement = isEarlyVacancy
-    ? 0
-    : Math.max(0, securityDeposit - totalDeductions);
-  const hasDebt = !isEarlyVacancy && netSettlement === 0 &&
-    totalDeductions > securityDeposit;
-  const remainingDebt = hasDebt
-    ? Math.round((totalDeductions - securityDeposit) * 100) / 100
-    : 0;
+  // ── Settlement & Deposit Math (Security Deposit is NOT deducted) ────────
+  const electricityCharge = estimatedElectricityCostMoveOut ?? 0;
+  const totalFinalBill = outstandingBal + damageFee + keyFee + electricityCharge;
+  const refundableDeposit = isEarlyVacancy ? 0 : securityDeposit;
 
   // ── Step gate validation ──────────────────────────────────────────────────
   const step1Valid = !!moveOutDate && !!moveOutTime;
@@ -1542,11 +1675,11 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
         outstandingBal,
         keyFee,
         damageFee,
-        electricityDeduction,
+        electricityDeduction: electricityCharge,
         kwhPreview: moveOutKwh,
         electricityRate: moveOutRate,
-        netSettlement,
-        remainingDebt,
+        netSettlement: refundableDeposit,
+        remainingDebt: totalFinalBill,
         isEarlyVacancy,
       });
     } catch (err) {
@@ -1627,7 +1760,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
       footer={renderFooter()}
     >
       <WizardStepper
-        steps={["Date & Time", "Meter & Condition", "Review"]}
+        steps={["Date & Time", "Meter & Condition", "Review & Settlement"]}
         currentStep={step}
       />
 
@@ -1682,7 +1815,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
       {step === 2 && (
         <>
           <div className="twm-callout twm-callout--info">
-            Record the final meter reading and note any deductions before proceeding to the financial summary.
+            Record the final meter reading and note any fees before proceeding to the final settlement summary.
           </div>
 
           <div className="tenant-modal-grid">
@@ -1722,13 +1855,13 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
                 onChange={(e) => setKeyReturned(e.target.value === "yes")}
               >
                 <option value="yes">Yes — Key Handed Over</option>
-                <option value="no">No — ₱500 Replacement Deduction</option>
+                <option value="no">No — ₱500 Replacement Fee</option>
               </select>
             </label>
           </div>
 
           <label className="tenant-modal-field">
-            <span>Damage / Cleaning Fee Deductions (₱)</span>
+            <span>Damage / Cleaning Fee (₱)</span>
             <input
               type="number"
               min="0"
@@ -1737,7 +1870,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
               value={damageDeductions}
               onChange={(e) => setDamageDeductions(e.target.value)}
             />
-            <span className="twm-meter-hint">Leave 0 if no damages. This amount will be deducted from the security deposit.</span>
+            <span className="twm-meter-hint">Leave 0 if no damages. This fee is added to the tenant's final settlement bill (not deducted from the security deposit).</span>
           </label>
 
           <label className="tenant-modal-field">
@@ -1752,7 +1885,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
         </>
       )}
 
-      {/* ── STEP 3: Review & Deposit Clearance ────────────────────────── */}
+      {/* ── STEP 3: Review & Final Settlement Summary ──────────────────── */}
       {step === 3 && (
         <>
           <div className="twm-review-summary">
@@ -1770,7 +1903,7 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
             </div>
             <div className="twm-review-field">
               <span className="twm-review-field__label">Key Returned</span>
-              <span className="twm-review-field__value">{keyReturned ? "Yes" : "No — ₱500 deducted"}</span>
+              <span className="twm-review-field__value">{keyReturned ? "Yes" : "No — ₱500 replacement fee"}</span>
             </div>
             {notes && (
               <div className="twm-review-field twm-review-field--wide">
@@ -1780,15 +1913,10 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
             )}
           </div>
 
-          {isEarlyVacancy && (
-            <div className="twm-callout twm-callout--danger">
-              ⚠ Early Vacancy — The security deposit will be forfeited per the lease contract.
-            </div>
-          )}
-
+          {/* Itemized Final Bill to Collect */}
           <div className="twm-settlement-card">
             <div className="twm-settlement-card__header">
-              <p className="twm-settlement-card__title">Deposit Clearance Summary</p>
+              <p className="twm-settlement-card__title">Itemized Final Bill to Collect</p>
               <button
                 type="button"
                 className="twm-settlement-card__download-btn"
@@ -1801,60 +1929,79 @@ export function MoveOutModal({ open, tenant, detail, loading, onClose, onSubmit,
               </button>
             </div>
             <div className="twm-settlement-card__body">
-              <div className="twm-settlement-row">
-                <span className="twm-settlement-row__label">Security Deposit Held</span>
-                <span className="twm-settlement-row__value">{fmtMoney(securityDeposit)}</span>
-              </div>
-              {outstandingBal > 0 && (
-                <div className="twm-settlement-row twm-settlement-row--danger">
-                  <span className="twm-settlement-row__label">Less: Unpaid Balance</span>
-                  <span className="twm-settlement-row__value">({fmtMoney(outstandingBal)})</span>
+              {outstandingBal > 0 ? (
+                <div className="twm-settlement-row">
+                  <span className="twm-settlement-row__label">Unpaid Rent / Balance Due</span>
+                  <span className="twm-settlement-row__value font-medium">{fmtMoney(outstandingBal)}</span>
                 </div>
-              )}
-              {keyFee > 0 && (
-                <div className="twm-settlement-row twm-settlement-row--danger">
-                  <span className="twm-settlement-row__label">Less: Key Replacement Fee</span>
-                  <span className="twm-settlement-row__value">({fmtMoney(keyFee)})</span>
-                </div>
-              )}
-              {damageFee > 0 && (
-                <div className="twm-settlement-row twm-settlement-row--danger">
-                  <span className="twm-settlement-row__label">Less: Damage / Cleaning Fee</span>
-                  <span className="twm-settlement-row__value">({fmtMoney(damageFee)})</span>
-                </div>
-              )}
-              {estimatedElectricityCostMoveOut !== null && estimatedElectricityCostMoveOut > 0 && (
-                <div className="twm-settlement-row twm-settlement-row--danger">
+              ) : null}
+              {estimatedElectricityCostMoveOut !== null && estimatedElectricityCostMoveOut > 0 ? (
+                <div className="twm-settlement-row">
                   <span className="twm-settlement-row__label">
-                    Less: Est. Electricity Charge
+                    Final Electricity Charge (Pro-Rata)
                     <span style={{ fontSize: 11, fontWeight: 400, display: "block", color: "var(--text-muted)" }}>
                       {moveOutKwh?.toLocaleString()} kWh × ₱{moveOutRate?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kWh
                     </span>
                   </span>
-                  <span className="twm-settlement-row__value">({fmtMoney(estimatedElectricityCostMoveOut)})</span>
+                  <span className="twm-settlement-row__value font-medium">{fmtMoney(estimatedElectricityCostMoveOut)}</span>
                 </div>
-              )}
+              ) : null}
+              {keyFee > 0 ? (
+                <div className="twm-settlement-row">
+                  <span className="twm-settlement-row__label">Keycard Replacement Fee</span>
+                  <span className="twm-settlement-row__value font-medium">{fmtMoney(keyFee)}</span>
+                </div>
+              ) : null}
+              {damageFee > 0 ? (
+                <div className="twm-settlement-row">
+                  <span className="twm-settlement-row__label">Room Damage / Cleaning Fee</span>
+                  <span className="twm-settlement-row__value font-medium">{fmtMoney(damageFee)}</span>
+                </div>
+              ) : null}
+              {totalFinalBill === 0 ? (
+                <div className="twm-settlement-row twm-settlement-row--success">
+                  <span className="twm-settlement-row__label">All Final Charges Cleared</span>
+                  <span className="twm-settlement-row__value">₱0.00</span>
+                </div>
+              ) : null}
+              <div className="twm-settlement-row twm-settlement-row--total twm-settlement-row--danger">
+                <span className="twm-settlement-row__label">Total Final Bill to Collect</span>
+                <span className="twm-settlement-row__value font-bold">{fmtMoney(totalFinalBill)}</span>
+              </div>
+            </div>
+            <p className="twm-settlement-card__note">
+              {estimatedElectricityCostMoveOut !== null
+                ? `Electricity is calculated at ₱${moveOutRate?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kWh. Security deposit is returned separately and is not deducted against this bill.`
+                : "Final charges are collected directly from the tenant before move-out sign-off."}
+            </p>
+          </div>
+
+          {/* Security Deposit Return Section (Isolated) */}
+          <div className="twm-settlement-card" style={{ marginTop: "12px" }}>
+            <div className="twm-settlement-card__header">
+              <p className="twm-settlement-card__title">Security Deposit Return (Separate Handover)</p>
+            </div>
+            <div className="twm-settlement-card__body">
+              <div className="twm-settlement-row">
+                <span className="twm-settlement-row__label">Security Deposit Held</span>
+                <span className="twm-settlement-row__value">{fmtMoney(securityDeposit)}</span>
+              </div>
               {isEarlyVacancy ? (
                 <div className="twm-settlement-row twm-settlement-row--total twm-settlement-row--forfeited">
                   <span className="twm-settlement-row__label">Deposit Status</span>
                   <span className="twm-settlement-row__value">Forfeited — Early Vacancy</span>
                 </div>
-              ) : hasDebt ? (
-                <div className="twm-settlement-row twm-settlement-row--total twm-settlement-row--danger">
-                  <span className="twm-settlement-row__label">Remaining Balance Due</span>
-                  <span className="twm-settlement-row__value">{fmtMoney(remainingDebt)}</span>
-                </div>
               ) : (
                 <div className="twm-settlement-row twm-settlement-row--total twm-settlement-row--success">
-                  <span className="twm-settlement-row__label">Estimated Refundable Deposit</span>
-                  <span className="twm-settlement-row__value">{fmtMoney(netSettlement)}</span>
+                  <span className="twm-settlement-row__label">Deposit to Hand Over / Return</span>
+                  <span className="twm-settlement-row__value font-bold">{fmtMoney(refundableDeposit)}</span>
                 </div>
               )}
             </div>
             <p className="twm-settlement-card__note">
-              {estimatedElectricityCostMoveOut !== null
-                ? `Electricity estimate uses rate ₱${moveOutRate?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kWh. Final charges confirmed at billing generation.`
-                : "Final utility charges are applied separately at billing generation time."}
+              {isEarlyVacancy
+                ? "Early vacancy detected. Security deposit is forfeited per lease contract agreement."
+                : "The security deposit is kept intact and handed back directly to the tenant via cash or check on the spot (or bank transfer)."}
             </p>
           </div>
         </>

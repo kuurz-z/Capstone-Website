@@ -175,7 +175,7 @@ describe("moveOutStayWorkflow closes the tenant's current Contract", () => {
       reason: "normal_completion_move_out",
     });
     const period = await UtilityPeriod.findOne({ roomId: reservation.roomId }).lean();
-    expect(period.status).toBe("open");
+    expect(period.status).toBe("closed");
     const moveOutReading = await UtilityReading.findOne({
       roomId: reservation.roomId,
       tenantId: tenant._id,

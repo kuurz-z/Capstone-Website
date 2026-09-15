@@ -1080,6 +1080,7 @@ export const createSuccessorContractForRenewal = async ({
         createdBy: actorId,
         updatedBy: actorId,
         isCurrent: false,
+        tenantVisible: true,
       },
     ],
     { session },

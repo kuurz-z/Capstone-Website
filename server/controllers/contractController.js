@@ -51,8 +51,10 @@ import {
   resolvePublishedFinalDocument,
 } from "../services/contractPublicationService.js";
 import {
+  attachContractLineage,
   resolveTenantCanonicalContract,
   resolveTenantContractHistory,
+  resolveTenantContractHistoryWithLineage,
   resolveTenantUpcomingContract,
 } from "../services/tenantContractSelectionService.js";
 import {
@@ -1458,11 +1460,19 @@ export const getMyCurrentContract = async (req, res) => {
     } catch (scanErr) {
       logger.warn({ err: scanErr, contractId: String(contract._id) }, "[getMyCurrentContract] signed-scan resolve failed (non-fatal)");
     }
+    // Resolve tenant contracts with lineage to determine termNumber & termLabel
+    const allTenantContracts = await Contract.find({ tenantId: user._id }).sort({ leaseStartDate: 1, createdAt: 1 });
+    const contractsWithLineage = attachContractLineage(allTenantContracts);
+    const currentLineage = contractsWithLineage.find((c) => String(c._id) === String(contract._id));
+
     const view = toTenantContractView(contract, new Date(), {
       preparedDocument,
       preparedDocumentIssue,
       acknowledgement,
       signedScan,
+      termNumber: currentLineage?.termNumber,
+      termLabel: currentLineage?.termLabel,
+      isShortTerm: currentLineage?.isShortTerm,
     });
 
     // "Upcoming" leg of the current/upcoming/history triad — a renewal or
@@ -1481,10 +1491,22 @@ export const getMyCurrentContract = async (req, res) => {
             // Non-fatal — upcoming view still returns without a prepared document
           }
         }
+        let upcomingAcknowledgement = null;
+        try {
+          upcomingAcknowledgement = await getAcknowledgementStatusForContract(upcomingContract, user._id);
+        } catch (ackErr) {
+          logger.warn({ err: ackErr, contractId: String(upcomingContract._id) }, "[getMyCurrentContract] upcoming acknowledgement resolve failed (non-fatal)");
+        }
         const upcomingSignedScan = await resolveSignedScanForContract(upcomingContract).catch(() => null);
+        const upcomingLineage = contractsWithLineage.find((c) => String(c._id) === String(upcomingContract._id));
+
         upcomingView = toTenantContractView(upcomingContract, new Date(), {
           preparedDocument: upcomingPrepared,
+          acknowledgement: upcomingAcknowledgement,
           signedScan: upcomingSignedScan,
+          termNumber: upcomingLineage?.termNumber,
+          termLabel: upcomingLineage?.termLabel,
+          isShortTerm: upcomingLineage?.isShortTerm,
         });
       }
     } catch {
@@ -1654,13 +1676,26 @@ export const getMyContractHistory = async (req, res) => {
   try {
     const user = await tenantActor(req);
     const contracts = await resolveTenantContractHistory(user._id);
-    // Each historical Contract resolves ITS OWN signed scan (an older
-    // historical Contract must never show the current Contract's scan). An
-    // amendment/replacement in history still inherits from its lineage.
+    // Each historical Contract resolves ITS OWN signed scan and prepared document.
     const views = await Promise.all(
       contracts.map(async (contract) => {
         const signedScan = await resolveSignedScanForContract(contract).catch(() => null);
-        return toTenantContractView(contract, new Date(), { signedScan });
+        let preparedDocument = null;
+        if (selectCurrentPreparedDocument(contract)) {
+          try {
+            preparedDocument = (await resolveCurrentPreparedDocument(contract)).document;
+          } catch {
+            // Non-fatal
+          }
+        }
+        return toTenantContractView(contract, new Date(), {
+          signedScan,
+          preparedDocument,
+          termNumber: contract.termNumber,
+          termLabel: contract.termLabel,
+          isShortTerm: contract.isShortTerm,
+          leaseDurationMonths: contract.leaseDurationMonths,
+        });
       }),
     );
     res.json({ contracts: views });

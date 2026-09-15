@@ -54,10 +54,11 @@ describe("renewStayWorkflow does not prematurely change the Reservation billing 
       name: "Room 301", roomNumber: "301", branch: "gil-puyat",
       type: "quadruple-sharing", capacity: 4, price: 6300,
     });
-    const leaseStart = new Date("2025-12-01T00:00:00.000Z");
+    const leaseStart = new Date("2025-08-01T00:00:00.000Z");
     const leaseEnd = new Date("2026-01-31T00:00:00.000Z");
     const reservation = await Reservation.create({
-      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: 2,
+      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: 6,
+      leaseDurationMonths: 6,
       reservationFeeAmount: 2000, preferredRoomType: "quadruple-sharing",
       agreedToPrivacy: true, agreedToCertification: true, totalPrice: 6300,
       monthlyRent: 6300, moveInDate: leaseStart,
@@ -66,6 +67,7 @@ describe("renewStayWorkflow does not prematurely change the Reservation billing 
     await Stay.create({
       tenantId: tenant._id, reservationId: reservation._id, branch: room.branch,
       roomId: room._id, bedId: "bed-1", leaseStartDate: leaseStart, leaseEndDate: leaseEnd,
+      leaseDurationMonths: 6,
       monthlyRent: 6300, status: "active",
     });
 

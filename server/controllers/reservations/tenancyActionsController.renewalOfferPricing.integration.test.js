@@ -76,7 +76,7 @@ describe("renewal offer pricing (createRenewalOffer / respondToRenewalOffer)", (
     });
   });
 
-  async function seed({ roomType, roomPrice }) {
+  async function seed({ roomType, roomPrice, durationMonths = 6 }) {
     const admin = await User.create({
       firebaseUid: `admin-${new mongoose.Types.ObjectId()}`,
       email: `admin-${new mongoose.Types.ObjectId()}@example.test`,
@@ -95,7 +95,8 @@ describe("renewal offer pricing (createRenewalOffer / respondToRenewalOffer)", (
       price: roomPrice,
     });
     const reservation = await Reservation.create({
-      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: 3,
+      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: durationMonths,
+      leaseDurationMonths: durationMonths,
       reservationFeeAmount: 2000, preferredRoomType: roomType,
       agreedToPrivacy: true, agreedToCertification: true, totalPrice: roomPrice,
       moveInDate: new Date("2026-01-01T00:00:00.000Z"), monthlyRent: roomPrice,
@@ -105,7 +106,8 @@ describe("renewal offer pricing (createRenewalOffer / respondToRenewalOffer)", (
       tenantId: tenant._id, reservationId: reservation._id, branch: room.branch,
       roomId: room._id, bedId: "bed-1",
       leaseStartDate: new Date("2026-01-01T00:00:00.000Z"),
-      leaseEndDate: new Date("2026-04-01T00:00:00.000Z"),
+      leaseEndDate: new Date("2026-07-01T00:00:00.000Z"),
+      leaseDurationMonths: durationMonths,
       monthlyRent: roomPrice, status: "active",
     });
     return { admin, tenant, room, reservation, stay };
@@ -128,7 +130,7 @@ describe("renewal offer pricing (createRenewalOffer / respondToRenewalOffer)", (
   ];
 
   test.each(CASES)("$name: offer stores canonical regular $regular / final $final", async ({ roomType, roomPrice, months, regular, final }) => {
-    const { admin, reservation } = await seed({ roomType, roomPrice });
+    const { admin, reservation } = await seed({ roomType, roomPrice, durationMonths: months >= 6 ? 6 : 3 });
     const res = response();
     await createRenewalOffer(req(admin, { reservationId: String(reservation._id) }, { months }), res);
 
@@ -138,11 +140,12 @@ describe("renewal offer pricing (createRenewalOffer / respondToRenewalOffer)", (
     expect(res.body.offer.pricingSource).toBe("canonical_resolver");
   });
 
-  test("short-term current room renewing to long-term: offer resolves 5400, not the current 6300 rent", async () => {
-    const { admin, reservation } = await seed({ roomType: "quadruple-sharing", roomPrice: 6300 });
+  test("short-term current room renewing to long-term is rejected with SHORT_TERM_LIMIT_EXCEEDED", async () => {
+    const { admin, reservation } = await seed({ roomType: "quadruple-sharing", roomPrice: 6300, durationMonths: 3 });
     const res = response();
     await createRenewalOffer(req(admin, { reservationId: String(reservation._id) }, { months: 6 }), res);
-    expect(res.body.offer.proposedRent).toBe(5400);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe("SHORT_TERM_LIMIT_EXCEEDED");
   });
 
   test("Room.monthlyPrice does not override the canonical approved renewal rate", async () => {

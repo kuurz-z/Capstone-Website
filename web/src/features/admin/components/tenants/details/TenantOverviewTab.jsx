@@ -6,6 +6,7 @@ import {
   ChevronUp,
   ChevronDown,
   Eye,
+  Download,
   FileText,
   History,
   Zap,
@@ -37,6 +38,7 @@ export default function TenantOverviewTab({
   docsPanelRef,
   onPreviewDoc,
   onOpenDigitalContract,
+  onDownloadStayProof,
   onProceedTransferRequest,
   onDeclineTransferRequest,
   transferRequestLoading = false,
@@ -854,28 +856,116 @@ export default function TenantOverviewTab({
       {/* Lease Extension History */}
       {extensionHistory.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4 space-y-3 shadow-2xs">
-          <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wide">
-            <History className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-            Lease Extension History ({extensionHistory.length})
+          <h4 className="text-xs font-semibold text-foreground flex items-center justify-between uppercase tracking-wide">
+            <span className="flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              Lease Extension History ({extensionHistory.length})
+            </span>
           </h4>
           <div className="divide-y divide-border/40 text-xs">
-            {extensionHistory.map((extension) => (
-              <div key={extension.id} className="py-2.5 first:pt-1 last:pb-0 text-xs">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="font-semibold text-foreground">{extension.duration}</span>
-                  <span className="text-muted-foreground text-[11px]">{extension.date}</span>
+            {extensionHistory.map((extension, idx) => {
+              const termNum = extension.termNumber || idx + 2;
+              const termLabel = extension.termLabel || (termNum === 1 ? "Term #1: Initial Stay" : `Term #${termNum}: Stay Extension`);
+              const dateRange =
+                extension.dateRange ||
+                (extension.startDate && extension.endDate
+                  ? `${extension.startDate} – ${extension.endDate}`
+                  : extension.previousEnd && extension.newEnd
+                  ? `${extension.previousEnd} → ${extension.newEnd}`
+                  : extension.date);
+
+              const contractsList = fetchedDetail?.contracts || tenant?.contracts || [];
+              const matchedContract =
+                extension.contract ||
+                contractsList.find(
+                  (c) =>
+                    (extension.contractId && String(c._id || c.id) === String(extension.contractId)) ||
+                    (extension.startDate && c.leaseStartDate && formatDate(c.leaseStartDate) === extension.startDate)
+                );
+              const resolvedMonthlyRent =
+                extension.monthlyRent ||
+                matchedContract?.approvedMonthlyRate ||
+                matchedContract?.monthlyRent;
+              const targetContract = matchedContract || extension.contractId || extension.id;
+
+              return (
+                <div
+                  key={extension.id || idx}
+                  className="py-3 first:pt-1 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-foreground border border-border/80">
+                        {termLabel}
+                      </span>
+                      {extension.duration && (
+                        <span className="inline-flex items-center text-[11px] font-medium text-muted-foreground">
+                          {extension.duration}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            extension.status === "active"
+                              ? "bg-emerald-500"
+                              : extension.status === "pending" || extension.status === "generated"
+                              ? "bg-amber-500"
+                              : "bg-slate-400"
+                          }`}
+                        />
+                        <span className="capitalize">{extension.status || "Extended"}</span>
+                      </span>
+                    </div>
+
+                    <div className="text-xs font-semibold text-foreground">
+                      {dateRange}
+                    </div>
+
+                    {extension.notes && (
+                      <div className="text-[11px] text-muted-foreground">
+                        {extension.notes}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 self-end sm:self-center">
+                    {resolvedMonthlyRent ? (
+                      <div className="text-right mr-1">
+                        <span className="text-[11px] text-muted-foreground block">Monthly Rent</span>
+                        <span className="text-xs font-bold text-foreground tabular-nums">
+                          {formatMoney(resolvedMonthlyRent)}/mo
+                        </span>
+                      </div>
+                    ) : null}
+
+                    <div className="flex items-center gap-1.5">
+                      {onOpenDigitalContract && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDigitalContract(targetContract)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer"
+                          title="View Digital Contract Record"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span>View Contract</span>
+                        </button>
+                      )}
+                      {onDownloadStayProof && (
+                        <button
+                          type="button"
+                          onClick={() => onDownloadStayProof(targetContract)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border bg-card hover:bg-muted text-foreground transition-colors cursor-pointer"
+                          title="Download Contract PDF"
+                        >
+                          <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span>Download</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-muted-foreground text-[11px]">
-                  {extension.dateRange ? (
-                    extension.dateRange
-                  ) : extension.previousEnd && extension.newEnd ? (
-                    `${extension.previousEnd} → ${extension.newEnd}`
-                  ) : (
-                    extension.notes || "Lease term extended"
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

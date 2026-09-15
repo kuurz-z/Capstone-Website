@@ -95,7 +95,8 @@ describe("renewal offer concurrency (createRenewalOffer / respondToRenewalOffer)
       type: "quadruple-sharing", capacity: 4, price: 6000,
     });
     const reservation = await Reservation.create({
-      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: 3,
+      userId: tenant._id, roomId: room._id, status: "moveIn", leaseDuration: 6,
+      leaseDurationMonths: 6,
       reservationFeeAmount: 2000, preferredRoomType: "quadruple-sharing",
       agreedToPrivacy: true, agreedToCertification: true, totalPrice: 6000,
       moveInDate: new Date("2026-01-01T00:00:00.000Z"), monthlyRent: 6000,
@@ -105,7 +106,8 @@ describe("renewal offer concurrency (createRenewalOffer / respondToRenewalOffer)
       tenantId: tenant._id, reservationId: reservation._id, branch: room.branch,
       roomId: room._id, bedId: "bed-1",
       leaseStartDate: new Date("2026-01-01T00:00:00.000Z"),
-      leaseEndDate: new Date("2026-04-01T00:00:00.000Z"),
+      leaseEndDate: new Date("2026-07-01T00:00:00.000Z"),
+      leaseDurationMonths: 6,
       monthlyRent: 6000, status: "active",
     });
     return { admin, tenant, room, reservation, stay };

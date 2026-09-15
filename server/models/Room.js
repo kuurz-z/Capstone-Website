@@ -311,7 +311,7 @@ roomSchema.methods.vacateBed = function (bedId, userId, reservationId) {
   const normUserId = userId ? String(userId?._id || userId).trim() : null;
   const normResId = reservationId ? String(reservationId?._id || reservationId).trim() : null;
 
-  const bed = this.beds.find((b) => {
+  let bed = this.beds?.find((b) => {
     const bId = b.id ? String(b.id).trim().toLowerCase() : "";
     const bCode = b.code ? String(b.code).trim().toLowerCase() : "";
     const bMongoId = b._id ? String(b._id).trim().toLowerCase() : "";
@@ -330,6 +330,11 @@ roomSchema.methods.vacateBed = function (bedId, userId, reservationId) {
     }
     return false;
   });
+
+  // Fallback: if only 1 occupied bed exists in room, vacate that bed
+  if (!bed && Array.isArray(this.beds) && this.beds.filter((b) => b.status === "occupied").length === 1) {
+    bed = this.beds.find((b) => b.status === "occupied");
+  }
 
   if (!bed) return false;
 

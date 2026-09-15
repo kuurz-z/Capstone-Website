@@ -137,11 +137,12 @@ export async function markInspectionComplete({ clearanceId, actorId, inspectionN
   return clearance;
 }
 
-const DEPOSIT_OUTCOME_FROM_SETTLEMENT = (depositSettlement) => {
+const DEPOSIT_OUTCOME_FROM_SETTLEMENT = (depositSettlement, securityDepositAmount) => {
   if (!depositSettlement) return "under_review";
   if (depositSettlement.isEarlyVacancy || depositSettlement.depositForfeited) return "forfeited";
   const amount = Number(depositSettlement.depositRefundAmount || 0);
   if (amount <= 0) return "fully_applied";
+  if (securityDepositAmount != null && amount >= Number(securityDepositAmount)) return "fully_refundable";
   return "partially_refundable";
 };
 
@@ -178,14 +179,15 @@ export async function completeMoveOutClearance({ clearanceId, payload, actorId }
   clearance.confirmedMoveOutDate = depositSettlement?.actualMoveOutDate || clearance.confirmedMoveOutDate;
   clearance.calculatedAt = new Date();
   clearance.calculatedBy = actorId;
-  const outstandingBalance = Number(result.billingSummary?.currentBalance ?? 0);
   clearance.deductions = {
     ...clearance.deductions,
-    unpaidRent: outstandingBalance,
+    unpaidRent: 0,
+    unpaidElectricity: 0,
+    unpaidWater: 0,
   };
-  clearance.totalDeductions = outstandingBalance;
+  clearance.totalDeductions = 0;
   clearance.refundableBalance = Number(depositSettlement?.depositRefundAmount ?? 0);
-  clearance.depositOutcome = DEPOSIT_OUTCOME_FROM_SETTLEMENT(depositSettlement);
+  clearance.depositOutcome = DEPOSIT_OUTCOME_FROM_SETTLEMENT(depositSettlement, clearance.securityDepositAmount);
   clearance.approvedBy = actorId;
   clearance.approvedAt = new Date();
   clearance.approvalReason = depositSettlement?.isEarlyVacancy
