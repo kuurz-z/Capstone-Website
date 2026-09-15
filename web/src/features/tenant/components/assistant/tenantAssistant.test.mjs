@@ -23,7 +23,7 @@ test("TenantAssistantLauncher renders accessible floating button and unread badg
 test("TenantAssistantDrawer includes header, route prompts, chat stream, and escalation trigger", () => {
   assert.match(drawerSource, /tenant-assistant-drawer/);
   assert.match(drawerSource, /tenant-assistant-backdrop/);
-  assert.match(drawerSource, /Grounded on/);
+  assert.match(drawerSource, /tenant-assistant-banner/);
   assert.match(drawerSource, /activeRoutePrompts/);
   assert.match(drawerSource, /streamTenantAssistant/);
   assert.match(drawerSource, /TenantBillingBreakdownCard/);
@@ -32,12 +32,12 @@ test("TenantAssistantDrawer includes header, route prompts, chat stream, and esc
   assert.match(drawerSource, /TenantHumanEscalateModal/);
 });
 
-test("TenantBillingBreakdownCard renders breakdown numbers, free water badge, and link to /applicant/billing", () => {
+test("TenantBillingBreakdownCard renders breakdown numbers, water consumption when billed, and link to /applicant/billing", () => {
   assert.match(billingCardSource, /tenant-snapshot-card/);
   assert.match(billingCardSource, /Base Monthly Rent/);
   assert.match(billingCardSource, /Electricity Share/);
   assert.match(billingCardSource, /Water Consumption/);
-  assert.match(billingCardSource, /FREE/);
+  assert.doesNotMatch(billingCardSource, /FREE/);
   assert.match(billingCardSource, /\/applicant\/billing/);
 });
 
@@ -135,12 +135,10 @@ test("TenantAnnouncementCard renders branch advisory notice, and link to /applic
   assert.match(announcementCardSource, /\/applicant\/announcements/);
 });
 
-test("TenantAssistantDrawer includes action chip routing, stop button, copy transcript, and refresh stay data", () => {
+test("TenantAssistantDrawer includes action chip routing, stop button, and copy transcript", () => {
   assert.match(drawerSource, /handleStopGeneration/);
   assert.match(drawerSource, /tenant-assistant-stop-btn/);
   assert.match(drawerSource, /handleCopyTranscript/);
-  assert.match(drawerSource, /handleRefreshStayData/);
-  assert.match(drawerSource, /tenant-assistant-refresh-btn/);
   assert.match(drawerSource, /action\.url|act\.url/);
   assert.match(drawerSource, /TenantPaymentGuideCard/);
   assert.match(drawerSource, /TenantHouseRulesCard/);
@@ -152,7 +150,7 @@ test("TenantBillingBreakdownCard and TenantLeaseTimelineCard enforce strict data
   assert.match(billingCardSource, /if \(!data \|\| !hasValidBillData\) return null;/);
   assert.match(leaseCardSource, /hasValidContract/);
   assert.match(leaseCardSource, /if \(!data \|\| !hasValidContract\) return null;/);
-  assert.match(drawerSource, /const billData = widgetData\?\.currentBill/);
+  assert.match(drawerSource, /const billData = (?:widgetData\?\.activeUnpaidBill\s*\|\|\s*)?widgetData\?\.currentBill/);
 });
 
 test("TenantAssistantDrawer supports unified single-stream live support, escalation handoff, and resolution confirm", () => {
@@ -183,3 +181,12 @@ test("TenantAssistantDrawer enforces user-scoped storage keys and resets state o
   assert.match(drawerSource, /sessionStorage\.removeItem\(userStorageKey\)/);
   assert.match(drawerSource, /setMessages\(saved \? JSON\.parse\(saved\) : \[\]\)/);
 });
+
+test("TenantAssistantDrawer prioritizes activeUnpaidBill over currentBill for statement cards", () => {
+  assert.match(drawerSource, /activeUnpaidBill/);
+});
+
+test("TenantBillingBreakdownCard supports standalone penalty billType and title formatting", () => {
+  assert.match(billingCardSource, /Penalty Fee Statement/);
+});
+

@@ -4,7 +4,6 @@ import {
   Bot,
   Headphones,
   RotateCcw,
-  RotateCw,
   X,
   Sparkles,
   Send,
@@ -176,7 +175,6 @@ export default function TenantAssistantDrawer({ isOpen, onClose, onUnreadCountCh
   const [activeActions, setActiveActions] = useState([]);
   const [isEscalateOpen, setIsEscalateOpen] = useState(false);
   const [contextSnapshot, setContextSnapshot] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
 
   const bodyRef = useRef(null);
@@ -547,28 +545,6 @@ export default function TenantAssistantDrawer({ isOpen, onClose, onUnreadCountCh
     }
   };
 
-  const handleRefreshStayData = async () => {
-    setIsRefreshing(true);
-    try {
-      const res = await getTenantContext().catch(() => null);
-      if (res?.data) {
-        setContextSnapshot(res.data);
-      }
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: isApplicant
-            ? `Verified live reservation records for **${tenantDisplayName}** at **${branchLabel}**. You can ask about payment milestones or ID verification status.`
-            : `Refreshed live room data for **Room ${roomLabel} (${bedLabel})** at **${branchLabel}**. Your billing and lease balance are synchronized.`,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 400);
-    }
-  };
-
   const handleStopGeneration = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -862,7 +838,7 @@ export default function TenantAssistantDrawer({ isOpen, onClose, onUnreadCountCh
     if (!widget) return null;
     const widgetType = typeof widget === "string" ? widget : widget.type;
     const widgetData = widget.data || contextSnapshot;
-    const billData = widgetData?.currentBill;
+    const billData = widgetData?.activeUnpaidBill || widgetData?.currentBill;
 
     switch (widgetType) {
       case "billing_breakdown":
@@ -1064,28 +1040,6 @@ export default function TenantAssistantDrawer({ isOpen, onClose, onUnreadCountCh
                 ) : (
                   <span>Room {roomLabel} ({bedLabel})</span>
                 )}
-              </div>
-              <div className="tenant-assistant-banner-right">
-                <button
-                  type="button"
-                  onClick={handleRefreshStayData}
-                  disabled={isRefreshing || isStreaming}
-                  className="tenant-assistant-refresh-btn"
-                  title="Click to refresh live stay data"
-                  aria-label="Refresh live stay data"
-                >
-                  <RotateCw
-                    className={`w-3 h-3 ${isRefreshing ? "animate-spin text-amber-500" : "text-slate-400"}`}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {isRefreshing
-                      ? "Refreshing..."
-                      : isApplicant
-                      ? "Grounded on Reservation"
-                      : "Grounded on Stay Data"}
-                  </span>
-                </button>
               </div>
             </div>
           )}
