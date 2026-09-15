@@ -8,7 +8,7 @@
  */
 
 import mongoose from "mongoose";
-import { Room, Reservation } from "../../models/index.js";
+import { Room, Reservation, Stay } from "../../models/index.js";
 import logger from "../../middleware/logger.js";
 import { emitRoomUpdate } from "../../utils/socket.js";
 import {
@@ -750,14 +750,42 @@ export const releaseOrphanedBeds = async (userIds = [], reservationIds = []) => 
     })
     .filter(Boolean);
 
+  const userStrIds = userIds.map(String).filter(Boolean);
+  const resStrIds = reservationIds.map(String).filter(Boolean);
+
+  const allUserIds = [...userObjectIds, ...userStrIds];
+  const allResIds = [...reservationObjectIds, ...resStrIds];
+
+  // Also cascade-cancel any active/in-progress stays referencing these deleted users or reservations
+  try {
+    const stayFilter = {
+      $or: [
+        ...(allUserIds.length ? [{ tenantId: { $in: allUserIds } }] : []),
+        ...(allResIds.length ? [{ reservationId: { $in: allResIds } }] : []),
+      ],
+      status: { $in: ["active", "ending_soon", "expired_occupancy_continuing"] },
+    };
+    if (stayFilter.$or.length > 0 && Stay) {
+      await Stay.updateMany(stayFilter, {
+        $set: {
+          status: "terminated",
+          endedAt: new Date(),
+          endReason: "Tenant account or reservation deleted",
+        },
+      });
+    }
+  } catch (stayErr) {
+    logger.warn({ err: stayErr }, "releaseOrphanedBeds stay cancellation error");
+  }
+
   // Build a filter to find rooms that have any bed referencing these ids
   const orClauses = [];
-  if (userObjectIds.length) {
-    orClauses.push({ "beds.lockedBy": { $in: userObjectIds } });
-    orClauses.push({ "beds.occupiedBy.userId": { $in: userObjectIds } });
+  if (allUserIds.length) {
+    orClauses.push({ "beds.lockedBy": { $in: allUserIds } });
+    orClauses.push({ "beds.occupiedBy.userId": { $in: allUserIds } });
   }
-  if (reservationObjectIds.length) {
-    orClauses.push({ "beds.occupiedBy.reservationId": { $in: reservationObjectIds } });
+  if (allResIds.length) {
+    orClauses.push({ "beds.occupiedBy.reservationId": { $in: allResIds } });
   }
 
   let rooms = [];
@@ -778,17 +806,15 @@ export const releaseOrphanedBeds = async (userIds = [], reservationIds = []) => 
     for (const bed of room.beds) {
       const isLockedByDeleted =
         bed.lockedBy &&
-        userObjectIds.some((id) => String(id) === String(bed.lockedBy));
+        allUserIds.some((id) => String(id) === String(bed.lockedBy));
 
       const isOccupiedByDeletedUser =
         bed.occupiedBy?.userId &&
-        userObjectIds.some((id) => String(id) === String(bed.occupiedBy.userId));
+        allUserIds.some((id) => String(id) === String(bed.occupiedBy.userId));
 
       const isOccupiedByDeletedReservation =
         bed.occupiedBy?.reservationId &&
-        reservationObjectIds.some(
-          (id) => String(id) === String(bed.occupiedBy.reservationId),
-        );
+        allResIds.some((id) => String(id) === String(bed.occupiedBy.reservationId));
 
       if (
         (bed.status === "locked" && (isLockedByDeleted || isOccupiedByDeletedReservation)) ||

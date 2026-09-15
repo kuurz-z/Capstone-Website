@@ -334,15 +334,15 @@ export async function resolveCurrentUtilityRate({ utilityType = "electricity" } 
 function lifecycleBlocker(resolution, roomLabel = "this room") {
   const messages = {
     [UTILITY_PERIOD_STATE.CLOSED_ONLY]:
-      "This room has previous billing history but no valid active period. Review or initialize continuity before continuing.",
+      "Unable to complete this action. This room requires an active electricity billing period to be opened first.",
     [UTILITY_PERIOD_STATE.MANUAL_REVIEW_REQUIRED]:
       "Electricity billing for this room requires review before this action can continue.",
     [UTILITY_PERIOD_STATE.AMBIGUOUS]:
-      "Multiple active electricity periods were found. Resolve the billing conflict first.",
+      "Unable to complete this action due to multiple active electricity billing periods. Please resolve the open billing periods first.",
     [UTILITY_PERIOD_STATE.OUTSIDE_PERIOD]:
-      "The utility period does not contain the requested occupancy time. Review period continuity first.",
+      "Unable to process move-out. The selected move-out time cannot be earlier than when the tenant moved into the room.",
     [UTILITY_PERIOD_STATE.MISSING]:
-      "No active electricity period exists for this room.",
+      "No active electricity billing period exists for this room. Please open a billing period first.",
   };
   return boundaryError(
     messages[resolution.state] || `Electricity billing for ${roomLabel} is not ready.`,

@@ -1,7 +1,6 @@
 import React from "react";
-import { Bed, Wrench, Layers, User, Calendar, CheckCircle2, AlertCircle, History, Image as ImageIcon } from "lucide-react";
+import { Bed, Wrench, Layers, User, Calendar, CheckCircle2, AlertCircle, History } from "lucide-react";
 import { groupBedsByBunk, getBedShortCode, formatBedPosition } from "../../../../shared/utils/bedIdentifier";
-import { prefetchOptimizedImage } from "../../../../shared/utils/imageOptimizer";
 
 /**
  * DoubleDeckRoomCard — Visual Bunk Bed Matrix Card (Upper & Lower Deck)
@@ -24,13 +23,6 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
   const formattedType = room.type ? room.type.replace("-", " ") : "Standard";
   const subtitleText = hasDistinctName ? `${rawRoomName} • ${formattedType}` : formattedType;
 
-  // Extract photos for quick full view
-  const roomImages = (() => {
-    const fromImages = Array.isArray(room.images) ? room.images.filter(Boolean) : [];
-    if (fromImages.length > 0) return fromImages;
-    if (typeof room.image === "string" && room.image.trim()) return [room.image.trim()];
-    return [];
-  })();
 
   // Filter beds in maintenance
   const bedsInMaintenance = (room.beds || []).filter((b) => b.status === "maintenance").length;
@@ -95,7 +87,7 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
   const getDeckPillStyle = (bed) => {
     if (!bed) {
       return {
-        bg: "bg-slate-100 dark:bg-slate-800",
+        bg: "bg-transparent",
         border: "border-slate-200 dark:border-slate-700",
         text: "text-slate-600 dark:text-slate-400",
         label: "Empty",
@@ -111,7 +103,7 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
 
     if (isOcc) {
       return {
-        bg: "bg-rose-50/80 dark:bg-rose-950/30",
+        bg: "bg-transparent",
         border: "border-slate-200 dark:border-slate-700",
         text: "text-rose-700 dark:text-rose-400 font-semibold",
         label: bed.occupiedBy?.fullName ? bed.occupiedBy.fullName.split(" ")[0] : "Occupied",
@@ -120,7 +112,7 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
     }
     if (isRes) {
       return {
-        bg: "bg-amber-50/80 dark:bg-amber-950/30",
+        bg: "bg-transparent",
         border: "border-slate-200 dark:border-slate-700",
         text: "text-amber-700 dark:text-amber-400 font-medium",
         label: "Reserved",
@@ -129,7 +121,7 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
     }
     if (isLocked) {
       return {
-        bg: "bg-amber-50/80 dark:bg-amber-950/30",
+        bg: "bg-transparent",
         border: "border-slate-200 dark:border-slate-700",
         text: "text-amber-700 dark:text-amber-400 font-medium",
         label: bed.occupiedBy?.fullName ? `${bed.occupiedBy.fullName.split(" ")[0]} (Paying)` : "Payment Pending",
@@ -138,7 +130,7 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
     }
     if (isMaint) {
       return {
-        bg: "bg-slate-100 dark:bg-slate-800",
+        bg: "bg-transparent",
         border: "border-slate-200 dark:border-slate-700",
         text: "text-slate-700 dark:text-slate-300 font-medium",
         label: "Maint",
@@ -148,13 +140,52 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
 
     // Default Vacant (Green)
     return {
-      bg: "bg-emerald-50/80 dark:bg-emerald-950/30",
+      bg: "bg-transparent",
       border: "border-slate-200 dark:border-slate-700",
       text: "text-emerald-700 dark:text-emerald-400 font-medium",
       label: "Vacant",
       dot: "bg-emerald-500",
     };
   };
+
+  // Private Room Occupant Details
+  const privateOccupiedBed = (room.beds || []).find(
+    (b) =>
+      b.status === "occupied" ||
+      b.status === "reserved" ||
+      b.status === "locked" ||
+      b.available === false ||
+      Boolean(b.occupiedBy?.userId) ||
+      Boolean(b.occupiedBy?.name) ||
+      Boolean(b.occupiedBy?.fullName) ||
+      Boolean(b.tenantName) ||
+      Boolean(b.userName),
+  );
+
+  const rawPrivateOccupant = privateOccupiedBed?.occupiedBy || room.occupiedBy || {};
+  const privateOccupantFullName =
+    rawPrivateOccupant.name ||
+    rawPrivateOccupant.fullName ||
+    rawPrivateOccupant.tenantName ||
+    rawPrivateOccupant.userName ||
+    privateOccupiedBed?.userName ||
+    privateOccupiedBed?.tenantName ||
+    (rawPrivateOccupant.firstName || rawPrivateOccupant.lastName
+      ? `${rawPrivateOccupant.firstName || ""} ${rawPrivateOccupant.lastName || ""}`.trim()
+      : null);
+
+  const privateOccupantFirstName = privateOccupantFullName
+    ? privateOccupantFullName.split(" ")[0]
+    : null;
+
+  const privateBedStatus = privateOccupiedBed
+    ? String(privateOccupiedBed.status || "").toLowerCase().trim()
+    : effectiveOccupancy > 0
+    ? "occupied"
+    : "available";
+  const isPrivateLocked = privateBedStatus === "locked";
+  const isPrivateRes = privateBedStatus === "reserved";
+  const isPrivateOcc = effectiveOccupancy > 0 || privateBedStatus === "occupied";
 
   return (
     <div
@@ -278,15 +309,47 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
           </div>
         </div>
       ) : (
-        /* Single Bed / Private Room Layout */
+        /* Entire Room / Private Room Layout */
         <div className="py-2.5 px-3 rounded-lg bg-muted/40 border border-border flex items-center justify-between text-xs my-1">
           <div className="flex items-center gap-2">
             <Bed className="w-4 h-4 text-slate-800 dark:text-slate-200" />
-            <span className="font-semibold text-foreground">Single Bed Unit</span>
+            <span className="font-semibold text-foreground">Entire Room</span>
           </div>
-          <span className={`text-[10px] px-2 py-0.5 rounded font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 ${effectiveOccupancy > 0 ? "bg-rose-50/80 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400" : "bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400"}`}>
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${effectiveOccupancy > 0 ? "bg-rose-500" : "bg-emerald-500"}`} />
-            {effectiveOccupancy > 0 ? "Occupied" : "Vacant"}
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded font-medium border border-slate-200 dark:border-slate-700 bg-transparent flex items-center gap-1.5 ${
+              isPrivateOcc
+                ? "text-rose-700 dark:text-rose-400 font-semibold"
+                : isPrivateRes
+                ? "text-amber-700 dark:text-amber-400 font-medium"
+                : isPrivateLocked
+                ? "text-amber-700 dark:text-amber-400 font-medium"
+                : "text-emerald-700 dark:text-emerald-400 font-medium"
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                isPrivateOcc
+                  ? "bg-rose-500"
+                  : isPrivateRes || isPrivateLocked
+                  ? "bg-amber-500"
+                  : "bg-emerald-500"
+              }`}
+            />
+            <span className="truncate max-w-[130px]">
+              {isPrivateOcc
+                ? privateOccupantFirstName
+                  ? `${privateOccupantFirstName} (Occupied)`
+                  : "Occupied"
+                : isPrivateRes
+                ? privateOccupantFirstName
+                  ? `${privateOccupantFirstName} (Reserved)`
+                  : "Reserved"
+                : isPrivateLocked
+                ? privateOccupantFirstName
+                  ? `${privateOccupantFirstName} (Pending)`
+                  : "Payment Pending"
+                : "Vacant"}
+            </span>
           </span>
         </div>
       )}
@@ -315,23 +378,6 @@ export default function DoubleDeckRoomCard({ room, onConfigure, onViewHistory, o
       {/* Footer Details */}
       <div className="pt-2 mt-1 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
-          {onViewPhotos && roomImages.length > 0 && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewPhotos(room);
-              }}
-              onMouseEnter={() => {
-                roomImages.forEach((img) => prefetchOptimizedImage(img));
-              }}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white px-1.5 py-0.5 rounded hover:bg-muted transition-colors cursor-pointer"
-              title={`View ${roomImages.length} full size room photo${roomImages.length > 1 ? "s" : ""}`}
-            >
-              <ImageIcon className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
-              <span>{roomImages.length} {roomImages.length === 1 ? "Photo" : "Photos"}</span>
-            </button>
-          )}
           {onViewHistory ? (
             <button
               type="button"

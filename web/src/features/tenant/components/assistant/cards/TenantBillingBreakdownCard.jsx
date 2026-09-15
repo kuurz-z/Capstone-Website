@@ -4,7 +4,7 @@ import { ReceiptText, ArrowRight, Zap, Droplet } from "lucide-react";
 
 /**
  * Solid Snapshot Card: Displays resident's active or latest billing breakdown
- * including pro-rata rent, submetered electricity, 100% free water badge,
+ * including pro-rata rent, submetered electricity, water consumption (when billed),
  * appliance surcharges, penalties, and net amount.
  *
  * Strictly follows Lilycrest zero-gradient, solid HSL aesthetic.
@@ -20,10 +20,11 @@ export default function TenantBillingBreakdownCard({ data, onCloseDrawer }) {
 
   const rent = Number(data.rentAmount || data.rent || 0);
   const electricity = Number(data.electricityAmount || data.electricity || 0);
+  const water = Number(data.waterAmount || data.water || 0);
   const appliances = Number(data.applianceFees || data.applianceAmount || 0);
   const penalties = Number(data.penalties || data.penaltyAmount || 0);
   const discount = Number(data.discount || data.discountAmount || 0);
-  const total = Number(data.totalAmount || data.total || rent + electricity + appliances + penalties - discount);
+  const total = Number(data.totalAmount || data.total || rent + electricity + water + appliances + penalties - discount);
   const remaining = data.remainingAmount !== undefined ? Number(data.remainingAmount) : total;
 
   const status = (data.status || "pending").toLowerCase();
@@ -32,6 +33,11 @@ export default function TenantBillingBreakdownCard({ data, onCloseDrawer }) {
   const formattedMonth = data.billingMonth || data.month
     ? new Date(data.billingMonth || data.month).toLocaleDateString("en-US", { month: "short", year: "numeric" })
     : "Current Statement";
+
+  const isPenaltyBill = data?.billType === "penalty" || (penalties > 0 && rent === 0 && electricity === 0);
+  const formattedTitle = isPenaltyBill
+    ? `${formattedMonth} Penalty Fee Statement`
+    : formattedMonth;
 
   const formattedDueDate = data.dueDate
     ? (data.dueDate.includes("T") || !isNaN(Date.parse(data.dueDate))
@@ -47,7 +53,7 @@ export default function TenantBillingBreakdownCard({ data, onCloseDrawer }) {
       <div className="tenant-snapshot-header">
         <div className="tenant-snapshot-title">
           <ReceiptText className="w-3.5 h-3.5 text-slate-700 dark:text-slate-200 flex-shrink-0" aria-hidden="true" />
-          <span className="truncate">{formattedMonth}</span>
+          <span className="truncate">{formattedTitle}</span>
         </div>
         <span className={`tenant-snapshot-badge ${status}`} aria-label={`Status: ${status}`}>
           {status}
@@ -71,16 +77,15 @@ export default function TenantBillingBreakdownCard({ data, onCloseDrawer }) {
           <span className="tenant-snapshot-cell-val">{formatCurrency(electricity)}</span>
         </div>
 
-        <div className="tenant-snapshot-cell">
-          <span className="tenant-snapshot-cell-label flex items-center gap-1">
-            <Droplet className="w-3 h-3 text-blue-500" aria-hidden="true" />
-            <span>Water Consumption</span>
-          </span>
-          <span className="tenant-snapshot-cell-val free flex items-center gap-1">
-            <span>FREE</span>
-            <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">(₱0.00)</span>
-          </span>
-        </div>
+        {water > 0 && (
+          <div className="tenant-snapshot-cell">
+            <span className="tenant-snapshot-cell-label flex items-center gap-1">
+              <Droplet className="w-3 h-3 text-blue-500" aria-hidden="true" />
+              <span>Water Consumption</span>
+            </span>
+            <span className="tenant-snapshot-cell-val">{formatCurrency(water)}</span>
+          </div>
+        )}
 
         {appliances > 0 && (
           <div className="tenant-snapshot-cell">

@@ -50,6 +50,8 @@ const ACTIVE_BED_HOLD_STATUSES = Object.freeze([
   "movein",
 ]);
 
+export const isPopulatedUser = (u) => Boolean(u && typeof u === "object" && (u.email || u.firstName || u.name || u.role));
+
 export const syncRealtimeBedStatuses = async (rooms) => {
   if (!Array.isArray(rooms) || rooms.length === 0) return rooms;
   const roomIds = rooms.map((r) => r._id).filter(Boolean);
@@ -78,19 +80,19 @@ export const syncRealtimeBedStatuses = async (rooms) => {
   // Collect unpopulated userId references from active reservations, stays, and room beds
   const unpopulatedUserIds = new Set();
   for (const resDoc of activeReservations) {
-    if (resDoc.userId && (!resDoc.userId.email && !resDoc.userId.name && !resDoc.userId.firstName)) {
+    if (resDoc.userId && !isPopulatedUser(resDoc.userId)) {
       unpopulatedUserIds.add(String(resDoc.userId._id || resDoc.userId));
     }
   }
   for (const stayDoc of activeStays) {
-    if (stayDoc.tenantId && (!stayDoc.tenantId.email && !stayDoc.tenantId.name && !stayDoc.tenantId.firstName)) {
+    if (stayDoc.tenantId && !isPopulatedUser(stayDoc.tenantId)) {
       unpopulatedUserIds.add(String(stayDoc.tenantId._id || stayDoc.tenantId));
     }
   }
   for (const room of rooms) {
     if (Array.isArray(room.beds)) {
       for (const b of room.beds) {
-        if (b.occupiedBy?.userId && (!b.occupiedBy.userId.email && !b.occupiedBy.userId.name && !b.occupiedBy.userId.firstName)) {
+        if (b.occupiedBy?.userId && !isPopulatedUser(b.occupiedBy.userId)) {
           unpopulatedUserIds.add(String(b.occupiedBy.userId._id || b.occupiedBy.userId));
         }
       }
@@ -99,13 +101,13 @@ export const syncRealtimeBedStatuses = async (rooms) => {
 
   const userMap = new Map();
   for (const resDoc of activeReservations) {
-    if (resDoc.userId?._id) {
-      userMap.set(String(resDoc.userId._id), resDoc.userId);
+    if (resDoc.userId && isPopulatedUser(resDoc.userId)) {
+      userMap.set(String(resDoc.userId._id || resDoc.userId), resDoc.userId);
     }
   }
   for (const stayDoc of activeStays) {
-    if (stayDoc.tenantId?._id) {
-      userMap.set(String(stayDoc.tenantId._id), stayDoc.tenantId);
+    if (stayDoc.tenantId && isPopulatedUser(stayDoc.tenantId)) {
+      userMap.set(String(stayDoc.tenantId._id || stayDoc.tenantId), stayDoc.tenantId);
     }
   }
 
@@ -117,7 +119,9 @@ export const syncRealtimeBedStatuses = async (rooms) => {
       .lean();
 
     for (const u of extraUsers) {
-      userMap.set(String(u._id), u);
+      if (isPopulatedUser(u)) {
+        userMap.set(String(u._id), u);
+      }
     }
   }
 
@@ -216,6 +220,17 @@ export const syncRealtimeBedStatuses = async (rooms) => {
       const matchingStay = roomStays.find((stayDoc) => {
         if (matchedStayIds.has(String(stayDoc._id))) return false;
         const stayTenantId = stayDoc.tenantId?._id ? String(stayDoc.tenantId._id) : String(stayDoc.tenantId || "");
+        if (!stayTenantId) return false;
+
+        // Ignore ghost stays where the tenant user was deleted or does not exist
+        const stayUser =
+          isPopulatedUser(stayDoc.userId)
+            ? stayDoc.userId
+            : isPopulatedUser(stayDoc.tenantId)
+            ? stayDoc.tenantId
+            : userMap.get(stayTenantId) || null;
+        if (!stayUser) return false;
+
         const stayResId = stayDoc.reservationId ? String(stayDoc.reservationId) : null;
         if (stayTenantId && matchedUserIds.has(stayTenantId)) return false;
         if (stayResId && matchedResIds.has(stayResId)) return false;
@@ -285,9 +300,9 @@ export const syncRealtimeBedStatuses = async (rooms) => {
         if (stayTenantId) matchedUserIds.add(stayTenantId);
 
         let stayUser =
-          matchingStay.userId && typeof matchingStay.userId === "object"
+          isPopulatedUser(matchingStay.userId)
             ? matchingStay.userId
-            : matchingStay.tenantId && typeof matchingStay.tenantId === "object"
+            : isPopulatedUser(matchingStay.tenantId)
             ? matchingStay.tenantId
             : userMap.get(String(matchingStay.userId || matchingStay.tenantId)) || null;
 
@@ -296,7 +311,7 @@ export const syncRealtimeBedStatuses = async (rooms) => {
           : null;
 
         if (!stayUser && stayRes?.userId) {
-          stayUser = typeof stayRes.userId === "object" ? stayRes.userId : userMap.get(String(stayRes.userId));
+          stayUser = isPopulatedUser(stayRes.userId) ? stayRes.userId : userMap.get(String(stayRes.userId));
         }
 
         let name = null;
@@ -374,10 +389,10 @@ export const syncRealtimeBedStatuses = async (rooms) => {
         }
 
         const resUser =
-          matchingHold.userId && typeof matchingHold.userId === "object"
+          isPopulatedUser(matchingHold.userId)
             ? matchingHold.userId
             : matchingHold.userId
-            ? userMap.get(String(matchingHold.userId))
+            ? userMap.get(String(matchingHold.userId._id || matchingHold.userId))
             : null;
 
         let name = null;
@@ -509,10 +524,10 @@ export const syncRealtimeBedStatuses = async (rooms) => {
           }
 
           const resUser =
-            matchingHold?.userId && typeof matchingHold.userId === "object"
+            isPopulatedUser(matchingHold?.userId)
               ? matchingHold.userId
               : matchingHold?.userId
-              ? userMap.get(String(matchingHold.userId))
+              ? userMap.get(String(matchingHold.userId._id || matchingHold.userId))
               : null;
           const occUserId = resUser?._id ? String(resUser._id) : null;
 
@@ -566,22 +581,32 @@ export const syncRealtimeBedStatuses = async (rooms) => {
       const sId = String(s._id);
       const sRes = s.reservationId ? String(s.reservationId) : null;
       const sUser = s.tenantId?._id ? String(s.tenantId._id) : String(s.tenantId || "");
-      return !matchedStayIds.has(sId) && (!sRes || !matchedResIds.has(sRes)) && (!sUser || !matchedUserIds.has(sUser));
+      if (!sUser) return false;
+      const resolvedUser =
+        isPopulatedUser(s.userId)
+          ? s.userId
+          : isPopulatedUser(s.tenantId)
+          ? s.tenantId
+          : userMap.get(sUser) || null;
+      if (!resolvedUser) return false;
+      return !matchedStayIds.has(sId) && (!sRes || !matchedResIds.has(sRes)) && !matchedUserIds.has(sUser);
     });
     if (unmatchedStays.length > 0) {
       updatedBeds = updatedBeds.map((bed) => {
         if (unmatchedStays.length > 0 && (bed.status === "available" || !bed.occupiedBy?.name)) {
           const stayDoc = unmatchedStays.shift();
+          const stayTenantIdStr = stayDoc.tenantId?._id ? String(stayDoc.tenantId._id) : String(stayDoc.tenantId || "");
+          const stayUser =
+            isPopulatedUser(stayDoc.userId)
+              ? stayDoc.userId
+              : isPopulatedUser(stayDoc.tenantId)
+              ? stayDoc.tenantId
+              : userMap.get(stayTenantIdStr) || null;
+          if (!stayUser) return bed;
+
           matchedStayIds.add(String(stayDoc._id));
           if (stayDoc.reservationId) matchedResIds.add(String(stayDoc.reservationId));
-          const stayTenantIdStr = stayDoc.tenantId?._id ? String(stayDoc.tenantId._id) : String(stayDoc.tenantId || "");
           if (stayTenantIdStr) matchedUserIds.add(stayTenantIdStr);
-          const stayUser =
-            stayDoc.userId && typeof stayDoc.userId === "object"
-              ? stayDoc.userId
-              : stayDoc.tenantId && typeof stayDoc.tenantId === "object"
-              ? stayDoc.tenantId
-              : userMap.get(String(stayDoc.userId || stayDoc.tenantId)) || null;
 
           let name = null;
           if (stayUser) {

@@ -554,6 +554,50 @@ export default function RoomConfigModal({
     });
   }
 
+  // Private Room Occupant Calculation
+  const privateOccupiedBed = bedsArray.find((b) => {
+    const st = getBedStatus(b);
+    return (
+      ["occupied", "reserved", "locked"].includes(st) ||
+      b.available === false ||
+      Boolean(b.occupiedBy?.userId) ||
+      Boolean(b.occupiedBy?.name) ||
+      Boolean(b.occupiedBy?.fullName) ||
+      Boolean(b.tenantName) ||
+      Boolean(b.userName)
+    );
+  }) || (bedsArray.length > 0 ? bedsArray[0] : null);
+
+  const isRoomOccupied = Boolean(
+    (privateOccupiedBed && (
+      ["occupied", "reserved", "locked"].includes(getBedStatus(privateOccupiedBed)) ||
+      privateOccupiedBed.available === false ||
+      Boolean(privateOccupiedBed.occupiedBy?.userId) ||
+      Boolean(privateOccupiedBed.occupiedBy?.name) ||
+      Boolean(privateOccupiedBed.occupiedBy?.fullName) ||
+      Boolean(privateOccupiedBed.tenantName) ||
+      Boolean(privateOccupiedBed.userName)
+    )) ||
+    (Number(draftRoom.currentOccupancy || 0) > 0)
+  );
+
+  const privateOccupant = privateOccupiedBed?.occupiedBy || draftRoom.occupiedBy || {};
+  const privateOccupantName =
+    privateOccupant.name ||
+    privateOccupant.fullName ||
+    privateOccupant.tenantName ||
+    privateOccupant.userName ||
+    privateOccupiedBed?.userName ||
+    privateOccupiedBed?.tenantName ||
+    (privateOccupant.firstName || privateOccupant.lastName
+      ? `${privateOccupant.firstName || ""} ${privateOccupant.lastName || ""}`.trim()
+      : null);
+
+  const privateBedStatus = privateOccupiedBed
+    ? getBedStatus(privateOccupiedBed)
+    : (isRoomOccupied ? "occupied" : "available");
+  const normPrivateStatus = String(privateBedStatus || "").toLowerCase();
+
   const standardRates = STANDARD_ROOM_RATES[roomType] || { basePrice: 15000, shortTermRate: 16000 };
   const currentBasePrice = standardRates.basePrice;
   const discountPercent =
@@ -793,7 +837,7 @@ export default function RoomConfigModal({
                 </div>
                 <div className="info-tile">
                   <span className="info-tile__label">Total Capacity</span>
-                  <span className="info-tile__value">{draftRoom.capacity} pax ({draftRoom.beds?.length || 0} beds)</span>
+                  <span className="info-tile__value">{isPrivate ? "1 pax (Entire Room)" : `${draftRoom.capacity} pax (${draftRoom.beds?.length || 0} beds)`}</span>
                 </div>
                 <div className="info-tile">
                   <span className="info-tile__label">Base Price</span>
@@ -983,8 +1027,109 @@ export default function RoomConfigModal({
             )}
           </div>
 
-          {/* Section: Bed Configuration (Bunk Pair Groupings) */}
-          {!isPrivate && (
+          {/* Section: Bed / Occupancy Configuration */}
+          {isPrivate ? (
+            <div className="rfm-section">
+              <div className="bed-config-section__header">
+                <div className="rfm-section-label" style={{ marginBottom: 0 }}>
+                  <User size={13} />
+                  Room Occupant Details
+                  <span className={`bed-count-pill ${isRoomOccupied ? "bed-count-pill--full" : ""}`}>
+                    {isRoomOccupied ? "Occupied" : "Vacant"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Unified Private Room Occupant Card */}
+              {isRoomOccupied ? (
+                <div className="p-3.5 rounded-lg border border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
+                        normPrivateStatus === "reserved" || normPrivateStatus === "locked"
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                          : "bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300"
+                      }`}
+                    >
+                      {privateOccupantName ? privateOccupantName.charAt(0).toUpperCase() : <User size={18} />}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm text-foreground truncate">
+                          {privateOccupantName || (normPrivateStatus === "reserved" ? "Reserved Tenant" : "Assigned Tenant")}
+                        </span>
+                        <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-transparent flex items-center gap-1.5">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              normPrivateStatus === "reserved" || normPrivateStatus === "locked"
+                                ? "bg-amber-500"
+                                : "bg-rose-500"
+                            }`}
+                          />
+                          <span
+                            className={
+                              normPrivateStatus === "reserved" || normPrivateStatus === "locked"
+                                ? "text-amber-700 dark:text-amber-400 font-medium"
+                                : "text-rose-700 dark:text-rose-400 font-semibold"
+                            }
+                          >
+                            {normPrivateStatus === "reserved"
+                              ? "Reserved"
+                              : normPrivateStatus === "locked"
+                              ? "Payment Pending"
+                              : "Occupied"}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-3 mt-1 flex-wrap">
+                        <span>Private Room Tenant</span>
+                        {privateOccupant.email && <span>• {privateOccupant.email}</span>}
+                        {privateOccupant.phone && <span>• {privateOccupant.phone}</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm shrink-0 inline-flex items-center gap-1.5 self-start sm:self-center"
+                    onClick={() =>
+                      handleOpenOccupantDetails(
+                        privateOccupiedBed || {
+                          id: "room-private",
+                          position: "single",
+                          status: normPrivateStatus,
+                          occupiedBy: privateOccupant,
+                        }
+                      )
+                    }
+                    title="View full tenant profile and contract details"
+                  >
+                    <User size={13} />
+                    <span>View Tenant Profile</span>
+                    <ExternalLink size={12} className="text-muted-foreground" />
+                  </button>
+                </div>
+              ) : (
+                /* Clean Vacant State Card */
+                <div className="p-3.5 rounded-lg border border-border bg-card flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 shrink-0">
+                      <Bed size={18} />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm text-foreground">Room is Available</div>
+                      <div className="text-xs text-muted-foreground">
+                        This private room currently has no assigned tenant.
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-transparent text-emerald-700 dark:text-emerald-400 shrink-0">
+                    Available
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : (
             <div className="rfm-section">
               <div className="bed-config-section__header">
                 <div className="rfm-section-label" style={{ marginBottom: 0 }}>
