@@ -1,3 +1,9 @@
+const safeTransferText = (value, fallback = "") => {
+  const label = typeof value === "object" ? value?.name || value?.roomNumber || value?.code || value?.position : value;
+  return typeof label === "string" && !/^[a-f0-9]{24}$/i.test(label) ? label : fallback;
+};
+
+import { getRoomTransferError } from "../../../shared/utils/roomTransferErrors";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRooms } from "../../../shared/hooks/queries/useRooms";
@@ -26,6 +32,11 @@ const fmtDate = (value) =>
         day: "numeric",
       })
     : "—";
+
+const fmtTransferDate = value => {
+  const day = toDateInputValue(value);
+  return day ? new Date(`${day}T12:00:00+08:00`).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric" }) : "Date not specified";
+};
 
 const fmtMoney = (value) =>
   typeof value === "number"
@@ -613,7 +624,7 @@ export function TransferTenantModal({
     );
     const now = new Date();
     setEffectiveTransferTime(
-      `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+      new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(now),
     );
   }, [open, transferRequest]);
 
@@ -631,15 +642,15 @@ export function TransferTenantModal({
   // selector below adapt to the DESTINATION room type.
   const targetRooms = useMemo(
     () =>
-      rooms.filter(
-        (r) => String(r._id || r.id) !== String(tenant?.roomId),
+      (Array.isArray(rooms) ? rooms : []).filter(
+        (r) => String(r._id || r.id) !== String(tenant?.roomId?._id || tenant?.roomId),
       ),
     [rooms, tenant?.roomId],
   );
   const selectedRoom = targetRooms.find(
     (r) => String(r._id || r.id) === String(roomId),
   );
-  const roomBeds = selectedRoom?.beds || [];
+  const roomBeds = Array.isArray(selectedRoom?.beds) ? selectedRoom.beds : [];
   // Bed selection is required for every NON-private destination room — a
   // private room has no bed to pick. This mirrors the backend canonical rule
   // (roomRequiresIndividualBed in reservationContractEligibilityService.js:
@@ -758,8 +769,8 @@ export function TransferTenantModal({
         type: "transfer",
         tenantName: tenant?.tenantName || "",
         branch: detail?.basicInfo?.branch || tenant?.branch || "",
-        fromRoom: preview.fromRoom?.name || tenant?.room || "",
-        fromBed: formatBedPosition(tenant?.bed) || "",
+        fromRoom: preview.fromRoom?.name || safeTransferText(tenant?.room, "Room"),
+        fromBed: formatBedPosition(safeTransferText(tenant?.bed)) || "",
         toRoom: preview.toRoom?.name || selectedRoom?.name || selectedRoom?.roomNumber || "",
         toBed: selectedBedLabel,
         effectiveDate: preview.effectiveTransferDate || effectiveTransferDate,
@@ -825,7 +836,7 @@ export function TransferTenantModal({
       );
     } catch (err) {
       console.error("Prepare Room Transfer Addendum failed:", err);
-      showNotification(err?.message || "Failed to prepare the Room Transfer Addendum.", "error");
+      showNotification(getRoomTransferError(err, "The Room Transfer Addendum could not be prepared. Review the transfer details and try again."), "error");
     } finally {
       setAddendumLoading(false);
     }
@@ -914,7 +925,7 @@ export function TransferTenantModal({
           Tenant preference: {prettyRoomType(transferRequest.preferredRoomType)}
           {transferRequest.preferredRoom?.name ? ` · ${transferRequest.preferredRoom.name}` : ""}
           {transferRequest.preferredTransferDate
-            ? ` · ${new Date(transferRequest.preferredTransferDate).toLocaleDateString("en-PH")}`
+            ? ` · ${fmtTransferDate(transferRequest.preferredTransferDate)}`
             : ""}. Confirm a valid destination below using the normal availability rules.
         </div>
       ) : null}
@@ -945,7 +956,7 @@ export function TransferTenantModal({
               <span>Current Assignment</span>
               <input
                 type="text"
-                value={`${tenant?.room || "Unknown room"} • ${formatBedPosition(tenant?.bed) || "No bed"}`}
+                value={`${safeTransferText(tenant?.room, "Unknown room")} • ${formatBedPosition(safeTransferText(tenant?.bed)) || "No bed"}`}
                 readOnly
               />
             </label>
@@ -1127,8 +1138,8 @@ export function TransferTenantModal({
             <div className="twm-transfer-journey">
               <div className="twm-transfer-journey__side">
                 <span className="twm-transfer-journey__tag">Current Assignment</span>
-                <span className="twm-transfer-journey__room">{tenant?.room || "—"}</span>
-                <span className="twm-transfer-journey__bed">{formatBedPosition(tenant?.bed) || "No bed"}</span>
+                <span className="twm-transfer-journey__room">{safeTransferText(tenant?.room, "Room")}</span>
+                <span className="twm-transfer-journey__bed">{formatBedPosition(safeTransferText(tenant?.bed)) || "No bed"}</span>
               </div>
               <div className="twm-transfer-journey__arrow-wrap">
                 <div className="twm-transfer-journey__arrow-circle">
@@ -1162,7 +1173,7 @@ export function TransferTenantModal({
                 <div className="twm-review-spec-item" style={{ textAlign: "right" }}>
                   <span className="twm-review-spec-label">Effective Date &amp; Time</span>
                   <span className="twm-review-spec-value">
-                    {fmtDate(effectiveTransferDate)}
+                    {fmtTransferDate(effectiveTransferDate)}
                     {effectiveTransferTime ? ` · ${effectiveTransferTime}` : ""}
                   </span>
                 </div>
@@ -1389,8 +1400,8 @@ export function TransferTenantModal({
                   Amends room &amp; rent for the existing lease. Original lease dates ({(() => {
                     const origStart = preparedAddendum?.leaseStartDate || preview?.leaseStartDate || detail?.basicInfo?.leaseStartDate || tenant?.leaseStartDate;
                     const origEnd = preparedAddendum?.leaseEndDate || preview?.leaseEndDate || detail?.basicInfo?.leaseEndDate || tenant?.leaseEndDate;
-                    return origStart || origEnd ? `${fmtDate(origStart)} → ${fmtDate(origEnd)}` : "active term";
-                  })()}) remain unchanged &mdash; does not start a new lease or reset the term. Old room → New room ({tenant?.room || "—"} → {selectedRoom?.name || selectedRoom?.roomNumber || "—"}), Old rent → New rent ({fmtMoney(preview?.rent?.sourceEffectiveRate ?? currentPrice)}/mo → {fmtMoney(preview?.rent?.destinationApprovedRate ?? newPrice)}/mo).
+                    return origStart || origEnd ? `${fmtTransferDate(origStart)} → ${fmtTransferDate(origEnd)}` : "active term";
+                  })()}) remain unchanged &mdash; does not start a new lease or reset the term. Old room → New room ({safeTransferText(tenant?.room, "Room")} → {selectedRoom?.name || selectedRoom?.roomNumber || "—"}), Old rent → New rent ({fmtMoney(preview?.rent?.sourceEffectiveRate ?? currentPrice)}/mo → {fmtMoney(preview?.rent?.destinationApprovedRate ?? newPrice)}/mo).
                 </span>
               </div>
               <button

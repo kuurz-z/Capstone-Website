@@ -39,6 +39,7 @@ const bedSnapshotSchema = new mongoose.Schema(
 
 const tenantTransferRequestSchema = new mongoose.Schema(
   {
+    clientRequestId: { type: String, maxlength: 80 },
     tenantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -98,6 +99,8 @@ const tenantTransferRequestSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+tenantTransferRequestSchema.index({ tenantId: 1, clientRequestId: 1 }, { unique: true, partialFilterExpression: { clientRequestId: { $type: "string" } }, name: "unique_tenant_transfer_submission" });
 
 tenantTransferRequestSchema.index({ tenantId: 1, submittedAt: -1 });
 tenantTransferRequestSchema.index({ reservationId: 1, submittedAt: -1 });

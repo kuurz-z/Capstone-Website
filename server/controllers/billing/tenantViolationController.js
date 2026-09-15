@@ -1,3 +1,4 @@
+import { createExclusiveTenancyRecord } from "../../services/tenancyConflictTransaction.js";
 /**
  * ============================================================================
  * TENANT VIOLATION CONTROLLER (Spec §23 & §22)
@@ -1115,7 +1116,7 @@ export const createTerminationCase = async (req, res, next) => {
       status: "open",
     });
 
-    await review.save();
+    await createExclusiveTenancyRecord(targetReservationId, session => review.save({ session }));
 
     if (linkedBill) {
       linkedBill.overdueEscalatedToReviewId = review._id;

@@ -161,6 +161,8 @@ const scheduledRoomTransferSchema = new mongoose.Schema(
     // The canonical settlement figures computed AT execution. Written by the
     // executor (Phase 2G), null until then.
     executedSettlement: { type: mongoose.Schema.Types.Mixed, default: null },
+    settlementRevision: { type: Number, default: 0 },
+    sourceStayId: { type: mongoose.Schema.Types.ObjectId, ref: "Stay", default: null },
     settlementBillId: { type: mongoose.Schema.Types.ObjectId, ref: "Bill", default: null },
     // Append-only transfer-specific financial review trail. It preserves the
     // paid Bill and records why an admin must coordinate a manual adjustment.
@@ -214,6 +216,7 @@ const scheduledRoomTransferSchema = new mongoose.Schema(
     // and partial-unique index do not change.
     executionToken: { type: String, default: null, select: false },
     executionStartedAt: { type: Date, default: null },
+    executionKind: { type: String, enum: ["completion", "cancellation", "reschedule", null], default: null },
 
     scheduledBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     scheduledAt: { type: Date, default: Date.now },

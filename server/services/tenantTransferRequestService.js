@@ -1,3 +1,4 @@
+import { getRoomTransferError } from "../utils/roomTransferErrors.js";
 import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
 import MoveOutClearance from "../models/MoveOutClearance.js";
@@ -6,6 +7,7 @@ import Room from "../models/Room.js";
 import ScheduledRoomTransfer from "../models/ScheduledRoomTransfer.js";
 import TerminationReview from "../models/TerminationReview.js";
 import TenantTransferRequest from "../models/TenantTransferRequest.js";
+import Stay from "../models/Stay.js";
 import User from "../models/User.js";
 import { OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES } from "../models/ScheduledRoomTransfer.js";
 import {
@@ -257,12 +259,12 @@ export async function resolveTenantTransferLifecycleRecords({
 
 export function tenantTransferStatusLabel(status) {
   return {
-    pending: "Pending Review",
-    scheduled: "Scheduled",
+    pending: "Pending Admin Review",
+    scheduled: "Transfer Scheduled",
     ready_for_transfer: "Ready for Transfer",
-    awaiting_settlement: "Settlement Required",
-    action_required: "Action Required",
-    completed: "Completed",
+    awaiting_settlement: "Payment Required",
+    action_required: "Administration Review Required",
+    completed: "Transfer Completed",
     declined: "Declined",
     cancelled: "Cancelled",
   }[status] || "";
@@ -273,10 +275,10 @@ export async function serializeTenantScheduledTransfer(scheduledTransfer) {
   const doc = typeof scheduledTransfer.toObject === "function"
     ? scheduledTransfer.toObject()
     : scheduledTransfer;
-  const destinationRoom = doc.destinationRoomId && typeof doc.destinationRoomId === "object"
+  const destinationRoom = doc.destinationRoomId && typeof doc.destinationRoomId === "object" && (doc.destinationRoomId.name || doc.destinationRoomId.roomNumber)
     ? doc.destinationRoomId
     : doc.destinationRoomId
-      ? await Room.findById(doc.destinationRoomId).select("name roomNumber type branch").lean()
+      ? await Room.findById(doc.destinationRoomId).select("name roomNumber type branch beds").lean()
       : null;
   const canonical = await serializeScheduledRoomTransfer(doc);
   const status = canonical.status;
@@ -293,6 +295,10 @@ export async function serializeTenantScheduledTransfer(scheduledTransfer) {
     effectiveTransferTimeMinutes: minutes,
     effectiveTransferTimeLabel: `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`,
     destinationRoom: safeRoom(destinationRoom),
+    destinationBed: doc.destinationNeedsBed ? (() => {
+      const bed = destinationRoom?.beds?.find(b => String(b.id || b._id) === String(doc.destinationBedId));
+      return { label: bed?.code || bed?.position || "Assigned bed" };
+    })() : null,
     settlement: {
       required: canonical.transferBalance?.hasBill === true,
       status: canonical.transferBalance?.paymentState || "none",
@@ -305,7 +311,7 @@ export async function serializeTenantScheduledTransfer(scheduledTransfer) {
     tenantGuidance: status === "awaiting_settlement"
       ? "A room-transfer settlement is still due. Open Billing to review and settle the balance before the transfer can complete."
       : status === "ready_for_transfer"
-        ? "Your transfer is ready. Lilycrest Administration will complete the room change."
+        ? "Administration can now prepare the final settlement and complete your transfer. Additional payment may be required; you remain in your current room until completion."
         : status === "action_required"
           ? (canonical.actionRequiredMessage || "Lilycrest Administration needs to review this transfer before it can complete.")
           : status === "scheduled"
@@ -333,10 +339,13 @@ export async function serializeTenantTransferRequest(
   const preferredRoom = doc.preferredRoomId && typeof doc.preferredRoomId === "object"
     ? doc.preferredRoomId
     : doc.preferredRoomId
-      ? await Room.findById(doc.preferredRoomId).select("name roomNumber type branch").lean()
+      ? await Room.findById(doc.preferredRoomId).select("name roomNumber type branch beds").lean()
       : null;
   const serialized = {
     id: id(doc),
+    clientRequestId: doc.clientRequestId || null,
+    currentRoom: doc.currentRoomSnapshot || null,
+    currentBed: doc.currentBedSnapshot || null,
     reservationId: id(doc.reservationId),
     stayId: id(doc.stayId),
     status: effectiveStatus,
@@ -403,12 +412,27 @@ export async function getTenantRoomTransferPreferences(tenantId) {
 }
 
 export async function getTenantTransferLifecycle(tenantId) {
-  const { request, scheduledTransfer } = await resolveTenantTransferLifecycleRecords({ tenantId });
+  const { request, scheduledTransfer } = await resolveTenantTransferLifecycleRecords({ tenantId, reconcile: false });
 
-  if (!request && !scheduledTransfer) {
-    return { status: null, statusLabel: "", request: null, scheduledRoomTransfer: null };
+
+
+  let eligibility = { canRequest: false, currentRoom: null, currentBed: null, eligibilityReason: "" };
+  try {
+    const stay = await resolveCurrentStayForTenant(tenantId);
+    const reservation = stay ? await Reservation.findById(stay.reservationId).lean() : null;
+    const room = stay ? await Room.findById(stay.roomId).lean() : null;
+    const user = await User.findById(tenantId).lean();
+    assertTransferAssignment(user, reservation, stay, room);
+    const { assertNoRoomTransferLifecycleConflict } = await import("./scheduledRoomTransferService.js");
+    await assertNoRoomTransferLifecycleConflict(reservation._id);
+    const contract = await resolveAuthoritativeCurrentContract({ reservationId: reservation._id, tenantId });
+    if (!isValidTransferPredecessor(contract)) throw serviceError("Your lease details need administration's review before requesting a room transfer.", "ROOM_TRANSFER_PREDECESSOR_NOT_ACTIVE", 409);
+    const bed = room.beds?.find(b => String(b.id || b._id) === String(stay.bedId));
+    eligibility = { canRequest: !isOpenSchedule(scheduledTransfer) && !OPEN_REQUEST_STATUSES.includes(request?.status), currentRoom: safeRoom(room), currentBed: room.type === "private" ? null : { label: bed?.code || bed?.position || "Assigned bed" }, leaseEndDate: stay.leaseEndDate, eligibilityReason: "" };
+  } catch (error) {
+    if (!error.statusCode) throw error;
+    eligibility.eligibilityReason = getRoomTransferError(error);
   }
-
   const tenantScheduledTransfer = await serializeTenantScheduledTransfer(scheduledTransfer);
   const status = tenantScheduledTransfer?.status || deriveTenantTransferStatus(request, scheduledTransfer);
   const linkedLifecycleSchedule = request && scheduledTransfer &&
@@ -416,6 +440,7 @@ export async function getTenantTransferLifecycle(tenantId) {
     ? scheduledTransfer
     : null;
   return {
+    ...eligibility,
     status,
     statusLabel: tenantTransferStatusLabel(status),
     request: request
@@ -425,7 +450,26 @@ export async function getTenantTransferLifecycle(tenantId) {
   };
 }
 
+function assertTransferAssignment(user, reservation, stay, room) {
+  const today = getManilaToday();
+  const start = toManilaStartOfDay(stay?.leaseStartDate), end = toManilaStartOfDay(stay?.leaseEndDate);
+  const bed = room?.beds?.find(b => String(b.id || b._id) === String(stay?.bedId));
+  if (!user || user.tenantStatus !== "active" || !reservation || !hasReservationStatus(reservation.status, "moveIn") ||
+    !stay || stay.endedAt || !["active", "ending_soon"].includes(stay.status) || !start || !end || start.isAfter(today) || end.isBefore(today) ||
+    !room || String(reservation.roomId?._id || reservation.roomId) !== String(stay.roomId) ||
+    (reservation.currentStayId && String(reservation.currentStayId) !== String(stay._id)) ||
+    (room.type !== "private" && (!bed || bed.status !== "occupied" || String(bed.occupiedBy?.reservationId || "") !== String(reservation._id) || String(reservation.selectedBed?.id || "") !== String(stay.bedId)))) {
+    throw serviceError("We could not confirm your current room assignment and lease. Ask administration to review your stay details before requesting a transfer.", "CURRENT_STAY_INVALID", 409);
+  }
+}
+
 export async function createTenantTransferRequest({ tenantId, payload = {} }) {
+  const clientRequestId = payload.clientRequestId;
+  if (clientRequestId != null && (typeof clientRequestId !== "string" || !/^[a-zA-Z0-9_-]{16,80}$/.test(clientRequestId))) throw serviceError("Refresh Room Transfer and try again.", "INVALID_REQUEST_KEY");
+  if (clientRequestId) {
+    const previous = await TenantTransferRequest.findOne({ tenantId, clientRequestId });
+    if (previous) return serializeTenantTransferRequest(previous);
+  }
   const user = await User.findById(tenantId)
     .select("firstName lastName name fullName email role tenantStatus branch")
     .lean();
@@ -492,7 +536,7 @@ export async function createTenantTransferRequest({ tenantId, payload = {} }) {
   }
   if (existingRequest && OPEN_REQUEST_STATUSES.includes(existingRequest.status)) {
     throw serviceError(
-      "You already have an open room transfer request.",
+      "You already have an active room transfer request. Please wait for it to be resolved before submitting another request.",
       "OPEN_TRANSFER_REQUEST_EXISTS",
       409,
     );
@@ -579,6 +623,7 @@ export async function createTenantTransferRequest({ tenantId, payload = {} }) {
       bunkBlock: stay.bunkBlock || bed?.bunkBlock || null,
       code: stay.bedCode || bed?.code || null,
     },
+    ...(clientRequestId ? { clientRequestId } : {}),
     preferredRoomType,
     preferredRoomId: preferredRoom?._id || null,
     preferredTransferDate,
@@ -588,11 +633,33 @@ export async function createTenantTransferRequest({ tenantId, payload = {} }) {
 
   let request;
   try {
-    request = await TenantTransferRequest.create(requestPayload);
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        // All conflicting tenancy writers touch Reservation. Retry reads current
+        // state after a competing extension/departure wins the write conflict.
+        const liveReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, { $inc: { renewalPreparationVersion: 1 } }, { new: true, session });
+        const liveStay = await Stay.findById(stay._id).session(session);
+        const liveUser = await User.findById(tenantId).session(session);
+        const liveRoom = await Room.findById(stay.roomId).session(session);
+        assertTransferAssignment(liveUser, liveReservation, liveStay, liveRoom);
+        const { assertNoRoomTransferLifecycleConflict } = await import("./scheduledRoomTransferService.js");
+        await assertNoRoomTransferLifecycleConflict(reservation._id, { session });
+        if (liveReservation.pendingExtensionRequestId) throw serviceError("You have an active Extend Stay request. Wait for it to be resolved or contact administration before requesting a room transfer.", "EXTENSION_PENDING", 409);
+        if (await MoveOutClearance.exists({ reservationId: reservation._id }).session(session)) throw serviceError("Your move-out process has started. Contact administration before requesting a transfer.", "ROOM_TRANSFER_MOVE_OUT_CONFLICT", 409);
+        if (await TerminationReview.exists({ reservationId: reservation._id, $or: [{ status: { $in: ["open", "under_review", "pending_response"] } }, { executionStatus: "pending_execution" }] }).session(session)) throw serviceError("Your stay is under review. Contact administration for assistance.", "ROOM_TRANSFER_TERMINATION_CONFLICT", 409);
+        if (await ScheduledRoomTransfer.exists({ tenantId, status: { $in: [...OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES] }, isArchived: { $ne: true } }).session(session)) throw serviceError("Your room transfer is already scheduled. Open its details or contact administration for changes.", "SCHEDULED_TRANSFER_ALREADY_EXISTS", 409);
+        [request] = await TenantTransferRequest.create([requestPayload], { session });
+      });
+    } finally { await session.endSession(); }
   } catch (error) {
     if (error?.code === 11000) {
+      if (clientRequestId) {
+        const previous = await TenantTransferRequest.findOne({ tenantId, clientRequestId });
+        if (previous) return serializeTenantTransferRequest(previous);
+      }
       throw serviceError(
-        "You already have an open room transfer request.",
+        "You already have an active room transfer request. Please wait for it to be resolved before submitting another request.",
         "OPEN_TRANSFER_REQUEST_EXISTS",
         409,
       );
@@ -647,7 +714,7 @@ export async function cancelTenantTransferRequest({ requestId, tenantId }) {
     }
     if (owned.status !== "scheduled" && !owned.scheduledRoomTransferId) {
       throw serviceError(
-        "Only a pending room transfer request can be cancelled.",
+        "This room transfer can no longer be cancelled because processing has already started. Please contact Lilycrest administration if you need assistance.",
         "TRANSFER_REQUEST_NOT_PENDING",
         409,
       );
@@ -796,7 +863,7 @@ export async function getAdminTransferLifecycleForReservation(reservationId) {
   if (TenantTransferRequest.db?.readyState === 0) {
     return { request: null, scheduledTransfer: null };
   }
-  const records = await resolveTenantTransferLifecycleRecords({ reservationId });
+  const records = await resolveTenantTransferLifecycleRecords({ reservationId, reconcile: false });
   return {
     request: records.request
       ? await serializeTenantTransferRequest(records.request, {
@@ -825,6 +892,7 @@ export async function declineTenantTransferRequest({
   if (!mongoose.isValidObjectId(requestId)) {
     throw serviceError("Room transfer request not found.", "TRANSFER_REQUEST_NOT_FOUND", 404);
   }
+  if (!cleanText(declineReason, 1000)) throw serviceError("Enter a short reason so the tenant understands why the request was declined.", "DECLINE_REASON_REQUIRED");
   const branchScope = actorRole === "branch_admin" ? { branch: actorBranch } : {};
   const request = await TenantTransferRequest.findOneAndUpdate(
     { _id: requestId, status: "pending", scheduledRoomTransferId: null, ...branchScope },
@@ -974,7 +1042,7 @@ export async function syncRequestFromScheduledTransfer(
     await notify.roomTransferLifecycleOnce(
       tenantId,
       "Room Transfer Rescheduled",
-      "Your room transfer schedule was updated. Open My Stays to view the new date and time.",
+      "Your room transfer schedule was updated. Open Room Transfer to view the new date and time.",
       `room_transfer_rescheduled:${scheduledId}:${historySize}`,
       { entityId: String(record.reservationId), event: "rescheduled" },
     );

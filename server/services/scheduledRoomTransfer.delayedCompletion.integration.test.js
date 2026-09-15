@@ -23,10 +23,10 @@ import mongoose from "mongoose";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, jest } from "@jest/globals";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 
-const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
+const mockGenerate = jest.fn(async ({ contractId, actorId, session = null }) => {
   const { Contract } = await import("../models/index.js");
   const { transitionContract } = await import("./contractService.js");
-  const c = await Contract.findById(contractId);
+  const c = await Contract.findById(contractId).session(session);
   c.preparedDocuments = c.preparedDocuments || [];
   c.preparedDocuments.push({
     documentType: "prepared", version: 1, storageProvider: "local", storageKey: "t/p.pdf",
@@ -453,7 +453,7 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
     expect(transferBills).toHaveLength(1);
   });
 
-  test("delayed completion after a PARTIAL payment whose recompute is higher -> Bill increases, payment is preserved, remaining balance is explicit", async () => {
+  test("delayed completion after a PARTIAL payment whose recompute is higher -> paid invoice stays unchanged and the difference requires review", async () => {
     const { res, roomB, actorId } = await seed();
     const { schedId } = await scheduleThenBackdate({ res, roomB, actorId, daysAgo: 10 });
 
@@ -485,7 +485,7 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
     // deposit) exceeds the partially-paid Bill total.
     const r2 = await completeRoomTransfer({ reservationId: res._id, payload: {}, actorId });
     expect(r2.outcome).toBe("action_required");
-    expect(r2.reason).toBe("ADDITIONAL_BALANCE_DUE");
+    expect(r2.reason).toBe("FINANCIAL_ADJUSTMENT_REQUIRED");
 
     // No cutover.
     const stay = await Stay.findOne({ reservationId: res._id }).lean();
@@ -498,28 +498,26 @@ describe("completeRoomTransfer — delayed completion settles as of TODAY", () =
     // same transfer Bill so the remaining amount can be paid normally.
     const billAfter = await Bill.findById(billId).lean();
     expect(Number(billAfter.paidAmount)).toBe(smallPayment);
-    expect(Number(billAfter.totalAmount)).toBeGreaterThan(originalTotal);
+    expect(Number(billAfter.totalAmount)).toBe(originalTotal);
     expect(billAfter.charges.rent).toBe(originalCharges.rent);
-    expect(billAfter.charges.securityDeposit).toBeGreaterThan(originalCharges.securityDeposit);
+    expect(billAfter.charges.securityDeposit).toBe(originalCharges.securityDeposit);
     expect(Number(billAfter.remainingAmount)).toBeCloseTo(
       Number(billAfter.totalAmount) - smallPayment,
       2,
     );
-    expect(Number(billAfter.transferSnapshot.upwardAdjustmentFrom)).toBe(originalTotal);
-    expect(Number(billAfter.transferSnapshot.upwardAdjustmentTo)).toBe(Number(billAfter.totalAmount));
-    expect(r2.message).toContain(Number(billAfter.totalAmount).toFixed(2));
-    expect(r2.message).toContain(smallPayment.toFixed(2));
+    expect(billAfter.transferSnapshot.upwardAdjustmentFrom).toBeNull();
+    expect(r2.message).toMatch(/preserved/);
 
     const audit = sched.financialAdjustmentHistory.at(-1);
-    expect(audit.reason).toBe("ADDITIONAL_BALANCE_DUE");
+    expect(audit.reason).toBe("FINANCIAL_ADJUSTMENT_REQUIRED");
     expect(String(audit.settlementBillId)).toBe(String(billId));
     expect(String(audit.tenantId)).toBe(String(res.userId));
     expect(String(audit.reservationId)).toBe(String(res._id));
     expect(String(audit.scheduledRoomTransferId)).toBe(String(schedId));
     expect(audit.amountPaid).toBe(smallPayment);
     expect(audit.previousRequiredAmount).toBe(originalTotal);
-    expect(audit.recomputedRequiredAmount).toBe(Number(billAfter.totalAmount));
-    expect(audit.difference).toBeCloseTo(Number(billAfter.totalAmount) - originalTotal, 2);
+    expect(audit.recomputedRequiredAmount).toBeGreaterThan(originalTotal);
+    expect(audit.difference).toBeCloseTo(audit.recomputedRequiredAmount - originalTotal, 2);
     expect(audit.recordedAt).toBeTruthy();
   });
 

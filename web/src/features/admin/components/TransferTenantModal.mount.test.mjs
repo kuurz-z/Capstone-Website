@@ -49,3 +49,19 @@ test("transfer modal uses the resolved preview rent and can reopen without crash
   mounted.rerender(element());
   assert.ok(getByRole(document.body, "heading", { name: "Transfer Tenant" }));
 });
+
+for (const [name, tenant, detail, request] of [
+  ['missing optional fields', { reservationId: 'test-reservation' }, {}, {}],
+  ['private room', { reservationId: 'test-reservation', roomId: 'source', room: 'Room 201', roomType: 'private' }, {}, {}],
+  ['populated bed and room', { reservationId: 'test-reservation', roomId: { _id: 'source' }, room: { name: 'Room 201' }, bed: { code: '201-A-L', position: 'lower' } }, {}, {}],
+  ['bed ID only', { reservationId: 'test-reservation', room: 'Room 201', bed: '507f1f77bcf86cd799439011' }, {}, {}],
+  ['legacy malformed optional dates', { reservationId: 'test-reservation', room: { roomNumber: '201' } }, {}, { preferredTransferDate: 'bad date' }],
+  ['new complete request', { reservationId: 'test-reservation', room: 'Room 201', bed: 'A-L' }, {}, { reason: 'Quieter room', preferredRoomType: 'double-sharing', preferredTransferDate: '2026-09-16' }],
+]) {
+  test(`transfer modal renders ${name} safely`, () => {
+    state.preview = { data: undefined, isFetching: false };
+    mounted = mount(React.createElement(TransferTenantModal, { open: true, tenant, detail, transferRequest: request, onClose() {}, onSubmit() { assert.fail('must not submit'); } }));
+    assert.ok(getByRole(document.body, 'heading', { name: 'Transfer Tenant' }));
+    assert.doesNotMatch(document.body.textContent, /\[object Object\]|undefined|Invalid Date|507f1f77bcf86cd799439011/);
+  });
+}

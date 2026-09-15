@@ -1,3 +1,4 @@
+import { getRoomTransferError } from "../utils/roomTransferErrors.js";
 import {
   cancelTenantTransferRequest,
   createTenantTransferRequest,
@@ -12,8 +13,8 @@ const actorTenantId = (req) => req.mobileTenant?._id || req.authUser?._id || nul
 
 const sendServiceError = (res, error, fallbackCode) =>
   res.status(error?.statusCode || 500).json({
-    error: error?.message || "Room transfer request failed.",
-    detail: error?.message || "Room transfer request failed.",
+    error: getRoomTransferError(error),
+    detail: getRoomTransferError(error),
     code: error?.code || fallbackCode,
   });
 

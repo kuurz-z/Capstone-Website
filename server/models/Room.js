@@ -517,6 +517,7 @@ roomSchema.statics.atomicIncreaseOccupancy = async function (roomId, session) {
   return this.findOneAndUpdate(
     {
       _id: roomId,
+      isArchived: { $ne: true },
       $expr: { $lt: ["$currentOccupancy", "$capacity"] },
     },
     [

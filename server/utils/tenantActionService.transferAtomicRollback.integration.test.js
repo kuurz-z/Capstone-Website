@@ -19,10 +19,10 @@ import mongoose from "mongoose";
 import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 
-const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
+const mockGenerate = jest.fn(async ({ contractId, actorId, session = null }) => {
   const { Contract } = await import("../models/index.js");
   const { transitionContract } = await import("../services/contractService.js");
-  const contract = await Contract.findById(contractId);
+  const contract = await Contract.findById(contractId).session(session);
   contract.preparedDocuments = contract.preparedDocuments || [];
   contract.preparedDocuments.push({
     documentType: "prepared", version: 1, storageProvider: "local",
@@ -35,9 +35,9 @@ const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
   contract.publicationStatus = "ready_for_resident";
   contract.tenantVisible = true;
   if (contract.status === "ready_for_generation") {
-    await transitionContract(contract, "generated", actorId, "prepared (test)");
+    await transitionContract(contract, "generated", actorId, "prepared (test)", session);
   } else {
-    await contract.save();
+    await contract.save(session ? { session } : undefined);
   }
   return { contract, document: contract.preparedDocuments.at(-1), previousStatus: "ready_for_generation", isRegeneration: false };
 });

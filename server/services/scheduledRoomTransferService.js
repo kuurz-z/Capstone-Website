@@ -1,3 +1,5 @@
+import { hasActiveTransferClaim, availableTransferClaimFilter } from "./roomTransferClaim.js";
+import { notify } from "./notifications/notificationService.js";
 /**
  * ============================================================================
  * SCHEDULED ROOM TRANSFER SERVICE
@@ -185,7 +187,7 @@ async function markPaidTransferCannotComplete(record, cause) {
   const reasonCode = cause?.code || "OPERATIONAL_VALIDATION_FAILED";
   const now = new Date();
   await ScheduledRoomTransfer.updateOne(
-    { _id: record._id, status: { $in: [...OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES] } },
+    { _id: record._id, executionToken: record.executionToken, status: { $in: [...OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES] } },
     {
       $set: {
         status: "action_required",
@@ -239,7 +241,7 @@ export function normalizeTransferTimeMinutes(value) {
 const err = (message, statusCode, code, extra = {}) =>
   Object.assign(new Error(message), { statusCode, code, ...extra });
 
-async function assertNoRoomTransferLifecycleConflict(reservationId, { session = null } = {}) {
+export async function assertNoRoomTransferLifecycleConflict(reservationId, { session = null } = {}) {
   if (await Reservation.exists({ _id: reservationId, pendingExtensionRequestId: { $ne: null } }).session(session)) {
     throw err('Review the pending stay extension request first.', 409, 'EXTENSION_PENDING');
   }
@@ -257,13 +259,11 @@ async function assertNoRoomTransferLifecycleConflict(reservationId, { session = 
     terminationQuery.session(session);
     stayIdsQuery.session(session);
   }
-  const [moveOut, termination, stays] = await Promise.all([
-    moveOutQuery,
-    terminationQuery,
-    stayIdsQuery,
-  ]);
+  const [moveOut, termination, stays] = session
+    ? [await moveOutQuery, await terminationQuery, await stayIdsQuery]
+    : await Promise.all([moveOutQuery, terminationQuery, stayIdsQuery]);
   const stayIds = stays.map((stay) => stay._id);
-  const renewalQuery = Stay.exists({ reservationId, previousStayId: { $in: stayIds } });
+  const renewalQuery = Stay.exists({ reservationId, previousStayId: { $in: stayIds }, status: { $in: ["upcoming", "active", "ending_soon"] }, leaseStartDate: { $gt: getManilaToday().toDate() } });
   if (session) renewalQuery.session(session);
   const renewal = stayIds.length ? await renewalQuery : null;
 
@@ -330,6 +330,8 @@ export async function applyScheduledTransferHold({
 }) {
   if (!session) throw new Error("applyScheduledTransferHold requires a transaction session");
 
+  const destination = await Room.findById(destinationRoomId).session(session);
+  if (!destination || destination.isArchived || !["private", "double-sharing", "quadruple-sharing"].includes(destination.type)) throw err("The selected room is no longer available. Choose another available room.", 409, "DESTINATION_UNAVAILABLE");
   const changesRoom = !sourceRoomId || String(sourceRoomId) !== String(destinationRoomId);
   if (changesRoom) {
     const incremented = await Room.atomicIncreaseOccupancy(destinationRoomId, session);
@@ -625,6 +627,11 @@ export async function scheduleRoomTransfer({ reservationId, payload = {}, actorI
   let created;
   try {
     await session.withTransaction(async () => {
+      await Reservation.updateOne({ _id: reservation._id }, { $inc: { renewalPreparationVersion: 1 } }, { session });
+      await assertNoRoomTransferLifecycleConflict(reservation._id, { session });
+      const liveReservation = await Reservation.findById(reservation._id).session(session);
+      const liveStay = await Stay.findById(activeStay._id).session(session);
+      if (!liveReservation || !liveStay || liveStay.endedAt || String(liveStay.roomId) !== String(activeStay.roomId) || String(liveStay.bedId) !== String(activeStay.bedId) || String(liveReservation.roomId) !== String(liveStay.roomId)) throw err("The tenant's current room assignment changed. Refresh the tenant details before scheduling.", 409, "TRANSFER_SOURCE_CHANGED");
       // Re-assert the "no open schedule" guard inside the txn.
       const raceOpen = await ScheduledRoomTransfer.findOne({
         reservationId: reservation._id,
@@ -654,6 +661,7 @@ export async function scheduleRoomTransfer({ reservationId, payload = {}, actorI
             reservationId: reservation._id,
             tenantId: reservation.userId?._id || reservation.userId,
             branch: targetRoom.branch,
+            sourceStayId: activeStay._id,
             sourceRoomId: activeStay.roomId,
             sourceBedId,
             destinationRoomId: targetRoom._id,
@@ -754,7 +762,7 @@ export async function rescheduleRoomTransfer({ reservationId, payload = {}, acto
   if (record.status === "executed") {
     throw err("This room transfer has already been completed.", 409, "TRANSFER_ALREADY_COMPLETED");
   }
-  if (record.executionToken) {
+  if (hasActiveTransferClaim(record)) {
     throw err("This room transfer is currently being completed and cannot be rescheduled.", 409, "TRANSFER_ALREADY_EXECUTING");
   }
 
@@ -813,19 +821,21 @@ export async function rescheduleRoomTransfer({ reservationId, payload = {}, acto
     {
       _id: record._id,
       status: { $in: [...OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES] },
-      executionToken: null,
+      ...availableTransferClaimFilter(),
     },
-    { $set: { executionToken: mutationToken, executionStartedAt: nowTs } },
+    { $set: { executionToken: mutationToken, executionKind: "reschedule", executionStartedAt: nowTs } },
     { new: true },
   ).select("+executionToken");
   if (!claimed) {
     throw err("This room transfer changed while it was being rescheduled.", 409, "TRANSFER_ALREADY_EXECUTING");
   }
 
+  const session = await mongoose.startSession();
   try {
+    await session.withTransaction(async () => {
     if (claimed.settlementBillId) {
-      const bill = await Bill.findById(claimed.settlementBillId).select("paidAmount status").lean();
-      if (bill && bill.status !== "voided" && Number(bill.paidAmount || 0) > 0) {
+      const bill = await Bill.findById(claimed.settlementBillId).select("paidAmount status").session(session).lean();
+      if (bill && (Number(bill.paidAmount || 0) > 0 || ["paid", "settled"].includes(bill.status))) {
         throw err(
           "A paid or partially paid transfer cannot be rescheduled automatically.",
           409,
@@ -834,13 +844,23 @@ export async function rescheduleRoomTransfer({ reservationId, payload = {}, acto
       }
     }
 
+    // Serialize a concurrent payment with rescheduling; only an unpaid bill
+    // can acquire this write, and a transaction retry repeats the paid guard.
+    if (claimed.settlementBillId) {
+      const lockedBill = await Bill.findOneAndUpdate({
+        _id: claimed.settlementBillId, paidAmount: { $lte: 0 },
+        status: { $nin: ["paid", "settled", "voided"] }, isArchived: { $ne: true },
+      }, { $inc: { __v: 1 } }, { session, new: true });
+      if (!lockedBill) throw err("The transfer bill changed. Review Billing before rescheduling.", 409, "ROOM_TRANSFER_SCHEDULED_BILL_INVALID");
+    }
+
     const addendum = claimed.addendumContractId
-      ? await Contract.findById(claimed.addendumContractId)
+      ? await Contract.findById(claimed.addendumContractId).session(session)
       : null;
     if (!addendum || addendum.isCurrent === true) {
       throw err("The Room Transfer Addendum is missing or already current.", 409, "ROOM_TRANSFER_ADDENDUM_NOT_RESCHEDULABLE");
     }
-    const hasAcknowledgement = Boolean(await ContractAcknowledgement.exists({ contractId: addendum._id }));
+    const hasAcknowledgement = Boolean(await ContractAcknowledgement.exists({ contractId: addendum._id }).session(session));
     const isSigned =
       hasAcknowledgement ||
       addendum.tenantSignatureStatus === "completed" ||
@@ -860,10 +880,12 @@ export async function rescheduleRoomTransfer({ reservationId, payload = {}, acto
       changedBy: actorId,
       reason: `Room Transfer rescheduled to ${newDate.format("YYYY-MM-DD")}; prepared document re-issued.`,
     });
-    await addendum.save();
+    await addendum.save({ session });
     const { generatePreparedContractPdf } = await import("./contractPdfService.js");
     await generatePreparedContractPdf({
       contractId: addendum._id,
+      session,
+      storageAttemptId: mutationToken,
       actorId,
       regenerationReason: `Room Transfer rescheduled to ${newDate.format("YYYY-MM-DD")}`,
     });
@@ -892,19 +914,20 @@ export async function rescheduleRoomTransfer({ reservationId, payload = {}, acto
           },
         },
       },
-      { new: true },
+      { new: true, session },
     );
     if (!updated) {
       throw err("The scheduled transfer changed before the reschedule could commit.", 409, "TRANSFER_STATE_CHANGED");
     }
     Object.assign(record, updated.toObject());
+    });
   } catch (e) {
     await ScheduledRoomTransfer.updateOne(
       { _id: record._id, executionToken: mutationToken },
       { $set: { executionToken: null, executionStartedAt: null } },
     );
     throw e;
-  }
+  } finally { await session.endSession(); }
 
   void intent;
   logger.info(
@@ -933,7 +956,28 @@ export async function rescheduleRoomTransfer({ reservationId, payload = {}, acto
  * @returns {Promise<import("mongoose").Document|null>} the Bill, or null when
  *   nothing is owed and no Bill exists.
  */
-async function upsertTransferSettlementBill({ record, reservation, preview, finalizedElectricity, asOfCutoverDay, actorId }) {
+export async function upsertTransferSettlementBill(options) {
+  const session = await mongoose.startSession();
+  let result;
+  try {
+    await session.withTransaction(async () => {
+      const record = await ScheduledRoomTransfer.findOneAndUpdate({
+        _id: options.record._id, status: { $in: [...OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES] },
+        executionToken: options.executionToken || null,
+      }, { $inc: { settlementRevision: 1 } }, { new: true, session });
+      if (!record) throw err("The transfer status changed. Refresh its details before trying again.", 409, "TRANSFER_CLAIM_LOST");
+      result = await writeTransferSettlementBill({ ...options, record, session });
+      if (result && String(record.settlementBillId || "") !== String(result._id)) {
+        record.settlementBillId = result._id;
+        await record.save({ session });
+      }
+    });
+    options.record.settlementBillId = result?._id || options.record.settlementBillId;
+    return result;
+  } finally { await session.endSession(); }
+}
+
+async function writeTransferSettlementBill({ record, reservation, preview, finalizedElectricity, asOfCutoverDay, actorId, session }) {
   const rentDue = roundMoney(Math.max(0, Number(preview?.rent?.adjustmentDue) || 0));
   const depositDue = roundMoney(Math.max(0, Number(preview?.deposit?.balanceDue) || 0));
   // Finalized source-room electricity (sub-metered branch) — settled on THIS
@@ -956,9 +1000,18 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
   const indexedCycleEnd = hasSameCycleMonthlyBill ? null : cycleEnd;
 
   let bill = record.settlementBillId
-    ? await Bill.findById(record.settlementBillId)
+    ? await Bill.findById(record.settlementBillId).session(session)
     : null;
-  if (bill && (bill.isArchived === true || bill.status === "voided")) bill = null;
+  if (!bill) bill = await Bill.findOne({ scheduledRoomTransferId: record._id }).session(session);
+  if (!bill) {
+    const linkedBillIds = await ScheduledRoomTransfer.distinct("settlementBillId", { reservationId: reservation._id }).session(session);
+    const orphan = await Bill.exists({ reservationId: reservation._id, billType: "transfer_settlement", "transferSnapshot.isScheduledTransferBalance": true, scheduledRoomTransferId: null, _id: { $nin: linkedBillIds.filter(Boolean) }, isArchived: { $ne: true }, status: { $ne: "voided" } }).session(session);
+    if (orphan) throw err("An earlier transfer bill needs to be linked to its transfer. Ask administration to review Billing before generating another invoice.", 409, "ROOM_TRANSFER_SCHEDULED_BILL_INVALID");
+  }
+  if (bill?.scheduledRoomTransferId && String(bill.scheduledRoomTransferId) !== String(record._id)) throw err("The linked bill belongs to another transfer. Ask administration to review Billing.", 409, "ROOM_TRANSFER_SCHEDULED_BILL_INVALID");
+  if (record.settlementBillId && !bill) throw err("The linked transfer bill is missing. Ask administration to review Billing before continuing.", 409, "ROOM_TRANSFER_SCHEDULED_BILL_INVALID");
+  if (bill && (bill.isArchived === true || bill.status === "voided")) throw err("The transfer bill is no longer active. Ask administration to review Billing before continuing.", 409, "ROOM_TRANSFER_SCHEDULED_BILL_INVALID");
+  if (bill && (String(bill.reservationId) !== String(reservation._id) || bill.billType !== "transfer_settlement")) throw err("The linked bill does not belong to this transfer. Ask administration to review Billing.", 409, "ROOM_TRANSFER_SCHEDULED_BILL_INVALID");
 
   const noteFor = () =>
     `Room Transfer settlement: ${preview?.fromRoom?.name || "current room"} → ` +
@@ -1000,6 +1053,7 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
     const [created] = await Bill.create([
       {
         billType: "transfer_settlement",
+        scheduledRoomTransferId: record._id,
         reservationId: reservation._id,
         userId: reservation.userId?._id || reservation.userId,
         branch: record.branch,
@@ -1036,19 +1090,24 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
         },
         createdBy: actorId || null,
       },
-    ]);
+    ], { session });
     record.settlementBillId = created._id;
-    await record.save();
+    await record.save({ session });
     return created;
   }
 
-  // Existing Bill: a downward change is never applied once money exists. An
-  // upward recomputation may increase this transfer-specific Bill while
-  // preserving its paid amount and payment history, so the additional balance
-  // can be settled through the existing payment path.
+  // Money received freezes both amounts and invoice metadata. Changes require review.
   const paid = roundMoney(Number(bill.paidAmount || 0));
   const previousTotal = roundMoney(Number(bill.totalAmount || 0));
-  if (paid <= 0 || total > previousTotal + 0.01) {
+  if (paid > 0 || ["paid", "settled"].includes(String(bill.status).toLowerCase())) {
+    const changed = Math.abs(total - previousTotal) > 0.01 ||
+      Math.abs(rentDue - Number(bill.charges?.rent || 0)) > 0.01 ||
+      Math.abs(depositDue - Number(bill.charges?.securityDeposit || 0)) > 0.01 ||
+      Math.abs(electricityDue - Number(bill.charges?.electricity || 0)) > 0.01;
+    if (changed) throw err("This transfer bill already has a payment and its required charges have changed. Ask administration to review the difference before completing the transfer. The paid invoice has been preserved.", 409, "FINANCIAL_ADJUSTMENT_REQUIRED", { bill, recomputedRequiredAmount: total });
+    return bill;
+  }
+  if (paid <= 0) {
     bill.billingCycleStart = indexedCycleStart;
     bill.billingCycleEnd = indexedCycleEnd;
     bill.charges.rent = rentDue;
@@ -1075,7 +1134,7 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
         : {}),
     };
     syncBillAmounts(bill, { preserveStatus: false });
-    await bill.save();
+    await bill.save({ session });
   }
   return bill;
 }
@@ -1097,11 +1156,32 @@ async function upsertTransferSettlementBill({ record, reservation, preview, fina
  *   scheduledTransfer, bill?, reason?, message?, transferResult? }>}
  */
 export async function completeRoomTransfer({ reservationId, payload = {}, actorId = null }) {
+  const latest = await ScheduledRoomTransfer.findOne({ reservationId, isArchived: { $ne: true } }).sort({ createdAt: -1 });
+  if (!latest) throw err("No room transfer was found. Refresh the tenant details and try again.", 404, "NO_SCHEDULED_TRANSFER");
+  if (latest.status === "executed") return { outcome: "executed", scheduledTransfer: latest, message: "This room transfer is already complete." };
+  const executionToken = new mongoose.Types.ObjectId().toString();
+  const claimed = await ScheduledRoomTransfer.findOneAndUpdate({
+    _id: latest._id, status: { $in: [...OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES] }, holdApplied: true,
+    ...availableTransferClaimFilter(),
+  }, { $set: { executionToken, executionKind: "completion", executionStartedAt: new Date(), lastAttemptAt: new Date() } }, { new: true }).select("+executionToken");
+  if (!claimed) throw err("This transfer is being processed or its status has changed. Refresh its details before trying again.", 409, "TRANSFER_ALREADY_EXECUTING");
+  try {
+    return await completeRoomTransferClaimed({ reservationId, payload, actorId, executionToken });
+  } catch (error) {
+    if (error.code !== "FINANCIAL_ADJUSTMENT_REQUIRED") throw error;
+    await ScheduledRoomTransfer.updateOne({ _id: claimed._id, executionToken }, { $set: { status: "action_required", lastError: "FINANCIAL_ADJUSTMENT_REQUIRED", lastAttemptAt: new Date() }, $push: { financialAdjustmentHistory: buildFinancialAdjustmentAudit({ record: claimed, bill: error.bill, amountPaid: error.bill?.paidAmount, previousRequiredAmount: error.bill?.totalAmount, recomputedRequiredAmount: error.recomputedRequiredAmount, difference: Math.abs(error.recomputedRequiredAmount - Number(error.bill?.totalAmount || 0)), reason: error.code }) } });
+    return { outcome: "action_required", reason: error.code, message: `${error.message} ${MANUAL_FINANCIAL_GUIDANCE}`, bill: error.bill, scheduledTransfer: await ScheduledRoomTransfer.findById(claimed._id) };
+  } finally {
+    await ScheduledRoomTransfer.updateOne({ _id: claimed._id, executionToken }, { $set: { executionToken: null, executionStartedAt: null } });
+  }
+}
+
+async function completeRoomTransferClaimed({ reservationId, payload = {}, actorId = null, executionToken }) {
   const record = await ScheduledRoomTransfer.findOne({
     reservationId,
-    status: { $nin: ["cancelled"] },
+    executionToken,
     isArchived: { $ne: true },
-  }).sort({ createdAt: -1 });
+  }).sort({ createdAt: -1 }).select("+executionToken");
   if (!record) {
     throw err("No scheduled room transfer to complete for this tenant.", 404, "NO_SCHEDULED_TRANSFER");
   }
@@ -1393,148 +1473,34 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
     (Number(preview.totalImmediateDue) || 0) + finalizedElectricityDue,
   );
 
-  // A previously paid transfer Bill that now recomputes to zero is still a
-  // downward financial adjustment. Preserve the Bill and route it to manual
-  // Administration Office processing rather than bypassing the settlement gate.
-  if (totalImmediateDue <= 0 && record.settlementBillId) {
-    const previousBill = await Bill.findById(record.settlementBillId).lean();
-    const previousPaid = roundMoney(Number(previousBill?.paidAmount || 0));
-    const previousRequired = roundMoney(Number(previousBill?.totalAmount || 0));
-    if (previousPaid > 0 && previousRequired > 0) {
-      const now = new Date();
-      await ScheduledRoomTransfer.updateOne(
-        { _id: record._id },
-        {
-          $set: {
-            status: "action_required",
-            lastError: "FINANCIAL_ADJUSTMENT_REQUIRED",
-            lastAttemptAt: now,
-          },
-          $push: {
-            financialAdjustmentHistory: buildFinancialAdjustmentAudit({
-              record,
-              bill: previousBill,
-              amountPaid: previousPaid,
-              previousRequiredAmount: previousRequired,
-              recomputedRequiredAmount: 0,
-              difference: previousRequired,
-              reason: "FINANCIAL_ADJUSTMENT_REQUIRED",
-              recordedAt: now,
-            }),
-          },
-        },
-      );
-      return {
-        outcome: "action_required",
-        reason: "FINANCIAL_ADJUSTMENT_REQUIRED",
-        scheduledTransfer: await ScheduledRoomTransfer.findById(record._id),
-        bill: previousBill,
-        message: MANUAL_FINANCIAL_GUIDANCE,
-      };
-    }
-  }
-
   // 5. Settlement gate — the transfer-settlement Bill (rent + deposit + final
   //    old-room electricity) must be fully paid before the physical cutover.
   //    Unrelated historical balances are NOT merged and do NOT block (spec §9).
-  if (totalImmediateDue > 0) {
-    const previousBill = record.settlementBillId
-      ? await Bill.findById(record.settlementBillId).lean()
-      : null;
-    const previousBillTotal = roundMoney(Number(previousBill?.totalAmount || 0));
-    const previousPaid = roundMoney(Number(previousBill?.paidAmount || 0));
+  {
+    // Reconcile existing invoices even when the new amount is zero.
     const bill = await upsertTransferSettlementBill({
       record,
       reservation,
       preview,
       finalizedElectricity,
       asOfCutoverDay: actualCutoverDay,
+      executionToken,
       actorId,
     });
     const paid = roundMoney(Number(bill?.paidAmount || 0));
     const billTotal = roundMoney(Number(bill?.totalAmount || 0));
 
-    // The Bill already carries a real payment AND the fresh (actual-cutover-day)
-    // recompute is HIGHER than what the Bill was sized for -> a financial
-    // adjustment. upsertTransferSettlementBill increases this transfer Bill
-    // while preserving its paid amount and payment history. The remaining
-    // balance must be settled before cutover.
-    if (previousPaid > 0 && previousBillTotal + 0.01 < totalImmediateDue) {
-      const remainingDue = roundMoney(Math.max(0, totalImmediateDue - paid));
-      const now = new Date();
-      await ScheduledRoomTransfer.updateOne(
-        { _id: record._id },
-        {
-          $set: { status: "action_required", lastError: "ADDITIONAL_BALANCE_DUE", lastAttemptAt: now },
-          $push: {
-            financialAdjustmentHistory: buildFinancialAdjustmentAudit({
-              record,
-              bill,
-              amountPaid: paid,
-              previousRequiredAmount: previousBillTotal,
-              recomputedRequiredAmount: totalImmediateDue,
-              difference: totalImmediateDue - previousBillTotal,
-              reason: "ADDITIONAL_BALANCE_DUE",
-              recordedAt: now,
-            }),
-          },
-        },
-      );
-      const fresh = await ScheduledRoomTransfer.findById(record._id);
-      return {
-        outcome: "action_required",
-        reason: "ADDITIONAL_BALANCE_DUE",
-        scheduledTransfer: fresh,
-        bill,
-        message:
-          `The transfer settlement recomputed to ₱${roundMoney(totalImmediateDue).toFixed(2)} ` +
-          `and ₱${paid.toFixed(2)} has been paid. Settle the remaining ` +
-          `₱${remainingDue.toFixed(2)}, then complete.`,
-      };
-    }
-
-    // The Bill carries a payment AND the recompute is LOWER — money already
-    // collected, no automatic refund/reallocation.
-    if (previousPaid > 0 && totalImmediateDue + 0.01 < previousBillTotal) {
-      const now = new Date();
-      await ScheduledRoomTransfer.updateOne(
-        { _id: record._id },
-        {
-          $set: { status: "action_required", lastError: "FINANCIAL_ADJUSTMENT_REQUIRED", lastAttemptAt: now },
-          $push: {
-            financialAdjustmentHistory: buildFinancialAdjustmentAudit({
-              record,
-              bill,
-              amountPaid: paid,
-              previousRequiredAmount: previousBillTotal,
-              recomputedRequiredAmount: totalImmediateDue,
-              difference: previousBillTotal - totalImmediateDue,
-              reason: "FINANCIAL_ADJUSTMENT_REQUIRED",
-              recordedAt: now,
-            }),
-          },
-        },
-      );
-      const fresh = await ScheduledRoomTransfer.findById(record._id);
-      return {
-        outcome: "action_required",
-        reason: "FINANCIAL_ADJUSTMENT_REQUIRED",
-        scheduledTransfer: fresh,
-        bill,
-        message: MANUAL_FINANCIAL_GUIDANCE,
-      };
-    }
-
     // Not fully settled -> surface the Bill; admin pays via the normal flow,
     // then re-invokes Complete Transfer. (Covers: brand-new Bill unpaid;
     // partial payment where the recompute did NOT move.)
-    if (!bill || paid + 0.01 < roundMoney(Number(bill?.totalAmount || 0))) {
+    if (bill && paid + 0.01 < roundMoney(Number(bill.totalAmount || 0))) {
       await ScheduledRoomTransfer.updateOne(
-        { _id: record._id, status: "scheduled" },
+        { _id: record._id, executionToken, status: "scheduled" },
         { $set: { status: "action_required", lastError: "TRANSFER_BALANCE_UNPAID", lastAttemptAt: new Date() } },
       );
       const fresh = await ScheduledRoomTransfer.findById(record._id);
       const freshTotal = roundMoney(Number((await Bill.findById(bill?._id).lean())?.totalAmount || billTotal));
+      await notify.roomTransferLifecycleOnce(record.tenantId, "Room Transfer Payment Required", "Your room transfer needs payment before completion. Open Billing to review and settle the transfer bill.", `room_transfer_payment_required:${String(bill._id)}`, { entityId: String(reservationId), event: "payment_required" }).catch(e => logger.warn({ err: e }, "Transfer payment notification failed"));
       return {
         outcome: "awaiting_settlement",
         reason: "TRANSFER_BALANCE_UNPAID",
@@ -1552,37 +1518,6 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
   //    financial gate). The engine consumes this transfer's existing hold
   //    atomically and reuses the linked Bill.
   const reusableBillId = record.settlementBillId ? String(record.settlementBillId) : undefined;
-  const executionToken = new mongoose.Types.ObjectId().toString();
-  const claimed = await ScheduledRoomTransfer.findOneAndUpdate(
-    {
-      _id: record._id,
-      status: { $in: [...OPEN_SCHEDULED_ROOM_TRANSFER_STATUSES] },
-      holdApplied: true,
-      executionToken: null,
-    },
-    {
-      $set: {
-        executionToken,
-        executionStartedAt: new Date(),
-        lastAttemptAt: new Date(),
-      },
-    },
-    { new: true },
-  ).select("+executionToken");
-  if (!claimed) {
-    const latest = await ScheduledRoomTransfer.findById(record._id).select("+executionToken");
-    if (latest?.status === "executed") {
-      return { outcome: "executed", scheduledTransfer: latest, message: "This room transfer is already complete." };
-    }
-    if (latest?.executionToken) {
-      throw err("Another Complete Transfer request is already executing.", 409, "TRANSFER_ALREADY_EXECUTING");
-    }
-    return markPaidTransferCannotComplete(
-      record,
-      err("This scheduled transfer no longer has a consumable destination hold.", 409, "SCHEDULED_TRANSFER_HOLD_MISSING"),
-    );
-  }
-
   let transferResult;
   try {
     transferResult = await transferStayWorkflow({
@@ -1675,47 +1610,9 @@ export async function completeRoomTransfer({ reservationId, payload = {}, actorI
     throw err(e.message || "The room transfer could not be completed.", e.statusCode || 500, e.code || "TRANSFER_COMPLETION_FAILED");
   }
 
-  // 7. Success — record the executed settlement + flip to executed. The
-  //    AUTHORITATIVE physical cutover timestamp is `transferResult.cutoverAt`
-  //    (a `new Date()` captured INSIDE the workflow transaction) — never the
-  //    scheduled date/time and never a value assembled here.
-  const cutoverAt = transferResult?.cutoverAt || new Date();
+  // Physical assignment, request completion, and execution settlement committed
+  // together. Post-commit response handling must not rewrite that audit snapshot.
   const settlementBillId = transferResult?.billingSnapshot?.transferBillId || record.settlementBillId || null;
-  const executedSettlement = {
-    rentAdjustmentDue: roundMoney(transferResult?.billingSnapshot?.rentComponentDue ?? preview.rent?.adjustmentDue ?? 0),
-    additionalDepositDue: roundMoney(transferResult?.billingSnapshot?.depositComponentDue ?? preview.deposit?.balanceDue ?? 0),
-    finalElectricityDue: roundMoney(
-      transferResult?.billingSnapshot?.electricityComponentDue ?? finalizedElectricityDue,
-    ),
-    excessRentCredit: roundMoney(transferResult?.billingSnapshot?.excessRentCredit ?? preview.rent?.excessCredit ?? 0),
-    excessDepositHeld: roundMoney(transferResult?.billingSnapshot?.excessDepositHeld ?? preview.deposit?.excessHeld ?? 0),
-    totalImmediateDue: roundMoney(transferResult?.billingSnapshot?.totalImmediateDue ?? totalImmediateDue),
-    settlementBillId: settlementBillId ? String(settlementBillId) : null,
-    sourceRoomMeterReading: sourceMeterReading != null ? Number(sourceMeterReading) : null,
-    targetRoomMeterReading: targetMeterReading != null ? Number(targetMeterReading) : null,
-    cutoverAt,
-    completedBy: actorId ? String(actorId) : null,
-    computedAt: new Date(),
-  };
-
-  await ScheduledRoomTransfer.updateOne(
-    { _id: record._id, status: "executed" },
-    {
-      $set: {
-        executedAt: cutoverAt,
-        executedSettlement,
-        settlementBillId: settlementBillId || record.settlementBillId || null,
-        sourceRoomMeterReading: sourceMeterReading != null ? Number(sourceMeterReading) : null,
-        targetRoomMeterReading: targetMeterReading != null ? Number(targetMeterReading) : null,
-        holdApplied: false,
-        executionToken: null,
-        executionStartedAt: null,
-        lastError: null,
-        lastAttemptAt: new Date(),
-      },
-    },
-  );
-
   const fresh = await ScheduledRoomTransfer.findById(record._id);
   logger.info(
     { scheduledTransferId: String(record._id), reservationId: String(reservationId), settlementBillId: String(settlementBillId || "") },

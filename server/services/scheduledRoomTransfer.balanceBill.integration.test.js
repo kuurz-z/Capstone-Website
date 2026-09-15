@@ -30,10 +30,10 @@ const mockValidate = jest.fn(async () => ({
   generationData: { pricing: {} },
   template: { templateId: "generic", templateVersion: 1, legalContentVersion: 1 },
 }));
-const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
+const mockGenerate = jest.fn(async ({ contractId, actorId, session = null }) => {
   const { Contract } = await import("../models/index.js");
   const { transitionContract } = await import("./contractService.js");
-  const contract = await Contract.findById(contractId);
+  const contract = await Contract.findById(contractId).session(session);
   contract.preparedDocuments = contract.preparedDocuments || [];
   contract.preparedDocuments.push({
     documentType: "prepared", version: 1, storageProvider: "local",
@@ -46,9 +46,9 @@ const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
   contract.publicationStatus = "ready_for_resident";
   contract.tenantVisible = true;
   if (contract.status === "ready_for_generation") {
-    await transitionContract(contract, "generated", actorId, "prepared (test)");
+    await transitionContract(contract, "generated", actorId, "prepared (test)", session);
   } else {
-    await contract.save();
+    await contract.save(session ? { session } : undefined);
   }
   return { contract, document: contract.preparedDocuments.at(-1), previousStatus: "ready_for_generation", isRegeneration: false };
 });
@@ -59,7 +59,7 @@ await jest.unstable_mockModule("./contractService.js", () => ({
   validateContractForGeneration: mockValidate,
 }));
 
-const { scheduleRoomTransfer, completeRoomTransfer } = await import("./scheduledRoomTransferService.js");
+const { scheduleRoomTransfer, completeRoomTransfer, upsertTransferSettlementBill } = await import("./scheduledRoomTransferService.js");
 const {
   serializeScheduledRoomTransfer,
   resolveScheduledTransferBalance,
@@ -180,6 +180,8 @@ beforeAll(async () => {
   mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongo.getUri(), { dbName: "sched_transfer_2d" });
   await ScheduledRoomTransfer.syncIndexes();
+  await Bill.createIndexes();
+  await Reservation.createIndexes();
 }, 120_000);
 afterAll(async () => {
   await mongoose.disconnect();
@@ -388,4 +390,138 @@ describe("all cross-room-type combinations schedule (no type-specific logic)", (
     expect(scheduledTransfer.settlementBillId == null).toBe(true);
     expect(await Bill.countDocuments({ reservationId: reservation._id, billType: "transfer_settlement" })).toBe(0);
   });
+});
+
+
+describe("QA regression: transfer settlement identity and immutable history", () => {
+  async function fixture() {
+    const { reservation, actorId } = await seed();
+    const dest = await emptyRoom("private", "205");
+    const { scheduledTransfer: record } = await scheduleRoomTransfer({ reservationId: reservation._id, payload: payloadFor({ targetRoom: dest, transferDate: futureDateStr(1) }), actorId });
+    const preview = { rent: { adjustmentDue: 1500, coverageBillType: "monthly" }, deposit: { balanceDue: 0 } };
+    return { record, reservation, preview, actorId };
+  }
+  test("concurrent copies and lost links reuse one authoritative bill, with real indexes", async () => {
+    const options = await fixture();
+    const copies = await Promise.all([ScheduledRoomTransfer.findById(options.record._id), ScheduledRoomTransfer.findById(options.record._id)]);
+    const bills = await Promise.all(copies.map(record => upsertTransferSettlementBill({ ...options, record })));
+    expect(String(bills[0]._id)).toBe(String(bills[1]._id));
+    expect(await Bill.countDocuments({ scheduledRoomTransferId: options.record._id })).toBe(1);
+    await ScheduledRoomTransfer.updateOne({ _id: options.record._id }, { $set: { settlementBillId: null } });
+    const recovered = await upsertTransferSettlementBill({ ...options, record: await ScheduledRoomTransfer.findById(options.record._id) });
+    expect(String(recovered._id)).toBe(String(bills[0]._id));
+  });
+  test("an orphaned legacy settlement blocks a second invoice without guessing its owner", async () => {
+    const options = await fixture();
+    const bill = await upsertTransferSettlementBill(options);
+    await Bill.updateOne({ _id: bill._id }, { $unset: { scheduledRoomTransferId: 1 } });
+    await ScheduledRoomTransfer.updateOne({ _id: options.record._id }, { $set: { settlementBillId: null } });
+    const fresh = await ScheduledRoomTransfer.findById(options.record._id);
+    await expect(upsertTransferSettlementBill({ ...options, record: fresh })).rejects.toMatchObject({ code: "ROOM_TRANSFER_SCHEDULED_BILL_INVALID" });
+    expect(await Bill.countDocuments({ reservationId: options.reservation._id, billType: "transfer_settlement" })).toBe(1);
+  });
+  test.each([500, 1500])("payment %s freezes every stored invoice field on retry and changed charges", async paid => {
+    const options = await fixture();
+    const bill = await upsertTransferSettlementBill(options);
+    await Bill.updateOne({ _id: bill._id }, { $set: { paidAmount: paid, remainingAmount: 1500 - paid, status: paid === 1500 ? "paid" : "partial" } });
+    const before = await Bill.findById(bill._id).lean();
+    const { rescheduleRoomTransfer } = await import("./scheduledRoomTransferService.js");
+    await expect(rescheduleRoomTransfer({ reservationId: options.reservation._id, payload: { effectiveTransferDate: futureDateStr(2) }, actorId: options.actorId })).rejects.toMatchObject({ code: "ROOM_TRANSFER_PAYMENT_ALREADY_RECEIVED" });
+    expect(await Bill.findById(bill._id).lean()).toEqual(before);
+    await upsertTransferSettlementBill(options);
+    expect(await Bill.findById(bill._id).lean()).toEqual(before);
+    for (const amount of [0, 1000, 2500]) {
+      await expect(upsertTransferSettlementBill({ ...options, preview: { ...options.preview, rent: { ...options.preview.rent, adjustmentDue: amount } } })).rejects.toMatchObject({ code: "FINANCIAL_ADJUSTMENT_REQUIRED" });
+      expect(await Bill.findById(bill._id).lean()).toEqual(before);
+    }
+  });
+  test("a failure saving the schedule rolls back the bill insert", async () => {
+    const options = await fixture();
+    const spy = jest.spyOn(ScheduledRoomTransfer.prototype, "save").mockRejectedValueOnce(new Error("injected link failure"));
+    try { await expect(upsertTransferSettlementBill(options)).rejects.toThrow("injected link failure"); }
+    finally { spy.mockRestore(); }
+    expect(await Bill.countDocuments({ scheduledRoomTransferId: options.record._id })).toBe(0);
+    expect((await ScheduledRoomTransfer.findById(options.record._id)).settlementBillId).toBeNull();
+    await upsertTransferSettlementBill(options);
+    expect(await Bill.countDocuments({ scheduledRoomTransferId: options.record._id })).toBe(1);
+  });
+  test("cancelled schedule cannot generate a settlement bill", async () => {
+    const options = await fixture();
+    await ScheduledRoomTransfer.updateOne({ _id: options.record._id }, { $set: { status: "cancelled" } });
+    await expect(upsertTransferSettlementBill(options)).rejects.toMatchObject({ code: "TRANSFER_CLAIM_LOST" });
+    expect(await Bill.countDocuments({ scheduledRoomTransferId: options.record._id })).toBe(0);
+  });
+  test("archived destination is rejected before any hold", async () => {
+    const { reservation, actorId } = await seed();
+    const dest = await emptyRoom("private", "205");
+    await Room.updateOne({ _id: dest._id }, { $set: { isArchived: true } });
+    await expect(scheduleRoomTransfer({ reservationId: reservation._id, payload: payloadFor({ targetRoom: dest, transferDate: futureDateStr(1) }), actorId })).rejects.toBeTruthy();
+    expect((await Room.findById(dest._id)).currentOccupancy).toBe(0);
+    expect(await ScheduledRoomTransfer.countDocuments({ reservationId: reservation._id })).toBe(0);
+  });
+  test("direct swap rejects before any occupancy write", async () => {
+    const { executeDirectRoomSwapWorkflow } = await import("../utils/tenantActionService.js");
+    const { reservation } = await seed();
+    const before = await Reservation.findById(reservation._id).lean();
+    await expect(executeDirectRoomSwapWorkflow(reservation._id, reservation._id)).rejects.toMatchObject({ code: "ROOM_SWAP_REQUIRES_CANONICAL_TRANSFER" });
+    expect(await Reservation.findById(reservation._id).lean()).toEqual(before);
+  });
+});
+
+
+describe("QA regression: request retries and cancellation rollback", () => {
+  test("a lost submission response reuses the same request even after decline", async () => {
+    const { default: TenantTransferRequest } = await import("../models/TenantTransferRequest.js");
+    const { createTenantTransferRequest, declineTenantTransferRequest } = await import("./tenantTransferRequestService.js");
+    await TenantTransferRequest.createIndexes();
+    const { tenant, actorId } = await seed();
+    const payload = { preferredRoomType: "private", reason: "Quiet room", clientRequestId: "qa-retry-identity-0001" };
+    const first = await createTenantTransferRequest({ tenantId: tenant._id, payload });
+    await declineTenantTransferRequest({ requestId: first.id, actorId, actorRole: "owner", declineReason: "No suitable vacancy" });
+    const replay = await createTenantTransferRequest({ tenantId: tenant._id, payload });
+    expect(replay.id).toBe(first.id);
+    expect(replay.status).toBe("declined");
+    expect(await TenantTransferRequest.countDocuments({ tenantId: tenant._id })).toBe(1);
+    const next = await createTenantTransferRequest({ tenantId: tenant._id, payload: { ...payload, clientRequestId: "qa-retry-identity-0002" } });
+    expect(next.id).not.toBe(first.id);
+  });
+  test("rapid duplicate submissions create one open request", async () => {
+    const { default: TenantTransferRequest } = await import("../models/TenantTransferRequest.js");
+    const { createTenantTransferRequest } = await import("./tenantTransferRequestService.js");
+    await TenantTransferRequest.createIndexes();
+    const { tenant } = await seed();
+    const results = await Promise.allSettled([1,2].map(n => createTenantTransferRequest({ tenantId: tenant._id, payload: { preferredRoomType: "private", reason: "Quiet room", clientRequestId: `qa-concurrent-request-${n}` } })));
+    expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+    expect(await TenantTransferRequest.countDocuments({ tenantId: tenant._id, status: "pending" })).toBe(1);
+  });
+  test("failed addendum cancellation rolls back hold release and bill changes", async () => {
+    const { cancelScheduledRoomTransfer } = await import("./scheduledRoomTransferExecutor.js");
+    const { reservation, actorId } = await seed();
+    const dest = await emptyRoom("private", "205");
+    const { scheduledTransfer } = await scheduleRoomTransfer({ reservationId: reservation._id, payload: payloadFor({ targetRoom: dest, transferDate: futureDateStr(1) }), actorId });
+    const spy = jest.spyOn(Contract.prototype, "save").mockRejectedValueOnce(new Error("injected cancellation failure"));
+    try { await expect(cancelScheduledRoomTransfer(scheduledTransfer._id, { actorId })).rejects.toThrow("injected cancellation failure"); }
+    finally { spy.mockRestore(); }
+    const after = await ScheduledRoomTransfer.findById(scheduledTransfer._id).select("+executionToken");
+    expect(after.status).toBe("scheduled"); expect(after.holdApplied).toBe(true); expect(after.executionToken).toBeNull();
+    expect((await Room.findById(dest._id)).currentOccupancy).toBe(1);
+    expect((await Contract.findById(scheduledTransfer.addendumContractId)).status).not.toBe("cancelled");
+    expect((await cancelScheduledRoomTransfer(scheduledTransfer._id, { actorId })).outcome).toBe("cancelled");
+  });
+});
+
+
+test("transfer submission versus move-out initiation commits only one conflicting lifecycle", async () => {
+  const { default: TenantTransferRequest } = await import("../models/TenantTransferRequest.js");
+  const { createTenantTransferRequest } = await import("./tenantTransferRequestService.js");
+  const { openMoveOutClearance } = await import("./moveOutClearanceService.js");
+  const { MoveOutClearance } = await import("../models/index.js");
+  const { tenant, reservation, actorId } = await seed();
+  const result = await Promise.allSettled([
+    createTenantTransferRequest({ tenantId: tenant._id, payload: { preferredRoomType: "private", reason: "Quiet room", clientRequestId: "qa-conflicting-lifecycle-001" } }),
+    openMoveOutClearance({ tenantId: tenant._id, reservationId: reservation._id, intendedMoveOutDate: futureDateStr(2), actorId }),
+  ]);
+  expect(result.filter(row => row.status === "fulfilled")).toHaveLength(1);
+  const count = await TenantTransferRequest.countDocuments({ reservationId: reservation._id, status: "pending" }) + await MoveOutClearance.countDocuments({ reservationId: reservation._id });
+  expect(count).toBe(1);
 });

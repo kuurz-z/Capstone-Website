@@ -20,12 +20,15 @@
  */
 export const toDateInputValue = (value) => {
   if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value ? value : "";
+  }
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  if (!Number.isFinite(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const part = name => parts.find(p => p.type === name).value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 };
 
 /**
@@ -50,7 +53,7 @@ export const minScheduleDateStr = (now = new Date()) => toDateInputValue(now);
 /** "HH:mm" -> minutes from midnight, or null. */
 export const timeStrToMinutes = (value) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
-  if (!m) return null;
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
   const mins = Number(m[1]) * 60 + Number(m[2]);
   return Number.isFinite(mins) && mins >= 0 && mins < 24 * 60 ? mins : null;
 };

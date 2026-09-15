@@ -30,10 +30,10 @@ const mockValidate = jest.fn(async () => ({
   generationData: { pricing: {} },
   template: { templateId: "generic", templateVersion: 1, legalContentVersion: 1 },
 }));
-const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
+const mockGenerate = jest.fn(async ({ contractId, actorId, session = null }) => {
   const { Contract } = await import("../models/index.js");
   const { transitionContract } = await import("./contractService.js");
-  const contract = await Contract.findById(contractId);
+  const contract = await Contract.findById(contractId).session(session);
   contract.preparedDocuments = contract.preparedDocuments || [];
   contract.preparedDocuments.push({
     documentType: "prepared", version: 1, storageProvider: "local",
@@ -46,9 +46,9 @@ const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
   contract.publicationStatus = "ready_for_resident";
   contract.tenantVisible = true;
   if (contract.status === "ready_for_generation") {
-    await transitionContract(contract, "generated", actorId, "prepared (test)");
+    await transitionContract(contract, "generated", actorId, "prepared (test)", session);
   } else {
-    await contract.save();
+    await contract.save(session ? { session } : undefined);
   }
   return { contract, document: contract.preparedDocuments.at(-1), previousStatus: "ready_for_generation", isRegeneration: false };
 });
@@ -59,7 +59,7 @@ await jest.unstable_mockModule("./contractService.js", () => ({
   validateContractForGeneration: mockValidate,
 }));
 
-const { scheduleRoomTransfer } = await import("./scheduledRoomTransferService.js");
+const { scheduleRoomTransfer, rescheduleRoomTransfer } = await import("./scheduledRoomTransferService.js");
 const { reconcileOccupancyIntegrity } = await import("../utils/scheduler.js");
 const { generateContractNumber } = await import("./contractService.js");
 const {
@@ -627,4 +627,33 @@ describe("reconciler awareness — the hold survives", () => {
     expect(await countOpenDestinationHolds(dest._id)).toBe(0);
     expect((await openHoldBackedBedKeys([dest._id])).size).toBe(0);
   });
+});
+
+
+test("reschedule PDF failure rolls back the addendum and schedule together", async () => {
+  const { reservation, actorId } = await seed({ sourceType: "private", roomNumber: "101" });
+  const dest = await emptyRoom("double-sharing", "205");
+  const { scheduledTransfer } = await scheduleRoomTransfer({ reservationId: reservation._id, payload: payloadFor({ targetRoom: dest, transferDate: futureDateISO(10) }), actorId });
+  const beforeSchedule = await ScheduledRoomTransfer.findById(scheduledTransfer._id).lean();
+  const beforeContract = await Contract.findById(beforeSchedule.addendumContractId).lean();
+  mockGenerate.mockRejectedValueOnce(new Error("Injected PDF failure"));
+  await expect(rescheduleRoomTransfer({ reservationId: reservation._id, payload: { effectiveTransferDate: futureDateISO(11) }, actorId })).rejects.toThrow("Injected PDF failure");
+  const afterSchedule = await ScheduledRoomTransfer.findById(scheduledTransfer._id).select("+executionToken").lean();
+  expect(afterSchedule.effectiveTransferDate).toEqual(beforeSchedule.effectiveTransferDate);
+  expect(afterSchedule.scheduleHistory).toEqual(beforeSchedule.scheduleHistory);
+  expect(afterSchedule.executionToken).toBeNull();
+  expect(await Contract.findById(beforeContract._id).lean()).toEqual(beforeContract);
+});
+
+
+test.each(["completion", "cancellation", "reschedule"])("reschedule recovers an abandoned %s claim", async executionKind => {
+  const { reservation, actorId } = await seed({ sourceType: "private", roomNumber: "101" });
+  const dest = await emptyRoom("double-sharing", "205");
+  const { scheduledTransfer } = await scheduleRoomTransfer({ reservationId: reservation._id, payload: payloadFor({ targetRoom: dest, transferDate: futureDateISO(10) }), actorId });
+  await ScheduledRoomTransfer.updateOne({ _id: scheduledTransfer._id }, { $set: { executionToken: "abandoned", executionKind, executionStartedAt: new Date(Date.now() - 20 * 60 * 1000) } });
+  await rescheduleRoomTransfer({ reservationId: reservation._id, payload: { effectiveTransferDate: futureDateISO(11) }, actorId });
+  const after = await ScheduledRoomTransfer.findById(scheduledTransfer._id).select("+executionToken").lean();
+  expect(after.executionToken).toBeNull();
+  expect(after.scheduleHistory.at(-1).kind).toBe("rescheduled");
+  expect(after.holdApplied).toBe(true);
 });

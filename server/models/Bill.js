@@ -1,3 +1,4 @@
+import { RENT_BILL_CYCLE_INDEX } from "../services/billing/rentBillCycleIndex.js";
 /**
  * ============================================================================
  * BILL MODEL
@@ -589,6 +590,8 @@ const billSchema = new mongoose.Schema(
       default: "monthly",
     },
 
+    scheduledRoomTransferId: { type: mongoose.Schema.Types.ObjectId, ref: "ScheduledRoomTransfer" },
+
     // --- Transfer Snapshot (populated only for billType: "transfer_settlement") ---
     // Permanently records the from/to room context and billing state at the
     // moment of the room transfer. Used in billing history display.
@@ -735,21 +738,14 @@ billSchema.index({
 billSchema.index({ userId: 1, status: 1, dueDate: 1 });
 billSchema.index({ roomId: 1, utilityPeriod: 1 });
 
-// Prevent duplicate rent bills for the same reservation + billing cycle.
-// The partial filter excludes bills without a reservationId (utility-only bills).
-billSchema.index(
-  { reservationId: 1, billingCycleStart: 1 },
-  {
-    unique: true,
-    sparse: true,
-    partialFilterExpression: {
-      reservationId: { $type: "objectId" },
-      billingCycleStart: { $type: "date" },
-    },
-    name: "unique_reservation_billing_cycle",
-  },
-);
+billSchema.index({ scheduledRoomTransferId: 1 }, { unique: true, partialFilterExpression: { scheduledRoomTransferId: { $type: "objectId" } }, name: "unique_scheduled_transfer_settlement" });
 
+// Keep the model and explicit migration on the same obligation-specific index.
+billSchema.index(RENT_BILL_CYCLE_INDEX.key, {
+  name: RENT_BILL_CYCLE_INDEX.name,
+  unique: RENT_BILL_CYCLE_INDEX.unique,
+  partialFilterExpression: RENT_BILL_CYCLE_INDEX.partialFilterExpression,
+});
 // For forecasting and trend analysis
 billSchema.index({waterSupplementKey:1},{unique:true,sparse:true,name:'unique_water_supplement'});
 billSchema.index({electricitySupplementKey:1},{unique:true,sparse:true,name:'unique_electricity_supplement'});
@@ -757,15 +753,15 @@ billSchema.index({ billingMonth: -1, totalAmount: 1 });
 billSchema.index({ branch: 1, billingMonth: -1, status: 1 });
 billSchema.index(
   { paymongoSessionId: 1 },
-  { sparse: true, partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
+  { partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
 );
 billSchema.index(
   { paymongoPaymentId: 1 },
-  { sparse: true, partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
+  { partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
 );
 billSchema.index(
   { billType: 1 },
-  { sparse: true, partialFilterExpression: { billType: { $type: "string" } } },
+  { partialFilterExpression: { billType: { $type: "string" } } },
 );
 // Compound index for transfer settlement lookups and the outstanding-balance pre-check
 // that runs before every transfer: Bill.find({ reservationId, isArchived: { $ne: true } })

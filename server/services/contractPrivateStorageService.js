@@ -58,6 +58,7 @@ export const buildPreparedContractStorage = ({
   leaseType,
   contractDate,
   version,
+  storageAttemptId = null,
 }) => {
   const safeBranch = sanitizeContractFileSegment(branch);
   const safeContractNumber = sanitizeContractFileSegment(contractNumber);
@@ -72,6 +73,7 @@ export const buildPreparedContractStorage = ({
       "contracts",
       sanitizeContractFileSegment(contractId),
       "prepared",
+      ...(storageAttemptId ? [sanitizeContractFileSegment(storageAttemptId)] : []),
     )
     : path.join(safeBranch, String(year), safeContractNumber);
   const storageKey = path.join(relativeDirectory, fileName).replaceAll("\\", "/");

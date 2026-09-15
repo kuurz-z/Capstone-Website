@@ -34,10 +34,10 @@ const mockValidate = jest.fn(async () => ({
   generationData: { pricing: {} },
   template: { templateId: "generic", templateVersion: 1, legalContentVersion: 1 },
 }));
-const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
+const mockGenerate = jest.fn(async ({ contractId, actorId, session = null }) => {
   const { Contract } = await import("../models/index.js");
   const { transitionContract } = await import("../services/contractService.js");
-  const contract = await Contract.findById(contractId);
+  const contract = await Contract.findById(contractId).session(session);
   contract.preparedDocuments = contract.preparedDocuments || [];
   contract.preparedDocuments.push({
     documentType: "prepared", version: 1, storageProvider: "local",
@@ -51,9 +51,9 @@ const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
   contract.publicationStatus = "ready_for_resident";
   contract.tenantVisible = true;
   if (contract.status === "ready_for_generation") {
-    await transitionContract(contract, "generated", actorId, "Prepared (test)");
+    await transitionContract(contract, "generated", actorId, "Prepared (test)", session);
   } else {
-    await contract.save();
+    await contract.save(session ? { session } : undefined);
   }
   return { contract, document: contract.preparedDocuments.at(-1), previousStatus: "ready_for_generation", isRegeneration: false };
 });
@@ -182,7 +182,7 @@ describe("room-transfer financial settlement", () => {
     const stay = await Stay.create({
       tenantId: tenant._id, reservationId: reservation._id, branch: roomA.branch,
       roomId: roomA._id, bedId: srcStayBedId,
-      leaseStartDate: moveIn, leaseEndDate: new Date("2027-01-31T00:00:00.000Z"),
+      leaseStartDate: moveIn, leaseEndDate: new Date(Date.UTC(moveIn.getUTCFullYear() + 1, moveIn.getUTCMonth(), moveIn.getUTCDate())),
       monthlyRent: RATE[sourceType], status: "active",
     });
     if (NEEDS_BED.has(sourceType)) {
@@ -199,7 +199,7 @@ describe("room-transfer financial settlement", () => {
       propertyName: "Lilycrest Dormitory", propertyAddress: "123 Test St.", roomNumber: roomA.roomNumber,
       roomType: sourceType, leaseType: "long_term", approvedMonthlyRate: RATE[sourceType],
       securityDepositAmount: RATE[sourceType],
-      leaseStartDate: moveIn, leaseEndDate: new Date("2027-01-31T00:00:00.000Z"), leaseDurationMonths: 6,
+      leaseStartDate: moveIn, leaseEndDate: new Date(Date.UTC(moveIn.getUTCFullYear() + 1, moveIn.getUTCMonth(), moveIn.getUTCDate())), leaseDurationMonths: 6,
       status: "active", isCurrent: true,
       statusHistory: [{ status: "active", changedBy: actorId, reason: "seed" }],
       createdBy: actorId, updatedBy: actorId,

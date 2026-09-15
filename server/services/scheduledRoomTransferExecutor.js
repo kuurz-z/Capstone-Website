@@ -1,3 +1,4 @@
+import { hasActiveTransferClaim, availableTransferClaimFilter } from "./roomTransferClaim.js";
 /**
  * ============================================================================
  * SCHEDULED ROOM TRANSFER — EFFECTIVE-DATE STATE NUDGER + CANCELLATION
@@ -250,19 +251,19 @@ async function voidUnpaidBalanceBill(sched, { session } = {}) {
  * `discardRoomTransferAddendum` uses). Never deletes the document/history;
  * it just can never become current. Idempotent.
  */
-async function cancelPreparedAddendum(sched, actorId) {
+async function cancelPreparedAddendum(sched, actorId, session = null) {
   if (!sched.addendumContractId) return { cancelled: false };
-  const c = await Contract.findById(sched.addendumContractId);
+  const c = await Contract.findById(sched.addendumContractId).session(session);
   if (!c) return { cancelled: false };
   if (c.isCurrent === true) return { cancelled: false, isCurrent: true };
   const ABANDONED = new Set(["cancelled", "voided", "rejected", "archived"]);
   if (ABANDONED.has(c.status)) return { cancelled: true, already: true };
   const { transitionContract } = await import("./contractService.js");
   try {
-    await transitionContract(c, "cancelled", actorId, "Room Transfer Addendum cancelled — scheduled transfer cancelled before cutover");
+    await transitionContract(c, "cancelled", actorId, "Room Transfer Addendum cancelled — scheduled transfer cancelled before cutover", session);
   } catch (e) {
     logger.warn({ err: e, contractId: String(c._id) }, "[scheduledTransferExecutor] addendum cancel transition failed (non-fatal)");
-    return { cancelled: false, error: e.message };
+    throw e;
   }
   return { cancelled: true };
 }
@@ -298,7 +299,7 @@ export async function cancelScheduledRoomTransfer(scheduledTransferId, { actorId
   if (sched.status === "cancelled") {
     return { outcome: "skipped", reason: "already_cancelled" };
   }
-  if (sched.executionToken) {
+  if (hasActiveTransferClaim(sched)) {
     return { outcome: "skipped", reason: SCHEDULED_TRANSFER_CANCEL_REASONS.NOT_CANCELLABLE };
   }
   // Defence-in-depth: if the Addendum has somehow already become current, the
@@ -327,9 +328,9 @@ export async function cancelScheduledRoomTransfer(scheduledTransferId, { actorId
     {
       _id: sched._id,
       status: { $in: ["scheduled", "action_required"] },
-      executionToken: null,
+      ...availableTransferClaimFilter(),
     },
-    { $set: { executionToken: cancellationToken, executionStartedAt: new Date() } },
+    { $set: { executionToken: cancellationToken, executionKind: "cancellation", executionStartedAt: new Date() } },
     { new: true },
   ).select("+executionToken");
   if (!claimed) {
@@ -412,37 +413,34 @@ export async function cancelScheduledRoomTransfer(scheduledTransferId, { actorId
   }
 
   // ── No money -> safe automatic cancellation ───────────────────────────────
-  // Release the hold first (its own tiny txn, idempotent — releaseHoldInOwnTxn
-  // no-ops when holdApplied is already false, and releaseScheduledTransferHold
-  // only frees a bed still "reserved" for THIS reservation).
-  await releaseHoldInOwnTxn(sched, cancellationToken).catch(async (e) => {
-    logger.error({ err: e, scheduledTransferId: String(sched._id) }, "[cancelScheduledRoomTransfer] hold release failed");
-    await ScheduledRoomTransfer.updateOne(
-      { _id: sched._id, executionToken: cancellationToken },
-      { $set: { executionToken: null, executionStartedAt: null } },
-    ).catch(() => {});
-    throw e;
-  });
-
-  const addendumResult = await cancelPreparedAddendum(sched, actorId);
-  const billResult = await voidUnpaidBalanceBill(sched);
-
-  const doc = await ScheduledRoomTransfer.findOneAndUpdate(
-    { _id: sched._id, status: { $ne: "cancelled" }, executionToken: cancellationToken },
-    {
-      $set: {
-        status: "cancelled",
-        cancelledBy: actorId || SYSTEM_ACTOR_ID,
-        cancelledAt: new Date(),
-        holdApplied: false,
-        lastError: null,
-        lastAttemptAt: new Date(),
-        executionToken: null,
-        executionStartedAt: null,
-      },
-    },
-    { new: true },
-  );
+  // Cancellation commits every required mutation together. A racing payment
+  // writes the same Bill, forcing transaction retry and a fresh paid guard.
+  const session = await mongoose.startSession();
+  let doc, addendumResult, billResult;
+  try {
+    await session.withTransaction(async () => {
+      const live = await ScheduledRoomTransfer.findOne({ _id: sched._id, executionToken: cancellationToken, status: { $in: ["scheduled", "action_required"] } }).session(session);
+      if (!live) throw Object.assign(new Error("The transfer changed. Refresh its details."), { statusCode: 409 });
+      const bill = live.settlementBillId ? await Bill.findById(live.settlementBillId).session(session) : null;
+      if (bill && (Number(bill.paidAmount || 0) > 0 || ["paid", "settled"].includes(bill.status))) throw Object.assign(new Error("A payment was received. Ask administration to review Billing before cancelling."), { statusCode: 409, code: "ROOM_TRANSFER_PAYMENT_ALREADY_RECEIVED" });
+      if (live.addendumContractId) {
+        const contract = await Contract.findById(live.addendumContractId).session(session);
+        const acknowledged = await ContractAcknowledgement.exists({ contractId: live.addendumContractId }).session(session);
+        if (acknowledged || contract?.isCurrent || contract?.tenantSignatureStatus === "completed" || ["signed", "awaiting_notarization", "notarized", "ready_for_publication", "published", "active"].includes(contract?.status)) throw Object.assign(new Error("The addendum has already been accepted. Ask administration to review this transfer before cancelling."), { statusCode: 409, code: "ROOM_TRANSFER_ADDENDUM_ACKNOWLEDGED" });
+      }
+      const { releaseScheduledTransferHold } = await lazy.schedSvc();
+      if (live.holdApplied) await releaseScheduledTransferHold({ session, scheduledTransferId: live._id, executionToken: cancellationToken, sourceRoomId: live.sourceRoomId, destinationRoomId: live.destinationRoomId, destinationBedId: live.destinationBedId, destinationNeedsBed: live.destinationNeedsBed, reservationId: live.reservationId });
+      addendumResult = await cancelPreparedAddendum(live, actorId, session);
+      billResult = await voidUnpaidBalanceBill(live, { session });
+      doc = await ScheduledRoomTransfer.findOneAndUpdate({ _id: live._id, executionToken: cancellationToken }, { $set: {
+        status: "cancelled", cancelledBy: actorId || SYSTEM_ACTOR_ID, cancelledAt: new Date(), holdApplied: false,
+        lastError: null, lastAttemptAt: new Date(), executionToken: null, executionStartedAt: null,
+      } }, { new: true, session });
+    });
+  } finally {
+    await session.endSession();
+    await ScheduledRoomTransfer.updateOne({ _id: sched._id, executionToken: cancellationToken }, { $set: { executionToken: null, executionStartedAt: null } });
+  }
 
   try {
     await notify.roomTransferLifecycleOnce(
