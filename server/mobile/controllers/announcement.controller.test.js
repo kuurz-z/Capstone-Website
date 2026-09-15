@@ -1,3 +1,4 @@
+jest.mock('../services/announcementEngagement.service', () => ({ engageAnnouncement: jest.fn(async ({ acknowledge }) => ({ isRead: true, acknowledged: acknowledge, acknowledgedAt: acknowledge ? new Date("2026-09-15") : null })), getEngagements: jest.fn(async () => new Map()), getEngagement: jest.fn(async () => ({ isRead: false, readAt: null, acknowledged: false, acknowledgedAt: null })) }));
 const mockGetDb = jest.fn();
 jest.mock('../config/database.js', () => ({ getDb: (...args) => mockGetDb(...args) }));
 jest.mock('../services/pushService.js', () => ({ notifyNewAnnouncement: jest.fn() }));
@@ -449,5 +450,32 @@ describe('announcement.controller dismissAnnouncementsBulk — batched News-tab-
     const res = response();
     await dismissAnnouncementsBulk({ user: null, body: { ids: ['a1'] } }, res);
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('mobile engagement audience and explicit intent', () => {
+  const controller = require('./announcement.controller');
+  const service = require('../services/announcementEngagement.service');
+  beforeEach(() => jest.clearAllMocks());
+  test('read delegates canonical Mongo IDs without acknowledgement', async () => {
+    mockGetDb.mockReturnValue(makeDb({ announcements: [{ _id: 'canonical', announcement_id: 'a1', content: 'x', requiresAcknowledgment: true }] }));
+    const res = response();
+    await controller.markRead({ user: { user_id: 't1', _id: 'mongo1' }, params: { announcementId: 'a1' } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(service.engageAnnouncement).toHaveBeenCalledWith({ userId: 'mongo1', announcementId: 'canonical', acknowledge: false, authorize: expect.any(Function) });
+    expect(res.body).toMatchObject({ requiresAcknowledgment: true, isRead: true, acknowledged: false, acknowledgedAt: null });
+  });
+  test('explicit action acknowledges and returns canonical DTO', async () => {
+    mockGetDb.mockReturnValue(makeDb({ announcements: [{ _id: 'canonical', announcement_id: 'a1', content: 'x', requiresAcknowledgment: true }] }));
+    const res = response();
+    await controller.acknowledge({ user: { user_id: 't1', _id: 'mongo1' }, params: { announcementId: 'a1' } }, res);
+    expect(res.body.acknowledged).toBe(true);
+    expect(service.engageAnnouncement).toHaveBeenCalledWith({ userId: 'mongo1', announcementId: 'canonical', acknowledge: true, authorize: expect.any(Function) });
+  });
+  test.each([{ isArchived: true }, { is_private: true, user_id: 'other' }, { branch: 'guadalupe' }])('invisible announcement prevents all writes %j', async (fields) => {
+    mockGetDb.mockReturnValue(makeDb({ announcements: [{ announcement_id: 'a1', content: 'x', ...fields }] }));
+    const res = response();
+    await controller.acknowledge({ user: { user_id: 't1', _id: 'mongo1' }, params: { announcementId: 'a1' } }, res);
+    expect(res.statusCode).toBe(404); expect(service.engageAnnouncement).not.toHaveBeenCalled();
   });
 });

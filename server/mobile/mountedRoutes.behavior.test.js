@@ -9,6 +9,8 @@ jest.mock('./controllers/dashboard.controller.js', () => ({ getDashboard: (q, r)
 jest.mock('./controllers/announcement.controller.js', () => ({
   getAllAnnouncements: (q, r) => r.json({ visibility: q.user ? 'private' : 'public', userId: q.user?.user_id || null }),
   getAnnouncementDetail: (q, r) => r.json({ announcementId: q.params.announcementId, userId: q.user?.user_id || null }),
+  markRead: (q, r) => r.json({ isRead: true, acknowledged: false, userId: q.user.user_id }),
+  acknowledge: (q, r) => r.json({ acknowledged: true, userId: q.user.user_id }),
   createAnnouncement: (q, r) => r.json({ admin: q.user.user_id }),
   dismissAnnouncement: (q, r) => r.json({ status: 'dismissed', userId: q.user?.user_id || null }),
   dismissAnnouncementsBulk: (q, r) => r.json({ status: 'dismissed', userId: q.user?.user_id || null }),
@@ -97,4 +99,8 @@ describe('mounted mobile route authentication', () => {
   test('CommonJS wrapper and factory expose identical shared-core behavior', async () => {
     expect(wrapper.__mobileAuthCore).toBe(createMobileAuth);
   });
+});
+
+test.each(['read', 'acknowledge'])('announcement %s requires mobile authentication', async (action) => {
+  expect((await request(`/api/m/announcements/ann_1/${action}`, { method: 'POST' })).status).toBe(401);
 });

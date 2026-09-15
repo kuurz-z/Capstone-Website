@@ -93,14 +93,14 @@ acknowledgmentAccountSchema.index({ createdAt: -1, isAcknowledged: 1 });
 // ============================================================================
 
 acknowledgmentAccountSchema.methods.markAsRead = function () {
+  if (!this.isRead) this.readAt = new Date();
   this.isRead = true;
-  this.readAt = new Date();
   return this.save();
 };
 
 acknowledgmentAccountSchema.methods.acknowledge = function () {
+  if (!this.isAcknowledged) this.acknowledgedAt = new Date();
   this.isAcknowledged = true;
-  this.acknowledgedAt = new Date();
   if (!this.isRead) {
     this.isRead = true;
     this.readAt = new Date();

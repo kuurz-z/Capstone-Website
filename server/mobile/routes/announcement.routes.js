@@ -3,6 +3,9 @@ const router = express.Router();
 const announcementController = require('../controllers/announcement.controller');
 const { authMiddleware, activeTenantMiddleware, adminMiddleware, requireMobilePermission } = require('../middleware/auth');
 
+router.post('/:announcementId/read', authMiddleware, activeTenantMiddleware, announcementController.markRead);
+router.post('/:announcementId/acknowledge', authMiddleware, activeTenantMiddleware, announcementController.acknowledge);
+
 router.get('/', authMiddleware, activeTenantMiddleware, announcementController.getAllAnnouncements);
 router.get('/:announcementId', authMiddleware, activeTenantMiddleware, announcementController.getAnnouncementDetail);
 

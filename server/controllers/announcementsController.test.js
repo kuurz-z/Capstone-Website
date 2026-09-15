@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 
+const engageAnnouncement = jest.fn(async () => ({ isRead: true, readAt: new Date("2026-04-09T09:00:00Z") }));
+await jest.unstable_mockModule("../services/announcementEngagementService.js", () => ({ engageAnnouncement }));
 const createLeanChain = (result) => ({
   lean: jest.fn(async () => result),
 });
@@ -461,15 +463,7 @@ describe("announcementsController", () => {
 
     await markAsRead(req, res, next);
 
-    expect(acknowledgmentFindOne).toHaveBeenCalledWith({
-      userId: "tenant-mongo-9",
-      announcementId: "announcement-9",
-    });
-    expect(AcknowledgmentAccount).toHaveBeenCalledWith({
-      userId: "tenant-mongo-9",
-      announcementId: "announcement-9",
-    });
-    expect(incrementViewCount).toHaveBeenCalledTimes(1);
+    expect(engageAnnouncement).toHaveBeenCalledWith({ userId: "tenant-mongo-9", announcementId: "announcement-9", authorize: expect.any(Function) });
     expect(sendSuccess).toHaveBeenCalledWith(
       res,
       expect.objectContaining({
