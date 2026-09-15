@@ -68,6 +68,7 @@ function toCurrentBillContext(bill) {
     billId: mobileBill.billing_id,
     month: bill.billingMonth || null,
     billingPeriod: mobileBill.billing_period,
+    billType: bill.billType || "monthly",
     totalAmount: mobileBill.total,
     remainingAmount: mobileBill.remaining_amount,
     paidAmount: mobileBill.paid_amount,
@@ -77,6 +78,8 @@ function toCurrentBillContext(bill) {
     applianceAmount: Number(bill.charges?.applianceFees || 0),
     penaltyAmount: Number(bill.charges?.penalty || 0),
     discountAmount: Number(bill.charges?.discount || 0),
+    penaltyDetails: bill.penaltyDetails || null,
+    charges: bill.charges || {},
     status: mobileBill.status,
     statusLabel: mobileBill.status_label,
     dueDate: mobileBill.due_date,
@@ -178,6 +181,15 @@ function buildNeutralContext(fallbackAuthUser = null) {
       scheduledMoveInDate: null,
     },
     currentBill: null,
+    billingSummary: {
+      totalOutstandingBalance: 0,
+      unpaidStatementsCount: 0,
+      hasPendingBalance: false,
+      totalPenaltyDue: 0,
+    },
+    unpaidBills: [],
+    activeUnpaidBill: null,
+    recentBills: [],
     contract: null,
     activeMaintenance: [],
     inquiries: [],
@@ -278,11 +290,22 @@ export async function resolveTenantAIContext(
       ? resolveTenantCanonicalContract(tenantId, { includeEarlyStages: true }).catch(() => null)
       : Promise.resolve(null),
     requestedDomains.has("billing")
-      ? Bill.find({ userId: tenantId, ...NON_DRAFT_BILL_FILTER })
+      ? Bill.find({
+        $or: [{ userId: tenantId }, { tenantId: tenantId }],
+        ...NON_DRAFT_BILL_FILTER,
+      })
         .sort(CURRENT_BILL_SORT)
         .limit(10)
         .lean()
-        .then((bills) => ({ currentBill: selectCurrentBillFromList(bills, now), bills }))
+        .then((bills) => {
+          const eligibleBills = (bills || []).filter(
+            (b) => b && b.status !== "draft" && !b.isArchived,
+          );
+          return {
+            currentBill: selectCurrentBillFromList(eligibleBills, now),
+            bills: eligibleBills,
+          };
+        })
         .catch(() => ({ currentBill: null, bills: [] }))
       : Promise.resolve({ currentBill: null, bills: [] }),
     requestedDomains.has("maintenance")
@@ -337,7 +360,32 @@ export async function resolveTenantAIContext(
     ? "active"
     : (currentReservation?.status || "unknown");
 
-  const currentBill = toCurrentBillContext(billingResolution.currentBill);
+  const bills = billingResolution?.bills || [];
+  const currentBill = toCurrentBillContext(billingResolution?.currentBill);
+  const totalOutstandingBalance = bills.reduce((sum, b) => {
+    if (b.status === "voided" || b.status === "waived") return sum;
+    return sum + (Number(b.remainingAmount !== undefined ? b.remainingAmount : b.totalAmount) || 0);
+  }, 0);
+  const unpaidBills = bills
+    .filter((b) => b.status !== "voided" && b.status !== "waived" && Number(b.remainingAmount !== undefined ? b.remainingAmount : b.totalAmount) > 0)
+    .map(toCurrentBillContext);
+  const totalPenaltyDue = bills.reduce((sum, b) => {
+    if (b.status === "voided" || b.status === "waived" || Number(b.remainingAmount || 0) <= 0) return sum;
+    return sum + (Number(b.charges?.penalty) || 0);
+  }, 0);
+  const activeUnpaidBill = unpaidBills.find((b) => b.penaltyAmount > 0) || unpaidBills[0] || null;
+  const recentBills = bills.slice(0, 5).map(toCurrentBillContext);
+  const billingSummary = {
+    totalOutstandingBalance,
+    unpaidStatementsCount: unpaidBills.length,
+    hasPendingBalance: totalOutstandingBalance > 0,
+    totalPenaltyDue,
+  };
+  const hasPendingBill = Boolean(
+    totalOutstandingBalance > 0
+    || unpaidBills.length > 0
+    || (currentBill && currentBill.remainingAmount > 0),
+  );
   const contract = toContractContext(canonicalContract, now);
   const recentAnnouncements = requestedDomains.has("announcements")
     ? await loadVisibleAnnouncements(db, audienceContext, now).catch(() => [])
@@ -386,12 +434,16 @@ export async function resolveTenantAIContext(
     },
     reservation: reservationContext,
     currentBill,
+    billingSummary,
+    unpaidBills,
+    activeUnpaidBill,
+    recentBills,
     contract,
     activeMaintenance: maintenanceRequests.map(toMaintenanceContext),
     inquiries: conversations.map(toInquiryContext),
     recentAnnouncements,
     hasActiveMaintenance: maintenanceRequests.length > 0,
-    hasPendingBill: Boolean(currentBill && currentBill.remainingAmount > 0),
+    hasPendingBill,
   };
 }
 

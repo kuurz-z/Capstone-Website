@@ -225,7 +225,7 @@ describe("canonical Lily tenant context", () => {
     expect(toMobileBill).toHaveBeenCalledWith(currentBill);
     expect(toMobileBill).not.toHaveBeenCalledWith(futureDraft);
     expect(billFind).toHaveBeenCalledWith(expect.objectContaining({
-      userId: expect.any(mongoose.Types.ObjectId),
+      $or: [{ userId: tenantId }, { tenantId }],
       status: { $ne: "draft" },
       isArchived: false,
     }));
@@ -240,7 +240,9 @@ describe("canonical Lily tenant context", () => {
     expect(String(userQuery.$or.find((clause) => clause._id)?._id)).toBe(String(tenantId));
     expect(stayFindOne).toHaveBeenCalledWith(expect.objectContaining({ tenantId }));
     expect(reservationFindOne).toHaveBeenCalledWith(expect.objectContaining({ userId: tenantId }));
-    expect(billFind).toHaveBeenCalledWith(expect.objectContaining({ userId: tenantId }));
+    expect(billFind).toHaveBeenCalledWith(expect.objectContaining({
+      $or: [{ userId: tenantId }, { tenantId }],
+    }));
     expect(maintenanceFind).toHaveBeenCalledWith(expect.objectContaining({
       $or: expect.arrayContaining([expect.objectContaining({ userId: tenantId })]),
     }));
@@ -342,6 +344,80 @@ describe("canonical Lily tenant context", () => {
     expect(context.userRole).toBe("applicant");
     expect(context.tenancy.isCurrentResident).toBe(false);
     expect(context.tenancy.status).toBe("reserved");
+  });
+
+  test("resolves billing summary, unpaid bills with penalties, and active unpaid bill when penalty exists", async () => {
+    const tenantId = new mongoose.Types.ObjectId();
+    const user = {
+      _id: tenantId,
+      user_id: "tenant-penalty-user",
+      role: "tenant",
+      tenantStatus: "active",
+      firstName: "Maria",
+      lastName: "Clara",
+      email: "maria@example.com",
+    };
+
+    const paidCycleBill = {
+      _id: "paid-cycle-bill",
+      userId: tenantId,
+      status: "paid",
+      isArchived: false,
+      billType: "monthly",
+      remainingAmount: 0,
+      totalAmount: 6000,
+      charges: { rent: 6000, penalty: 0 },
+    };
+
+    const unpaidPenaltyBill = {
+      _id: "unpaid-penalty-bill",
+      userId: tenantId,
+      status: "pending",
+      isArchived: false,
+      billType: "penalty",
+      remainingAmount: 50000,
+      totalAmount: 50000,
+      charges: { penalty: 50000 },
+      penaltyDetails: { description: "Late payment fee" },
+    };
+
+    userFindOne.mockReturnValue(queryResult(user));
+    stayFindOne.mockReturnValue(queryResult(null));
+    reservationFindOne.mockReturnValue(queryResult(null));
+    billFind.mockReturnValue(queryResult([paidCycleBill, unpaidPenaltyBill]));
+    buildAnnouncementTenantContext.mockResolvedValue({
+      authenticated: true,
+      mongoId: tenantId,
+      branch: "gil-puyat",
+    });
+    toMobileBill.mockImplementation((bill) => ({
+      billing_id: String(bill._id),
+      billing_period: "September 2026",
+      total: bill.totalAmount,
+      remaining_amount: bill.remainingAmount,
+      paid_amount: (bill.totalAmount || 0) - (bill.remainingAmount || 0),
+      rent: bill.charges?.rent || 0,
+      electricity: 0,
+      water: 0,
+      status: bill.status,
+      status_label: bill.status === "paid" ? "Paid" : "Pending",
+      due_date: new Date("2026-09-20T00:00:00Z"),
+      release_date: new Date("2026-09-15T00:00:00Z"),
+    }));
+
+    const context = await resolveTenantAIContext(tenantId, user, {
+      db: null,
+      domains: ["billing"],
+    });
+
+    expect(context.billingSummary.totalOutstandingBalance).toBe(50000);
+    expect(context.billingSummary.totalPenaltyDue).toBe(50000);
+    expect(context.unpaidBills).toHaveLength(1);
+    expect(context.unpaidBills[0].penaltyAmount).toBe(50000);
+    expect(context.unpaidBills[0].billId).toBe("unpaid-penalty-bill");
+    expect(context.activeUnpaidBill).toBeDefined();
+    expect(context.activeUnpaidBill.billId).toBe("unpaid-penalty-bill");
+    expect(context.hasPendingBill).toBe(true);
   });
 
   test("neutral fallback never fabricates a branch, room, bed, bill, or move-in date", () => {
