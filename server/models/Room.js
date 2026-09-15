@@ -301,39 +301,95 @@ roomSchema.methods.occupyBed = function (bedId, userId, reservationId) {
 
 /**
  * Mark a bed as vacant
- * @param {string} bedId - The bed ID, code, or identifier to vacate
- * @param {string} [userId] - Optional User ID to match if bedId doesn't match
- * @param {string} [reservationId] - Optional Reservation ID to match if bedId doesn't match
+ * Matches beds across multiple attributes:
+ * 1. Specificity match: Ownership (userId / reservationId / lockedBy) + Position/ID
+ * 2. Direct ownership: userId / reservationId / lockedBy
+ * 3. Direct identifier: id, code, _id, bedNumber (case-insensitive)
+ * 4. Position string: "lower", "upper", "single" (matches occupied/reserved/locked bed with that position)
+ * 5. Single occupied bed fallback: if room has exactly 1 occupied bed
+ *
+ * @param {string} [bedId] - The bed ID, code, position, or identifier to vacate
+ * @param {string|ObjectId|Object} [userId] - Optional User ID to match
+ * @param {string|ObjectId|Object} [reservationId] - Optional Reservation ID to match
  * @returns {boolean} - true if successful, false if bed not found
  */
 roomSchema.methods.vacateBed = function (bedId, userId, reservationId) {
-  const normBedId = bedId ? String(bedId).trim().toLowerCase() : null;
+  if (!this.beds || !Array.isArray(this.beds) || this.beds.length === 0) {
+    return false;
+  }
+
+  const normBedId = bedId != null && String(bedId).trim() !== "" ? String(bedId).trim().toLowerCase() : null;
   const normUserId = userId ? String(userId?._id || userId).trim() : null;
   const normResId = reservationId ? String(reservationId?._id || reservationId).trim() : null;
 
-  let bed = this.beds?.find((b) => {
+  const isPositionString = normBedId && ["lower", "upper", "single"].includes(normBedId);
+
+  const matchesOwnership = (b) => {
+    const bUserId = b.occupiedBy?.userId ? String(b.occupiedBy.userId._id || b.occupiedBy.userId).trim() : "";
+    const bResId = b.occupiedBy?.reservationId ? String(b.occupiedBy.reservationId._id || b.occupiedBy.reservationId).trim() : "";
+    const bLockedBy = b.lockedBy ? String(b.lockedBy._id || b.lockedBy).trim() : "";
+
+    if (normUserId && (bUserId === normUserId || bLockedBy === normUserId)) return true;
+    if (normResId && bResId === normResId) return true;
+    return false;
+  };
+
+  const matchesDirectId = (b) => {
+    if (!normBedId) return false;
     const bId = b.id ? String(b.id).trim().toLowerCase() : "";
     const bCode = b.code ? String(b.code).trim().toLowerCase() : "";
     const bMongoId = b._id ? String(b._id).trim().toLowerCase() : "";
-    const bNum = b.bedNumber != null ? String(b.bedNumber) : "";
-    const bUserId = b.occupiedBy?.userId ? String(b.occupiedBy.userId).trim() : "";
-    const bResId = b.occupiedBy?.reservationId ? String(b.occupiedBy.reservationId).trim() : "";
+    const bNum = b.bedNumber != null ? String(b.bedNumber).trim().toLowerCase() : "";
 
-    if (normBedId && (bId === normBedId || bCode === normBedId || bMongoId === normBedId || bNum === normBedId)) {
-      return true;
-    }
-    if (normUserId && bUserId && bUserId === normUserId) {
-      return true;
-    }
-    if (normResId && bResId && bResId === normResId) {
-      return true;
-    }
-    return false;
-  });
+    return bId === normBedId || bCode === normBedId || bMongoId === normBedId || bNum === normBedId;
+  };
 
-  // Fallback: if only 1 occupied bed exists in room, vacate that bed
-  if (!bed && Array.isArray(this.beds) && this.beds.filter((b) => b.status === "occupied").length === 1) {
-    bed = this.beds.find((b) => b.status === "occupied");
+  const matchesPosition = (b) => {
+    if (!isPositionString) return false;
+    const bPos = b.position ? String(b.position).trim().toLowerCase() : "";
+    return bPos === normBedId;
+  };
+
+  let bed = null;
+
+  // 1. Priority 1: High specificity match — ownership AND (position or direct ID)
+  if ((normUserId || normResId) && normBedId) {
+    bed = this.beds.find((b) => matchesOwnership(b) && (matchesPosition(b) || matchesDirectId(b)));
+  }
+
+  // 2. Priority 2: Direct ownership match (userId, reservationId, or lockedBy)
+  if (!bed && (normUserId || normResId)) {
+    bed = this.beds.find((b) => matchesOwnership(b));
+  }
+
+  // 3. Priority 3: Direct ID / Code / _id / bedNumber match (when not just a position string)
+  if (!bed && normBedId && !isPositionString) {
+    bed = this.beds.find((b) => matchesDirectId(b));
+  }
+
+  // 4. Priority 4: Position string match ("lower", "upper", "single")
+  if (!bed && isPositionString) {
+    const activePosBeds = this.beds.filter(
+      (b) => matchesPosition(b) && (b.status === "occupied" || b.status === "reserved" || b.status === "locked"),
+    );
+    if (activePosBeds.length >= 1) {
+      bed = activePosBeds[0];
+    } else {
+      bed = this.beds.find((b) => matchesPosition(b));
+    }
+  }
+
+  // 5. Priority 5: Direct identifier match even if normBedId was a position name (e.g., bed.id === 'lower')
+  if (!bed && normBedId) {
+    bed = this.beds.find((b) => matchesDirectId(b));
+  }
+
+  // 6. Fallback: If only 1 occupied bed exists in the room, vacate that bed
+  if (!bed) {
+    const occupiedBeds = this.beds.filter((b) => b.status === "occupied");
+    if (occupiedBeds.length === 1) {
+      bed = occupiedBeds[0];
+    }
   }
 
   if (!bed) return false;
