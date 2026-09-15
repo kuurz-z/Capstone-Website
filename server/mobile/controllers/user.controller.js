@@ -3,6 +3,7 @@ const { Types: { ObjectId } } = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const { resolveRequesterBranchCode } = require('./announcement.controller');
 const { MOBILE_BRANCH_LOCATIONS } = require('../config/branchLocations');
+const { withTenantOnboardingState } = require('../utils/tenantOnboarding');
 
 function firstNonEmptyString(...values) {
   for (const value of values) {
@@ -90,7 +91,7 @@ function normalizeUser(doc) {
     u.username = u.email.split('@')[0];
   }
 
-  return u;
+  return withTenantOnboardingState(u);
 }
 
 // Client-visible field allowlist — mirrors the currently-live standalone
@@ -106,6 +107,7 @@ function normalizeUser(doc) {
 const CLIENT_VISIBLE_USER_FIELDS = [
   'user_id', 'email', 'name', 'firstName', 'middleName', 'lastName', 'phone', 'address',
   'username', 'usernameNextAllowedAt', 'serverTime', 'picture', 'role',
+  'tenantOnboardingSeen',
   // Extended profile fields the web profile editor writes to
   // (authController.js updateProfile). These are read-only on mobile today
   // — surfacing them here just lets the app display what was set on web,
@@ -165,27 +167,57 @@ async function resolveTenantBranchLocation(db, mongoId) {
   return MOBILE_BRANCH_LOCATIONS[branchCode] || null;
 }
 
+async function buildCanonicalUserProfile(db, userId, mongoId, now = new Date()) {
+  const user = await db.collection('users').findOne(
+    { user_id: userId },
+    { projection: { _id: 0 } },
+  );
+  if (!user) return null;
+
+  const branch = await resolveTenantBranchLocation(db, mongoId);
+  return {
+    ...sanitizeUserForClient(withUsernameCooldownFields(normalizeUser(user), now)),
+    branch,
+  };
+}
+
 // Get current user profile
 async function getMe(req, res) {
   try {
     const db = getDb();
-    const user = await db.collection('users').findOne(
-      { user_id: req.user.user_id },
-      { projection: { _id: 0 } },
-    );
+    const user = await buildCanonicalUserProfile(db, req.user.user_id, req.user._id);
 
     if (!user) {
       return res.status(404).json({ detail: 'User not found' });
     }
 
-    const branch = await resolveTenantBranchLocation(db, req.user._id);
-    res.json({
-      ...sanitizeUserForClient(withUsernameCooldownFields(normalizeUser(user))),
-      branch,
-    });
+    res.json(user);
   } catch (error) {
     console.error('getMe error:', error);
     res.status(500).json({ detail: 'Failed to load profile' });
+  }
+}
+
+// Persist completion or an intentional skip for the authenticated active
+// tenant only. The null filter makes the first write atomic and preserves the
+// original first-seen timestamp on retries.
+async function markTenantOnboardingSeen(req, res) {
+  try {
+    const db = getDb();
+    await db.collection('users').updateOne(
+      {
+        user_id: req.user.user_id,
+        tenant_onboarding_seen_at: null,
+      },
+      { $set: { tenant_onboarding_seen_at: new Date() } },
+    );
+
+    const user = await buildCanonicalUserProfile(db, req.user.user_id, req.user._id);
+    if (!user) return res.status(404).json({ detail: 'User not found' });
+    return res.json(user);
+  } catch (error) {
+    console.error('Mark tenant onboarding seen error:', error);
+    return res.status(500).json({ detail: 'Failed to save your guide preference.' });
   }
 }
 
@@ -852,6 +884,7 @@ async function savePushToken(req, res) {
 module.exports = {
   getMe,
   updateMe,
+  markTenantOnboardingSeen,
   savePushToken,
   uploadDocument,
   getUserDocuments,
@@ -859,5 +892,6 @@ module.exports = {
   deleteDocument,
   sanitizeUserForClient,
   resolveTenantBranchLocation,
+  buildCanonicalUserProfile,
   normalizeUser,
 };

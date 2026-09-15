@@ -8,6 +8,7 @@ const { validateNewPassword: validateCanonicalNewPassword } = require('../../sec
 const { createSession } = require('../security/mobileSession');
 const { hashResetToken, resetTokenEligibilityFilter } = require('../security/resetTokenEligibility');
 const { evaluateTenant } = require('../../security/mobileTenantEligibility.cjs');
+const { withTenantOnboardingState } = require('../utils/tenantOnboarding');
 const {
   firebaseIdentityToolkitBaseUrl,
   signInWithPasswordUrl,
@@ -322,7 +323,7 @@ function normalizeUser(doc) {
     );
   }
   if (!u.username && u.email) u.username = u.email.split('@')[0];
-  return u;
+  return withTenantOnboardingState(u);
 }
 
 /** Return user object without MongoDB _id */
@@ -1489,6 +1490,7 @@ module.exports = {
   // controller; the separately scoped legacy controller exists only to
   // finish already-issued custom tokens during the cutover window.
   __test: {
+    normalizeUser,
     firebaseIdentityToolkitBaseUrl,
     signInWithPasswordUrl,
     hashOtp,

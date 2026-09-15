@@ -10,7 +10,7 @@ jest.mock('uuid', () => ({ v4: () => 'test-uuid-0000-0000-0000-000000000000' }))
 // — stub it, matching announcement.controller.test.js's own mock.
 jest.mock('../services/pushService.js', () => ({ notifyNewAnnouncement: jest.fn() }));
 
-const { getMe, updateMe, savePushToken, sanitizeUserForClient, normalizeUser, resolveTenantBranchLocation } = require('./user.controller.js');
+const { getMe, updateMe, markTenantOnboardingSeen, savePushToken, sanitizeUserForClient, normalizeUser, resolveTenantBranchLocation } = require('./user.controller.js');
 
 function response() {
   return {
@@ -50,8 +50,13 @@ function makeDb(users, branchSource = null) {
         },
         async updateOne(filter, update) {
           const user = users[filter.user_id];
-          if (user) Object.assign(user, update.$set);
-          return { matchedCount: user ? 1 : 0 };
+          const onboardingMatch = filter.tenant_onboarding_seen_at !== null
+            || user?.tenant_onboarding_seen_at == null;
+          if (user && onboardingMatch) Object.assign(user, update.$set);
+          return {
+            matchedCount: user && onboardingMatch ? 1 : 0,
+            modifiedCount: user && onboardingMatch ? 1 : 0,
+          };
         },
       };
     },
@@ -95,6 +100,57 @@ describe('sanitizeUserForClient', () => {
   test('drops any field not on the allowlist', () => {
     const safe = sanitizeUserForClient({ user_id: 'x', email: 'e', push_token: 'leak', role: 'tenant', hashedPassword: 'nope' });
     expect(safe).toEqual({ user_id: 'x', email: 'e', role: 'tenant' });
+  });
+
+  test('projects the server timestamp as a boolean without exposing the raw timestamp', () => {
+    const unseen = sanitizeUserForClient(normalizeUser({ user_id: 'new-tenant' }));
+    expect(unseen.tenantOnboardingSeen).toBe(false);
+
+    const seen = sanitizeUserForClient(normalizeUser({
+      user_id: 'existing-tenant',
+      tenant_onboarding_seen_at: new Date('2026-09-01T00:00:00Z'),
+    }));
+    expect(seen.tenantOnboardingSeen).toBe(true);
+    expect(seen.tenant_onboarding_seen_at).toBeUndefined();
+  });
+});
+
+describe('user.controller markTenantOnboardingSeen', () => {
+  beforeEach(() => { mockGetDb.mockReset(); });
+
+  test('marks only the authenticated user and returns the canonical sanitized profile', async () => {
+    const users = {
+      t1: { _id: 'mongo-t1', user_id: 't1', role: 'tenant', tenantStatus: 'active' },
+      t2: { _id: 'mongo-t2', user_id: 't2', role: 'tenant', tenantStatus: 'active' },
+    };
+    mockGetDb.mockReturnValue(makeDb(users));
+    const res = response();
+
+    await markTenantOnboardingSeen({ user: users.t1, body: { user_id: 't2' } }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.tenantOnboardingSeen).toBe(true);
+    expect(res.body.tenant_onboarding_seen_at).toBeUndefined();
+    expect(users.t1.tenant_onboarding_seen_at).toBeInstanceOf(Date);
+    expect(users.t2.tenant_onboarding_seen_at).toBeUndefined();
+  });
+
+  test('is idempotent and preserves the original first-seen timestamp', async () => {
+    const firstSeen = new Date('2026-09-01T00:00:00Z');
+    const users = {
+      t1: {
+        _id: 'mongo-t1', user_id: 't1', role: 'tenant', tenantStatus: 'active',
+        tenant_onboarding_seen_at: firstSeen,
+      },
+    };
+    mockGetDb.mockReturnValue(makeDb(users));
+    const res = response();
+
+    await markTenantOnboardingSeen({ user: users.t1 }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.tenantOnboardingSeen).toBe(true);
+    expect(users.t1.tenant_onboarding_seen_at).toBe(firstSeen);
   });
 });
 

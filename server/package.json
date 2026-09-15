@@ -27,6 +27,8 @@
     "push:repair-duplicates:write": "node scripts/repair_duplicate_push_registrations.mjs --write",
     "maintenance:backfill-contract": "node scripts/backfill_maintenance_contract.mjs",
     "maintenance:backfill-contract:write": "node scripts/backfill_maintenance_contract.mjs --write",
+    "tenant-onboarding:backfill": "node scripts/backfill_tenant_onboarding_seen.mjs",
+    "tenant-onboarding:backfill:write": "node scripts/backfill_tenant_onboarding_seen.mjs --confirm",
     "maintenance:branch-report": "node scripts/repair_maintenance_branches.mjs",
     "maintenance:branch-repair": "node scripts/repair_maintenance_branches.mjs --write",
     "contracts:audit-prepared-documents": "node scripts/audit_broken_prepared_contracts.mjs",

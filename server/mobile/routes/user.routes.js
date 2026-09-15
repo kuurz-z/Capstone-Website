@@ -5,6 +5,7 @@ const { authMiddleware, activeTenantMiddleware } = require('../middleware/auth')
 
 router.get('/me', authMiddleware, activeTenantMiddleware, userController.getMe);
 router.put('/me', authMiddleware, activeTenantMiddleware, userController.updateMe);
+router.post('/me/manual-guide-seen', authMiddleware, activeTenantMiddleware, userController.markTenantOnboardingSeen);
 router.post('/push-token', authMiddleware, activeTenantMiddleware, userController.savePushToken);
 
 // Document management

@@ -115,3 +115,18 @@ describe('email/password login error-code contract', () => {
     });
   });
 });
+
+describe('auth profile onboarding serialization', () => {
+  test('login normalization exposes only the boolean onboarding state', () => {
+    const timestamp = new Date('2026-09-01T00:00:00Z');
+    const unseen = controller.__test.normalizeUser({ user_id: 'unseen' });
+    const seen = controller.__test.normalizeUser({
+      user_id: 'seen',
+      tenant_onboarding_seen_at: timestamp,
+    });
+
+    expect(unseen.tenantOnboardingSeen).toBe(false);
+    expect(seen.tenantOnboardingSeen).toBe(true);
+    expect(seen.tenant_onboarding_seen_at).toBeUndefined();
+  });
+});
