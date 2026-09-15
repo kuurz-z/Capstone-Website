@@ -796,6 +796,111 @@
   color: #0f172a !important;
 }
 
+/* ── Tenant Workspace Modals Dark Mode Support ── */
+:is(html.dark, [data-theme="dark"], .dark) .tenant-workspace-modal {
+  background: var(--card, #1e293b);
+  border: 1px solid var(--border, #334155);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-workspace-modal__header,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-workspace-modal__footer {
+  border-color: var(--border, #334155);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-workspace-modal__header h3 {
+  color: var(--foreground, #f8fafc);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-workspace-modal__close {
+  color: var(--muted-foreground, #94a3b8);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-workspace-modal__close:hover {
+  color: var(--foreground, #f8fafc);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field span,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-section h4 {
+  color: var(--muted-foreground, #94a3b8);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field input,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field select,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field textarea {
+  border-color: var(--border, #334155);
+  color: var(--foreground, #f8fafc);
+  background: var(--input-background, #1e293b);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field input:focus,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field select:focus,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field textarea:focus {
+  border-color: var(--ring, #d4af37);
+  outline: none;
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field select option {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field input[readonly],
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field input:disabled {
+  background: var(--muted, #334155);
+  color: var(--muted-foreground, #94a3b8);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field--invalid input,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field--invalid select,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-field--invalid textarea {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  color: #f8fafc !important;
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .twm-search-select__dropdown {
+  background: var(--card, #1e293b);
+  border-color: var(--border, #334155);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .twm-search-select__option {
+  color: var(--foreground, #f8fafc);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .twm-search-select__option:hover {
+  background: var(--muted, #334155);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .twm-search-select__option--disabled {
+  background: rgba(30, 41, 59, 0.5);
+  color: #64748b;
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-btn--ghost {
+  color: var(--muted-foreground, #94a3b8);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-btn--ghost:hover:not(:disabled) {
+  background: var(--muted, #334155);
+  border-color: var(--border, #334155);
+  color: var(--foreground, #f8fafc);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-btn--back,
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-btn--secondary {
+  background: var(--card, #1e293b);
+  border-color: var(--border, #334155);
+  color: var(--foreground, #f8fafc);
+}
+
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-btn--back:hover:not(:disabled),
+:is(html.dark, [data-theme="dark"], .dark) .tenant-modal-btn--secondary:hover:not(:disabled) {
+  background: var(--muted, #334155);
+  border-color: var(--border-strong, #475569);
+}
+
 /* ── Searchable Room Dropdown Component ─────────────────────────────────────── */
 .twm-search-select {
   position: relative;

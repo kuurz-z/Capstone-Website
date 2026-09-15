@@ -17,7 +17,7 @@ import { AlertTriangle } from "lucide-react";
 class RouteErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null, isChunkError: false };
+    this.state = { hasError: false, error: null, errorInfo: null, isChunkError: false, isRetrying: false };
   }
 
   static getDerivedStateFromError(error) {
@@ -28,7 +28,7 @@ class RouteErrorBoundary extends React.Component {
          error.message?.includes("importing a module script failed"))) ||
       error?.message?.includes("Loading chunk");
 
-    return { hasError: true, error, isChunkError: Boolean(isChunkError) };
+    return { hasError: true, error, isChunkError: Boolean(isChunkError), isRetrying: false };
   }
 
   componentDidCatch(error, errorInfo) {
@@ -41,11 +41,11 @@ class RouteErrorBoundary extends React.Component {
   }
 
   handleRetry = () => {
-    if (this.state.isChunkError) {
-      window.location.reload();
-    } else {
-      this.setState({ hasError: false, error: null, errorInfo: null, isChunkError: false });
-    }
+    this.setState({ isRetrying: true });
+    try {
+      sessionStorage.removeItem("socialAuthInProgress");
+    } catch (_) {}
+    window.location.reload();
   };
 
   render() {
@@ -107,21 +107,27 @@ class RouteErrorBoundary extends React.Component {
  <div
  style={{ display: "flex", gap: "12px", justifyContent: "center" }}
  >
- <button
- onClick={this.handleRetry}
- style={{
- background: "#1a3f6b",
- color: "#fff",
- border: "none",
- borderRadius: "8px",
- padding: "10px 24px",
- fontSize: "14px",
- cursor: "pointer",
- fontWeight: 500,
- }}
- >
- {this.state.isChunkError ? "Reload Page" : "Try Again"}
- </button>
+              <button
+                onClick={this.handleRetry}
+                disabled={this.state.isRetrying}
+                style={{
+                  background: "#1a3f6b",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "10px 24px",
+                  fontSize: "14px",
+                  cursor: this.state.isRetrying ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  opacity: this.state.isRetrying ? 0.7 : 1,
+                }}
+              >
+                {this.state.isRetrying
+                  ? "Reloading..."
+                  : this.state.isChunkError
+                    ? "Reload Page"
+                    : "Try Again"}
+              </button>
  <button
  onClick={() => (window.location.href = "/")}
  style={{

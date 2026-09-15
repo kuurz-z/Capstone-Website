@@ -103,8 +103,8 @@ export const createRoomSchema = z
       .string()
       .trim()
       .min(1, "Room number is required")
-      .max(10, "Room number cannot exceed 10 digits")
-      .regex(/^[0-9]+$/, "Room number must contain numbers only"),
+      .max(20, "Room number cannot exceed 20 characters")
+      .regex(/^[a-zA-Z0-9-]+$/, "Room number must contain letters, numbers, and hyphens only"),
     branch: z.enum(["gil-puyat", "guadalupe"]),
     type: z.enum(["private", "double-sharing", "quadruple-sharing"]),
     capacity: z.number().int().min(1).max(20),
@@ -144,8 +144,8 @@ export const updateRoomSchema = z
       .string()
       .trim()
       .min(1, "Room number is required")
-      .max(10, "Room number cannot exceed 10 digits")
-      .regex(/^[0-9]+$/, "Room number must contain numbers only")
+      .max(20, "Room number cannot exceed 20 characters")
+      .regex(/^[a-zA-Z0-9-]+$/, "Room number must contain letters, numbers, and hyphens only")
       .optional(),
     branch: z.enum(["gil-puyat", "guadalupe"]).optional(),
     type: z.enum(["private", "double-sharing", "quadruple-sharing"]).optional(),

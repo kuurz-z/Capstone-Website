@@ -96,5 +96,7 @@ test("sanitizeName strips forbidden characters and capitalizes the first letter 
   assert.equal(sanitizeName("vince<script>alert(1)</script>"), "Vince");
   assert.equal(sanitizeName("dela cruz"), "Dela Cruz");
   assert.equal(sanitizeName("anne-marie"), "Anne-Marie");
+  assert.equal(sanitizeName("Ma. Elonah Kay"), "Ma. Elonah Kay");
+  assert.equal(sanitizeName("ma."), "Ma.");
 });
 

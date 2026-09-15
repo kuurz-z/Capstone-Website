@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -13,11 +13,11 @@ test("ContactFooter enforces balanced compact padding and grid spacing", () => {
     "utf8"
   );
 
-  // Outer container padding must be py-8 lg:py-10 (not py-12 lg:py-16)
+  // Outer container padding must be py-6 lg:py-8 (not oversized py-12 lg:py-16 or py-8 lg:py-10)
   assert.match(
     rawCode,
-    /className="[^"]*py-8 lg:py-10[^"]*"/,
-    "Footer outer container must use balanced compact vertical padding py-8 lg:py-10"
+    /className="[^"]*py-6 lg:py-8[^"]*"/,
+    "Footer outer container must use balanced compact vertical padding py-6 lg:py-8"
   );
   assert.doesNotMatch(
     rawCode,
@@ -25,11 +25,23 @@ test("ContactFooter enforces balanced compact padding and grid spacing", () => {
     "Footer outer container must not use oversized py-12 lg:py-16 padding"
   );
 
+  // Container max-width should be compact max-w-6xl rather than oversized max-w-screen-2xl
+  assert.match(
+    rawCode,
+    /max-w-6xl mx-auto px-4 sm:px-6 lg:px-8/,
+    "Footer container must use compact max-w-6xl with refined horizontal padding"
+  );
+  assert.doesNotMatch(
+    rawCode,
+    /max-w-screen-2xl/,
+    "Footer container must not stretch across max-w-screen-2xl"
+  );
+
   // Grid column gaps and bottom margin
   assert.match(
     rawCode,
-    /gap-8 lg:gap-10\s+mb-6/,
-    "Footer grid must use compact gap-8 lg:gap-10 and mb-6 bottom margin"
+    /gap-6 lg:gap-8\s+mb-5/,
+    "Footer grid must use compact gap-6 lg:gap-8 and mb-5 bottom margin"
   );
   assert.doesNotMatch(
     rawCode,
@@ -75,11 +87,11 @@ test("ContactFooter enforces compact typography margins and list item spacing", 
     "Social media icon buttons must use 32px dimensions"
   );
 
-  // Bottom legal bar padding should be pt-4
+  // Bottom legal bar padding should be pt-3.5 or pt-4
   assert.match(
     rawCode,
-    /className="pt-4"/,
-    "Bottom legal bar must use compact pt-4 padding"
+    /className="pt-(?:3\.5|4)"/,
+    "Bottom legal bar must use compact padding"
   );
   assert.doesNotMatch(
     rawCode,

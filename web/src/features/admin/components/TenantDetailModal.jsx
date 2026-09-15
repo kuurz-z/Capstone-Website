@@ -1549,7 +1549,7 @@ export default function TenantDetailModal({
           onClick={() => setShowDigitalContractModal(false)}
         >
           <div
-            className="bg-card border border-border rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 my-auto"
+            className="bg-card border border-border rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border/80 pb-3">

@@ -1069,7 +1069,7 @@ export default function DigitalContractPaper({
 
             {/* Scrollable Container (flex-1 fill height). Compact padding on
                 narrow viewports so the document itself gets the width (R5.6). */}
-            <div className="flex-1 min-h-0 px-3 py-4 sm:px-12 sm:py-10 overflow-y-auto overflow-x-auto bg-slate-100 dark:bg-slate-950 flex justify-center">
+            <div className="flex-1 min-h-0 px-3 py-4 sm:px-12 sm:py-10 overflow-y-auto overflow-x-auto bg-slate-100 dark:bg-slate-950 flex justify-center items-start">
               <article
                 id="digital-contract-paper"
                 className="w-full max-w-[840px] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-lg p-6 sm:p-12 shadow-sm"

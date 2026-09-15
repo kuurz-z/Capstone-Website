@@ -69,7 +69,7 @@ const LIMITS = {
   NAME_MIN: 2,
   NAME_MAX: 50,
   ROOM_NUMBER_MIN: 1,
-  ROOM_NUMBER_MAX: 10,
+  ROOM_NUMBER_MAX: 20,
   FLOOR_MIN: 1,
   FLOOR_MAX: 100,
   PRICE_MIN: 500,
@@ -414,8 +414,8 @@ export default function RoomFormModal({ room, onClose, onSave }) {
       // Room name: letters, numbers, hyphens, and spaces; max 50 chars
       nextValue = value.replace(/[^a-zA-Z0-9\s-]/g, "").slice(0, LIMITS.NAME_MAX);
     } else if (field === "roomNumber") {
-      // Room number: numbers only; max 10 digits
-      nextValue = value.replace(/\D/g, "").slice(0, LIMITS.ROOM_NUMBER_MAX);
+      // Room number: letters, numbers, and hyphens; max LIMITS.ROOM_NUMBER_MAX
+      nextValue = value.replace(/[^a-zA-Z0-9-]/g, "").slice(0, LIMITS.ROOM_NUMBER_MAX);
     } else if (field === "floor") {
       // Floor: positive integer only, max 3 digits
       const digitsOnly = String(value).replace(/[^0-9]/g, "").slice(0, 3);
@@ -481,9 +481,9 @@ export default function RoomFormModal({ room, onClose, onSave }) {
       if (!trimmed) {
         err = "Room number is required";
       } else if (trimmed.length > LIMITS.ROOM_NUMBER_MAX) {
-        err = `Room number cannot exceed ${LIMITS.ROOM_NUMBER_MAX} digits`;
-      } else if (!/^[0-9]+$/.test(trimmed)) {
-        err = "Room number must contain numbers only";
+        err = `Room number cannot exceed ${LIMITS.ROOM_NUMBER_MAX} characters`;
+      } else if (!/^[a-zA-Z0-9-]+$/.test(trimmed)) {
+        err = "Room number must contain letters, numbers, and hyphens only";
       } else if (isRoomNumberDuplicate(allRooms, form.branch, trimmed, room?._id)) {
         err = `Room number ${trimmed} already exists in ${branchLabel}`;
       }
@@ -549,9 +549,9 @@ export default function RoomFormModal({ room, onClose, onSave }) {
     if (!trimmedNumber) {
       newErrors.roomNumber = "Room number is required";
     } else if (trimmedNumber.length > LIMITS.ROOM_NUMBER_MAX) {
-      newErrors.roomNumber = `Room number cannot exceed ${LIMITS.ROOM_NUMBER_MAX} digits`;
-    } else if (!/^[0-9]+$/.test(trimmedNumber)) {
-      newErrors.roomNumber = "Room number must contain numbers only";
+      newErrors.roomNumber = `Room number cannot exceed ${LIMITS.ROOM_NUMBER_MAX} characters`;
+    } else if (!/^[a-zA-Z0-9-]+$/.test(trimmedNumber)) {
+      newErrors.roomNumber = "Room number must contain letters, numbers, and hyphens only";
     } else if (isRoomNumberDuplicate(allRooms, form.branch, trimmedNumber, room?._id)) {
       newErrors.roomNumber = `Room number ${trimmedNumber} already exists in ${branchLabel}`;
     }
@@ -764,7 +764,7 @@ export default function RoomFormModal({ room, onClose, onSave }) {
     /^[a-zA-Z0-9\s-]+$/.test(form.name.trim()) &&
     form.roomNumber.trim().length >= LIMITS.ROOM_NUMBER_MIN &&
     form.roomNumber.trim().length <= LIMITS.ROOM_NUMBER_MAX &&
-    /^[0-9]+$/.test(form.roomNumber.trim()) &&
+    /^[a-zA-Z0-9-]+$/.test(form.roomNumber.trim()) &&
     !isDuplicateNumber &&
     Boolean(form.type) &&
     ["private", "double-sharing", "quadruple-sharing"].includes(form.type) &&
@@ -864,8 +864,6 @@ export default function RoomFormModal({ room, onClose, onSave }) {
                       <input
                         id="rfm-number"
                         type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
                         spellCheck={false}
                         maxLength={LIMITS.ROOM_NUMBER_MAX}
                         value={form.roomNumber}
@@ -876,7 +874,7 @@ export default function RoomFormModal({ room, onClose, onSave }) {
                           handleChange("roomNumber", e.target.value);
                         }}
                         onBlur={() => handleBlur("roomNumber")}
-                        placeholder="e.g. 101"
+                        placeholder="e.g. 101 or 101-A"
                       />
 
                       {/* Edit mode floor change suggestion */}

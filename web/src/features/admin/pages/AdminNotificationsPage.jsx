@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -544,40 +544,6 @@ export default function AdminNotificationsPage() {
     };
   }, [notifications, totalNotifications, unreadCount]);
 
-  // Handle active SummaryBar card state
-  const activeKpiIndex = useMemo(() => {
-    if (unreadOnly) return 1;
-    if (priorityFilter === "critical" || priorityFilter === "high") return 2;
-    if (categoryFilter === "maintenance" || categoryFilter === "billing")
-      return 3;
-    if (categoryFilter === "all" && priorityFilter === "all" && !unreadOnly)
-      return 0;
-    return -1;
-  }, [unreadOnly, priorityFilter, categoryFilter]);
-
-  const handleKpiCardClick = useCallback((index) => {
-    setPage(1);
-    if (index === 0) {
-      // Total Notifications: Reset all filters
-      setCategoryFilter("all");
-      setPriorityFilter("all");
-      setUnreadOnly(false);
-      setSearchTerm("");
-    } else if (index === 1) {
-      // Unread Alerts
-      setUnreadOnly((prev) => !prev);
-    } else if (index === 2) {
-      // Action Required (toggle critical/high)
-      setPriorityFilter((prev) => (prev === "critical" ? "all" : "critical"));
-      setCategoryFilter("all");
-    } else if (index === 3) {
-      // Operations & Updates
-      setCategoryFilter((prev) =>
-        prev === "maintenance" ? "all" : "maintenance"
-      );
-      setPriorityFilter("all");
-    }
-  }, []);
 
   // Filtered notifications list
   const filteredNotifications = useMemo(() => {
@@ -789,11 +755,7 @@ export default function AdminNotificationsPage() {
 
       {/* ── SummaryBar KPI Metrics ── */}
       <section className="admin-notif-page__summary" aria-label="Key Metrics">
-        <SummaryBar
-          items={summaryItems}
-          onItemClick={handleKpiCardClick}
-          activeIndex={activeKpiIndex}
-        />
+        <SummaryBar items={summaryItems} />
       </section>
 
       {/* ── Search & Filter Controls ── */}

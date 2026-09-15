@@ -26,6 +26,9 @@ test("SignUp handleSocialSignup auto-onboards and handles instant cancellation",
   // 5. Must integrate socialAuthManager for instant cancellation & timeout protection
   assert.match(signUp, /createSocialAuthSession/);
   assert.match(signUp, /isPopupCancellationError/);
+
+  // 6. Must use parseSmartFullName to correctly handle multi-word and compound names
+  assert.match(signUp, /parseSmartFullName/);
 });
 
 test("SignUp provides friendly Google sign-in message when duplicate account detected", () => {
