@@ -1,3 +1,4 @@
+import { createExclusiveTenancyRecord } from "../../services/tenancyConflictTransaction.js";
 /**
  * ============================================================================
  * OVERDUE NOTICE & TERMINATION REVIEW CONTROLLER (Spec §21 & §22)
@@ -505,7 +506,7 @@ export const sendOverdueNoticeAction = async (req, res, next) => {
           status: "open",
         });
 
-        await existingReview.save();
+    await createExclusiveTenancyRecord(resvId, session => existingReview.save({ session }));
         logger.info(
           `[OverdueNotice] Auto-opened TerminationReview ${existingReview._id} upon Notice 3 exhaustion for bill ${bill._id}`,
         );

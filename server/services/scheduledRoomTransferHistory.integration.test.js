@@ -161,13 +161,12 @@ describe("getRoomTransferHistoryForReservation — scheduled records", () => {
     expect(hist).toHaveLength(1);
     const e = hist[0];
     expect(e.source).toBe("scheduled");
-    // The date/time has not been reached, so it stays "Scheduled" regardless of
-    // the settlement Bill state — settlement is collected at Complete Transfer.
-    expect(e.userFacingStatus).toBe("Scheduled");
-    expect(e.status).toBe("scheduled");
+    // An unpaid settlement is visible even before the scheduled transfer day.
+    expect(e.userFacingStatus).toBe("Payment Required");
+    expect(e.status).toBe("awaiting_settlement");
     expect(e.fromRoom.name).toBe("Room 301");
     expect(e.toRoom.name).toBe("Room 205");
-    expect(e.toBed).toBe("b2"); // destination needs a bed
+    expect(e.toBed).toBe("Assigned bed"); // legacy bed ID has no display label
     expect(e.scheduledAt).toBeTruthy();
     expect(e.initiatedBy?.name).toBe("Ada Admin");
     expect(e.settlementBillId).toBeTruthy();
@@ -180,7 +179,7 @@ describe("getRoomTransferHistoryForReservation — scheduled records", () => {
     const f = await baseFixture();
     await makeScheduled({ ...f, status: "scheduled", withBill: true, settlementPaid: 8100 });
     const [e] = await getRoomTransferHistoryForReservation(f.reservation._id);
-    expect(e.userFacingStatus).toBe("Scheduled");
+    expect(e.userFacingStatus).toBe("Transfer Scheduled");
     expect(e.status).toBe("scheduled");
   });
 
@@ -188,7 +187,7 @@ describe("getRoomTransferHistoryForReservation — scheduled records", () => {
     const f = await baseFixture();
     await makeScheduled({ ...f, status: "scheduled", withBill: false });
     const [e] = await getRoomTransferHistoryForReservation(f.reservation._id);
-    expect(e.userFacingStatus).toBe("Scheduled");
+    expect(e.userFacingStatus).toBe("Transfer Scheduled");
     expect(e.transferBalance.hasBill).toBe(false);
   });
 
@@ -203,7 +202,7 @@ describe("getRoomTransferHistoryForReservation — scheduled records", () => {
       },
     });
     const [e] = await getRoomTransferHistoryForReservation(f.reservation._id);
-    expect(e.userFacingStatus).toBe("Completed");
+    expect(e.userFacingStatus).toBe("Transfer Completed");
     expect(e.status).toBe("completed");
     expect(e.finalSettlementAmount).toBe(8100);
     expect(e.completedAt).toBeTruthy();
@@ -227,8 +226,8 @@ describe("getRoomTransferHistoryForReservation — scheduled records", () => {
     await makeScheduled({ ...f, status: "action_required", withBill: true, settlementPaid: 0 });
     const [e] = await getRoomTransferHistoryForReservation(f.reservation._id);
     // An action_required record whose only blocker is the unpaid transfer
-    // settlement is presented to the admin as "Awaiting Settlement".
-    expect(e.userFacingStatus).toBe("Awaiting Settlement");
+    // settlement is presented to the admin as "Payment Required".
+    expect(e.userFacingStatus).toBe("Payment Required");
     expect(e.status).toBe("awaiting_settlement");
     // The raw orchestration reason is still available for context, but never as
     // the primary message.
@@ -294,7 +293,7 @@ describe("legacy immediate transfers — derived, deduped", () => {
     expect(hist).toHaveLength(1);
     const e = hist[0];
     expect(e.source).toBe("legacy_immediate");
-    expect(e.userFacingStatus).toBe("Completed");
+    expect(e.userFacingStatus).toBe("Transfer Completed");
     expect(e.status).toBe("completed");
     expect(e.fromRoom.name).toBe("Room 301");
     expect(e.toRoom.name).toBe("Room 205");

@@ -1,3 +1,4 @@
+import { getRoomTransferError } from "../../utils/roomTransferErrors.js";
 import { resolveRenewalTerm } from "../../services/contractLeaseDateService.js";
 import { toManilaStartOfDay } from "../../utils/dateUtils.js";
 /**
@@ -1029,14 +1030,14 @@ export const transferTenant = async (req, res, next) => {
       // engine) still surfaces the outstanding-balance guard here.
       if (error?.code === "OUTSTANDING_BILLS_BLOCKING_TRANSFER") {
         return res.status(error.statusCode || 409).json({
-          error: error.message,
+          error: getRoomTransferError(error),
           code: error.code,
           outstandingBalance: error.outstandingBalance,
           paymentStatus: error.paymentStatus,
         });
       }
       if (error?.statusCode) {
-        return res.status(error.statusCode).json({ error: error.message, code: error.code || "SCHEDULE_TRANSFER_FAILED" });
+        return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "SCHEDULE_TRANSFER_FAILED" });
       }
       return handleReservationError(res, error, "schedule transfer");
     } finally {
@@ -1046,7 +1047,7 @@ export const transferTenant = async (req, res, next) => {
     logger.error({ err: error, requestId: req.id }, "Transfer error");
     await auditLogger.logError(req, error, "Failed to transfer tenant");
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "TRANSFER_FAILED" });
+      return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "TRANSFER_FAILED" });
     }
     handleReservationError(res, error, "transfer");
   }
@@ -1112,7 +1113,7 @@ export const prepareRoomTransferAddendumAction = async (req, res, next) => {
     logger.error({ err: error, requestId: req.id }, "Prepare Room Transfer Addendum error");
     await auditLogger.logError(req, error, "Failed to prepare Room Transfer Addendum");
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "ADDENDUM_PREPARATION_FAILED" });
+      return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "ADDENDUM_PREPARATION_FAILED" });
     }
     handleReservationError(res, error, "prepare room transfer addendum");
   }
@@ -1165,7 +1166,7 @@ export const discardRoomTransferAddendumAction = async (req, res, next) => {
     logger.error({ err: error, requestId: req.id }, "Discard Room Transfer Addendum error");
     await auditLogger.logError(req, error, "Failed to discard Room Transfer Addendum");
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "ADDENDUM_DISCARD_FAILED" });
+      return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "ADDENDUM_DISCARD_FAILED" });
     }
     handleReservationError(res, error, "discard room transfer addendum");
   }
@@ -1245,7 +1246,7 @@ export const cancelScheduledRoomTransferAction = async (req, res, next) => {
     logger.error({ err: error, requestId: req.id }, "Cancel scheduled room transfer error");
     await auditLogger.logError(req, error, "Failed to cancel scheduled room transfer");
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "SCHEDULED_TRANSFER_CANCEL_FAILED" });
+      return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "SCHEDULED_TRANSFER_CANCEL_FAILED" });
     }
     handleReservationError(res, error, "cancel scheduled room transfer");
   }
@@ -1331,7 +1332,7 @@ export const retryScheduledRoomTransferAction = async (req, res, next) => {
     logger.error({ err: error, requestId: req.id }, "Retry scheduled room transfer error");
     await auditLogger.logError(req, error, "Failed to retry scheduled room transfer");
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "SCHEDULED_TRANSFER_RETRY_FAILED" });
+      return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "SCHEDULED_TRANSFER_RETRY_FAILED" });
     }
     handleReservationError(res, error, "retry scheduled room transfer");
   }
@@ -1394,7 +1395,7 @@ export const rescheduleRoomTransferAction = async (req, res, next) => {
     logger.error({ err: error, requestId: req.id }, "Reschedule room transfer error");
     await auditLogger.logError(req, error, "Failed to reschedule room transfer");
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "RESCHEDULE_TRANSFER_FAILED" });
+      return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "RESCHEDULE_TRANSFER_FAILED" });
     }
     handleReservationError(res, error, "reschedule room transfer");
   }
@@ -1463,7 +1464,7 @@ export const completeRoomTransferAction = async (req, res, next) => {
 
     const status = result.outcome === "executed" ? 200 : 202;
     return res.status(status).json({
-      message: result.message || (result.outcome === "executed" ? "Room transfer completed." : "Room transfer not yet completed."),
+      message: (result.message ? getRoomTransferError(result.message) : null) || (result.outcome === "executed" ? "Room transfer completed." : "Room transfer not yet completed."),
       outcome: result.outcome,
       reason: result.reason || null,
       bill: result.bill
@@ -1484,13 +1485,13 @@ export const completeRoomTransferAction = async (req, res, next) => {
     await auditLogger.logError(req, error, "Failed to complete room transfer");
     if (error?.code === "TRANSFER_SETTLEMENT_UNPAID" || error?.code === "OUTSTANDING_BILLS_BLOCKING_TRANSFER") {
       return res.status(error.statusCode || 409).json({
-        error: error.message,
+        error: getRoomTransferError(error),
         code: error.code,
         outstandingBalance: error.outstandingBalance,
       });
     }
     if (error?.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message, code: error.code || "COMPLETE_TRANSFER_FAILED" });
+      return res.status(error.statusCode).json({ error: getRoomTransferError(error), code: error.code || "COMPLETE_TRANSFER_FAILED" });
     }
     handleReservationError(res, error, "complete room transfer");
   }

@@ -68,8 +68,8 @@ describe("deriveScheduledTransferUserStatus — DERIVED from stored status + cal
     expect(deriveScheduledTransferUserStatus({ status: "cancelled", effectiveTransferDate: PAST }, null, NOW)).toBe("cancelled");
   });
 
-  it("scheduled + calendar date NOT reached -> scheduled (even with an unpaid balance)", () => {
-    expect(deriveScheduledTransferUserStatus(sched(FUTURE), { hasBill: true, paymentState: "unpaid" }, NOW)).toBe("scheduled");
+  it("scheduled + calendar date not reached still shows a required payment", () => {
+    expect(deriveScheduledTransferUserStatus(sched(FUTURE), { hasBill: true, paymentState: "unpaid" }, NOW)).toBe("awaiting_settlement");
     expect(deriveScheduledTransferUserStatus(sched(FUTURE), null, NOW)).toBe("scheduled");
   });
 

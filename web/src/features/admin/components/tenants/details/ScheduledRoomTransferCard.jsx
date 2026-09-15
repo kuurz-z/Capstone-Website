@@ -5,7 +5,7 @@ import { ArrowRightLeft, LoaderCircle } from "lucide-react";
 import { formatDate, formatMoney } from "./tenantDetailConstants";
 import { reservationApi } from "../../../../../shared/api/reservationApi";
 import { showNotification } from "../../../../../shared/utils/notification";
-import getFriendlyError from "../../../../../shared/utils/friendlyError";
+import { getRoomTransferError as getFriendlyError } from "../../../../../shared/utils/roomTransferErrors.js";
 import ConfirmModal from "../../../../../shared/components/ConfirmModal";
 import {
   minScheduleDateStr,
@@ -99,8 +99,8 @@ export default function ScheduledRoomTransferCard({ transfer, onOpenDigitalContr
   const hasPayment = Number(bal.amountPaid || 0) > 0;
   const reasonCode = String(actionRequiredReason || "");
   const isOpenRecord = !["completed", "cancelled"].includes(status);
-  const canCancel = isOpenRecord && !hasPayment;
-  const canReschedule = isOpenRecord;
+  const canCancel = isOpenRecord && !hasPayment && transfer.canCancel === true;
+  const canReschedule = isOpenRecord && transfer.canReschedule === true;
   const canComplete = !!completable;
 
   const refresh = () => {
@@ -142,7 +142,7 @@ export default function ScheduledRoomTransferCard({ transfer, onOpenDigitalContr
           Scheduled Room Transfer
         </h4>
         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_TONE[status] || STATUS_TONE.completed}`}>
-          {statusLabel || status}
+          {statusLabel || "Administration Review Required"}
         </span>
       </div>
 

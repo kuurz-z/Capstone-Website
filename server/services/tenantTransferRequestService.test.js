@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 const objectId = () => new mongoose.Types.ObjectId();
 const chain = (value) => {
   const query = {
+    session: jest.fn(() => query),
     select: jest.fn(() => query),
     lean: jest.fn(() => Promise.resolve(value)),
     sort: jest.fn(() => query),
@@ -14,9 +15,13 @@ const chain = (value) => {
   return query;
 };
 
-const Reservation = { findOne: jest.fn() };
+const Reservation = { findOne: jest.fn(), findById: jest.fn(), findOneAndUpdate: jest.fn() };
+const Stay = { findById: jest.fn() };
+jest.spyOn(mongoose, "startSession").mockResolvedValue({ withTransaction: async fn => fn(), endSession: async () => {} });
+jest.unstable_mockModule("../models/Stay.js", () => ({ default: Stay }));
+jest.unstable_mockModule("./scheduledRoomTransferService.js", () => ({ assertNoRoomTransferLifecycleConflict: async () => {} }));
 const Room = { find: jest.fn(), findById: jest.fn(), findOne: jest.fn() };
-const ScheduledRoomTransfer = { find: jest.fn(), findById: jest.fn(), findOne: jest.fn() };
+const ScheduledRoomTransfer = { exists: jest.fn(() => chain(null)), find: jest.fn(), findById: jest.fn(), findOne: jest.fn() };
 const TenantTransferRequest = {
   create: jest.fn(),
   findById: jest.fn(),
@@ -80,12 +85,17 @@ function arrangeActiveStay() {
     _id: tenantId, role: "tenant", tenantStatus: "active", firstName: "Tina", lastName: "Tenant", email: "tina@example.com",
   }));
   resolveCurrentStayForTenant.mockResolvedValue({
+    status: "active", leaseStartDate: new Date("2026-01-01"), leaseEndDate: new Date("2027-08-31"),
     _id: stayId, tenantId, reservationId, roomId, bedId: "bed-a", bedCode: "A-L", bunkBlock: "A", branch: "guadalupe",
   });
-  Reservation.findOne.mockReturnValue(chain({ _id: reservationId, userId: tenantId, status: "moveIn" }));
+  const reservation = { _id: reservationId, userId: tenantId, roomId, selectedBed: { id: "bed-a" }, status: "moveIn" };
+  Reservation.findOne.mockReturnValue(chain(reservation));
+  Reservation.findById.mockReturnValue(chain(reservation));
+  Reservation.findOneAndUpdate.mockReturnValue(chain(reservation));
+  Stay.findById.mockReturnValue(chain({ _id: stayId, roomId, bedId: "bed-a", status: "active", leaseStartDate: new Date("2026-01-01"), leaseEndDate: new Date("2027-08-31") }));
   Room.findById.mockReturnValue(chain({
     _id: roomId, name: "Room 201", roomNumber: "201", type: "double-sharing", branch: "guadalupe",
-    beds: [{ id: "bed-a", position: "lower", bunkBlock: "A", code: "A-L" }],
+    beds: [{ status: "occupied", occupiedBy: { reservationId }, id: "bed-a", position: "lower", bunkBlock: "A", code: "A-L" }],
   }));
   const request = {
     _id: objectId(), tenantId, reservationId, stayId, branch: "guadalupe", status: "pending",
@@ -94,7 +104,7 @@ function arrangeActiveStay() {
     currentBedSnapshot: { bedId: "bed-a", position: "lower", bunkBlock: "A", code: "A-L" },
     submittedAt: new Date("2026-08-31T02:00:00Z"),
   };
-  TenantTransferRequest.create.mockResolvedValue(request);
+  TenantTransferRequest.create.mockResolvedValue([request]);
   resolveAuthoritativeCurrentContract.mockResolvedValue({
     _id: objectId(), status: "active", isCurrent: true, leaseEndDate: new Date("2027-08-31T00:00:00Z"),
   });
@@ -108,15 +118,15 @@ beforeEach(() => {
   ScheduledRoomTransfer.findById.mockReturnValue(chain(null));
   TenantTransferRequest.findOne.mockReturnValue(chain(null));
   Room.findOne.mockReturnValue(chain(null));
-  MoveOutClearance.exists.mockResolvedValue(null);
-  TerminationReview.exists.mockResolvedValue(null);
+  MoveOutClearance.exists.mockReturnValue(chain(null));
+  TerminationReview.exists.mockReturnValue(chain(null));
 });
 
 describe("tenant room transfer request boundary", () => {
   test("one canonical label vocabulary drives Web and Mobile", () => {
     expect(["pending", "scheduled", "ready_for_transfer", "awaiting_settlement", "action_required", "completed", "declined", "cancelled"].map((status) => (
       service.tenantTransferStatusLabel(status)
-    ))).toEqual(["Pending Review", "Scheduled", "Ready for Transfer", "Settlement Required", "Action Required", "Completed", "Declined", "Cancelled"]);
+    ))).toEqual(["Pending Admin Review", "Transfer Scheduled", "Ready for Transfer", "Payment Required", "Administration Review Required", "Transfer Completed", "Declined", "Cancelled"]);
   });
 
   test("submission code cannot create holds, schedules, bills, addenda, utilities, or occupancy mutations", () => {
@@ -138,10 +148,10 @@ describe("tenant room transfer request boundary", () => {
       payload: { preferredRoomType: "private", reason: "Need a quieter room" },
     });
 
-    expect(result).toMatchObject({ id: String(created._id), status: "pending", statusLabel: "Pending Review", canCancel: true });
-    expect(TenantTransferRequest.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(result).toMatchObject({ id: String(created._id), status: "pending", statusLabel: "Pending Admin Review", canCancel: true });
+    expect(TenantTransferRequest.create).toHaveBeenCalledWith([expect.objectContaining({
       tenantId, reservationId, stayId, preferredRoomType: "private", reason: "Need a quieter room",
-    }));
+    })], expect.objectContaining({ session: expect.anything() }));
     expect(ScheduledRoomTransfer.findOne).not.toHaveBeenCalled();
     expect(ScheduledRoomTransfer.findById).not.toHaveBeenCalled();
     expect(roomTransferLifecycleOnce).toHaveBeenCalledWith(
@@ -290,6 +300,7 @@ describe("tenant room transfer request boundary", () => {
       actorId: objectId(),
       actorRole: "branch_admin",
       actorBranch: "guadalupe",
+      declineReason: "No suitable vacancy",
     })).rejects.toMatchObject({ code: "TRANSFER_REQUEST_NOT_FOUND", statusCode: 404 });
     expect(TenantTransferRequest.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ branch: "guadalupe" });
   });
@@ -389,7 +400,7 @@ describe("tenant room transfer request boundary", () => {
     TenantTransferRequest.findOne.mockReturnValue(chain(null));
     ScheduledRoomTransfer.find.mockReturnValue(chain([schedule]));
     const lifecycle = await service.getTenantTransferLifecycle(tenantId);
-    expect(lifecycle).toMatchObject({ status: "scheduled", statusLabel: "Scheduled", request: null });
+    expect(lifecycle).toMatchObject({ status: "scheduled", statusLabel: "Transfer Scheduled", request: null });
     expect(lifecycle.scheduledRoomTransfer).not.toHaveProperty("internalReadinessSnapshot");
     expect(lifecycle.scheduledRoomTransfer).not.toHaveProperty("estimatedTransferBalance");
 
@@ -403,7 +414,7 @@ describe("tenant room transfer request boundary", () => {
     });
     ScheduledRoomTransfer.find.mockReturnValueOnce(chain([schedule]));
     const settlementLifecycle = await service.getTenantTransferLifecycle(tenantId);
-    expect(settlementLifecycle).toMatchObject({ status: "awaiting_settlement", statusLabel: "Settlement Required" });
+    expect(settlementLifecycle).toMatchObject({ status: "awaiting_settlement", statusLabel: "Payment Required" });
     expect(settlementLifecycle.scheduledRoomTransfer).toMatchObject({
       settlement: { required: true, status: "partial", remaining: 600, billId: "bill-1" },
       tenantGuidance: expect.stringContaining("Open Billing"),

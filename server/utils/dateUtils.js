@@ -20,9 +20,9 @@ dayjs.tz.setDefault(APP_TIMEZONE);
  */
 export function getManilaDayjs(dateLike) {
   if (dateLike === undefined || dateLike === null) {
-    return dayjs().tz(APP_TIMEZONE);
+    return dayjs().tz("Asia/Manila");
   }
-  return dayjs(dateLike).tz(APP_TIMEZONE);
+  return dayjs(dateLike).tz("Asia/Manila");
 }
 
 /**
@@ -30,9 +30,14 @@ export function getManilaDayjs(dateLike) {
  */
 export function toManilaStartOfDay(dateLike) {
   if (!dateLike) return null;
+  if (typeof dateLike === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(dateLike.trim())) {
+    const value = dateLike.trim().slice(0, 10);
+    const parsed = new Date(`${value}T00:00:00Z`);
+    if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return null;
+  }
   const d =
     typeof dateLike === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateLike.trim())
-      ? dayjs.tz(dateLike.trim(), APP_TIMEZONE)
+      ? dayjs.tz(dateLike.trim(), "Asia/Manila")
       : getManilaDayjs(dateLike);
   return d.isValid() ? d.startOf("day") : null;
 }
@@ -42,7 +47,7 @@ export function toManilaStartOfDay(dateLike) {
  */
 export function getManilaToday(referenceDate) {
   const base = referenceDate ? dayjs(referenceDate) : dayjs();
-  return base.tz(APP_TIMEZONE).startOf("day");
+  return base.tz("Asia/Manila").startOf("day");
 }
 
 /**

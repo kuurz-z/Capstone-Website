@@ -28,10 +28,10 @@ import mongoose from "mongoose";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, jest } from "@jest/globals";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 
-const mockGenerate = jest.fn(async ({ contractId, actorId }) => {
+const mockGenerate = jest.fn(async ({ contractId, actorId, session = null }) => {
   const { Contract } = await import("../../models/index.js");
   const { transitionContract } = await import("../contractService.js");
-  const c = await Contract.findById(contractId);
+  const c = await Contract.findById(contractId).session(session);
   c.preparedDocuments = c.preparedDocuments || [];
   c.preparedDocuments.push({
     documentType: "prepared", version: 1, storageProvider: "local", storageKey: "t/p.pdf",

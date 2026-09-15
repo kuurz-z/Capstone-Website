@@ -1513,7 +1513,7 @@ reservationSchema.index(
     partialFilterExpression: {
       isArchived: false,
       status: {
-        $nin: ["cancelled", "archived", "moveOut", "rejected"],
+        $in: CANONICAL_RESERVATION_STATUSES.filter(status => !["cancelled", "archived", "moveOut", "rejected"].includes(status)),
       },
     },
   },
@@ -1549,11 +1549,11 @@ reservationSchema.index(
 reservationSchema.index({ status: 1, targetMoveInDate: 1 });
 reservationSchema.index(
   { paymongoSessionId: 1 },
-  { sparse: true, partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
+  { partialFilterExpression: { paymongoSessionId: { $type: "string" } } },
 );
 reservationSchema.index(
   { paymongoPaymentId: 1 },
-  { sparse: true, partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
+  { partialFilterExpression: { paymongoPaymentId: { $type: "string" } } },
 );
 // REMOVED: { branch: 1, status: 1, isArchived: 1 } — phantom index.
 // Reservation has no 'branch' field; branch lives on the Room document.

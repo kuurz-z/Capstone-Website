@@ -19,7 +19,7 @@
  *         status "transferred") + the tenant's NEXT room's BedHistory row
  *       * the matching Room Transfer Addendum / legacy replacement Contract
  *       * the `billType: "transfer_settlement"` Bill (transferSnapshot)
- *     Tagged `source: "legacy_immediate"`, `userFacingStatus: "Completed"`,
+ *     Tagged `source: "legacy_immediate"`, `userFacingStatus: "Transfer Completed"`,
  *     no actions. NO fake DB rows are written.
  *
  *   - DEDUPE: a modern scheduled transfer ALSO writes BedHistory + Addendum +
@@ -161,8 +161,8 @@ export async function buildLegacyImmediateTransferEntries({
       id: `legacy:${String(closed._id)}`,
       source: "legacy_immediate",
       status: "completed",
-      userFacingStatus: "Completed",
-      statusLabel: "Completed",
+      userFacingStatus: "Transfer Completed",
+      statusLabel: "Transfer Completed",
 
       fromRoom: { id: asId(closed.roomId), name: fromRoomName, type: fromSnap.type || closed.roomId?.type || null },
       fromBed: closed.bedId && !String(closed.bedId).startsWith("room-") ? String(closed.bedId) : null,

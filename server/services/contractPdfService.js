@@ -608,8 +608,11 @@ export const generatePreparedContractPdf = async ({
   contractId,
   actorId,
   regenerationReason = "",
+  session = null,
+  storageAttemptId = null,
 }) => {
-  const contract = await Contract.findById(contractId);
+  const contractQuery = Contract.findById(contractId);
+  const contract = await (session ? contractQuery.session(session) : contractQuery);
   if (!contract) throw pdfError("Contract not found.", "CONTRACT_NOT_FOUND", 404);
   const { isRegeneration } = assertPreparedGenerationAllowed(
     contract,
@@ -632,7 +635,7 @@ export const generatePreparedContractPdf = async ({
   if (!contract.executionDate) {
     contract.executionDate = executionDateResolution.value;
     contract.updatedBy = actorId;
-    await contract.save();
+    await contract.save(session ? { session } : undefined);
   }
   const validation = await validateContractForGeneration(contract);
   if (!validation.valid) {
@@ -659,6 +662,7 @@ export const generatePreparedContractPdf = async ({
     leaseType: generationData.lease.leaseType,
     contractDate: generationData.lease.executionDate.toISOString().slice(0, 10),
     version: generatedVersion,
+    storageAttemptId,
   });
   const generatedAt = new Date();
   const fileHash = crypto.createHash("sha256").update(rendered.bytes).digest("hex");
@@ -719,9 +723,9 @@ export const generatePreparedContractPdf = async ({
     contract.isCanonical = contract.duplicateOfContractId ? false : true;
     contract.publicationStatus = "ready_for_resident";
     if (previousStatus === "ready_for_generation") {
-      await transitionContract(contract, "generated", actorId, "Prepared Contract PDF generated");
+      await transitionContract(contract, "generated", actorId, "Prepared Contract PDF generated", session);
     } else {
-      await contract.save();
+      await contract.save(session ? { session } : undefined);
     }
     return {
       contract,

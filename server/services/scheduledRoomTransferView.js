@@ -1,3 +1,4 @@
+import { hasActiveTransferClaim } from "./roomTransferClaim.js";
 /**
  * ============================================================================
  * SCHEDULED ROOM TRANSFER — SERIALIZATION
@@ -35,11 +36,11 @@ export const SCHEDULED_TRANSFER_USER_STATUSES = Object.freeze([
 ]);
 
 export const SCHEDULED_TRANSFER_STATUS_LABELS = Object.freeze({
-  scheduled: "Scheduled",
+  scheduled: "Transfer Scheduled",
   ready_for_transfer: "Ready for Transfer",
-  awaiting_settlement: "Awaiting Settlement",
-  completed: "Completed",
-  action_required: "Action Required",
+  awaiting_settlement: "Payment Required",
+  completed: "Transfer Completed",
+  action_required: "Administration Review Required",
   cancelled: "Cancelled",
 });
 
@@ -65,7 +66,7 @@ const ACTION_REQUIRED_MESSAGES = Object.freeze({
   DESTINATION_UNAVAILABLE:
     "The destination room or bed is no longer available for this tenant's stay. Reschedule the transfer or pick another room.",
   ADDENDUM_EFFECTIVE_DATE_LOCKED:
-    "The Room Transfer Addendum was already acknowledged for the originally scheduled date. Reschedule the transfer to re-issue the Addendum for the actual date, then complete it.",
+    "The Room Transfer Addendum was already acknowledged for the originally scheduled date. Ask administration to arrange a reviewed replacement before changing the date.",
 });
 
 export function describeScheduledTransferActionRequired(reason) {
@@ -115,10 +116,11 @@ export async function resolveScheduledTransferBalance(scheduledTransfer, { sessi
   }
   const q = Bill.findById(billId);
   const bill = await (session ? q.session(session) : q).lean();
-  if (!bill || bill.status === "voided") {
+  if (!bill || bill.status === "voided" || bill.isArchived || String(bill.reservationId) !== String(scheduledTransfer.reservationId)) {
     return {
       hasBill: false,
       billId: String(billId),
+      invalid: true,
       amountDue: 0,
       amountPaid: 0,
       remaining: 0,
@@ -138,6 +140,7 @@ export async function resolveScheduledTransferBalance(scheduledTransfer, { sessi
     amountPaid,
     remaining,
     paymentState,
+    locked: amountPaid > 0 || ["paid", "settled"].includes(bill.status),
   };
 }
 
@@ -158,6 +161,7 @@ export function deriveScheduledTransferUserStatus(scheduledTransfer, balance, no
   if (scheduledTransfer.status === "executed") return "completed";
   if (scheduledTransfer.status === "cancelled") return "cancelled";
 
+  if (balance?.invalid) return "action_required";
   const effectiveDay = toManilaStartOfDay(scheduledTransfer.effectiveTransferDate);
   const dueReached = !!effectiveDay && !effectiveDay.isAfter(getManilaToday(now));
   const balanceUnpaid =
@@ -169,12 +173,14 @@ export function deriveScheduledTransferUserStatus(scheduledTransfer, balance, no
     const paymentBlocker =
       scheduledTransfer.lastError === "TRANSFER_BALANCE_UNPAID" ||
       scheduledTransfer.lastError === "ADDITIONAL_BALANCE_DUE";
+    if (scheduledTransfer.lastError === "FINANCIAL_ADJUSTMENT_REQUIRED") return "action_required";
     if (balanceUnpaid) return "awaiting_settlement";
     if (paymentBlocker) return "ready_for_transfer";
     return "action_required";
   }
 
   // status === "scheduled"
+  if (balanceUnpaid) return "awaiting_settlement";
   if (!dueReached) return "scheduled";
   return balanceUnpaid ? "awaiting_settlement" : "ready_for_transfer";
 }
@@ -220,7 +226,7 @@ export async function serializeScheduledRoomTransfer(scheduledTransfer, { sessio
   // Draft that becomes effective on `effectiveTransferDate`.
   let addendum = null;
   if (doc.addendumContractId) {
-    const q = Contract.findById(doc.addendumContractId).select("status isCurrent contractNumber amendmentEffectiveDate");
+    const q = Contract.findById(doc.addendumContractId).select("status isCurrent tenantSignatureStatus contractNumber amendmentEffectiveDate");
     const c = await (session ? q.session(session) : q).lean();
     if (c) {
       addendum = {
@@ -228,6 +234,7 @@ export async function serializeScheduledRoomTransfer(scheduledTransfer, { sessio
         contractNumber: c.contractNumber || null,
         status: c.status,
         isCurrent: !!c.isCurrent,
+        tenantSignatureStatus: c.tenantSignatureStatus,
         effectiveDate: c.amendmentEffectiveDate || doc.effectiveTransferDate,
         // User-facing: "Scheduled" until it actually becomes the current lease.
         label: c.isCurrent ? "Room Transfer Addendum" : "Room Transfer Addendum — Scheduled",
@@ -235,7 +242,19 @@ export async function serializeScheduledRoomTransfer(scheduledTransfer, { sessio
     }
   }
 
+  const { ContractAcknowledgement, ScheduledRoomTransfer, Room } = await import("../models/index.js");
+  const live = await ScheduledRoomTransfer.findById(doc._id).select("+executionToken").session(session).lean();
+  const acknowledgement = doc.addendumContractId ? await ContractAcknowledgement.exists({ contractId: doc.addendumContractId }).session(session) : null;
+  const lockedAddendum = !!acknowledgement || addendum?.isCurrent || addendum?.tenantSignatureStatus === "completed" || ["signed", "awaiting_notarization", "notarized", "ready_for_publication", "published", "active"].includes(addendum?.status);
+  const open = ["scheduled", "action_required"].includes(doc.status);
+  const claimActive = hasActiveTransferClaim(live);
+  const mutable = open && !claimActive && !lockedAddendum && !balance.invalid && !balance.locked && balance.amountPaid <= 0;
+  const destination = doc.destinationNeedsBed ? await Room.findById(doc.destinationRoomId).select("beds").session(session).lean() : null;
+  const bed = destination?.beds?.find(b => String(b.id || b._id) === String(doc.destinationBedId));
+  const bedLabel = bed?.code || (bed?.position ? `${bed.bunkBlock ? `Bunk ${bed.bunkBlock} / ` : ""}${bed.position}` : "Assigned bed");
   return {
+    canCancel: mutable,
+    canReschedule: mutable && !!addendum,
     id: String(doc._id),
     reservationId: String(doc.reservationId),
     tenantId: doc.tenantId ? String(doc.tenantId) : null,
@@ -256,7 +275,7 @@ export async function serializeScheduledRoomTransfer(scheduledTransfer, { sessio
     },
 
     // Destination bed — only meaningful for a shared destination.
-    destinationBed: doc.destinationNeedsBed ? (doc.destinationBedId || null) : null,
+    destinationBed: doc.destinationNeedsBed ? bedLabel : null,
 
     effectiveTransferDate: doc.effectiveTransferDate,
     effectiveTransferTimeMinutes: doc.effectiveTransferTimeMinutes ?? 9 * 60,
@@ -273,7 +292,7 @@ export async function serializeScheduledRoomTransfer(scheduledTransfer, { sessio
     recordStatus: doc.status,
     // Whether the admin Complete Transfer flow is available (calendar date
     // reached and not already executed/cancelled). The stored time is guidance.
-    completable: ["ready_for_transfer", "awaiting_settlement", "action_required"].includes(userStatus),
+    completable: !claimActive && ["ready_for_transfer", "awaiting_settlement", "action_required"].includes(userStatus),
     actionRequiredReason: doc.status === "action_required" ? (doc.lastError || null) : null,
     actionRequiredMessage:
       doc.status === "action_required" ? describeScheduledTransferActionRequired(doc.lastError) : null,

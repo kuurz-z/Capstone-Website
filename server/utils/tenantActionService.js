@@ -1,5 +1,5 @@
 import { resolveRenewalTerm } from "../services/contractLeaseDateService.js";
-import { toManilaStartOfDay } from "./dateUtils.js";
+import { toManilaStartOfDay, getManilaToday } from "./dateUtils.js";
 import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
@@ -934,6 +934,14 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         throw Object.assign(new Error("Only active moved-in tenants can be renewed."), { statusCode: 400, code: "INVALID_STATUS_FOR_RENEWAL" });
       }
 
+      // Room Transfer and direct renewal share a tenancy write so concurrent
+      // requests cannot commit incompatible plans for the same current stay.
+      await Reservation.updateOne({ _id: reservation._id }, { $inc: { renewalPreparationVersion: 1 } }, { session });
+      const { default: TransferRequest } = await import("../models/TenantTransferRequest.js");
+      const openTransferRequest = await TransferRequest.exists({ reservationId: reservation._id, status: { $in: ["pending", "scheduling", "scheduled"] } }).session(session);
+      const openTransferSchedule = await ScheduledRoomTransfer.exists({ reservationId: reservation._id, status: { $in: ["scheduled", "action_required"] }, isArchived: { $ne: true } }).session(session);
+      if (openTransferRequest || openTransferSchedule) throw Object.assign(new Error("Resolve the active room transfer before renewing this stay."), { statusCode: 409, code: "ROOM_TRANSFER_LIFECYCLE_CONFLICT" });
+
       const predecessorContract = await resolveAuthoritativeCurrentContract({
         reservationId: reservation._id,
         tenantId: reservation.userId?._id || reservation.userId,
@@ -1228,9 +1236,11 @@ export async function resolveValidatedRoomTransferIntent({
     throw Object.assign(new Error("Target room is required."), { statusCode: 400, code: "MISSING_TRANSFER_FIELDS" });
   }
 
-  const effectiveTransferDate = normalizeDate(payload.effectiveTransferDate) || new Date();
+  if (reservation.userId?.tenantStatus !== "active") throw Object.assign(new Error("Room transfers are available to current residents. Ask administration to review this tenant's status."), { statusCode: 409, code: "ACTIVE_TENANT_REQUIRED" });
+  const effectiveTransferDate = toManilaStartOfDay(payload.effectiveTransferDate)?.toDate();
+  if (!effectiveTransferDate) throw Object.assign(new Error("Choose a valid transfer date in Manila before continuing."), { statusCode: 400, code: "INVALID_TRANSFER_DATE" });
   const targetRoom = await Room.findById(payload.targetRoomId);
-  if (!targetRoom) {
+  if (!targetRoom || targetRoom.isArchived || !["private", "double-sharing", "quadruple-sharing"].includes(targetRoom.type)) {
     throw Object.assign(new Error("Target room not found."), { statusCode: 404, code: "TARGET_ROOM_NOT_FOUND" });
   }
   if (String(targetRoom.branch) !== String(reservation.roomId?.branch || "")) {
@@ -1861,6 +1871,8 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
         );
       }
 
+      const { assertNoRoomTransferLifecycleConflict } = await import("../services/scheduledRoomTransferService.js");
+      await assertNoRoomTransferLifecycleConflict(reservation._id, { session });
       const activeStay = await ensureActiveStay(reservation, actorId, session, prepPredecessor);
       // ── BILLING BOUNDARY = ACTUAL CUTOVER DAY ────────────────────────────
       // The scheduled `payload.effectiveTransferDate` is the PLANNING date
@@ -1878,6 +1890,19 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
         throw Object.assign(new Error("No active stay found for transfer."), { statusCode: 400, code: "NO_ACTIVE_STAY" });
       }
 
+      if (reservation.userId?.tenantStatus !== "active" || activeStay.endedAt ||
+          !toManilaStartOfDay(activeStay.leaseStartDate) || !toManilaStartOfDay(activeStay.leaseEndDate) ||
+          toManilaStartOfDay(activeStay.leaseStartDate).isAfter(getManilaToday(), "day") ||
+          toManilaStartOfDay(activeStay.leaseEndDate).isBefore(getManilaToday(), "day") ||
+          String(activeStay.roomId) !== String(reservation.roomId?._id || reservation.roomId) ||
+          (reservation.currentStayId && String(reservation.currentStayId) !== String(activeStay._id)) ||
+          (scheduledExecution && (String(scheduledExecution.sourceRoomId) !== String(activeStay.roomId) ||
+            (scheduledExecution.sourceStayId && String(scheduledExecution.sourceStayId) !== String(activeStay._id)) ||
+            (scheduledExecution.sourceBedId && String(scheduledExecution.sourceBedId) !== String(activeStay.bedId))))) {
+        throw Object.assign(new Error("The tenant's current room assignment has changed. Ask administration to review the stay before completing this transfer."), { statusCode: 409, code: "TRANSFER_SOURCE_CHANGED" });
+      }
+      if (scheduledExecution && toManilaStartOfDay(scheduledExecution.effectiveTransferDate)?.isAfter(getManilaToday(), "day")) throw Object.assign(new Error("The transfer date has not arrived. Wait until the scheduled Manila date."), { statusCode: 409, code: "TRANSFER_NOT_DUE" });
+
       // Hard guard, not just the advisory buildActionAvailability check above
       // (a stale UI state could otherwise bypass it) — a pending future
       // renewal must be resolved or cancelled before a room transfer can
@@ -1887,6 +1912,8 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
       const pendingRenewalStay = await Stay.exists({
         reservationId: reservation._id,
         previousStayId: activeStay._id,
+        status: { $in: ["upcoming", "active", "ending_soon"] },
+        leaseStartDate: { $gt: cutoverDay },
       }).session(session);
       if (pendingRenewalStay) {
         throw Object.assign(new Error("A future renewal already exists for this tenant. Resolve or cancel it before transferring."), { statusCode: 409, code: "FUTURE_RENEWAL_EXISTS" });
@@ -1897,7 +1924,7 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
       }
 
       const targetRoom = await Room.findById(payload.targetRoomId).session(session);
-      if (!targetRoom) {
+      if (!targetRoom || targetRoom.isArchived || !["private", "double-sharing", "quadruple-sharing"].includes(targetRoom.type)) {
         throw Object.assign(new Error("Target room not found."), { statusCode: 404, code: "TARGET_ROOM_NOT_FOUND" });
       }
       if (String(targetRoom.branch) !== String(reservation.roomId?.branch || "")) {
@@ -1912,6 +1939,8 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
         throw Object.assign(new Error("Current room not found."), { statusCode: 404, code: "CURRENT_ROOM_NOT_FOUND" });
       }
       const sourceNeedsBed = roomTypeRequiresBed(currentRoom.type);
+      const sourceBed = currentRoom.beds?.find(b => String(b.id || b._id) === String(activeStay.bedId));
+      if (sourceNeedsBed && (String(reservation.selectedBed?.id || "") !== String(activeStay.bedId) || !sourceBed || sourceBed.status !== "occupied" || String(sourceBed.occupiedBy?.reservationId || "") !== String(reservation._id))) throw Object.assign(new Error("The current bed assignment needs review. Ask administration to correct it before completing the transfer."), { statusCode: 409, code: "TRANSFER_SOURCE_BED_CHANGED" });
       const destinationNeedsBed = roomTypeRequiresBed(targetRoom.type);
 
       if (destinationNeedsBed && !payload.targetBedId) {
@@ -1923,6 +1952,20 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
       ) {
         throw Object.assign(new Error("Transfer target must differ from the current room and bed."), { statusCode: 400, code: "SAME_TRANSFER_TARGET" });
       }
+
+      const conflictingBookings = await Reservation.find({
+        _id: { $ne: reservation._id }, roomId: targetRoom._id,
+        status: { $in: ["reserved", "approved_for_payment", "moveIn"] }, isArchived: { $ne: true },
+      }).session(session).lean();
+      const overlap = conflictingBookings.some(booking => {
+        if (destinationNeedsBed && String(booking.selectedBed?.id || "") !== String(payload.targetBedId)) return false;
+        const start = toManilaStartOfDay(booking.leaseStartDate || booking.expectedMoveInDate || booking.moveInDate);
+        const end = toManilaStartOfDay(readMoveOutDate(booking) || computeLeaseEndDate(booking));
+        if (end && !end.isAfter(toManilaStartOfDay(cutoverAt))) return false;
+        if (start && !start.isBefore(toManilaStartOfDay(activeStay.leaseEndDate))) return false;
+        return true;
+      });
+      if (overlap) throw Object.assign(new Error("The selected room or bed is no longer available for this stay. Ask administration to review the destination."), { statusCode: 409, code: "DESTINATION_UNAVAILABLE" });
 
       // Resolve the destination bed only when the destination room needs one.
       // A bed id supplied for a private destination is ignored, never
@@ -2422,6 +2465,7 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
       //    -> abort the whole txn) and refresh the Bill's execution-time
       //    metadata while preserving paidAmount / status / payment history.
       const scheduledBillId = payload.scheduledTransferBillId || null;
+      if (scheduledExecution && !scheduledBillId && transferSettlementTotal > 0.01) throw Object.assign(new Error("The required transfer payment changed. Refresh the settlement in Billing and complete payment before trying again."), { statusCode: 409, code: "TRANSFER_SETTLEMENT_UNPAID" });
       let transferBill;
       if (scheduledBillId) {
         transferBill = await Bill.findById(scheduledBillId).session(session);
@@ -2452,82 +2496,14 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
             { statusCode: 409, code: "ROOM_TRANSFER_SCHEDULED_BILL_MISMATCH" },
           );
         }
-        // Refresh execution-time metadata; never touch paidAmount / payment history.
-        transferBill.roomId = currentRoom._id;
-        transferBill.billingMonth = effectiveTransferDate;
-        transferBill.billingCycleStart = rentCoverageBillType === "monthly"
-          ? null
-          : (currentBillingCycle?.billingCycleStart || effectiveTransferDate);
-        transferBill.billingCycleEnd = rentCoverageBillType === "monthly"
-          ? null
-          : (currentBillingCycle?.billingCycleEnd || effectiveTransferDate);
-        transferBill.proRataDays = proRataDays || null;
-        transferBill.notes = noteParts.join("; ");
-        transferBill.transferSnapshot = {
-          ...(transferBill.transferSnapshot || {}),
-          fromRoomId: currentRoom._id,
-          fromRoomName: currentRoom.name || currentRoom.roomNumber || "",
-          fromRoomType: currentRoom.type || "",
-          toRoomId: targetRoom._id,
-          toRoomName: targetRoom.name || targetRoom.roomNumber || "",
-          toRoomType: targetRoom.type || "",
-          effectiveTransferDate,
-          cycleStart: currentBillingCycle?.billingCycleStart || null,
-          cycleEnd: currentBillingCycle?.billingCycleEnd || null,
-          sourceApprovedRate: sourceEffectiveRate,
-          destinationApprovedRate: successorContract.approvedMonthlyRate,
-          sourceRateSource,
-          applicablePrepaidRent,
-          prepaidRentSource,
-          rentCoverageBillId,
-          rentCoverageBillType,
-          rentLiabilityForPeriod: settlement.rentLiabilityForPeriod,
-          totalCoverageDays: settlement.totalCoverageDays,
-          destinationDays: settlement.destinationDays,
-          destinationProratedValue: settlement.destinationProratedValue,
-          unusedPrepaidCredit: settlement.unusedPrepaidCredit,
-          additionalAmountDue: settlement.additionalAmountDue,
-          excessCredit: settlement.excessCredit,
-          estimatedElectricityKwh,
-          estimatedElectricityCharge: estimatedElectricityCharge > 0 ? estimatedElectricityCharge : null,
-          // Source-room electricity is FINALIZED on this Bill (sub-metered
-          // branch) — the period close will NOT re-bill this tenant for it
-          // (a UtilityFinalization row is written in this same txn). For a
-          // non-sub-metered branch, finalizedSourceElectricity is inapplicable
-          // and charges.electricity stays 0.
-          finalizedSourceElectricity:
-            finalizedSourceElectricity?.applicable
-              ? {
-                  utilityPeriodId: finalizedSourceElectricity.utilityPeriodId,
-                  kwh: finalizedSourceElectricity.kwh,
-                  amount: finalizedSourceElectricity.amount,
-                  ratePerUnit: finalizedSourceElectricity.ratePerUnit,
-                  baselineReading: finalizedSourceElectricity.baselineReading,
-                  closingReading: finalizedSourceElectricity.closingReading,
-                }
-              : null,
-          sourceElectricitySettledAtPeriodClose: !finalizedSourceElectricity?.applicable,
-          sourceWaterSettledAtPeriodClose: true,
-          depositPreviouslyHeld: depositSettlement.depositPreviouslyHeld,
-          destinationRequiredDeposit: depositSettlement.destinationRequiredDeposit,
-          additionalDepositDue: depositSettlement.additionalDepositDue,
-          excessDepositHeld: depositSettlement.excessDepositHeld,
-          depositHeldAfterTransferBeforePayment: depositSettlement.depositHeldAfterTransferBeforePayment,
-          depositHeldWasBackfilled: false,
-          rentComponentDue,
-          depositComponentDue,
-          totalImmediateDue: transferSettlementTotal,
-          transferReference: predecessorContract._id,
-          isScheduledTransferBalance: true,
-          reconciledAtExecution: true,
-        };
-        syncBillAmounts(transferBill, { preserveStatus: true });
-        await transferBill.save({ session });
+        // The paid invoice is historical truth. Execution details belong on the
+        // schedule and BedHistory, which are committed with the physical move.
       } else {
       [transferBill] = await Bill.create(
         [
           {
             billType: "transfer_settlement",
+            scheduledRoomTransferId: scheduledExecution?._id || undefined,
             reservationId: reservation._id,
             userId: reservation.userId?._id || reservation.userId,
             branch: currentRoom.branch,
@@ -2968,6 +2944,18 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
             $set: {
               status: "executed",
               executedAt: cutoverAt,
+              executedSettlement: {
+                rentAdjustmentDue: rentComponentDue,
+                additionalDepositDue: depositComponentDue,
+                finalElectricityDue: roundMoney(transferCharges.electricity),
+                excessRentCredit: roundMoney(settlement.excessCredit),
+                excessDepositHeld: roundMoney(depositSettlement.excessDepositHeld),
+                totalImmediateDue: transferSettlementTotal,
+                settlementBillId: transferBill?._id ? String(transferBill._id) : null,
+                sourceRoomMeterReading: sourceMeterReading != null ? Number(sourceMeterReading) : null,
+                targetRoomMeterReading: targetMeterReading != null ? Number(targetMeterReading) : null,
+                cutoverAt, completedBy: actorId ? String(actorId) : null, computedAt: cutoverAt,
+              },
               settlementBillId: transferBill?._id || null,
               sourceRoomMeterReading: sourceMeterReading != null ? Number(sourceMeterReading) : null,
               targetRoomMeterReading: targetMeterReading != null ? Number(targetMeterReading) : null,
@@ -2986,6 +2974,10 @@ export async function transferStayWorkflow({ reservationId, payload, actorId }) 
             code: "SCHEDULED_TRANSFER_HOLD_CONSUME_FAILED",
           });
         }
+        const { default: TenantTransferRequest } = await import("../models/TenantTransferRequest.js");
+        const linkedRequest = await TenantTransferRequest.findOne({ scheduledRoomTransferId: scheduledExecution._id }).session(session);
+        if (linkedRequest && ["cancelled", "declined", "completed"].includes(linkedRequest.status)) throw Object.assign(new Error("This request is no longer open. Refresh the transfer status."), { statusCode: 409, code: "TRANSFER_REQUEST_NOT_PENDING" });
+        if (linkedRequest) await TenantTransferRequest.updateOne({ _id: linkedRequest._id }, { $set: { status: "completed", completedAt: cutoverAt } }, { session });
       }
 
       result = {
@@ -3549,79 +3541,8 @@ export async function executeEarlyTerminationWorkflow(reservationId, payload = {
 /**
  * SCENARIO 1 - Case 4: Direct Tenant Room Swap
  */
-export async function executeDirectRoomSwapWorkflow(
-  reservationAId,
-  reservationBId,
-  actorId = null,
-  branchFilter = null,
-) {
-  const session = await mongoose.startSession();
-  let result = null;
-
-  try {
-    await session.withTransaction(async () => {
-      const resA = await Reservation.findById(reservationAId).populate("roomId").session(session);
-      const resB = await Reservation.findById(reservationBId).populate("roomId").session(session);
-
-      if (!resA || !resB) {
-        throw Object.assign(new Error("One or both reservations not found for room swap"), {
-          statusCode: 404,
-          code: "RESERVATION_NOT_FOUND",
-        });
-      }
-
-      const branchA = resA.roomId?.branch || resA.branch;
-      const branchB = resB.roomId?.branch || resB.branch;
-
-      if (branchFilter) {
-        if (branchA !== branchFilter || branchB !== branchFilter) {
-          throw Object.assign(
-            new Error(`Access denied. You can only execute room swaps within ${branchFilter} branch.`),
-            {
-              statusCode: 403,
-              code: "BRANCH_ACCESS_DENIED",
-            },
-          );
-        }
-      }
-
-      if (branchA && branchB && branchA !== branchB) {
-        throw Object.assign(
-          new Error("Direct room swap cannot be executed across different branches. Use standard tenant transfer."),
-          {
-            statusCode: 400,
-            code: "CROSS_BRANCH_SWAP_PROHIBITED",
-          },
-        );
-      }
-
-      // Swap room and bed assignments
-      const roomATemp = resA.roomId?._id || resA.roomId;
-      const bedATemp = resA.selectedBed;
-
-      resA.roomId = resB.roomId?._id || resB.roomId;
-      resA.selectedBed = resB.selectedBed;
-      resA.notes = `${resA.notes ? resA.notes + " | " : ""}Swapped room with tenant ${resB.userId} at ${new Date().toISOString()}`;
-
-      resB.roomId = roomATemp;
-      resB.selectedBed = bedATemp;
-      resB.notes = `${resB.notes ? resB.notes + " | " : ""}Swapped room with tenant ${resA.userId} at ${new Date().toISOString()}`;
-
-      await resA.save({ session });
-      await resB.save({ session });
-
-      result = {
-        success: true,
-        message: "Direct room swap executed successfully between tenants.",
-        tenantA: resA,
-        tenantB: resB,
-      };
-    });
-
-    return result;
-  } finally {
-    await session.endSession();
-  }
+export async function executeDirectRoomSwapWorkflow() {
+  throw Object.assign(new Error("Direct room swaps are unavailable. Schedule and complete each room change through Room Transfer so billing and room assignments are checked together."), { statusCode: 409, code: "ROOM_SWAP_REQUIRES_CANONICAL_TRANSFER" });
 }
 
 /**

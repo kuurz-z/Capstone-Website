@@ -1,3 +1,4 @@
+import { createExclusiveTenancyRecord } from "./tenancyConflictTransaction.js";
 /**
  * ============================================================================
  * MOVE-OUT CLEARANCE SERVICE
@@ -92,7 +93,11 @@ export async function openMoveOutClearance({
     ? heldDepositRaw
     : Number(stay.monthlyRent || reservation.monthlyRent || 0);
 
-  return MoveOutClearance.create({
+  return createExclusiveTenancyRecord(reservationId, async (session, liveReservation) => {
+    if (String(liveReservation.roomId) !== String(reservation.roomId)) throw serviceError("The current room changed. Refresh the tenant details before starting move-out.", "CURRENT_ROOM_CHANGED", 409);
+    const existing = await MoveOutClearance.findOne({ reservationId, isArchived: { $ne: true } }).session(session);
+    if (existing) return existing;
+    const [clearance] = await MoveOutClearance.create([{
     reservationId,
     stayId: stay._id,
     tenantId,
@@ -101,6 +106,8 @@ export async function openMoveOutClearance({
     intendedMoveOutDate: new Date(intendedMoveOutDate),
     initiatedBy: actorId,
     securityDepositAmount,
+    }], { session });
+    return clearance;
   });
 }
 

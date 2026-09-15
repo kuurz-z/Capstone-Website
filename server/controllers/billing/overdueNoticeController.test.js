@@ -21,6 +21,12 @@ const mockFindByIdReview = jest.fn();
 const mockBillingNotice = jest.fn();
 const mockFindUsers = jest.fn();
 
+// Controller unit tests isolate the transaction boundary; its conflicting
+// lifecycle behavior is exercised against a replica set in transfer tests.
+await jest.unstable_mockModule("../../services/tenancyConflictTransaction.js", () => ({
+  createExclusiveTenancyRecord: async (_reservationId, create) => create(null),
+}));
+
 await jest.unstable_mockModule("../../models/index.js", () => {
   class MockOverdueNotice {
     constructor(data) {

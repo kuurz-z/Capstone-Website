@@ -2,13 +2,16 @@ import { useState } from "react";
 import { ArrowRight, CheckCircle2, XCircle } from "lucide-react";
 
 const formatDate = (value) =>
-  value
+  value && Number.isFinite(new Date(value).getTime())
     ? new Date(value).toLocaleDateString("en-PH", {
+        timeZone: "Asia/Manila",
         year: "numeric",
         month: "short",
         day: "numeric",
       })
     : "No preferred date";
+
+const safeText = (value, fallback = "") => typeof value === "string" && !/^[a-f0-9]{24}$/i.test(value) ? value : fallback;
 
 const labelRoomType = (value) =>
   String(value || "Not specified")
@@ -31,26 +34,26 @@ export default function TenantTransferRequestCard({ request, onProceed, onDeclin
             <CheckCircle2 className="h-4 w-4 text-blue-600" />
             Room Transfer Request
           </div>
-          <p className="mt-1 text-xs font-semibold text-blue-700 dark:text-blue-300">Pending Review</p>
+          <p className="mt-1 text-xs font-semibold text-blue-700 dark:text-blue-300">Pending Admin Review</p>
         </div>
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          Submitted {new Date(request.submittedAt).toLocaleString("en-PH")}
+          Submitted {formatDate(request.submittedAt)}
         </span>
       </div>
 
       <dl className="mt-4 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-        <div><dt className="text-slate-500">Tenant</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{request.tenant?.name || "Tenant"}</dd></div>
-        <div><dt className="text-slate-500">Current room / bed</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{currentRoom.name || currentRoom.roomNumber || "Room"}{currentBed.bedId ? ` · ${currentBed.code || currentBed.position || currentBed.bedId}` : ""}</dd></div>
+        <div><dt className="text-slate-500">Tenant</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{safeText(request.tenant?.name, "Tenant")}</dd></div>
+        <div><dt className="text-slate-500">Current room / bed</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{safeText(currentRoom.name, safeText(currentRoom.roomNumber, "Room"))}{currentBed.bedId ? ` · ${safeText(currentBed.code, safeText(currentBed.position, "Assigned bed"))}` : ""}</dd></div>
         <div><dt className="text-slate-500">Preferred room type</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{labelRoomType(request.preferredRoomType)}</dd></div>
-        <div><dt className="text-slate-500">Preferred room</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{request.preferredRoom?.name || "No individual room requested"}</dd></div>
+        <div><dt className="text-slate-500">Preferred room</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{safeText(request.preferredRoom?.name, "No individual room requested")}</dd></div>
         <div><dt className="text-slate-500">Preferred date</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{formatDate(request.preferredTransferDate)}</dd></div>
-        <div><dt className="text-slate-500">Reason</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{request.reason}</dd></div>
-        {request.note ? <div className="sm:col-span-2"><dt className="text-slate-500">Note</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{request.note}</dd></div> : null}
+        <div><dt className="text-slate-500">Reason</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{safeText(request.reason)}</dd></div>
+        {request.note ? <div className="sm:col-span-2"><dt className="text-slate-500">Note</dt><dd className="font-semibold text-slate-900 dark:text-slate-100">{safeText(request.note)}</dd></div> : null}
       </dl>
 
       {declining ? (
         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200" htmlFor="transfer-decline-reason">Decline reason (optional)</label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200" htmlFor="transfer-decline-reason">Decline reason *</label>
           <textarea
             id="transfer-decline-reason"
             value={declineReason}
@@ -60,7 +63,7 @@ export default function TenantTransferRequestCard({ request, onProceed, onDeclin
           />
           <div className="mt-3 flex justify-end gap-2">
             <button type="button" className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold dark:border-slate-700" onClick={() => setDeclining(false)} disabled={loading}>Back</button>
-            <button type="button" className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => onDecline?.(declineReason)} disabled={loading}>Confirm decline</button>
+            <button type="button" className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white" onClick={() => onDecline?.(declineReason.trim())} disabled={loading || !declineReason.trim()}>Confirm decline</button>
           </div>
         </div>
       ) : (
