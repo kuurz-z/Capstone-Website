@@ -3,6 +3,7 @@ import { toManilaStartOfDay, getManilaToday, getManilaDayjs, composeManilaDateTi
 import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
+import { queueStayExtensionNotification } from '../services/notifications/stayExtensionDelivery.js';
 import dayjs from "dayjs";
 import logger from "../middleware/logger.js";
 import {
@@ -1141,6 +1142,7 @@ export async function renewStayWorkflow({ reservationId, payload, actorId, exten
         extension.adminNote = payload.notes || '';
         extension.successorStayId = newStay._id;
         await extension.save({ session });
+        await queueStayExtensionNotification(extension, 'Approved', session);
         reservation.pendingExtensionRequestId = null;
       }
 

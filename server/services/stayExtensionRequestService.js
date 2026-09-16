@@ -14,7 +14,9 @@ import { getBusinessSettings } from '../utils/businessSettings.js';
 import { hasReservationStatus } from '../utils/lifecycleNaming.js';
 import { getManilaToday, toManilaStartOfDay } from '../utils/dateUtils.js';
 import { renewStayWorkflow } from '../utils/tenantActionService.js';
-import { notify, notifyBranchAdmins } from './notifications/notificationService.js';
+import { notifyBranchAdmins } from './notifications/notificationService.js';
+import { queueStayExtensionNotification, deliverStayExtensionNotification, extensionEventKey } from './notifications/stayExtensionDelivery.js';
+import logger from '../middleware/logger.js';
 
 const fail = (message, statusCode = 409) => { throw Object.assign(new Error(message), { statusCode }); };
 const id = (value) => String(value?._id || value || '');
@@ -74,15 +76,8 @@ async function assertNoConflicts(context, session = null) {
 }
 
 async function sendLifecycle(request, event) {
-  await notify.stayExtensionLifecycleOnce(request.tenantId, `Stay Extension ${event}`, event === 'Submitted'
-    ? 'Your stay extension request is pending Admin review.'
-    : event === 'Approved'
-      ? 'Your extension was approved. Your successor lease follows the contract preparation and signing process.'
-      : `Your extension request was rejected.${request.adminNote ? ` ${request.adminNote}` : ''}`,
-  `stay_extension:${request._id}:${event}`, {
-    entityType: 'reservation', entityId: request.reservationId,
-    actionUrl: '/extend-stay', data: { screen: 'extend-stay' },
-  });
+  try { await deliverStayExtensionNotification(request.tenantId, extensionEventKey(request._id, event)); }
+  catch (error) { logger.warn({ err: error, requestId: request._id }, 'Extension push queued for retry'); }
 }
 
 export async function getMyStayExtension(tenantId) {
@@ -171,6 +166,7 @@ export async function createStayExtension({ tenantId, payload = {} }) {
       }], { session });
       reservation.pendingExtensionRequestId = request._id;
       await reservation.save({ session, validateModifiedOnly: true });
+      await queueStayExtensionNotification(request, 'Submitted', session);
     });
   } catch (error) {
     if (error.code === 11000) fail('An extension request is already pending.');
@@ -214,6 +210,7 @@ export async function reviewStayExtension({ requestId, actor, decision, adminNot
         const changed = await StayExtensionRequest.updateOne({ _id: request._id, status: 'pending' }, { $set: { status: decision, adminNote: note, reviewedBy: actor._id, reviewedAt: new Date() } }, { session });
         if (!changed.modifiedCount) fail('This request has already been reviewed.');
         await Reservation.updateOne({ _id: request.reservationId, pendingExtensionRequestId: request._id }, { $unset: { pendingExtensionRequestId: '' } }, { session });
+        await queueStayExtensionNotification({ ...request.toObject(), adminNote: note }, 'Rejected', session);
       });
     } finally { await session.endSession(); }
   }
