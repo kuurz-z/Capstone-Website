@@ -1,4 +1,5 @@
 import { resolveRenewalTerm } from "../services/contractLeaseDateService.js";
+import { assertStayContractEndDates } from '../services/stayContractIntegrity.js';
 import { toManilaStartOfDay, getManilaToday, getManilaDayjs, composeManilaDateTime } from "./dateUtils.js";
 import { getWaterObservationBaseline, recordWaterObservation, requiresWaterObservation } from '../services/billing/waterObservations.js';
 import mongoose from "mongoose";
@@ -171,7 +172,10 @@ async function ensureActiveStay(reservation, actorId = null, session = null, pre
     const tenantId = reservation.userId?._id || reservation.userId;
     existingStay = await resolveCurrentStayForTenant(tenantId, { session });
   }
-  if (existingStay) return existingStay;
+  if (existingStay) {
+    if (predecessorContract) assertStayContractEndDates(existingStay, predecessorContract);
+    return existingStay;
+  }
 
   const moveInDate = readMoveInDate(reservation);
   const leaseDuration = Number(reservation?.leaseDuration ?? reservation?.leaseDurationMonths ?? 0);

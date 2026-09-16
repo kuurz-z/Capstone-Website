@@ -89,6 +89,17 @@ test('rejection preserves stay/contract, releases pending lock and notifies tena
   expect(await Notification.countDocuments({ userId: tenant._id, title: 'Stay Extension Rejected' })).toBe(1);
   expect((await getMyStayExtension(tenant._id)).canRequest).toBe(true);
 });
+test('active tenant date drift is identified without changing legal terms or submitting', async () => {
+  await Stay.updateOne({ _id: stay._id }, { $set: { leaseEndDate: new Date(stay.leaseEndDate.getTime() + 3 * 86400000) } });
+  expect(await getMyStayExtension(tenant._id)).toMatchObject({ canRequest: false, reasonCode: 'STAY_CONTRACT_DATE_MISMATCH' });
+  await expect(submit()).rejects.toMatchObject({ code: 'STAY_CONTRACT_DATE_MISMATCH' });
+  expect(await Request.countDocuments()).toBe(0);
+  expect((await Contract.findById(contract._id)).leaseEndDate).toEqual(contract.leaseEndDate);
+  await Stay.updateOne({ _id: stay._id }, { $set: { leaseEndDate: contract.leaseEndDate } });
+  expect((await getMyStayExtension(tenant._id)).canRequest).toBe(true);
+  await expect(submit()).resolves.toMatchObject({ status: 'pending' });
+});
+
 test('cannot submit as inactive tenant or against a historical stay', async () => {
   await User.updateOne({ _id: tenant._id }, { $set: { tenantStatus: 'inactive' } });
   await expect(submit()).rejects.toMatchObject({ statusCode: 403 });

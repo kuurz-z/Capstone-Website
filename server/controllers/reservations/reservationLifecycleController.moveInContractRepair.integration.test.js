@@ -243,6 +243,38 @@ describe("moveIn transition — draft Contract repair backstop", () => {
     expect(String(contracts[0]._id)).toBe(String(existing._id));
   }, 20_000);
 
+  test('later actual check-in preserves the existing Contract end date without changing legal terms', async () => {
+    const { reservation, tenant } = await seedReservedReservation();
+    const existing = await createDraftContract({ reservationId: reservation._id, actorId: tenant._id });
+    const before = existing.toObject();
+    await Contract.collection.updateOne({_id:existing._id}, {$set:{status:'published',publicationStatus:'published',tenantVisible:true}});
+    const res = response();
+    await updateReservation(requestFor(String(reservation._id), {
+      status: 'moveIn', meterReading: 100, actualMoveInDate: '2026-09-10',
+    }), res, jest.fn());
+    expect(res.statusCode).toBe(200);
+    const stay = await Stay.findOne({ reservationId: reservation._id });
+    expect(stay.leaseEndDate).toEqual(before.leaseEndDate);
+    const after = await Contract.findById(existing._id);
+    expect(after.leaseStartDate).toEqual(before.leaseStartDate);
+    expect(after.leaseEndDate).toEqual(before.leaseEndDate);
+  }, 20_000);
+
+  test('later actual check-in aligns an unsigned draft and Stay together', async () => {
+    const { reservation } = await seedReservedReservation();
+    const existing = await createDraftContract({ reservationId: reservation._id, actorId: new mongoose.Types.ObjectId() });
+    const res = response();
+    await updateReservation(requestFor(String(reservation._id), {
+      status: 'moveIn', meterReading: 100, actualMoveInDate: '2026-09-10',
+    }), res, jest.fn());
+    expect(res.statusCode).toBe(200);
+    const stay = await Stay.findOne({ reservationId: reservation._id });
+    const after = await Contract.findById(existing._id);
+    expect(after.leaseStartDate).toEqual(stay.leaseStartDate);
+    expect(after.leaseEndDate).toEqual(stay.leaseEndDate);
+    expect(after.leaseStartDate).not.toEqual(existing.leaseStartDate);
+  }, 20_000);
+
   test("ordinary move-in initializes a clean closed-only vacant room from the actual reading", async () => {
     const { reservation, room } = await seedReservedReservation();
     const closedAt = new Date("2026-08-31T00:00:00.000Z");

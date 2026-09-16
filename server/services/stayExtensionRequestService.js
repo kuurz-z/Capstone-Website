@@ -1,4 +1,5 @@
 import { resolveRenewalTerm } from "./contractLeaseDateService.js";
+import { assertStayContractEndDates } from './stayContractIntegrity.js';
 import mongoose from 'mongoose';
 import { isOwnerRole, isAdminRole } from '../config/roles.js';
 import StayExtensionRequest from '../models/StayExtensionRequest.js';
@@ -52,10 +53,7 @@ async function currentContext(tenantId, session = null) {
       (reservation.currentStayId && id(reservation.currentStayId) !== id(stay))) fail('Your current stay has changed.');
   const contract = await resolveAuthoritativeCurrentContract({ reservationId: reservation._id, tenantId, session, strictIntegrityCheck: true });
   if (!contract || !['active', 'published', 'expiring_soon'].includes(contract.status)) fail('A current contract is required.');
-  const stayEndDay = toManilaStartOfDay(stay.leaseEndDate)?.valueOf();
-  if (!contract.leaseEndDate || ![toManilaStartOfDay(contract.leaseEndDate)?.valueOf(),
-    toManilaStartOfDay(new Date(new Date(contract.leaseEndDate).getTime() - 1))?.valueOf()].includes(stayEndDay))
-    fail('The current stay and contract dates require Admin review.');
+  assertStayContractEndDates(stay, contract);
   if (toManilaStartOfDay(stay.leaseStartDate)?.isAfter(getManilaToday(), 'day')) fail('Your renewed stay has not started yet.');
   if (id(contract.roomId) && id(contract.roomId) !== id(stay.roomId)) fail('Your current room and contract require Admin review.');
   const room = await Room.findById(stay.roomId).session(session);
@@ -113,7 +111,7 @@ export async function getMyStayExtension(tenantId) {
     return { request, current, options, canRequest: true, isShortTerm };
   } catch (error) {
     if (!error.statusCode) throw error;
-    return { request, current: null, canRequest: false, reason: error.message };
+    return { request, current: null, canRequest: false, reason: error.message, reasonCode: error.code || null };
   }
 }
 

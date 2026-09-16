@@ -42,6 +42,11 @@ describe("autoContractOrchestratorService", () => {
     });
     mockGeneratePreparedContractPdf = jest.fn();
 
+    jest.unstable_mockModule('./moveInContractDateSync.js', () => ({
+      canRealignMoveInDraft: c => ['draft','incomplete','ready_for_generation','generated','awaiting_signatures'].includes(c.status) && !c.finalDocument && !c.publishedAt,
+      synchronizeMoveInDraftDates: (c, fields) => mockContractUpdateOne({_id:c._id}, {$set:fields}),
+    }));
+
     jest.unstable_mockModule("./renewalContractPreparationService.js", () => ({
       withRenewalPreparationLock: (_stayId, prepare) => prepare(),
     skipBlockedRenewalPreparation: jest.fn().mockResolvedValue(null),
