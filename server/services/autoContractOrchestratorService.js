@@ -1,5 +1,6 @@
 import { withRenewalPreparationLock, skipBlockedRenewalPreparation, recordRenewalPreparationFailure, clearRenewalPreparationFailure } from "./renewalContractPreparationService.js";
 import dayjs from "dayjs";
+import { canRealignMoveInDraft, synchronizeMoveInDraftDates } from './moveInContractDateSync.js';
 import logger from "../middleware/logger.js";
 import { Contract, Reservation, Room, User } from "../models/index.js";
 import { notify } from "../utils/notificationService.js";
@@ -296,7 +297,7 @@ export async function autoGenerateMoveInContract({ reservationId, actualMoveInDa
     const moveInResolution = actualMoveInDate
       ? { value: actualMoveInDate, sourceField: "actualMoveInDate" }
       : readMoveInDate(reservation, { includeSource: true });
-    if (moveInResolution.value && !contract.finalDocument?.storageKey) {
+    if (moveInResolution.value && canRealignMoveInDraft(contract)) {
       const moveInDateObj = new Date(moveInResolution.value);
       if (!isNaN(moveInDateObj.getTime())) {
         const durationMonths = contract.leaseDurationMonths ||
@@ -329,7 +330,7 @@ export async function autoGenerateMoveInContract({ reservationId, actualMoveInDa
           updateFields.status = "ready_for_generation";
         }
 
-        await Contract.updateOne({ _id: contract._id }, { $set: updateFields });
+        await synchronizeMoveInDraftDates(contract, updateFields);
         contract = await Contract.findById(contract._id);
       }
     }

@@ -9,6 +9,7 @@
 
 import dayjs from "dayjs";
 import mongoose from "mongoose";
+import { assertStayContractEndDates, resolveCheckInLeaseEndDate } from '../../services/stayContractIntegrity.js';
 import {
   BedHistory,
   Contract,
@@ -687,9 +688,25 @@ export const updateReservation = async (req, res, next) => {
           const leaseStartDate = new Date(
             updatedReservation.confirmedMoveInDate || updatedReservation.moveInDate,
           );
-          const leaseEndDate = dayjs(leaseStartDate)
+          const currentContracts = await Contract.find({
+            reservationId: updatedReservation._id,
+            tenantId: updatedReservation.userId?._id || updatedReservation.userId,
+            isCurrent: true,
+            isCanonical: { $ne: false },
+            archivedAt: null,
+            status: { $nin: ['cancelled', 'voided', 'rejected', 'archived', 'replaced', 'expired', 'terminated'] },
+          }).limit(2).session(session);
+          if (currentContracts.length > 1) {
+            throw Object.assign(new Error('Multiple current contracts require review before check-in.'), { statusCode: 409 });
+          }
+          const currentContract = currentContracts[0] || null;
+          if (currentContract?.roomId && String(currentContract.roomId) !== String(existingReservation.roomId._id || existingReservation.roomId)) {
+            throw Object.assign(new Error('The current room and contract require Admin review.'), { statusCode: 409 });
+          }
+          const fallbackLeaseEndDate = dayjs(leaseStartDate)
             .add(Math.max(1, Number(updatedReservation.leaseDuration || 12)), "month")
             .toDate();
+          const leaseEndDate = resolveCheckInLeaseEndDate(currentContract, fallbackLeaseEndDate);
           const activeStay = await Stay.findOneAndUpdate(
             {
               reservationId: updatedReservation._id,
@@ -715,6 +732,7 @@ export const updateReservation = async (req, res, next) => {
             },
             { upsert: true, new: true, session, runValidators: true },
           );
+          if (currentContract) assertStayContractEndDates(activeStay, currentContract);
           updatedReservation.currentStayId = activeStay._id;
           updatedReservation.latestStayStatus = "active";
           await updatedReservation.save({ validateModifiedOnly: true, session });
@@ -746,10 +764,6 @@ export const updateReservation = async (req, res, next) => {
             { upsert: true, new: true, session, runValidators: true },
           );
 
-          const currentContract = await Contract.findOne({
-            reservationId: updatedReservation._id,
-            isCurrent: true,
-          }).session(session);
           if (currentContract) {
             if (!currentContract.stayId) currentContract.stayId = activeStay._id;
             if (!currentContract.leaseStartDate) currentContract.leaseStartDate = leaseStartDate;
