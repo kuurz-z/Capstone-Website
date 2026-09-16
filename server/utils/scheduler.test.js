@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 import dayjs from "dayjs";
+import cron from "node-cron";
+
+const retryStayExtensionNotifications = jest.fn().mockResolvedValue(undefined);
+await jest.unstable_mockModule("../services/notifications/stayExtensionDelivery.js", () => ({
+  retryStayExtensionNotifications,
+  queueStayExtensionNotification: jest.fn(),
+}));
 
 const reservationFind = jest.fn();
 const reservationFindById = jest.fn();
@@ -153,6 +160,27 @@ const reconcileRenewalContractPreparation = jest.fn().mockResolvedValue({ recove
 await jest.unstable_mockModule("../services/renewalContractPreparationService.js", () => ({ reconcileRenewalContractPreparation }));
 
 const scheduler = await import("./scheduler.js");
+
+test("extension retry is registered once, invokes the worker, and stops on shutdown", async () => {
+  const jobs = [];
+  const schedule = jest.spyOn(cron, "schedule").mockImplementation((expression, callback, options) => {
+    const job = { expression, callback, options, stop: jest.fn() };
+    jobs.push(job);
+    return job;
+  });
+  try {
+    scheduler.startScheduler({ runWarmup: false });
+    scheduler.startScheduler({ runWarmup: false });
+    const extensionJobs = jobs.filter(job => job.options?.name === "stay-extension-notification-delivery");
+    expect(extensionJobs).toHaveLength(1);
+    expect(extensionJobs[0].expression).toBe("* * * * *");
+    expect(extensionJobs[0].options.noOverlap).toBe(true);
+    await extensionJobs[0].callback();
+    expect(retryStayExtensionNotifications).toHaveBeenCalledTimes(1);
+    scheduler.stopScheduler();
+    expect(extensionJobs[0].stop).toHaveBeenCalledTimes(1);
+  } finally { scheduler.stopScheduler(); schedule.mockRestore(); }
+});
 
 const createReservation = (overrides = {}) => ({
   _id: "reservation-1",
