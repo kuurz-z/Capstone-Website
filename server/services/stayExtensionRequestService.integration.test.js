@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { jest, beforeAll, afterAll, beforeEach, test, expect } from '@jest/globals';
 
-const push = jest.fn().mockResolvedValue({ sent: 1 });
+const push = jest.fn().mockResolvedValue({ status: 'accepted', accepted: 1, acceptedTokenHashes: ['test-device'] });
 const generate = jest.fn().mockResolvedValue({});
 jest.unstable_mockModule('./notifications/mobilePushService.js', () => ({ sendMobilePushToRecipients: push, sendMobilePushBill: jest.fn(), sendMobilePushAnnouncement: jest.fn() }));
 jest.unstable_mockModule('./autoContractOrchestratorService.js', () => ({ autoGenerateRenewalContract: generate }));
@@ -10,6 +10,7 @@ const { createStayExtension, reviewStayExtension, getMyStayExtension, extensionD
 const { Reservation, Room, Stay, User, Contract } = await import('../models/index.js');
 const { default: Request } = await import('../models/StayExtensionRequest.js');
 const { default: Notification } = await import('../models/Notification.js');
+const { deliverStayExtensionNotification, extensionEventKey, retryStayExtensionNotifications } = await import('./notifications/stayExtensionDelivery.js');
 const { getManilaToday } = await import('../utils/dateUtils.js');
 
 jest.setTimeout(120000);
@@ -18,11 +19,13 @@ beforeAll(async () => {
   mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongo.getUri(), { dbName: 'stay_extension_tests' });
   await Request.init();
+  await Notification.init();
 });
 afterAll(async () => { await mongoose.disconnect(); await mongo?.stop(); });
 beforeEach(async () => {
   for (const collection of Object.values(mongoose.connection.collections)) await collection.deleteMany({});
   jest.clearAllMocks();
+  push.mockResolvedValue({ status: 'accepted', accepted: 1, acceptedTokenHashes: ['test-device'] });
   tenant = await User.create({ firebaseUid: `test-${new mongoose.Types.ObjectId()}`, username: `t${new mongoose.Types.ObjectId()}`, email: `t${new mongoose.Types.ObjectId()}@example.test`, firstName: 'Extension', lastName: 'Tenant', role: 'tenant', tenantStatus: 'active' });
   room = await Room.create({ name: 'Test 301', roomNumber: '301', branch: 'gil-puyat', type: 'quadruple-sharing', capacity: 4, price: 6300 });
   const start = getManilaToday().subtract(90, 'day').toDate(), end = getManilaToday().add(90, 'day').toDate();
@@ -42,7 +45,7 @@ test('valid request snapshots canonical terms, notifies tenant/admin, and does n
   expect((await Stay.findById(stay._id)).leaseEndDate).toEqual(stay.leaseEndDate);
   expect((await getMyStayExtension(tenant._id)).canRequest).toBe(false);
   expect(await Notification.countDocuments({ userId: tenant._id, title: 'Stay Extension Submitted' })).toBe(1);
-  expect(push).toHaveBeenCalledWith(expect.arrayContaining([expect.anything()]), expect.objectContaining({ data: expect.objectContaining({ screen: 'extend-stay' }) }));
+  expect(push).toHaveBeenCalledWith(expect.arrayContaining([expect.anything()]), expect.objectContaining({ data: expect.objectContaining({ screen: 'extend-stay', extension_request_id: String(result._id) }) }), expect.objectContaining({ detailed: true }));
 });
 test.each([0, -1, 1.5, 25, 'bad'])('rejects invalid extension duration %s', async (months) => {
   await expect(submit({ months })).rejects.toMatchObject({ statusCode: 400 });
@@ -136,4 +139,66 @@ test('repeated rejection does not duplicate persisted or delivered notifications
   expect(await Notification.countDocuments({ userId: tenant._id, title: 'Stay Extension Rejected' })).toBe(1);
   expect(push.mock.calls.filter(([, payload]) => payload.title === 'Stay Extension Rejected')).toHaveLength(1);
   expect((await getMyStayExtension(tenant._id)).request.status).toBe('rejected');
+});
+
+test('push failure preserves the inbox event and retry delivers once without changing the request', async () => {
+  push.mockResolvedValueOnce({ status: 'failed', accepted: 0 });
+  const request = await submit();
+  const key = extensionEventKey(request._id, 'Submitted');
+  const before = await Notification.findOne({ userId: tenant._id, dedupeKey: key });
+  expect(before.pushDelivery.status).toBe('failed');
+  expect((await Request.findById(request._id)).status).toBe('pending');
+  await deliverStayExtensionNotification(tenant._id, key);
+  await deliverStayExtensionNotification(tenant._id, key);
+  expect(push).toHaveBeenCalledTimes(2);
+  expect(await Notification.countDocuments({ userId: tenant._id, dedupeKey: key })).toBe(1);
+  expect((await Notification.findById(before._id)).pushDelivery.status).toBe('accepted');
+});
+
+test('notification persistence failure rolls back submission and never sends push', async () => {
+  const write = jest.spyOn(Notification, 'updateOne').mockRejectedValueOnce(new Error('Inbox write failed'));
+  try {
+    await expect(submit()).rejects.toThrow('Inbox write failed');
+    expect(await Request.countDocuments()).toBe(0);
+    expect((await Reservation.findById(reservation._id)).pendingExtensionRequestId).toBeFalsy();
+    expect(push).not.toHaveBeenCalled();
+  } finally { write.mockRestore(); }
+});
+
+test('partial push retries exclude devices already accepted and concurrent workers lease the event', async () => {
+  push.mockResolvedValueOnce({ status: 'partial', accepted: 1, acceptedTokenHashes: ['first-device'] });
+  const request = await submit();
+  await Promise.all([1, 2].map(() => deliverStayExtensionNotification(tenant._id, extensionEventKey(request._id, 'Submitted'))));
+  expect(push).toHaveBeenCalledTimes(2);
+  expect(push.mock.calls[1][2].acceptedTokenHashes).toEqual(['first-device']);
+});
+
+test('scheduled retries wait until due and stop after provider acceptance', async () => {
+  push.mockResolvedValueOnce({ status: 'no_eligible_token', accepted: 0 });
+  const request = await submit();
+  const filter = { userId: tenant._id, dedupeKey: extensionEventKey(request._id, 'Submitted') };
+  await retryStayExtensionNotifications();
+  expect(push).toHaveBeenCalledTimes(1);
+  await Notification.updateOne(filter, { $set: { 'pushDelivery.nextAttemptAt': new Date(0) } });
+  await retryStayExtensionNotifications();
+  expect(push).toHaveBeenCalledTimes(2);
+  expect((await Notification.findOne(filter)).pushDelivery.status).toBe('accepted');
+  await Notification.updateOne(filter, { $set: { 'pushDelivery.nextAttemptAt': new Date(0) } });
+  await retryStayExtensionNotifications();
+  expect(push).toHaveBeenCalledTimes(2);
+});
+
+test.each(['approved', 'rejected'])('inbox write failure rolls back the %s decision', async (decision) => {
+  const request = await submit();
+  push.mockClear();
+  const write = jest.spyOn(Notification, 'updateOne').mockRejectedValueOnce(new Error('Inbox unavailable'));
+  try {
+    await expect(reviewStayExtension({ requestId: request._id, actor, decision })).rejects.toThrow('Inbox unavailable');
+    expect((await Request.findById(request._id)).status).toBe('pending');
+    expect(String((await Reservation.findById(reservation._id)).pendingExtensionRequestId)).toBe(String(request._id));
+    expect(await Stay.countDocuments({ previousStayId: stay._id })).toBe(0);
+    expect(await Notification.countDocuments({ userId: tenant._id, title: { $in: ['Stay Extension Approved', 'Stay Extension Rejected'] } })).toBe(0);
+    expect(push).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+  } finally { write.mockRestore(); }
 });

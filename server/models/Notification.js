@@ -141,6 +141,20 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Optional delivery state for transactionally queued extension events.
+    pushDelivery: {
+      type: new mongoose.Schema({
+        kind: String,
+        status: { type: String, enum: ['pending', 'accepted', 'partial', 'failed', 'no_eligible_token'] },
+        attempts: { type: Number, default: 0 },
+        acceptedTokenHashes: [String],
+        nextAttemptAt: Date,
+        leaseUntil: Date,
+        leaseToken: String,
+        error: String,
+      }, { _id: false }),
+      default: undefined,
+    },
   },
   {
     timestamps: true,

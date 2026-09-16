@@ -1,4 +1,5 @@
 import { reconcileRenewalContractPreparation } from "../services/renewalContractPreparationService.js";
+import { retryStayExtensionNotifications } from '../services/notifications/stayExtensionDelivery.js';
 /**
  * ============================================================================
  * CENTRALIZED CRON SCHEDULER
@@ -1516,6 +1517,12 @@ export function startScheduler(options = {}) {
       name: "renewal-contract-activation",
     }),
   );
+
+  // Retry durable extension notifications independently of contract preparation.
+  scheduledJobs.push(cron.schedule('* * * * *', () =>
+    retryJobOperation(retryStayExtensionNotifications, { label: 'Stay extension notification delivery' }), {
+      timezone: process.env.APP_TIMEZONE || 'Asia/Manila', name: 'stay-extension-notification-delivery', noOverlap: true,
+    }));
 
   // Job 19: Contract preparation reconciliation - every five minutes.
   // Recovers upcoming renewals with persistent failure gating, and retries

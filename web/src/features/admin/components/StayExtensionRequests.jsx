@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch } from '../../../shared/api/httpClient';
 import { showNotification } from '../../../shared/utils/notification';
 
@@ -6,11 +6,28 @@ const date = (value) => new Date(value).toLocaleDateString('en-PH', { timeZone: 
 export default function StayExtensionRequests({ onReviewed }) {
   const [requests, setRequests] = useState([]), [error, setError] = useState('');
   const [notes, setNotes] = useState({}), [busy, setBusy] = useState(null);
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
-    try { const result = await authFetch('/tenant/stay-extension-requests'); setRequests(result.requests || []); setError(''); }
-    catch (err) { setError(err.message || 'Unable to load extension requests.'); }
+    const sequence = ++loadSequence.current;
+    try {
+      const result = await authFetch('/tenant/stay-extension-requests');
+      if (sequence !== loadSequence.current) return;
+      setRequests(result.requests || []); setError('');
+    } catch (err) { if (sequence === loadSequence.current) setError(err.message || 'Unable to load extension requests.'); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const refreshVisible = () => { if (document.visibilityState !== 'hidden') load(); };
+    const interval = window.setInterval(refreshVisible, 30_000);
+    window.addEventListener('focus', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      loadSequence.current += 1;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
+  }, [load]);
   const review = async (request, decision) => {
     if (busy) return;
     setBusy(request._id);
