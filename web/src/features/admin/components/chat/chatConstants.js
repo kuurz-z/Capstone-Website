@@ -14,7 +14,7 @@ export const STATUS_DESCRIPTIONS = {
   open: "Conversation is active and awaiting staff response or triage.",
   in_review: "Staff is currently investigating and working on the tenant's concern.",
   waiting_tenant: "Staff replied; awaiting further information from the tenant.",
-  resolved: "Admin resolved the concern with a resolution note.",
+  resolved: "Admin marks the inquiry resolved; the tenant must confirm and rate before it closes.",
   closed: "Permanently closes and archives the conversation thread with an audit note.",
 };
 

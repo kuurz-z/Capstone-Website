@@ -917,7 +917,7 @@ const notify = {
 
     const normalizedConversationId = String(conversationId);
     const normalizedMessageId = String(messageId);
-    const title = "New Admin Reply";
+    const title = supportEvent.status === 'resolved' ? 'Please confirm your inquiry is resolved' : "New Admin Reply";
     const message = supportEvent.message || "You received a reply from LilyCrest Admin. Confirm whether your concern was resolved.";
 
     return createNotificationWithPush(
@@ -930,6 +930,7 @@ const notify = {
         entityId: normalizedConversationId,
         actionUrl: "/(tabs)/chatbot",
         dedupeKey: `chat_reply:${normalizedConversationId}:${normalizedMessageId}`,
+        ...(supportEvent.durable ? { reuseExisting: true, throwOnFailure: true } : {}),
         ...(supportEvent.requestId ? { data: { requestId: supportEvent.requestId, conversationId: normalizedConversationId } } : {}),
       },
       (_notification, pushIdentity) =>

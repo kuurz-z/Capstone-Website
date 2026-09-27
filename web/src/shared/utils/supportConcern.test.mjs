@@ -29,6 +29,13 @@ test('revision 11 cannot overwrite revision 12 rating, status, resolution or ass
   const a = normalize(concern({ status: 'resolved', satisfaction: rating, assignedAdminName: 'Admin', resolvedAt: 'today' }));
   assert.equal(reconcileSupportConcern(a, { ...concern(), revision: 11 }), a);
 });
+
+test('closed ratings stay readable and an equal revision snapshot cannot erase satisfaction', () => {
+  const saved = normalize(concern({ status: 'closed', satisfaction: rating }));
+  assert.equal(saved.rating, 5);
+  assert.equal(saved.ratingState, 'rated');
+  assert.equal(reconcileSupportConcern(saved, concern({ status: 'resolved' })), saved);
+});
 test('legacy retains historical meaning without inventing request identity', () => {
   const c = normalize({ id: 'thread', legacy: true, requestId: null, status: 'resolved', satisfactionRating: 4 });
   assert.equal(c.requestId, null); assert.equal(c.rating, 4); assert.equal(c.ratingState, 'historical');
@@ -38,12 +45,12 @@ test('verified mobile flat projection is supported', () => {
   assert.equal(c.rating, 5); assert.equal(c.requestId, 'A');
 });
 test('allowed transitions match backend, required note trimmed and payload targeted', () => {
-  assert.deepEqual(allowedSupportStatuses(normalize(concern())), ['in_review', 'waiting_tenant', 'closed']);
+  assert.deepEqual(allowedSupportStatuses(normalize(concern())), ['in_review', 'waiting_tenant', 'resolved']);
   assert.ok(allowedSupportStatuses(normalize(concern({ status: 'in_review' }))).includes('waiting_tenant'));
   const c = normalize(concern({ status: 'waiting_tenant' }));
   assert.throws(() => supportStatusPayload(c, 'resolved', '  '));
   assert.throws(() => supportStatusPayload(c, 'resolved', 'x'.repeat(1001)));
-  assert.throws(() => supportStatusPayload(normalize(concern()), 'resolved', 'Fixed'));
+  assert.equal(supportStatusPayload(normalize(concern()), 'resolved', 'Fixed').status, 'resolved');
   assert.deepEqual(supportStatusPayload(c, 'resolved', ' Fixed '), { requestId: 'A', revision: 12, status: 'resolved', note: 'Fixed' });
   assert.deepEqual(allowedSupportStatuses(normalize(concern({ status: 'closed' }))), []);
 });

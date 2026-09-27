@@ -209,7 +209,7 @@ describe("chat controller authoritative branch scope", () => {
     expect(notifyAdminReply).not.toHaveBeenCalled();
   });
 
-  test("an admin cannot bypass tenant confirmation by setting resolved directly", async () => {
+  test("admin resolution requires a resolution note", async () => {
     const conversationId = "507f1f77bcf86cd799439011";
     conversationFindOne.mockResolvedValue({
       _id: conversationId,
@@ -225,8 +225,8 @@ describe("chat controller authoritative branch scope", () => {
       res,
     );
 
-    expect(res.statusCode).toBe(409);
-    expect(res.body.code).toBe("TENANT_CONFIRMATION_REQUIRED");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe("RESOLUTION_NOTE_REQUIRED");
   });
 
   test("tenant reply reopens a closed shared conversation and clears closure metadata", async () => {

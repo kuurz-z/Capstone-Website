@@ -48,6 +48,7 @@ router.get(
   chatController.downloadChatAttachment,
 );
 router.post("/chat/:conversationId/messages", ...tenant, chatController.sendTenantMessage);
+router.patch("/chat/:conversationId/rating", ...tenant, chatController.rateTenantSupport);
 router.patch("/chat/:conversationId/resolution", ...tenant, chatController.confirmTenantResolution);
 router.patch("/chat/:conversationId/reopen", ...tenant, chatController.reopenTenantConversation);
 router.patch("/chat/:conversationId/close", ...tenant, chatController.closeTenantConversation);

@@ -1,4 +1,5 @@
-import { currentConversation, mutateConversation, persistMessage, reconcileSupport, assertTransition, conflict, createSupportRequest, rateSupportRequest } from '../services/supportRequestService.js';
+import { supportLifecycleEvents } from '../services/supportLifecycleEvents.js';
+import { currentConversation, mutateConversation, persistMessage, reconcileSupport, assertTransition, conflict, createSupportRequest, rateSupportRequest, reopenSupportRequest } from '../services/supportRequestService.js';
 import mongoose from "mongoose";
 import {
   ChatConversation,
@@ -576,6 +577,7 @@ export function serializeConversation(conversation) {
 
   return {
     id: String(doc._id || doc.id),
+    lifecycleEvents: supportLifecycleEvents(doc),
     request: doc.request || null,
     requestId: doc.request?.id || null,
     legacy: !doc.request,
@@ -612,6 +614,8 @@ export function serializeConversation(conversation) {
     closingNote: doc.closingNote || "",
     resolvedAt: doc.resolvedAt || null,
     resolvedBy: doc.resolvedBy ? String(doc.resolvedBy) : null,
+    tenantResolutionConfirmed: Boolean(doc.tenantResolutionConfirmed || doc.request?.satisfaction),
+    tenantResolutionAt: doc.tenantResolutionAt || doc.request?.satisfaction?.submittedAt || null,
     resolutionConfirmationSource: doc.resolutionConfirmationSource || "",
     firstAdminReplyAt: doc.firstAdminReplyAt || null,
     firstAdminReplyMinutes: doc.firstAdminReplyMinutes ?? null,
@@ -622,6 +626,13 @@ export function serializeConversation(conversation) {
     reopenCount: Number(doc.reopenCount || 0),
     statusHistory: Array.isArray(doc.statusHistory)
       ? doc.statusHistory.map((entry) => ({
+          eventId: entry.eventId || '',
+          eventType: entry.eventType || '',
+          rating: entry.rating ?? null,
+          feedback: entry.feedback || '',
+          resolvedAt: entry.resolvedAt || null,
+          resolvedBy: entry.resolvedBy ? String(entry.resolvedBy) : null,
+          resolutionNote: entry.resolutionNote || '',
           status: entry.status || "",
           note: entry.note || "",
           actorId: entry.actorId ? String(entry.actorId) : "",
@@ -1261,7 +1272,7 @@ export async function getConversationMessages(req, res) {
       tenantContext.user,
     );
     if (conversation.request) {
-      await reconcileSupport(mongoose.connection.db, conversation._id);
+      await reconcileSupport(mongoose.connection.db, conversation._id).catch((error) => console.warn('Support delivery pending:', error.message));
       conversation = await ChatConversation.findById(conversation._id);
     }
     conversation = await ensureChatTicketId(conversation);
@@ -1307,6 +1318,7 @@ export async function sendTenantMessage(req, res) {
       req.params.conversationId,
       tenantContext.user,
     );
+    if (!conversation.request && conversation.satisfactionRating != null) throw conflict('Historical ratings are immutable.', 'ALREADY_RATED');
 
     const attachments = await normalizeAttachments(req.body?.attachments, conversation._id);
     const message = normalizeMessage(req.body?.message, attachments.length > 0);
@@ -1373,8 +1385,9 @@ export async function reopenTenantConversation(req, res) {
       req.params.conversationId,
       tenantContext.user,
     );
+    if (!conversation.request && conversation.satisfactionRating != null) throw conflict('Historical ratings are immutable.', 'ALREADY_RATED');
 
-    if (conversation.request) return await changeTenantSupportStatus(req, res, conversation, tenantContext.user, 'in_review');
+    if (conversation.request) return await reopenTenantSupport(req, res, conversation, tenantContext.user);
 
     if (!["resolved", "closed"].includes(conversation.status)) {
       return res.json({ conversation: serializeConversation(conversation) });
@@ -1423,8 +1436,9 @@ export async function closeTenantConversation(req, res) {
       req.params.conversationId,
       tenantContext.user,
     );
+    if (!conversation.request && conversation.satisfactionRating != null) throw conflict('Historical ratings are immutable.', 'ALREADY_RATED');
 
-    if (conversation.request) return await changeTenantSupportStatus(req, res, conversation, tenantContext.user, 'closed');
+    if (conversation.request) throw conflict('Confirm resolution and submit a rating to close this inquiry.', 'TENANT_CONFIRMATION_REQUIRED');
 
     if (conversation.status === "closed") {
       return res.json({ conversation: serializeConversation(conversation) });
@@ -1457,23 +1471,21 @@ export async function closeTenantConversation(req, res) {
   }
 }
 
-async function changeTenantSupportStatus(req, res, conversation, user, status) {
-  const updated = await mutateConversation(mongoose.connection.db, conversation._id, (doc) => {
-    if (req.body?.requestId && req.body.requestId !== doc.request.id) throw conflict('This support concern has changed.');
-    assertTransition(doc, status, 'tenant');
-    if (doc.status === status) return null;
-    const now = new Date();
-    const note = normalizeOptionalNote(req.body?.note) || (status === 'closed' ? 'Tenant closed the concern.' : 'Tenant reopened the concern.');
-    return { status, updatedAt: now,
-      ...(status === 'closed' ? { closedAt: now, closedBy: String(user._id), closingNote: note }
-        : { resolvedAt: null, resolvedBy: null, resolutionDurationMinutes: null, closingNote: '', reopenedAt: now, reopenCount: Number(doc.reopenCount || 0) + 1 }),
-      statusHistory: [...(doc.statusHistory || []), { status, note, actorId: user._id,
-        actorName: displayName(user, 'Tenant'), createdAt: now }] };
-  });
-  if (status === 'in_review') await notifyAdminsOfTenantMessage(updated);
+async function reopenTenantSupport(req, res, conversation, user) {
+  const updated = await reopenSupportRequest(mongoose.connection.db, conversation, user, req.body);
+  await reconcileSupport(mongoose.connection.db, conversation._id).catch((error) => console.warn('Support delivery pending:', error.message));
   const serialized = serializeConversation(updated);
   emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
   return res.json({ conversation: serialized });
+}
+
+// The explicit rating endpoint confirms an existing admin resolution; it never resolves an inquiry.
+export async function rateTenantSupport(req, res) {
+  if (!Number.isSafeInteger(req.body?.revision) || req.body.revision < 0) {
+    return res.status(400).json({ error: 'Refresh this inquiry before submitting your rating.', code: 'REVISION_REQUIRED' });
+  }
+  req.body = { ...req.body, resolved: true };
+  return confirmTenantResolution(req, res);
 }
 
 export async function confirmTenantResolution(req, res) {
@@ -1484,76 +1496,14 @@ export async function confirmTenantResolution(req, res) {
       tenantContext.user,
     );
     if (conversation.request) {
+      if (req.body?.resolved === false) return await reopenTenantSupport(req, res, conversation, tenantContext.user);
       const updated = await rateSupportRequest(mongoose.connection.db, conversation, tenantContext.user, req.body);
+      await reconcileSupport(mongoose.connection.db, conversation._id).catch((error) => console.warn('Support delivery pending:', error.message));
       const serialized = serializeConversation(updated);
       emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
       return res.json({ conversation: serialized });
     }
-    if (typeof req.body?.resolved !== "boolean") {
-      throw createHttpError("Choose YES or NO to confirm resolution.", 400, "RESOLUTION_CHOICE_REQUIRED");
-    }
-    if (conversation.status !== "waiting_tenant") {
-      throw createHttpError(
-        "This conversation is not awaiting resolution confirmation.",
-        409,
-        "RESOLUTION_CONFIRMATION_NOT_PENDING",
-      );
-    }
-
-    if (!req.body.resolved) {
-      const note = normalizeOptionalNote(req.body?.note) || "My concern is not resolved yet.";
-      const result = await createMessageAndUpdateConversation({
-        conversation,
-        sender: tenantContext.user,
-        senderRole: "tenant",
-        message: note,
-        unreadTarget: "admin",
-        nextStatus: "open",
-        statusNote: "Tenant selected NO; concern remains active in the same thread.",
-      });
-      await notifyAdminsOfTenantMessage(result.conversation);
-      const message = serializeMessage(result.chatMessage);
-      const serializedConversation = serializeConversation(result.conversation);
-      emitToChatAdmins(result.conversation.branch, "chat:message-new", {
-        message,
-        conversationId: String(result.conversation._id),
-      });
-      emitToChatAdmins(result.conversation.branch, "chat:conversation-updated", serializedConversation);
-      return res.json({ message, conversation: serializedConversation });
-    }
-
-    const now = new Date();
-    const createdAtTime = new Date(conversation.createdAt || now).getTime();
-    const durationMinutes = Math.max(0, Math.round((now.getTime() - createdAtTime) / (60 * 1000)));
-
-    conversation.status = "resolved";
-    conversation.resolvedAt = now;
-    conversation.resolvedBy = tenantContext.user._id;
-    conversation.resolutionConfirmationSource = "tenant_yes";
-    conversation.resolutionDurationMinutes = durationMinutes;
-
-    if (req.body?.rating !== undefined && req.body?.rating !== null) {
-      const rating = Number(req.body.rating);
-      if (!Number.isNaN(rating) && rating >= 1 && rating <= 5) {
-        conversation.satisfactionRating = rating;
-      }
-    }
-
-    if (typeof req.body?.feedback === "string" && req.body.feedback.trim()) {
-      conversation.satisfactionFeedback = req.body.feedback.trim().slice(0, 1000);
-    }
-
-    conversation.statusHistory.push({
-      status: "resolved",
-      note: "Tenant selected YES and confirmed that the concern was resolved.",
-      actorId: tenantContext.user._id,
-      actorName: displayName(tenantContext.user, "Tenant"),
-      createdAt: now,
-    });
-    await conversation.save();
-    const serializedConversation = serializeConversation(conversation);
-    emitToChatAdmins(conversation.branch, "chat:conversation-updated", serializedConversation);
-    return res.json({ conversation: serializedConversation });
+    throw conflict('An admin must mark this inquiry as resolved before you can confirm it.', 'NOT_RESOLVED');
   } catch (error) {
     return sendError(res, error, "Failed to confirm resolution.");
   }
@@ -1800,7 +1750,7 @@ export async function getAdminConversationMessages(req, res) {
     conversation = await ensureChatTicketId(conversation);
 
     if (conversation.request) {
-      await reconcileSupport(mongoose.connection.db, conversation._id);
+      await reconcileSupport(mongoose.connection.db, conversation._id).catch((error) => console.warn('Support delivery pending:', error.message));
       conversation = await ChatConversation.findById(conversation._id);
     }
     await markTenantMessagesRead(conversation._id);
@@ -1841,6 +1791,7 @@ export async function sendAdminMessage(req, res) {
       req.params.conversationId,
       adminContext,
     );
+    if (!conversation.request && conversation.satisfactionRating != null) throw conflict('Historical ratings are immutable.', 'ALREADY_RATED');
 
     if (conversation.request) {
       const attachments = await normalizeAttachments(req.body?.attachments, conversation._id);
@@ -1985,22 +1936,35 @@ async function updateSupportRequestStatus(req, res, conversation, adminContext, 
   const note = normalizeOptionalNote(req.body?.note);
   if (status === 'resolved' && !note) throw createHttpError('Describe how this concern was resolved.', 400, 'RESOLUTION_NOTE_REQUIRED');
   const updated = await mutateConversation(mongoose.connection.db, conversation._id, async (doc) => {
-    if (req.body?.requestId && req.body.requestId !== doc.request.id) throw conflict('Wrong concern identity.', 'REQUEST_MISMATCH');
+    assertAdminConversationAccess(doc, adminContext);
+    if (req.body?.requestId && req.body.requestId !== doc.request?.id) throw conflict('Wrong concern identity.', 'REQUEST_MISMATCH');
     if (req.body?.revision != null && req.body.revision !== (doc.supportRevision || 0)) throw conflict('This concern changed. Refresh before updating.');
-    if (doc.status === status) return null;
-    assertTransition(doc, status);
+    if (doc.status === 'closed' || doc.satisfaction || doc.satisfactionRating != null) throw conflict('Completed support is immutable.');
+    if (doc.request && doc.status === status) return null;
+    if (doc.request) assertTransition(doc, status);
     if (doc.supportNotification?.pending) throw conflict('Previous status notification is pending. Retry shortly.');
     const now = new Date();
-    return {
+    const fields = {
       status, assignedAdminId: adminContext.user._id, assignedAdminName: adminContext.displayName, updatedAt: now,
       ...(status === 'resolved' ? { resolvedAt: now, resolvedBy: adminContext.user._id, closingNote: note,
         resolutionDurationMinutes: Math.max(0, Math.round((now - new Date(doc.createdAt)) / 60000)) } : {}),
       ...(doc.status === 'resolved' && status === 'in_review' ? { resolvedAt: null, resolvedBy: null, resolutionDurationMinutes: null, closingNote: '' } : {}),
       ...(status === 'closed' ? { closedAt: now, closedBy: adminContext.user._id, closingNote: note || 'Closed by admin.' } : {}),
-      statusHistory: [...(doc.statusHistory || []), { status, note, actorId: adminContext.user._id, actorName: adminContext.displayName, createdAt: now }],
+      statusHistory: [...(doc.statusHistory || []), { eventId: String(new mongoose.Types.ObjectId()), eventType: status === 'resolved' ? 'admin_resolved' : 'status_changed', status, note, actorId: adminContext.user._id, actorName: adminContext.displayName, createdAt: now }],
       supportNotification: { pending: true, eventId: String(new mongoose.Types.ObjectId()), status,
-        adminName: adminContext.displayName, message: note || `Your concern is now ${status.replace(/_/g, ' ')}.` },
+        adminName: adminContext.displayName, message: status === 'resolved' ? 'Your support inquiry was marked as resolved. Please confirm if your concern has been addressed.' : note || `Your concern is now ${status.replace(/_/g, ' ')}.` },
     };
+    if (!doc.request) {
+      const owner = doc.tenantUserId ? null : await mongoose.connection.db.collection('users').findOne({ _id: doc.tenantId });
+      fields.tenantUserId = doc.tenantUserId || owner?.user_id || '';
+      fields.statusHistory = fields.statusHistory.map((entry) => entry.eventType || entry.status !== 'resolved'
+        ? entry : { ...entry, eventType: 'historical_resolved' });
+      const request = { id: String(new mongoose.Types.ObjectId()), tenantUserId: fields.tenantUserId,
+        branch: doc.branch, createdAt: doc.createdAt, satisfaction: null, satisfactionRating: null };
+      for (const key of ['concern', 'category', 'priority', 'assignedAdminId', 'assignedAdminName', 'resolvedAt', 'resolvedBy', 'closingNote', 'statusHistory', 'updatedAt', 'status']) request[key] = fields[key] ?? doc[key];
+      fields.request = request;
+    }
+    return fields;
   });
   // A saved status remains saved if delivery fails; the shared pending event is retried on reads/mobile reconciliation.
   await reconcileSupport(mongoose.connection.db, conversation._id).catch((error) => console.warn('Support delivery pending:', error.message));
@@ -2016,12 +1980,13 @@ export async function updateAdminConversationStatus(req, res) {
       req.params.conversationId,
       adminContext,
     );
+    if (!conversation.request && conversation.satisfactionRating != null) throw conflict('Historical ratings are immutable.', 'ALREADY_RATED');
 
     const status = String(req.body?.status || "").trim().toLowerCase();
     if (!VALID_STATUSES.has(status)) {
       throw createHttpError("Invalid conversation status.", 400, "INVALID_STATUS");
     }
-    if (conversation.request) return await updateSupportRequestStatus(req, res, conversation, adminContext, status);
+    if (conversation.request || status === 'resolved') return await updateSupportRequestStatus(req, res, conversation, adminContext, status);
     if (status === "closed") {
       throw createHttpError(
         "Use close conversation to close this chat.",
@@ -2103,6 +2068,7 @@ export async function closeAdminConversation(req, res) {
       req.params.conversationId,
       adminContext,
     );
+    if (!conversation.request && conversation.satisfactionRating != null) throw conflict('Historical ratings are immutable.', 'ALREADY_RATED');
     const closingNote = normalizeNote(
       req.body?.note,
       "Please enter a closing note.",

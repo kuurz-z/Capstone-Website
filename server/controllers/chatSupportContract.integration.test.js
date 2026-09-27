@@ -81,7 +81,7 @@ test('mobile Concern B is separate and open; A retains its immutable rating', as
   const b = normalizeSupportConcern(started.body.conversation);
   expect(b.requestId).not.toBe(a.requestId); expect(b.conversationId).not.toBe(a.id);
   expect(b.rating).toBeNull(); expect(b.status).toBe('open');
-  expect((await call(web.updateAdminConversationStatus, adminReq({ status: 'resolved', note: 'Invalid direct resolve' }, b.id))).statusCode).toBe(409);
+  expect((await call(web.updateAdminConversationStatus, adminReq({ status: 'resolved', note: 'Admin resolved the open inquiry' }, b.id))).statusCode).toBe(200);
   expect((await call(web.updateAdminConversationStatus, adminReq({ status: 'in_review', requestId: a.requestId }, b.id))).statusCode).toBe(409);
   expect(normalizeSupportConcern((await call(web.getAdminConversationMessages, adminReq())).body.conversation).rating).toBe(5);
 });
