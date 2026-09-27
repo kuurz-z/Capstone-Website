@@ -65,17 +65,37 @@ export default function OverdueNoticeTracker({
   });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest"); // "newest" | "oldest"
 
   const filteredNotices = useMemo(() => {
-    if (!searchQuery.trim()) return notices;
-    const q = searchQuery.toLowerCase();
-    return notices.filter((n) => {
-      const name = String(n.tenantName || "").toLowerCase();
-      const room = String(n.roomName || n.roomId || "").toLowerCase();
-      const bill = String(n.billNumber || n.billId || "").toLowerCase();
-      return name.includes(q) || room.includes(q) || bill.includes(q);
+    let list = notices;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = notices.filter((n) => {
+        const name = String(n.tenantName || "").toLowerCase();
+        const room = String(n.roomName || n.roomId || "").toLowerCase();
+        const bill = String(n.billNumber || n.billId || "").toLowerCase();
+        return name.includes(q) || room.includes(q) || bill.includes(q);
+      });
+    }
+
+    return [...list].sort((a, b) => {
+      const getNoticeDate = (n) => {
+        const raw = n.dueDate || n.createdAt || n.dateOfNotice;
+        if (!raw) return null;
+        const time = new Date(raw).getTime();
+        return Number.isFinite(time) ? time : null;
+      };
+      const dateA = getNoticeDate(a);
+      const dateB = getNoticeDate(b);
+      const hasA = dateA !== null;
+      const hasB = dateB !== null;
+      if (!hasA && !hasB) return 0;
+      if (!hasA) return 1; // missing dates always placed at the end
+      if (!hasB) return -1;
+      return sortOrder === "oldest" ? dateA - dateB : dateB - dateA;
     });
-  }, [notices, searchQuery]);
+  }, [notices, searchQuery, sortOrder]);
 
   // Batch Selection State
   const [selectedBillIds, setSelectedBillIds] = useState(new Set());
@@ -365,6 +385,20 @@ export default function OverdueNoticeTracker({
                 <option value="notice_1">1st Reminder Sent</option>
                 <option value="notice_2">2nd Notice Sent</option>
                 <option value="notice_3">Final Notice / Escalated</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">Sort:</span>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="h-8 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-card-foreground shadow-xs focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 cursor-pointer"
+                aria-label="Sort overdue accounts by date"
+                title="Sort overdue accounts by date"
+              >
+                <option value="newest">Newest to Oldest</option>
+                <option value="oldest">Oldest to Newest</option>
               </select>
             </div>
 

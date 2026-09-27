@@ -352,6 +352,8 @@ export default function RentBillingTab({
   const hasLoadedOnceRef = useRef(false);
   const [activeTab, setActiveTab] = useState('all'); // all, upcoming, overdue, exceptions
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // "all" | "unpaid" | "paid"
+  const [sortOrder, setSortOrder] = useState("newest"); // "newest" | "oldest"
   const [cronCountdown, setCronCountdown] = useState(getNextCronCountdown());
 
   const [previewLoadingId, setPreviewLoadingId] = useState(null);
@@ -385,7 +387,7 @@ export default function RentBillingTab({
     setSelectedReservationIds(new Set());
     setPreview(null);
     setPreviewTenant(null);
-  }, [branchParam, activeMonthParam, timeframeMode, activeTab, searchQuery]);
+  }, [branchParam, activeMonthParam, timeframeMode, activeTab, searchQuery, statusFilter]);
 
   const loadData = useCallback(async () => {
     if (!canLoad || !isActive) return;
@@ -553,6 +555,8 @@ export default function RentBillingTab({
 
   const filteredRows = useMemo(() => {
     let rows = tableRows;
+
+    // 1. Existing Sub-tab filtering
     if (activeTab === 'upcoming') {
       rows = rows.filter(r => r.computedStatus === 'ready' || r.computedStatus === 'pending_generation');
     } else if (activeTab === 'overdue') {
@@ -561,6 +565,14 @@ export default function RentBillingTab({
       rows = rows.filter(r => r.computedStatus === 'missing_data');
     }
 
+    // 2. Status dropdown filtering
+    if (statusFilter === 'unpaid') {
+      rows = rows.filter(r => r.computedStatus !== 'paid');
+    } else if (statusFilter === 'paid') {
+      rows = rows.filter(r => r.computedStatus === 'paid');
+    }
+
+    // 3. Search query filtering
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       rows = rows.filter(r =>
@@ -569,8 +581,25 @@ export default function RentBillingTab({
         (r.branch && r.branch.toLowerCase().includes(q))
       );
     }
-    return rows;
-  }, [tableRows, activeTab, searchQuery]);
+
+    // 4. Date sorting ("Newest to Oldest" vs "Oldest to Newest")
+    return [...rows].sort((a, b) => {
+      const getRowDate = (row) => {
+        const raw = row.dueDate || row.billingCycleEnd || row.billingMonth || row.createdAt || row.nextBillingDate;
+        if (!raw) return null;
+        const time = new Date(raw).getTime();
+        return Number.isFinite(time) ? time : null;
+      };
+      const dateA = getRowDate(a);
+      const dateB = getRowDate(b);
+      const hasA = dateA !== null;
+      const hasB = dateB !== null;
+      if (!hasA && !hasB) return 0;
+      if (!hasA) return 1; // missing dates always placed at the end
+      if (!hasB) return -1;
+      return sortOrder === "oldest" ? dateA - dateB : dateB - dateA;
+    });
+  }, [tableRows, activeTab, statusFilter, searchQuery, sortOrder]);
 
   const kpis = useMemo(() => {
     let expected = 0;
@@ -972,24 +1001,54 @@ export default function RentBillingTab({
             ))}
           </div>
 
-          <div className="relative flex items-center shrink-0 w-full sm:w-60">
-            <Search size={14} className="absolute left-2.5 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              maxLength={50}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tenant or room..."
-              className="w-full h-8 rounded-lg border border-border bg-card pl-8 pr-7 text-xs font-medium text-card-foreground shadow-xs focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 p-0.5 rounded-full text-muted-foreground hover:text-card-foreground"
-              >
-                <X size={12} />
-              </button>
-            )}
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {/* Search Input */}
+            <div className="relative flex items-center shrink-0 w-full sm:w-56">
+              <Search size={14} className="absolute left-2.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                maxLength={50}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search tenant or room..."
+                className="w-full h-8 rounded-lg border border-border bg-card pl-8 pr-7 text-xs font-medium text-card-foreground shadow-xs focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 p-0.5 rounded-full text-muted-foreground hover:text-card-foreground cursor-pointer"
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-8 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-card-foreground shadow-xs focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 cursor-pointer"
+              aria-label="Filter by payment status"
+              title="Filter by payment status"
+            >
+              <option value="all">All Status</option>
+              <option value="unpaid">Unpaid (Upcoming / Sent / Overdue)</option>
+              <option value="paid">Paid History</option>
+            </select>
+
+            {/* Sort Order */}
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="h-8 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-card-foreground shadow-xs focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 cursor-pointer"
+              aria-label="Sort records by date"
+              title="Sort records by date"
+            >
+              <option value="newest">Sort: Newest to Oldest</option>
+              <option value="oldest">Sort: Oldest to Newest</option>
+            </select>
           </div>
         </div>
 

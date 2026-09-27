@@ -688,6 +688,8 @@ const StatementFilters = ({
   setStatusFilter,
   categoryFilter = "all",
   setCategoryFilter,
+  sortOrder = "newest",
+  setSortOrder,
   hasElectricityBilling = false,
   hasWaterBilling = false,
 }) => {
@@ -1101,6 +1103,20 @@ const StatementFilters = ({
               })}
             </div>
           )}
+        </div>
+
+        {/* Sort Order Dropdown */}
+        <div className="relative flex-shrink-0">
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder?.(e.target.value)}
+            className="h-8 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-card-foreground shadow-xs focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 cursor-pointer"
+            aria-label="Sort statements by date"
+            title="Sort statements by date"
+          >
+            <option value="newest">Sort: Newest to Oldest</option>
+            <option value="oldest">Sort: Oldest to Newest</option>
+          </select>
         </div>
       </div>
     </div>
@@ -1662,6 +1678,7 @@ export default function BillingTab() {
   const [bills, setBills] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all"); // all | unpaid | paid
   const [categoryFilter, setCategoryFilter] = useState("all"); // all | rent | electricity | water
+  const [sortOrder, setSortOrder] = useState("newest"); // newest | oldest
   const [selectedBillIds, setSelectedBillIds] = useState([]);
   const [expandedBillIds, setExpandedBillIds] = useState(new Set());
   useEffect(()=>{
@@ -1849,10 +1866,16 @@ export default function BillingTab() {
         return true;
       })
       .sort((a, b) => {
-        if (statusFilter === "unpaid") return sortBillsOldestFirst(a, b);
-        return getBillSortTimestamp(b) - getBillSortTimestamp(a);
+        const timeA = getBillSortTimestamp(a);
+        const timeB = getBillSortTimestamp(b);
+        const hasA = Number.isFinite(timeA);
+        const hasB = Number.isFinite(timeB);
+        if (!hasA && !hasB) return 0;
+        if (!hasA) return 1; // missing dates always placed at the end
+        if (!hasB) return -1;
+        return sortOrder === "oldest" ? timeA - timeB : timeB - timeA;
       });
-  }, [bills, statusFilter, categoryFilter]);
+  }, [bills, statusFilter, categoryFilter, sortOrder]);
 
   // Selection Logic
   const allUnpaidSelected =
@@ -2028,6 +2051,8 @@ export default function BillingTab() {
         setStatusFilter={setStatusFilter}
         categoryFilter={categoryFilter}
         setCategoryFilter={setCategoryFilter}
+        sortOrder={sortOrder}
+        setSortOrder={setSortOrder}
         hasElectricityBilling={hasElectricityBilling}
         hasWaterBilling={hasWaterBilling}
       />
