@@ -3,6 +3,9 @@ import { ROOM_BRANCHES } from "../config/branches.js";
 
 const chatConversationSchema = new mongoose.Schema(
   {
+    // Persisted by the mobile support service; never reconstructed from legacy fields.
+    request: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    supportRevision: { type: Number, default: undefined },
     ticketId: {
       type: String,
       trim: true,

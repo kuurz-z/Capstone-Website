@@ -109,7 +109,7 @@ export default function useChatSocket({
       socket.on("chat:message-new", (payload = {}) => {
         const { message, conversationId } = payload;
         onMessageNewRef.current?.(message, conversationId);
-        onNewMessageRef.current?.({ message, conversationId });
+        onNewMessageRef.current?.({ ...payload, message, conversationId });
       });
 
       socket.on("chat:conversation-updated", (conversation) => {

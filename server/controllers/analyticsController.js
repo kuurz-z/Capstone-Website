@@ -1,3 +1,4 @@
+import { currentConversation } from '../services/supportRequestService.js';
 import dayjs from "dayjs";
 import {getVisibleBillCharges} from "../services/billing/billingPolicy.js";
 import mongoose from "mongoose";
@@ -2404,17 +2405,27 @@ const buildSupportChatReportData = async (scope, rangeKey, tableRequest = parseT
     : dayjs().subtract(rangeDays - 1, "day").startOf("day").toDate();
 
   const matchFilter = {
-    branch: { $in: scope.branchesIncluded },
+    $or: [
+      { 'request.branch': { $in: scope.branchesIncluded } },
+      { request: { $exists: false }, branch: { $in: scope.branchesIncluded } },
+    ],
   };
   if (sinceDate) {
     matchFilter.createdAt = { $gte: sinceDate };
   }
 
-  const conversations = await ChatConversation.find(matchFilter)
+  const rawConversations = await ChatConversation.find(matchFilter)
     .populate("tenantId", "firstName lastName email user_id profileImage")
     .sort({ createdAt: -1 })
     .lean();
 
+  const conversations = rawConversations.map((raw) => {
+    const c = currentConversation(raw);
+    if (!c.request) return c;
+    const rating = c.request.satisfaction;
+    const valid = c.status === 'resolved' && rating?.requestId === c.request.id && Number.isInteger(rating?.rating) && rating.rating >= 1 && rating.rating <= 5;
+    return { ...c, satisfactionRating: valid ? rating.rating : null, satisfactionFeedback: valid ? rating.feedback || '' : '' };
+  });
   const totalConversations = conversations.length;
   const activeConversations = conversations.filter((c) =>
     ["open", "in_review", "waiting_tenant"].includes(c.status),
@@ -2479,8 +2490,9 @@ const buildSupportChatReportData = async (scope, rangeKey, tableRequest = parseT
       : 0;
 
   // CSAT Satisfaction Rating (1 to 5)
+  const legacyRatedConversations = conversations.filter((c) => !c.request && typeof c.satisfactionRating === "number" && c.satisfactionRating >= 1);
   const ratedConversations = conversations.filter(
-    (c) => typeof c.satisfactionRating === "number" && c.satisfactionRating >= 1,
+    (c) => c.request && typeof c.satisfactionRating === "number" && c.satisfactionRating >= 1,
   );
   const totalRating = ratedConversations.reduce(
     (sum, c) => sum + c.satisfactionRating,
@@ -2639,6 +2651,8 @@ const buildSupportChatReportData = async (scope, rangeKey, tableRequest = parseT
       firstReplyLabel: firstReplyMinutes != null ? (firstReplyMinutes < 60 ? `${firstReplyMinutes}m` : `${(firstReplyMinutes / 60).toFixed(1)}h`) : "—",
       resolutionMinutes,
       resolutionLabel: resolutionMinutes != null ? (resolutionMinutes < 60 ? `${resolutionMinutes}m` : `${(resolutionMinutes / 60).toFixed(1)}h`) : "In Progress",
+      requestId: c.request?.id || null,
+      legacy: !c.request,
       satisfactionRating: c.satisfactionRating || null,
       satisfactionFeedback: c.satisfactionFeedback || "",
       createdAt: c.createdAt,
@@ -2668,6 +2682,8 @@ const buildSupportChatReportData = async (scope, rangeKey, tableRequest = parseT
       avgResolutionLabel,
       resolutionRate,
       resolutionRateLabel: `${resolutionRate}%`,
+      legacyAvgSatisfactionRating: legacyRatedConversations.length ? Number((legacyRatedConversations.reduce((sum, c) => sum + c.satisfactionRating, 0) / legacyRatedConversations.length).toFixed(1)) : null,
+      legacyRatedConversationsCount: legacyRatedConversations.length,
       avgSatisfactionRating,
       ratedConversationsCount: ratedConversations.length,
       comparison: {

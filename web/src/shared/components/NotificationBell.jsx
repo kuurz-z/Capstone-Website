@@ -1,3 +1,4 @@
+import { supportNotificationUrl } from "../utils/supportConcern.js";
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -166,6 +167,8 @@ function getNotificationActionUrl(notification, isAdminUser = false) {
       return "/admin/tenants";
     }
 
+    const supportUrl = supportNotificationUrl(notification);
+    if (supportUrl) return supportUrl;
     const rawUrl = notification?.actionUrl;
     if (rawUrl && rawUrl.startsWith("/admin/")) {
       return rawUrl === "/admin/contracts" ? "/admin/tenants" : rawUrl;

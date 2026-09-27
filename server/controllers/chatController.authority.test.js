@@ -95,7 +95,7 @@ describe("chat controller authoritative branch scope", () => {
     await getAdminConversations(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(conversationFind).toHaveBeenCalledWith({ branch: "gil-puyat" });
+    expect(conversationFind).toHaveBeenCalledWith({ $or: [{ "request.branch": "gil-puyat" }, { request: { $exists: false }, branch: "gil-puyat" }, { "request.assignedAdminId": { $in: ["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439012"] } }] });
   });
 
   test("a cross-branch private-history target is hidden by the scoped resource query", async () => {
@@ -106,7 +106,7 @@ describe("chat controller authoritative branch scope", () => {
 
     expect(conversationFindOne).toHaveBeenCalledWith({
       _id: expect.any(Object),
-      branch: "gil-puyat",
+      $or: [{ "request.branch": "gil-puyat" }, { request: { $exists: false }, branch: "gil-puyat" }, { "request.assignedAdminId": { $in: ["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439012"] } }],
     });
     expect(res.statusCode).toBe(404);
     expect(res.body.code).toBe("CONVERSATION_NOT_FOUND");

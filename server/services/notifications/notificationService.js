@@ -910,7 +910,7 @@ const notify = {
       data: { ...pushIdentity, type: 'stay_extension', screen: 'extend-stay', url: '/extend-stay' },
     })),
 
-  adminReply: (userId, conversationId, messageId) => {
+  adminReply: (userId, conversationId, messageId, supportEvent = {}) => {
     if (!userId || !conversationId || !messageId) {
       return Promise.reject(new Error("A tenant, conversation, and persisted message are required."));
     }
@@ -918,7 +918,7 @@ const notify = {
     const normalizedConversationId = String(conversationId);
     const normalizedMessageId = String(messageId);
     const title = "New Admin Reply";
-    const message = "You received a reply from LilyCrest Admin. Confirm whether your concern was resolved.";
+    const message = supportEvent.message || "You received a reply from LilyCrest Admin. Confirm whether your concern was resolved.";
 
     return createNotificationWithPush(
       userId,
@@ -930,6 +930,7 @@ const notify = {
         entityId: normalizedConversationId,
         actionUrl: "/(tabs)/chatbot",
         dedupeKey: `chat_reply:${normalizedConversationId}:${normalizedMessageId}`,
+        ...(supportEvent.requestId ? { data: { requestId: supportEvent.requestId, conversationId: normalizedConversationId } } : {}),
       },
       (_notification, pushIdentity) =>
         sendMobilePushToRecipients([userId], {
@@ -939,6 +940,7 @@ const notify = {
             ...pushIdentity,
             type: "chat_reply",
             conversation_id: normalizedConversationId,
+            ...(supportEvent.requestId ? { request_id: supportEvent.requestId, requestId: supportEvent.requestId } : {}),
             message_id: normalizedMessageId,
             screen: "chat",
             url: `/(tabs)/chatbot?conversationId=${encodeURIComponent(normalizedConversationId)}`,

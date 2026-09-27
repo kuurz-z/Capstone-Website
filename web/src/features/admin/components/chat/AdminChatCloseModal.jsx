@@ -57,7 +57,7 @@ export default function AdminChatCloseModal({
         <p className="text-xs text-muted-foreground leading-relaxed">
           Administratively closing this conversation with{" "}
           <strong className="text-foreground">{tenantName}</strong>{" "}
-          will archive the active thread and lock future replies. This is separate from tenant-confirmed resolution. Please enter a closing note for auditing.
+          will archive the active thread and lock future replies. This closes the thread without marking the concern resolved. Please enter a closing note for auditing.
         </p>
 
         <div className="space-y-1.5">

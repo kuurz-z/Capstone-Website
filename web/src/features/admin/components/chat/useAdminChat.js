@@ -1,5 +1,6 @@
+import { normalizeSupportConcern, reconcileSupportConcern, supportStatusPayload } from '../../../../shared/utils/supportConcern.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { chatApi } from "../../../../shared/api/chatApi.js";
 import { useAuth } from "../../../../shared/hooks/useAuth";
 import useChatSocket from "../../../../shared/hooks/useChatSocket.js";
@@ -13,6 +14,10 @@ import {
 
 export function useAdminChat() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const listSequence = useRef(0);
+  const selectedId = useRef(null);
+  const messageSequence = useRef(0);
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
 
@@ -65,48 +70,66 @@ export function useAdminChat() {
         else setIsRefreshing(true);
       }
       setListError("");
+      const sequence = ++listSequence.current;
       try {
         const data = await chatApi.getAdminConversations({
           branch: isOwner ? branchFilter : "all",
+          requestId: new URLSearchParams(location.search).get("requestId"),
+          conversationId: new URLSearchParams(location.search).get("conversationId"),
         });
-        const nextConversations = data?.conversations || [];
-        setConversations(nextConversations);
+        if (sequence !== listSequence.current) return;
+        const nextConversations = (data?.conversations || []).map((item) => normalizeSupportConcern(item));
+        setConversations((current) => nextConversations.map((item) => reconcileSupportConcern(current.find((old) => old.id === item.id), item)));
         setAccessInfo(data?.access || null);
         hasLoadedOnceRef.current = true;
         setSelectedConversation((current) => {
           if (!current) return current;
-          return nextConversations.find((item) => item.id === current.id) || current;
+          const next = nextConversations.find((item) => item.id === current.id);
+          return next ? reconcileSupportConcern(current, next) : null;
         });
       } catch (error) {
+        if (sequence !== listSequence.current) return;
         const message = getErrorMessage(error, "Failed to load conversations.");
         setListError(message);
         if (!silent) showNotification(message, "error");
       } finally {
-        if (!silent) {
+        if (sequence === listSequence.current) {
           setInitialLoading(false);
           setIsRefreshing(false);
         }
       }
     },
-    [branchFilter, isOwner],
+    [branchFilter, isOwner, location.search],
   );
 
   const loadMessages = useCallback(
     async (conversationId, { silent = false } = {}) => {
       if (!conversationId) return [];
+      const sequence = ++messageSequence.current;
       if (!silent) setMessagesLoading(true);
       try {
         const data = await chatApi.getAdminMessages(conversationId);
         const nextMessages = data?.messages || [];
+        if (selectedId.current !== conversationId || sequence !== messageSequence.current) return [];
         setMessages(nextMessages);
+        if (data.conversation) {
+          setSelectedConversation((current) => reconcileSupportConcern(current, data.conversation));
+          setConversations((current) => current.map((item) => item.id === conversationId ? reconcileSupportConcern(item, data.conversation) : item));
+        }
         await loadConversations({ silent: true });
         return nextMessages;
       } catch (error) {
+        if (selectedId.current !== conversationId || sequence !== messageSequence.current) return [];
+        if ([403, 404].includes(error?.response?.status) && selectedId.current === conversationId) {
+          setSelectedConversation(null);
+          setMessages([]);
+          setConversations((current) => current.filter((item) => item.id !== conversationId));
+        }
         const message = getErrorMessage(error, "Failed to load messages.");
         if (!silent) showNotification(message, "error");
         return [];
       } finally {
-        if (!silent) setMessagesLoading(false);
+        if (!silent && sequence === messageSequence.current) setMessagesLoading(false);
       }
     },
     [loadConversations],
@@ -169,36 +192,43 @@ export function useAdminChat() {
         );
       }
     },
-    onConversationUpdated: (updatedConversation) => {
-      if (!updatedConversation?.id) return;
-      setConversations((current) => {
-        const exists = current.some((item) => item.id === updatedConversation.id);
-        if (!exists) return [updatedConversation, ...current];
-        return current.map((item) =>
-          item.id === updatedConversation.id ? { ...item, ...updatedConversation } : item,
-        );
-      });
-      setSelectedConversation((current) =>
-        current?.id === updatedConversation.id
-          ? { ...current, ...updatedConversation }
-          : current,
-      );
-    },
+    // Socket payloads are invalidations: refetch through the scoped API.
+    onConversationUpdated: () => loadConversations({ silent: true }),
   });
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      loadConversations({ silent: true });
-      if (selectedConversation?.id) {
-        chatApi.getAdminMessages(selectedConversation.id).then((data) => {
-          if (data?.messages) setMessages(data.messages);
-        }).catch(() => {});
-      }
-    }, 30000);
-    return () => window.clearInterval(interval);
-  }, [loadConversations, selectedConversation?.id]);
+    const refresh = () => {
+      if (document.hidden) return;
+      if (selectedId.current) loadMessages(selectedId.current, { silent: true });
+      else loadConversations({ silent: true });
+    };
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [loadConversations, loadMessages]);
+
+  useEffect(() => { selectedId.current = selectedConversation?.id || null; }, [selectedConversation?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestId = params.get('requestId');
+    const conversationId = params.get('conversationId');
+    if (!requestId && !conversationId) return;
+    const exact = conversations.find((item) => (!requestId || item.requestId === requestId) && (!conversationId || item.id === conversationId));
+    if (exact && selectedId.current !== exact.id) handleSelectConversation(exact);
+  }, [location.search, conversations]);
 
   const handleSelectConversation = async (conversation) => {
+    selectedId.current = conversation.id;
+    setMessages([]);
+    setStatusModalOpen(false);
+    setCloseModalOpen(false);
+    setPriorityModalOpen(false);
     setSelectedConversation(conversation);
     setReplyError("");
     setReplyText("");
@@ -216,7 +246,7 @@ export function useAdminChat() {
   };
 
   const handleSendReply = async () => {
-    if (!selectedConversation || sending || uploadingAttachments) return;
+    if (!selectedConversation || selectedConversation.lifecycleLocked || (!selectedConversation.legacy && selectedConversation.status === "resolved") || sending || uploadingAttachments) return;
     const message = replyText.trim();
     if (!message && stagedAttachments.length === 0) {
       setReplyError("Please enter a reply message or attach a file.");
@@ -246,6 +276,10 @@ export function useAdminChat() {
         uploadedAttachments,
       );
 
+      if (selectedId.current !== selectedConversation.id) {
+        await loadConversations({ silent: true });
+        return;
+      }
       stagedAttachments.forEach((item) => {
         if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
       });
@@ -260,9 +294,13 @@ export function useAdminChat() {
           return true;
         });
       });
-      setSelectedConversation(data.conversation);
+      setSelectedConversation((current) => current?.id === data.conversation?.id ? reconcileSupportConcern(current, data.conversation) : current);
       await loadConversations({ silent: true });
     } catch (error) {
+      if (error?.response?.status === 409) {
+        await loadConversations({ silent: true });
+        showNotification("This concern changed. The latest status has been refreshed.", "error");
+      }
       const messageText = getErrorMessage(error, "Failed to send reply.");
       setReplyError(messageText);
       showNotification(messageText, "error");
@@ -277,17 +315,21 @@ export function useAdminChat() {
     setAssigning(true);
     try {
       const data = await chatApi.assignConversation(selectedConversation.id, "me");
-      setSelectedConversation(data.conversation);
+      setSelectedConversation((current) => current?.id === data.conversation?.id ? reconcileSupportConcern(current, data.conversation) : current);
       await loadConversations({ silent: true });
       showNotification("Conversation assigned successfully.", "success");
     } catch (error) {
+      if (error?.response?.status === 409) {
+        await loadConversations({ silent: true });
+        showNotification("This concern changed. The latest status has been refreshed.", "error");
+      }
       showNotification(getErrorMessage(error, "Failed to assign conversation."), "error");
     } finally {
       setAssigning(false);
     }
   };
 
-  const handleConfirmStatusChange = async (pendingStatus) => {
+  const handleConfirmStatusChange = async (pendingStatus, note = "", setNoteError) => {
     if (!selectedConversation || updatingStatus) return;
     if (pendingStatus === selectedConversation.status) {
       setStatusModalOpen(false);
@@ -301,13 +343,20 @@ export function useAdminChat() {
 
     setUpdatingStatus(true);
     try {
-      const data = await chatApi.updateStatus(selectedConversation.id, pendingStatus);
-      setSelectedConversation(data.conversation);
+      const payload = supportStatusPayload(selectedConversation, pendingStatus, note);
+      const data = await chatApi.updateStatus(selectedConversation.id, payload.status, payload.note, payload);
+      setSelectedConversation((current) => current?.id === data.conversation?.id ? reconcileSupportConcern(current, data.conversation) : current);
       await loadConversations({ silent: true });
       setStatusModalOpen(false);
       showNotification(`Conversation status changed to ${getStatusLabel(pendingStatus)}.`, "success");
     } catch (error) {
-      showNotification(getErrorMessage(error, "Failed to update conversation status."), "error");
+      if (error?.response?.status === 409) {
+        await loadConversations({ silent: true });
+        showNotification("This concern changed. The latest status has been refreshed.", "error");
+      }
+      const message = getErrorMessage(error, "Failed to update conversation status.");
+      setNoteError?.(message);
+      showNotification(message, "error");
     } finally {
       setUpdatingStatus(false);
     }
@@ -323,11 +372,15 @@ export function useAdminChat() {
     setUpdatingPriority(true);
     try {
       const data = await chatApi.updatePriority(selectedConversation.id, pendingPriority);
-      setSelectedConversation(data.conversation);
+      setSelectedConversation((current) => current?.id === data.conversation?.id ? reconcileSupportConcern(current, data.conversation) : current);
       await loadConversations({ silent: true });
       setPriorityModalOpen(false);
       showNotification(`Conversation priority changed to ${getPriorityLabel(pendingPriority)}.`, "success");
     } catch (error) {
+      if (error?.response?.status === 409) {
+        await loadConversations({ silent: true });
+        showNotification("This concern changed. The latest status has been refreshed.", "error");
+      }
       showNotification(getErrorMessage(error, "Failed to update conversation priority."), "error");
     } finally {
       setUpdatingPriority(false);
@@ -335,14 +388,22 @@ export function useAdminChat() {
   };
 
   const handleConfirmClose = async (note, setNoteError) => {
+    if (!selectedConversation || closing || selectedConversation.lifecycleLocked) return;
     setClosing(true);
     try {
-      const data = await chatApi.closeConversation(selectedConversation.id, note);
-      setSelectedConversation(data.conversation);
+      const payload = supportStatusPayload(selectedConversation, "closed", note);
+      const data = selectedConversation.legacy
+        ? await chatApi.closeConversation(selectedConversation.id, payload.note)
+        : await chatApi.updateStatus(selectedConversation.id, payload.status, payload.note, payload);
+      setSelectedConversation((current) => current?.id === data.conversation?.id ? reconcileSupportConcern(current, data.conversation) : current);
       await loadConversations({ silent: true });
       setCloseModalOpen(false);
       showNotification("Conversation closed successfully.", "success");
     } catch (error) {
+      if (error?.response?.status === 409) {
+        await loadConversations({ silent: true });
+        showNotification("This concern changed. The latest status has been refreshed.", "error");
+      }
       const msg = getErrorMessage(error, "Failed to close conversation.");
       if (setNoteError) setNoteError(msg);
       showNotification(msg, "error");
@@ -358,6 +419,10 @@ export function useAdminChat() {
       await downloadChatTranscript(selectedConversation, messages);
       showNotification("Chat transcript downloaded.", "success");
     } catch (error) {
+      if (error?.response?.status === 409) {
+        await loadConversations({ silent: true });
+        showNotification("This concern changed. The latest status has been refreshed.", "error");
+      }
       showNotification(getErrorMessage(error, "Failed to download transcript."), "error");
     } finally {
       setDownloading(false);
@@ -376,6 +441,10 @@ export function useAdminChat() {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch (error) {
+      if (error?.response?.status === 409) {
+        await loadConversations({ silent: true });
+        showNotification("This concern changed. The latest status has been refreshed.", "error");
+      }
       showNotification(getErrorMessage(error, "Unable to download attachment."), "error");
     }
   };

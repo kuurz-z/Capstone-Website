@@ -1,3 +1,4 @@
+import AdminSupportRequestDetails from './AdminSupportRequestDetails.jsx';
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -97,7 +98,7 @@ export default function AdminChatTicketSidebar({
               <button
                 type="button"
                 onClick={onOpenStatusModal}
-                disabled={selectedConversation.status === "closed"}
+                disabled={selectedConversation.lifecycleLocked}
                 className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs font-semibold border transition-colors bg-transparent ${
                   selectedConversation.status === "closed"
                     ? "border-border text-slate-600 dark:text-slate-400 cursor-default"
@@ -134,7 +135,7 @@ export default function AdminChatTicketSidebar({
               <button
                 type="button"
                 onClick={onOpenPriorityModal}
-                disabled={selectedConversation.status === "closed"}
+                disabled={selectedConversation.lifecycleLocked}
                 className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs font-semibold border transition-colors bg-transparent ${
                   selectedConversation.status === "closed"
                     ? "border-border text-slate-600 dark:text-slate-400 cursor-default"
@@ -171,7 +172,7 @@ export default function AdminChatTicketSidebar({
             <span className="font-semibold text-foreground">
               {selectedConversation.assignedAdminName || "Unassigned"}
             </span>
-            {!selectedConversation.assignedAdminName && selectedConversation.status !== "closed" && (
+            {!selectedConversation.assignedAdminName && !selectedConversation.lifecycleLocked && (
               <button
                 type="button"
                 onClick={onAssignToMe}
@@ -202,19 +203,21 @@ export default function AdminChatTicketSidebar({
             <span>Transcript</span>
           </button>
 
-          {selectedConversation.status !== "closed" && (
+          {!selectedConversation.lifecycleLocked && (
             <button
               type="button"
               onClick={onOpenCloseModal}
               className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-700 dark:hover:text-white px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-              title="Quick action: Archive and lock this conversation with a resolution note"
+              title="Close this thread with an audit note"
             >
               <Lock size={13} />
-              <span>Resolve & Close</span>
+              <span>Close thread</span>
             </button>
           )}
         </div>
       </header>
+
+      <AdminSupportRequestDetails concern={selectedConversation} />
 
       {/* Issue Cluster Banner */}
       {selectedConversation?.priority === "urgent" &&
