@@ -3,8 +3,183 @@
    Clean, modern, minimalist 1px border aesthetic with solid HSL tokens.
    ============================================================================= */
 
+.admin-layout-main:has(.admin-chat-page),
+.admin-content:has(.admin-chat-page) {
+  min-width: 0;
+}
+
 .admin-chat-page {
   font-family: var(--font-sans, system-ui, sans-serif);
+  height: var(--admin-content-inner-height, calc(100dvh - 112px));
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-chat-page > .admin-page-header {
+  position: static;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* Keep the overview available without reserving a full card row above chat. */
+.admin-chat-page > .grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.admin-chat-page > .grid > div {
+  min-height: 0;
+  padding: 6px 10px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-chat-page > .grid > div > div:last-child {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.admin-chat-page > .grid svg { display: none; }
+
+.admin-chat-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 30%) minmax(0, 1fr);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.admin-chat-conversations,
+.admin-chat-thread {
+  min-width: 0;
+  min-height: 0;
+}
+
+.admin-chat-context > header,
+.admin-chat-thread > footer {
+  flex-shrink: 0;
+}
+
+.admin-chat-context {
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.admin-chat-thread > .flex-1 {
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.admin-chat-request summary::-webkit-details-marker { display: none; }
+
+.admin-chat-request-body {
+  max-height: min(144px, 18dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+.admin-chat-request-body[role="region"]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.admin-chat-list-toggle { display: none; }
+
+@media (max-width: 1023px) {
+  .admin-chat-list-toggle { display: block; flex-shrink: 0; }
+  .admin-chat-workspace { grid-template-columns: minmax(0, 1fr); }
+  .admin-chat-workspace[data-show-list="false"] .admin-chat-conversations,
+  .admin-chat-workspace[data-show-list="true"] .admin-chat-thread { display: none; }
+  .admin-chat-page .admin-page-header-top { flex-direction: row; gap: 8px; }
+  .admin-chat-page .admin-page-header-subtitle { display: none; }
+  .admin-chat-page .admin-page-header-heading { flex-shrink: 1; }
+  .admin-chat-page > .grid > div { padding: 4px; gap: 2px; flex-direction: column; }
+  .admin-chat-page > .grid > div span { font-size: 9px; }
+  .admin-chat-page > .grid {
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .admin-chat-page > .grid > div {
+    flex-direction: row;
+    flex-shrink: 0;
+    padding: 4px 8px;
+    gap: 6px;
+  }
+  .admin-chat-page > .grid::-webkit-scrollbar { display: none; }
+  .admin-chat-page .admin-chat-request-body { max-height: 80px; }
+  .admin-chat-context > header { padding: 8px; gap: 6px; }
+}
+
+@media (max-width: 600px), (max-height: 650px) {
+  .admin-chat-page > .grid::-webkit-scrollbar,
+  .admin-chat-context > header ::-webkit-scrollbar,
+  .admin-chat-thread > footer > .flex > .flex::-webkit-scrollbar { display: none; }
+  .admin-chat-context > header *,
+  .admin-chat-thread > footer > .flex > .flex { scrollbar-width: none; }
+  .admin-chat-request .admin-chat-request-body { max-height: 80px; }
+  /* Keep every header control reachable without wrapping into a tall stack. */
+  .admin-chat-context > header { display: block; }
+  .admin-chat-context > header > div:first-child > div > div {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .admin-chat-context > header > div:first-child > div > div > * {
+    flex-shrink: 0;
+  }
+  .admin-chat-context > header > div:last-child {
+    margin-top: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .admin-chat-context > header > div:last-child > * {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .admin-chat-thread > footer > .flex > .flex {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .admin-chat-thread > footer > .flex > .flex > button {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-height: 800px) {
+  .admin-chat-page .admin-page-header-subtitle { display: none; }
+  .admin-chat-context > header { padding: 8px; gap: 6px; }
+  .admin-chat-thread > footer { padding: 8px; }
+  .admin-chat-thread > footer > :not([hidden]) ~ :not([hidden]) { margin-top: 4px; }
+  .admin-chat-thread > footer textarea { height: 44px; padding: 8px; }
+  .admin-chat-thread > footer > div:last-child > button { padding-top: 4px; padding-bottom: 4px; }
+  .admin-chat-request-body { max-height: min(100px, 15dvh); }
+}
+
+/* On very short screens, scroll context as one region, not the whole page.
+   The message feed and composer keep their own reserved space. */
+@media (max-height: 650px) {
+  .admin-chat-context {
+    max-height: 40%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .admin-chat-context .admin-chat-request .admin-chat-request-body {
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
 /* Typing indicator micro-bounce */

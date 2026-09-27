@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { MessageSquareText, RefreshCw } from "lucide-react";
 import AdminPageHeader from "../../../shared/components/AdminPageHeader";
 import { AdminChatSkeleton } from "../components/AdminContentSkeletons";
@@ -19,6 +20,7 @@ import "../styles/admin-common.css";
 import "../styles/admin-chat.css";
 
 export default function AdminChatPage() {
+  const [conversationListOpen, setConversationListOpen] = useState(false);
   const {
     isOwner,
     user,
@@ -80,7 +82,7 @@ export default function AdminChatPage() {
   }
 
   return (
-    <section className="admin-chat-page space-y-4">
+    <section className="admin-chat-page">
       {/* ── Pattern 1 Sticky Sub-Header ── */}
       <AdminPageHeader
         title="Support Chat"
@@ -126,12 +128,22 @@ export default function AdminChatPage() {
       />
 
       {/* ── Main Chat Workspace ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)] gap-4 items-stretch h-[calc(100vh-210px)] min-h-[580px] max-h-[920px]">
+      <button type="button" className="admin-chat-list-toggle rounded-lg border border-border px-3 py-1.5 text-xs font-semibold"
+        aria-expanded={conversationListOpen || !selectedConversation} aria-controls="admin-chat-conversations"
+        onClick={() => setConversationListOpen((open) => !open)} disabled={!selectedConversation}>
+        {conversationListOpen || !selectedConversation ? 'Conversations' : 'Change conversation'}
+        {conversationListOpen && selectedConversation ? ' · Back to chat' : ''}
+      </button>
+      <div className="admin-chat-workspace" data-show-list={conversationListOpen || !selectedConversation}>
         {/* Left Sidebar: Conversations & Filters */}
+        <div id="admin-chat-conversations" className="admin-chat-conversations">
         <AdminChatConversationList
           conversations={conversations}
           selectedConversation={selectedConversation}
-          onSelectConversation={handleSelectConversation}
+          onSelectConversation={(conversation) => {
+            setConversationListOpen(false);
+            handleSelectConversation(conversation);
+          }}
           initialLoading={initialLoading}
           listError={listError}
           isOwner={isOwner}
@@ -140,11 +152,13 @@ export default function AdminChatPage() {
           branchFilter={branchFilter}
           onBranchFilterChange={setBranchFilter}
         />
+        </div>
 
         {/* Right Pane: Conversation Details & Message Feed */}
-        <section className="rounded-xl border border-border bg-card shadow-xs flex flex-col h-full overflow-hidden">
+        <section className="admin-chat-thread rounded-xl border border-border bg-card shadow-xs flex flex-col h-full overflow-hidden">
           {selectedConversation ? (
             <>
+              <div className="admin-chat-context" tabIndex={0} role="region" aria-label="Conversation details and controls">
               <AdminChatTicketSidebar
                 selectedConversation={selectedConversation}
                 accessInfo={accessInfo}
@@ -159,6 +173,7 @@ export default function AdminChatPage() {
                 dismissedClusters={dismissedClusters}
                 setDismissedClusters={setDismissedClusters}
               />
+              </div>
 
               <AdminChatMessageFeed
                 selectedConversation={selectedConversation}
