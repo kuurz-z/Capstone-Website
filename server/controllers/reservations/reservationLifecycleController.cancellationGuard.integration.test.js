@@ -50,8 +50,9 @@ await jest.unstable_mockModule("../../services/occupancy/occupancyManager.js", (
   default: {},
 }));
 
-const { updateReservation, extendReservation } = await import("./reservationLifecycleController.js");
-const { approveCancellationRequest } = await import("./cancellationController.js");
+const { updateReservation, extendReservation, releaseSlot } = await import("./reservationLifecycleController.js");
+const { approveCancellationRequest, cancelReservationByUser, requestCancellationByUser } = await import("./cancellationController.js");
+const { invalidateUserCache } = await import("./_helpers.js");
 const { default: Reservation } = await import("../../models/Reservation.js");
 const { default: Room } = await import("../../models/Room.js");
 const { default: User } = await import("../../models/User.js");
@@ -97,6 +98,8 @@ describe("Reservation Lifecycle Controller — Cancellation Guards", () => {
   }, 30_000);
 
   beforeEach(async () => {
+    invalidateUserCache("admin-firebase-uid");
+    invalidateUserCache("tenant-firebase-uid");
     await Reservation.deleteMany({});
     await Room.deleteMany({});
     await User.deleteMany({});
@@ -287,6 +290,110 @@ describe("Reservation Lifecycle Controller — Cancellation Guards", () => {
     expect(updated.cancellationStatus).toBe("approved");
     expect(typeof updated.cancellationReason).toBe("string");
     expect(updated.cancellationReason.length).toBeGreaterThan(0);
+  });
+
+  test("approveCancellationRequest rejects when 1-month advance rent and security deposit are settled", async () => {
+    const reservation = await Reservation.create({
+      userId: tenantUser._id,
+      roomId: roomDoc._id,
+      status: "reserved",
+      paymentStatus: "paid_in_full",
+      initialPaymentStatus: "paid",
+      reservationFeePaymentStatus: "verified",
+      totalPrice: 6000,
+      leaseDuration: 6,
+      moveInDate: new Date("2026-09-20T00:00:00.000Z"),
+      cancellationRequested: true,
+      cancellationStatus: "pending",
+      selectedBed: { id: "bed-1", bedNumber: 1, position: "lower" },
+    });
+
+    const req = requestFor(String(reservation._id), {}, {
+      user: { uid: "admin-firebase-uid" },
+      authUser: adminUser,
+    });
+    const res = response();
+    await approveCancellationRequest(req, res, jest.fn());
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("ADVANCE_AND_DEPOSIT_PAID_USE_TERMINATION");
+    expect(res.body.error).toContain("1-month advance rent and security deposit have been paid");
+
+    const unchanged = await Reservation.findById(reservation._id).lean();
+    expect(unchanged.status).toBe("reserved");
+  });
+
+  test("cancelReservationByUser rejects when 1-month advance rent and security deposit are settled", async () => {
+    const reservation = await Reservation.create({
+      userId: tenantUser._id,
+      roomId: roomDoc._id,
+      status: "reserved",
+      paymentStatus: "paid_in_full",
+      initialPaymentStatus: "paid",
+      totalPrice: 6000,
+      leaseDuration: 6,
+      selectedBed: { id: "bed-1", bedNumber: 1, position: "lower" },
+    });
+
+    const req = requestFor(String(reservation._id), {}, {
+      user: { uid: "tenant-firebase-uid" },
+      authUser: tenantUser,
+    });
+    const res = response();
+    await cancelReservationByUser(req, res, jest.fn());
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("ADVANCE_AND_DEPOSIT_PAID_CANCELLATION_LOCKED");
+    expect(res.body.error).toContain("Cancellation is no longer permitted once the 1-month advance rent and security deposit have been paid");
+  });
+
+  test("requestCancellationByUser rejects when 1-month advance rent and security deposit are settled", async () => {
+    const reservation = await Reservation.create({
+      userId: tenantUser._id,
+      roomId: roomDoc._id,
+      status: "reserved",
+      paymentStatus: "paid_in_full",
+      initialPaymentStatus: "paid",
+      reservationFeePaymentStatus: "verified",
+      totalPrice: 6000,
+      leaseDuration: 6,
+      selectedBed: { id: "bed-1", bedNumber: 1, position: "lower" },
+    });
+
+    const req = requestFor(String(reservation._id), { reason: "Need to cancel" }, {
+      user: { uid: "tenant-firebase-uid" },
+      authUser: tenantUser,
+    });
+    const res = response();
+    await requestCancellationByUser(req, res, jest.fn());
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("ADVANCE_AND_DEPOSIT_PAID_CANCELLATION_LOCKED");
+    expect(res.body.error).toContain("Cancellation is no longer permitted once the 1-month advance rent and security deposit have been paid");
+  });
+
+  test("releaseSlot rejects when 1-month advance rent and security deposit are settled", async () => {
+    const reservation = await Reservation.create({
+      userId: tenantUser._id,
+      roomId: roomDoc._id,
+      status: "reserved",
+      paymentStatus: "paid_in_full",
+      initialPaymentStatus: "paid",
+      totalPrice: 6000,
+      leaseDuration: 6,
+      selectedBed: { id: "bed-1", bedNumber: 1, position: "lower" },
+    });
+
+    const req = requestFor(String(reservation._id), { reason: "No-show release" }, {
+      user: { uid: "admin-firebase-uid" },
+      authUser: adminUser,
+    });
+    const res = response();
+    await releaseSlot(req, res, jest.fn());
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("ADVANCE_AND_DEPOSIT_PAID_USE_TERMINATION");
+    expect(res.body.error).toContain("Cannot release slot via cancellation once 1-month advance rent and security deposit have been settled");
   });
 });
 

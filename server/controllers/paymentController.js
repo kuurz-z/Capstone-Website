@@ -137,6 +137,22 @@ export const createBillCheckout = async (req, res, next) => {
       throw new AppError("You can only pay your own bills", 403, "FORBIDDEN");
     }
 
+    if (bill.billType === "initial_payment" && bill.reservationId) {
+      const reservation = await Reservation.findById(bill.reservationId)
+        .select("cancellationRequested cancellationStatus")
+        .lean();
+      if (
+        reservation?.cancellationRequested &&
+        reservation?.cancellationStatus === "pending"
+      ) {
+        throw new AppError(
+          "A cancellation request is currently pending review. Please withdraw your cancellation request before paying the initial move-in balance.",
+          409,
+          "CANCELLATION_REQUEST_PENDING_PAYMENT_BLOCKED",
+        );
+      }
+    }
+
     const expectedVersion = req.body?.expectedVersion ?? req.query?.expectedVersion;
     if (expectedVersion !== undefined && expectedVersion !== null) {
       const versionCheck = await validateInvoiceVersionForCheckout(billId, expectedVersion);
@@ -490,6 +506,17 @@ export const createMoveInCheckout = async (req, res, next) => {
         "You can only pay for your own reservation",
         403,
         "FORBIDDEN",
+      );
+    }
+
+    if (
+      reservation.cancellationRequested &&
+      reservation.cancellationStatus === "pending"
+    ) {
+      throw new AppError(
+        "A cancellation request is currently pending review. Please withdraw your cancellation request before paying the initial move-in balance.",
+        409,
+        "CANCELLATION_REQUEST_PENDING_PAYMENT_BLOCKED",
       );
     }
 

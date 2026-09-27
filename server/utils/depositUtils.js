@@ -231,3 +231,21 @@ export function computeMoveInCashOut(
     netAmountDue,
   };
 }
+
+/**
+ * Checks if the reservation has fully settled the 1-month advance rent and security deposit.
+ * When settled, reservation cancellation is locked.
+ *
+ * @param {object} reservation — Mongoose document or plain object
+ * @returns {boolean}
+ */
+export function hasSettledAdvanceAndDeposit(reservation = {}) {
+  if (!reservation) return false;
+  const initialStatus = String(reservation.initialPaymentStatus || "").trim().toLowerCase();
+  const paymentStatus = String(reservation.paymentStatus || "").trim().toLowerCase();
+  if (["paid", "paid_in_full", "settled", "completed"].includes(initialStatus)) return true;
+  if (paymentStatus === "paid_in_full") return true;
+  if (Boolean(reservation.initialPaymentSettledAt)) return true;
+  const financials = resolveReservationFinancials(reservation);
+  return Boolean(financials.isSettled);
+}

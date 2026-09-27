@@ -56,6 +56,7 @@ import { resolveBillStatus, syncBillAmounts } from "./billingPolicy.js";
 import {
   getLifecyclePolicySettings,
 } from "./businessSettings.js";
+import { hasSettledAdvanceAndDeposit } from "./depositUtils.js";
 import { computePenalty, fetchPenaltySettings } from "./penaltyCalculator.js";
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -635,6 +636,14 @@ async function cancelNoShowReservations() {
 
       const daysOverdue = now.diff(dayjs(deadline), "day");
       if (daysOverdue < graceDays) continue;
+
+      if (hasSettledAdvanceAndDeposit(reservation)) {
+        logger.info(
+          { reservationId: reservation._id, code: reservation.reservationCode },
+          "[cancelNoShowReservations] Skipping auto-cancel: 1-month advance rent and deposit settled; requires administrative review",
+        );
+        continue;
+      }
 
       reservation.status = "cancelled";
       reservation.notes = `${reservation.notes ? reservation.notes + " | " : ""}Auto-cancelled: no-show ${daysOverdue} days past move-in — ${now.format("MMM D, YYYY")}`;

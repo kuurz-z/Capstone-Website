@@ -444,6 +444,30 @@ describe("scheduler jobs", () => {
     expect(notify.reservationNoShow).not.toHaveBeenCalled();
   });
 
+  test("cancelNoShowReservations skips auto-cancel when 1-month advance rent and security deposit are settled", async () => {
+    const reservation = createReservation({
+      status: "reserved",
+      initialPaymentStatus: "paid",
+      userId: { _id: "user-paid-1" },
+      roomId: { _id: "room-paid-1", name: "Room Paid" },
+      targetMoveInDate: new Date("2026-03-01T00:00:00.000Z"),
+      save: jest.fn(async function save() {
+        return this;
+      }),
+      populate: jest.fn(async function populate() {
+        return this;
+      }),
+    });
+
+    reservationFind.mockReturnValue(makePopulateChain([reservation]));
+
+    await scheduler.cancelNoShowReservations();
+
+    expect(reservation.status).toBe("reserved");
+    expect(reservation.save).not.toHaveBeenCalled();
+    expect(notify.reservationNoShow).not.toHaveBeenCalled();
+  });
+
   test("markOverdueBills only marks records with due dates in the past", async () => {
     const overdueBill = {
       _id: "bill-1",

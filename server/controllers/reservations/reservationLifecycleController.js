@@ -45,6 +45,7 @@ import {
   reservationStatusesForQuery,
 } from "../../utils/lifecycleNaming.js";
 import { updateOccupancyOnReservationChange } from "../../utils/occupancyManager.js";
+import { hasSettledAdvanceAndDeposit } from "../../utils/depositUtils.js";
 import { archiveContractForCancelledReservation } from "../../services/contractArchiveService.js";
 import {
   sendReservationConfirmedEmail,
@@ -2465,6 +2466,13 @@ export const releaseSlot = async (req, res, next) => {
       reservation.roomId?.branch,
     );
     if (denied) return;
+
+    if (hasSettledAdvanceAndDeposit(reservation)) {
+      return res.status(409).json({
+        error: "Cannot release slot via cancellation once 1-month advance rent and security deposit have been settled. Use Move-Out or Early Termination instead.",
+        code: "ADVANCE_AND_DEPOSIT_PAID_USE_TERMINATION",
+      });
+    }
 
     const oldData = reservation.toObject();
     reservation.status = "cancelled";

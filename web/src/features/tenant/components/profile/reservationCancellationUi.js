@@ -35,9 +35,21 @@ export const hasPaidReservationFee = (reservation = {}) => {
   );
 };
 
+export const hasSettledAdvanceAndDeposit = (reservation = {}) => {
+  if (!reservation) return false;
+  const initialStatus = String(reservation.initialPaymentStatus || "").trim().toLowerCase();
+  const paymentStatus = String(reservation.paymentStatus || "").trim().toLowerCase();
+  return (
+    ["paid", "paid_in_full", "settled", "completed"].includes(initialStatus) ||
+    paymentStatus === "paid_in_full" ||
+    Boolean(reservation.initialPaymentSettledAt) ||
+    reservation.isMoveInSettled === true
+  );
+};
+
 export const getReservationCancellationUiState = (reservation = null) => {
   if (!reservation) {
-    return { visible: false, canRequest: false, isPending: false };
+    return { visible: false, canRequest: false, isPending: false, isSettledLocked: false };
   }
 
   const status = reservation.reservationStatus || reservation.status;
@@ -51,14 +63,23 @@ export const getReservationCancellationUiState = (reservation = null) => {
   );
 
   if (isTerminal) {
-    return { visible: false, canRequest: false, isPending: false };
+    return { visible: false, canRequest: false, isPending: false, isSettledLocked: false };
   }
 
   const isPending =
     reservation.cancellationRequested && reservation.cancellationStatus === "pending";
 
   if (isPending) {
-    return { visible: true, canRequest: false, isPending: true };
+    return { visible: true, canRequest: false, isPending: true, isSettledLocked: false };
+  }
+
+  if (hasSettledAdvanceAndDeposit(reservation)) {
+    return {
+      visible: true,
+      canRequest: false,
+      isPending: false,
+      isSettledLocked: true,
+    };
   }
 
   const statusKey = String(status || "").trim();
@@ -69,5 +90,6 @@ export const getReservationCancellationUiState = (reservation = null) => {
     visible: canRequest,
     canRequest,
     isPending: false,
+    isSettledLocked: false,
   };
 };

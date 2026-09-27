@@ -1010,4 +1010,59 @@ describe("paymentController", () => {
     );
     expect(next).not.toHaveBeenCalled();
   });
+
+  test("createMoveInCheckout blocks checkout when cancellation request is pending review", async () => {
+    const reservation = {
+      _id: "res_pending_cancel",
+      userId: "tenant_1",
+      roomId: { _id: "room_1", branch: "gil-puyat", price: 13500 },
+      cancellationRequested: true,
+      cancellationStatus: "pending",
+    };
+
+    userFindOne.mockReturnValue(mockLean({ _id: "tenant_1" }));
+    reservationFindById.mockReturnValue({
+      populate: jest.fn().mockResolvedValue(reservation),
+    });
+
+    const req = { params: { resId: "res_pending_cancel" }, user: { uid: "firebase-1" } };
+    const res = {};
+    const next = jest.fn();
+
+    await createMoveInCheckout(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0].code).toBe("CANCELLATION_REQUEST_PENDING_PAYMENT_BLOCKED");
+  });
+
+  test("createBillCheckout blocks initial_payment checkout when cancellation request is pending review", async () => {
+    const bill = {
+      _id: "bill_initial_pending",
+      userId: "tenant_1",
+      billType: "initial_payment",
+      reservationId: "res_initial_pending",
+      remainingAmount: 5000,
+      totalAmount: 5000,
+    };
+
+    userFindOne.mockReturnValue(mockLean({ _id: "tenant_1" }));
+    billFindById.mockResolvedValue(bill);
+    reservationFindById.mockReturnValue({
+      select: jest.fn().mockReturnValue(mockLean({
+        _id: "res_initial_pending",
+        cancellationRequested: true,
+        cancellationStatus: "pending",
+      })),
+    });
+
+    const req = { params: { billId: "bill_initial_pending" }, user: { uid: "firebase-1" } };
+    const res = {};
+    const next = jest.fn();
+
+    await createBillCheckout(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0].code).toBe("CANCELLATION_REQUEST_PENDING_PAYMENT_BLOCKED");
+  });
 });
+

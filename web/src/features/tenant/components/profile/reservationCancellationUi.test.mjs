@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   getReservationCancellationUiState,
   hasPaidReservationFee,
+  hasSettledAdvanceAndDeposit,
 } from "./reservationCancellationUi.js";
 
 test("paid reserved reservation can request cancellation", () => {
@@ -14,10 +15,28 @@ test("paid reserved reservation can request cancellation", () => {
   };
 
   assert.equal(hasPaidReservationFee(reservation), true);
+  assert.equal(hasSettledAdvanceAndDeposit(reservation), false);
   assert.deepEqual(getReservationCancellationUiState(reservation), {
     visible: true,
     canRequest: true,
     isPending: false,
+    isSettledLocked: false,
+  });
+});
+
+test("advance rent and security deposit settled reservation locks cancellation with isSettledLocked true", () => {
+  const reservation = {
+    status: "reserved",
+    paymentStatus: "paid_in_full",
+    initialPaymentStatus: "paid",
+  };
+
+  assert.equal(hasSettledAdvanceAndDeposit(reservation), true);
+  assert.deepEqual(getReservationCancellationUiState(reservation), {
+    visible: true,
+    canRequest: false,
+    isPending: false,
+    isSettledLocked: true,
   });
 });
 
@@ -33,6 +52,7 @@ test("pending cancellation request shows pending state instead of request action
     visible: true,
     canRequest: false,
     isPending: true,
+    isSettledLocked: false,
   });
 });
 

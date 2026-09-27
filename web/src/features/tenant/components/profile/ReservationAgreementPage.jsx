@@ -21,6 +21,7 @@ import {
  Users,
  DoorOpen,
  AlertCircle,
+ Lock,
  ChevronDown,
  ChevronUp,
 } from "lucide-react";
@@ -798,19 +799,33 @@ const ReservationAgreementPage = ({ reservation, onBack, onReservationUpdated })
  {/* Cancellation Request Card */}
  {cancellationUi.visible && (
    <div style={{ ...card, padding: "14px 18px", marginBottom: 12, borderColor: "var(--border-card, #CBD5E1)" }}>
-     <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
-       <AlertCircle size={16} color={cancellationUi.isPending ? "#D97706" : "#DC2626"} style={{ marginTop: 1, flexShrink: 0 }} />
-       <div>
-         <h3 style={{ ...sectionTitle, margin: 0, fontSize: 13 }}>
-           {cancellationUi.isPending ? "Cancellation Request Pending" : "Request Reservation Cancellation"}
-         </h3>
-         <p style={{ color: "var(--muted-foreground)", fontSize: 12, lineHeight: 1.45, margin: "4px 0 0" }}>
-           {cancellationUi.isPending
-             ? "Your cancellation request is waiting for admin review. Your bed remains reserved until admin approves the request."
-             : RESERVATION_FEE_NON_REFUNDABLE_NOTICE}
-         </p>
+     {cancellationUi.isSettledLocked ? (
+       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+         <Lock size={16} color="var(--primary, #0284C7)" style={{ marginTop: 2, flexShrink: 0 }} />
+         <div>
+           <h3 style={{ ...sectionTitle, margin: 0, fontSize: 13, color: "var(--foreground)" }}>
+             Reservation Confirmed &amp; Cancellation Locked
+           </h3>
+           <p style={{ color: "var(--muted-foreground)", fontSize: 12, lineHeight: 1.5, margin: "4px 0 0" }}>
+             Cancellation is no longer permitted because your 1-month advance rent and security deposit have been settled and your contract is confirmed. If you are unable to proceed with your stay, please contact dorm management to discuss Early Termination or Move-Out.
+           </p>
+         </div>
        </div>
-     </div>
+     ) : (
+       <>
+         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+           <AlertCircle size={16} color={cancellationUi.isPending ? "#D97706" : "#DC2626"} style={{ marginTop: 1, flexShrink: 0 }} />
+           <div>
+             <h3 style={{ ...sectionTitle, margin: 0, fontSize: 13 }}>
+               {cancellationUi.isPending ? "Cancellation Request Pending" : "Request Reservation Cancellation"}
+             </h3>
+             <p style={{ color: "var(--muted-foreground)", fontSize: 12, lineHeight: 1.45, margin: "4px 0 0" }}>
+               {cancellationUi.isPending
+                 ? "Your cancellation request is waiting for admin review. Your bed remains reserved until admin approves the request."
+                 : RESERVATION_FEE_NON_REFUNDABLE_NOTICE}
+             </p>
+           </div>
+         </div>
 
       {cancellationUi.isPending ? (
         <div
@@ -899,6 +914,8 @@ const ReservationAgreementPage = ({ reservation, onBack, onReservationUpdated })
         >
           Request Cancellation
         </button>
+     )}
+       </>
      )}
    </div>
  )}

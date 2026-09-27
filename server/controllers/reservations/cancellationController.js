@@ -18,6 +18,7 @@ import {
   normalizeReservationStatus,
 } from "../../utils/lifecycleNaming.js";
 import { updateOccupancyOnReservationChange } from "../../utils/occupancyManager.js";
+import { hasSettledAdvanceAndDeposit } from "../../utils/depositUtils.js";
 import { notify } from "../../utils/notificationService.js";
 import { archiveContractForCancelledReservation } from "../../services/contractArchiveService.js";
 import {
@@ -81,6 +82,13 @@ export const cancelReservationByUser = async (req, res, next) => {
       return res.status(409).json({
         error: "This reservation is already cancelled.",
         code: "ALREADY_CANCELLED",
+      });
+    }
+
+    if (hasSettledAdvanceAndDeposit(reservation)) {
+      return res.status(409).json({
+        error: "Cancellation is no longer permitted once the 1-month advance rent and security deposit have been paid. Please contact dorm management.",
+        code: "ADVANCE_AND_DEPOSIT_PAID_CANCELLATION_LOCKED",
       });
     }
 
@@ -199,6 +207,13 @@ export const requestCancellationByUser = async (req, res, next) => {
 
     if (String(reservation.userId) !== String(dbUser._id))
       return res.status(403).json({ error: "Unauthorized.", code: "UNAUTHORIZED" });
+
+    if (hasSettledAdvanceAndDeposit(reservation)) {
+      return res.status(409).json({
+        error: "Cancellation is no longer permitted once the 1-month advance rent and security deposit have been paid. Please contact dorm management.",
+        code: "ADVANCE_AND_DEPOSIT_PAID_CANCELLATION_LOCKED",
+      });
+    }
 
     if (!hasPaidReservationFee(reservation)) {
       return res.status(409).json({
@@ -352,6 +367,13 @@ export const approveCancellationRequest = async (req, res, next) => {
       return res.status(409).json({
         error: "Cannot cancel a reservation for a tenant who has already moved in. Please use the Move-Out or Early Termination workflow instead.",
         code: "TENANT_ALREADY_MOVED_IN",
+      });
+    }
+
+    if (hasSettledAdvanceAndDeposit(reservation)) {
+      return res.status(409).json({
+        error: "Cannot cancel a reservation once the 1-month advance rent and security deposit have been paid. Please use the Move-Out or Early Termination workflow instead.",
+        code: "ADVANCE_AND_DEPOSIT_PAID_USE_TERMINATION",
       });
     }
 

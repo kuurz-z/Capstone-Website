@@ -633,7 +633,7 @@ export default function ReservationDetailsModal({
     allowedActions.includes("approve_for_payment") ||
     allowedActions.includes("needs_revision") ||
     allowedActions.includes("rejected") ||
-    (allowedActions.includes("cancelled") && !cancellationPending);
+    (allowedActions.includes("cancelled") && !cancellationPending && !isMoveInPaymentSettled);
   const hasQuickActions = showMeterPrompt || Boolean(stageGuide) || hasActionButtons;
   const emptyStateInfo = useMemo(
     () => getQuickActionsEmptyState(status, isMovedOut),
@@ -1224,7 +1224,11 @@ export default function ReservationDetailsModal({
  </div>
  <div className="rdm-cancellation-request__impact">
  <AlertTriangle size={15} style={{ flexShrink: 0 }} />
- <span>Approving cancels the reservation and releases the assigned bed.</span>
+ <span>
+   {isMoveInPaymentSettled
+     ? "1-Month Advance Rent and Security Deposit have already been paid. Cancellation cannot be approved. Process Early Termination or Move-Out instead."
+     : "Approving cancels the reservation and releases the assigned bed."}
+ </span>
  </div>
  <div className="rdm-cancellation-request__actions">
  <button
@@ -1242,6 +1246,7 @@ export default function ReservationDetailsModal({
  <XCircle size={16} />
  <span>Reject Request</span>
  </button>
+ {!isMoveInPaymentSettled && (
  <button
  type="button"
  className="rdm-action rdm-action-danger-solid"
@@ -1257,6 +1262,7 @@ export default function ReservationDetailsModal({
  <CheckCircle size={16} />
  <span>Approve Cancellation</span>
  </button>
+ )}
  </div>
  </div>
  )}
@@ -2413,7 +2419,7 @@ export default function ReservationDetailsModal({
                       </button>
                     )}
 
-                    {allowedActions.includes("cancelled") && !cancellationPending && (
+                    {allowedActions.includes("cancelled") && !cancellationPending && !isMoveInPaymentSettled && (
                       <button
                         className="rdm-action rdm-action-danger-outline"
                         onClick={() =>

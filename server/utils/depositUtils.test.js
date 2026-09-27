@@ -1,4 +1,4 @@
-import { resolveReservationFinancials } from "./depositUtils.js";
+import { resolveReservationFinancials, hasSettledAdvanceAndDeposit } from "./depositUtils.js";
 
 describe("server depositUtils - resolveReservationFinancials", () => {
   test("does NOT deduct reservation fee when unpaid or pending", () => {
@@ -113,6 +113,27 @@ describe("server depositUtils - resolveReservationFinancials", () => {
     expect(financials.isReservationFeePaid).toBe(true);
     expect(financials.appliedReservationCredit).toBe(2000);
     expect(financials.remainingDue).toBe(12000); // (7000 + 7000) - 2000
+  });
+
+  describe("hasSettledAdvanceAndDeposit", () => {
+    test("returns false when initialPaymentStatus is pending or unpaid", () => {
+      expect(hasSettledAdvanceAndDeposit({ initialPaymentStatus: "pending" })).toBe(false);
+      expect(hasSettledAdvanceAndDeposit({ initialPaymentStatus: "unpaid" })).toBe(false);
+      expect(hasSettledAdvanceAndDeposit(null)).toBe(false);
+    });
+
+    test("returns true when initialPaymentStatus is paid", () => {
+      expect(hasSettledAdvanceAndDeposit({ initialPaymentStatus: "paid" })).toBe(true);
+      expect(hasSettledAdvanceAndDeposit({ initialPaymentStatus: "completed" })).toBe(true);
+    });
+
+    test("returns true when paymentStatus is paid_in_full", () => {
+      expect(hasSettledAdvanceAndDeposit({ paymentStatus: "paid_in_full" })).toBe(true);
+    });
+
+    test("returns true when initialPaymentSettledAt is present", () => {
+      expect(hasSettledAdvanceAndDeposit({ initialPaymentSettledAt: new Date() })).toBe(true);
+    });
   });
 });
 
