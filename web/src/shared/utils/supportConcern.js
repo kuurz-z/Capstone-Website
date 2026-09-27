@@ -10,7 +10,7 @@ export function normalizeSupportConcern(conversation, report = console.error) {
   const mismatch = Boolean(satisfaction && (!requestId || satisfaction.requestId !== requestId));
   if (mismatch) report('Support satisfaction association mismatch', { requestId, satisfactionRequestId: satisfaction.requestId });
   const validScore = (value) => Number.isInteger(value) && value >= 1 && value <= 5;
-  const completed = !legacy && source.status === 'resolved' && satisfaction && !mismatch && validScore(satisfaction.rating);
+  const completed = !legacy && ['resolved', 'closed'].includes(source.status) && satisfaction && !mismatch && validScore(satisfaction.rating);
   const historical = legacy && validScore(source.satisfactionRating);
   const rating = completed ? satisfaction.rating : historical ? source.satisfactionRating : null;
   const ratingState = mismatch || (!legacy && satisfaction && !completed) ? 'unavailable'
@@ -30,7 +30,7 @@ export function normalizeSupportConcern(conversation, report = console.error) {
     feedback: rating !== null ? (completed ? satisfaction.feedback : source.satisfactionFeedback) || '' : '',
     ratedAt: rating !== null ? (completed ? satisfaction.submittedAt : source.satisfactionRatedAt) || null : null,
     revision: Number(conversation.supportRevision ?? conversation.revision ?? 0),
-    lifecycleLocked: source.status === 'closed' || (source.status === 'resolved' && Boolean(satisfaction || source.satisfactionRating != null)),
+    lifecycleLocked: historical || source.status === 'closed' || (source.status === 'resolved' && Boolean(satisfaction || source.satisfactionRating != null)),
   };
 }
 
@@ -42,15 +42,16 @@ export function reconcileSupportConcern(current, incoming) {
     console.error('Support request identity changed', { conversationId: current.conversationId });
     return current;
   }
+  if (['rated', 'historical'].includes(current.ratingState) && !['rated', 'historical'].includes(next.ratingState)) return current;
   return current.revision > next.revision ? current : next;
 }
 
-// Matches supportRequest.service.js in the remediated mobile backend.
+// Matches the shared API's supportRequestService.js admin transitions.
 export function allowedSupportStatuses(concern) {
   if (!concern || concern.lifecycleLocked) return [];
-  if (concern.legacy) return ['open', 'in_review', 'waiting_tenant', 'closed'].filter((s) => s !== concern.status);
-  return ({ open: ['in_review', 'waiting_tenant', 'closed'], in_review: ['waiting_tenant', 'resolved', 'closed'],
-    waiting_tenant: ['in_review', 'resolved', 'closed'], resolved: ['in_review', 'closed'], closed: [] })[concern.status] || [];
+  if (concern.legacy) return ['open', 'in_review', 'waiting_tenant', 'resolved', 'closed'].filter((s) => s !== concern.status);
+  return ({ open: ['in_review', 'waiting_tenant', 'resolved'], in_review: ['waiting_tenant', 'resolved'],
+    waiting_tenant: ['in_review', 'resolved'], resolved: [], closed: [] })[concern.status] || [];
 }
 
 export function supportStatusPayload(concern, status, note = '') {

@@ -84,7 +84,7 @@ export default function AdminChatStatusModal({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-bold text-foreground">
-                      {opt.label}
+                      {opt.value === "resolved" ? "Mark as Resolved" : opt.label}
                     </span>
                     {isCurrent && (
                       <span className="rounded bg-muted px-1.5 py-0.2 text-[10px] font-semibold text-muted-foreground uppercase">
@@ -126,7 +126,7 @@ export default function AdminChatStatusModal({
             <span>
               {pendingStatus === "closed"
                 ? "Proceed to Close Note"
-                : "Confirm Status Change"}
+                : pendingStatus === "resolved" ? "Mark as Resolved" : "Confirm Status Change"}
             </span>
           </button>
         </div>

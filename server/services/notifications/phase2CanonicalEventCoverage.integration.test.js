@@ -88,6 +88,28 @@ beforeEach(async () => {
 });
 
 describe("Phase 2 canonical event persistence and mobile feed", () => {
+  test('support reopen outbox delivers one persisted notification per authorized admin across concurrent retries', async () => {
+    const { reconcileSupport } = await import('../supportRequestService.js');
+    await mongoose.connection.db.collection('users').updateOne({ _id: tenantGilPeer._id }, { $set: {
+      role: 'branch_admin', permissions: ['manageUsers'], accountStatus: 'active', isArchived: false,
+    } });
+    const id = new mongoose.Types.ObjectId();
+    const requestId = String(new mongoose.Types.ObjectId());
+    await mongoose.connection.db.collection('chat_conversations').insertOne({ _id: id,
+      tenantUserId: tenantGil.user_id, tenantId: tenantGil._id,
+      request: { id: requestId, branch: 'gil-puyat', status: 'open', assignedAdminId: tenantGilPeer._id },
+      supportAdminNotifications: [{ eventId: 'reopened-event', eventType: 'tenant_reopened' }],
+    });
+    await Promise.all([reconcileSupport(mongoose.connection.db, id), reconcileSupport(mongoose.connection.db, id)]);
+    await reconcileSupport(mongoose.connection.db, id);
+    const notices = await Notification.find({ entityId: String(id) }).lean();
+    expect(notices).toHaveLength(1);
+    expect(String(notices[0].userId)).toBe(String(tenantGilPeer._id));
+    expect(notices[0].message).toContain('still unresolved');
+    expect(notices[0].data).toMatchObject({ conversationId: String(id), requestId });
+    expect(notices[0].actionUrl).toContain(requestId);
+    expect((await mongoose.connection.db.collection('chat_conversations').findOne({ _id: id })).supportAdminNotifications).toEqual([]);
+  });
   test("contract prepared retry dedupes, final remains distinct after dismissal, and recipient ownership is exact", async () => {
     const contractId = new mongoose.Types.ObjectId();
 
@@ -146,11 +168,13 @@ describe("Phase 2 canonical event persistence and mobile feed", () => {
     const conversationId = new mongoose.Types.ObjectId();
     const eventId = new mongoose.Types.ObjectId();
     const requestId = String(new mongoose.Types.ObjectId());
-    const event = { requestId, message: 'The support concern has been resolved.' };
-    await notify.adminReply(tenantGil._id, conversationId, eventId, event);
-    await notify.adminReply(tenantGil._id, conversationId, eventId, event);
+    const event = { requestId, status: 'resolved', durable: true, message: 'Your support inquiry was marked as resolved. Please confirm if your concern has been addressed.' };
+    const first = await notify.adminReply(tenantGil._id, conversationId, eventId, event);
+    const retry = await notify.adminReply(tenantGil._id, conversationId, eventId, event);
+    expect(String(retry._id)).toBe(String(first._id));
     const notices = await Notification.find({ userId: tenantGil._id }).lean();
     expect(notices).toHaveLength(1);
+    expect(notices[0].title).toBe('Please confirm your inquiry is resolved');
     expect(notices[0]).toMatchObject({ message: event.message,
       data: { requestId, conversationId: String(conversationId) } });
     const pushes = axiosPost.mock.calls.flatMap(([, body]) => Array.isArray(body) ? body : [body]);

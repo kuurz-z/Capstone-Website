@@ -2423,7 +2423,7 @@ const buildSupportChatReportData = async (scope, rangeKey, tableRequest = parseT
     const c = currentConversation(raw);
     if (!c.request) return c;
     const rating = c.request.satisfaction;
-    const valid = c.status === 'resolved' && rating?.requestId === c.request.id && Number.isInteger(rating?.rating) && rating.rating >= 1 && rating.rating <= 5;
+    const valid = ['resolved', 'closed'].includes(c.status) && rating?.requestId === c.request.id && Number.isInteger(rating?.rating) && rating.rating >= 1 && rating.rating <= 5;
     return { ...c, satisfactionRating: valid ? rating.rating : null, satisfactionFeedback: valid ? rating.feedback || '' : '' };
   });
   const totalConversations = conversations.length;
@@ -2482,7 +2482,7 @@ const buildSupportChatReportData = async (scope, rangeKey, tableRequest = parseT
 
   // Tenant Resolution Confirmation Rate (% confirmed by tenant_yes vs auto-closed)
   const tenantConfirmedCount = conversations.filter(
-    (c) => c.resolutionConfirmationSource === "tenant_yes" || c.status === "resolved",
+    (c) => c.request ? Boolean(c.request.satisfaction || c.request.tenantResolutionConfirmed) : c.resolutionConfirmationSource === "tenant_yes" || c.status === "resolved",
   ).length;
   const resolutionRate =
     resolvedCount + closedCount > 0

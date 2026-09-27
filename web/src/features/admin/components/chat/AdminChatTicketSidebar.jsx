@@ -203,7 +203,7 @@ export default function AdminChatTicketSidebar({
             <span>Transcript</span>
           </button>
 
-          {!selectedConversation.lifecycleLocked && (
+          {selectedConversation.legacy && !selectedConversation.lifecycleLocked && (
             <button
               type="button"
               onClick={onOpenCloseModal}

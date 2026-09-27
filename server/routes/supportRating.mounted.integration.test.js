@@ -14,7 +14,7 @@ jest.unstable_mockModule('../config/firebase.js', () => ({ default: {}, getAuth:
   verifyIdToken: async (token) => ({ uid: token, auth_time: Math.floor(Date.now() / 1000) }),
 }) }));
 jest.unstable_mockModule('../utils/notificationService.js', () => ({ notify: {
-  adminReply: jest.fn().mockResolvedValue({}), general: jest.fn().mockResolvedValue({}),
+  adminReply: jest.fn().mockResolvedValue({}), general: jest.fn().mockResolvedValue({}), generalOnce: jest.fn().mockResolvedValue({}),
 } }));
 jest.unstable_mockModule('../utils/socket.js', () => ({ emitToChatAdmins: jest.fn(), emitToUser: jest.fn(),
   emitRoomUpdate: jest.fn(), emitToBranch: jest.fn(), emitToAll: jest.fn(), emitToAdmins: jest.fn(), getIO: jest.fn() }));
@@ -119,7 +119,7 @@ test.each([1, 2, 3, 4, 5])('Mobile mounted API saves %i/5 once and Admin reads t
   for (const result of [saved, reread, admin]) {
     expect(result.status).toBe(200);
     expect(normalizeSupportConcern(result.body.conversation)).toMatchObject({ rating,
-      requestId: conversation.requestId, feedback: `QA score ${rating}`, status: 'resolved', lifecycleLocked: true });
+      requestId: conversation.requestId, feedback: `QA score ${rating}`, status: 'closed', lifecycleLocked: true });
   }
   const markup = renderToStaticMarkup(React.createElement(AdminDetails,
     { concern: normalizeSupportConcern(admin.body.conversation) }));
@@ -166,7 +166,7 @@ test('concurrent starts and rating submissions persist only one request and one 
   expect(attempts.map((r) => r.status).sort()).toEqual([200, 409]);
   const before = await db.collection('chat_conversations').findOne({ _id: new mongoose.Types.ObjectId(c.id) });
   for (const action of ['close', 'reopen']) {
-    expect((await call('PATCH', mobilePath(c.id, action), {})).status).toBe(409);
+    expect((await call('PATCH', mobilePath(c.id, action), { requestId: c.requestId })).status).toBe(409);
   }
   expect((await call('POST', mobilePath(c.id, 'messages'), { message: 'Try reopening' })).status).toBe(409);
   for (const [action, body] of [['status', { status: 'in_review' }], ['priority', { priority: 'urgent' }],
@@ -241,12 +241,12 @@ test('only admin-resolved requests can be rated; unrated reopen and close preser
   expect(resolved.status).toBe(200);
   const reopened = await call('PATCH', mobilePath(c.id, 'reopen'), { requestId: c.requestId });
   expect(reopened.status).toBe(200);
-  expect(reopened.body.conversation.status).toBe('in_review');
+  expect(reopened.body.conversation.status).toBe('open');
   expect(reopened.body.conversation.resolvedAt).toBeNull();
   expect(reopened.body.conversation.resolutionDurationMinutes).toBeNull();
-  expect((await call('PATCH', mobilePath(c.id, 'close'), {})).status).toBe(200);
+  expect((await call('PATCH', mobilePath(c.id, 'close'), {})).status).toBe(409);
   expect((await call('PATCH', mobilePath(c.id), body)).status).toBe(409);
-  expect((await call('PATCH', mobilePath(c.id, 'reopen'), {})).status).toBe(409);
+  expect((await call('PATCH', mobilePath(c.id, 'reopen'), { requestId: c.requestId })).status).toBe(409);
 });
 
 test('owner analytics uses persisted request ratings and the canonical branch', async () => {
@@ -260,4 +260,127 @@ test('owner analytics uses persisted request ratings and the canonical branch', 
   expect(report.body.data.kpis).toMatchObject({ ratedConversationsCount: 3, avgSatisfactionRating: 4 });
   const list = await call('GET', '/api/chat/admin/conversations?branch=guadalupe', undefined, 'owner');
   expect(list.body.conversations.map((c) => c.id).sort()).toEqual(records.map((c) => String(c._id)).sort());
+});
+
+test('direct admin resolve awaits confirmation; repeat resolve does not duplicate notifications or events', async () => {
+  const { notify } = await import('../utils/notificationService.js');
+  const c = await start('confirmation-direct');
+  notify.adminReply.mockClear();
+  const payload = { status: 'resolved', note: 'Issue corrected.', requestId: c.requestId };
+  expect((await call('PATCH', adminPath(c.id), payload, 'other-admin')).status).toBe(404);
+  const attempts = await Promise.all([1, 2].map(() => call('PATCH', adminPath(c.id), payload, 'admin')));
+  expect(attempts.every((r) => r.status === 200)).toBe(true);
+  const saved = (await call('GET', mobilePath(c.id, 'messages'))).body.conversation;
+  expect(saved.status).toBe('resolved');
+  expect(saved.closedAt).toBeNull();
+  expect(saved.tenantResolutionConfirmed).toBe(false);
+  expect(saved.resolvedBy).toBe(String(people.admin._id));
+  expect(saved.lifecycleEvents.filter((e) => e.eventType === 'admin_resolved')).toHaveLength(1);
+  const notificationIds = notify.adminReply.mock.calls.map((args) => args[2]);
+  expect(new Set(notificationIds).size).toBe(1); // transport dedupes this persisted event key
+  expect(notify.adminReply.mock.calls[0][0]).toEqual(people['tenant-a']._id);
+  expect(notify.adminReply.mock.calls[0][3].message).toContain('Please confirm');
+  expect((await call('PATCH', adminPath(c.id, 'close'), { note: 'Bypass' }, 'admin')).status).toBe(409);
+  expect((await call('PATCH', mobilePath(c.id, 'rating'), { requestId: c.requestId, rating: 1, revision: saved.revision })).status).toBe(200);
+  const closed = (await call('GET', mobilePath(c.id, 'messages'))).body.conversation;
+  expect(closed.status).toBe('closed');
+  expect(closed.closedAt).toBeTruthy();
+  expect(closed.tenantResolutionConfirmed).toBe(true);
+  expect(closed.lifecycleEvents.filter((e) => e.eventType === 'tenant_confirmed')).toHaveLength(1);
+});
+
+test('NO requires the owner tenant and same request; reopens the same thread with history and notifies admins once', async () => {
+  const { notify } = await import('../utils/notificationService.js');
+  const c = await start('confirmation-no');
+  await resolve(c);
+  const body = { requestId: c.requestId, note: 'The concern persists.' };
+  expect((await call('PATCH', mobilePath(c.id, 'reopen'), body, 'tenant-b')).status).toBe(403);
+  expect((await call('PATCH', mobilePath(c.id, 'reopen'), {})).status).toBe(400);
+  expect((await call('PATCH', mobilePath(c.id, 'reopen'), { requestId: 'wrong' })).status).toBe(409);
+  notify.generalOnce.mockClear();
+  const result = await call('PATCH', mobilePath(c.id, 'reopen'), body);
+  expect(result.status).toBe(200);
+  expect(result.body.conversation).toMatchObject({ id: c.id, requestId: c.requestId, status: 'open', satisfactionRating: null });
+  expect(result.body.conversation.lifecycleEvents.map((e) => e.eventType)).toEqual(['admin_resolved', 'tenant_reopened']);
+  expect(result.body.conversation.statusHistory.at(-1).resolutionNote).toBe('QA issue corrected.');
+  const deliveries = notify.generalOnce.mock.calls.length;
+  expect(deliveries).toBeGreaterThan(0);
+  expect(notify.generalOnce.mock.calls.every((args) => ['admin', 'owner'].some((id) => String(people[id]._id) === String(args[0])))).toBe(true);
+  expect(notify.generalOnce.mock.calls[0][2]).toContain('still unresolved');
+  expect((await call('PATCH', mobilePath(c.id, 'reopen'), body)).status).toBe(409);
+  await call('GET', mobilePath(c.id, 'messages'));
+  expect(notify.generalOnce.mock.calls).toHaveLength(deliveries);
+  expect((await call('POST', mobilePath(c.id, 'messages'), { message: 'Continuing in this thread', clientMessageId: 'after-no' })).status).toBe(200);
+  expect(await db.collection('chat_messages').countDocuments({ conversationId: new mongoose.Types.ObjectId(c.id) })).toBe(2);
+});
+
+test('rating versus reopen race has exactly one winner; stale resolution revision cannot confirm a later resolution', async () => {
+  const c = await start('confirmation-race');
+  await resolve(c);
+  const revision = (await call('GET', mobilePath(c.id, 'messages'))).body.conversation.revision;
+  const results = await Promise.all([
+    call('PATCH', mobilePath(c.id, 'rating'), { requestId: c.requestId, rating: 5, revision }),
+    call('PATCH', mobilePath(c.id, 'reopen'), { requestId: c.requestId, revision }),
+  ]);
+  expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+  const saved = (await call('GET', mobilePath(c.id, 'messages'))).body.conversation;
+  expect(saved.lifecycleEvents.filter((e) => ['tenant_confirmed', 'tenant_reopened'].includes(e.eventType))).toHaveLength(1);
+  expect(saved.status === 'closed' ? saved.satisfactionRating === 5 : saved.status === 'open' && saved.satisfactionRating === null).toBe(true);
+  const other = await start('stale-resolution');
+  await resolve(other);
+  const old = (await call('GET', mobilePath(other.id, 'messages'))).body.conversation;
+  await call('PATCH', mobilePath(other.id, 'reopen'), { requestId: other.requestId });
+  await resolve(other);
+  expect((await call('PATCH', mobilePath(other.id, 'rating'), { requestId: other.requestId, revision: old.revision, rating: 4 })).status).toBe(409);
+});
+
+test('notification failure does not hide saved state and retries keep their event identity', async () => {
+  const { notify } = await import('../utils/notificationService.js');
+  const c = await start('delivery-retry');
+  await resolve(c);
+  const revision = (await call('GET', mobilePath(c.id, 'messages'))).body.conversation.revision;
+  notify.generalOnce.mockRejectedValueOnce(new Error('Offline delivery'));
+  expect((await call('PATCH', mobilePath(c.id, 'rating'), { requestId: c.requestId, rating: 5, revision })).status).toBe(200);
+  const raw = await db.collection('chat_conversations').findOne({ _id: new mongoose.Types.ObjectId(c.id) });
+  expect(raw.supportAdminNotifications).toHaveLength(1);
+  const reread = await call('GET', mobilePath(c.id, 'messages'));
+  expect(reread.body.conversation.satisfactionRating).toBe(5);
+  const retried = await db.collection('chat_conversations').findOne({ _id: raw._id });
+  expect(retried.supportAdminNotifications).toHaveLength(0);
+});
+
+test('the explicit rating endpoint requires a valid observed revision before any mutation', async () => {
+  const c = await start('required-rating-revision');
+  await resolve(c);
+  for (const revision of [undefined, null, '2', -1, 1.5, {}, [], Number.MAX_SAFE_INTEGER + 1]) {
+    const result = await call('PATCH', mobilePath(c.id, 'rating'), { requestId: c.requestId, rating: 5, revision });
+    expect(result.status).toBe(400);
+    expect(result.body.code).toBe('REVISION_REQUIRED');
+  }
+  const saved = (await call('GET', mobilePath(c.id, 'messages'))).body.conversation;
+  expect(saved.status).toBe('resolved');
+  expect(saved.satisfaction).toBeNull();
+  expect((await call('PATCH', mobilePath(c.id, 'rating'), { requestId: c.requestId, rating: 5, revision: saved.revision })).status).toBe(200);
+});
+
+test('legacy saved ratings stay historical; an explicit admin action upgrades only an unrated legacy thread', async () => {
+  const c = await start('legacy-upgrade');
+  await db.collection('chat_conversations').updateOne({ _id: new mongoose.Types.ObjectId(c.id) }, { $unset: { request: '' } });
+  expect((await call('PATCH', mobilePath(c.id), { resolved: true, rating: 5 })).status).toBe(409);
+  const resolved = await call('PATCH', adminPath(c.id), { status: 'resolved', note: 'Legacy issue addressed.' }, 'admin');
+  expect(resolved.status).toBe(200);
+  expect(resolved.body.conversation.requestId).toBeTruthy();
+  expect(resolved.body.conversation.id).toBe(c.id);
+  const historical = await start('legacy-rated');
+  await db.collection('chat_conversations').updateOne({ _id: new mongoose.Types.ObjectId(historical.id) }, {
+    $unset: { request: '' }, $set: { status: 'resolved', satisfactionRating: 4, satisfactionFeedback: 'Historical feedback' },
+  });
+  const before = await db.collection('chat_conversations').findOne({ _id: new mongoose.Types.ObjectId(historical.id) });
+  expect((await call('PATCH', mobilePath(historical.id, 'reopen'), {})).status).toBe(409);
+  expect((await call('PATCH', adminPath(historical.id), { status: 'resolved', note: 'Cannot change history' }, 'admin')).status).toBe(409);
+  const saved = (await call('GET', mobilePath(historical.id, 'messages'))).body.conversation;
+  expect(saved.satisfactionRating).toBe(4);
+  expect(saved.lifecycleEvents.filter((e) => e.eventType === 'tenant_confirmed')).toHaveLength(1);
+  expect(saved.lifecycleEvents.at(-1).message).toContain('Historical feedback');
+  expect((await db.collection('chat_conversations').findOne({ _id: before._id })).request).toBeUndefined();
 });

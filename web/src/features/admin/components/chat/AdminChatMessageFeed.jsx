@@ -119,13 +119,13 @@ export default function AdminChatMessageFeed({
   scrollToBottom,
 }) {
   const sortedMessages = useMemo(() => {
-    return [...messages].sort((a, b) => {
+    return [...new Map([...messages, ...(selectedConversation?.lifecycleEvents || [])].map((item) => [item.id, item])).values()].sort((a, b) => {
       const timeA = new Date(a.createdAt || 0).getTime();
       const timeB = new Date(b.createdAt || 0).getTime();
       if (timeA !== timeB) return timeA - timeB;
       return String(a.id || "").localeCompare(String(b.id || ""));
     });
-  }, [messages]);
+  }, [messages, selectedConversation?.lifecycleEvents]);
 
   return (
     <div

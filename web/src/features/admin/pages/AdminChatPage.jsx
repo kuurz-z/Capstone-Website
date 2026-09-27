@@ -189,7 +189,7 @@ export default function AdminChatPage() {
               />
 
               {selectedConversation.lifecycleLocked || (!selectedConversation.legacy && selectedConversation.status === "resolved") ? (
-                <AdminChatClosedBanner status={selectedConversation.status} closingNote={selectedConversation.closingNote} />
+                <AdminChatClosedBanner status={selectedConversation.status} ratingState={selectedConversation.ratingState} closingNote={selectedConversation.closingNote} />
               ) : (
                 <AdminChatComposer
                   selectedConversation={selectedConversation}

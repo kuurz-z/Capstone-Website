@@ -26,6 +26,26 @@ const request = (revision = 1, rated = false) => ({ id: 'thread-A', revision, re
     requestId: 'A', rating: 5, feedback: 'Thank you, resolved na po.', submittedAt: '2026-09-27T01:00:00Z',
   } : null,
 } });
+
+test('timeline shows persisted resolution, confirmation with rating, and reopen events without duplicates', async () => {
+  const Empty = () => null;
+  const dependencies = Object.fromEntries(['Check', 'CheckCheck', 'Clock', 'Download', 'Eye', 'FileText', 'ImageOff', 'MessageSquare', 'ProfileAvatar', 'ChatMessageFeedSkeleton'].map((key) => [key, Empty]));
+  for (const key of ['fmtDateTime', 'fmtShortTime', 'fmtDateDivider', 'fmtFileSize', 'getBranchLabel', 'getRoomLabel', 'getCategoryLabel', 'getInitials']) dependencies[key] = () => 'label';
+  dependencies.isSameDay = () => true;
+  const Feed = await load('./AdminChatMessageFeed.jsx', 'AdminChatMessageFeed', dependencies);
+  const events = [
+    { id: 'resolve', senderRole: 'system', message: 'Admin marked this inquiry as resolved\nResolution note: Fixed', createdAt: '2026-09-28T01:00:00Z' },
+    { id: 'reopen', senderRole: 'system', message: 'Tenant reported the concern is still unresolved\nInquiry reopened', createdAt: '2026-09-28T01:01:00Z' },
+    { id: 'rating', senderRole: 'system', message: 'Tenant confirmed the inquiry is resolved\n★★★★★ 5/5\nThank you', createdAt: '2026-09-28T01:02:00Z' },
+  ];
+  try {
+    const view = render(React.createElement(Feed, { selectedConversation: { id: 'thread-A', lifecycleEvents: events }, messages: [events[0]] }));
+    assert.equal(view.getAllByText(/Admin marked/).length, 1);
+    assert.ok(view.getByText(/Inquiry reopened/));
+    assert.ok(view.getByText(/5\/5/));
+    assert.ok(view.getByText(/Thank you/));
+  } finally { cleanup(); }
+});
 test('queue keeps same-tenant concerns separate and rated sidebar disables lifecycle actions', async () => {
   const Empty = () => null;
   const identity = (value) => typeof value === 'string' ? value : '';
@@ -68,16 +88,17 @@ test('resolve modal requires a note and disables duplicate submissions', async (
   const props = { isOpen: true, currentStatus: 'waiting_tenant', concern: support.normalizeSupportConcern({ id: 't', request: { id: 'A', status: 'waiting_tenant' } }), onConfirm: () => {}, onClose: () => {} };
   try {
     const view = render(React.createElement(Modal, props));
-    fireEvent.click(view.getByText('resolved'));
-    assert.equal(view.getByText('Confirm Status Change').closest('button').disabled, true);
+    fireEvent.click(view.getByText('Mark as Resolved'));
+    assert.equal(view.getAllByText('Mark as Resolved').at(-1).closest('button').disabled, true);
     fireEvent.change(view.getByLabelText('Resolution note'), { target: { value: 'Fixed the charge' } });
-    assert.equal(view.getByText('Confirm Status Change').closest('button').disabled, false);
+    assert.equal(view.getAllByText('Mark as Resolved').at(-1).closest('button').disabled, false);
     view.rerender(React.createElement(Modal, { ...props, updating: true }));
-    assert.equal(view.getByText('Confirm Status Change').closest('button').disabled, true);
+    assert.equal(view.getAllByText('Mark as Resolved').at(-1).closest('button').disabled, true);
   } finally { cleanup(); }
 });
 test('focus receives mobile rating in list and detail; stale revision cannot remove it; 409 refetches state', async () => {
   let state, serverValue = request(), resolveOld;
+  serverValue.request.status = 'open';
   const notices = [];
   const actor = { id: 'admin', role: 'branch_admin' };
   const location = { search: '' };
