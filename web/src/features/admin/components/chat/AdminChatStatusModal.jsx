@@ -1,3 +1,4 @@
+import { allowedSupportStatuses } from '../../../../shared/utils/supportConcern.js';
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Tag, X, Check, LoaderCircle } from "lucide-react";
@@ -8,13 +9,18 @@ export default function AdminChatStatusModal({
   onClose,
   onConfirm,
   currentStatus = "open",
+  concern,
   tenantName,
   updating = false,
 }) {
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
   const [pendingStatus, setPendingStatus] = useState(currentStatus || "open");
 
   useEffect(() => {
     if (isOpen) {
+      setNote("");
+      setError("");
       setPendingStatus(currentStatus || "open");
     }
   }, [isOpen, currentStatus]);
@@ -22,7 +28,7 @@ export default function AdminChatStatusModal({
   if (!isOpen || typeof document === "undefined") return null;
 
   const handleConfirm = () => {
-    onConfirm(pendingStatus);
+    onConfirm(pendingStatus, note, setError);
   };
 
   return createPortal(
@@ -49,7 +55,7 @@ export default function AdminChatStatusModal({
         </p>
 
         <div className="space-y-2">
-          {STATUS_OPTIONS.filter((opt) => !["all", "resolved"].includes(opt.value)).map((opt) => {
+          {STATUS_OPTIONS.filter((opt) => allowedSupportStatuses(concern).includes(opt.value)).map((opt) => {
             const isSelected = pendingStatus === opt.value;
             const isCurrent = currentStatus === opt.value;
 
@@ -57,6 +63,7 @@ export default function AdminChatStatusModal({
               <button
                 type="button"
                 key={opt.value}
+                disabled={updating}
                 onClick={() => setPendingStatus(opt.value)}
                 className={`w-full text-left p-3 rounded-lg border transition-all cursor-pointer flex items-start gap-2.5 ${
                   isSelected
@@ -94,6 +101,8 @@ export default function AdminChatStatusModal({
           })}
         </div>
 
+        {pendingStatus === "resolved" && <label className="block text-sm">Resolution note (required)<textarea aria-label="Resolution note" value={note} maxLength={1000} disabled={updating} onChange={(event) => setNote(event.target.value)} className="w-full border rounded p-2 bg-card" /></label>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
           <button
             type="button"
@@ -106,7 +115,7 @@ export default function AdminChatStatusModal({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={updating || pendingStatus === currentStatus}
+            disabled={updating || pendingStatus === currentStatus || (pendingStatus === "resolved" && !note.trim())}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-4 py-1.5 text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
           >
             {updating ? (

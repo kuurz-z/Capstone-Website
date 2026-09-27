@@ -128,6 +128,8 @@ describe("Phase 2 canonical event persistence and mobile feed", () => {
       conversation_id: String(conversationId),
       url: "/(tabs)/chatbot",
     });
+    const legacyNotice = await Notification.findOne({ userId: tenantGil._id });
+    expect(legacyNotice.message).toContain('Confirm whether your concern was resolved.');
     expect(await feedFor(tenantGilPeer)).toEqual([]);
     expect(await feedFor(tenantGuadalupe)).toEqual([]);
 
@@ -138,6 +140,23 @@ describe("Phase 2 canonical event persistence and mobile feed", () => {
     expect(feed).toHaveLength(1);
     expect(feed[0].dedup_key).toBe(`chat_reply:${conversationId}:${messageTwo}`);
     expect(await Notification.countDocuments({ userId: tenantGil._id })).toBe(2);
+  });
+
+  test("request status notification persists the request identity and tenant-scoped push payload", async () => {
+    const conversationId = new mongoose.Types.ObjectId();
+    const eventId = new mongoose.Types.ObjectId();
+    const requestId = String(new mongoose.Types.ObjectId());
+    const event = { requestId, message: 'The support concern has been resolved.' };
+    await notify.adminReply(tenantGil._id, conversationId, eventId, event);
+    await notify.adminReply(tenantGil._id, conversationId, eventId, event);
+    const notices = await Notification.find({ userId: tenantGil._id }).lean();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ message: event.message,
+      data: { requestId, conversationId: String(conversationId) } });
+    const pushes = axiosPost.mock.calls.flatMap(([, body]) => Array.isArray(body) ? body : [body]);
+    expect(pushes.some((push) => push.data?.requestId === requestId
+      && push.data?.conversation_id === String(conversationId))).toBe(true);
+    expect(await feedFor(tenantGilPeer)).toEqual([]);
   });
 
   test("bill release retry dedupes while a later persisted payment event remains visible after dismissal", async () => {

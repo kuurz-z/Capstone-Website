@@ -1,3 +1,4 @@
+import { supportNotificationUrl } from "../../../shared/utils/supportConcern.js";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -401,6 +402,8 @@ function getMeta(type) {
 }
 
 function getActionUrl(notification) {
+  const supportUrl = supportNotificationUrl(notification);
+  if (supportUrl) return supportUrl;
   if (
     notification.type === "reservation_cancellation_requested" &&
     notification.entityId

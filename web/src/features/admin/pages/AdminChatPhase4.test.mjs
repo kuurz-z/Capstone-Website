@@ -59,9 +59,8 @@ test("the failed attachment state offers a retry rather than a dead tile", () =>
   assert.match(allChatSources, /\[attachment, attempt\]/);
 });
 
-test("administrative close remains distinct from tenant-confirmed resolution", () => {
-  assert.match(allChatSources, />Close Conversation</);
-  assert.match(allChatSources, /This is separate from tenant-confirmed resolution/);
-  assert.match(allChatSources, /!\["all", "resolved"\]\.includes\(opt\.value\)/);
-  assert.match(allChatSources, /Please confirm whether this resolved your concern/);
+test("administrative closure and explicit request resolution have separate controls", () => {
+  assert.match(allChatSources, /allowedSupportStatuses\(concern\)/);
+  assert.match(allChatSources, /Resolution note \(required\)/);
+  assert.match(allChatSources, /supportStatusPayload/);
 });

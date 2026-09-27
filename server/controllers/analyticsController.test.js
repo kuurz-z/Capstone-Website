@@ -1371,7 +1371,8 @@ describe("analyticsController", () => {
           totalConversations: 2,
           activeConversations: 1,
           avgFirstReplyMinutes: 15,
-          avgSatisfactionRating: 5,
+          avgSatisfactionRating: null,
+          legacyAvgSatisfactionRating: 5,
         }),
         series: expect.objectContaining({
           volumeByPeriod: expect.any(Array),

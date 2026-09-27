@@ -1,3 +1,4 @@
+import { currentConversation, mutateConversation, persistMessage, reconcileSupport, assertTransition, conflict, createSupportRequest, rateSupportRequest } from '../services/supportRequestService.js';
 import mongoose from "mongoose";
 import {
   ChatConversation,
@@ -324,7 +325,14 @@ async function autoAssignConversation(conversation) {
     conversation.assignedAdminId = String(chosenId);
     conversation.assignedAdminName =
       `${firstName} ${lastName}`.trim() || "Admin";
-    await conversation.save();
+    if (conversation.request) {
+      await mutateConversation(mongoose.connection.db, conversation._id, (doc) => {
+        if (doc.status !== 'open' || doc.assignedAdminId) return null;
+        return { assignedAdminId: String(chosenId), assignedAdminName: conversation.assignedAdminName };
+      });
+    } else {
+      await conversation.save();
+    }
   } catch (err) {
     // Non-fatal — log and continue
     console.error("autoAssignConversation failed (non-fatal):", err.message);
@@ -554,12 +562,9 @@ async function batchResolveConversationPhotos(conversations = []) {
   }
 }
 
-function serializeConversation(conversation) {
+export function serializeConversation(conversation) {
   if (!conversation) return null;
-  const doc =
-    typeof conversation.toObject === "function"
-      ? conversation.toObject()
-      : conversation;
+  const doc = currentConversation(typeof conversation.toObject === "function" ? conversation.toObject() : conversation);
 
   const tenantObj =
     doc.tenantId && typeof doc.tenantId === "object" ? doc.tenantId : null;
@@ -571,8 +576,16 @@ function serializeConversation(conversation) {
 
   return {
     id: String(doc._id || doc.id),
+    request: doc.request || null,
+    requestId: doc.request?.id || null,
+    legacy: !doc.request,
+    concern: doc.request?.concern || "",
+    satisfaction: doc.request?.satisfaction || null,
+    satisfactionRatedAt: doc.request?.satisfactionRatedAt || null,
+    revision: doc.supportRevision || 0,
     ticketId: doc.ticketId || "",
     tenantId: tenantIdStr,
+    tenantUserId: doc.tenantUserId || tenantObj?.user_id || '',
     tenantName:
       doc.tenantName ||
       (tenantObj ? displayName(tenantObj, "Tenant") : "Tenant"),
@@ -635,6 +648,7 @@ function serializeMessage(message) {
   return {
     id: String(doc._id || doc.id),
     conversationId: doc.conversationId ? String(doc.conversationId) : "",
+    requestId: doc.requestId || null,
     senderId: senderIdStr,
     senderName:
       doc.senderName || (senderObj ? displayName(senderObj, "User") : ""),
@@ -762,12 +776,21 @@ async function findConversationForTenant(conversationId, tenantUser) {
   return conversation;
 }
 
+function supportAdminScope(adminContext) {
+  return [
+    { 'request.branch': adminContext.branch },
+    { request: { $exists: false }, branch: adminContext.branch },
+    { 'request.assignedAdminId': { $in: [adminContext.user._id, String(adminContext.user._id)] } },
+  ];
+}
+
 function assertAdminConversationAccess(conversation, adminContext) {
   if (!conversation) {
     throw createHttpError("Conversation not found.", 404, "CONVERSATION_NOT_FOUND");
   }
 
-  if (!adminContext.isOwnerLike && conversation.branch !== adminContext.branch) {
+  if (!adminContext.isOwnerLike && (conversation.request?.branch || conversation.branch) !== adminContext.branch
+      && String(conversation.request?.assignedAdminId || "") !== String(adminContext.user?._id)) {
     throw createHttpError(
       "Conversation not found.",
       404,
@@ -778,7 +801,7 @@ function assertAdminConversationAccess(conversation, adminContext) {
 
 async function findConversationForAdmin(conversationId, adminContext) {
   const filter = { _id: ensureObjectId(conversationId) };
-  if (!adminContext.isOwnerLike) filter.branch = adminContext.branch;
+  if (!adminContext.isOwnerLike) filter.$or = supportAdminScope(adminContext);
 
   const conversation = await ChatConversation.findOne(filter);
   assertAdminConversationAccess(conversation, adminContext);
@@ -1095,6 +1118,31 @@ export async function startConversation(req, res) {
 
     const context = await resolveConversationContext(req.body?.context, tenantContext.user);
 
+    if (req.body?.clientRequestId !== undefined) {
+      const key = req.body.clientRequestId;
+      if (typeof key !== 'string' || !key.trim() || key.length > 128) {
+        throw createHttpError('A valid concern operation key is required.', 400, 'INVALID_REQUEST_KEY');
+      }
+      const concern = normalizeMessage(req.body.initialMessage);
+      const category = normalizeCategory(req.body.category, { required: true });
+      const started = await createSupportRequest(mongoose.connection.db,
+        { _id: tenantContext.user._id, user_id: tenantContext.user.user_id, name: tenantName, role: tenantContext.user.role }, key,
+        { concern, category, priority: normalizePriority(req.body.priority, category), context: context || undefined,
+          tenantName, tenantEmail: tenantContext.user.email || '', tenantProfileImage,
+          branch: tenantContext.branch, roomNumber: tenantContext.roomNumber, roomBed: tenantContext.roomBed,
+          unreadAdminCount: 0, unreadTenantCount: 0, lastMessage: '',
+          statusHistory: [{ status: 'open', note: 'Conversation started.', actorId: tenantContext.user._id,
+            actorName: tenantName, createdAt: new Date() }] });
+      await autoAssignConversation(started.conversation);
+      await reconcileSupport(mongoose.connection.db, started.conversation._id);
+      const fresh = await ensureChatTicketId(await ChatConversation.findById(started.conversation._id).lean());
+      if (!started.reusedExisting) await notifyAdminsOfTenantMessage(fresh);
+      const initial = await ChatMessage.findOne({ conversationId: fresh._id }).sort({ createdAt: 1 }).lean();
+      const serialized = serializeConversation(fresh);
+      emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
+      return res.json({ conversation: serialized, message: serializeMessage(initial), reusedExisting: started.reusedExisting });
+    }
+
     // With a context (e.g. "this concerns Contract X"), only reuse/reopen an
     // existing conversation about that SAME entity — never silently attach
     // to an unrelated open thread. Without a context, preserve the original
@@ -1117,6 +1165,7 @@ export async function startConversation(req, res) {
           ],
         };
 
+    reuseFilter.request = { $exists: false };
     let conversation = await ChatConversation.findOne(reuseFilter).sort({ updatedAt: -1 });
     const reusedExisting = Boolean(conversation);
 
@@ -1211,6 +1260,10 @@ export async function getConversationMessages(req, res) {
       req.params.conversationId,
       tenantContext.user,
     );
+    if (conversation.request) {
+      await reconcileSupport(mongoose.connection.db, conversation._id);
+      conversation = await ChatConversation.findById(conversation._id);
+    }
     conversation = await ensureChatTicketId(conversation);
 
     await markAdminMessagesRead(conversation._id);
@@ -1257,6 +1310,16 @@ export async function sendTenantMessage(req, res) {
 
     const attachments = await normalizeAttachments(req.body?.attachments, conversation._id);
     const message = normalizeMessage(req.body?.message, attachments.length > 0);
+    if (conversation.request) {
+      const result = await persistMessage(mongoose.connection.db, currentConversation(conversation.toObject()),
+        tenantContext.user, { message, attachments, clientMessageId: String(req.body?.clientMessageId || '') });
+      if (!result.idempotentReplay) await notifyAdminsOfTenantMessage(result.conversation);
+      const serialized = serializeConversation(result.conversation);
+      const sent = serializeMessage(result.message);
+      emitToChatAdmins(serialized.branch, 'chat:message-new', { message: sent, conversationId: serialized.id });
+      emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
+      return res.json({ message: sent, conversation: serialized });
+    }
     const result = await createMessageAndUpdateConversation({
       conversation,
       sender: tenantContext.user,
@@ -1311,6 +1374,8 @@ export async function reopenTenantConversation(req, res) {
       tenantContext.user,
     );
 
+    if (conversation.request) return await changeTenantSupportStatus(req, res, conversation, tenantContext.user, 'in_review');
+
     if (!["resolved", "closed"].includes(conversation.status)) {
       return res.json({ conversation: serializeConversation(conversation) });
     }
@@ -1359,6 +1424,8 @@ export async function closeTenantConversation(req, res) {
       tenantContext.user,
     );
 
+    if (conversation.request) return await changeTenantSupportStatus(req, res, conversation, tenantContext.user, 'closed');
+
     if (conversation.status === "closed") {
       return res.json({ conversation: serializeConversation(conversation) });
     }
@@ -1390,6 +1457,25 @@ export async function closeTenantConversation(req, res) {
   }
 }
 
+async function changeTenantSupportStatus(req, res, conversation, user, status) {
+  const updated = await mutateConversation(mongoose.connection.db, conversation._id, (doc) => {
+    if (req.body?.requestId && req.body.requestId !== doc.request.id) throw conflict('This support concern has changed.');
+    assertTransition(doc, status, 'tenant');
+    if (doc.status === status) return null;
+    const now = new Date();
+    const note = normalizeOptionalNote(req.body?.note) || (status === 'closed' ? 'Tenant closed the concern.' : 'Tenant reopened the concern.');
+    return { status, updatedAt: now,
+      ...(status === 'closed' ? { closedAt: now, closedBy: String(user._id), closingNote: note }
+        : { resolvedAt: null, resolvedBy: null, resolutionDurationMinutes: null, closingNote: '', reopenedAt: now, reopenCount: Number(doc.reopenCount || 0) + 1 }),
+      statusHistory: [...(doc.statusHistory || []), { status, note, actorId: user._id,
+        actorName: displayName(user, 'Tenant'), createdAt: now }] };
+  });
+  if (status === 'in_review') await notifyAdminsOfTenantMessage(updated);
+  const serialized = serializeConversation(updated);
+  emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
+  return res.json({ conversation: serialized });
+}
+
 export async function confirmTenantResolution(req, res) {
   try {
     const tenantContext = await resolveTenantContext(req);
@@ -1397,6 +1483,12 @@ export async function confirmTenantResolution(req, res) {
       req.params.conversationId,
       tenantContext.user,
     );
+    if (conversation.request) {
+      const updated = await rateSupportRequest(mongoose.connection.db, conversation, tenantContext.user, req.body);
+      const serialized = serializeConversation(updated);
+      emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
+      return res.json({ conversation: serialized });
+    }
     if (typeof req.body?.resolved !== "boolean") {
       throw createHttpError("Choose YES or NO to confirm resolution.", 400, "RESOLUTION_CHOICE_REQUIRED");
     }
@@ -1612,26 +1704,30 @@ export async function getAdminConversations(req, res) {
 
     if (adminContext.isOwnerLike) {
       if (ROOM_BRANCHES.includes(req.query.branch)) {
-        filter.branch = req.query.branch;
+        (filter.$and ||= []).push({ $or: [{ 'request.branch': req.query.branch },
+          { request: { $exists: false }, branch: req.query.branch }] });
       }
     } else {
-      filter.branch = adminContext.branch;
+      filter.$or = supportAdminScope(adminContext);
     }
 
     if (VALID_STATUSES.has(req.query.status)) {
-      filter.status = req.query.status;
+      (filter.$and ||= []).push({ $or: [{ 'request.status': req.query.status }, { request: { $exists: false }, status: req.query.status }] });
     }
 
     if (VALID_PRIORITIES.has(req.query.priority)) {
-      filter.priority = req.query.priority;
+      (filter.$and ||= []).push({ $or: [{ 'request.priority': req.query.priority }, { request: { $exists: false }, priority: req.query.priority }] });
     }
 
     if (VALID_CATEGORIES.has(req.query.category)) {
-      filter.category = req.query.category;
+      (filter.$and ||= []).push({ $or: [{ 'request.category': req.query.category }, { request: { $exists: false }, category: req.query.category }] });
     }
 
     if (req.query.assigned === "me" && adminContext.user?._id) {
-      filter.assignedAdminId = adminContext.user._id;
+      (filter.$and ||= []).push({ $or: [
+        { 'request.assignedAdminId': { $in: [adminContext.user._id, String(adminContext.user._id)] } },
+        { request: { $exists: false }, assignedAdminId: adminContext.user._id },
+      ] });
     }
 
     if (req.query.unread === "true") {
@@ -1641,16 +1737,20 @@ export async function getAdminConversations(req, res) {
     const search = String(req.query.search || "").trim();
     if (search) {
       const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      filter.$or = [
+      (filter.$and ||= []).push({ $or: [
+        { "request.id": regex },
+        { "request.concern": regex },
         { ticketId: regex },
         { tenantName: regex },
         { tenantEmail: regex },
         { roomNumber: regex },
         { roomBed: regex },
         { lastMessage: regex },
-      ];
+      ] });
     }
 
+    if (req.query.requestId) filter["request.id"] = String(req.query.requestId);
+    if (req.query.conversationId) filter._id = ensureObjectId(req.query.conversationId);
     let conversations = await ChatConversation.find(filter)
       .populate("tenantId", "profileImage firstName lastName email user_id")
       .sort({ lastMessageAt: -1, updatedAt: -1 })
@@ -1662,8 +1762,8 @@ export async function getAdminConversations(req, res) {
 
     conversations.sort((left, right) => {
       const priorityDiff =
-        (PRIORITY_RANK[left.priority || "normal"] ?? 2) -
-        (PRIORITY_RANK[right.priority || "normal"] ?? 2);
+        (PRIORITY_RANK[currentConversation(left).priority || "normal"] ?? 2) -
+        (PRIORITY_RANK[currentConversation(right).priority || "normal"] ?? 2);
       if (priorityDiff !== 0) return priorityDiff;
 
       const unreadDiff =
@@ -1699,6 +1799,10 @@ export async function getAdminConversationMessages(req, res) {
     );
     conversation = await ensureChatTicketId(conversation);
 
+    if (conversation.request) {
+      await reconcileSupport(mongoose.connection.db, conversation._id);
+      conversation = await ChatConversation.findById(conversation._id);
+    }
     await markTenantMessagesRead(conversation._id);
 
     const messages = await ChatMessage.find({ conversationId: conversation._id })
@@ -1724,7 +1828,7 @@ export async function getAdminConversationMessages(req, res) {
       }
     });
 
-    return res.json({ messages: messages.map(serializeMessage) });
+    return res.json({ conversation: serializeConversation(conversation), messages: messages.map(serializeMessage) });
   } catch (error) {
     return sendError(res, error, "Failed to load messages.");
   }
@@ -1738,6 +1842,19 @@ export async function sendAdminMessage(req, res) {
       adminContext,
     );
 
+    if (conversation.request) {
+      const attachments = await normalizeAttachments(req.body?.attachments, conversation._id);
+      const message = normalizeMessage(req.body?.message, attachments.length > 0);
+      const result = await persistMessage(mongoose.connection.db, currentConversation(conversation.toObject()),
+        { ...adminContext.user, name: adminContext.displayName },
+        { message, attachments, clientMessageId: String(req.body?.clientMessageId || ''), asAdmin: true });
+      const serialized = serializeConversation(result.conversation);
+      const sent = serializeMessage(result.message);
+      emitToUser(result.conversation.tenantId, 'chat:message-new', { message: sent, conversationId: serialized.id });
+      emitToChatAdmins(serialized.branch, 'chat:message-new', { message: sent, conversationId: serialized.id });
+      emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
+      return res.json({ conversation: serialized, message: sent });
+    }
     if (conversation.status === "closed") {
       throw createHttpError("This conversation is closed.", 400, "CONVERSATION_CLOSED");
     }
@@ -1841,6 +1958,13 @@ export async function assignAdminConversation(req, res) {
       }
     }
 
+    if (conversation.request) {
+      const updated = await mutateConversation(mongoose.connection.db, conversation._id, async (doc) => {
+        if (doc.status === 'closed' || doc.satisfaction || doc.satisfactionRating != null) throw conflict('Completed support is immutable.');
+        return { assignedAdminId: targetAdmin?._id || null, assignedAdminName: displayName(targetAdmin, 'Admin'), updatedAt: new Date() };
+      });
+      return res.json({ conversation: serializeConversation(updated) });
+    }
     conversation.assignedAdminId = targetAdmin?._id || null;
     conversation.assignedAdminName = displayName(targetAdmin, "Admin");
     await conversation.save();
@@ -1857,6 +1981,34 @@ export async function assignAdminConversation(req, res) {
   }
 }
 
+async function updateSupportRequestStatus(req, res, conversation, adminContext, status) {
+  const note = normalizeOptionalNote(req.body?.note);
+  if (status === 'resolved' && !note) throw createHttpError('Describe how this concern was resolved.', 400, 'RESOLUTION_NOTE_REQUIRED');
+  const updated = await mutateConversation(mongoose.connection.db, conversation._id, async (doc) => {
+    if (req.body?.requestId && req.body.requestId !== doc.request.id) throw conflict('Wrong concern identity.', 'REQUEST_MISMATCH');
+    if (req.body?.revision != null && req.body.revision !== (doc.supportRevision || 0)) throw conflict('This concern changed. Refresh before updating.');
+    if (doc.status === status) return null;
+    assertTransition(doc, status);
+    if (doc.supportNotification?.pending) throw conflict('Previous status notification is pending. Retry shortly.');
+    const now = new Date();
+    return {
+      status, assignedAdminId: adminContext.user._id, assignedAdminName: adminContext.displayName, updatedAt: now,
+      ...(status === 'resolved' ? { resolvedAt: now, resolvedBy: adminContext.user._id, closingNote: note,
+        resolutionDurationMinutes: Math.max(0, Math.round((now - new Date(doc.createdAt)) / 60000)) } : {}),
+      ...(doc.status === 'resolved' && status === 'in_review' ? { resolvedAt: null, resolvedBy: null, resolutionDurationMinutes: null, closingNote: '' } : {}),
+      ...(status === 'closed' ? { closedAt: now, closedBy: adminContext.user._id, closingNote: note || 'Closed by admin.' } : {}),
+      statusHistory: [...(doc.statusHistory || []), { status, note, actorId: adminContext.user._id, actorName: adminContext.displayName, createdAt: now }],
+      supportNotification: { pending: true, eventId: String(new mongoose.Types.ObjectId()), status,
+        adminName: adminContext.displayName, message: note || `Your concern is now ${status.replace(/_/g, ' ')}.` },
+    };
+  });
+  // A saved status remains saved if delivery fails; the shared pending event is retried on reads/mobile reconciliation.
+  await reconcileSupport(mongoose.connection.db, conversation._id).catch((error) => console.warn('Support delivery pending:', error.message));
+  const serialized = serializeConversation(updated);
+  emitToChatAdmins(serialized.branch, 'chat:conversation-updated', serialized);
+  return res.json({ conversation: serialized });
+}
+
 export async function updateAdminConversationStatus(req, res) {
   try {
     const adminContext = await resolveAdminContext(req);
@@ -1869,6 +2021,7 @@ export async function updateAdminConversationStatus(req, res) {
     if (!VALID_STATUSES.has(status)) {
       throw createHttpError("Invalid conversation status.", 400, "INVALID_STATUS");
     }
+    if (conversation.request) return await updateSupportRequestStatus(req, res, conversation, adminContext, status);
     if (status === "closed") {
       throw createHttpError(
         "Use close conversation to close this chat.",
@@ -1921,6 +2074,13 @@ export async function updateAdminConversationPriority(req, res) {
     );
 
     const priority = normalizePriority(req.body?.priority);
+    if (conversation.request) {
+      const updated = await mutateConversation(mongoose.connection.db, conversation._id, async (doc) => {
+        if (doc.status === 'closed' || doc.satisfaction || doc.satisfactionRating != null) throw conflict('Completed support is immutable.');
+        return { priority, updatedAt: new Date() };
+      });
+      return res.json({ conversation: serializeConversation(updated) });
+    }
     conversation.priority = priority;
     await conversation.save();
 
@@ -1948,6 +2108,7 @@ export async function closeAdminConversation(req, res) {
       "Please enter a closing note.",
     );
 
+    if (conversation.request) return await updateSupportRequestStatus(req, res, conversation, adminContext, "closed");
     if (conversation.status !== "closed") {
       const now = new Date();
       const createdAtTime = new Date(conversation.createdAt || now).getTime();
@@ -1995,6 +2156,7 @@ export async function autoCloseInactiveChatConversations({
   const now = new Date();
 
   const inactiveConversations = await ChatConversation.find({
+    request: { $exists: false },
     status: { $in: ["waiting_tenant", "resolved"] },
     $or: [
       { lastMessageAt: { $lt: cutoff, $ne: null } },

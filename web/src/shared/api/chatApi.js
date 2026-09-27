@@ -55,10 +55,10 @@ export const chatApi = {
       body: JSON.stringify({ assignedAdminId }),
     }),
 
-  updateStatus: (conversationId, status, note = "") =>
+  updateStatus: (conversationId, status, note = "", identity = {}) =>
     authFetch(`/chat/admin/conversations/${conversationId}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ status, note }),
+      body: JSON.stringify({ status, note, ...(identity.requestId ? { requestId: identity.requestId, revision: identity.revision } : {}) }),
     }),
 
   updatePriority: (conversationId, priority) =>

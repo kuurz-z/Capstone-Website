@@ -168,7 +168,7 @@ const SUPPORT_CHAT_COLUMNS = [
       row.satisfactionRating ? (
         <div className="flex items-center gap-1 text-amber-500 font-semibold text-xs">
           <Star size={13} fill="currentColor" />
-          <span>{row.satisfactionRating}.0</span>
+          <span>{row.satisfactionRating}.0 {row.legacy ? "(historical)" : ""}</span>
         </div>
       ) : (
         <span className="text-xs text-muted-foreground">—</span>
@@ -262,11 +262,11 @@ export default function AnalyticsSupportChatTab({
         tone: "green",
         label: "Resolution Rate",
         value: kpis.resolutionRateLabel || "0%",
-        trend: "Tenant-confirmed & resolved",
+        trend: "Resolved support concerns",
         changeType: "neutral",
         note: kpis.avgSatisfactionRating
-          ? `★ ${kpis.avgSatisfactionRating} CSAT (${kpis.ratedConversationsCount || 0} reviews)`
-          : "Awaiting tenant reviews",
+          ? `★ ${kpis.avgSatisfactionRating} request CSAT (${kpis.ratedConversationsCount || 0} reviews)`
+          : kpis.legacyAvgSatisfactionRating ? `Historical conversation CSAT: ${kpis.legacyAvgSatisfactionRating} (${kpis.legacyRatedConversationsCount} reviews)` : "Awaiting tenant reviews",
       },
     ],
     [kpis],

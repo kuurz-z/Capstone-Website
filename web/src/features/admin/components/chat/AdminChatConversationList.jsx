@@ -69,6 +69,8 @@ export default function AdminChatConversationList({
       // 1. Search filter
       if (q) {
         const matchesSearch =
+          (item.requestId || "").toLowerCase().includes(q) ||
+          (item.concern || "").toLowerCase().includes(q) ||
           (item.ticketId || "").toLowerCase().includes(q) ||
           (item.tenantName || "").toLowerCase().includes(q) ||
           (item.tenantEmail || "").toLowerCase().includes(q) ||
@@ -127,14 +129,7 @@ export default function AdminChatConversationList({
       items: [],
     }));
 
-    const activeTenantSeen = new Set();
     filteredConversations.forEach((item) => {
-      const isOngoing = ["open", "in_review", "waiting_tenant"].includes(item.status);
-      const tenantKey = item.tenantId || item.tenantName;
-      if (isOngoing && tenantKey) {
-        if (activeTenantSeen.has(tenantKey)) return;
-        activeTenantSeen.add(tenantKey);
-      }
       const targetGroup =
         groups.find((group) => group.status === item.status) || groups[0];
       targetGroup.items.push(item);
@@ -403,12 +398,12 @@ export default function AdminChatConversationList({
                             {conversation.tenantName}
                           </span>
                           <time className="text-[10px] text-muted-foreground shrink-0 font-normal">
-                            {fmtRelativeTime(conversation.lastMessageAt)}
+                            {fmtRelativeTime(conversation.updatedAt || conversation.lastMessageAt)}
                           </time>
                         </div>
 
                         <div className="text-[11px] text-muted-foreground truncate font-normal">
-                          {conversation.ticketId || "Inquiry ID pending"} · {getBranchLabel(conversation.branch)} · {getRoomLabel(conversation)}
+                          {conversation.requestId || conversation.ticketId || "Legacy thread"} · {getBranchLabel(conversation.branch)} · {getRoomLabel(conversation)}
                         </div>
 
                         <div className="flex items-center gap-1.5 pt-0.5">
@@ -419,12 +414,18 @@ export default function AdminChatConversationList({
                         </div>
 
                         <p className="text-[11px] text-muted-foreground truncate line-clamp-1 leading-tight font-normal">
-                          {conversation.lastMessage || "No messages yet"}
+                          {conversation.concern || conversation.lastMessage || "No messages yet"}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          Assigned: {conversation.assignedAdminName || "Unassigned"}
                         </p>
                       </div>
 
                       {/* Badges Column */}
                       <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+                        {conversation.rating !== null && conversation.rating !== undefined && <span className="text-xs">★ {conversation.rating}/5{conversation.legacy ? " (historical)" : ""}</span>}
+                        {conversation.ratingState === "unrated" && <span className="text-xs">Not yet rated</span>}
+                        {conversation.ratingState === "unavailable" && <span className="text-xs">Rating unavailable</span>}
                         {isUnread && (
                           <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
                             {conversation.unreadAdminCount}

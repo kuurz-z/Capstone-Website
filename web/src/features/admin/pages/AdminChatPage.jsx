@@ -173,8 +173,8 @@ export default function AdminChatPage() {
                 scrollToBottom={scrollToBottom}
               />
 
-              {selectedConversation.status === "closed" ? (
-                <AdminChatClosedBanner closingNote={selectedConversation.closingNote} />
+              {selectedConversation.lifecycleLocked || (!selectedConversation.legacy && selectedConversation.status === "resolved") ? (
+                <AdminChatClosedBanner status={selectedConversation.status} closingNote={selectedConversation.closingNote} />
               ) : (
                 <AdminChatComposer
                   selectedConversation={selectedConversation}
@@ -220,6 +220,7 @@ export default function AdminChatPage() {
         isOpen={statusModalOpen}
         onClose={() => setStatusModalOpen(false)}
         onConfirm={handleConfirmStatusChange}
+        concern={selectedConversation}
         currentStatus={selectedConversation?.status}
         tenantName={selectedConversation?.tenantName}
         updating={updatingStatus}
