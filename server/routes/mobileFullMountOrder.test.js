@@ -95,6 +95,7 @@ jest.unstable_mockModule("../services/mobileNotificationBridge.js", () => ({
 jest.unstable_mockModule("../controllers/chatController.js", () => ({
   startConversation: jest.fn(), getMyConversations: jest.fn(), getConversationMessages: jest.fn(),
   uploadChatAttachment: jest.fn(), downloadChatAttachment: jest.fn(), sendTenantMessage: jest.fn(),
+  rateTenantSupport: jest.fn(),
   confirmTenantResolution: jest.fn(), reopenTenantConversation: jest.fn(), closeTenantConversation: jest.fn(),
   broadcastTyping: jest.fn(),
 }));
@@ -190,6 +191,7 @@ describe("full /api/m mount order — no bridge shadows a vendored-only domain",
     ["GET", "/api/m/notifications"],
     ["POST", "/api/m/upload/firebase-storage"],
     ["GET", "/api/m/chat/me"],
+    ["PATCH", "/api/m/chat/507f1f77bcf86cd799439011/rating"],
     ["GET", "/api/m/maintenance/me"],
   ])("unauthenticated %s %s is correctly rejected by its own bridge's session auth (sanity check)", async (method, path) => {
     await startApp();
