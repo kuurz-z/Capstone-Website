@@ -26,6 +26,8 @@ export default function UtilityRoomSelector({
   availableFloors = [],
   roomStatusFilter = "all",
   onRoomStatusFilterChange,
+  sortOrder = "default",
+  onSortOrderChange,
   roomsPage = 1,
   totalRoomPages = 1,
   onPageChange,
@@ -38,12 +40,14 @@ export default function UtilityRoomSelector({
   const hasActiveFilters =
     Boolean(sidebarSearch.trim()) ||
     floorFilter !== "all" ||
-    roomStatusFilter !== "all";
+    roomStatusFilter !== "all" ||
+    sortOrder !== "default";
 
   const handleResetFilters = () => {
     if (onSearchChange) onSearchChange("");
     if (onFloorFilterChange) onFloorFilterChange("all");
     if (onRoomStatusFilterChange) onRoomStatusFilterChange("all");
+    if (onSortOrderChange) onSortOrderChange("default");
   };
 
   const startItem = filteredRooms.length > 0 ? (roomsPage - 1) * 7 + 1 : 0;
@@ -143,6 +147,24 @@ export default function UtilityRoomSelector({
             className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
         </div>
+      </div>
+
+      {/* Sort Order Dropdown */}
+      <div className="relative">
+        <select
+          aria-label="Sort rooms"
+          className="h-8 w-full appearance-none rounded-lg border border-border bg-card pl-2.5 pr-6 text-xs font-medium text-foreground focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-700 transition-all cursor-pointer"
+          value={sortOrder}
+          onChange={(e) => onSortOrderChange?.(e.target.value)}
+        >
+          <option value="default">Sort: Default (Room Number)</option>
+          <option value="newest">Sort: Newest to Oldest</option>
+          <option value="oldest">Sort: Oldest to Newest</option>
+        </select>
+        <ChevronDown
+          size={12}
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
       </div>
 
       {/* Room Button List — Stable scroll container prevents layout shift */}
