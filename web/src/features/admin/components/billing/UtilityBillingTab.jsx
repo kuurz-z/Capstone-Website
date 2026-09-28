@@ -129,6 +129,7 @@ const UtilityBillingTab = ({
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [floorFilter, setFloorFilter] = useState("all");
   const [roomStatusFilter, setRoomStatusFilter] = useState("all");
+  const [roomSortOrder, setRoomSortOrder] = useState("default"); // default | newest | oldest
   const [roomsPage, setRoomsPage] = useState(1);
 
   // Filter and pagination states for Cycle History
@@ -251,7 +252,7 @@ const UtilityBillingTab = ({
 
   // Filtered rooms
   const filteredRooms = useMemo(() => {
-    return rooms.filter((r) => {
+    const list = rooms.filter((r) => {
       const q = sidebarSearch.trim().toLowerCase();
       if (q) {
         const name = String(r.name || r.roomNumber || "").toLowerCase();
@@ -270,7 +271,47 @@ const UtilityBillingTab = ({
       }
       return true;
     });
-  }, [rooms, sidebarSearch, floorFilter, roomStatusFilter]);
+
+    if (roomSortOrder === "default") {
+      return list;
+    }
+
+    return [...list].sort((a, b) => {
+      const getRoomTimestamp = (room) => {
+        const candidates = [
+          room.activePeriod?.startDate,
+          room.activePeriod?.createdAt,
+          room.latestPeriod?.endDate,
+          room.latestPeriod?.startDate,
+          room.latestPeriod?.createdAt,
+          room.targetCloseDate,
+          room.createdAt,
+          room.updatedAt,
+        ];
+        for (const val of candidates) {
+          if (val) {
+            const t = new Date(val).getTime();
+            if (Number.isFinite(t) && t > 0) return t;
+          }
+        }
+        if (room.id && typeof room.id === "string" && room.id.length === 24) {
+          const hex = room.id.substring(0, 8);
+          const sec = parseInt(hex, 16);
+          if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+        }
+        return null;
+      };
+
+      const timeA = getRoomTimestamp(a);
+      const timeB = getRoomTimestamp(b);
+      const hasA = timeA !== null;
+      const hasB = timeB !== null;
+      if (!hasA && !hasB) return 0;
+      if (!hasA) return 1;
+      if (!hasB) return -1;
+      return roomSortOrder === "oldest" ? timeA - timeB : timeB - timeA;
+    });
+  }, [rooms, sidebarSearch, floorFilter, roomStatusFilter, roomSortOrder]);
 
   const totalRoomPages = Math.max(1, Math.ceil(filteredRooms.length / ROOMS_PER_PAGE));
   const pagedRooms = useMemo(() => {
@@ -1047,6 +1088,11 @@ const UtilityBillingTab = ({
           floorFilter={floorFilter}
           onFloorFilterChange={(fl) => {
             setFloorFilter(fl);
+            setRoomsPage(1);
+          }}
+          sortOrder={roomSortOrder}
+          onSortOrderChange={(val) => {
+            setRoomSortOrder(val);
             setRoomsPage(1);
           }}
           availableFloors={availableFloors}
