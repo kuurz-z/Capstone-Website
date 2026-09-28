@@ -250,6 +250,34 @@ const UtilityBillingTab = ({
     return Array.from(floorsSet).sort((a, b) => Number(a) - Number(b));
   }, [rooms]);
 
+  // Helper to extract chronological timestamp for room sorting
+  const getRoomSortTimestamp = (room) => {
+    if (!room) return null;
+    const candidates = [
+      room.activePeriod?.startDate,
+      room.activePeriod?.createdAt,
+      room.latestPeriod?.endDate,
+      room.latestPeriod?.startDate,
+      room.latestPeriod?.createdAt,
+      room.targetCloseDate,
+      room.createdAt,
+      room.updatedAt,
+    ];
+    for (const val of candidates) {
+      if (val) {
+        const t = new Date(val).getTime();
+        if (Number.isFinite(t) && t > 0) return t;
+      }
+    }
+    const idStr = String(room.id || room.roomId || room._id || "");
+    if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
+      const hex = idStr.substring(0, 8);
+      const sec = parseInt(hex, 16);
+      if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+    }
+    return null;
+  };
+
   // Filtered rooms
   const filteredRooms = useMemo(() => {
     const list = rooms.filter((r) => {
@@ -277,33 +305,8 @@ const UtilityBillingTab = ({
     }
 
     return [...list].sort((a, b) => {
-      const getRoomTimestamp = (room) => {
-        const candidates = [
-          room.activePeriod?.startDate,
-          room.activePeriod?.createdAt,
-          room.latestPeriod?.endDate,
-          room.latestPeriod?.startDate,
-          room.latestPeriod?.createdAt,
-          room.targetCloseDate,
-          room.createdAt,
-          room.updatedAt,
-        ];
-        for (const val of candidates) {
-          if (val) {
-            const t = new Date(val).getTime();
-            if (Number.isFinite(t) && t > 0) return t;
-          }
-        }
-        if (room.id && typeof room.id === "string" && room.id.length === 24) {
-          const hex = room.id.substring(0, 8);
-          const sec = parseInt(hex, 16);
-          if (Number.isFinite(sec) && sec > 0) return sec * 1000;
-        }
-        return null;
-      };
-
-      const timeA = getRoomTimestamp(a);
-      const timeB = getRoomTimestamp(b);
+      const timeA = getRoomSortTimestamp(a);
+      const timeB = getRoomSortTimestamp(b);
       const hasA = timeA !== null;
       const hasB = timeB !== null;
       if (!hasA && !hasB) return 0;
