@@ -292,6 +292,9 @@ function buildRoomDiagnostic({
     branch: room.branch,
     type: room.type,
     capacity: room.capacity,
+    createdAt: room.createdAt || null,
+    updatedAt: room.updatedAt || null,
+    floor: room.floor != null ? String(room.floor) : null,
     status: issues.length ? "needs_repair" : "ok",
     hasActiveTenants: reservations.some((r) =>
       hasReservationStatus(r.status, "moveIn"),
@@ -310,7 +313,7 @@ function buildRoomDiagnostic({
     billingState: latestPeriodBillingState,
     billingLabel: latestPeriodBillingLabel,
     billingBlockingReason,
-    activePeriod:openPeriod,
+    activePeriod: openPeriod,
     latestPeriod,
     targetCloseDate: openPeriod
       ? getUtilityTargetCloseDate(openPeriod.startDate)
@@ -327,7 +330,7 @@ function buildRoomDiagnostic({
  */
 export async function getUtilityRoomDiagnostics(roomId, utilityType) {
   const room = await Room.findById(roomId)
-    .select("name roomNumber branch type capacity")
+    .select("name roomNumber branch type capacity createdAt updatedAt floor")
     .lean();
   if (!room) return null;
   if (!branchSupportsSeparateUtilityBilling(room.branch, utilityType)) return null;
@@ -383,7 +386,7 @@ export async function getUtilityDiagnostics({ branch = null } = {}) {
 
   // Query 1: All rooms
   const allRooms = await Room.find(roomFilter)
-    .select("_id name roomNumber branch type capacity")
+    .select("_id name roomNumber branch type capacity createdAt updatedAt floor")
     .lean();
   const roomIds = allRooms.map((r) => r._id);
 

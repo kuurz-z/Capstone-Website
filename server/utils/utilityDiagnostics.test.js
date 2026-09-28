@@ -282,7 +282,54 @@ describe("getUtilityDiagnostics", () => {
 
     await getUtilityDiagnostics({ branch: "gil-puyat" });
 
-    expect(selectedFields).toContain("_id name roomNumber branch type capacity");
+    expect(selectedFields).toContain(
+      "_id name roomNumber branch type capacity createdAt updatedAt floor",
+    );
+  });
+
+  test("includes createdAt, updatedAt, and floor in room diagnostics", async () => {
+    const createdAt = new Date("2026-01-15T08:00:00.000Z");
+    const updatedAt = new Date("2026-02-01T10:00:00.000Z");
+    roomFind.mockReturnValueOnce(
+      mockSelectLeanResult([
+        {
+          _id: "room-enriched",
+          name: "Room 101",
+          roomNumber: "101",
+          branch: "gil-puyat",
+          type: "private",
+          capacity: 1,
+          createdAt,
+          updatedAt,
+          floor: 2,
+        },
+        {
+          _id: "room-empty-dates",
+          name: "Room 102",
+          roomNumber: "102",
+          branch: "gil-puyat",
+          type: "private",
+          capacity: 1,
+          floor: null,
+        },
+      ]),
+    );
+
+    const result = await getUtilityDiagnostics({ branch: "gil-puyat" });
+
+    expect(result.electricityRooms).toHaveLength(2);
+    expect(result.electricityRooms[0]).toMatchObject({
+      roomId: "room-enriched",
+      createdAt,
+      updatedAt,
+      floor: "2",
+    });
+    expect(result.electricityRooms[1]).toMatchObject({
+      roomId: "room-empty-dates",
+      createdAt: null,
+      updatedAt: null,
+      floor: null,
+    });
   });
 
   test("adds tenant-aware electricity review data for rooms with periods", async () => {
