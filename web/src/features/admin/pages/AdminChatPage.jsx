@@ -56,6 +56,8 @@ export default function AdminChatPage() {
     closeModalOpen,
     setCloseModalOpen,
     statusModalOpen,
+    statusInitialStatus,
+    handleOpenStatusModal,
     setStatusModalOpen,
     priorityModalOpen,
     setPriorityModalOpen,
@@ -164,7 +166,7 @@ export default function AdminChatPage() {
                 accessInfo={accessInfo}
                 assigning={assigning}
                 downloading={downloading}
-                onOpenStatusModal={() => setStatusModalOpen(true)}
+                onOpenStatusModal={() => handleOpenStatusModal()}
                 onOpenPriorityModal={() => setPriorityModalOpen(true)}
                 onOpenCloseModal={() => setCloseModalOpen(true)}
                 onAssignToMe={handleAssignToMe}
@@ -203,6 +205,8 @@ export default function AdminChatPage() {
                   replyError={replyError}
                   setReplyError={setReplyError}
                   onSendReply={handleSendReply}
+                  onRequestResolution={() => handleOpenStatusModal("resolved")}
+                  updatingStatus={updatingStatus}
                 />
               )}
             </>
@@ -232,6 +236,8 @@ export default function AdminChatPage() {
       />
 
       <AdminChatStatusModal
+        key={selectedConversation?.id || "no-conversation"}
+        initialStatus={statusInitialStatus}
         isOpen={statusModalOpen}
         onClose={() => setStatusModalOpen(false)}
         onConfirm={handleConfirmStatusChange}

@@ -1,4 +1,4 @@
-import { normalizeSupportConcern, reconcileSupportConcern, supportStatusPayload } from '../../../../shared/utils/supportConcern.js';
+import { allowedSupportStatuses, normalizeSupportConcern, reconcileSupportConcern, supportStatusPayload } from '../../../../shared/utils/supportConcern.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { chatApi } from "../../../../shared/api/chatApi.js";
@@ -17,6 +17,7 @@ export function useAdminChat() {
   const location = useLocation();
   const listSequence = useRef(0);
   const selectedId = useRef(null);
+  const statusMutationPending = useRef(false);
   const messageSequence = useRef(0);
   const { user } = useAuth();
   const isOwner = user?.role === "owner";
@@ -34,6 +35,7 @@ export function useAdminChat() {
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusInitialStatus, setStatusInitialStatus] = useState(null);
   const [priorityModalOpen, setPriorityModalOpen] = useState(false);
 
   const [initialLoading, setInitialLoading] = useState(true);
@@ -329,8 +331,15 @@ export function useAdminChat() {
     }
   };
 
+  const handleOpenStatusModal = (initialStatus = null) => {
+    if (!selectedConversation || sending || uploadingAttachments || closing || statusMutationPending.current) return;
+    if (initialStatus && !allowedSupportStatuses(selectedConversation).includes(initialStatus)) return;
+    setStatusInitialStatus(initialStatus);
+    setStatusModalOpen(true);
+  };
+
   const handleConfirmStatusChange = async (pendingStatus, note = "", setNoteError) => {
-    if (!selectedConversation || updatingStatus) return;
+    if (!selectedConversation || statusMutationPending.current) return;
     if (pendingStatus === selectedConversation.status) {
       setStatusModalOpen(false);
       return;
@@ -341,13 +350,14 @@ export function useAdminChat() {
       return;
     }
 
+    statusMutationPending.current = true;
     setUpdatingStatus(true);
     try {
       const payload = supportStatusPayload(selectedConversation, pendingStatus, note);
       const data = await chatApi.updateStatus(selectedConversation.id, payload.status, payload.note, payload);
       setSelectedConversation((current) => current?.id === data.conversation?.id ? reconcileSupportConcern(current, data.conversation) : current);
       await loadConversations({ silent: true });
-      setStatusModalOpen(false);
+      if (selectedId.current === selectedConversation.id) setStatusModalOpen(false);
       showNotification(`Conversation status changed to ${getStatusLabel(pendingStatus)}.`, "success");
     } catch (error) {
       if (error?.response?.status === 409) {
@@ -355,9 +365,10 @@ export function useAdminChat() {
         showNotification("This concern changed. The latest status has been refreshed.", "error");
       }
       const message = getErrorMessage(error, "Failed to update conversation status.");
-      setNoteError?.(message);
+      if (selectedId.current === selectedConversation.id) setNoteError?.(message);
       showNotification(message, "error");
     } finally {
+      statusMutationPending.current = false;
       setUpdatingStatus(false);
     }
   };
@@ -510,6 +521,8 @@ export function useAdminChat() {
     setCloseModalOpen,
     statusModalOpen,
     setStatusModalOpen,
+    statusInitialStatus,
+    handleOpenStatusModal,
     priorityModalOpen,
     setPriorityModalOpen,
     unreadTotal,
