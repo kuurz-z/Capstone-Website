@@ -14,13 +14,13 @@ test("NAV_ITEMS includes Inquiries & Leads in the workspace group", () => {
   );
 });
 
-test("Inquiries & Leads is visible to both branch admins and owners", () => {
+test("Inquiries & Leads is visible to owners and hidden for branch admins", () => {
   const branchAdminItems = getVisibleNavItems({ isOwner: false, can: () => false });
   const ownerItems = getVisibleNavItems({ isOwner: true, can: () => true });
 
   const inAdminItems = branchAdminItems.some((item) => item.to === "/admin/inquiries");
   const inOwnerItems = ownerItems.some((item) => item.to === "/admin/inquiries");
 
-  assert.equal(inAdminItems, true, "Expected /admin/inquiries to be visible to branch admins");
+  assert.equal(inAdminItems, false, "Expected /admin/inquiries to be hidden for branch admins");
   assert.equal(inOwnerItems, true, "Expected /admin/inquiries to be visible to owners");
 });

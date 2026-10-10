@@ -102,7 +102,18 @@ const BASE_NAV_ITEMS = [
     to: "/admin/inquiries",
     icon: MessageSquare,
     group: "Navigation",
+    ownerOnly: true,
+    keywords: ["inquiries", "questions", "leads", "prospective", "messages"],
+  },
+  {
+    id: "nav-inquiries-reservations",
+    label: "Inquiries",
+    subtext: "Review applicant inquiries inside the Reservations workspace",
+    to: "/admin/reservations?tab=inquiries",
+    icon: MessageSquare,
+    group: "Navigation",
     permission: "manageReservations",
+    branchAdminOnly: true,
     keywords: ["inquiries", "questions", "leads", "prospective", "messages"],
   },
   {
@@ -255,6 +266,7 @@ export default function AdminCommandPalette({
   const allowedNavItems = useMemo(() => {
     return BASE_NAV_ITEMS.filter((item) => {
       if (item.ownerOnly && !isOwner) return false;
+      if (item.branchAdminOnly && isOwner) return false;
       if (item.permission && !isOwner && !can(item.permission)) return false;
       return true;
     });

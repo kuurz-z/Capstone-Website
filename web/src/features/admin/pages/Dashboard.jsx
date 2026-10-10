@@ -454,7 +454,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 <Link
-                  to="/admin/inquiries"
+                  to={isOwner ? "/admin/inquiries" : "/admin/reservations?tab=inquiries"}
                   state={{ fromDashboard: true }}
                   className="inline-flex items-center gap-1 text-xs font-semibold hover:underline transition-all text-primary"
                 >

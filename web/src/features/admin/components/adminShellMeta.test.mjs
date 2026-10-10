@@ -45,11 +45,13 @@ test("owners keep owner-only routes while branch admins stay on shared workspace
   assert.equal(branchAdminItems.some((item) => item.to === "/admin/users"), false);
   assert.equal(branchAdminItems.some((item) => item.to === "/admin/audit-logs"), false);
   assert.equal(branchAdminItems.some((item) => item.to === "/admin/analytics"), false);
+  assert.equal(branchAdminItems.some((item) => item.to === "/admin/inquiries"), false);
   assert.equal(ownerItems.some((item) => item.to === "/admin/branches"), true);
   assert.equal(ownerItems.some((item) => item.to === "/admin/settings"), true);
   assert.equal(ownerItems.some((item) => item.to === "/admin/users"), true);
   assert.equal(ownerItems.some((item) => item.to === "/admin/audit-logs"), true);
   assert.equal(ownerItems.some((item) => item.to === "/admin/analytics"), true);
+  assert.equal(ownerItems.some((item) => item.to === "/admin/inquiries"), true);
 });
 
 test("system navigation labels and ordering match the consolidated IA", () => {

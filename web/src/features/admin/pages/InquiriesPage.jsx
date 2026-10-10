@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import {
   MessageSquare,
   Search,
@@ -190,6 +190,10 @@ function InquiriesPage({ isEmbedded = false }) {
       navigate("/admin/dashboard");
     }
   };
+
+  if (!isEmbedded && user && !isOwner) {
+    return <Navigate to="/admin/reservations?tab=inquiries" replace />;
+  }
 
   if (!isEmbedded && loading && !data) {
     return <AdminTablePageSkeleton />;
