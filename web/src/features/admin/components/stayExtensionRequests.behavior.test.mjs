@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { transform } from 'esbuild';
@@ -20,10 +20,10 @@ function component(fetch) {
  return new Function('React','useCallback','useEffect','useRef','useState','authFetch','showNotification',code+'; return StayExtensionRequests;')
  (React,React.useCallback,React.useEffect,React.useRef,React.useState,fetch,()=>{});
 }
-test('the Tenants workspace includes the connected extension request component', () => {
+test('the Tenants workspace does not mount the extension request banner', () => {
  const page = readFileSync(new URL('../pages/TenantsWorkspacePage.jsx', import.meta.url), 'utf8');
- assert.match(page, /import StayExtensionRequests from ['"]\.\.\/components\/StayExtensionRequests['"]/);
- assert.match(page, /<StayExtensionRequests\s+onReviewed=\{\(\) => queryClient\.invalidateQueries\(\)\}/);
+ assert.doesNotMatch(page, /import StayExtensionRequests from ['"]\.\.\/components\/StayExtensionRequests['"]/);
+ assert.doesNotMatch(page, /<StayExtensionRequests/);
 });
 test('Admin sees the exact preparation error and can retry without approving again',async()=>{
  const calls=[];let retried=false;
