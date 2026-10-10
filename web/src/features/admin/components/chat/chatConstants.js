@@ -58,10 +58,10 @@ export const PRIORITY_OPTIONS = [
 ];
 
 export const QUICK_REPLIES = [
-  "We have received your concern.",
-  "Please provide more details.",
-  "Your request is being processed.",
-  "Please confirm whether this resolved your concern.",
+  { id: "received", text: "We have received your concern." },
+  { id: "details", text: "Please provide more details." },
+  { id: "processing", text: "Your request is being processed." },
+  { id: "confirm-resolution", text: "Please confirm whether this resolved your concern.", action: "resolve" },
 ];
 
 export const MAX_SUPPORT_ATTACHMENTS = 5;

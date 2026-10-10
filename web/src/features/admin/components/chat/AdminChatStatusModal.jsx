@@ -10,6 +10,7 @@ export default function AdminChatStatusModal({
   onConfirm,
   currentStatus = "open",
   concern,
+  initialStatus,
   tenantName,
   updating = false,
 }) {
@@ -17,13 +18,16 @@ export default function AdminChatStatusModal({
   const [error, setError] = useState("");
   const [pendingStatus, setPendingStatus] = useState(currentStatus || "open");
 
+  const defaultStatus = initialStatus && allowedSupportStatuses(concern).includes(initialStatus)
+    ? initialStatus : currentStatus || "open";
+
   useEffect(() => {
     if (isOpen) {
       setNote("");
       setError("");
-      setPendingStatus(currentStatus || "open");
+      setPendingStatus(defaultStatus);
     }
-  }, [isOpen, currentStatus]);
+  }, [isOpen, currentStatus, defaultStatus]);
 
   if (!isOpen || typeof document === "undefined") return null;
 

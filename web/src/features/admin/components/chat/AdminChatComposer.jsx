@@ -1,3 +1,4 @@
+import { allowedSupportStatuses } from '../../../../shared/utils/supportConcern.js';
 import { useRef, useState } from "react";
 import {
   ChevronDown,
@@ -33,6 +34,8 @@ export default function AdminChatComposer({
   replyError = "",
   setReplyError,
   onSendReply,
+  onRequestResolution,
+  updatingStatus = false,
 }) {
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showAiDraft, setShowAiDraft] = useState(false);
@@ -157,14 +160,19 @@ export default function AdminChatComposer({
           {QUICK_REPLIES.map((template) => (
             <button
               type="button"
-              key={template}
+              key={template.id}
+              disabled={template.action === "resolve" && (sending || uploadingAttachments || updatingStatus || !onRequestResolution || !allowedSupportStatuses(selectedConversation).includes("resolved"))}
               onClick={() => {
-                setReplyText(template);
+                if (template.action === "resolve") {
+                  onRequestResolution();
+                  return;
+                }
+                setReplyText(template.text);
                 if (replyError) setReplyError("");
               }}
               className="rounded-full border border-border bg-card px-3 py-1 text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap cursor-pointer shrink-0"
             >
-              {template}
+              {template.text}
             </button>
           ))}
         </div>
